@@ -50,8 +50,26 @@ export default function Download() {
         className="space-y-4 rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700"
       >
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-300">
+          <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-gray-300">
             Video URL
+            <span className="group relative inline-flex">
+              <span className="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-ink-700 text-[10px] font-bold text-gray-300">
+                ?
+              </span>
+              <span className="pointer-events-none absolute left-1/2 top-6 z-10 w-64 -translate-x-1/2 rounded-lg bg-ink-800 p-3 text-xs font-normal leading-relaxed text-gray-300 opacity-0 ring-1 ring-ink-600 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+                Works with YouTube, Vimeo, Twitch, TikTok, Twitter/X, Dailymotion,
+                SoundCloud, and{" "}
+                <a
+                  href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-accent hover:underline"
+                >
+                  1000+ other sites
+                </a>{" "}
+                supported by yt-dlp.
+              </span>
+            </span>
           </label>
           <input
             value={url}

@@ -3,19 +3,61 @@ import { formatDuration } from "../utils";
 
 export type ViewMode = "standard" | "theater" | "windowed";
 
+export interface SubtitleSource {
+  lang: string;
+  src: string;
+}
+
 interface Props {
   src: string;
   mode: ViewMode;
   onModeChange: (mode: ViewMode) => void;
+  tracks?: SubtitleSource[];
+  onEnded?: () => void;
+  variant?: "full" | "mini";
+  title?: string;
+  onExpand?: () => void;
+  onClose?: () => void;
 }
 
-export default function VideoPlayer({ src, mode, onModeChange }: Props) {
+export default function VideoPlayer({
+  src,
+  mode,
+  onModeChange,
+  tracks = [],
+  onEnded,
+  variant = "full",
+  title,
+  onExpand,
+  onClose,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
+  const [captionLang, setCaptionLang] = useState<string | null>(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    for (const tt of Array.from(v.textTracks)) {
+      tt.mode = tt.language === captionLang ? "showing" : "hidden";
+    }
+  }, [captionLang, tracks]);
+
+  // Start playback when the source changes (opening a video, advancing a queue).
+  useEffect(() => {
+    videoRef.current?.play().catch(() => undefined);
+  }, [src]);
+
+  const cycleCaptions = useCallback(() => {
+    if (tracks.length === 0) return;
+    const order = [null, ...tracks.map((t) => t.lang)];
+    const idx = order.indexOf(captionLang);
+    setCaptionLang(order[(idx + 1) % order.length]);
+  }, [tracks, captionLang]);
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -78,16 +120,41 @@ export default function VideoPlayer({ src, mode, onModeChange }: Props) {
     setMuted(v.muted);
   };
 
-  const progressPct = duration > 0 ? (current / duration) * 100 : 0;
+  const requestPiP = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else if (v.requestPictureInPicture) {
+        await v.requestPictureInPicture();
+      }
+    } catch {
+      // PiP can be blocked by the browser; ignore.
+    }
+  }, []);
 
-  const wrapperClass =
-    mode === "windowed"
+  const progressPct = duration > 0 ? (current / duration) * 100 : 0;
+  const isMini = variant === "mini";
+
+  const wrapperClass = isMini
+    ? "relative w-full bg-black"
+    : mode === "windowed"
       ? "fixed inset-0 z-50 flex items-center justify-center bg-black"
       : "relative w-full bg-black";
 
+  const innerClass =
+    !isMini && mode === "windowed" ? "relative h-full w-full" : "relative";
+
+  const videoClass = isMini
+    ? "aspect-video w-full bg-black object-contain"
+    : mode === "windowed"
+      ? "h-full w-full object-contain"
+      : "max-h-[80vh] w-full bg-black object-contain";
+
   return (
     <div className={wrapperClass}>
-      <div className={mode === "windowed" ? "relative h-full w-full" : "relative"}>
+      <div className={innerClass}>
         <video
           ref={videoRef}
           src={src}
@@ -96,76 +163,134 @@ export default function VideoPlayer({ src, mode, onModeChange }: Props) {
           onPause={() => setPlaying(false)}
           onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-          className={
-            mode === "windowed"
-              ? "h-full w-full object-contain"
-              : "aspect-video w-full bg-black"
-          }
-        />
+          onEnded={onEnded}
+          className={videoClass}
+        >
+          {tracks.map((t) => (
+            <track
+              key={t.lang}
+              kind="subtitles"
+              src={t.src}
+              srcLang={t.lang}
+              label={t.lang}
+            />
+          ))}
+        </video>
 
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-4 pb-3 pt-10">
-          <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            step={0.1}
-            value={current}
-            onChange={onSeek}
-            className="accent-scrubber w-full"
-            style={{
-              background: `linear-gradient(to right, #22d3ee ${progressPct}%, #2a313f ${progressPct}%)`,
-            }}
-          />
-          <div className="mt-2 flex items-center gap-3 text-gray-100">
-            <button onClick={togglePlay} className="text-xl leading-none hover:text-accent">
+        {isMini ? (
+          <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/90 to-transparent px-3 pb-2 pt-6 text-gray-100">
+            <button
+              onClick={togglePlay}
+              className="text-lg leading-none hover:text-accent"
+            >
               {playing ? "❚❚" : "►"}
             </button>
-
-            <div className="flex items-center gap-2">
-              <button onClick={toggleMute} className="hover:text-accent">
-                {muted || volume === 0 ? "🔇" : "🔊"}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={muted ? 0 : volume}
-                onChange={onVolume}
-                className="accent-scrubber w-20"
-              />
-            </div>
-
-            <span className="text-xs tabular-nums text-gray-300">
-              {formatDuration(current)} / {formatDuration(duration)}
+            <span className="min-w-0 flex-1 truncate text-xs text-gray-200">
+              {title}
             </span>
+            <button
+              onClick={onExpand}
+              className="shrink-0 text-sm hover:text-accent"
+              title="Expand"
+            >
+              ⤢
+            </button>
+            <button
+              onClick={onClose}
+              className="shrink-0 text-sm hover:text-accent"
+              title="Close"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-4 pb-3 pt-10">
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              step={0.1}
+              value={current}
+              onChange={onSeek}
+              className="accent-scrubber w-full"
+              style={{
+                background: `linear-gradient(to right, #22d3ee ${progressPct}%, #2a313f ${progressPct}%)`,
+              }}
+            />
+            <div className="mt-2 flex items-center gap-3 text-gray-100">
+              <button
+                onClick={togglePlay}
+                className="text-xl leading-none hover:text-accent"
+              >
+                {playing ? "❚❚" : "►"}
+              </button>
 
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={toggleTheater}
-                className={`rounded px-2 py-1 text-xs font-medium ${
-                  mode === "theater"
-                    ? "bg-accent text-ink-950"
-                    : "bg-ink-700 text-gray-200 hover:text-accent"
-                }`}
-                title="Theater mode (t)"
-              >
-                Theater
-              </button>
-              <button
-                onClick={toggleWindowed}
-                className={`rounded px-2 py-1 text-xs font-medium ${
-                  mode === "windowed"
-                    ? "bg-accent text-ink-950"
-                    : "bg-ink-700 text-gray-200 hover:text-accent"
-                }`}
-                title="Windowed fullscreen (f)"
-              >
-                {mode === "windowed" ? "Exit" : "Fullscreen"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={toggleMute} className="hover:text-accent">
+                  {muted || volume === 0 ? "🔇" : "🔊"}
+                </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={muted ? 0 : volume}
+                  onChange={onVolume}
+                  className="accent-scrubber w-20"
+                />
+              </div>
+
+              <span className="text-xs tabular-nums text-gray-300">
+                {formatDuration(current)} / {formatDuration(duration)}
+              </span>
+
+              <div className="ml-auto flex items-center gap-2">
+                {tracks.length > 0 && (
+                  <button
+                    onClick={cycleCaptions}
+                    className={`rounded px-2 py-1 text-xs font-medium ${
+                      captionLang
+                        ? "bg-accent text-ink-950"
+                        : "bg-ink-700 text-gray-200 hover:text-accent"
+                    }`}
+                    title="Subtitles"
+                  >
+                    {captionLang ? `CC ${captionLang}` : "CC"}
+                  </button>
+                )}
+                <button
+                  onClick={requestPiP}
+                  className="rounded bg-ink-700 px-2 py-1 text-xs font-medium text-gray-200 hover:text-accent"
+                  title="Picture in picture"
+                >
+                  PiP
+                </button>
+                <button
+                  onClick={toggleTheater}
+                  className={`rounded px-2 py-1 text-xs font-medium ${
+                    mode === "theater"
+                      ? "bg-accent text-ink-950"
+                      : "bg-ink-700 text-gray-200 hover:text-accent"
+                  }`}
+                  title="Theater mode (t)"
+                >
+                  Theater
+                </button>
+                <button
+                  onClick={toggleWindowed}
+                  className={`rounded px-2 py-1 text-xs font-medium ${
+                    mode === "windowed"
+                      ? "bg-accent text-ink-950"
+                      : "bg-ink-700 text-gray-200 hover:text-accent"
+                  }`}
+                  title="Windowed fullscreen (f)"
+                >
+                  {mode === "windowed" ? "Exit" : "Fullscreen"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

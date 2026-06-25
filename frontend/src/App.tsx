@@ -5,6 +5,10 @@ import Library from "./pages/Library";
 import Download from "./pages/Download";
 import Review from "./pages/Review";
 import Watch from "./pages/Watch";
+import Settings from "./pages/Settings";
+import Playlists from "./pages/Playlists";
+import PlaylistDetail from "./pages/PlaylistDetail";
+import { PlaybackProvider } from "./context/PlaybackContext";
 
 function TopNav() {
   const [reviewCount, setReviewCount] = useState(0);
@@ -46,6 +50,9 @@ function TopNav() {
           <NavLink to="/download" className={linkClass}>
             Download
           </NavLink>
+          <NavLink to="/playlists" className={linkClass}>
+            Playlists
+          </NavLink>
           <NavLink to="/review" className={linkClass}>
             <span className="flex items-center gap-2">
               Review
@@ -56,6 +63,9 @@ function TopNav() {
               )}
             </span>
           </NavLink>
+          <NavLink to="/settings" className={linkClass}>
+            Settings
+          </NavLink>
         </nav>
       </div>
     </header>
@@ -64,16 +74,21 @@ function TopNav() {
 
 export default function App() {
   return (
-    <div className="min-h-full">
-      <TopNav />
-      <main className="mx-auto max-w-[1600px] px-6 py-6">
-        <Routes>
-          <Route path="/" element={<Library />} />
-          <Route path="/download" element={<Download />} />
-          <Route path="/review" element={<Review />} />
-          <Route path="/watch/:id" element={<Watch />} />
-        </Routes>
-      </main>
-    </div>
+    <PlaybackProvider>
+      <div className="min-h-full">
+        <TopNav />
+        <main className="mx-auto max-w-[1600px] px-6 py-6">
+          <Routes>
+            <Route path="/" element={<Library />} />
+            <Route path="/download" element={<Download />} />
+            <Route path="/playlists" element={<Playlists />} />
+            <Route path="/playlists/:id" element={<PlaylistDetail />} />
+            <Route path="/review" element={<Review />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/watch/:id" element={<Watch />} />
+          </Routes>
+        </main>
+      </div>
+    </PlaybackProvider>
   );
 }

@@ -1,6 +1,8 @@
 import type {
   ChannelStat,
   DownloadJob,
+  Playlist,
+  PlaylistDetail,
   Video,
   VideoUpdate,
 } from "./types";
@@ -69,6 +71,14 @@ export const api = {
     return request<ChannelStat[]>("/api/channels");
   },
 
+  renameChannel(oldName: string, newName: string): Promise<{ updated: number }> {
+    return request<{ updated: number }>("/api/channels", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ old_name: oldName, new_name: newName }),
+    });
+  },
+
   listTags(): Promise<string[]> {
     return request<string[]>("/api/tags");
   },
@@ -92,6 +102,59 @@ export const api = {
   listJobs(): Promise<DownloadJob[]> {
     return request<DownloadJob[]>("/api/downloads");
   },
+
+  listPlaylists(): Promise<Playlist[]> {
+    return request<Playlist[]>("/api/playlists");
+  },
+
+  getPlaylist(id: number): Promise<PlaylistDetail> {
+    return request<PlaylistDetail>(`/api/playlists/${id}`);
+  },
+
+  createPlaylist(name: string, description?: string): Promise<Playlist> {
+    return request<Playlist>("/api/playlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, description }),
+    });
+  },
+
+  deletePlaylist(id: number): Promise<void> {
+    return request<void>(`/api/playlists/${id}`, { method: "DELETE" });
+  },
+
+  addToPlaylist(playlistId: number, videoId: number): Promise<PlaylistDetail> {
+    return request<PlaylistDetail>(`/api/playlists/${playlistId}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_id: videoId }),
+    });
+  },
+
+  removeFromPlaylist(playlistId: number, videoId: number): Promise<void> {
+    return request<void>(`/api/playlists/${playlistId}/items/${videoId}`, {
+      method: "DELETE",
+    });
+  },
+
+  reorderPlaylist(
+    playlistId: number,
+    videoIds: number[]
+  ): Promise<PlaylistDetail> {
+    return request<PlaylistDetail>(`/api/playlists/${playlistId}/reorder`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_ids: videoIds }),
+    });
+  },
+
+  importPlaylist(url: string, quality_preset: string): Promise<Playlist> {
+    return request<Playlist>("/api/playlists/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, quality_preset }),
+    });
+  },
 };
 
 export function thumbnailUrl(video: Video): string | null {
@@ -100,4 +163,8 @@ export function thumbnailUrl(video: Video): string | null {
 
 export function streamUrl(id: number): string {
   return `/api/videos/${id}/stream`;
+}
+
+export function subtitleUrl(id: number, lang: string): string {
+  return `/api/videos/${id}/subtitles/${encodeURIComponent(lang)}`;
 }

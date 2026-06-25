@@ -1,9 +1,12 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { thumbnailUrl } from "../api";
+import { usePlayback } from "../context/PlaybackContext";
 import type { Video } from "../types";
 import { formatDuration } from "../utils";
 
 export default function VideoCard({ video }: { video: Video }) {
+  const navigate = useNavigate();
+  const { addToQueue } = usePlayback();
   const thumb = thumbnailUrl(video);
   const duration = formatDuration(video.duration_sec);
 
@@ -30,13 +33,33 @@ export default function VideoCard({ video }: { video: Video }) {
             {duration}
           </span>
         )}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            addToQueue(video);
+          }}
+          title="Add to queue"
+          className="absolute right-2 top-2 rounded bg-black/70 px-2 py-1 text-xs font-medium text-gray-100 opacity-0 transition-opacity hover:bg-accent hover:text-ink-950 group-hover:opacity-100"
+        >
+          + Queue
+        </button>
       </div>
       <div className="flex flex-col gap-1 p-3">
         <h3 className="line-clamp-2 text-sm font-semibold text-gray-100 group-hover:text-accent">
           {video.title}
         </h3>
         {video.channel && (
-          <p className="truncate text-xs text-gray-400">{video.channel}</p>
+          <span
+            role="link"
+            tabIndex={0}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate(`/?channel=${encodeURIComponent(video.channel!)}`);
+            }}
+            className="w-fit truncate text-xs text-gray-400 hover:text-accent"
+          >
+            {video.channel}
+          </span>
         )}
         {video.tags.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">

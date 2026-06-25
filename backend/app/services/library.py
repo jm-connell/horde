@@ -28,6 +28,18 @@ def dump_tags(tags: list[str]) -> str:
     return json.dumps(cleaned)
 
 
+def parse_subtitles(raw: Optional[str]) -> list[dict]:
+    try:
+        value = json.loads(raw or "[]")
+        return [t for t in value if isinstance(t, dict)] if isinstance(value, list) else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def dump_subtitles(tracks: list[dict]) -> str:
+    return json.dumps(tracks)
+
+
 def query_videos(
     session: Session,
     q: Optional[str] = None,
@@ -46,7 +58,11 @@ def query_videos(
     if q:
         like = f"%{q}%"
         statement = statement.where(
-            Video.title.ilike(like) | Video.description.ilike(like)
+            Video.title.ilike(like)
+            | Video.description.ilike(like)
+            | Video.channel.ilike(like)
+            | Video.notes.ilike(like)
+            | Video.tags.ilike(like)
         )
     if tag:
         # Tags are stored as a JSON list string; match the quoted token.
@@ -56,6 +72,17 @@ def query_videos(
     statement = statement.order_by(column.desc() if order == "desc" else column.asc())
 
     return list(session.exec(statement).all())
+
+
+def rename_channel(session: Session, old_name: str, new_name: str) -> int:
+    """Rename a channel across all videos. Returns the number of rows updated."""
+    rows = session.exec(select(Video).where(Video.channel == old_name)).all()
+    for video in rows:
+        video.channel = new_name
+        session.add(video)
+    if rows:
+        session.commit()
+    return len(rows)
 
 
 def channel_stats(session: Session) -> list[tuple[str, int]]:

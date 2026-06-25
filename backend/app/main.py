@@ -7,8 +7,8 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import ensure_dirs
 from .database import init_db
-from .api import downloads, review, videos
-from .services.scanner import start_scanner
+from .api import downloads, playlists, review, videos
+from .services.scanner import cleanup_orphans, start_scanner
 
 # Static frontend build copied next to the backend in the Docker image.
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -18,6 +18,7 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
 async def lifespan(app: FastAPI):
     ensure_dirs()
     init_db()
+    cleanup_orphans()
     observer = start_scanner()
     try:
         yield
@@ -31,6 +32,7 @@ app = FastAPI(title="Horde", lifespan=lifespan)
 app.include_router(videos.router)
 app.include_router(downloads.router)
 app.include_router(review.router)
+app.include_router(playlists.router)
 
 
 @app.get("/api/health")

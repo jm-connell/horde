@@ -3,17 +3,25 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from .models import JobStatus, VideoStatus
+from .models import JobStatus, PlaylistSource, VideoStatus
+
+
+class SubtitleTrack(BaseModel):
+    lang: str
+    auto: bool = False
 
 
 class VideoRead(BaseModel):
     id: int
     title: str
     channel: Optional[str]
+    channel_url: Optional[str]
     tags: list[str]
     description: Optional[str]
+    notes: Optional[str]
     source_url: Optional[str]
     has_thumbnail: bool
+    subtitles: list[SubtitleTrack]
     file_path: str
     duration_sec: Optional[float]
     file_size: Optional[int]
@@ -27,8 +35,10 @@ class VideoRead(BaseModel):
 class VideoUpdate(BaseModel):
     title: Optional[str] = None
     channel: Optional[str] = None
+    channel_url: Optional[str] = None
     tags: Optional[list[str]] = None
     description: Optional[str] = None
+    notes: Optional[str] = None
     source_url: Optional[str] = None
     published_at: Optional[datetime] = None
     # Setting a remote URL fetches and caches the image server-side.
@@ -55,3 +65,45 @@ class DownloadJobRead(BaseModel):
 class ChannelStat(BaseModel):
     channel: str
     count: int
+
+
+class ChannelRename(BaseModel):
+    old_name: str
+    new_name: str
+
+
+class PlaylistCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class PlaylistUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class PlaylistRead(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    source_type: PlaylistSource
+    source_url: Optional[str]
+    created_at: datetime
+    item_count: int
+
+
+class PlaylistDetail(PlaylistRead):
+    videos: list[VideoRead]
+
+
+class PlaylistItemAdd(BaseModel):
+    video_id: int
+
+
+class PlaylistReorder(BaseModel):
+    video_ids: list[int]
+
+
+class PlaylistImport(BaseModel):
+    url: str
+    quality_preset: str = "best"

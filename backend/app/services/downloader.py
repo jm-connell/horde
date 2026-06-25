@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 import httpx
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import engine
 from ..models import DownloadJob, JobStatus, Video, VideoStatus
+from . import library, scanner
 from .metadata import probe_duration
 from .paths import find_video_by_path, to_rel_path
 
@@ -72,6 +73,66 @@ def _save_thumbnail(url: Optional[str], video_id: int) -> Optional[str]:
         return None
 
 
+def _collect_tags(info: dict[str, Any]) -> list[str]:
+    """Gather tags and categories from yt-dlp metadata for keyword search."""
+    collected: list[str] = []
+    seen: set[str] = set()
+    for key in ("tags", "categories"):
+        for item in info.get(key) or []:
+            tag = str(item).strip()
+            low = tag.lower()
+            if tag and low not in seen:
+                seen.add(low)
+                collected.append(tag)
+    return collected
+
+
+def _safe_rel(path: Path) -> Optional[str]:
+    try:
+        return to_rel_path(path)
+    except ValueError:
+        return None
+
+
+def _collect_subtitles(final_path: Path) -> list[dict[str, Any]]:
+    """Find sidecar ``.vtt`` files yt-dlp wrote next to the video."""
+    stem = final_path.stem
+    parent = final_path.parent
+    tracks: list[dict[str, Any]] = []
+    if not parent.is_dir():
+        return tracks
+    for entry in parent.iterdir():
+        if not entry.is_file() or entry.suffix.lower() != ".vtt":
+            continue
+        if not entry.name.startswith(stem + "."):
+            continue
+        lang = entry.name[len(stem) + 1 : -len(".vtt")]
+        rel = _safe_rel(entry)
+        if lang and rel:
+            tracks.append({"lang": lang, "path": rel, "auto": False})
+    return tracks
+
+
+def _remove_review_duplicates(
+    session: Session, video_id: Optional[str], keep_id: Optional[int]
+) -> None:
+    """Drop stale review rows for the same source video (e.g. a scanner-ingested
+    fragment) now that the real download has landed."""
+    if not video_id:
+        return
+    token = f"[{video_id}]"
+    rows = session.exec(
+        select(Video).where(Video.needs_review == True)  # noqa: E712
+    ).all()
+    for row in rows:
+        if row.id == keep_id or token not in row.file_path:
+            continue
+        if row.thumbnail_path:
+            Path(row.thumbnail_path).unlink(missing_ok=True)
+        session.delete(row)
+    session.commit()
+
+
 def _published_at(info: dict[str, Any]) -> Optional[datetime]:
     raw = info.get("upload_date")  # YYYYMMDD
     if not raw:
@@ -82,7 +143,7 @@ def _published_at(info: dict[str, Any]) -> Optional[datetime]:
         return None
 
 
-def _run_download(job_id: int, url: str, quality_preset: str) -> None:
+def _run_download(job_id: int, url: str, quality_preset: str) -> Optional[int]:
     import yt_dlp
 
     _update_job(job_id, status=JobStatus.downloading)
@@ -96,6 +157,15 @@ def _run_download(job_id: int, url: str, quality_preset: str) -> None:
         "quiet": True,
         "no_warnings": True,
         "merge_output_format": "mp4",
+        # Fetch captions (manual, falling back to auto-generated) as WebVTT so
+        # the player can show subtitles.
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": ["en", "en-US", "en-GB", "en-orig"],
+        "subtitlesformat": "vtt/best",
+        "postprocessors": [
+            {"key": "FFmpegSubtitlesConvertor", "format": "vtt"},
+        ],
         # YouTube often breaks older clients; try multiple player APIs.
         "extractor_args": {
             "youtube": {
@@ -104,8 +174,20 @@ def _run_download(job_id: int, url: str, quality_preset: str) -> None:
         },
     }
 
+    active_paths: set[str] = set()
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Metadata-only pass first so we know the output path before any file
+            # is written, and can tell the scanner to ignore it (avoids the
+            # download briefly appearing in the review queue).
+            info = ydl.extract_info(url, download=False)
+            prepared = Path(ydl.prepare_filename(info))
+            for candidate in (prepared, prepared.with_suffix(".mp4")):
+                rel = _safe_rel(candidate)
+                if rel:
+                    active_paths.add(rel)
+                    scanner.mark_active(rel)
+
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             # merge_output_format can change the final extension.
@@ -127,11 +209,14 @@ def _run_download(job_id: int, url: str, quality_preset: str) -> None:
 
             video.title = info.get("title") or final_path.stem
             video.channel = info.get("uploader") or info.get("channel")
+            video.channel_url = info.get("uploader_url") or info.get("channel_url")
             video.description = info.get("description")
+            video.tags = library.dump_tags(_collect_tags(info))
             video.source_url = info.get("webpage_url") or url
             video.duration_sec = duration
             video.file_size = file_size
             video.published_at = _published_at(info)
+            video.subtitles = library.dump_subtitles(_collect_subtitles(final_path))
             video.needs_review = False
             video.platform = info.get("extractor_key")
             video.status = VideoStatus.ready
@@ -140,6 +225,8 @@ def _run_download(job_id: int, url: str, quality_preset: str) -> None:
 
             session.commit()
             session.refresh(video)
+
+            _remove_review_duplicates(session, info.get("id"), keep_id=video.id)
 
             thumb = _save_thumbnail(info.get("thumbnail"), video.id)
             if thumb:
@@ -162,15 +249,98 @@ def _run_download(job_id: int, url: str, quality_preset: str) -> None:
             "video_id": video_id,
             "title": info.get("title"),
         }
+        return video_id
     except Exception as exc:  # noqa: BLE001 - surface any yt-dlp failure to the UI
         _update_job(job_id, status=JobStatus.error, error=str(exc))
         progress_store[job_id] = {"status": "error", "error": str(exc)}
+        return None
+    finally:
+        for rel in active_paths:
+            scanner.unmark_active(rel)
 
 
 def start_download(job_id: int, url: str, quality_preset: str) -> None:
     thread = threading.Thread(
         target=_run_download,
         args=(job_id, url, quality_preset),
+        daemon=True,
+    )
+    thread.start()
+
+
+def extract_playlist(url: str) -> tuple[str, list[str]]:
+    """Return (playlist title, list of entry watch URLs) without downloading."""
+    import yt_dlp
+
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    title = info.get("title") or "Imported playlist"
+    entries = []
+    for entry in info.get("entries") or []:
+        if not entry:
+            continue
+        entry_url = entry.get("url") or entry.get("webpage_url")
+        vid = entry.get("id")
+        if entry_url and entry_url.startswith("http"):
+            entries.append(entry_url)
+        elif vid:
+            entries.append(f"https://www.youtube.com/watch?v={vid}")
+    return title, entries
+
+
+def _run_playlist_import(
+    playlist_id: int, entries: list[str], quality_preset: str
+) -> None:
+    from ..models import Playlist, PlaylistItem
+
+    for index, entry_url in enumerate(entries):
+        with Session(engine) as session:
+            job = DownloadJob(
+                url=entry_url,
+                quality_preset=quality_preset,
+                status=JobStatus.queued,
+            )
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+            job_id = job.id
+
+        video_id = _run_download(job_id, entry_url, quality_preset)
+        if video_id is None:
+            continue
+
+        with Session(engine) as session:
+            # Skip if this video is already linked (e.g. re-import).
+            existing = session.exec(
+                select(PlaylistItem).where(
+                    PlaylistItem.playlist_id == playlist_id,
+                    PlaylistItem.video_id == video_id,
+                )
+            ).first()
+            if existing is None:
+                session.add(
+                    PlaylistItem(
+                        playlist_id=playlist_id,
+                        video_id=video_id,
+                        position=index,
+                    )
+                )
+                session.commit()
+
+
+def start_playlist_import(
+    playlist_id: int, entries: list[str], quality_preset: str
+) -> None:
+    thread = threading.Thread(
+        target=_run_playlist_import,
+        args=(playlist_id, entries, quality_preset),
         daemon=True,
     )
     thread.start()

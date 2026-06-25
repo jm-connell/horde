@@ -10,17 +10,25 @@ designed to run on TrueNAS via Dockge, but it works with any Docker host.
 
 ## Features
 
-- URL ingestion with quality presets and a live progress bar (yt-dlp).
-- Automatic metadata and thumbnail extraction; files are stored under
-  `/<channel>/<year>/<title>.ext`.
+- URL ingestion with quality presets and a live progress bar (yt-dlp). Pasted
+  links are cleaned of tracking parameters before download.
+- Automatic metadata, tags, subtitles (WebVTT), and thumbnail extraction; files
+  are stored under `/<channel>/<year>/<title>.ext`.
 - Folder scanner (watchdog + 60s polling fallback) that detects manually
-  dropped `.mp4` / `.mkv` / `.webm` files and queues them for review.
-- Review queue to attach title, channel, tags, description, source URL, publish
-  date, and a custom thumbnail (upload or URL).
-- Library grid with channel sidebar, global search, tag filters, and sorting.
-- Custom player with standard, theater, and windowed-fullscreen modes, plus
-  keyboard shortcuts (`space`/`k` play, `t` theater, `f` fullscreen, arrows
-  seek).
+  dropped `.mp4` / `.mkv` / `.webm` files and queues them for review. yt-dlp
+  downloads are no longer mistakenly sent to review.
+- Edit any video's metadata, notes, and thumbnail (not just review items), and
+  rename a channel across every video at once.
+- Playlists: build your own or import a public YouTube playlist; both are
+  browsed and played the same way.
+- Playback queue with auto-advance, a floating mini-player that keeps playing
+  while you browse, and a Picture-in-Picture button.
+- Library grid with channel sidebar, global keyword search (title, channel,
+  description, notes, tags), tag filters, and sorting.
+- Settings for the default playback mode and whether descriptions are shown.
+- Custom player with standard, theater, and windowed-fullscreen modes,
+  subtitles, plus keyboard shortcuts (`space`/`k` play, `t` theater,
+  `f` fullscreen, arrows seek).
 
 This is a single-admin app with no authentication. Keep it on a trusted LAN.
 

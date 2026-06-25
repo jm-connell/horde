@@ -1,8 +1,9 @@
+import re
 import threading
 import time
 from pathlib import Path
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -19,9 +20,47 @@ from .paths import find_video_by_path, to_rel_path
 
 _scan_lock = threading.Lock()
 
+# yt-dlp writes per-format fragments like "Title [id].f137.mp4" before merging
+# them into the final file; these must never be ingested as review items.
+_FRAGMENT_RE = re.compile(r"\.f\d+\.[^.]+$")
+
+# Relative paths the downloader is actively writing. The scanner skips these so
+# in-progress downloads don't briefly surface in the review queue.
+_active_downloads: set[str] = set()
+_active_lock = threading.Lock()
+
+
+def mark_active(rel_path: str) -> None:
+    with _active_lock:
+        _active_downloads.add(rel_path)
+
+
+def unmark_active(rel_path: str) -> None:
+    with _active_lock:
+        _active_downloads.discard(rel_path)
+
+
+def _is_active(rel_path: str) -> bool:
+    with _active_lock:
+        return rel_path in _active_downloads
+
 
 def _is_media(path: Path) -> bool:
-    return path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS
+    if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
+        return False
+    # Skip yt-dlp intermediate fragment files (e.g. ".f137.mp4").
+    return _FRAGMENT_RE.search(path.name) is None
+
+
+def _is_stable(path: Path) -> bool:
+    """True if the file size is non-zero and unchanged across a short interval."""
+    try:
+        first = path.stat().st_size
+        time.sleep(1)
+        second = path.stat().st_size
+    except OSError:
+        return False
+    return first > 0 and first == second
 
 
 def _ingest_file(session: Session, path: Path) -> bool:
@@ -31,8 +70,14 @@ def _ingest_file(session: Session, path: Path) -> bool:
     except ValueError:
         return False
 
+    if _is_active(rel_path):
+        return False
+
     existing = find_video_by_path(session, rel_path)
     if existing is not None:
+        return False
+
+    if not _is_stable(path):
         return False
 
     try:
@@ -75,6 +120,27 @@ def scan_once() -> int:
     finally:
         _scan_lock.release()
     return added
+
+
+def cleanup_orphans() -> int:
+    """Remove review rows that point at files which no longer exist on disk.
+
+    These are typically leftovers from before the fragment-aware scanner, e.g.
+    a yt-dlp fragment that was ingested and then deleted once the merge ran.
+    """
+    removed = 0
+    with Session(engine) as session:
+        rows = session.exec(select(Video).where(Video.needs_review == True)).all()  # noqa: E712
+        for video in rows:
+            if (DOWNLOADS_DIR / video.file_path).exists():
+                continue
+            if video.thumbnail_path:
+                Path(video.thumbnail_path).unlink(missing_ok=True)
+            session.delete(video)
+            removed += 1
+        if removed:
+            session.commit()
+    return removed
 
 
 class _MediaEventHandler(FileSystemEventHandler):

@@ -10,6 +10,7 @@ from ..database import get_session
 from ..models import DownloadJob, JobStatus
 from ..schemas import DownloadCreate, DownloadJobRead
 from ..services import downloader
+from ..services.url_clean import clean_url
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 
@@ -26,8 +27,10 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
     if not payload.url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
 
+    url = clean_url(payload.url, keep_playlist=False)
+
     job = DownloadJob(
-        url=payload.url.strip(),
+        url=url,
         quality_preset=payload.quality_preset,
         status=JobStatus.queued,
     )

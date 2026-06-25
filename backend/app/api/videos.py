@@ -10,7 +10,7 @@ from sqlmodel import Session
 from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import get_session
 from ..models import Video
-from ..schemas import ChannelStat, VideoRead, VideoUpdate
+from ..schemas import ChannelRename, ChannelStat, VideoRead, VideoUpdate
 from ..services import library
 
 router = APIRouter(prefix="/api", tags=["videos"])
@@ -23,10 +23,16 @@ def _to_read(video: Video) -> VideoRead:
         id=video.id,
         title=video.title,
         channel=video.channel,
+        channel_url=video.channel_url,
         tags=library.parse_tags(video.tags),
         description=video.description,
+        notes=video.notes,
         source_url=video.source_url,
         has_thumbnail=bool(video.thumbnail_path and Path(video.thumbnail_path).exists()),
+        subtitles=[
+            {"lang": t.get("lang"), "auto": t.get("auto", False)}
+            for t in library.parse_subtitles(video.subtitles)
+        ],
         file_path=video.file_path,
         duration_sec=video.duration_sec,
         file_size=video.file_size,
@@ -67,6 +73,16 @@ def list_videos(
 @router.get("/channels", response_model=list[ChannelStat])
 def list_channels(session: Session = Depends(get_session)):
     return [ChannelStat(channel=c, count=n) for c, n in library.channel_stats(session)]
+
+
+@router.patch("/channels", response_model=dict)
+def rename_channel(payload: ChannelRename, session: Session = Depends(get_session)):
+    old = payload.old_name.strip()
+    new = payload.new_name.strip()
+    if not old or not new:
+        raise HTTPException(status_code=400, detail="Both names are required")
+    updated = library.rename_channel(session, old, new)
+    return {"updated": updated}
 
 
 @router.get("/tags", response_model=list[str])
@@ -172,6 +188,23 @@ def get_thumbnail(video_id: int, session: Session = Depends(get_session)):
     if not path.exists():
         raise HTTPException(status_code=404, detail="No thumbnail")
     return FileResponse(path, media_type="image/jpeg")
+
+
+@router.get("/videos/{video_id}/subtitles/{lang}")
+def get_subtitle(video_id: int, lang: str, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    track = next(
+        (t for t in library.parse_subtitles(video.subtitles) if t.get("lang") == lang),
+        None,
+    )
+    if track is None:
+        raise HTTPException(status_code=404, detail="Subtitle not found")
+    path = (DOWNLOADS_DIR / track["path"]).resolve()
+    if DOWNLOADS_DIR not in path.parents or not path.exists():
+        raise HTTPException(status_code=404, detail="Subtitle file missing")
+    return FileResponse(path, media_type="text/vtt")
 
 
 _RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")

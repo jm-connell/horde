@@ -1,0 +1,171 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
+import { streamUrl, subtitleUrl } from "../api";
+import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
+import { loadSettings } from "../hooks/useSettings";
+import type { Video } from "../types";
+
+interface PlaybackValue {
+  current: Video | null;
+  queue: Video[];
+  mode: ViewMode;
+  setMode: (mode: ViewMode) => void;
+  playVideo: (video: Video, opts?: { queue?: Video[] }) => void;
+  addToQueue: (video: Video) => void;
+  playNext: (video: Video) => void;
+  removeFromQueue: (id: number) => void;
+  clearQueue: () => void;
+  close: () => void;
+  registerDock: (el: HTMLElement | null) => void;
+}
+
+const Ctx = createContext<PlaybackValue | null>(null);
+
+const QUEUE_KEY = "horde.queue";
+
+function loadQueue(): Video[] {
+  try {
+    const raw = sessionStorage.getItem(QUEUE_KEY);
+    return raw ? (JSON.parse(raw) as Video[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function PlaybackProvider({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const [current, setCurrent] = useState<Video | null>(null);
+  const [queue, setQueue] = useState<Video[]>(loadQueue);
+  const [dock, setDock] = useState<HTMLElement | null>(null);
+  const [mode, setMode] = useState<ViewMode>(
+    () => loadSettings().defaultPlaybackMode
+  );
+
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  if (hostRef.current === null) {
+    hostRef.current = document.createElement("div");
+  }
+
+  useEffect(() => {
+    sessionStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  }, [queue]);
+
+  // Move the persistent player node into the watch dock, or into a floating
+  // mini-player while browsing. Using appendChild (not portal re-targeting)
+  // keeps the <video> element alive so playback never restarts.
+  useEffect(() => {
+    const host = hostRef.current!;
+    if (dock) {
+      dock.appendChild(host);
+      host.className = "w-full";
+    } else if (current) {
+      document.body.appendChild(host);
+      host.className =
+        "fixed bottom-4 right-4 z-40 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
+    } else {
+      host.className = "hidden";
+    }
+  }, [dock, current]);
+
+  useEffect(() => {
+    const host = hostRef.current!;
+    return () => {
+      host.remove();
+    };
+  }, []);
+
+  const playVideo = useCallback(
+    (video: Video, opts?: { queue?: Video[] }) => {
+      setCurrent(video);
+      if (opts?.queue) {
+        setQueue(opts.queue.filter((v) => v.id !== video.id));
+      } else {
+        setQueue((q) => q.filter((v) => v.id !== video.id));
+      }
+    },
+    []
+  );
+
+  const addToQueue = useCallback((video: Video) => {
+    setQueue((q) => (q.some((v) => v.id === video.id) ? q : [...q, video]));
+  }, []);
+
+  const playNext = useCallback((video: Video) => {
+    setQueue((q) => [video, ...q.filter((v) => v.id !== video.id)]);
+  }, []);
+
+  const removeFromQueue = useCallback((id: number) => {
+    setQueue((q) => q.filter((v) => v.id !== id));
+  }, []);
+
+  const clearQueue = useCallback(() => setQueue([]), []);
+
+  const close = useCallback(() => {
+    setCurrent(null);
+    setDock(null);
+  }, []);
+
+  const advance = useCallback(() => {
+    setQueue((q) => {
+      if (q.length === 0) return q;
+      const [next, ...rest] = q;
+      setCurrent(next);
+      navigate(`/watch/${next.id}`);
+      return rest;
+    });
+  }, [navigate]);
+
+  const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
+
+  const value: PlaybackValue = {
+    current,
+    queue,
+    mode,
+    setMode,
+    playVideo,
+    addToQueue,
+    playNext,
+    removeFromQueue,
+    clearQueue,
+    close,
+    registerDock,
+  };
+
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      {current &&
+        createPortal(
+          <VideoPlayer
+            src={streamUrl(current.id)}
+            mode={mode}
+            onModeChange={setMode}
+            variant={dock ? "full" : "mini"}
+            title={current.title}
+            tracks={current.subtitles.map((t) => ({
+              lang: t.lang,
+              src: subtitleUrl(current.id, t.lang),
+            }))}
+            onEnded={advance}
+            onExpand={() => navigate(`/watch/${current.id}`)}
+            onClose={close}
+          />,
+          hostRef.current
+        )}
+    </Ctx.Provider>
+  );
+}
+
+export function usePlayback(): PlaybackValue {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error("usePlayback must be used within PlaybackProvider");
+  return ctx;
+}
