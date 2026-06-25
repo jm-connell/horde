@@ -61,18 +61,6 @@ export default function VideoCard({ video }: { video: Video }) {
             {video.channel}
           </span>
         )}
-        {video.tags.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {video.tags.slice(0, 3).map((tag) => (
-              <span
-                key={tag}
-                className="rounded bg-ink-700 px-1.5 py-0.5 text-[10px] text-accent-soft"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
     </Link>
   );

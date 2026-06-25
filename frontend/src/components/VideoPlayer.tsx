@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDuration } from "../utils";
+import type { SubtitleSize } from "../hooks/useSettings";
 
 export type ViewMode = "standard" | "theater" | "windowed";
 
@@ -7,6 +8,8 @@ export interface SubtitleSource {
   lang: string;
   src: string;
 }
+
+const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 
 interface Props {
   src: string;
@@ -18,6 +21,9 @@ interface Props {
   title?: string;
   onExpand?: () => void;
   onClose?: () => void;
+  subtitleSize?: SubtitleSize;
+  subtitleOffset?: number;
+  defaultRate?: number;
 }
 
 export default function VideoPlayer({
@@ -30,6 +36,9 @@ export default function VideoPlayer({
   title,
   onExpand,
   onClose,
+  subtitleSize = "medium",
+  subtitleOffset = 12,
+  defaultRate = 1,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -38,6 +47,11 @@ export default function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [captionLang, setCaptionLang] = useState<string | null>(null);
+  const [rate, setRate] = useState(defaultRate);
+  const [showSpeed, setShowSpeed] = useState(false);
+  // Remembers the user's chosen rate while "hold for 2x" is temporarily active.
+  const heldRate = useRef<number | null>(null);
+  const holdTimer = useRef<number | null>(null);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -46,6 +60,33 @@ export default function VideoPlayer({
       tt.mode = tt.language === captionLang ? "showing" : "hidden";
     }
   }, [captionLang, tracks]);
+
+  // Lift captions above the control bar. Native cues sit at the bottom edge by
+  // default, so we override each cue's line as it becomes active.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const applyLines = () => {
+      for (const tt of Array.from(v.textTracks)) {
+        if (tt.mode !== "showing" || !tt.cues) continue;
+        for (const cue of Array.from(tt.cues)) {
+          const vtt = cue as VTTCue;
+          vtt.snapToLines = false;
+          vtt.line = Math.max(0, 100 - subtitleOffset);
+        }
+      }
+    };
+    applyLines();
+    const tracksList = Array.from(v.textTracks);
+    for (const tt of tracksList) tt.addEventListener("cuechange", applyLines);
+    return () => {
+      for (const tt of tracksList) tt.removeEventListener("cuechange", applyLines);
+    };
+  }, [captionLang, subtitleOffset, tracks]);
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = rate;
+  }, [rate, src]);
 
   // Start playback when the source changes (opening a video, advancing a queue).
   useEffect(() => {
@@ -74,6 +115,15 @@ export default function VideoPlayer({
     onModeChange(mode === "windowed" ? "standard" : "windowed");
   }, [mode, onModeChange]);
 
+  const stepRate = useCallback((dir: 1 | -1) => {
+    setRate((r) => {
+      const idx = SPEED_STEPS.indexOf(r);
+      const base = idx === -1 ? SPEED_STEPS.indexOf(1) : idx;
+      const next = Math.min(SPEED_STEPS.length - 1, Math.max(0, base + dir));
+      return SPEED_STEPS[next];
+    });
+  }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -91,11 +141,15 @@ export default function VideoPlayer({
         videoRef.current.currentTime += 5;
       } else if (e.key === "ArrowLeft" && videoRef.current) {
         videoRef.current.currentTime -= 5;
+      } else if (e.key === ">" || e.key === ".") {
+        stepRate(1);
+      } else if (e.key === "<" || e.key === ",") {
+        stepRate(-1);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [togglePlay, toggleTheater, toggleWindowed, mode, onModeChange]);
+  }, [togglePlay, toggleTheater, toggleWindowed, mode, onModeChange, stepRate]);
 
   const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current;
@@ -134,6 +188,27 @@ export default function VideoPlayer({
     }
   }, []);
 
+  // Press-and-hold the video to temporarily play at 2x, restoring on release.
+  // A short delay avoids triggering on a normal click (which toggles play).
+  const startHold = useCallback(() => {
+    if (holdTimer.current !== null || heldRate.current !== null) return;
+    holdTimer.current = window.setTimeout(() => {
+      heldRate.current = rate;
+      setRate(2);
+      holdTimer.current = null;
+    }, 250);
+  }, [rate]);
+
+  const endHold = useCallback(() => {
+    if (holdTimer.current !== null) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    if (heldRate.current === null) return;
+    setRate(heldRate.current);
+    heldRate.current = null;
+  }, []);
+
   const progressPct = duration > 0 ? (current / duration) * 100 : 0;
   const isMini = variant === "mini";
 
@@ -151,6 +226,7 @@ export default function VideoPlayer({
     : mode === "windowed"
       ? "h-full w-full object-contain"
       : "max-h-[80vh] w-full bg-black object-contain";
+  const subtitleClass = `sub-${subtitleSize}`;
 
   return (
     <div className={wrapperClass}>
@@ -164,7 +240,12 @@ export default function VideoPlayer({
           onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
           onEnded={onEnded}
-          className={videoClass}
+          onMouseDown={isMini ? undefined : startHold}
+          onMouseUp={isMini ? undefined : endHold}
+          onMouseLeave={isMini ? undefined : endHold}
+          onTouchStart={isMini ? undefined : startHold}
+          onTouchEnd={isMini ? undefined : endHold}
+          className={`${videoClass} ${subtitleClass}`}
         >
           {tracks.map((t) => (
             <track
@@ -245,6 +326,47 @@ export default function VideoPlayer({
               </span>
 
               <div className="ml-auto flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowSpeed((s) => !s)}
+                    className={`rounded px-2 py-1 text-xs font-medium tabular-nums ${
+                      rate !== 1
+                        ? "bg-accent text-ink-950"
+                        : "bg-ink-700 text-gray-200 hover:text-accent"
+                    }`}
+                    title="Playback speed"
+                  >
+                    {rate}x
+                  </button>
+                  {showSpeed && (
+                    <div className="absolute bottom-9 right-0 z-10 w-40 rounded-lg bg-ink-800 p-3 ring-1 ring-ink-600">
+                      <div className="mb-2 grid grid-cols-3 gap-1">
+                        {SPEED_STEPS.map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setRate(s)}
+                            className={`rounded px-1.5 py-1 text-[11px] font-medium tabular-nums ${
+                              rate === s
+                                ? "bg-accent text-ink-950"
+                                : "bg-ink-700 text-gray-200 hover:text-accent"
+                            }`}
+                          >
+                            {s}x
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="range"
+                        min={0.25}
+                        max={3}
+                        step={0.05}
+                        value={rate}
+                        onChange={(e) => setRate(Number(e.target.value))}
+                        className="accent-scrubber w-full"
+                      />
+                    </div>
+                  )}
+                </div>
                 {tracks.length > 0 && (
                   <button
                     onClick={cycleCaptions}

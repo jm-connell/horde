@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { streamUrl, subtitleUrl } from "../api";
 import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
-import { loadSettings } from "../hooks/useSettings";
+import { loadSettings, useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
 
 interface PlaybackValue {
@@ -22,6 +22,7 @@ interface PlaybackValue {
   addToQueue: (video: Video) => void;
   playNext: (video: Video) => void;
   removeFromQueue: (id: number) => void;
+  reorderQueue: (from: number, to: number) => void;
   clearQueue: () => void;
   close: () => void;
   registerDock: (el: HTMLElement | null) => void;
@@ -42,6 +43,7 @@ function loadQueue(): Video[] {
 
 export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
+  const [settings] = useSettings();
   const [current, setCurrent] = useState<Video | null>(null);
   const [queue, setQueue] = useState<Video[]>(loadQueue);
   const [dock, setDock] = useState<HTMLElement | null>(null);
@@ -106,6 +108,18 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setQueue((q) => q.filter((v) => v.id !== id));
   }, []);
 
+  const reorderQueue = useCallback((from: number, to: number) => {
+    setQueue((q) => {
+      if (from === to || from < 0 || to < 0 || from >= q.length || to >= q.length) {
+        return q;
+      }
+      const next = [...q];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
   const clearQueue = useCallback(() => setQueue([]), []);
 
   const close = useCallback(() => {
@@ -134,6 +148,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     addToQueue,
     playNext,
     removeFromQueue,
+    reorderQueue,
     clearQueue,
     close,
     registerDock,
@@ -157,6 +172,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             onEnded={advance}
             onExpand={() => navigate(`/watch/${current.id}`)}
             onClose={close}
+            subtitleSize={settings.subtitleSize}
+            subtitleOffset={settings.subtitleOffset}
+            defaultRate={settings.defaultPlaybackRate}
           />,
           hostRef.current
         )}

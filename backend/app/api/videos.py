@@ -5,12 +5,19 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from sqlmodel import Session
+from sqlmodel import Session, func, select
 
 from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import get_session
 from ..models import Video
-from ..schemas import ChannelRename, ChannelStat, VideoRead, VideoUpdate
+from ..schemas import (
+    ChannelRename,
+    ChannelStat,
+    StorageStats,
+    TagStat,
+    VideoRead,
+    VideoUpdate,
+)
 from ..services import library
 
 router = APIRouter(prefix="/api", tags=["videos"])
@@ -88,6 +95,34 @@ def rename_channel(payload: ChannelRename, session: Session = Depends(get_sessio
 @router.get("/tags", response_model=list[str])
 def list_tags(session: Session = Depends(get_session)):
     return library.all_tags(session)
+
+
+@router.get("/tags/stats", response_model=list[TagStat])
+def tag_stats(session: Session = Depends(get_session)):
+    return [TagStat(tag=t, count=n) for t, n in library.tag_stats(session)]
+
+
+@router.get("/stats/storage", response_model=StorageStats)
+def storage_stats(session: Session = Depends(get_session)):
+    video_bytes = session.exec(
+        select(func.coalesce(func.sum(Video.file_size), 0)).where(
+            Video.needs_review == False  # noqa: E712
+        )
+    ).one()
+    video_count = session.exec(
+        select(func.count(Video.id)).where(Video.needs_review == False)  # noqa: E712
+    ).one()
+    thumbnail_bytes = 0
+    if THUMBNAILS_DIR.exists():
+        thumbnail_bytes = sum(
+            f.stat().st_size for f in THUMBNAILS_DIR.glob("*") if f.is_file()
+        )
+    return StorageStats(
+        total_bytes=int(video_bytes) + thumbnail_bytes,
+        video_bytes=int(video_bytes),
+        thumbnail_bytes=thumbnail_bytes,
+        video_count=int(video_count),
+    )
 
 
 @router.get("/videos/{video_id}", response_model=VideoRead)

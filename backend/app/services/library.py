@@ -102,3 +102,15 @@ def all_tags(session: Session) -> list[str]:
         for tag in parse_tags(raw):
             seen.add(tag)
     return sorted(seen)
+
+
+def tag_stats(session: Session) -> list[tuple[str, int]]:
+    """Return (tag, count) pairs ordered by most common first."""
+    rows = session.exec(
+        select(Video.tags).where(Video.needs_review == False)  # noqa: E712
+    ).all()
+    counts: dict[str, int] = {}
+    for raw in rows:
+        for tag in parse_tags(raw):
+            counts[tag] = counts.get(tag, 0) + 1
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))

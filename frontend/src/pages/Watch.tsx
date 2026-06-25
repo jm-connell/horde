@@ -7,7 +7,7 @@ import VideoEditForm from "../components/VideoEditForm";
 import { usePlayback } from "../context/PlaybackContext";
 import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
-import { formatDate, formatDuration, formatSize } from "../utils";
+import { formatDate, formatSize } from "../utils";
 
 export default function Watch() {
   const { id } = useParams();
@@ -16,11 +16,20 @@ export default function Watch() {
   const [video, setVideo] = useState<Video | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
   const [settings] = useSettings();
-  const { mode, playVideo, registerDock, queue, removeFromQueue, clearQueue } =
-    usePlayback();
+  const {
+    mode,
+    playVideo,
+    registerDock,
+    queue,
+    removeFromQueue,
+    reorderQueue,
+    clearQueue,
+  } = usePlayback();
 
   const dockRef = useRef<HTMLDivElement>(null);
+  const dragIndex = useRef<number | null>(null);
 
   useEffect(() => {
     if (!videoId) return;
@@ -67,45 +76,16 @@ export default function Watch() {
           <h1 className="text-xl font-bold text-gray-100">{video.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-400">
             {video.channel && (
-              <span className="flex items-center gap-1.5">
-                <Link
-                  to={`/?channel=${encodeURIComponent(video.channel)}`}
-                  className="font-medium text-accent hover:underline"
-                >
-                  {video.channel}
-                </Link>
-                {video.channel_url && (
-                  <a
-                    href={video.channel_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-gray-500 hover:text-accent"
-                    title="Open channel page"
-                  >
-                    ↗
-                  </a>
-                )}
-              </span>
+              <Link
+                to={`/?channel=${encodeURIComponent(video.channel)}`}
+                className="font-medium text-accent hover:underline"
+              >
+                {video.channel}
+              </Link>
             )}
             {video.published_at && <span>{formatDate(video.published_at)}</span>}
-            <span>{formatDuration(video.duration_sec)}</span>
             <span>{formatSize(video.file_size)}</span>
-            {video.platform && <span>{video.platform}</span>}
           </div>
-
-          {video.tags.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {video.tags.map((tag) => (
-                <Link
-                  key={tag}
-                  to={`/?tag=${encodeURIComponent(tag)}`}
-                  className="rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-accent-soft hover:border-accent"
-                >
-                  #{tag}
-                </Link>
-              ))}
-            </div>
-          )}
 
           {video.source_url && (
             <a
@@ -120,9 +100,19 @@ export default function Watch() {
 
           {settings.showDescription && video.description && (
             <div className="mt-4 rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700">
-              <p className="whitespace-pre-wrap text-sm text-gray-300">
+              <p
+                className={`whitespace-pre-wrap text-sm text-gray-300 ${
+                  descExpanded ? "" : "line-clamp-3"
+                }`}
+              >
                 <LinkifiedText text={video.description} />
               </p>
+              <button
+                onClick={() => setDescExpanded((v) => !v)}
+                className="mt-2 text-xs font-medium text-accent hover:underline"
+              >
+                {descExpanded ? "Show less" : "Show more"}
+              </button>
             </div>
           )}
 
@@ -151,13 +141,29 @@ export default function Watch() {
                 </button>
               </div>
               <ul className="space-y-1">
-                {queue.map((v) => {
+                {queue.map((v, index) => {
                   const thumb = thumbnailUrl(v);
                   return (
                     <li
                       key={v.id}
-                      className="flex items-center gap-3 rounded-lg p-1 hover:bg-ink-800"
+                      draggable
+                      onDragStart={() => (dragIndex.current = index)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        if (dragIndex.current !== null) {
+                          reorderQueue(dragIndex.current, index);
+                        }
+                        dragIndex.current = null;
+                      }}
+                      onDragEnd={() => (dragIndex.current = null)}
+                      className="flex items-center gap-2 rounded-lg p-1 hover:bg-ink-800"
                     >
+                      <span
+                        className="shrink-0 cursor-grab px-1 text-gray-600 active:cursor-grabbing"
+                        title="Drag to reorder"
+                      >
+                        ⠿
+                      </span>
                       <button
                         onClick={() => playVideo(v)}
                         className="flex min-w-0 flex-1 items-center gap-3 text-left"

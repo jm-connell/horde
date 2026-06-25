@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 
 from ..database import get_session
 from ..models import DownloadJob, JobStatus
-from ..schemas import DownloadCreate, DownloadJobRead
+from ..schemas import DownloadCreate, DownloadJobRead, DownloadPreview
 from ..services import downloader
 from ..services.url_clean import clean_url
 
@@ -20,6 +20,16 @@ QUALITY_PRESETS = list(downloader.QUALITY_FORMATS.keys())
 @router.get("/presets", response_model=list[str])
 def list_presets():
     return QUALITY_PRESETS
+
+
+@router.get("/preview", response_model=DownloadPreview)
+def preview_download(url: str):
+    if not url.strip():
+        raise HTTPException(status_code=400, detail="URL is required")
+    try:
+        return downloader.extract_preview(clean_url(url, keep_playlist=True))
+    except Exception as exc:  # noqa: BLE001 - surface extraction failures to the UI
+        raise HTTPException(status_code=400, detail=f"Could not read link: {exc}")
 
 
 @router.post("", response_model=DownloadJobRead)
@@ -38,7 +48,13 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
     session.commit()
     session.refresh(job)
 
-    downloader.start_download(job.id, job.url, job.quality_preset)
+    downloader.start_download(
+        job.id,
+        job.url,
+        job.quality_preset,
+        title_override=(payload.title_override or "").strip() or None,
+        channel_override=(payload.channel_override or "").strip() or None,
+    )
     return job
 
 

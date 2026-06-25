@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ViewMode } from "../components/VideoPlayer";
 
+export type SubtitleSize = "small" | "medium" | "large";
+
 export interface Settings {
   defaultPlaybackMode: ViewMode;
   showDescription: boolean;
+  subtitleSize: SubtitleSize;
+  subtitleOffset: number;
+  defaultPlaybackRate: number;
 }
 
 const DEFAULTS: Settings = {
   defaultPlaybackMode: "standard",
   showDescription: true,
+  subtitleSize: "medium",
+  subtitleOffset: 12,
+  defaultPlaybackRate: 1,
 };
 
 const STORAGE_KEY = "horde.settings";

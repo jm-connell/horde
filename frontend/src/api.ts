@@ -1,8 +1,12 @@
 import type {
   ChannelStat,
   DownloadJob,
+  DownloadOverrides,
+  DownloadPreview,
   Playlist,
   PlaylistDetail,
+  StorageStats,
+  TagStat,
   Video,
   VideoUpdate,
 } from "./types";
@@ -83,19 +87,41 @@ export const api = {
     return request<string[]>("/api/tags");
   },
 
+  tagStats(): Promise<TagStat[]> {
+    return request<TagStat[]>("/api/tags/stats");
+  },
+
+  storageStats(): Promise<StorageStats> {
+    return request<StorageStats>("/api/stats/storage");
+  },
+
   listReview(): Promise<Video[]> {
     return request<Video[]>("/api/review");
+  },
+
+  skipReview(id: number): Promise<Video> {
+    return request<Video>(`/api/review/${id}/skip`, { method: "POST" });
   },
 
   listPresets(): Promise<string[]> {
     return request<string[]>("/api/downloads/presets");
   },
 
-  createDownload(url: string, quality_preset: string): Promise<DownloadJob> {
+  previewDownload(url: string): Promise<DownloadPreview> {
+    return request<DownloadPreview>(
+      `/api/downloads/preview?url=${encodeURIComponent(url)}`
+    );
+  },
+
+  createDownload(
+    url: string,
+    quality_preset: string,
+    overrides: DownloadOverrides = {}
+  ): Promise<DownloadJob> {
     return request<DownloadJob>("/api/downloads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, quality_preset }),
+      body: JSON.stringify({ url, quality_preset, ...overrides }),
     });
   },
 

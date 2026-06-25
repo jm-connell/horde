@@ -65,6 +65,31 @@ export interface ProgressEvent {
   error?: string;
 }
 
+export interface DownloadPreview {
+  is_playlist: boolean;
+  title: string | null;
+  channel: string | null;
+  channel_url: string | null;
+  entry_count: number | null;
+}
+
+export interface DownloadOverrides {
+  title_override?: string;
+  channel_override?: string;
+}
+
+export interface TagStat {
+  tag: string;
+  count: number;
+}
+
+export interface StorageStats {
+  total_bytes: number;
+  video_bytes: number;
+  thumbnail_bytes: number;
+  video_count: number;
+}
+
 export type PlaylistSource = "user" | "youtube";
 
 export interface Playlist {

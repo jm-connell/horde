@@ -48,6 +48,16 @@ class VideoUpdate(BaseModel):
 class DownloadCreate(BaseModel):
     url: str
     quality_preset: str = "best"
+    title_override: Optional[str] = None
+    channel_override: Optional[str] = None
+
+
+class DownloadPreview(BaseModel):
+    is_playlist: bool
+    title: Optional[str]
+    channel: Optional[str]
+    channel_url: Optional[str]
+    entry_count: Optional[int]
 
 
 class DownloadJobRead(BaseModel):
@@ -65,6 +75,18 @@ class DownloadJobRead(BaseModel):
 class ChannelStat(BaseModel):
     channel: str
     count: int
+
+
+class TagStat(BaseModel):
+    tag: str
+    count: int
+
+
+class StorageStats(BaseModel):
+    total_bytes: int
+    video_bytes: int
+    thumbnail_bytes: int
+    video_count: int
 
 
 class ChannelRename(BaseModel):

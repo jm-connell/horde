@@ -19,6 +19,7 @@ progress_store: dict[int, dict[str, Any]] = {}
 # bv*+ba/b = best video+audio merge, falling back to a single progressive file.
 QUALITY_FORMATS = {
     "best": "bv*+ba/b",
+    "1440p": "bv*[height<=1440]+ba/b[height<=1440]/bv*+ba/b",
     "1080p": "bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b",
     "720p": "bv*[height<=720]+ba/b[height<=720]/bv*+ba/b",
     "480p": "bv*[height<=480]+ba/b[height<=480]/bv*+ba/b",
@@ -143,7 +144,13 @@ def _published_at(info: dict[str, Any]) -> Optional[datetime]:
         return None
 
 
-def _run_download(job_id: int, url: str, quality_preset: str) -> Optional[int]:
+def _run_download(
+    job_id: int,
+    url: str,
+    quality_preset: str,
+    title_override: Optional[str] = None,
+    channel_override: Optional[str] = None,
+) -> Optional[int]:
     import yt_dlp
 
     _update_job(job_id, status=JobStatus.downloading)
@@ -207,8 +214,10 @@ def _run_download(job_id: int, url: str, quality_preset: str) -> Optional[int]:
                 video = Video(file_path=rel_path)
                 session.add(video)
 
-            video.title = info.get("title") or final_path.stem
-            video.channel = info.get("uploader") or info.get("channel")
+            video.title = title_override or info.get("title") or final_path.stem
+            video.channel = (
+                channel_override or info.get("uploader") or info.get("channel")
+            )
             video.channel_url = info.get("uploader_url") or info.get("channel_url")
             video.description = info.get("description")
             video.tags = library.dump_tags(_collect_tags(info))
@@ -259,13 +268,55 @@ def _run_download(job_id: int, url: str, quality_preset: str) -> Optional[int]:
             scanner.unmark_active(rel)
 
 
-def start_download(job_id: int, url: str, quality_preset: str) -> None:
+def start_download(
+    job_id: int,
+    url: str,
+    quality_preset: str,
+    title_override: Optional[str] = None,
+    channel_override: Optional[str] = None,
+) -> None:
     thread = threading.Thread(
         target=_run_download,
-        args=(job_id, url, quality_preset),
+        args=(job_id, url, quality_preset, title_override, channel_override),
         daemon=True,
     )
     thread.start()
+
+
+def extract_preview(url: str) -> dict[str, Any]:
+    """Inspect a URL without downloading so the UI can show and let the user
+    override the detected title/channel, and detect playlists."""
+    import yt_dlp
+
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": "in_playlist",
+        "extractor_args": {
+            "youtube": {"player_client": ["android_vr", "web", "ios"]},
+        },
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    if info.get("_type") == "playlist" or info.get("entries") is not None:
+        entries = [e for e in (info.get("entries") or []) if e]
+        return {
+            "is_playlist": True,
+            "title": info.get("title"),
+            "channel": info.get("uploader") or info.get("channel"),
+            "channel_url": info.get("uploader_url") or info.get("channel_url"),
+            "entry_count": len(entries),
+        }
+
+    return {
+        "is_playlist": False,
+        "title": info.get("title"),
+        "channel": info.get("uploader") or info.get("channel"),
+        "channel_url": info.get("uploader_url") or info.get("channel_url"),
+        "entry_count": None,
+    }
 
 
 def extract_playlist(url: str) -> tuple[str, list[str]]:
