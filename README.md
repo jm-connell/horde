@@ -67,6 +67,10 @@ npm install
 npm run dev
 ```
 
+On Windows, start the backend before the frontend. The Vite proxy targets
+`127.0.0.1:8080` (not `localhost`) to avoid IPv6 `::1` connection refused
+errors that show up as instant 500s in the UI.
+
 ## Configuration
 
 | Variable            | Default                            | Purpose                                  |
@@ -81,3 +85,6 @@ npm run dev
 - No transcoding: the original file is streamed with HTTP range support, so
   playback depends on your browser's codec support (`.mp4`/`.webm` are safest).
 - Automated channel subscriptions are out of scope for this version.
+- **yt-dlp must be kept current.** YouTube changes frequently; if downloads
+  fail with "Requested format is not available", upgrade: `pip install -U yt-dlp`
+  (or rebuild the Docker image).

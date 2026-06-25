@@ -2,7 +2,7 @@ import threading
 import time
 from pathlib import Path
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -15,6 +15,7 @@ from ..config import (
 from ..database import engine
 from ..models import Video, VideoStatus
 from .metadata import grab_frame, probe_duration
+from .paths import find_video_by_path, to_rel_path
 
 _scan_lock = threading.Lock()
 
@@ -26,13 +27,11 @@ def _is_media(path: Path) -> bool:
 def _ingest_file(session: Session, path: Path) -> bool:
     """Insert a newly discovered file as a review-needed video. Returns True if added."""
     try:
-        rel_path = str(path.relative_to(DOWNLOADS_DIR))
+        rel_path = to_rel_path(path)
     except ValueError:
         return False
 
-    existing = session.exec(
-        select(Video).where(Video.file_path == rel_path)
-    ).first()
+    existing = find_video_by_path(session, rel_path)
     if existing is not None:
         return False
 

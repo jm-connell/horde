@@ -6,7 +6,9 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://localhost:8080",
+        // Use 127.0.0.1 — on Windows, "localhost" often resolves to ::1 while
+        // uvicorn binds to 127.0.0.1, causing ECONNREFUSED proxy 500s.
+        target: "http://127.0.0.1:8080",
         changeOrigin: true,
       },
     },
