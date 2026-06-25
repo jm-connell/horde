@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #08090c;
+  color: #e5e7eb;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+/* Custom range styling for the player scrubber and volume. */
+input[type="range"].accent-scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: #2a313f;
+  cursor: pointer;
+}
+
+input[type="range"].accent-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #22d3ee;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+}
+
+input[type="range"].accent-scrubber::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 9999px;
+  background: #22d3ee;
+}

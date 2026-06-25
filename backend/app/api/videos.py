@@ -1,0 +1,232 @@
+import re
+from pathlib import Path
+from typing import Optional
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from sqlmodel import Session
+
+from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
+from ..database import get_session
+from ..models import Video
+from ..schemas import ChannelStat, VideoRead, VideoUpdate
+from ..services import library
+
+router = APIRouter(prefix="/api", tags=["videos"])
+
+CHUNK_SIZE = 1024 * 1024
+
+
+def _to_read(video: Video) -> VideoRead:
+    return VideoRead(
+        id=video.id,
+        title=video.title,
+        channel=video.channel,
+        tags=library.parse_tags(video.tags),
+        description=video.description,
+        source_url=video.source_url,
+        has_thumbnail=bool(video.thumbnail_path and Path(video.thumbnail_path).exists()),
+        file_path=video.file_path,
+        duration_sec=video.duration_sec,
+        file_size=video.file_size,
+        published_at=video.published_at,
+        added_at=video.added_at,
+        needs_review=video.needs_review,
+        platform=video.platform,
+        status=video.status,
+    )
+
+
+def _resolve_media(video: Video) -> Path:
+    path = (DOWNLOADS_DIR / video.file_path).resolve()
+    # Guard against path traversal escaping the downloads root.
+    if DOWNLOADS_DIR not in path.parents and path != DOWNLOADS_DIR:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="File missing on disk")
+    return path
+
+
+@router.get("/videos", response_model=list[VideoRead])
+def list_videos(
+    q: Optional[str] = None,
+    channel: Optional[str] = None,
+    tag: Optional[str] = None,
+    sort: str = Query("added_at"),
+    order: str = Query("desc"),
+    session: Session = Depends(get_session),
+):
+    videos = library.query_videos(
+        session, q=q, channel=channel, tag=tag, sort=sort, order=order,
+        needs_review=False,
+    )
+    return [_to_read(v) for v in videos]
+
+
+@router.get("/channels", response_model=list[ChannelStat])
+def list_channels(session: Session = Depends(get_session)):
+    return [ChannelStat(channel=c, count=n) for c, n in library.channel_stats(session)]
+
+
+@router.get("/tags", response_model=list[str])
+def list_tags(session: Session = Depends(get_session)):
+    return library.all_tags(session)
+
+
+@router.get("/videos/{video_id}", response_model=VideoRead)
+def get_video(video_id: int, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return _to_read(video)
+
+
+@router.patch("/videos/{video_id}", response_model=VideoRead)
+def update_video(
+    video_id: int,
+    payload: VideoUpdate,
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    data = payload.model_dump(exclude_unset=True)
+
+    if "tags" in data and data["tags"] is not None:
+        video.tags = library.dump_tags(data.pop("tags"))
+    if "thumbnail_url" in data and data["thumbnail_url"]:
+        _fetch_thumbnail_from_url(video, data.pop("thumbnail_url"))
+    data.pop("thumbnail_url", None)
+
+    for key, value in data.items():
+        setattr(video, key, value)
+
+    # Auto-clear the review flag once the required fields are present.
+    if video.needs_review and video.title and video.channel:
+        video.needs_review = False
+
+    session.add(video)
+    session.commit()
+    session.refresh(video)
+    return _to_read(video)
+
+
+@router.delete("/videos/{video_id}", status_code=204)
+def delete_video(
+    video_id: int,
+    delete_file: bool = False,
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if delete_file:
+        media = (DOWNLOADS_DIR / video.file_path)
+        if media.exists():
+            media.unlink(missing_ok=True)
+    if video.thumbnail_path:
+        Path(video.thumbnail_path).unlink(missing_ok=True)
+    session.delete(video)
+    session.commit()
+    return Response(status_code=204)
+
+
+def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
+    dest = THUMBNAILS_DIR / f"{video.id}.jpg"
+    try:
+        with httpx.Client(timeout=30, follow_redirects=True) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            dest.write_bytes(resp.content)
+        video.thumbnail_path = str(dest)
+    except (httpx.HTTPError, OSError) as exc:
+        raise HTTPException(status_code=400, detail=f"Could not fetch thumbnail: {exc}")
+
+
+@router.post("/videos/{video_id}/thumbnail", response_model=VideoRead)
+async def upload_thumbnail(
+    video_id: int,
+    file: UploadFile,
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    dest = THUMBNAILS_DIR / f"{video_id}.jpg"
+    dest.write_bytes(await file.read())
+    video.thumbnail_path = str(dest)
+    session.add(video)
+    session.commit()
+    session.refresh(video)
+    return _to_read(video)
+
+
+@router.get("/thumbnails/{video_id}")
+def get_thumbnail(video_id: int, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None or not video.thumbnail_path:
+        raise HTTPException(status_code=404, detail="No thumbnail")
+    path = Path(video.thumbnail_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="No thumbnail")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+_RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
+
+
+@router.get("/videos/{video_id}/stream")
+def stream_video(
+    video_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    path = _resolve_media(video)
+    file_size = path.stat().st_size
+
+    suffix = path.suffix.lower()
+    content_type = {
+        ".mp4": "video/mp4",
+        ".webm": "video/webm",
+        ".mkv": "video/x-matroska",
+    }.get(suffix, "application/octet-stream")
+
+    range_header = request.headers.get("range")
+    if range_header is None:
+        return FileResponse(path, media_type=content_type)
+
+    match = _RANGE_RE.fullmatch(range_header.strip())
+    if match is None:
+        raise HTTPException(status_code=416, detail="Invalid range")
+
+    start = int(match.group(1)) if match.group(1) else 0
+    end = int(match.group(2)) if match.group(2) else file_size - 1
+    end = min(end, file_size - 1)
+    if start > end:
+        raise HTTPException(status_code=416, detail="Range not satisfiable")
+
+    length = end - start + 1
+
+    def iter_file():
+        with open(path, "rb") as f:
+            f.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = f.read(min(CHUNK_SIZE, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(length),
+        "Content-Type": content_type,
+    }
+    return StreamingResponse(iter_file(), status_code=206, headers=headers)
