@@ -4,7 +4,6 @@ import type { ViewMode } from "../components/VideoPlayer";
 export type SubtitleSize = "small" | "medium" | "large";
 
 export interface Settings {
-  defaultPlaybackMode: ViewMode;
   showDescription: boolean;
   subtitleSize: SubtitleSize;
   subtitleOffset: number;
@@ -15,7 +14,6 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  defaultPlaybackMode: "standard",
   showDescription: true,
   subtitleSize: "medium",
   subtitleOffset: 12,

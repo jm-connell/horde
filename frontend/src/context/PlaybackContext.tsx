@@ -85,12 +85,15 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
   }, [queue]);
 
-  // Move the persistent player node into the watch dock, or into a floating
-  // mini-player while browsing. Using appendChild (not portal re-targeting)
-  // keeps the <video> element alive so playback never restarts.
+  // Move the persistent player node into the watch dock, body (windowed), or a
+  // floating mini-player while browsing. Using appendChild (not portal
+  // re-targeting) keeps the <video> element alive so playback never restarts.
   useEffect(() => {
     const host = hostRef.current!;
-    if (dock) {
+    if (!isMobile && mode === "windowed" && current) {
+      document.body.appendChild(host);
+      host.className = "fixed inset-0 z-50";
+    } else if (dock) {
       dock.appendChild(host);
       host.className = "w-full";
     } else if (current) {
@@ -101,7 +104,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     } else {
       host.className = "hidden";
     }
-  }, [dock, current, isMobile]);
+  }, [dock, current, isMobile, mode]);
+
+  // Hide page scroll while windowed fullscreen is active.
+  useEffect(() => {
+    if (!isMobile && mode === "windowed" && current) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [isMobile, mode, current]);
 
   useEffect(() => {
     const host = hostRef.current!;

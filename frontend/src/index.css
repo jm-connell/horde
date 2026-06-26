@@ -52,6 +52,9 @@ input[type="range"].accent-scrubber::-moz-range-thumb {
 video::cue {
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
+  text-align: center;
+  line-height: 1.2;
+  white-space: pre-line;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 

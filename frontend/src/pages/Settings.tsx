@@ -1,15 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useSettings, type SubtitleSize } from "../hooks/useSettings";
-import type { ViewMode } from "../components/VideoPlayer";
 import type { StorageStats } from "../types";
 import { formatSize } from "../utils";
-
-const MODE_OPTIONS: { value: ViewMode; label: string; hint: string }[] = [
-  { value: "standard", label: "Normal", hint: "Centered player" },
-  { value: "theater", label: "Theater", hint: "Wide player layout" },
-  { value: "windowed", label: "Fullscreen", hint: "Fills the window" },
-];
 
 const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "small", label: "Small" },
@@ -17,7 +10,7 @@ const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "large", label: "Large" },
 ];
 
-const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 
 export default function Settings() {
   const [settings, update] = useSettings();
@@ -36,31 +29,6 @@ export default function Settings() {
 
       <div className="space-y-6 rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700">
         <div>
-          <h2 className="mb-1 text-sm font-medium text-gray-200">
-            Default playback mode
-          </h2>
-          <p className="mb-3 text-xs text-gray-500">
-            How a video opens on the watch page.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {MODE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => update({ defaultPlaybackMode: opt.value })}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  settings.defaultPlaybackMode === opt.value
-                    ? "bg-accent text-ink-950"
-                    : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                }`}
-                title={opt.hint}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="border-t border-ink-700 pt-6">
           <label className="flex items-center justify-between">
             <span>
               <span className="block text-sm font-medium text-gray-200">
@@ -74,13 +42,13 @@ export default function Settings() {
               role="switch"
               aria-checked={settings.showDescription}
               onClick={() => update({ showDescription: !settings.showDescription })}
-              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+              className={`flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
                 settings.showDescription ? "bg-accent" : "bg-ink-700"
               }`}
             >
               <span
-                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                  settings.showDescription ? "translate-x-5" : "translate-x-0.5"
+                className={`block h-5 w-5 rounded-full bg-white transition-transform ${
+                  settings.showDescription ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>

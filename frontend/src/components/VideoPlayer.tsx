@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { formatDuration } from "../utils";
 import type { SubtitleSize } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -10,8 +10,16 @@ export interface SubtitleSource {
   src: string;
 }
 
-const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 const CONTROLS_HIDE_DELAY_MS = 2500;
+const HOLD_DELAY_MS = 250;
+
+function snapRateToStep(r: number): number {
+  if (SPEED_STEPS.includes(r)) return r;
+  return SPEED_STEPS.reduce((best, s) =>
+    Math.abs(s - r) < Math.abs(best - r) ? s : best
+  );
+}
 
 interface Props {
   src: string;
@@ -62,53 +70,105 @@ export default function VideoPlayer({
   const [volume, setVolume] = useState(volumeProp ?? 1);
   const [muted, setMuted] = useState(false);
   const [captionLang, setCaptionLang] = useState<string | null>(null);
-  const [rate, setRate] = useState(defaultRate);
+  const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
   const [showSpeed, setShowSpeed] = useState(false);
-  // Remembers the user's chosen rate while "hold for 2x" is temporarily active.
+  const [videoAspect, setVideoAspect] = useState<number | null>(null);
   const heldRate = useRef<number | null>(null);
   const holdTimer = useRef<number | null>(null);
+  const holdActive = useRef(false);
+  const wasPlayingBeforeHold = useRef(false);
+  const suppressClick = useRef(false);
+  const pointerDownOnVideo = useRef(false);
 
-  useEffect(() => {
+  const applyCueLines = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
+    const activeCues: VTTCue[] = [];
     for (const tt of Array.from(v.textTracks)) {
-      tt.mode = tt.language === captionLang ? "showing" : "hidden";
+      if (tt.mode !== "showing") continue;
+      for (const cue of Array.from(tt.activeCues ?? [])) {
+        activeCues.push(cue as VTTCue);
+      }
     }
+    // Stack simultaneous cues upward so they don't sit on the same line.
+    const lineStep = 7;
+    const baseLine = Math.max(10, 100 - subtitleOffset);
+    activeCues.forEach((vtt, index) => {
+      try {
+        vtt.snapToLines = false;
+        vtt.line = baseLine - index * lineStep;
+        vtt.lineAlign = "end";
+        vtt.position = 50;
+        vtt.positionAlign = "center";
+        vtt.align = "center";
+        vtt.size = 100;
+      } catch {
+        // Some browsers reject edits on inactive or read-only cues.
+      }
+    });
+  }, [subtitleOffset]);
+
+  const setCaptionMode = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const selected = captionLang?.toLowerCase() ?? null;
+    Array.from(v.textTracks).forEach((tt, i) => {
+      if (!selected) {
+        tt.mode = "hidden";
+        return;
+      }
+      const metaLang = (tracks[i]?.lang ?? "").toLowerCase();
+      const trackLang = (tt.language || tt.label || tracks[i]?.lang || "").toLowerCase();
+      const matches =
+        metaLang === selected ||
+        metaLang.split("-")[0] === selected.split("-")[0] ||
+        trackLang === selected ||
+        trackLang.split("-")[0] === selected.split("-")[0];
+      tt.mode = matches ? "showing" : "hidden";
+    });
   }, [captionLang, tracks]);
+
+  useLayoutEffect(() => {
+    setCaptionMode();
+  }, [setCaptionMode, tracks, src]);
+
+  useEffect(() => {
+    if (playing) setCaptionMode();
+  }, [playing, setCaptionMode]);
 
   // Lift captions above the control bar. Native cues sit at the bottom edge by
   // default, so we override each cue's line as it becomes active.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const applyLines = () => {
-      for (const tt of Array.from(v.textTracks)) {
-        if (tt.mode !== "showing" || !tt.cues) continue;
-        for (const cue of Array.from(tt.cues)) {
-          const vtt = cue as VTTCue;
-          vtt.snapToLines = false;
-          vtt.line = Math.max(0, 100 - subtitleOffset);
-        }
-      }
+    const applyLines = () => applyCueLines();
+    const onTrackLoad = () => {
+      setCaptionMode();
+      applyLines();
     };
     applyLines();
+    setCaptionMode();
+    v.addEventListener("loadedmetadata", onTrackLoad);
+    const trackEls = v.querySelectorAll("track");
+    for (const el of trackEls) el.addEventListener("load", onTrackLoad);
     const tracksList = Array.from(v.textTracks);
     for (const tt of tracksList) tt.addEventListener("cuechange", applyLines);
     return () => {
-      for (const tt of tracksList) tt.removeEventListener("cuechange", applyLines);
+      v.removeEventListener("loadedmetadata", onTrackLoad);
+      for (const el of trackEls) el.removeEventListener("load", onTrackLoad);
+      for (const tt of tracksList)
+        tt.removeEventListener("cuechange", applyLines);
     };
-  }, [captionLang, subtitleOffset, tracks]);
+  }, [captionLang, subtitleOffset, tracks, src, setCaptionMode, applyCueLines]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = rate;
   }, [rate, src]);
 
-  // Apply the persisted volume to the element on load and source change.
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = volume;
   }, [src]);
 
-  // Start playback when the source changes (opening a video, advancing a queue).
   useEffect(() => {
     videoRef.current?.play().catch(() => undefined);
   }, [src]);
@@ -121,6 +181,7 @@ export default function VideoPlayer({
   }, [tracks, captionLang]);
 
   const togglePlay = useCallback(() => {
+    if (suppressClick.current) return;
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) v.play();
@@ -260,22 +321,27 @@ export default function VideoPlayer({
     setMuted(v.muted);
   };
 
+  const enterPiP = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v?.requestPictureInPicture) return;
+    await v.requestPictureInPicture();
+    applyCueLines();
+  }, [applyCueLines]);
+
   const requestPiP = useCallback(async () => {
     const v = videoRef.current;
     if (!v) return;
     try {
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
-      } else if (v.requestPictureInPicture) {
-        await v.requestPictureInPicture();
+      } else {
+        await enterPiP();
       }
     } catch {
       // PiP can be blocked by the browser; ignore.
     }
-  }, []);
+  }, [enterPiP]);
 
-  // On mobile, hand off to Picture-in-Picture when the user backgrounds the
-  // app/tab so audio and video keep playing. Restore inline view on return.
   useEffect(() => {
     if (!isMobile) return;
     const onVisibility = () => {
@@ -287,24 +353,48 @@ export default function VideoPlayer({
         document.pictureInPictureEnabled &&
         !document.pictureInPictureElement
       ) {
-        v.requestPictureInPicture().catch(() => undefined);
+        enterPiP().catch(() => undefined);
       } else if (!document.hidden && document.pictureInPictureElement) {
         document.exitPictureInPicture().catch(() => undefined);
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [isMobile]);
+  }, [isMobile, enterPiP]);
 
-  // Press-and-hold the video to temporarily play at 2x, restoring on release.
-  // A short delay avoids triggering on a normal click (which toggles play).
-  const startHold = useCallback(() => {
-    if (holdTimer.current !== null || heldRate.current !== null) return;
-    holdTimer.current = window.setTimeout(() => {
-      heldRate.current = rate;
-      setRate(2);
-      holdTimer.current = null;
-    }, 250);
+  // Re-apply cue positioning when PiP starts (some browsers reset cues).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onEnterPiP = () => applyCueLines();
+    v.addEventListener("enterpictureinpicture", onEnterPiP);
+    return () => v.removeEventListener("enterpictureinpicture", onEnterPiP);
+  }, [applyCueLines]);
+
+  // Block iOS native fullscreen hijack; keep playback inline unless windowed.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onBeginFullscreen = () => {
+      if (mode !== "windowed") {
+        const el = v as HTMLVideoElement & {
+          webkitExitFullscreen?: () => void;
+        };
+        el.webkitExitFullscreen?.();
+      }
+    };
+    v.addEventListener("webkitbeginfullscreen", onBeginFullscreen);
+    return () => v.removeEventListener("webkitbeginfullscreen", onBeginFullscreen);
+  }, [mode]);
+
+  const activateHold = useCallback(() => {
+    const v = videoRef.current;
+    if (!v || heldRate.current !== null) return;
+    holdActive.current = true;
+    wasPlayingBeforeHold.current = !v.paused;
+    heldRate.current = rate;
+    setRate(2);
+    if (v.paused) v.play().catch(() => undefined);
   }, [rate]);
 
   const endHold = useCallback(() => {
@@ -312,10 +402,96 @@ export default function VideoPlayer({
       clearTimeout(holdTimer.current);
       holdTimer.current = null;
     }
-    if (heldRate.current === null) return;
-    setRate(heldRate.current);
-    heldRate.current = null;
+    if (!holdActive.current && heldRate.current === null) return;
+
+    const v = videoRef.current;
+    const hadHold = holdActive.current;
+    const shouldResume = wasPlayingBeforeHold.current;
+
+    if (heldRate.current !== null) {
+      setRate(heldRate.current);
+      heldRate.current = null;
+    }
+    holdActive.current = false;
+    wasPlayingBeforeHold.current = false;
+
+    if (hadHold) {
+      suppressClick.current = true;
+      window.setTimeout(() => {
+        suppressClick.current = false;
+      }, 300);
+      if (shouldResume && v?.paused) {
+        v.play().catch(() => undefined);
+      }
+    }
   }, []);
+
+  const onVideoPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLVideoElement>) => {
+      if (isMini) return;
+      pointerDownOnVideo.current = true;
+      if (e.pointerType === "touch") {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+      if (holdTimer.current !== null || heldRate.current !== null) return;
+      holdTimer.current = window.setTimeout(() => {
+        holdTimer.current = null;
+        activateHold();
+      }, HOLD_DELAY_MS);
+    },
+    [isMini, activateHold]
+  );
+
+  const onVideoPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLVideoElement>) => {
+      if (isMini) return;
+      const wasHold = holdActive.current;
+      const wasShortTap =
+        pointerDownOnVideo.current && !wasHold && holdTimer.current !== null;
+
+      endHold();
+
+      if (wasShortTap && isMobile) {
+        e.preventDefault();
+        suppressClick.current = true;
+        window.setTimeout(() => {
+          suppressClick.current = false;
+        }, 300);
+        togglePlay();
+      }
+
+      pointerDownOnVideo.current = false;
+      if (e.pointerType === "touch") {
+        try {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+          // ignore
+        }
+      }
+    },
+    [isMini, endHold, isMobile, togglePlay]
+  );
+
+  const onVideoPointerCancel = useCallback(() => {
+    if (isMini) return;
+    endHold();
+    pointerDownOnVideo.current = false;
+  }, [isMini, endHold]);
+
+  const onVideoClick = useCallback(
+    (e: React.MouseEvent<HTMLVideoElement>) => {
+      if (suppressClick.current || holdActive.current) {
+        e.preventDefault();
+        return;
+      }
+      if (isMobile) {
+        e.preventDefault();
+        return;
+      }
+      togglePlay();
+    },
+    [isMobile, togglePlay]
+  );
 
   useEffect(() => {
     if (isMini) return;
@@ -342,16 +518,23 @@ export default function VideoPlayer({
   const progressPct = duration > 0 ? (current / duration) * 100 : 0;
 
   const wrapperClass = isMini
-    ? "relative w-full bg-black"
+    ? `relative w-full bg-black${isMobile ? " max-h-32" : ""}`
     : mode === "windowed"
-      ? "fixed inset-0 z-50 flex items-center justify-center bg-black"
+      ? "relative flex h-full w-full items-center justify-center bg-black"
       : "relative w-full bg-black";
 
   const innerClass =
     !isMini && mode === "windowed" ? "relative h-full w-full" : "relative";
 
+  const miniStyle =
+    isMini && videoAspect
+      ? { aspectRatio: `${videoAspect}` as const }
+      : isMini
+        ? { aspectRatio: "16 / 9" as const }
+        : undefined;
+
   const videoClass = isMini
-    ? "aspect-video w-full bg-black object-contain"
+    ? "h-full w-full bg-black object-contain"
     : mode === "windowed"
       ? "h-full w-full object-contain"
       : isMobile
@@ -360,11 +543,12 @@ export default function VideoPlayer({
   const subtitleClass = `sub-${subtitleSize}`;
 
   return (
-    <div className={wrapperClass}>
+    <div className={wrapperClass} style={miniStyle}>
       <div
         className={`${innerClass}${
           !isMini && playing && !controlsVisible ? " cursor-none" : ""
         }`}
+        style={isMini ? undefined : { touchAction: "manipulation" }}
         onMouseMove={onPlayerMouseMove}
         onMouseLeave={onPlayerMouseLeave}
         onTouchStart={isMini ? undefined : revealControls}
@@ -372,8 +556,13 @@ export default function VideoPlayer({
         <video
           ref={videoRef}
           src={src}
-          onClick={togglePlay}
-          onPlay={() => setPlaying(true)}
+          playsInline
+          controls={false}
+          onClick={onVideoClick}
+          onPlay={() => {
+            setPlaying(true);
+            setCaptionMode();
+          }}
           onPause={() => setPlaying(false)}
           onTimeUpdate={(e) => {
             const t = e.currentTarget.currentTime;
@@ -381,25 +570,28 @@ export default function VideoPlayer({
             onProgress?.(t);
           }}
           onLoadedMetadata={(e) => {
-            setDuration(e.currentTarget.duration);
+            const el = e.currentTarget;
+            setDuration(el.duration);
+            if (el.videoWidth > 0 && el.videoHeight > 0) {
+              setVideoAspect(el.videoWidth / el.videoHeight);
+            }
             if (
               initialPosition > 5 &&
-              initialPosition < e.currentTarget.duration
+              initialPosition < el.duration
             ) {
-              e.currentTarget.currentTime = initialPosition;
+              el.currentTime = initialPosition;
             }
           }}
           onEnded={onEnded}
-          onMouseDown={isMini ? undefined : startHold}
-          onMouseUp={isMini ? undefined : endHold}
+          onPointerDown={isMini ? undefined : onVideoPointerDown}
+          onPointerUp={isMini ? undefined : onVideoPointerUp}
+          onPointerCancel={isMini ? undefined : onVideoPointerCancel}
           onMouseLeave={isMini ? undefined : endHold}
-          onTouchStart={isMini ? undefined : startHold}
-          onTouchEnd={isMini ? undefined : endHold}
           className={`${videoClass} ${subtitleClass}`}
         >
           {tracks.map((t) => (
             <track
-              key={t.lang}
+              key={`${src}-${t.lang}`}
               kind="subtitles"
               src={t.src}
               srcLang={t.lang}
@@ -409,10 +601,11 @@ export default function VideoPlayer({
         </video>
 
         {isMini ? (
-          <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/90 to-transparent px-3 pb-2 pt-6 text-gray-100">
+          <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/90 to-transparent px-2 pb-1 pt-8 text-gray-100">
             <button
               onClick={togglePlay}
-              className="text-lg leading-none hover:text-accent"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center text-xl leading-none hover:text-accent"
+              aria-label={playing ? "Pause" : "Play"}
             >
               {playing ? "❚❚" : "►"}
             </button>
@@ -421,15 +614,17 @@ export default function VideoPlayer({
             </span>
             <button
               onClick={onExpand}
-              className="shrink-0 text-sm hover:text-accent"
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-base hover:text-accent"
               title="Expand"
+              aria-label="Expand"
             >
               ⤢
             </button>
             <button
               onClick={onClose}
-              className="shrink-0 text-sm hover:text-accent"
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-base hover:text-accent"
               title="Close"
+              aria-label="Close"
             >
               ✕
             </button>

@@ -48,7 +48,7 @@ export default function Watch() {
   useEffect(() => {
     registerDock(dockRef.current);
     return () => registerDock(null);
-  }, [registerDock, video]);
+  }, [registerDock, video, mode]);
 
   const onDelete = async () => {
     if (!video) return;
@@ -66,27 +66,25 @@ export default function Watch() {
 
   const isWide = !isMobile && mode === "theater";
   const resolution = formatResolution(video.height_px);
-  const contentClass = isWide
-    ? "mx-auto w-[85vw] max-w-5xl"
-    : "mx-auto max-w-5xl";
+  // Theater: full-bleed black bar, player at least as wide as standard (max-w-5xl).
+  const theaterWidthClass =
+    "mx-auto w-[clamp(min(100%,64rem),85vw,100vw)]";
+  const contentClass = isWide ? theaterWidthClass : "mx-auto max-w-5xl";
+
+  const playerOuterClass = isMobile
+    ? "bg-black"
+    : isWide
+      ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
+      : "mx-auto max-w-5xl";
+  const playerInnerClass = isWide && !isMobile ? theaterWidthClass : "w-full";
 
   return (
     <div>
-      {isMobile ? (
-        <div className="relative left-1/2 w-screen -translate-x-1/2 bg-black">
-          <div ref={dockRef} />
+      <div className={playerOuterClass}>
+        <div className={playerInnerClass}>
+          <div ref={dockRef} className="w-full" />
         </div>
-      ) : isWide ? (
-        <div className="relative left-1/2 w-screen -translate-x-1/2 bg-black">
-          <div className="mx-auto w-[85vw]">
-            <div ref={dockRef} />
-          </div>
-        </div>
-      ) : (
-        <div className="mx-auto max-w-5xl">
-          <div ref={dockRef} />
-        </div>
-      )}
+      </div>
 
       <div className={contentClass}>
         <div className="mt-5">
@@ -104,16 +102,6 @@ export default function Watch() {
             <span>{formatSize(video.file_size)}</span>
             {resolution && (
               <span className="text-xs text-gray-500">{resolution}</span>
-            )}
-            {video.source_url && (
-              <a
-                href={video.source_url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-accent hover:underline"
-              >
-                Source ↗
-              </a>
             )}
           </div>
 
