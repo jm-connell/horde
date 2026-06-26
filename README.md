@@ -10,13 +10,11 @@ designed to run on TrueNAS via Dockge, but it works with any Docker host.
 
 ## Features
 
-- URL ingestion with quality presets and a live progress bar (yt-dlp). Pasted
-  links are cleaned of tracking parameters before download.
+- URL ingestion with quality presets and a live progress bar (yt-dlp).
 - Automatic metadata, tags, subtitles (WebVTT), and thumbnail extraction; files
   are stored under `/<channel>/<year>/<title>.ext`.
 - Folder scanner (watchdog + 60s polling fallback) that detects manually
-  dropped `.mp4` / `.mkv` / `.webm` files and queues them for review. yt-dlp
-  downloads are no longer mistakenly sent to review.
+  dropped `.mp4` / `.mkv` / `.webm` files and queues them for review.
 - Edit any video's metadata, notes, and thumbnail (not just review items), and
   rename a channel across every video at once.
 - Playlists: build your own or import a public YouTube playlist; both are
