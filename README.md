@@ -55,6 +55,36 @@ Open `http://<server-ip>:8080`.
    in from your desktop. Dropped files appear in the Review tab within
    `SCAN_INTERVAL_SEC` (default 60s).
 
+### Updating a Dockge deploy
+
+Horde is built from source on the server (`build: .` in `docker-compose.yml`),
+so pulling new code and rebuilding the image is required after changes. Use the
+**TrueNAS shell** (or SSH to the host)—not the per-service **Bash** button in
+Dockge, which opens a shell inside the running container where `docker` is not
+available.
+
+1. Push your changes from your dev machine, then on TrueNAS open the shell and
+   go to the Dockge stack folder (the path shown in Dockge for the stack), e.g.
+   `/mnt/tank/dockge/stacks/horde`.
+2. Pull the latest code and rebuild the image:
+
+```bash
+cd /mnt/tank/dockge/stacks/horde   # adjust to your stack path
+git pull
+sudo docker compose build horde
+```
+
+3. Start the stack again—either click **Start** in Dockge, or run
+   `sudo docker compose up -d` from the same folder.
+
+Stopping the container in Dockge before rebuilding is optional; either way,
+the running container must be recreated from the new image for changes to take
+effect. Your library and database are on host volumes (`DATA_PATH`,
+`DOWNLOADS_PATH`) and are not affected by a rebuild.
+
+If the UI still looks old after a deploy, hard-refresh the browser
+(`Ctrl+Shift+R`) to clear cached frontend assets.
+
 ## Local development
 
 Backend:
