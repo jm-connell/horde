@@ -15,7 +15,7 @@ from ..config import (
 )
 from ..database import engine
 from ..models import Video, VideoStatus
-from .metadata import grab_frame, probe_duration
+from .metadata import grab_frame, probe_dimensions, probe_duration
 from .paths import find_video_by_path, to_rel_path
 
 _scan_lock = threading.Lock()
@@ -85,12 +85,15 @@ def _ingest_file(session: Session, path: Path) -> bool:
     except OSError:
         return False
 
+    dims = probe_dimensions(path)
     video = Video(
         title=path.stem,
         channel=None,
         file_path=rel_path,
         duration_sec=probe_duration(path),
         file_size=file_size,
+        width_px=dims[0] if dims else None,
+        height_px=dims[1] if dims else None,
         needs_review=True,
         status=VideoStatus.ready,
     )

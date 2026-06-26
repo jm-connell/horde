@@ -10,7 +10,7 @@ from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import engine
 from ..models import DownloadJob, JobStatus, Video, VideoStatus
 from . import library, scanner
-from .metadata import probe_duration
+from .metadata import probe_dimensions, probe_duration
 from .paths import find_video_by_path, to_rel_path
 
 # Live progress snapshots keyed by job id, consumed by the SSE endpoint.
@@ -95,23 +95,33 @@ def _safe_rel(path: Path) -> Optional[str]:
         return None
 
 
+def _normalize_lang(lang: str) -> str:
+    """Collapse regional/origin variants (en-US, en-GB, en-orig) to a base code."""
+    return lang.split("-")[0].lower()
+
+
 def _collect_subtitles(final_path: Path) -> list[dict[str, Any]]:
-    """Find sidecar ``.vtt`` files yt-dlp wrote next to the video."""
+    """Find sidecar ``.vtt`` files yt-dlp wrote next to the video, keeping one
+    track per language (variants like ``en-orig`` collapse to ``en``)."""
     stem = final_path.stem
     parent = final_path.parent
-    tracks: list[dict[str, Any]] = []
+    by_lang: dict[str, dict[str, Any]] = {}
     if not parent.is_dir():
-        return tracks
+        return []
     for entry in parent.iterdir():
         if not entry.is_file() or entry.suffix.lower() != ".vtt":
             continue
         if not entry.name.startswith(stem + "."):
             continue
-        lang = entry.name[len(stem) + 1 : -len(".vtt")]
+        raw_lang = entry.name[len(stem) + 1 : -len(".vtt")]
         rel = _safe_rel(entry)
-        if lang and rel:
-            tracks.append({"lang": lang, "path": rel, "auto": False})
-    return tracks
+        if not raw_lang or not rel:
+            continue
+        lang = _normalize_lang(raw_lang)
+        # Prefer the exact base-code file (e.g. "en") over a variant ("en-orig").
+        if lang not in by_lang or raw_lang.lower() == lang:
+            by_lang[lang] = {"lang": lang, "path": rel, "auto": False}
+    return list(by_lang.values())
 
 
 def _remove_review_duplicates(
@@ -168,7 +178,7 @@ def _run_download(
         # the player can show subtitles.
         "writesubtitles": True,
         "writeautomaticsub": True,
-        "subtitleslangs": ["en", "en-US", "en-GB", "en-orig"],
+        "subtitleslangs": ["en"],
         "subtitlesformat": "vtt/best",
         "postprocessors": [
             {"key": "FFmpegSubtitlesConvertor", "format": "vtt"},
@@ -207,16 +217,29 @@ def _run_download(
         rel_path = to_rel_path(final_path)
         file_size = final_path.stat().st_size if final_path.exists() else None
         duration = info.get("duration") or probe_duration(final_path)
+        width = info.get("width")
+        height = info.get("height")
+        if not (width and height):
+            dims = probe_dimensions(final_path)
+            if dims:
+                width, height = dims
 
         with Session(engine) as session:
+            # Re-read the job so edits made on the download card mid-download win.
+            job = session.get(DownloadJob, job_id)
+            effective_title = (job.title_override if job else None) or title_override
+            effective_channel = (
+                job.channel_override if job else None
+            ) or channel_override
+
             video = find_video_by_path(session, rel_path)
             if video is None:
                 video = Video(file_path=rel_path)
                 session.add(video)
 
-            video.title = title_override or info.get("title") or final_path.stem
+            video.title = effective_title or info.get("title") or final_path.stem
             video.channel = (
-                channel_override or info.get("uploader") or info.get("channel")
+                effective_channel or info.get("uploader") or info.get("channel")
             )
             video.channel_url = info.get("uploader_url") or info.get("channel_url")
             video.description = info.get("description")
@@ -224,6 +247,8 @@ def _run_download(
             video.source_url = info.get("webpage_url") or url
             video.duration_sec = duration
             video.file_size = file_size
+            video.width_px = int(width) if width else None
+            video.height_px = int(height) if height else None
             video.published_at = _published_at(info)
             video.subtitles = library.dump_subtitles(_collect_subtitles(final_path))
             video.needs_review = False

@@ -48,11 +48,23 @@ def query_videos(
     sort: str = "added_at",
     order: str = "desc",
     needs_review: Optional[bool] = None,
+    continue_watching: bool = False,
 ) -> list[Video]:
     statement = select(Video)
 
     if needs_review is not None:
         statement = statement.where(Video.needs_review == needs_review)
+    if continue_watching:
+        # Started but not effectively finished (within the last 10% of runtime).
+        statement = statement.where(Video.last_position_sec >= 30).where(
+            (Video.duration_sec.is_(None))
+            | (Video.last_position_sec < Video.duration_sec * 0.9)
+        )
+        return list(
+            session.exec(
+                statement.order_by(Video.last_watched_at.desc()).limit(12)
+            ).all()
+        )
     if channel:
         statement = statement.where(Video.channel == channel)
     if q:
@@ -104,11 +116,17 @@ def all_tags(session: Session) -> list[str]:
     return sorted(seen)
 
 
-def tag_stats(session: Session) -> list[tuple[str, int]]:
-    """Return (tag, count) pairs ordered by most common first."""
-    rows = session.exec(
-        select(Video.tags).where(Video.needs_review == False)  # noqa: E712
-    ).all()
+def tag_stats(
+    session: Session, channel: Optional[str] = None
+) -> list[tuple[str, int]]:
+    """Return (tag, count) pairs ordered by most common first.
+
+    When ``channel`` is given, only tags from that channel's videos are counted.
+    """
+    statement = select(Video.tags).where(Video.needs_review == False)  # noqa: E712
+    if channel:
+        statement = statement.where(Video.channel == channel)
+    rows = session.exec(statement).all()
     counts: dict[str, int] = {}
     for raw in rows:
         for tag in parse_tags(raw):

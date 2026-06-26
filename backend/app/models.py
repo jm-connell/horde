@@ -43,9 +43,14 @@ class Video(SQLModel, table=True):
     file_path: str = Field(index=True, unique=True)
     duration_sec: Optional[float] = None
     file_size: Optional[int] = None
+    width_px: Optional[int] = None
+    height_px: Optional[int] = None
 
     published_at: Optional[datetime] = None
     added_at: datetime = Field(default_factory=utcnow, index=True)
+
+    last_position_sec: float = 0.0
+    last_watched_at: Optional[datetime] = None
 
     needs_review: bool = Field(default=False, index=True)
     platform: Optional[str] = None
@@ -61,6 +66,8 @@ class DownloadJob(SQLModel, table=True):
     status: JobStatus = Field(default=JobStatus.queued)
     progress: float = 0.0
     title: Optional[str] = None
+    title_override: Optional[str] = None
+    channel_override: Optional[str] = None
     error: Optional[str] = None
     video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
     created_at: datetime = Field(default_factory=utcnow)

@@ -19,8 +19,12 @@ export interface Video {
   file_path: string;
   duration_sec: number | null;
   file_size: number | null;
+  width_px: number | null;
+  height_px: number | null;
   published_at: string | null;
   added_at: string;
+  last_position_sec: number;
+  last_watched_at: string | null;
   needs_review: boolean;
   platform: string | null;
   status: VideoStatus;
@@ -52,6 +56,8 @@ export interface DownloadJob {
   status: JobStatus;
   progress: number;
   title: string | null;
+  title_override: string | null;
+  channel_override: string | null;
   error: string | null;
   video_id: number | null;
   created_at: string;

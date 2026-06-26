@@ -2,13 +2,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { thumbnailUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
 import type { Video } from "../types";
-import { formatDuration } from "../utils";
+import { formatDuration, formatResolution } from "../utils";
 
 export default function VideoCard({ video }: { video: Video }) {
   const navigate = useNavigate();
   const { addToQueue } = usePlayback();
   const thumb = thumbnailUrl(video);
   const duration = formatDuration(video.duration_sec);
+  const resolution = formatResolution(video.height_px);
 
   return (
     <Link
@@ -31,6 +32,11 @@ export default function VideoCard({ video }: { video: Video }) {
         {duration && (
           <span className="absolute bottom-2 right-2 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
             {duration}
+          </span>
+        )}
+        {resolution && (
+          <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-gray-300">
+            {resolution}
           </span>
         )}
         <button

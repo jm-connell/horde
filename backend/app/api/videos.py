@@ -9,7 +9,7 @@ from sqlmodel import Session, func, select
 
 from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import get_session
-from ..models import Video
+from ..models import Video, utcnow
 from ..schemas import (
     ChannelRename,
     ChannelStat,
@@ -17,12 +17,25 @@ from ..schemas import (
     TagStat,
     VideoRead,
     VideoUpdate,
+    WatchProgressUpdate,
 )
 from ..services import library
 
 router = APIRouter(prefix="/api", tags=["videos"])
 
 CHUNK_SIZE = 1024 * 1024
+
+CONTENT_TYPES = {
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mkv": "video/x-matroska",
+}
+
+
+def _safe_filename(name: str) -> str:
+    """Strip characters that break Content-Disposition or filesystems."""
+    cleaned = re.sub(r'[\\/:*?"<>|]', "_", name).strip()
+    return cleaned or "video"
 
 
 def _to_read(video: Video) -> VideoRead:
@@ -43,8 +56,12 @@ def _to_read(video: Video) -> VideoRead:
         file_path=video.file_path,
         duration_sec=video.duration_sec,
         file_size=video.file_size,
+        width_px=video.width_px,
+        height_px=video.height_px,
         published_at=video.published_at,
         added_at=video.added_at,
+        last_position_sec=video.last_position_sec,
+        last_watched_at=video.last_watched_at,
         needs_review=video.needs_review,
         platform=video.platform,
         status=video.status,
@@ -68,11 +85,12 @@ def list_videos(
     tag: Optional[str] = None,
     sort: str = Query("added_at"),
     order: str = Query("desc"),
+    continue_watching: bool = False,
     session: Session = Depends(get_session),
 ):
     videos = library.query_videos(
         session, q=q, channel=channel, tag=tag, sort=sort, order=order,
-        needs_review=False,
+        needs_review=False, continue_watching=continue_watching,
     )
     return [_to_read(v) for v in videos]
 
@@ -98,8 +116,12 @@ def list_tags(session: Session = Depends(get_session)):
 
 
 @router.get("/tags/stats", response_model=list[TagStat])
-def tag_stats(session: Session = Depends(get_session)):
-    return [TagStat(tag=t, count=n) for t, n in library.tag_stats(session)]
+def tag_stats(
+    channel: Optional[str] = None, session: Session = Depends(get_session)
+):
+    return [
+        TagStat(tag=t, count=n) for t, n in library.tag_stats(session, channel=channel)
+    ]
 
 
 @router.get("/stats/storage", response_model=StorageStats)
@@ -162,6 +184,25 @@ def update_video(
     session.commit()
     session.refresh(video)
     return _to_read(video)
+
+
+@router.patch("/videos/{video_id}/progress", status_code=204)
+def update_progress(
+    video_id: int,
+    payload: WatchProgressUpdate,
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    # Treat the first few seconds as "not started" so brief opens don't clutter
+    # the Continue watching row. A reset to 0 (on finish) is always honored.
+    if payload.position_sec >= 5 or payload.position_sec == 0:
+        video.last_position_sec = max(0.0, payload.position_sec)
+        video.last_watched_at = utcnow()
+        session.add(video)
+        session.commit()
+    return Response(status_code=204)
 
 
 @router.delete("/videos/{video_id}", status_code=204)
@@ -258,11 +299,7 @@ def stream_video(
     file_size = path.stat().st_size
 
     suffix = path.suffix.lower()
-    content_type = {
-        ".mp4": "video/mp4",
-        ".webm": "video/webm",
-        ".mkv": "video/x-matroska",
-    }.get(suffix, "application/octet-stream")
+    content_type = CONTENT_TYPES.get(suffix, "application/octet-stream")
 
     range_header = request.headers.get("range")
     if range_header is None:
@@ -298,3 +335,14 @@ def stream_video(
         "Content-Type": content_type,
     }
     return StreamingResponse(iter_file(), status_code=206, headers=headers)
+
+
+@router.get("/videos/{video_id}/file")
+def download_video_file(video_id: int, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    path = _resolve_media(video)
+    content_type = CONTENT_TYPES.get(path.suffix.lower(), "application/octet-stream")
+    filename = f"{_safe_filename(video.title)}{path.suffix.lower()}"
+    return FileResponse(path, media_type=content_type, filename=filename)

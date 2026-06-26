@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import VideoCard from "../components/VideoCard";
+import { useDownloads } from "../context/DownloadContext";
 import type { ChannelStat, TagStat, Video } from "../types";
 
 const SORT_OPTIONS = [
@@ -13,6 +14,7 @@ const SORT_OPTIONS = [
 
 export default function Library() {
   const [videos, setVideos] = useState<Video[]>([]);
+  const [continueWatching, setContinueWatching] = useState<Video[]>([]);
   const [channels, setChannels] = useState<ChannelStat[]>([]);
   const [tags, setTags] = useState<TagStat[]>([]);
   const [showTags, setShowTags] = useState(false);
@@ -30,6 +32,13 @@ export default function Library() {
   const [order, setOrder] = useState("desc");
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { onJobCompleted } = useDownloads();
+
+  // Refresh the library when a background download finishes.
+  useEffect(() => {
+    return onJobCompleted(() => setRefreshKey((k) => k + 1));
+  }, [onJobCompleted]);
 
   const reloadChannels = () =>
     api.listChannels().then(setChannels).catch(() => undefined);
@@ -56,8 +65,21 @@ export default function Library() {
 
   useEffect(() => {
     api.listChannels().then(setChannels).catch(() => undefined);
-    api.tagStats().then(setTags).catch(() => undefined);
   }, [videos.length]);
+
+  useEffect(() => {
+    api
+      .listVideos({ continue_watching: true })
+      .then(setContinueWatching)
+      .catch(() => undefined);
+  }, [videos.length, refreshKey]);
+
+  useEffect(() => {
+    api
+      .tagStats(activeChannel || undefined)
+      .then(setTags)
+      .catch(() => undefined);
+  }, [activeChannel, videos.length]);
 
   useEffect(() => {
     setLoading(true);
@@ -72,7 +94,7 @@ export default function Library() {
       .then(setVideos)
       .catch(() => setVideos([]))
       .finally(() => setLoading(false));
-  }, [debouncedSearch, activeChannel, activeTag, sort, order]);
+  }, [debouncedSearch, activeChannel, activeTag, sort, order, refreshKey]);
 
   const headline = useMemo(() => {
     if (activeChannel) return activeChannel;
@@ -215,6 +237,24 @@ export default function Library() {
               ))}
           </div>
         )}
+
+        {!activeChannel &&
+          !activeTag &&
+          !debouncedSearch &&
+          continueWatching.length > 0 && (
+            <div className="mb-6">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-400">
+                Continue watching
+              </h2>
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {continueWatching.map((v) => (
+                  <div key={v.id} className="w-64 shrink-0">
+                    <VideoCard video={v} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
         {loading ? (
           <p className="py-20 text-center text-gray-500">Loading...</p>

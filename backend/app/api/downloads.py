@@ -8,7 +8,12 @@ from sqlmodel import Session, select
 
 from ..database import get_session
 from ..models import DownloadJob, JobStatus
-from ..schemas import DownloadCreate, DownloadJobRead, DownloadPreview
+from ..schemas import (
+    DownloadCreate,
+    DownloadJobRead,
+    DownloadJobUpdate,
+    DownloadPreview,
+)
 from ..services import downloader
 from ..services.url_clean import clean_url
 
@@ -43,6 +48,8 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         url=url,
         quality_preset=payload.quality_preset,
         status=JobStatus.queued,
+        title_override=(payload.title_override or "").strip() or None,
+        channel_override=(payload.channel_override or "").strip() or None,
     )
     session.add(job)
     session.commit()
@@ -52,9 +59,33 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         job.id,
         job.url,
         job.quality_preset,
-        title_override=(payload.title_override or "").strip() or None,
-        channel_override=(payload.channel_override or "").strip() or None,
+        title_override=job.title_override,
+        channel_override=job.channel_override,
     )
+    return job
+
+
+@router.patch("/{job_id}", response_model=DownloadJobRead)
+def update_job(
+    job_id: int,
+    payload: DownloadJobUpdate,
+    session: Session = Depends(get_session),
+):
+    job = session.get(DownloadJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status not in (JobStatus.queued, JobStatus.downloading):
+        raise HTTPException(
+            status_code=409, detail="Job already finished; edit the video instead"
+        )
+    data = payload.model_dump(exclude_unset=True)
+    if "title_override" in data:
+        job.title_override = (data["title_override"] or "").strip() or None
+    if "channel_override" in data:
+        job.channel_override = (data["channel_override"] or "").strip() or None
+    session.add(job)
+    session.commit()
+    session.refresh(job)
     return job
 
 

@@ -33,15 +33,24 @@ export interface LibraryQuery {
   tag?: string;
   sort?: string;
   order?: string;
+  continue_watching?: boolean;
 }
 
 export const api = {
   listVideos(params: LibraryQuery = {}): Promise<Video[]> {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v) qs.set(k, v);
+      if (v) qs.set(k, String(v));
     });
     return request<Video[]>(`/api/videos?${qs.toString()}`);
+  },
+
+  saveProgress(id: number, positionSec: number): Promise<void> {
+    return request<void>(`/api/videos/${id}/progress`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ position_sec: positionSec }),
+    });
   },
 
   getVideo(id: number): Promise<Video> {
@@ -87,8 +96,9 @@ export const api = {
     return request<string[]>("/api/tags");
   },
 
-  tagStats(): Promise<TagStat[]> {
-    return request<TagStat[]>("/api/tags/stats");
+  tagStats(channel?: string): Promise<TagStat[]> {
+    const qs = channel ? `?channel=${encodeURIComponent(channel)}` : "";
+    return request<TagStat[]>(`/api/tags/stats${qs}`);
   },
 
   storageStats(): Promise<StorageStats> {
@@ -127,6 +137,21 @@ export const api = {
 
   listJobs(): Promise<DownloadJob[]> {
     return request<DownloadJob[]>("/api/downloads");
+  },
+
+  getJob(jobId: number): Promise<DownloadJob> {
+    return request<DownloadJob>(`/api/downloads/${jobId}`);
+  },
+
+  updateJob(
+    jobId: number,
+    overrides: DownloadOverrides
+  ): Promise<DownloadJob> {
+    return request<DownloadJob>(`/api/downloads/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(overrides),
+    });
   },
 
   listPlaylists(): Promise<Playlist[]> {
@@ -189,6 +214,10 @@ export function thumbnailUrl(video: Video): string | null {
 
 export function streamUrl(id: number): string {
   return `/api/videos/${id}/stream`;
+}
+
+export function downloadFileUrl(id: number): string {
+  return `/api/videos/${id}/file`;
 }
 
 export function subtitleUrl(id: number, lang: string): string {

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../api";
-import { useDownloadProgress } from "../hooks/useDownloadProgress";
+import { useDownloads } from "../context/DownloadContext";
+import { useSettings } from "../hooks/useSettings";
+import ChannelPicker from "../components/ChannelPicker";
+import DownloadJobCard from "../components/DownloadJobCard";
 import type { ChannelStat, DownloadPreview } from "../types";
 
 const PRESET_LABELS: Record<string, string> = {
@@ -14,33 +16,30 @@ const PRESET_LABELS: Record<string, string> = {
 };
 
 export default function Download() {
+  const { jobs, progress, submitDownload } = useDownloads();
+  const [settings] = useSettings();
+
   const [url, setUrl] = useState("");
   const [preset, setPreset] = useState("best");
   const [presets, setPresets] = useState<string[]>(["best"]);
-  const [jobId, setJobId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [preview, setPreview] = useState<DownloadPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  const [overrideTitle, setOverrideTitle] = useState(false);
-  const [overrideChannel, setOverrideChannel] = useState(false);
-  const [titleValue, setTitleValue] = useState("");
-  const [channelValue, setChannelValue] = useState("");
+  const [title, setTitle] = useState("");
+  const [channel, setChannel] = useState("");
   const [channels, setChannels] = useState<ChannelStat[]>([]);
 
   const [importMessage, setImportMessage] = useState<string | null>(null);
-
-  const progress = useDownloadProgress(jobId);
 
   useEffect(() => {
     api.listPresets().then(setPresets).catch(() => undefined);
     api.listChannels().then(setChannels).catch(() => undefined);
   }, []);
 
-  // Inspect the link (debounced) so we can show and optionally override the
-  // detected title/channel, and detect playlists.
+  // Inspect the link (debounced) and autofill the title/channel fields.
   useEffect(() => {
     const trimmed = url.trim();
     if (!trimmed) {
@@ -53,8 +52,8 @@ export default function Download() {
         .previewDownload(trimmed)
         .then((p) => {
           setPreview(p);
-          setTitleValue(p.title ?? "");
-          setChannelValue(p.channel ?? "");
+          setTitle(p.title ?? "");
+          setChannel(p.channel ?? "");
         })
         .catch(() => setPreview(null))
         .finally(() => setPreviewing(false));
@@ -65,25 +64,26 @@ export default function Download() {
     };
   }, [url]);
 
+  const isPlaylist = preview?.is_playlist ?? false;
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
-      const job = await api.createDownload(url.trim(), preset, {
-        title_override:
-          overrideTitle && titleValue.trim() ? titleValue.trim() : undefined,
-        channel_override:
-          overrideChannel && channelValue.trim()
-            ? channelValue.trim()
-            : undefined,
+      const detectedTitle = (preview?.title ?? "").trim();
+      const detectedChannel = (preview?.channel ?? "").trim();
+      const t = title.trim();
+      const c = channel.trim();
+      await submitDownload(url.trim(), preset, {
+        title: t && t !== detectedTitle ? t : undefined,
+        channel: c && c !== detectedChannel ? c : undefined,
       });
-      setJobId(job.id);
       setUrl("");
       setPreview(null);
-      setOverrideTitle(false);
-      setOverrideChannel(false);
+      setTitle("");
+      setChannel("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Download failed");
     } finally {
@@ -110,18 +110,13 @@ export default function Download() {
     }
   };
 
-  const percent = Math.round(progress?.progress ?? 0);
-  const done = progress?.status === "completed";
-  const failed = progress?.status === "error";
-  const isPlaylist = preview?.is_playlist ?? false;
-
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-1 text-2xl font-bold text-gray-100">Download</h1>
       <p className="mb-6 text-sm text-gray-400">
-        Paste a YouTube or other supported link. The video is saved to your
-        library with metadata and a thumbnail. Playlist links can be imported in
-        full.
+        Paste a YouTube or other supported link. Adjust the title and channel
+        before downloading if you like. Downloads continue in the background and
+        appear below.
       </p>
 
       <form
@@ -156,68 +151,36 @@ export default function Download() {
             placeholder="https://www.youtube.com/watch?v=..."
             className="w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
           />
+          {previewing && (
+            <p className="mt-1 text-xs text-gray-500">Reading link...</p>
+          )}
         </div>
 
-        {previewing && (
-          <p className="text-xs text-gray-500">Reading link...</p>
-        )}
-
-        {preview && !isPlaylist && (
-          <div className="space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
+        {!isPlaylist && (
+          <>
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={overrideTitle}
-                  onChange={(e) => setOverrideTitle(e.target.checked)}
-                  className="accent-accent"
-                />
-                Override title
+              <label className="mb-1 block text-sm font-medium text-gray-300">
+                Title
               </label>
-              {overrideTitle ? (
-                <input
-                  value={titleValue}
-                  onChange={(e) => setTitleValue(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                />
-              ) : (
-                <p className="mt-1 truncate text-xs text-gray-500">
-                  {preview.title ?? "Unknown title"}
-                </p>
-              )}
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Auto-detected from the link"
+                className="w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+              />
             </div>
-
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={overrideChannel}
-                  onChange={(e) => setOverrideChannel(e.target.checked)}
-                  className="accent-accent"
-                />
-                Override channel
+              <label className="mb-1 block text-sm font-medium text-gray-300">
+                Channel
               </label>
-              {overrideChannel ? (
-                <>
-                  <input
-                    value={channelValue}
-                    onChange={(e) => setChannelValue(e.target.value)}
-                    list="known-channels"
-                    className="mt-2 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                  />
-                  <datalist id="known-channels">
-                    {channels.map((c) => (
-                      <option key={c.channel} value={c.channel} />
-                    ))}
-                  </datalist>
-                </>
-              ) : (
-                <p className="mt-1 truncate text-xs text-gray-500">
-                  {preview.channel ?? "Unknown channel"}
-                </p>
-              )}
+              <ChannelPicker
+                value={channel}
+                onChange={setChannel}
+                channels={channels}
+                placeholder={settings.lastCustomChannel || "Detected channel"}
+              />
             </div>
-          </div>
+          </>
         )}
 
         {preview && isPlaylist && (
@@ -273,35 +236,16 @@ export default function Download() {
         {importMessage && <p className="text-sm text-accent">{importMessage}</p>}
       </form>
 
-      {jobId != null && (
-        <div className="mt-6 rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700">
-          <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="font-medium text-gray-200">
-              {progress?.title ?? "Working..."}
-            </span>
-            <span className="text-gray-400">
-              {failed ? "Failed" : done ? "Complete" : `${percent}%`}
-            </span>
-          </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-ink-700">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                failed ? "bg-red-500" : "bg-accent"
-              }`}
-              style={{ width: `${failed ? 100 : percent}%` }}
+      {jobs.length > 0 && (
+        <div className="mt-6 space-y-4">
+          {jobs.map((job) => (
+            <DownloadJobCard
+              key={job.id}
+              job={job}
+              live={progress[job.id]}
+              channels={channels}
             />
-          </div>
-          {failed && (
-            <p className="mt-3 text-sm text-red-400">{progress?.error}</p>
-          )}
-          {done && progress?.video_id && (
-            <Link
-              to={`/watch/${progress.video_id}`}
-              className="mt-4 inline-block rounded-lg bg-accent/15 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/25"
-            >
-              Watch now →
-            </Link>
-          )}
+          ))}
         </div>
       )}
     </div>

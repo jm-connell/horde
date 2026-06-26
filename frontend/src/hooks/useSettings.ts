@@ -9,6 +9,9 @@ export interface Settings {
   subtitleSize: SubtitleSize;
   subtitleOffset: number;
   defaultPlaybackRate: number;
+  volume: number;
+  playbackMode: ViewMode;
+  lastCustomChannel: string;
 }
 
 const DEFAULTS: Settings = {
@@ -17,6 +20,9 @@ const DEFAULTS: Settings = {
   subtitleSize: "medium",
   subtitleOffset: 12,
   defaultPlaybackRate: 1,
+  volume: 1,
+  playbackMode: "standard",
+  lastCustomChannel: "",
 };
 
 const STORAGE_KEY = "horde.settings";

@@ -8,9 +8,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { streamUrl, subtitleUrl } from "../api";
+import { api, streamUrl, subtitleUrl } from "../api";
 import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
 import { loadSettings, useSettings } from "../hooks/useSettings";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { dedupeSubtitleTracks } from "../utils";
 import type { Video } from "../types";
 
 interface PlaybackValue {
@@ -43,18 +45,41 @@ function loadQueue(): Video[] {
 
 export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
-  const [settings] = useSettings();
+  const [settings, updateSettings] = useSettings();
+  const isMobile = useIsMobile();
   const [current, setCurrent] = useState<Video | null>(null);
   const [queue, setQueue] = useState<Video[]>(loadQueue);
   const [dock, setDock] = useState<HTMLElement | null>(null);
-  const [mode, setMode] = useState<ViewMode>(
-    () => loadSettings().defaultPlaybackMode
+  const [mode, setModeState] = useState<ViewMode>(
+    () => loadSettings().playbackMode
   );
+
+  // Persist the chosen view mode so it is remembered across sessions.
+  const setMode = useCallback(
+    (next: ViewMode) => {
+      setModeState(next);
+      updateSettings({ playbackMode: next });
+    },
+    [updateSettings]
+  );
+
+  // Mobile always uses the inline standard layout (no theater/fullscreen).
+  const effectiveMode: ViewMode = isMobile ? "standard" : mode;
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   if (hostRef.current === null) {
     hostRef.current = document.createElement("div");
   }
+
+  // Persist watch position at most once every 5s while playing.
+  const progressTimer = useRef<number | null>(null);
+  const saveProgress = useCallback((id: number, sec: number) => {
+    if (progressTimer.current !== null) return;
+    progressTimer.current = window.setTimeout(() => {
+      progressTimer.current = null;
+    }, 5000);
+    api.saveProgress(id, sec).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     sessionStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
@@ -70,12 +95,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.className = "w-full";
     } else if (current) {
       document.body.appendChild(host);
-      host.className =
-        "fixed bottom-4 right-4 z-40 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
+      host.className = isMobile
+        ? "fixed bottom-0 inset-x-0 z-40 overflow-hidden shadow-2xl ring-1 ring-ink-700"
+        : "fixed bottom-4 right-4 z-40 w-[44rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
     } else {
       host.className = "hidden";
     }
-  }, [dock, current]);
+  }, [dock, current, isMobile]);
 
   useEffect(() => {
     const host = hostRef.current!;
@@ -137,6 +163,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     });
   }, [navigate]);
 
+  // Reset saved progress when a video finishes so it leaves Continue watching.
+  const handleEnded = useCallback(() => {
+    if (current) api.saveProgress(current.id, 0).catch(() => undefined);
+    advance();
+  }, [current, advance]);
+
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
 
   const value: PlaybackValue = {
@@ -161,20 +193,24 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         createPortal(
           <VideoPlayer
             src={streamUrl(current.id)}
-            mode={mode}
+            mode={effectiveMode}
             onModeChange={setMode}
             variant={dock ? "full" : "mini"}
             title={current.title}
-            tracks={current.subtitles.map((t) => ({
+            tracks={dedupeSubtitleTracks(current.subtitles).map((t) => ({
               lang: t.lang,
               src: subtitleUrl(current.id, t.lang),
             }))}
-            onEnded={advance}
+            onEnded={handleEnded}
             onExpand={() => navigate(`/watch/${current.id}`)}
             onClose={close}
             subtitleSize={settings.subtitleSize}
             subtitleOffset={settings.subtitleOffset}
             defaultRate={settings.defaultPlaybackRate}
+            volume={settings.volume}
+            onVolumeChange={(v) => updateSettings({ volume: v })}
+            initialPosition={current.last_position_sec}
+            onProgress={(sec) => saveProgress(current.id, sec)}
           />,
           hostRef.current
         )}

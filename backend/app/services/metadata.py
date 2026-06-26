@@ -31,6 +31,40 @@ def probe_duration(path: Path) -> Optional[float]:
         return None
 
 
+def probe_dimensions(path: Path) -> Optional[tuple[int, int]]:
+    """Return (width, height) in pixels of the first video stream via ffprobe."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "json",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return None
+        streams = json.loads(result.stdout).get("streams", [])
+        if not streams:
+            return None
+        width = streams[0].get("width")
+        height = streams[0].get("height")
+        if width and height:
+            return int(width), int(height)
+        return None
+    except (subprocess.SubprocessError, ValueError, OSError):
+        return None
+
+
 def grab_frame(video_path: Path, output_path: Path, at_seconds: float = 5.0) -> bool:
     """Extract a single frame as a JPEG thumbnail. Returns True on success."""
     try:

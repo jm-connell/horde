@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .models import JobStatus, PlaylistSource, VideoStatus
 
@@ -25,8 +25,12 @@ class VideoRead(BaseModel):
     file_path: str
     duration_sec: Optional[float]
     file_size: Optional[int]
+    width_px: Optional[int]
+    height_px: Optional[int]
     published_at: Optional[datetime]
     added_at: datetime
+    last_position_sec: float
+    last_watched_at: Optional[datetime]
     needs_review: bool
     platform: Optional[str]
     status: VideoStatus
@@ -45,6 +49,10 @@ class VideoUpdate(BaseModel):
     thumbnail_url: Optional[str] = None
 
 
+class WatchProgressUpdate(BaseModel):
+    position_sec: float
+
+
 class DownloadCreate(BaseModel):
     url: str
     quality_preset: str = "best"
@@ -61,15 +69,24 @@ class DownloadPreview(BaseModel):
 
 
 class DownloadJobRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     url: str
     quality_preset: str
     status: JobStatus
     progress: float
     title: Optional[str]
+    title_override: Optional[str]
+    channel_override: Optional[str]
     error: Optional[str]
     video_id: Optional[int]
     created_at: datetime
+
+
+class DownloadJobUpdate(BaseModel):
+    title_override: Optional[str] = None
+    channel_override: Optional[str] = None
 
 
 class ChannelStat(BaseModel):
