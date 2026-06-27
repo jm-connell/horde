@@ -1,4 +1,5 @@
 import re
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -9,17 +10,18 @@ from sqlmodel import Session, func, select
 
 from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import get_session
-from ..models import Video, utcnow
+from ..models import DownloadJob, JobStatus, Video, utcnow
 from ..schemas import (
     ChannelRename,
     ChannelStat,
     StorageStats,
     TagStat,
     VideoRead,
+    VideoRedownload,
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import library
+from ..services import downloader, library
 
 router = APIRouter(prefix="/api", tags=["videos"])
 
@@ -242,14 +244,65 @@ def delete_video(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     if delete_file:
-        media = (DOWNLOADS_DIR / video.file_path)
-        if media.exists():
-            media.unlink(missing_ok=True)
+        _delete_media_files(video)
     if video.thumbnail_path:
         Path(video.thumbnail_path).unlink(missing_ok=True)
     session.delete(video)
     session.commit()
     return Response(status_code=204)
+
+
+def _delete_media_files(video: Video) -> None:
+    media = DOWNLOADS_DIR / video.file_path
+    if media.exists():
+        media.unlink(missing_ok=True)
+    for track in library.parse_subtitles(video.subtitles):
+        sub = DOWNLOADS_DIR / track.get("path", "")
+        if sub.exists():
+            sub.unlink(missing_ok=True)
+
+
+def _effective_source_url(video: Video) -> Optional[str]:
+    if video.source_url and video.source_url.strip():
+        return video.source_url.strip()
+    match = re.search(r"\[([A-Za-z0-9_-]{11})\]", video.file_path)
+    if match:
+        return f"https://www.youtube.com/watch?v={match.group(1)}"
+    return None
+
+
+@router.post("/videos/{video_id}/redownload", response_model=VideoRead)
+def redownload_video(
+    video_id: int,
+    payload: VideoRedownload,
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    source_url = _effective_source_url(video)
+    if not source_url:
+        raise HTTPException(status_code=400, detail="No source URL for this video")
+
+    _delete_media_files(video)
+
+    job = DownloadJob(
+        url=source_url,
+        quality_preset=payload.quality_preset,
+        status=JobStatus.queued,
+        title=video.title,
+        channel=video.channel,
+        title_override=video.title,
+        channel_override=video.channel,
+        normalize_volume=payload.normalize_volume,
+        replace_video_id=video_id,
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    downloader.enqueue_download(job.id)
+    return _to_read(video)
 
 
 def _fetch_thumbnail_from_url(video: Video, url: str) -> None:

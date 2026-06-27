@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { downloadFileUrl } from "../api";
 import type { Video } from "../types";
+import { effectiveSourceUrl } from "../utils";
 
 interface Props {
   video: Video;
   onEdit: () => void;
   onAddNote: () => void;
+  onChangeResolution: () => void;
   onDelete: () => void;
 }
 
@@ -13,10 +15,12 @@ export default function VideoActionsMenu({
   video,
   onEdit,
   onAddNote,
+  onChangeResolution,
   onDelete,
 }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const canChangeResolution = Boolean(effectiveSourceUrl(video));
 
   useEffect(() => {
     if (!open) return;
@@ -52,7 +56,7 @@ export default function VideoActionsMenu({
         •••
       </button>
       {open && (
-        <div className="absolute right-0 bottom-full z-20 mb-1 w-48 overflow-hidden rounded-lg bg-ink-800 py-1 shadow-2xl ring-1 ring-ink-600">
+        <div className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-lg bg-ink-800 py-1 shadow-2xl ring-1 ring-ink-600">
           <button
             onClick={() => {
               onEdit();
@@ -71,6 +75,17 @@ export default function VideoActionsMenu({
           >
             Add note
           </button>
+          {canChangeResolution && (
+            <button
+              onClick={() => {
+                onChangeResolution();
+                setOpen(false);
+              }}
+              className={itemClass}
+            >
+              Change resolution
+            </button>
+          )}
           <button onClick={downloadFile} className={itemClass}>
             Download file
           </button>

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:sync": "npm run build && node scripts/sync-static.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

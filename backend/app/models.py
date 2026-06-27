@@ -20,6 +20,7 @@ class JobStatus(str, Enum):
     downloading = "downloading"
     completed = "completed"
     error = "error"
+    cancelled = "cancelled"
 
 
 class Video(SQLModel, table=True):
@@ -70,7 +71,13 @@ class DownloadJob(SQLModel, table=True):
     progress: float = 0.0
     title: Optional[str] = None
     title_override: Optional[str] = None
+    channel: Optional[str] = None
     channel_override: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    notes_pending: Optional[str] = None
+    paused: bool = Field(default=False)
+    normalize_volume: bool = Field(default=False)
+    replace_video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
     error: Optional[str] = None
     video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
     created_at: datetime = Field(default_factory=utcnow)

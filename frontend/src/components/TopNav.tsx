@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useDownloads } from "../context/DownloadContext";
+import { useSettings } from "../hooks/useSettings";
 
 const NAV_LINKS = [
   { to: "/", label: "Library", end: true },
@@ -16,7 +17,11 @@ export default function TopNav() {
   const [reviewCount, setReviewCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const { activeCount } = useDownloads();
+  const [settings] = useSettings();
   const location = useLocation();
+
+  const showDownloadBadge =
+    settings.showDownloadNavBadge && activeCount > 0;
 
   useEffect(() => {
     let active = true;
@@ -60,7 +65,10 @@ export default function TopNav() {
     ) : null;
 
   const reviewBadge = badge(reviewCount);
-  const downloadBadge = badge(activeCount);
+  const downloadBadge = badge(showDownloadBadge ? activeCount : 0);
+
+  const mobileBadgeCount =
+    reviewCount + (showDownloadBadge ? activeCount : 0);
 
   const linkBadge = (label: string) =>
     label === "Review"
@@ -101,7 +109,7 @@ export default function TopNav() {
           aria-expanded={menuOpen}
         >
           <span className="flex items-center gap-2">
-            {badge(reviewCount + activeCount)}
+            {badge(mobileBadgeCount)}
             <span className="text-xl leading-none">{menuOpen ? "✕" : "☰"}</span>
           </span>
         </button>

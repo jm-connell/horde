@@ -11,7 +11,11 @@ export function subscribeToJob(
     try {
       const parsed: ProgressEvent = JSON.parse(e.data);
       onEvent(parsed);
-      if (parsed.status === "completed" || parsed.status === "error") {
+      if (
+        parsed.status === "completed" ||
+        parsed.status === "error" ||
+        parsed.status === "cancelled"
+      ) {
         source.close();
       }
     } catch {

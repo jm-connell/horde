@@ -23,6 +23,9 @@ VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm"}
 HOST: str = os.environ.get("HOST", "0.0.0.0")
 PORT: int = int(os.environ.get("PORT", "8080"))
 
+# Max simultaneous download workers (FIFO queue).
+MAX_DOWNLOAD_CONCURRENCY: int = int(os.environ.get("MAX_DOWNLOAD_CONCURRENCY", "2"))
+
 
 def ensure_dirs() -> None:
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)

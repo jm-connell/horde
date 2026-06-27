@@ -27,6 +27,8 @@ export interface Settings {
   playbackMode: ViewMode;
   lastCustomChannel: string;
   showContinueWatching: boolean;
+  showDownloadNavBadge: boolean;
+  normalizeVolumeOnDownload: boolean;
   channelSort: ChannelSort;
   channelOrder: "asc" | "desc";
   defaultLibrarySort: LibrarySort;
@@ -41,6 +43,8 @@ const DEFAULTS: Settings = {
   playbackMode: "standard",
   lastCustomChannel: "",
   showContinueWatching: true,
+  showDownloadNavBadge: true,
+  normalizeVolumeOnDownload: false,
   channelSort: "recent_download",
   channelOrder: "desc",
   defaultLibrarySort: "added_at",

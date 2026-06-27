@@ -9,7 +9,7 @@ import {
 import { api } from "../api";
 import { useSettings } from "../hooks/useSettings";
 import { subscribeToJob } from "../hooks/useJobEvents";
-import type { DownloadJob, ProgressEvent } from "../types";
+import type { DownloadJob, DownloadQueueStatus, ProgressEvent } from "../types";
 
 interface SubmitOverrides {
   title?: string;
@@ -20,6 +20,7 @@ interface DownloadContextValue {
   jobs: DownloadJob[];
   progress: Record<number, ProgressEvent>;
   activeCount: number;
+  queuePaused: boolean;
   submitDownload: (
     url: string,
     preset: string,
@@ -27,36 +28,45 @@ interface DownloadContextValue {
   ) => Promise<DownloadJob>;
   updateJobOverrides: (
     jobId: number,
-    overrides: SubmitOverrides
+    overrides: SubmitOverrides & { notes?: string }
   ) => Promise<void>;
-  onJobCompleted: (cb: (videoId: number | null) => void) => () => void;
+  cancelJob: (jobId: number) => Promise<void>;
+  dismissJob: (jobId: number) => Promise<void>;
+  pauseQueue: () => Promise<void>;
+  resumeQueue: () => Promise<void>;
+  refreshJobs: () => void;
+  onJobCompleted: (cb: (videoId: number | null, event?: ProgressEvent) => void) => () => void;
 }
 
 const Ctx = createContext<DownloadContextValue | null>(null);
 
-const TERMINAL = new Set(["completed", "error"]);
+const TERMINAL = new Set(["completed", "error", "cancelled"]);
 
-function isActive(job: DownloadJob): boolean {
-  return job.status === "queued" || job.status === "downloading";
+function jobStatus(job: DownloadJob, live?: ProgressEvent): string {
+  return live?.status ?? job.status;
+}
+
+function isActiveJob(job: DownloadJob, live?: ProgressEvent): boolean {
+  const status = jobStatus(job, live);
+  return status === "queued" || status === "downloading" || status === "processing";
 }
 
 export function DownloadProvider({ children }: { children: React.ReactNode }) {
-  const [, updateSettings] = useSettings();
+  const [settings, updateSettings] = useSettings();
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [progress, setProgress] = useState<Record<number, ProgressEvent>>({});
+  const [queuePaused, setQueuePaused] = useState(false);
 
   const sources = useRef<Map<number, () => void>>(new Map());
-  const completionListeners = useRef<Set<(videoId: number | null) => void>>(
-    new Set()
-  );
+  const completionListeners = useRef<
+    Set<(videoId: number | null, event?: ProgressEvent) => void>
+  >(new Set());
 
   const refreshJob = useCallback((jobId: number) => {
     api
       .getJob(jobId)
       .then((fresh) =>
-        setJobs((prev) =>
-          prev.map((j) => (j.id === fresh.id ? fresh : j))
-        )
+        setJobs((prev) => prev.map((j) => (j.id === fresh.id ? fresh : j)))
       )
       .catch(() => undefined);
   }, []);
@@ -72,7 +82,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           refreshJob(jobId);
           if (event.status === "completed") {
             const videoId = event.video_id ?? null;
-            completionListeners.current.forEach((cb) => cb(videoId));
+            completionListeners.current.forEach((cb) => cb(videoId, event));
           }
         }
       });
@@ -81,69 +91,133 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     [refreshJob]
   );
 
-  // Hydrate from the backend on mount and resume listening to active jobs.
+  const refreshJobs = useCallback(() => {
+    api
+      .listJobs()
+      .then((all) => {
+        setJobs(all);
+        all.forEach((j) => {
+          if (isActiveJob(j)) {
+            subscribe(j.id);
+          }
+        });
+      })
+      .catch(() => undefined);
+  }, [subscribe]);
+
+  const syncQueue = useCallback(() => {
+    api
+      .getQueueStatus()
+      .then((s: DownloadQueueStatus) => setQueuePaused(s.paused))
+      .catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     api
       .listJobs()
       .then((all) => {
         setJobs(all);
-        all.filter(isActive).forEach((j) => subscribe(j.id));
+        all.filter((j) => isActiveJob(j)).forEach((j) => subscribe(j.id));
       })
       .catch(() => undefined);
+    syncQueue();
+    const poll = setInterval(refreshJobs, 10000);
+    const queuePoll = setInterval(syncQueue, 5000);
     const current = sources.current;
     return () => {
+      clearInterval(poll);
+      clearInterval(queuePoll);
       current.forEach((close) => close());
       current.clear();
     };
-  }, [subscribe]);
+  }, [subscribe, refreshJobs, syncQueue]);
 
   const submitDownload = useCallback(
     async (url: string, preset: string, overrides: SubmitOverrides) => {
       const job = await api.createDownload(url, preset, {
         title_override: overrides.title?.trim() || undefined,
         channel_override: overrides.channel?.trim() || undefined,
+        normalize_volume: settings.normalizeVolumeOnDownload,
       });
       setJobs((prev) => [job, ...prev]);
       subscribe(job.id);
+      syncQueue();
       if (overrides.channel?.trim()) {
         updateSettings({ lastCustomChannel: overrides.channel.trim() });
       }
       return job;
     },
-    [subscribe, updateSettings]
+    [subscribe, updateSettings, settings.normalizeVolumeOnDownload, syncQueue]
   );
 
   const updateJobOverrides = useCallback(
-    async (jobId: number, overrides: SubmitOverrides) => {
+    async (
+      jobId: number,
+      overrides: SubmitOverrides & { notes?: string }
+    ) => {
       const updated = await api.updateJob(jobId, {
         title_override: overrides.title?.trim() || undefined,
         channel_override: overrides.channel?.trim() || undefined,
+        notes_pending: overrides.notes?.trim() || undefined,
       });
       setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
     },
     []
   );
 
+  const cancelJob = useCallback(
+    async (jobId: number) => {
+      const updated = await api.cancelJob(jobId);
+      setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
+      syncQueue();
+    },
+    [syncQueue]
+  );
+
+  const dismissJob = useCallback(async (jobId: number) => {
+    await api.dismissJob(jobId);
+    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    setProgress((prev) => {
+      const next = { ...prev };
+      delete next[jobId];
+      return next;
+    });
+  }, []);
+
+  const pauseQueue = useCallback(async () => {
+    const s = await api.pauseQueue();
+    setQueuePaused(s.paused);
+    refreshJobs();
+  }, [refreshJobs]);
+
+  const resumeQueue = useCallback(async () => {
+    const s = await api.resumeQueue();
+    setQueuePaused(s.paused);
+    refreshJobs();
+  }, [refreshJobs]);
+
   const onJobCompleted = useCallback(
-    (cb: (videoId: number | null) => void) => {
+    (cb: (videoId: number | null, event?: ProgressEvent) => void) => {
       completionListeners.current.add(cb);
       return () => completionListeners.current.delete(cb);
     },
     []
   );
 
-  const activeCount = jobs.filter((j) => {
-    const live = progress[j.id];
-    const status = live?.status ?? j.status;
-    return status === "queued" || status === "downloading" || status === "processing";
-  }).length;
+  const activeCount = jobs.filter((j) => isActiveJob(j, progress[j.id])).length;
 
   const value: DownloadContextValue = {
     jobs,
     progress,
     activeCount,
+    queuePaused,
     submitDownload,
     updateJobOverrides,
+    cancelJob,
+    dismissJob,
+    pauseQueue,
+    resumeQueue,
+    refreshJobs,
     onJobCompleted,
   };
 
@@ -155,3 +229,5 @@ export function useDownloads(): DownloadContextValue {
   if (!ctx) throw new Error("useDownloads must be used within DownloadProvider");
   return ctx;
 }
+
+export { isActiveJob, jobStatus };

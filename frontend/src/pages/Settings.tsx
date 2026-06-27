@@ -168,6 +168,76 @@ export default function Settings() {
         </div>
 
         <div className="border-t border-ink-700 pt-6">
+          <h2 className="mb-1 text-sm font-medium text-gray-200">Downloads</h2>
+          <p className="mb-4 text-xs text-gray-500">
+            Background download queue and navigation preferences.
+          </p>
+
+          <label className="mb-6 flex items-center justify-between">
+            <span>
+              <span className="block text-sm font-medium text-gray-200">
+                Show download count in navigation
+              </span>
+              <span className="block text-xs text-gray-500">
+                Badge on the Download tab while jobs are queued or in progress.
+              </span>
+            </span>
+            <button
+              role="switch"
+              aria-checked={settings.showDownloadNavBadge}
+              onClick={() =>
+                update({
+                  showDownloadNavBadge: !settings.showDownloadNavBadge,
+                })
+              }
+              className={`flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+                settings.showDownloadNavBadge ? "bg-accent" : "bg-ink-700"
+              }`}
+            >
+              <span
+                className={`block h-5 w-5 rounded-full bg-white transition-transform ${
+                  settings.showDownloadNavBadge
+                    ? "translate-x-5"
+                    : "translate-x-0"
+                }`}
+              />
+            </button>
+          </label>
+
+          <label className="flex items-center justify-between">
+            <span>
+              <span className="block text-sm font-medium text-gray-200">
+                Normalize volume on download
+              </span>
+              <span className="block text-xs text-gray-500">
+                Apply loudness normalization when saving new videos (requires
+                ffmpeg).
+              </span>
+            </span>
+            <button
+              role="switch"
+              aria-checked={settings.normalizeVolumeOnDownload}
+              onClick={() =>
+                update({
+                  normalizeVolumeOnDownload: !settings.normalizeVolumeOnDownload,
+                })
+              }
+              className={`flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+                settings.normalizeVolumeOnDownload ? "bg-accent" : "bg-ink-700"
+              }`}
+            >
+              <span
+                className={`block h-5 w-5 rounded-full bg-white transition-transform ${
+                  settings.normalizeVolumeOnDownload
+                    ? "translate-x-5"
+                    : "translate-x-0"
+                }`}
+              />
+            </button>
+          </label>
+        </div>
+
+        <div className="border-t border-ink-700 pt-6">
           <h2 className="mb-1 text-sm font-medium text-gray-200">Subtitles</h2>
           <p className="mb-3 text-xs text-gray-500">
             Caption size and how far they sit above the player controls.

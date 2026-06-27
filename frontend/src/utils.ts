@@ -84,3 +84,14 @@ export function formatRelative(iso: string | null): string {
   if (diffMo < 12) return `${diffMo}mo ago`;
   return `${Math.floor(diffMo / 12)}y ago`;
 }
+
+/** Source URL for re-downloading; falls back to YouTube id in the file path. */
+export function effectiveSourceUrl(video: {
+  source_url: string | null;
+  file_path: string;
+}): string | null {
+  if (video.source_url?.trim()) return video.source_url.trim();
+  const match = video.file_path.match(/\[([A-Za-z0-9_-]{11})\]/);
+  if (match) return `https://www.youtube.com/watch?v=${match[1]}`;
+  return null;
+}

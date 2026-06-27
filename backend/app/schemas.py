@@ -60,6 +60,7 @@ class DownloadCreate(BaseModel):
     quality_preset: str = "best"
     title_override: Optional[str] = None
     channel_override: Optional[str] = None
+    normalize_volume: bool = False
 
 
 class DownloadPreview(BaseModel):
@@ -67,6 +68,7 @@ class DownloadPreview(BaseModel):
     title: Optional[str]
     channel: Optional[str]
     channel_url: Optional[str]
+    thumbnail_url: Optional[str] = None
     entry_count: Optional[int]
 
 
@@ -80,7 +82,11 @@ class DownloadJobRead(BaseModel):
     progress: float
     title: Optional[str]
     title_override: Optional[str]
+    channel: Optional[str]
     channel_override: Optional[str]
+    thumbnail_url: Optional[str]
+    notes_pending: Optional[str]
+    paused: bool
     error: Optional[str]
     video_id: Optional[int]
     created_at: datetime
@@ -89,6 +95,18 @@ class DownloadJobRead(BaseModel):
 class DownloadJobUpdate(BaseModel):
     title_override: Optional[str] = None
     channel_override: Optional[str] = None
+    notes_pending: Optional[str] = None
+
+
+class DownloadQueueStatus(BaseModel):
+    paused: bool
+    active_count: int
+    queued_count: int
+
+
+class VideoRedownload(BaseModel):
+    quality_preset: str = "best"
+    normalize_volume: bool = False
 
 
 class ChannelStat(BaseModel):

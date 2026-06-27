@@ -51,7 +51,12 @@ export interface ChannelStat {
   subscriber_count: number | null;
 }
 
-export type JobStatus = "queued" | "downloading" | "completed" | "error";
+export type JobStatus =
+  | "queued"
+  | "downloading"
+  | "completed"
+  | "error"
+  | "cancelled";
 
 export interface DownloadJob {
   id: number;
@@ -61,7 +66,11 @@ export interface DownloadJob {
   progress: number;
   title: string | null;
   title_override: string | null;
+  channel: string | null;
   channel_override: string | null;
+  thumbnail_url: string | null;
+  notes_pending: string | null;
+  paused: boolean;
   error: string | null;
   video_id: number | null;
   created_at: string;
@@ -71,8 +80,11 @@ export interface ProgressEvent {
   status: string;
   progress?: number;
   title?: string;
+  channel?: string;
   video_id?: number;
   error?: string;
+  quality_warning?: string;
+  volume_warning?: string;
 }
 
 export interface DownloadPreview {
@@ -80,12 +92,21 @@ export interface DownloadPreview {
   title: string | null;
   channel: string | null;
   channel_url: string | null;
+  thumbnail_url: string | null;
   entry_count: number | null;
 }
 
 export interface DownloadOverrides {
   title_override?: string;
   channel_override?: string;
+  notes_pending?: string;
+  normalize_volume?: boolean;
+}
+
+export interface DownloadQueueStatus {
+  paused: boolean;
+  active_count: number;
+  queued_count: number;
 }
 
 export interface TagStat {

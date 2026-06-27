@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import { useDownloads } from "../context/DownloadContext";
+import { useDownloads, isActiveJob } from "../context/DownloadContext";
 import { useSettings } from "../hooks/useSettings";
 import ChannelPicker from "../components/ChannelPicker";
 import DownloadJobCard from "../components/DownloadJobCard";
@@ -15,8 +15,18 @@ const PRESET_LABELS: Record<string, string> = {
   audio: "Audio only",
 };
 
+const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
+
 export default function Download() {
-  const { jobs, progress, submitDownload } = useDownloads();
+  const {
+    jobs,
+    progress,
+    activeCount,
+    queuePaused,
+    submitDownload,
+    pauseQueue,
+    resumeQueue,
+  } = useDownloads();
   const [settings] = useSettings();
 
   const [url, setUrl] = useState("");
@@ -34,12 +44,33 @@ export default function Download() {
 
   const [importMessage, setImportMessage] = useState<string | null>(null);
 
+  const [activeCollapsed, setActiveCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(ACTIVE_COLLAPSE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (activeCount > 0 && activeCollapsed) {
+      setActiveCollapsed(false);
+    }
+  }, [activeCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleActiveCollapsed = () => {
+    setActiveCollapsed((v) => {
+      const next = !v;
+      localStorage.setItem(ACTIVE_COLLAPSE_KEY, String(next));
+      return next;
+    });
+  };
+
   useEffect(() => {
     api.listPresets().then(setPresets).catch(() => undefined);
     api.listChannels().then(setChannels).catch(() => undefined);
   }, []);
 
-  // Inspect the link (debounced) and autofill the title/channel fields.
   useEffect(() => {
     const trimmed = url.trim();
     if (!trimmed) {
@@ -65,6 +96,19 @@ export default function Download() {
   }, [url]);
 
   const isPlaylist = preview?.is_playlist ?? false;
+
+  const { activeJobs, recentJobs } = useMemo(() => {
+    const active: typeof jobs = [];
+    const recent: typeof jobs = [];
+    for (const job of jobs) {
+      if (isActiveJob(job, progress[job.id])) {
+        active.push(job);
+      } else {
+        recent.push(job);
+      }
+    }
+    return { activeJobs: active, recentJobs: recent };
+  }, [jobs, progress]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,7 +280,63 @@ export default function Download() {
         {importMessage && <p className="text-sm text-accent">{importMessage}</p>}
       </form>
 
-      {jobs.length > 0 && (
+      {activeCount > 0 && (
+        <section className="mt-6 rounded-xl bg-accent/5 p-4 ring-1 ring-accent/40">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={toggleActiveCollapsed}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            >
+              <span className="text-gray-400">{activeCollapsed ? "▶" : "▼"}</span>
+              <span className="text-sm font-semibold text-gray-100">
+                Active downloads
+              </span>
+              <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-ink-950">
+                {activeCount}
+              </span>
+            </button>
+            <div className="flex shrink-0 gap-2">
+              {queuePaused ? (
+                <button
+                  type="button"
+                  onClick={() => resumeQueue()}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-ink-950 hover:bg-accent-soft"
+                >
+                  Resume all
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => pauseQueue()}
+                  className="rounded-lg bg-ink-800 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-700"
+                >
+                  Pause all
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="mb-3 text-xs text-gray-400">
+            {activeCount} active — this is what the navigation badge shows.
+            Pause all stops every download; nothing new starts until you resume.
+          </p>
+          {!activeCollapsed && (
+            <div className="space-y-4">
+              {activeJobs.map((job) => (
+                <DownloadJobCard
+                  key={job.id}
+                  job={job}
+                  live={progress[job.id]}
+                  channels={channels}
+                  active
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {jobs.length > 0 && activeCount === 0 && recentJobs.length === 0 && (
         <div className="mt-6 space-y-4">
           {jobs.map((job) => (
             <DownloadJobCard
@@ -244,8 +344,27 @@ export default function Download() {
               job={job}
               live={progress[job.id]}
               channels={channels}
+              active={isActiveJob(job, progress[job.id])}
             />
           ))}
+        </div>
+      )}
+
+      {recentJobs.length > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-3 text-sm font-medium text-gray-400">
+            Recent downloads
+          </h2>
+          <div className="space-y-4">
+            {recentJobs.map((job) => (
+              <DownloadJobCard
+                key={job.id}
+                job={job}
+                live={progress[job.id]}
+                channels={channels}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

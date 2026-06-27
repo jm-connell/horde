@@ -5,11 +5,22 @@ import AddToPlaylist from "../components/AddToPlaylist";
 import LinkifiedText from "../components/LinkifiedText";
 import VideoActionsMenu from "../components/VideoActionsMenu";
 import VideoEditForm from "../components/VideoEditForm";
+import { useDownloads } from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
+import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
 import { formatDate, formatResolution, formatSize } from "../utils";
+
+const PRESET_LABELS: Record<string, string> = {
+  best: "Best available",
+  "1440p": "1440p (2K)",
+  "1080p": "1080p",
+  "720p": "720p",
+  "480p": "480p",
+  audio: "Audio only",
+};
 
 export default function Watch() {
   const { id } = useParams();
@@ -20,7 +31,14 @@ export default function Watch() {
   const [editing, setEditing] = useState(false);
   const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [redownloadOpen, setRedownloadOpen] = useState(false);
+  const [redownloadPreset, setRedownloadPreset] = useState("1080p");
+  const [presets, setPresets] = useState<string[]>(["best"]);
+  const [redownloading, setRedownloading] = useState(false);
   const [settings] = useSettings();
+  const { showToast } = useToast();
+  const { onJobCompleted, refreshJobs } = useDownloads();
+  const redownloadPending = useRef(false);
   const isMobile = useIsMobile();
   const {
     mode,
@@ -50,6 +68,45 @@ export default function Watch() {
     registerDock(dockRef.current);
     return () => registerDock(null);
   }, [registerDock, video, mode]);
+
+  useEffect(() => {
+    api.listPresets().then(setPresets).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    return onJobCompleted((completedId, event) => {
+      if (!redownloadPending.current || completedId !== videoId) return;
+      redownloadPending.current = false;
+      api.getVideo(videoId).then(setVideo).catch(() => undefined);
+      if (event?.quality_warning) {
+        showToast(event.quality_warning);
+      } else {
+        showToast("Redownload complete.");
+      }
+    });
+  }, [onJobCompleted, videoId, showToast]);
+
+  const onRedownload = async () => {
+    setRedownloading(true);
+    try {
+      redownloadPending.current = true;
+      await api.redownloadVideo(
+        videoId,
+        redownloadPreset,
+        settings.normalizeVolumeOnDownload
+      );
+      showToast("Download started — check the Download page for progress.");
+      refreshJobs();
+      setRedownloadOpen(false);
+    } catch (err) {
+      redownloadPending.current = false;
+      showToast(
+        err instanceof Error ? err.message : "Could not start download"
+      );
+    } finally {
+      setRedownloading(false);
+    }
+  };
 
   const onDelete = async () => {
     if (!video) return;
@@ -262,11 +319,56 @@ export default function Watch() {
                 setEditFocus("notes");
                 setEditing(true);
               }}
+              onChangeResolution={() => setRedownloadOpen(true)}
               onDelete={onDelete}
             />
           </div>
         </div>
       </div>
+
+      {redownloadOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700">
+            <h2 className="mb-1 text-lg font-semibold text-gray-100">
+              Change resolution
+            </h2>
+            <p className="mb-4 text-sm text-gray-400">
+              This replaces the video file on disk with a newly downloaded copy at
+              the selected resolution. Your title, notes, and other metadata are
+              kept. Playback may be unavailable until the download finishes.
+            </p>
+            <label className="mb-1 block text-xs font-medium text-gray-400">
+              Quality
+            </label>
+            <select
+              value={redownloadPreset}
+              onChange={(e) => setRedownloadPreset(e.target.value)}
+              className="mb-6 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-accent"
+            >
+              {presets.map((p) => (
+                <option key={p} value={p}>
+                  {PRESET_LABELS[p] ?? p}
+                </option>
+              ))}
+            </select>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setRedownloadOpen(false)}
+                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onRedownload}
+                disabled={redownloading}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+              >
+                {redownloading ? "Starting…" : "Replace file"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ from .config import ensure_dirs
 from .database import init_db
 from .api import downloads, playlists, review, videos
 from .services.scanner import cleanup_orphans, start_scanner
+from .services import downloader
 
 # Static frontend build copied next to the backend in the Docker image.
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
     ensure_dirs()
     init_db()
     cleanup_orphans()
+    downloader.download_queue.recover()
     observer = start_scanner()
     try:
         yield

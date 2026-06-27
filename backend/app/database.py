@@ -27,6 +27,12 @@ _VIDEO_COLUMNS = [
 _DOWNLOAD_JOB_COLUMNS = [
     ("title_override", "VARCHAR"),
     ("channel_override", "VARCHAR"),
+    ("channel", "VARCHAR"),
+    ("thumbnail_url", "VARCHAR"),
+    ("notes_pending", "VARCHAR"),
+    ("paused", "BOOLEAN DEFAULT 0"),
+    ("normalize_volume", "BOOLEAN DEFAULT 0"),
+    ("replace_video_id", "INTEGER"),
 ]
 
 

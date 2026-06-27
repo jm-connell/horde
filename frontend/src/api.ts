@@ -3,6 +3,7 @@ import type {
   DownloadJob,
   DownloadOverrides,
   DownloadPreview,
+  DownloadQueueStatus,
   Playlist,
   PlaylistDetail,
   StorageStats,
@@ -163,6 +164,44 @@ export const api = {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(overrides),
+    });
+  },
+
+  cancelJob(jobId: number): Promise<DownloadJob> {
+    return request<DownloadJob>(`/api/downloads/${jobId}/cancel`, {
+      method: "POST",
+    });
+  },
+
+  dismissJob(jobId: number): Promise<void> {
+    return request<void>(`/api/downloads/${jobId}`, { method: "DELETE" });
+  },
+
+  getQueueStatus(): Promise<DownloadQueueStatus> {
+    return request<DownloadQueueStatus>("/api/downloads/queue/status");
+  },
+
+  pauseQueue(): Promise<DownloadQueueStatus> {
+    return request<DownloadQueueStatus>("/api/downloads/queue/pause", {
+      method: "POST",
+    });
+  },
+
+  resumeQueue(): Promise<DownloadQueueStatus> {
+    return request<DownloadQueueStatus>("/api/downloads/queue/resume", {
+      method: "POST",
+    });
+  },
+
+  redownloadVideo(
+    id: number,
+    quality_preset: string,
+    normalize_volume = false
+  ): Promise<Video> {
+    return request<Video>(`/api/videos/${id}/redownload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quality_preset, normalize_volume }),
     });
   },
 
