@@ -1,18 +1,33 @@
 import json
+import random as py_random
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, nullsfirst, nullslast
 from sqlmodel import Session, select
 
 from ..models import Video
 
+PROGRESS_EXPIRY_DAYS = 14
 
 SORT_COLUMNS = {
     "added_at": Video.added_at,
     "title": Video.title,
     "duration": Video.duration_sec,
     "published_at": Video.published_at,
+    "file_size": Video.file_size,
+    "view_count": Video.view_count,
+    "last_watched_at": Video.last_watched_at,
 }
+
+
+@dataclass
+class ChannelStatRow:
+    channel: str
+    count: int
+    last_download_at: Optional[datetime]
+    subscriber_count: Optional[int]
 
 
 def parse_tags(raw: str) -> list[str]:
@@ -40,6 +55,36 @@ def dump_subtitles(tracks: list[dict]) -> str:
     return json.dumps(tracks)
 
 
+def expire_stale_progress(session: Session) -> None:
+    """Reset watch position on videos not watched in PROGRESS_EXPIRY_DAYS."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=PROGRESS_EXPIRY_DAYS)
+    rows = session.exec(
+        select(Video).where(
+            Video.last_watched_at.is_not(None),
+            Video.last_watched_at < cutoff,
+            Video.last_position_sec > 0,
+        )
+    ).all()
+    for video in rows:
+        video.last_position_sec = 0.0
+        session.add(video)
+    if rows:
+        session.commit()
+
+
+def _apply_sort(statement, sort: str, order: str):
+    if sort == "random":
+        return statement, True
+
+    column = SORT_COLUMNS.get(sort, Video.added_at)
+    nullable = sort in ("file_size", "view_count", "last_watched_at")
+    if order == "desc":
+        ordering = nullslast(column.desc()) if nullable else column.desc()
+    else:
+        ordering = nullsfirst(column.asc()) if nullable else column.asc()
+    return statement.order_by(ordering), False
+
+
 def query_videos(
     session: Session,
     q: Optional[str] = None,
@@ -49,6 +94,8 @@ def query_videos(
     order: str = "desc",
     needs_review: Optional[bool] = None,
     continue_watching: bool = False,
+    watched_only: bool = False,
+    seed: Optional[int] = None,
 ) -> list[Video]:
     statement = select(Video)
 
@@ -60,11 +107,10 @@ def query_videos(
             (Video.duration_sec.is_(None))
             | (Video.last_position_sec < Video.duration_sec * 0.9)
         )
-        return list(
-            session.exec(
-                statement.order_by(Video.last_watched_at.desc()).limit(12)
-            ).all()
-        )
+        statement = statement.order_by(Video.last_watched_at.desc()).limit(12)
+        return list(session.exec(statement).all())
+    if watched_only:
+        statement = statement.where(Video.last_watched_at.is_not(None))
     if channel:
         statement = statement.where(Video.channel == channel)
     if q:
@@ -80,10 +126,13 @@ def query_videos(
         # Tags are stored as a JSON list string; match the quoted token.
         statement = statement.where(Video.tags.ilike(f'%"{tag}"%'))
 
-    column = SORT_COLUMNS.get(sort, Video.added_at)
-    statement = statement.order_by(column.desc() if order == "desc" else column.asc())
+    statement, is_random = _apply_sort(statement, sort, order)
 
-    return list(session.exec(statement).all())
+    results = list(session.exec(statement).all())
+    if is_random:
+        rng = py_random.Random(seed)
+        rng.shuffle(results)
+    return results
 
 
 def rename_channel(session: Session, old_name: str, new_name: str) -> int:
@@ -97,14 +146,57 @@ def rename_channel(session: Session, old_name: str, new_name: str) -> int:
     return len(rows)
 
 
-def channel_stats(session: Session) -> list[tuple[str, int]]:
+def channel_stats(
+    session: Session,
+    sort: str = "recent_download",
+    order: str = "desc",
+) -> list[ChannelStatRow]:
     statement = (
-        select(Video.channel, func.count(Video.id))
+        select(
+            Video.channel,
+            func.count(Video.id),
+            func.max(Video.added_at),
+            func.max(Video.channel_subscriber_count),
+        )
         .where(Video.channel.is_not(None))
+        .where(Video.needs_review == False)  # noqa: E712
         .group_by(Video.channel)
-        .order_by(func.count(Video.id).desc())
     )
-    return [(c, n) for c, n in session.exec(statement).all() if c]
+    rows = [
+        ChannelStatRow(
+            channel=c,
+            count=int(n),
+            last_download_at=last_dl,
+            subscriber_count=int(sub) if sub is not None else None,
+        )
+        for c, n, last_dl, sub in session.exec(statement).all()
+        if c
+    ]
+
+    def sort_key(row: ChannelStatRow):
+        if sort == "video_count":
+            return row.count
+        if sort == "alphabetical":
+            return row.channel.lower()
+        if sort == "subscriber_count":
+            # Nulls sort last regardless of direction (handled below).
+            return row.subscriber_count if row.subscriber_count is not None else -1
+        # recent_download (default)
+        if row.last_download_at is None:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        return row.last_download_at
+
+    reverse = order == "desc"
+    if sort == "subscriber_count":
+        # Put channels without subscriber data at the end.
+        with_sub = [r for r in rows if r.subscriber_count is not None]
+        without_sub = [r for r in rows if r.subscriber_count is None]
+        with_sub.sort(key=lambda r: r.subscriber_count or 0, reverse=reverse)
+        without_sub.sort(key=lambda r: r.channel.lower())
+        return with_sub + without_sub
+
+    rows.sort(key=sort_key, reverse=reverse)
+    return rows
 
 
 def all_tags(session: Session) -> list[str]:

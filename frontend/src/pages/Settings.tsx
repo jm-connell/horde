@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { useSettings, type SubtitleSize } from "../hooks/useSettings";
+import {
+  useSettings,
+  type ChannelSort,
+  type LibrarySort,
+  type SubtitleSize,
+} from "../hooks/useSettings";
+import { LIBRARY_SORT_OPTIONS } from "../hooks/useLibrarySort";
 import type { StorageStats } from "../types";
 import { formatSize } from "../utils";
 
@@ -11,6 +17,13 @@ const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
 ];
 
 const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+
+const CHANNEL_SORT_OPTIONS: { value: ChannelSort; label: string }[] = [
+  { value: "recent_download", label: "Recent download" },
+  { value: "video_count", label: "Video count" },
+  { value: "alphabetical", label: "Alphabetical" },
+  { value: "subscriber_count", label: "Subscriber count" },
+];
 
 export default function Settings() {
   const [settings, update] = useSettings();
@@ -53,6 +66,105 @@ export default function Settings() {
               />
             </button>
           </label>
+        </div>
+
+        <div className="border-t border-ink-700 pt-6">
+          <h2 className="mb-1 text-sm font-medium text-gray-200">Library</h2>
+          <p className="mb-4 text-xs text-gray-500">
+            Homepage and channel sidebar preferences.
+          </p>
+
+          <label className="mb-6 flex items-center justify-between">
+            <span>
+              <span className="block text-sm font-medium text-gray-200">
+                Show continue watching
+              </span>
+              <span className="block text-xs text-gray-500">
+                Display the continue watching row on the library home page.
+              </span>
+            </span>
+            <button
+              role="switch"
+              aria-checked={settings.showContinueWatching}
+              onClick={() =>
+                update({
+                  showContinueWatching: !settings.showContinueWatching,
+                })
+              }
+              className={`flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+                settings.showContinueWatching ? "bg-accent" : "bg-ink-700"
+              }`}
+            >
+              <span
+                className={`block h-5 w-5 rounded-full bg-white transition-transform ${
+                  settings.showContinueWatching
+                    ? "translate-x-5"
+                    : "translate-x-0"
+                }`}
+              />
+            </button>
+          </label>
+
+          <p className="mb-2 text-xs font-medium text-gray-400">
+            Default video sort
+          </p>
+          <p className="mb-3 text-xs text-gray-500">
+            Used when you open the library or after a temporary sort expires (3
+            hours).
+          </p>
+          <div className="mb-6 flex flex-wrap gap-2">
+            {LIBRARY_SORT_OPTIONS.filter((o) => o.value !== "random").map(
+              (opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() =>
+                    update({ defaultLibrarySort: opt.value as LibrarySort })
+                  }
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    settings.defaultLibrarySort === opt.value
+                      ? "bg-accent text-ink-950"
+                      : "bg-ink-800 text-gray-300 hover:bg-ink-700"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              )
+            )}
+          </div>
+
+          <p className="mb-2 text-xs font-medium text-gray-400">
+            Channel List Order (Sidebar)
+          </p>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {CHANNEL_SORT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => update({ channelSort: opt.value })}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  settings.channelSort === opt.value
+                    ? "bg-accent text-ink-950"
+                    : "bg-ink-800 text-gray-300 hover:bg-ink-700"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            {(["desc", "asc"] as const).map((dir) => (
+              <button
+                key={dir}
+                onClick={() => update({ channelOrder: dir })}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  settings.channelOrder === dir
+                    ? "bg-accent text-ink-950"
+                    : "bg-ink-800 text-gray-300 hover:bg-ink-700"
+                }`}
+              >
+                {dir === "desc" ? "Descending" : "Ascending"}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="border-t border-ink-700 pt-6">

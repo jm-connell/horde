@@ -18,6 +18,7 @@ export default function Watch() {
   const [video, setVideo] = useState<Video | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
   const [descExpanded, setDescExpanded] = useState(false);
   const [settings] = useSettings();
   const isMobile = useIsMobile();
@@ -105,28 +106,50 @@ export default function Watch() {
             )}
           </div>
 
-          {settings.showDescription && video.description && (
+          {settings.showDescription && (video.description || video.notes) && (
             <div className="mt-4 rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700">
-              <p
-                className={`whitespace-pre-wrap text-sm text-gray-300 ${
-                  descExpanded ? "" : "line-clamp-3"
-                }`}
-              >
-                <LinkifiedText text={video.description} />
-              </p>
-              <button
-                onClick={() => setDescExpanded((v) => !v)}
-                className="mt-2 text-xs font-medium text-accent hover:underline"
-              >
-                {descExpanded ? "Show less" : "Show more"}
-              </button>
+              {video.description && (
+                <>
+                  <p
+                    className={`whitespace-pre-wrap text-sm text-gray-300 ${
+                      descExpanded ? "" : "line-clamp-3"
+                    }`}
+                  >
+                    <LinkifiedText text={video.description} />
+                  </p>
+                  <button
+                    onClick={() => setDescExpanded((v) => !v)}
+                    className="mt-2 text-xs font-medium text-accent hover:underline"
+                  >
+                    {descExpanded ? "Show less" : "Show more"}
+                  </button>
+                </>
+              )}
+
+              {video.notes &&
+                (descExpanded || !video.description) && (
+                  <div
+                    className={
+                      video.description
+                        ? "mt-4 border-t border-ink-700 pt-4"
+                        : ""
+                    }
+                  >
+                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
+                      Your notes
+                    </h3>
+                    <p className="whitespace-pre-wrap text-sm text-gray-300">
+                      <LinkifiedText text={video.notes} />
+                    </p>
+                  </div>
+                )}
             </div>
           )}
 
-          {video.notes && (
+          {!settings.showDescription && video.notes && (
             <div className="mt-4 rounded-xl border border-accent/30 bg-accent/5 p-4">
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
-                Notes
+                Your notes
               </h3>
               <p className="whitespace-pre-wrap text-sm text-gray-300">
                 <LinkifiedText text={video.notes} />
@@ -207,10 +230,15 @@ export default function Watch() {
               <VideoEditForm
                 video={video}
                 saveLabel="Save changes"
-                onCancel={() => setEditing(false)}
+                focusField={editFocus}
+                onCancel={() => {
+                  setEditing(false);
+                  setEditFocus(undefined);
+                }}
                 onSaved={(updated) => {
                   setVideo(updated);
                   setEditing(false);
+                  setEditFocus(undefined);
                 }}
               />
             </div>
@@ -226,7 +254,14 @@ export default function Watch() {
             <AddToPlaylist videoId={video.id} />
             <VideoActionsMenu
               video={video}
-              onEdit={() => setEditing((v) => !v)}
+              onEdit={() => {
+                setEditFocus(undefined);
+                setEditing((v) => !v);
+              }}
+              onAddNote={() => {
+                setEditFocus("notes");
+                setEditing(true);
+              }}
               onDelete={onDelete}
             />
           </div>

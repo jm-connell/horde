@@ -3,6 +3,21 @@ import type { ViewMode } from "../components/VideoPlayer";
 
 export type SubtitleSize = "small" | "medium" | "large";
 
+export type ChannelSort =
+  | "recent_download"
+  | "video_count"
+  | "alphabetical"
+  | "subscriber_count";
+
+export type LibrarySort =
+  | "added_at"
+  | "published_at"
+  | "title"
+  | "duration"
+  | "file_size"
+  | "view_count"
+  | "random";
+
 export interface Settings {
   showDescription: boolean;
   subtitleSize: SubtitleSize;
@@ -11,6 +26,10 @@ export interface Settings {
   volume: number;
   playbackMode: ViewMode;
   lastCustomChannel: string;
+  showContinueWatching: boolean;
+  channelSort: ChannelSort;
+  channelOrder: "asc" | "desc";
+  defaultLibrarySort: LibrarySort;
 }
 
 const DEFAULTS: Settings = {
@@ -21,6 +40,10 @@ const DEFAULTS: Settings = {
   volume: 1,
   playbackMode: "standard",
   lastCustomChannel: "",
+  showContinueWatching: true,
+  channelSort: "recent_download",
+  channelOrder: "desc",
+  defaultLibrarySort: "added_at",
 };
 
 const STORAGE_KEY = "horde.settings";

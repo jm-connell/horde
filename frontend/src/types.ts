@@ -21,6 +21,8 @@ export interface Video {
   file_size: number | null;
   width_px: number | null;
   height_px: number | null;
+  view_count: number | null;
+  channel_subscriber_count: number | null;
   published_at: string | null;
   added_at: string;
   last_position_sec: number;
@@ -45,6 +47,8 @@ export interface VideoUpdate {
 export interface ChannelStat {
   channel: string;
   count: number;
+  last_download_at: string | null;
+  subscriber_count: number | null;
 }
 
 export type JobStatus = "queued" | "downloading" | "completed" | "error";

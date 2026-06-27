@@ -34,13 +34,20 @@ export interface LibraryQuery {
   sort?: string;
   order?: string;
   continue_watching?: boolean;
+  watched_only?: boolean;
+  seed?: number;
+}
+
+export interface ChannelQuery {
+  sort?: string;
+  order?: string;
 }
 
 export const api = {
   listVideos(params: LibraryQuery = {}): Promise<Video[]> {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v) qs.set(k, String(v));
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
     });
     return request<Video[]>(`/api/videos?${qs.toString()}`);
   },
@@ -80,8 +87,13 @@ export const api = {
     });
   },
 
-  listChannels(): Promise<ChannelStat[]> {
-    return request<ChannelStat[]>("/api/channels");
+  listChannels(params: ChannelQuery = {}): Promise<ChannelStat[]> {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v) qs.set(k, String(v));
+    });
+    const query = qs.toString();
+    return request<ChannelStat[]>(`/api/channels${query ? `?${query}` : ""}`);
   },
 
   renameChannel(oldName: string, newName: string): Promise<{ updated: number }> {

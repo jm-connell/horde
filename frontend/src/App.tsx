@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import Library from "./pages/Library";
+import History from "./pages/History";
 import Download from "./pages/Download";
 import Review from "./pages/Review";
 import Watch from "./pages/Watch";
@@ -19,6 +20,7 @@ export default function App() {
           <main className="mx-auto max-w-[1600px] px-3 py-6 md:px-6">
             <Routes>
               <Route path="/" element={<Library />} />
+              <Route path="/history" element={<History />} />
               <Route path="/download" element={<Download />} />
               <Route path="/playlists" element={<Playlists />} />
               <Route path="/playlists/:id" element={<PlaylistDetail />} />

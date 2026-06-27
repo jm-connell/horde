@@ -250,6 +250,8 @@ def _run_download(
             video.width_px = int(width) if width else None
             video.height_px = int(height) if height else None
             video.published_at = _published_at(info)
+            video.view_count = info.get("view_count")
+            video.channel_subscriber_count = info.get("channel_follower_count")
             video.subtitles = library.dump_subtitles(_collect_subtitles(final_path))
             video.needs_review = False
             video.platform = info.get("extractor_key")

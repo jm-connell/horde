@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, thumbnailUrl } from "../api";
 import type { Video } from "../types";
 import { formatDuration, formatSize } from "../utils";
@@ -36,6 +36,7 @@ interface Props {
   saveLabel?: string;
   // Require title + channel before saving (used by the review flow).
   requireChannel?: boolean;
+  focusField?: "notes";
 }
 
 export default function VideoEditForm({
@@ -44,11 +45,19 @@ export default function VideoEditForm({
   onCancel,
   saveLabel = "Save",
   requireChannel = false,
+  focusField,
 }: Props) {
+  const notesRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState<DraftState>(toDraft(video));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [thumbVersion, setThumbVersion] = useState(0);
+
+  useEffect(() => {
+    if (focusField === "notes") {
+      notesRef.current?.focus();
+    }
+  }, [focusField]);
 
   const set = (key: keyof DraftState, value: string) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -235,6 +244,7 @@ export default function VideoEditForm({
           <div>
             <label className={labelClass}>Notes</label>
             <textarea
+              ref={notesRef}
               value={draft.notes}
               onChange={(e) => set("notes", e.target.value)}
               rows={2}

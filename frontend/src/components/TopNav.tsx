@@ -5,6 +5,7 @@ import { useDownloads } from "../context/DownloadContext";
 
 const NAV_LINKS = [
   { to: "/", label: "Library", end: true },
+  { to: "/history", label: "History", end: false },
   { to: "/download", label: "Download", end: false },
   { to: "/playlists", label: "Playlists", end: false },
   { to: "/review", label: "Review", end: false },

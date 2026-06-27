@@ -45,6 +45,9 @@ class Video(SQLModel, table=True):
     file_size: Optional[int] = None
     width_px: Optional[int] = None
     height_px: Optional[int] = None
+    view_count: Optional[int] = None
+    # Denormalized per video; same value for all videos from a channel when known.
+    channel_subscriber_count: Optional[int] = None
 
     published_at: Optional[datetime] = None
     added_at: datetime = Field(default_factory=utcnow, index=True)

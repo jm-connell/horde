@@ -20,6 +20,8 @@ _VIDEO_COLUMNS = [
     ("height_px", "INTEGER"),
     ("last_position_sec", "FLOAT DEFAULT 0"),
     ("last_watched_at", "VARCHAR"),
+    ("view_count", "INTEGER"),
+    ("channel_subscriber_count", "INTEGER"),
 ]
 
 _DOWNLOAD_JOB_COLUMNS = [

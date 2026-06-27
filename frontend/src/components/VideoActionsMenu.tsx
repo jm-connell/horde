@@ -5,10 +5,16 @@ import type { Video } from "../types";
 interface Props {
   video: Video;
   onEdit: () => void;
+  onAddNote: () => void;
   onDelete: () => void;
 }
 
-export default function VideoActionsMenu({ video, onEdit, onDelete }: Props) {
+export default function VideoActionsMenu({
+  video,
+  onEdit,
+  onAddNote,
+  onDelete,
+}: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -55,6 +61,15 @@ export default function VideoActionsMenu({ video, onEdit, onDelete }: Props) {
             className={itemClass}
           >
             Edit
+          </button>
+          <button
+            onClick={() => {
+              onAddNote();
+              setOpen(false);
+            }}
+            className={itemClass}
+          >
+            Add note
           </button>
           <button onClick={downloadFile} className={itemClass}>
             Download file

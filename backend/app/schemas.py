@@ -27,6 +27,8 @@ class VideoRead(BaseModel):
     file_size: Optional[int]
     width_px: Optional[int]
     height_px: Optional[int]
+    view_count: Optional[int]
+    channel_subscriber_count: Optional[int]
     published_at: Optional[datetime]
     added_at: datetime
     last_position_sec: float
@@ -92,6 +94,8 @@ class DownloadJobUpdate(BaseModel):
 class ChannelStat(BaseModel):
     channel: str
     count: int
+    last_download_at: Optional[datetime] = None
+    subscriber_count: Optional[int] = None
 
 
 class TagStat(BaseModel):

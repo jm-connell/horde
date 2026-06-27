@@ -58,6 +58,8 @@ def _to_read(video: Video) -> VideoRead:
         file_size=video.file_size,
         width_px=video.width_px,
         height_px=video.height_px,
+        view_count=video.view_count,
+        channel_subscriber_count=video.channel_subscriber_count,
         published_at=video.published_at,
         added_at=video.added_at,
         last_position_sec=video.last_position_sec,
@@ -86,18 +88,42 @@ def list_videos(
     sort: str = Query("added_at"),
     order: str = Query("desc"),
     continue_watching: bool = False,
+    watched_only: bool = False,
+    seed: Optional[int] = None,
     session: Session = Depends(get_session),
 ):
+    if continue_watching or watched_only:
+        library.expire_stale_progress(session)
     videos = library.query_videos(
-        session, q=q, channel=channel, tag=tag, sort=sort, order=order,
-        needs_review=False, continue_watching=continue_watching,
+        session,
+        q=q,
+        channel=channel,
+        tag=tag,
+        sort=sort,
+        order=order,
+        needs_review=False,
+        continue_watching=continue_watching,
+        watched_only=watched_only,
+        seed=seed,
     )
     return [_to_read(v) for v in videos]
 
 
 @router.get("/channels", response_model=list[ChannelStat])
-def list_channels(session: Session = Depends(get_session)):
-    return [ChannelStat(channel=c, count=n) for c, n in library.channel_stats(session)]
+def list_channels(
+    sort: str = Query("recent_download"),
+    order: str = Query("desc"),
+    session: Session = Depends(get_session),
+):
+    return [
+        ChannelStat(
+            channel=row.channel,
+            count=row.count,
+            last_download_at=row.last_download_at,
+            subscriber_count=row.subscriber_count,
+        )
+        for row in library.channel_stats(session, sort=sort, order=order)
+    ]
 
 
 @router.patch("/channels", response_model=dict)
@@ -198,6 +224,7 @@ def update_progress(
     # Treat the first few seconds as "not started" so brief opens don't clutter
     # the Continue watching row. A reset to 0 (on finish) is always honored.
     if payload.position_sec >= 5 or payload.position_sec == 0:
+        library.expire_stale_progress(session)
         video.last_position_sec = max(0.0, payload.position_sec)
         video.last_watched_at = utcnow()
         session.add(video)
