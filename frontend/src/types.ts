@@ -21,6 +21,7 @@ export interface Video {
   file_size: number | null;
   width_px: number | null;
   height_px: number | null;
+  frame_rate: number | null;
   view_count: number | null;
   channel_subscriber_count: number | null;
   published_at: string | null;
@@ -30,6 +31,9 @@ export interface Video {
   needs_review: boolean;
   platform: string | null;
   status: VideoStatus;
+  metadata_synced_at: string | null;
+  source_title: string | null;
+  title_is_custom: boolean;
 }
 
 export interface VideoUpdate {
@@ -119,6 +123,19 @@ export interface StorageStats {
   video_bytes: number;
   thumbnail_bytes: number;
   video_count: number;
+}
+
+export interface AppSettings {
+  progress_expiry_days: number;
+}
+
+export interface HealthStats {
+  status: string;
+  yt_dlp_version: string;
+  disk: { total_bytes: number; used_bytes: number; free_bytes: number } | null;
+  library_video_count: number;
+  review_pending_count: number;
+  active_downloads: number;
 }
 
 export type PlaylistSource = "user" | "youtube";

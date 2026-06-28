@@ -27,6 +27,7 @@ class VideoRead(BaseModel):
     file_size: Optional[int]
     width_px: Optional[int]
     height_px: Optional[int]
+    frame_rate: Optional[float]
     view_count: Optional[int]
     channel_subscriber_count: Optional[int]
     published_at: Optional[datetime]
@@ -36,6 +37,9 @@ class VideoRead(BaseModel):
     needs_review: bool
     platform: Optional[str]
     status: VideoStatus
+    metadata_synced_at: Optional[datetime]
+    source_title: Optional[str]
+    title_is_custom: bool
 
 
 class VideoUpdate(BaseModel):
@@ -168,3 +172,27 @@ class PlaylistReorder(BaseModel):
 class PlaylistImport(BaseModel):
     url: str
     quality_preset: str = "best"
+
+
+class BulkVideoDelete(BaseModel):
+    video_ids: list[int]
+    delete_files: bool = False
+
+
+class BulkVideoNotes(BaseModel):
+    video_ids: list[int]
+    notes: str
+
+
+class BulkMetadataRefresh(BaseModel):
+    video_ids: list[int] = []
+
+
+class MetadataRefreshResult(BaseModel):
+    refreshed: int
+    failed: int
+    skipped: int
+
+
+class BulkPlaylistAdd(BaseModel):
+    video_ids: list[int]

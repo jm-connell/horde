@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api } from "../api";
+import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import VideoCard from "../components/VideoCard";
 import { useDownloads } from "../context/DownloadContext";
@@ -13,10 +13,17 @@ import {
   type LibrarySortState,
 } from "../hooks/useLibrarySort";
 import { loadSettings, useSettings } from "../hooks/useSettings";
-import type { ChannelStat, TagStat, Video } from "../types";
+import { useToast } from "../context/ToastContext";
+import type { ChannelStat, Playlist, TagStat, Video } from "../types";
 
 const TAG_MIN_COUNT = 3;
 const TAG_PAGE_SIZE = 20;
+
+function videoProgress(video: Video): number | undefined {
+  if (!video.duration_sec || video.duration_sec <= 0) return undefined;
+  if (video.last_position_sec <= 0) return undefined;
+  return Math.min(1, video.last_position_sec / video.duration_sec);
+}
 
 export default function Library() {
   const [videos, setVideos] = useState<Video[]>([]);
@@ -26,6 +33,18 @@ export default function Library() {
   const [showTags, setShowTags] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Multi-select state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const lastSelectedIndex = useRef<number | null>(null);
+
+  // Bulk action popover state
+  const [bulkNote, setBulkNote] = useState("");
+  const [bulkNoteOpen, setBulkNoteOpen] = useState(false);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlistOpen, setPlaylistOpen] = useState(false);
+  const [metadataSyncing, setMetadataSyncing] = useState(false);
 
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
@@ -47,7 +66,8 @@ export default function Library() {
   const [renameValue, setRenameValue] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const [settings] = useSettings();
+  const [settings, update] = useSettings();
+  const { showToast } = useToast();
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
   const { onJobCompleted } = useDownloads();
 
@@ -196,15 +216,114 @@ export default function Library() {
     return String(count);
   };
 
+  const toggleSelect = (id: number, index: number, shiftHeld: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (shiftHeld && lastSelectedIndex.current !== null) {
+        const lo = Math.min(index, lastSelectedIndex.current);
+        const hi = Math.max(index, lastSelectedIndex.current);
+        for (let i = lo; i <= hi; i++) {
+          next.add(videos[i].id);
+        }
+      } else {
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+    lastSelectedIndex.current = index;
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    lastSelectedIndex.current = null;
+  };
+
+  const bulkDelete = async () => {
+    if (!selectedIds.size) return;
+    if (!confirm(`Delete ${selectedIds.size} video(s) from your library? Files will not be removed.`)) return;
+    await api.bulkDeleteVideos([...selectedIds]).catch(() => undefined);
+    exitSelectMode();
+    setRefreshKey((k) => k + 1);
+  };
+
+  const bulkSaveNote = async () => {
+    if (!selectedIds.size || !bulkNote.trim()) return;
+    await api.bulkUpdateNotes([...selectedIds], bulkNote.trim()).catch(() => undefined);
+    setBulkNote("");
+    setBulkNoteOpen(false);
+    exitSelectMode();
+  };
+
+  const bulkAddToPlaylist = async (playlistId: number) => {
+    if (!selectedIds.size) return;
+    await api.bulkAddToPlaylist(playlistId, [...selectedIds]).catch(() => undefined);
+    setPlaylistOpen(false);
+    exitSelectMode();
+  };
+
+  const bulkDownload = () => {
+    const selected = videos.filter((v) => selectedIds.has(v.id));
+    selected.forEach((v, i) => {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = downloadFileUrl(v.id);
+        a.download = v.title;
+        a.click();
+      }, i * 300);
+    });
+    exitSelectMode();
+  };
+
+  const bulkRefreshMetadata = async () => {
+    if (!selectedIds.size || metadataSyncing) return;
+    setMetadataSyncing(true);
+    const result = await api
+      .refreshMetadataBulk([...selectedIds])
+      .catch(() => null);
+    setMetadataSyncing(false);
+    if (!result) {
+      showToast("Metadata sync failed");
+      return;
+    }
+    showToast(
+      `Synced ${result.refreshed} video${result.refreshed === 1 ? "" : "s"}` +
+        (result.failed ? ` (${result.failed} failed)` : "")
+    );
+    setRefreshKey((k) => k + 1);
+    exitSelectMode();
+  };
+
+  const openPlaylistPicker = () => {
+    api.listPlaylists().then(setPlaylists).catch(() => undefined);
+    setPlaylistOpen(true);
+  };
+
   return (
-    <div className="flex gap-6">
-      <aside className="hidden w-56 shrink-0 lg:block">
-        <div className="sticky top-20 space-y-6">
-          <div>
-            <h2 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Channels
-            </h2>
-            <ul className="space-y-0.5">
+    <div
+      className={`flex gap-6 ${settings.sidebarCollapsed ? "justify-center" : ""}`}
+    >
+      {!settings.sidebarCollapsed && (
+        <aside className="hidden w-56 shrink-0 lg:block">
+          <div className="sticky top-20 space-y-6">
+            <div>
+              <div className="mb-2 flex items-center justify-between px-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Channels
+                </h2>
+                <button
+                  onClick={() => update({ sidebarCollapsed: true })}
+                  title="Collapse sidebar"
+                  className="rounded p-1 text-gray-500 hover:bg-ink-800 hover:text-accent"
+                >
+                  ‹
+                </button>
+              </div>
+              <ul className="space-y-0.5">
               <li>
                 <button
                   onClick={() => setActiveChannel(null)}
@@ -241,8 +360,21 @@ export default function Library() {
           </div>
         </div>
       </aside>
+      )}
 
-      <div className="min-w-0 flex-1">
+      {settings.sidebarCollapsed && (
+        <button
+          onClick={() => update({ sidebarCollapsed: false })}
+          title="Expand channels"
+          className="sticky top-20 hidden h-fit rounded-lg border border-ink-700 bg-ink-900 px-2 py-3 text-sm text-gray-400 hover:border-accent hover:text-accent lg:block"
+        >
+          ›
+        </button>
+      )}
+
+      <div
+        className={`min-w-0 flex-1 ${settings.sidebarCollapsed ? "max-w-6xl" : ""}`}
+      >
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
           {activeChannel && renaming === activeChannel ? (
             <input
@@ -300,6 +432,16 @@ export default function Library() {
             >
               {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
             </button>
+            <button
+              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+              className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                selectMode
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
+              }`}
+            >
+              {selectMode ? "Cancel" : "Select"}
+            </button>
           </div>
         </div>
 
@@ -350,6 +492,7 @@ export default function Library() {
         {showContinueRow && (
           <ContinueWatchingRow
             videos={visibleContinueWatching}
+            showProgress={settings.showProgressOnContinueWatching}
             onDismiss={dismiss}
             onDismissAll={dismissAll}
           />
@@ -367,15 +510,119 @@ export default function Library() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-            {videos.map((v) => (
+            {videos.map((v, idx) => (
               <VideoCard
                 key={v.id}
                 video={v}
                 showViewCount={sort === "view_count"}
+                progress={settings.showProgressOnAllVideos ? videoProgress(v) : undefined}
+                selectable={selectMode}
+                selected={selectedIds.has(v.id)}
+                onSelect={(id, e) => toggleSelect(id, idx, e.shiftKey)}
               />
             ))}
           </div>
         )}
+
+        {selectMode && selectedIds.size > 0 && (
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-700 bg-ink-900/95 px-4 py-3 backdrop-blur">
+              <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3">
+                <span className="text-sm font-medium text-gray-300">
+                  {selectedIds.size} selected
+                </span>
+
+                {/* Add to playlist */}
+                <div className="relative">
+                  <button
+                    onClick={() =>
+                      playlistOpen ? setPlaylistOpen(false) : openPlaylistPicker()
+                    }
+                    className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700"
+                  >
+                    + Playlist
+                  </button>
+                  {playlistOpen && (
+                    <div className="absolute bottom-10 left-0 z-50 w-56 rounded-lg bg-ink-800 p-2 shadow-xl ring-1 ring-ink-600">
+                      {playlists.length === 0 ? (
+                        <p className="px-2 py-1 text-xs text-gray-500">No playlists yet.</p>
+                      ) : (
+                        playlists.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => bulkAddToPlaylist(p.id)}
+                            className="block w-full truncate rounded px-2 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
+                          >
+                            {p.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add note */}
+                <div className="relative">
+                  <button
+                    onClick={() => setBulkNoteOpen((v) => !v)}
+                    className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700"
+                  >
+                    Add note
+                  </button>
+                  {bulkNoteOpen && (
+                    <div className="absolute bottom-10 left-0 z-50 w-72 rounded-lg bg-ink-800 p-3 shadow-xl ring-1 ring-ink-600">
+                      <textarea
+                        value={bulkNote}
+                        onChange={(e) => setBulkNote(e.target.value)}
+                        rows={3}
+                        placeholder="Note to apply to all selected..."
+                        className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                        autoFocus
+                      />
+                      <button
+                        onClick={bulkSaveNote}
+                        disabled={!bulkNote.trim()}
+                        className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-40"
+                      >
+                        Apply to {selectedIds.size} video{selectedIds.size === 1 ? "" : "s"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Resync metadata */}
+                <button
+                  onClick={bulkRefreshMetadata}
+                  disabled={metadataSyncing}
+                  className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700 disabled:opacity-50"
+                >
+                  {metadataSyncing ? "Syncing…" : "Resync metadata"}
+                </button>
+
+                {/* Download to device */}
+                <button
+                  onClick={bulkDownload}
+                  className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700"
+                >
+                  Download
+                </button>
+
+                {/* Delete */}
+                <button
+                  onClick={bulkDelete}
+                  className="rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+                >
+                  Delete
+                </button>
+
+                <button
+                  onClick={exitSelectMode}
+                  className="ml-auto text-xs text-gray-500 hover:text-accent"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
       </div>
     </div>
   );

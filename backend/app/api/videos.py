@@ -1,5 +1,4 @@
 import re
-import re
 from pathlib import Path
 from typing import Optional
 
@@ -12,8 +11,12 @@ from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import get_session
 from ..models import DownloadJob, JobStatus, Video, utcnow
 from ..schemas import (
+    BulkMetadataRefresh,
+    BulkVideoDelete,
+    BulkVideoNotes,
     ChannelRename,
     ChannelStat,
+    MetadataRefreshResult,
     StorageStats,
     TagStat,
     VideoRead,
@@ -60,6 +63,7 @@ def _to_read(video: Video) -> VideoRead:
         file_size=video.file_size,
         width_px=video.width_px,
         height_px=video.height_px,
+        frame_rate=video.frame_rate,
         view_count=video.view_count,
         channel_subscriber_count=video.channel_subscriber_count,
         published_at=video.published_at,
@@ -69,6 +73,9 @@ def _to_read(video: Video) -> VideoRead:
         needs_review=video.needs_review,
         platform=video.platform,
         status=video.status,
+        metadata_synced_at=video.metadata_synced_at,
+        source_title=video.source_title,
+        title_is_custom=video.title_is_custom,
     )
 
 
@@ -201,6 +208,12 @@ def update_video(
         _fetch_thumbnail_from_url(video, data.pop("thumbnail_url"))
     data.pop("thumbnail_url", None)
 
+    # Track user customizations so metadata resync can preserve them.
+    if "title" in data:
+        video.title_is_custom = True
+    if "description" in data:
+        video.description_is_custom = True
+
     for key, value in data.items():
         setattr(video, key, value)
 
@@ -315,6 +328,97 @@ def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
         video.thumbnail_path = str(dest)
     except (httpx.HTTPError, OSError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not fetch thumbnail: {exc}")
+
+
+@router.post("/videos/bulk-delete", status_code=204)
+def bulk_delete_videos(
+    payload: BulkVideoDelete,
+    session: Session = Depends(get_session),
+):
+    for vid_id in payload.video_ids:
+        video = session.get(Video, vid_id)
+        if video is None:
+            continue
+        if payload.delete_files:
+            _delete_media_files(video)
+        if video.thumbnail_path:
+            Path(video.thumbnail_path).unlink(missing_ok=True)
+        session.delete(video)
+    session.commit()
+    return Response(status_code=204)
+
+
+@router.patch("/videos/bulk-notes", status_code=204)
+def bulk_update_notes(
+    payload: BulkVideoNotes,
+    session: Session = Depends(get_session),
+):
+    note = payload.notes.strip() or None
+    for vid_id in payload.video_ids:
+        video = session.get(Video, vid_id)
+        if video is None:
+            continue
+        video.notes = note
+        session.add(video)
+    session.commit()
+    return Response(status_code=204)
+
+
+@router.post("/videos/refresh-metadata", response_model=MetadataRefreshResult)
+def bulk_refresh_metadata(
+    payload: BulkMetadataRefresh,
+    session: Session = Depends(get_session),
+):
+    from ..services.metadata_sync import refresh_video_metadata
+
+    if payload.video_ids:
+        candidates = [
+            session.get(Video, vid_id)
+            for vid_id in payload.video_ids
+        ]
+        videos = [v for v in candidates if v is not None]
+    else:
+        videos = list(
+            session.exec(
+                select(Video).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
+            ).all()
+        )
+
+    refreshed = 0
+    failed = 0
+    skipped = 0
+
+    for video in videos:
+        if not video.source_url:
+            skipped += 1
+            continue
+        try:
+            refresh_video_metadata(video.id)
+            refreshed += 1
+        except Exception:  # noqa: BLE001
+            failed += 1
+
+    return MetadataRefreshResult(
+        refreshed=refreshed,
+        failed=failed,
+        skipped=skipped,
+    )
+
+
+@router.post("/videos/{video_id}/refresh-metadata", response_model=VideoRead)
+def refresh_metadata(video_id: int, session: Session = Depends(get_session)):
+    from ..services.metadata_sync import refresh_video_metadata
+
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    try:
+        refresh_video_metadata(video_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}")
+    session.expire_all()
+    video = session.get(Video, video_id)
+    return _to_read(video)
 
 
 @router.post("/videos/{video_id}/thumbnail", response_model=VideoRead)

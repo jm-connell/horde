@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -5,11 +7,11 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import ensure_dirs
-from .database import init_db
-from .api import downloads, playlists, review, videos
+from .config import DOWNLOADS_DIR, ensure_dirs
+from .database import engine, init_db
+from .api import app_settings, downloads, playlists, review, videos
 from .services.scanner import cleanup_orphans, start_scanner
-from .services import downloader
+from .services import downloader, app_settings as app_settings_svc
 
 # Static frontend build copied next to the backend in the Docker image.
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -22,6 +24,11 @@ async def lifespan(app: FastAPI):
     cleanup_orphans()
     downloader.download_queue.recover()
     observer = start_scanner()
+
+    from .services.metadata_sync import start_sync_worker
+    settings = app_settings_svc.load()
+    start_sync_worker(interval_hours=settings.get("metadata_sync_interval_hours", 24))
+
     try:
         yield
     finally:
@@ -35,11 +42,57 @@ app.include_router(videos.router)
 app.include_router(downloads.router)
 app.include_router(review.router)
 app.include_router(playlists.router)
+app.include_router(app_settings.router)
+
+
+def _yt_dlp_version() -> str:
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.stdout.strip() or "unknown"
+    except Exception:  # noqa: BLE001
+        return "unknown"
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    from .models import DownloadJob, JobStatus, Video
+    from sqlmodel import Session, func, select
+
+    with Session(engine) as session:
+        video_count = session.scalar(select(func.count(Video.id))) or 0
+        review_count = session.scalar(
+            select(func.count(Video.id)).where(Video.needs_review == True)  # noqa: E712
+        ) or 0
+        active_downloads = session.scalar(
+            select(func.count(DownloadJob.id)).where(
+                DownloadJob.status.in_([JobStatus.downloading, JobStatus.queued])  # type: ignore[attr-defined]
+            )
+        ) or 0
+
+    disk = None
+    try:
+        usage = shutil.disk_usage(DOWNLOADS_DIR)
+        disk = {
+            "total_bytes": usage.total,
+            "used_bytes": usage.used,
+            "free_bytes": usage.free,
+        }
+    except OSError:
+        pass
+
+    return {
+        "status": "ok",
+        "yt_dlp_version": _yt_dlp_version(),
+        "disk": disk,
+        "library_video_count": video_count,
+        "review_pending_count": review_count,
+        "active_downloads": active_downloads,
+    }
 
 
 if FRONTEND_DIR.exists():

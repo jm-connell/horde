@@ -1,71 +1,251 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  color-scheme: dark;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  margin: 0;
-  background-color: #08090c;
-  color: #e5e7eb;
-  font-family: Inter, system-ui, sans-serif;
-}
-
-/* Custom range styling for the player scrubber and volume. */
-input[type="range"].accent-scrubber {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  border-radius: 9999px;
-  background: #2a313f;
-  cursor: pointer;
-}
-
-input[type="range"].accent-scrubber::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 9999px;
-  background: #22d3ee;
-  box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
-}
-
-input[type="range"].accent-scrubber::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border: none;
-  border-radius: 9999px;
-  background: #22d3ee;
-}
-
-/* Subtitle (WebVTT cue) styling. Vertical position is controlled in JS via
-   each cue's line property; size is set per-video with the sub-* classes. */
-video::cue {
-  background: rgba(0, 0, 0, 0.7);
-  color: #fff;
-  text-align: center;
-  line-height: 1.2;
-  white-space: pre-line;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
-}
-
-video.sub-small::cue {
-  font-size: 0.85em;
-}
-
-video.sub-medium::cue {
-  font-size: 1.1em;
-}
-
-video.sub-large::cue {
-  font-size: 1.5em;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Default theme (cyan-on-dark) ─── */
+:root {
+  color-scheme: dark;
+  --font-sans: Inter, system-ui, sans-serif;
+  --ink-950: 8 9 12;
+  --ink-900: 13 15 20;
+  --ink-800: 20 23 31;
+  --ink-700: 28 33 43;
+  --ink-600: 42 49 63;
+  --accent: 34 211 238;
+  --accent-soft: 103 232 249;
+  --accent-deep: 8 145 178;
+}
+
+/* ─── OLED (true black) ─── */
+[data-theme="oled"] {
+  --ink-950: 0 0 0;
+  --ink-900: 6 6 9;
+  --ink-800: 12 12 18;
+  --ink-700: 20 20 28;
+  --ink-600: 32 32 44;
+  --accent: 34 211 238;
+  --accent-soft: 103 232 249;
+  --accent-deep: 8 145 178;
+}
+
+/* ─── Terminal (green phosphor) ─── */
+[data-theme="terminal"] {
+  color-scheme: dark;
+  --ink-950: 0 8 2;
+  --ink-900: 3 16 5;
+  --ink-800: 6 26 8;
+  --ink-700: 10 40 13;
+  --ink-600: 16 56 20;
+  --accent: 74 222 128;
+  --accent-soft: 134 239 172;
+  --accent-deep: 34 197 94;
+}
+
+/* ─── Nord ─── */
+[data-theme="nord"] {
+  color-scheme: dark;
+  --ink-950: 36 41 51;
+  --ink-900: 46 52 64;
+  --ink-800: 59 66 82;
+  --ink-700: 67 76 94;
+  --ink-600: 76 86 106;
+  --accent: 136 192 208;
+  --accent-soft: 163 210 222;
+  --accent-deep: 94 153 175;
+}
+
+/* ─── Light & Clean ─── */
+[data-theme="light"] {
+  color-scheme: light;
+  --ink-950: 249 249 249;
+  --ink-900: 255 255 255;
+  --ink-800: 245 245 245;
+  --ink-700: 229 229 229;
+  --ink-600: 200 200 200;
+  --accent: 204 0 0;
+  --accent-soft: 239 68 68;
+  --accent-deep: 153 0 0;
+}
+
+/* ─── Midnight Indigo ─── */
+[data-theme="indigo"] {
+  color-scheme: dark;
+  --ink-950: 10 12 31;
+  --ink-900: 22 27 46;
+  --ink-800: 30 36 58;
+  --ink-700: 45 52 78;
+  --ink-600: 71 85 105;
+  --accent: 99 102 241;
+  --accent-soft: 129 140 248;
+  --accent-deep: 79 70 229;
+}
+
+/* ─── Neon Cyber ─── */
+[data-theme="cyber"] {
+  color-scheme: dark;
+  --ink-950: 13 13 13;
+  --ink-900: 26 26 46;
+  --ink-800: 36 36 58;
+  --ink-700: 50 50 78;
+  --ink-600: 80 80 120;
+  --accent: 0 245 255;
+  --accent-soft: 100 250 255;
+  --accent-deep: 0 200 210;
+}
+
+/* ─── Warm Sunset ─── */
+[data-theme="sunset"] {
+  color-scheme: dark;
+  --ink-950: 28 15 10;
+  --ink-900: 44 31 24;
+  --ink-800: 58 42 34;
+  --ink-700: 78 58 48;
+  --ink-600: 120 90 74;
+  --accent: 255 107 53;
+  --accent-soft: 255 154 102;
+  --accent-deep: 234 88 12;
+}
+
+/* ─── Forest Deep ─── */
+[data-theme="forest"] {
+  color-scheme: dark;
+  --ink-950: 12 18 15;
+  --ink-900: 26 37 32;
+  --ink-800: 36 50 44;
+  --ink-700: 52 68 60;
+  --ink-600: 100 116 108;
+  --accent: 34 197 94;
+  --accent-soft: 74 222 128;
+  --accent-deep: 22 163 74;
+}
+
+/* ─── Slate Minimal ─── */
+[data-theme="slate"] {
+  color-scheme: dark;
+  --ink-950: 17 24 39;
+  --ink-900: 31 41 55;
+  --ink-800: 45 55 72;
+  --ink-700: 55 65 81;
+  --ink-600: 100 116 139;
+  --accent: 96 165 250;
+  --accent-soft: 147 197 253;
+  --accent-deep: 59 130 246;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: rgb(var(--ink-950));
+  color: #e5e7eb;
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+[data-theme="light"] body {
+  color: #0f0f0f;
+}
+
+[data-theme="indigo"] body {
+  color: #e0e7ff;
+}
+
+[data-theme="cyber"] body {
+  color: #ffffff;
+}
+
+[data-theme="sunset"] body {
+  color: #ffedd8;
+}
+
+[data-theme="forest"] body {
+  color: #ecfdf5;
+}
+
+[data-theme="slate"] body {
+  color: #f1f5f9;
+}
+
+/* Light theme: remap Tailwind gray text utilities */
+[data-theme="light"] .text-gray-100,
+[data-theme="light"] .text-gray-200 {
+  color: #0f0f0f;
+}
+
+[data-theme="light"] .text-gray-300 {
+  color: #1a1a1a;
+}
+
+[data-theme="light"] .text-gray-400,
+[data-theme="light"] .text-gray-500 {
+  color: #606060;
+}
+
+[data-theme="light"] .placeholder-gray-500::placeholder {
+  color: #909090;
+}
+
+/* Neon Cyber: subtle glow on accent controls */
+[data-theme="cyber"] input[type="range"].accent-scrubber::-webkit-slider-thumb {
+  box-shadow: 0 0 10px rgb(var(--accent) / 0.8);
+}
+
+[data-theme="cyber"] .bg-accent {
+  box-shadow: 0 0 14px rgb(var(--accent) / 0.35);
+}
+
+/* Custom range styling for the player scrubber and volume. */
+input[type="range"].accent-scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgb(var(--ink-600));
+  cursor: pointer;
+}
+
+input[type="range"].accent-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 8px rgb(var(--accent) / 0.6);
+}
+
+input[type="range"].accent-scrubber::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+}
+
+/* Subtitle (WebVTT cue) styling. Vertical position is controlled in JS via
+   each cue's line property; size is set per-video with the sub-* classes. */
+video::cue {
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  text-align: center;
+  line-height: 1.2;
+  white-space: pre-line;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+video.sub-small::cue {
+  font-size: 0.85em;
+}
+
+video.sub-medium::cue {
+  font-size: 1.1em;
+}
+
+video.sub-large::cue {
+  font-size: 1.5em;
+}
+

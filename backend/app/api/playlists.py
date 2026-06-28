@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 from ..database import get_session
 from ..models import Playlist, PlaylistItem, PlaylistSource, Video
 from ..schemas import (
+    BulkPlaylistAdd,
     PlaylistCreate,
     PlaylistDetail,
     PlaylistImport,
@@ -155,6 +156,39 @@ def add_item(
         session.commit()
 
     return get_playlist(playlist_id, session)
+
+
+@router.post("/{playlist_id}/items/bulk", status_code=204)
+def bulk_add_items(
+    playlist_id: int,
+    payload: BulkPlaylistAdd,
+    session: Session = Depends(get_session),
+):
+    playlist = session.get(Playlist, playlist_id)
+    if playlist is None:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    base_pos = _item_count(session, playlist_id)
+    offset = 0
+    for video_id in payload.video_ids:
+        if session.get(Video, video_id) is None:
+            continue
+        existing = session.exec(
+            select(PlaylistItem).where(
+                PlaylistItem.playlist_id == playlist_id,
+                PlaylistItem.video_id == video_id,
+            )
+        ).first()
+        if existing is None:
+            session.add(
+                PlaylistItem(
+                    playlist_id=playlist_id,
+                    video_id=video_id,
+                    position=base_pos + offset,
+                )
+            )
+            offset += 1
+    session.commit()
+    return Response(status_code=204)
 
 
 @router.delete("/{playlist_id}/items/{video_id}", status_code=204)

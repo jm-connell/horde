@@ -26,6 +26,7 @@ export default function Download() {
     submitDownload,
     pauseQueue,
     resumeQueue,
+    dismissFinishedJobs,
   } = useDownloads();
   const [settings] = useSettings();
 
@@ -317,7 +318,7 @@ export default function Download() {
             </div>
           </div>
           <p className="mb-3 text-xs text-gray-400">
-            {activeCount} active — this is what the navigation badge shows.
+            {activeCount} active -
             Pause all stops every download; nothing new starts until you resume.
           </p>
           {!activeCollapsed && (
@@ -352,9 +353,20 @@ export default function Download() {
 
       {recentJobs.length > 0 && (
         <div className="mt-6">
-          <h2 className="mb-3 text-sm font-medium text-gray-400">
-            Recent downloads
-          </h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-medium text-gray-400">
+              Recent downloads
+            </h2>
+            {recentJobs.some((j) => j.status === "completed" || j.status === "error") && (
+              <button
+                type="button"
+                onClick={dismissFinishedJobs}
+                className="text-xs text-gray-500 hover:text-accent"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
           <div className="space-y-4">
             {recentJobs.map((job) => (
               <DownloadJobCard

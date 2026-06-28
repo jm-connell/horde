@@ -1,0 +1,17 @@
+{
+  "name": "Horde",
+  "short_name": "Horde",
+  "description": "Your personal video library",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08090c",
+  "theme_color": "#08090c",
+  "icons": [
+    {
+      "src": "/horde-icon.webp",
+      "sizes": "any",
+      "type": "image/webp",
+      "purpose": "any"
+    }
+  ]
+}

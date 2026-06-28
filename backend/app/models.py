@@ -60,6 +60,15 @@ class Video(SQLModel, table=True):
     platform: Optional[str] = None
     status: VideoStatus = Field(default=VideoStatus.ready)
 
+    frame_rate: Optional[float] = None
+
+    # Metadata resync tracking
+    metadata_synced_at: Optional[datetime] = None
+    source_title: Optional[str] = None
+    source_description: Optional[str] = None
+    title_is_custom: bool = Field(default=False)
+    description_is_custom: bool = Field(default=False)
+
 
 class DownloadJob(SQLModel, table=True):
     __tablename__ = "download_jobs"

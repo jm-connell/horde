@@ -32,6 +32,7 @@ interface DownloadContextValue {
   ) => Promise<void>;
   cancelJob: (jobId: number) => Promise<void>;
   dismissJob: (jobId: number) => Promise<void>;
+  dismissFinishedJobs: () => Promise<void>;
   pauseQueue: () => Promise<void>;
   resumeQueue: () => Promise<void>;
   refreshJobs: () => void;
@@ -43,6 +44,10 @@ const Ctx = createContext<DownloadContextValue | null>(null);
 const TERMINAL = new Set(["completed", "error", "cancelled"]);
 
 function jobStatus(job: DownloadJob, live?: ProgressEvent): string {
+  // Prefer persisted terminal states over stale SSE snapshots.
+  if (job.status === "completed" || job.status === "cancelled") {
+    return job.status;
+  }
   return live?.status ?? job.status;
 }
 
@@ -65,9 +70,20 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const refreshJob = useCallback((jobId: number) => {
     api
       .getJob(jobId)
-      .then((fresh) =>
-        setJobs((prev) => prev.map((j) => (j.id === fresh.id ? fresh : j)))
-      )
+      .then((fresh) => {
+        setJobs((prev) => prev.map((j) => (j.id === fresh.id ? fresh : j)));
+        if (fresh.status === "completed") {
+          setProgress((prev) => ({
+            ...prev,
+            [jobId]: {
+              status: "completed",
+              progress: 100,
+              video_id: fresh.video_id ?? undefined,
+              title: fresh.title ?? undefined,
+            },
+          }));
+        }
+      })
       .catch(() => undefined);
   }, []);
 
@@ -184,6 +200,24 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const dismissFinishedJobs = useCallback(async () => {
+    await api.dismissFinished();
+    setJobs((prev) =>
+      prev.filter((j) => j.status !== "completed" && j.status !== "error")
+    );
+    setProgress((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        const id = Number(key);
+        const ev = next[id];
+        if (ev?.status === "completed" || ev?.status === "error") {
+          delete next[id];
+        }
+      }
+      return next;
+    });
+  }, []);
+
   const pauseQueue = useCallback(async () => {
     const s = await api.pauseQueue();
     setQueuePaused(s.paused);
@@ -215,6 +249,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     updateJobOverrides,
     cancelJob,
     dismissJob,
+    dismissFinishedJobs,
     pauseQueue,
     resumeQueue,
     refreshJobs,

@@ -1,4 +1,5 @@
 import type {
+  AppSettings,
   ChannelStat,
   DownloadJob,
   DownloadOverrides,
@@ -79,6 +80,38 @@ export const api = {
     });
   },
 
+  bulkDeleteVideos(ids: number[], deleteFiles = false): Promise<void> {
+    return request<void>("/api/videos/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_ids: ids, delete_files: deleteFiles }),
+    });
+  },
+
+  bulkUpdateNotes(ids: number[], notes: string): Promise<void> {
+    return request<void>("/api/videos/bulk-notes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_ids: ids, notes }),
+    });
+  },
+
+  refreshMetadata(id: number): Promise<Video> {
+    return request<Video>(`/api/videos/${id}/refresh-metadata`, {
+      method: "POST",
+    });
+  },
+
+  refreshMetadataBulk(
+    videoIds?: number[]
+  ): Promise<{ refreshed: number; failed: number; skipped: number }> {
+    return request("/api/videos/refresh-metadata", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_ids: videoIds ?? [] }),
+    });
+  },
+
   uploadThumbnail(id: number, file: File): Promise<Video> {
     const form = new FormData();
     form.append("file", file);
@@ -116,6 +149,18 @@ export const api = {
 
   storageStats(): Promise<StorageStats> {
     return request<StorageStats>("/api/stats/storage");
+  },
+
+  getAppSettings(): Promise<AppSettings> {
+    return request<AppSettings>("/api/settings");
+  },
+
+  updateAppSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+    return request<AppSettings>("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
   },
 
   listReview(): Promise<Video[]> {
@@ -177,6 +222,10 @@ export const api = {
     return request<void>(`/api/downloads/${jobId}`, { method: "DELETE" });
   },
 
+  dismissFinished(): Promise<void> {
+    return request<void>("/api/downloads/dismiss-finished", { method: "POST" });
+  },
+
   getQueueStatus(): Promise<DownloadQueueStatus> {
     return request<DownloadQueueStatus>("/api/downloads/queue/status");
   },
@@ -230,6 +279,14 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ video_id: videoId }),
+    });
+  },
+
+  bulkAddToPlaylist(playlistId: number, videoIds: number[]): Promise<void> {
+    return request<void>(`/api/playlists/${playlistId}/items/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_ids: videoIds }),
     });
   },
 

@@ -12,7 +12,8 @@ import { api, streamUrl, subtitleUrl } from "../api";
 import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { dedupeSubtitleTracks } from "../utils";
+import { useSponsorBlock } from "../hooks/useSponsorBlock";
+import { dedupeSubtitleTracks, parseChapters } from "../utils";
 import type { Video } from "../types";
 
 interface PlaybackValue {
@@ -184,6 +185,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
 
+  const chapters = parseChapters(current?.description ?? null);
+  const sponsorSegments = useSponsorBlock(
+    current?.source_url ?? null,
+    current?.file_path ?? "",
+    settings.sponsorBlockEnabled
+  );
+
   const value: PlaybackValue = {
     current,
     queue,
@@ -219,11 +227,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             onClose={close}
             subtitleSize={settings.subtitleSize}
             subtitleOffset={settings.subtitleOffset}
+            onSubtitleOffsetChange={(offset) =>
+              updateSettings({ subtitleOffset: offset })
+            }
             defaultRate={settings.defaultPlaybackRate}
             volume={settings.volume}
             onVolumeChange={(v) => updateSettings({ volume: v })}
             initialPosition={current.last_position_sec}
             onProgress={(sec) => saveProgress(current.id, sec)}
+            chapters={chapters}
+            sponsorSegments={sponsorSegments}
+            sponsorShowNotice={settings.sponsorBlockShowNotice}
           />,
           hostRef.current
         )}

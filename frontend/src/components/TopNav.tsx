@@ -7,8 +7,8 @@ import { useSettings } from "../hooks/useSettings";
 const NAV_LINKS = [
   { to: "/", label: "Library", end: true },
   { to: "/history", label: "History", end: false },
-  { to: "/download", label: "Download", end: false },
   { to: "/playlists", label: "Playlists", end: false },
+  { to: "/download", label: "Download", end: false },
   { to: "/review", label: "Review", end: false },
   { to: "/settings", label: "Settings", end: false },
 ];

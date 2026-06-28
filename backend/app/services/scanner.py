@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -15,7 +16,7 @@ from ..config import (
 )
 from ..database import engine
 from ..models import Video, VideoStatus
-from .metadata import grab_frame, probe_dimensions, probe_duration
+from .metadata import grab_frame, probe_dimensions, probe_duration, probe_frame_rate
 from .paths import find_video_by_path, to_rel_path
 
 _scan_lock = threading.Lock()
@@ -24,25 +25,36 @@ _scan_lock = threading.Lock()
 # them into the final file; these must never be ingested as review items.
 _FRAGMENT_RE = re.compile(r"\.f\d+\.[^.]+$")
 
-# Relative paths the downloader is actively writing. The scanner skips these so
-# in-progress downloads don't briefly surface in the review queue.
+# Relative paths / source IDs the downloader is actively writing.
 _active_downloads: set[str] = set()
+_active_source_ids: set[str] = set()
 _active_lock = threading.Lock()
+
+_SOURCE_ID_RE = re.compile(r"\[[^\]]+\]")
 
 
 def mark_active(rel_path: str) -> None:
     with _active_lock:
         _active_downloads.add(rel_path)
+        match = _SOURCE_ID_RE.search(Path(rel_path).name)
+        if match:
+            _active_source_ids.add(match.group(0))
 
 
 def unmark_active(rel_path: str) -> None:
     with _active_lock:
         _active_downloads.discard(rel_path)
+        match = _SOURCE_ID_RE.search(Path(rel_path).name)
+        if match:
+            _active_source_ids.discard(match.group(0))
 
 
 def _is_active(rel_path: str) -> bool:
     with _active_lock:
-        return rel_path in _active_downloads
+        if rel_path in _active_downloads:
+            return True
+        name = Path(rel_path).name
+        return any(source_id in name for source_id in _active_source_ids)
 
 
 def _is_media(path: Path) -> bool:
@@ -94,11 +106,16 @@ def _ingest_file(session: Session, path: Path) -> bool:
         file_size=file_size,
         width_px=dims[0] if dims else None,
         height_px=dims[1] if dims else None,
+        frame_rate=probe_frame_rate(path),
         needs_review=True,
         status=VideoStatus.ready,
     )
     session.add(video)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        return False
     session.refresh(video)
 
     thumb_path = THUMBNAILS_DIR / f"{video.id}.jpg"
@@ -153,8 +170,11 @@ class _MediaEventHandler(FileSystemEventHandler):
             return
         # Give the writer a moment to finish flushing the file.
         time.sleep(2)
-        with Session(engine) as session:
-            _ingest_file(session, path)
+        try:
+            with Session(engine) as session:
+                _ingest_file(session, path)
+        except Exception:  # noqa: BLE001 - keep watchdog thread alive
+            pass
 
     def on_created(self, event) -> None:
         if not event.is_directory:

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useDownloads, jobStatus } from "../context/DownloadContext";
@@ -13,6 +13,10 @@ interface Props {
 }
 
 const labelClass = "mb-1 block text-xs font-medium text-gray-400";
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
 
 export default function DownloadJobCard({
   job,
@@ -29,21 +33,30 @@ export default function DownloadJobCard({
   const cancelled = status === "cancelled";
   const videoId = live?.video_id ?? job.video_id;
 
-  const [title, setTitle] = useState(
-    job.title_override ?? live?.title ?? job.title ?? ""
-  );
-  const [channel, setChannel] = useState(
-    job.channel_override ?? live?.channel ?? job.channel ?? ""
-  );
+  const resolveTitle = () => job.title_override ?? live?.title ?? job.title ?? "";
+  const resolveChannel = () => job.channel_override ?? live?.channel ?? job.channel ?? "";
+
+  const [title, setTitle] = useState(resolveTitle);
+  const [channel, setChannel] = useState(resolveChannel);
   const [note, setNote] = useState(job.notes_pending ?? "");
   const [saved, setSaved] = useState(false);
   const [showNote, setShowNote] = useState(Boolean(job.notes_pending));
 
+  const savedTitle = useRef(resolveTitle());
+  const savedChannel = useRef(resolveChannel());
+
   useEffect(() => {
-    setTitle(job.title_override ?? live?.title ?? job.title ?? "");
-    setChannel(job.channel_override ?? live?.channel ?? job.channel ?? "");
-    setNote(job.notes_pending ?? "");
-  }, [job, live?.title, live?.channel]);
+    const t = resolveTitle();
+    const c = resolveChannel();
+    const n = job.notes_pending ?? "";
+    setTitle(t);
+    setChannel(c);
+    setNote(n);
+    savedTitle.current = t;
+    savedChannel.current = c;
+  }, [job, live?.title, live?.channel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isDirty = title !== savedTitle.current || channel !== savedChannel.current;
 
   const flashSaved = () => {
     setSaved(true);
@@ -61,6 +74,8 @@ export default function DownloadJobCard({
       } else if (!completed && !failed && !cancelled) {
         await updateJobOverrides(job.id, { title, channel, notes: note });
       }
+      savedTitle.current = title;
+      savedChannel.current = channel;
       flashSaved();
     } catch {
       // leave fields as-is on failure
@@ -113,6 +128,9 @@ export default function DownloadJobCard({
     ? "ring-accent/50 border-l-4 border-l-accent"
     : "ring-ink-700";
 
+  const errorMsg =
+    failed && !completed ? stripAnsi(live?.error ?? job.error ?? "") : "";
+
   return (
     <div className={`rounded-xl bg-ink-900 p-5 ring-1 ${cardRing}`}>
       <div className="flex gap-4">
@@ -134,6 +152,7 @@ export default function DownloadJobCard({
           <div className="mb-3 flex items-start justify-between gap-3 text-sm">
             <span className="flex min-w-0 items-center gap-2 font-medium text-gray-200">
               {completed && <span className="text-accent">✓</span>}
+              {failed && <span className="text-red-400">✗</span>}
               <span className="truncate">{title || "Working…"}</span>
             </span>
             <div className="flex shrink-0 items-center gap-2">
@@ -169,28 +188,17 @@ export default function DownloadJobCard({
             </div>
           )}
 
-          {failed ? (
-            <div className="space-y-3">
-              {live?.error && (
-                <p className="text-sm text-red-400">{live.error}</p>
-              )}
-              <button
-                onClick={() =>
-                  submitDownload(job.url, job.quality_preset, { title, channel })
-                }
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
-              >
-                Retry
-              </button>
-            </div>
-          ) : (
+          {failed && errorMsg && (
+            <p className="mb-3 text-sm text-red-400">{errorMsg}</p>
+          )}
+
+          {!cancelled && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>Title</label>
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  onBlur={save}
                   className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                 />
               </div>
@@ -206,7 +214,7 @@ export default function DownloadJobCard({
             </div>
           )}
 
-          {(showNote || note) && !failed && !cancelled && (
+          {(showNote || note) && !cancelled && (
             <div className="mt-3">
               <label className={labelClass}>Note</label>
               <textarea
@@ -228,7 +236,17 @@ export default function DownloadJobCard({
                 Watch now →
               </Link>
             )}
-            {(completed || (!failed && !cancelled && status !== "queued")) && (
+            {failed && (
+              <button
+                onClick={() =>
+                  submitDownload(job.url, job.quality_preset, { title, channel })
+                }
+                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+              >
+                Retry
+              </button>
+            )}
+            {!failed && !cancelled && isDirty && (
               <button
                 onClick={save}
                 className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
@@ -244,7 +262,7 @@ export default function DownloadJobCard({
                 {showNote ? "Hide note" : "Add note"}
               </button>
             )}
-            {showNote && (
+            {showNote && !cancelled && (
               <button
                 onClick={saveNote}
                 className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"

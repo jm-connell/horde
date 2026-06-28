@@ -5,20 +5,20 @@ export default {
     extend: {
       colors: {
         ink: {
-          950: "#08090c",
-          900: "#0d0f14",
-          800: "#14171f",
-          700: "#1c212b",
-          600: "#2a313f",
+          950: "rgb(var(--ink-950) / <alpha-value>)",
+          900: "rgb(var(--ink-900) / <alpha-value>)",
+          800: "rgb(var(--ink-800) / <alpha-value>)",
+          700: "rgb(var(--ink-700) / <alpha-value>)",
+          600: "rgb(var(--ink-600) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "#22d3ee",
-          soft: "#67e8f9",
-          deep: "#0891b2",
+          DEFAULT: "rgb(var(--accent) / <alpha-value>)",
+          soft: "rgb(var(--accent-soft) / <alpha-value>)",
+          deep: "rgb(var(--accent-deep) / <alpha-value>)",
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-sans)"],
       },
     },
   },

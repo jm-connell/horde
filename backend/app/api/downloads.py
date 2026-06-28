@@ -155,6 +155,20 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
     return job
 
 
+@router.post("/dismiss-finished", status_code=204)
+def dismiss_finished_jobs(session: Session = Depends(get_session)):
+    """Remove all completed and errored jobs from the list."""
+    statement = select(DownloadJob).where(
+        DownloadJob.status.in_([JobStatus.completed, JobStatus.error])  # type: ignore[attr-defined]
+    )
+    jobs = list(session.exec(statement).all())
+    for job in jobs:
+        downloader.progress_store.pop(job.id, None)
+        session.delete(job)
+    session.commit()
+    return Response(status_code=204)
+
+
 @router.delete("/{job_id}", status_code=204)
 def dismiss_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(DownloadJob, job_id)

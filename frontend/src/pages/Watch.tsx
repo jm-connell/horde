@@ -11,7 +11,7 @@ import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
-import { formatDate, formatResolution, formatSize } from "../utils";
+import { formatDate, formatDuration, formatResolution, formatSize, parseChapters } from "../utils";
 
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
@@ -31,6 +31,8 @@ export default function Watch() {
   const [editing, setEditing] = useState(false);
   const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [chaptersExpanded, setChaptersExpanded] = useState(false);
+  const [moreLikeThis, setMoreLikeThis] = useState<Video[]>([]);
   const [redownloadOpen, setRedownloadOpen] = useState(false);
   const [redownloadPreset, setRedownloadPreset] = useState("1080p");
   const [presets, setPresets] = useState<string[]>(["best"]);
@@ -63,6 +65,22 @@ export default function Watch() {
       })
       .catch(() => setError("Video not found"));
   }, [videoId, playVideo]);
+
+  useEffect(() => {
+    if (!video) return;
+    const channel = video.channel;
+    const tag = video.tags[0];
+    const query = channel
+      ? api.listVideos({ channel, sort: "added_at", order: "desc" })
+      : tag
+        ? api.listVideos({ tag, sort: "added_at", order: "desc" })
+        : Promise.resolve([] as Video[]);
+    query
+      .then((results) =>
+        setMoreLikeThis(results.filter((v) => v.id !== video.id).slice(0, 8))
+      )
+      .catch(() => undefined);
+  }, [video?.id, video?.channel, video?.tags[0]]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     registerDock(dockRef.current);
@@ -145,6 +163,43 @@ export default function Watch() {
       </div>
 
       <div className={contentClass}>
+        {/* Metadata change banner */}
+        {video.title_is_custom &&
+          video.source_title &&
+          video.source_title !== video.title && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink-800 px-4 py-3 ring-1 ring-ink-600">
+              <p className="text-sm text-gray-300">
+                Source title changed:{" "}
+                <span className="text-gray-400 line-through">{video.title}</span>{" "}
+                →{" "}
+                <span className="text-gray-200">{video.source_title}</span>
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    const updated = await api
+                      .updateVideo(video!.id, { title: video!.source_title! })
+                      .catch(() => null);
+                    if (updated) setVideo(updated);
+                  }}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-accent-soft"
+                >
+                  Use source
+                </button>
+                <button
+                  onClick={async () => {
+                    const updated = await api
+                      .updateVideo(video!.id, { title: video!.title })
+                      .catch(() => null);
+                    if (updated) setVideo(updated);
+                  }}
+                  className="rounded-lg bg-ink-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-600"
+                >
+                  Keep mine
+                </button>
+              </div>
+            </div>
+          )}
         <div className="mt-5">
           <h1 className="text-xl font-bold text-gray-100">{video.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-400">
@@ -160,6 +215,11 @@ export default function Watch() {
             <span>{formatSize(video.file_size)}</span>
             {resolution && (
               <span className="text-xs text-gray-500">{resolution}</span>
+            )}
+            {video.frame_rate && video.frame_rate > 60 && (
+              <span className="text-xs text-gray-500">
+                {Math.round(video.frame_rate)}fps
+              </span>
             )}
           </div>
 
@@ -213,6 +273,46 @@ export default function Watch() {
               </p>
             </div>
           )}
+
+          {/* Chapters */}
+          {(() => {
+            const chapters = parseChapters(video.description);
+            if (chapters.length === 0) return null;
+            return (
+              <div className="mt-4 rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700">
+                <button
+                  onClick={() => setChaptersExpanded((v) => !v)}
+                  className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
+                >
+                  <span>Chapters ({chapters.length})</span>
+                  <span>{chaptersExpanded ? "▲" : "▼"}</span>
+                </button>
+                {chaptersExpanded && (
+                  <ul className="mt-3 space-y-1">
+                    {chapters.map((ch) => (
+                      <li key={ch.startSec}>
+                        <button
+                          onClick={() =>
+                            window.dispatchEvent(
+                              new CustomEvent("horde:seek", {
+                                detail: { sec: ch.startSec },
+                              })
+                            )
+                          }
+                          className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm text-gray-300 hover:bg-ink-800 hover:text-accent"
+                        >
+                          <span className="w-12 shrink-0 font-mono text-xs text-gray-500">
+                            {formatDuration(ch.startSec)}
+                          </span>
+                          <span>{ch.title}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })()}
 
           {queue.length > 0 && (
             <div className="mt-4 rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700">
@@ -323,6 +423,47 @@ export default function Watch() {
               onDelete={onDelete}
             />
           </div>
+
+          {/* More like this */}
+          {moreLikeThis.length > 0 && (
+            <div className="mt-6">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                More like this
+              </h3>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {moreLikeThis.map((v) => {
+                  const thumb = thumbnailUrl(v);
+                  return (
+                    <Link
+                      key={v.id}
+                      to={`/watch/${v.id}`}
+                      className="group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-all hover:ring-accent/60"
+                    >
+                      <div className="aspect-video w-full overflow-hidden bg-ink-800">
+                        {thumb ? (
+                          <img
+                            src={thumb}
+                            alt={v.title}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-ink-600">
+                            <span className="text-3xl">▶</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-2">
+                        <p className="line-clamp-2 text-xs font-medium text-gray-200 group-hover:text-accent">
+                          {v.title}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

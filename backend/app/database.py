@@ -22,6 +22,12 @@ _VIDEO_COLUMNS = [
     ("last_watched_at", "VARCHAR"),
     ("view_count", "INTEGER"),
     ("channel_subscriber_count", "INTEGER"),
+    ("frame_rate", "FLOAT"),
+    ("metadata_synced_at", "VARCHAR"),
+    ("source_title", "VARCHAR"),
+    ("source_description", "VARCHAR"),
+    ("title_is_custom", "BOOLEAN DEFAULT 0"),
+    ("description_is_custom", "BOOLEAN DEFAULT 0"),
 ]
 
 _DOWNLOAD_JOB_COLUMNS = [

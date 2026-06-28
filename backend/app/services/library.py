@@ -56,8 +56,10 @@ def dump_subtitles(tracks: list[dict]) -> str:
 
 
 def expire_stale_progress(session: Session) -> None:
-    """Reset watch position on videos not watched in PROGRESS_EXPIRY_DAYS."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=PROGRESS_EXPIRY_DAYS)
+    """Reset watch position on videos not watched within the configured expiry period."""
+    from .app_settings import load as load_app_settings
+    expiry_days = load_app_settings().get("progress_expiry_days", PROGRESS_EXPIRY_DAYS)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=expiry_days)
     rows = session.exec(
         select(Video).where(
             Video.last_watched_at.is_not(None),

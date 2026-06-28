@@ -65,6 +65,42 @@ def probe_dimensions(path: Path) -> Optional[tuple[int, int]]:
         return None
 
 
+def probe_frame_rate(path: Path) -> Optional[float]:
+    """Return the frame rate of the first video stream via ffprobe, or None."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=r_frame_rate",
+                "-of",
+                "json",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return None
+        streams = json.loads(result.stdout).get("streams", [])
+        if not streams:
+            return None
+        raw = streams[0].get("r_frame_rate", "")
+        # r_frame_rate is a fraction like "60000/1001" or "30/1"
+        if "/" in raw:
+            num, den = raw.split("/", 1)
+            if int(den):
+                return round(int(num) / int(den), 3)
+        return None
+    except (subprocess.SubprocessError, ValueError, OSError, ZeroDivisionError):
+        return None
+
+
 def grab_frame(video_path: Path, output_path: Path, at_seconds: float = 5.0) -> bool:
     """Extract a single frame as a JPEG thumbnail. Returns True on success."""
     try:

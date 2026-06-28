@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { formatDuration } from "../utils";
+import { formatDuration, type Chapter } from "../utils";
 import type { SubtitleSize } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
+import type { SponsorSegment } from "../hooks/useSponsorBlock";
 
 export type ViewMode = "standard" | "theater" | "windowed";
 
@@ -33,11 +34,15 @@ interface Props {
   onClose?: () => void;
   subtitleSize?: SubtitleSize;
   subtitleOffset?: number;
+  onSubtitleOffsetChange?: (offset: number) => void;
   defaultRate?: number;
   volume?: number;
   onVolumeChange?: (volume: number) => void;
   initialPosition?: number;
   onProgress?: (sec: number) => void;
+  chapters?: Chapter[];
+  sponsorSegments?: SponsorSegment[];
+  sponsorShowNotice?: boolean;
 }
 
 export default function VideoPlayer({
@@ -52,11 +57,15 @@ export default function VideoPlayer({
   onClose,
   subtitleSize = "medium",
   subtitleOffset = 12,
+  onSubtitleOffsetChange,
   defaultRate = 1,
   volume: volumeProp,
   onVolumeChange,
   initialPosition = 0,
   onProgress,
+  chapters = [],
+  sponsorSegments = [],
+  sponsorShowNotice = true,
 }: Props) {
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
@@ -79,6 +88,13 @@ export default function VideoPlayer({
   const wasPlayingBeforeHold = useRef(false);
   const suppressClick = useRef(false);
   const pointerDownOnVideo = useRef(false);
+
+  // SponsorBlock skip notice
+  const [skipNotice, setSkipNotice] = useState<string | null>(null);
+  const skipNoticeTimer = useRef<number | null>(null);
+
+  // Subtitle drag
+  const subtitleDragRef = useRef<{ startY: number; startOffset: number } | null>(null);
 
   const applyCueLines = useCallback(() => {
     const v = videoRef.current;
@@ -160,6 +176,16 @@ export default function VideoPlayer({
         tt.removeEventListener("cuechange", applyLines);
     };
   }, [captionLang, subtitleOffset, tracks, src, setCaptionMode, applyCueLines]);
+
+  // Listen for programmatic seek requests (e.g., clicking a chapter in Watch.tsx)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { sec } = (e as CustomEvent<{ sec: number }>).detail;
+      if (videoRef.current) videoRef.current.currentTime = sec;
+    };
+    window.addEventListener("horde:seek", handler);
+    return () => window.removeEventListener("horde:seek", handler);
+  }, []);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = rate;
@@ -263,6 +289,7 @@ export default function VideoPlayer({
         e.key === "." ||
         e.key === "<" ||
         e.key === "," ||
+        e.key === "n" ||
         (e.key === "Escape" && mode === "windowed");
       if (isPlayerKey && !isMini) revealControls();
       if (e.key === " " || e.key === "k") {
@@ -282,6 +309,11 @@ export default function VideoPlayer({
         stepRate(1);
       } else if (e.key === "<" || e.key === ",") {
         stepRate(-1);
+      } else if (e.key === "n" && chapters.length > 0 && videoRef.current) {
+        e.preventDefault();
+        const t = videoRef.current.currentTime;
+        const next = chapters.find((c) => c.startSec > t + 1);
+        if (next) videoRef.current.currentTime = next.startSec;
       }
     };
     window.addEventListener("keydown", handler);
@@ -295,6 +327,7 @@ export default function VideoPlayer({
     stepRate,
     isMini,
     revealControls,
+    chapters,
   ]);
 
   const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -568,6 +601,34 @@ export default function VideoPlayer({
             const t = e.currentTarget.currentTime;
             setCurrent(t);
             onProgress?.(t);
+            // SponsorBlock: auto-skip segments
+            if (sponsorSegments.length > 0) {
+              for (const seg of sponsorSegments) {
+                if (t >= seg.startSec && t < seg.endSec - 0.3) {
+                  e.currentTarget.currentTime = seg.endSec;
+                  if (sponsorShowNotice) {
+                    const label =
+                      seg.category === "sponsor"
+                        ? "Sponsor"
+                        : seg.category === "selfpromo"
+                          ? "Self-promo"
+                          : seg.category === "intro"
+                            ? "Intro"
+                            : seg.category === "outro"
+                              ? "Outro"
+                              : "Segment";
+                    setSkipNotice(`Skipped: ${label}`);
+                    if (skipNoticeTimer.current !== null)
+                      clearTimeout(skipNoticeTimer.current);
+                    skipNoticeTimer.current = window.setTimeout(() => {
+                      setSkipNotice(null);
+                      skipNoticeTimer.current = null;
+                    }, 2000);
+                  }
+                  break;
+                }
+              }
+            }
           }}
           onLoadedMetadata={(e) => {
             const el = e.currentTarget;
@@ -649,9 +710,60 @@ export default function VideoPlayer({
               onPointerCancel={onControlsInteractionEnd}
               className="accent-scrubber w-full"
               style={{
-                background: `linear-gradient(to right, #22d3ee ${progressPct}%, #2a313f ${progressPct}%)`,
+                background: `linear-gradient(to right, rgb(var(--accent)) ${progressPct}%, rgb(var(--ink-600)) ${progressPct}%)`,
               }}
             />
+            {/* Chapter tick marks */}
+            {chapters.length > 0 && duration > 0 && (
+              <div className="pointer-events-none relative -mt-1 h-1">
+                {chapters.slice(1).map((ch) => (
+                  <div
+                    key={ch.startSec}
+                    className="absolute top-0 h-full w-0.5 -translate-x-1/2 rounded-full bg-white/50"
+                    style={{ left: `${(ch.startSec / duration) * 100}%` }}
+                  />
+                ))}
+              </div>
+            )}
+            {/* SponsorBlock skip notice */}
+            {skipNotice && (
+              <div className="pointer-events-none absolute right-4 top-4 rounded-lg bg-black/80 px-3 py-1.5 text-xs text-accent transition-opacity">
+                {skipNotice}
+              </div>
+            )}
+            {/* Subtitle drag handle — only shown when CC is active */}
+            {captionLang && onSubtitleOffsetChange && (
+              <div
+                className="absolute inset-x-0 top-0 flex cursor-ns-resize justify-center opacity-0 hover:opacity-100"
+                style={{ height: "24px", marginTop: "-24px" }}
+                title="Drag to reposition subtitles"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  subtitleDragRef.current = {
+                    startY: e.clientY,
+                    startOffset: subtitleOffset,
+                  };
+                }}
+                onPointerMove={(e) => {
+                  if (!subtitleDragRef.current) return;
+                  const dy = subtitleDragRef.current.startY - e.clientY;
+                  const newOffset = Math.max(
+                    0,
+                    Math.min(40, subtitleDragRef.current.startOffset + Math.round(dy / 4))
+                  );
+                  onSubtitleOffsetChange(newOffset);
+                }}
+                onPointerUp={() => {
+                  subtitleDragRef.current = null;
+                }}
+                onPointerCancel={() => {
+                  subtitleDragRef.current = null;
+                }}
+              >
+                <div className="h-1 w-12 rounded-full bg-white/40" />
+              </div>
+            )}
             <div className="mt-2 flex items-center gap-3 text-gray-100">
               <button
                 onClick={togglePlay}
@@ -736,7 +848,7 @@ export default function VideoPlayer({
                     }`}
                     title="Subtitles"
                   >
-                    {captionLang ? `CC ${captionLang}` : "CC"}
+                    CC
                   </button>
                 )}
                 {!isMobile && (

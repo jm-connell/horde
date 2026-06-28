@@ -8,6 +8,36 @@ export function formatDuration(seconds: number | null): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
+export interface Chapter {
+  startSec: number;
+  title: string;
+}
+
+export function parseChapters(description: string | null): Chapter[] {
+  if (!description) return [];
+  const TIME_RE = /^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\s*[-–—|·•:→]?\s*)(.+)/;
+  const chapters: Chapter[] = [];
+  for (const rawLine of description.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const m = line.match(TIME_RE);
+    if (!m) continue;
+    const [, h, min, sec, rest] = m;
+    const secs =
+      (h ? parseInt(h, 10) * 3600 : 0) +
+      parseInt(min, 10) * 60 +
+      parseInt(sec, 10);
+    const title = rest.trim().replace(/^\((.+)\)$/, "$1");
+    if (title) chapters.push({ startSec: secs, title });
+  }
+  if (chapters.length < 2) return [];
+  // Chapters must be in strictly ascending order to be valid
+  for (let i = 1; i < chapters.length; i++) {
+    if (chapters[i].startSec <= chapters[i - 1].startSec) return [];
+  }
+  return chapters;
+}
+
 export function formatSize(bytes: number | null): string {
   if (!bytes) return "";
   const units = ["B", "KB", "MB", "GB", "TB"];
