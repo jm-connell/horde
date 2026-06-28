@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { formatDuration, type Chapter } from "../utils";
+import { formatDuration, formatTimestamp, type Chapter } from "../utils";
 import type { SubtitleSize } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
@@ -20,6 +20,26 @@ function snapRateToStep(r: number): number {
   return SPEED_STEPS.reduce((best, s) =>
     Math.abs(s - r) < Math.abs(best - r) ? s : best
   );
+}
+
+function activeChapterAt(chapters: Chapter[], time: number): Chapter | null {
+  if (chapters.length === 0) return null;
+  let active = chapters[0];
+  for (const ch of chapters) {
+    if (ch.startSec <= time) active = ch;
+    else break;
+  }
+  return active;
+}
+
+function isChapterActive(
+  chapters: Chapter[],
+  chapterIndex: number,
+  time: number
+): boolean {
+  const ch = chapters[chapterIndex];
+  const next = chapters[chapterIndex + 1];
+  return time >= ch.startSec && (!next || time < next.startSec);
 }
 
 interface Props {
@@ -698,6 +718,7 @@ export default function VideoPlayer({
                 : "pointer-events-none opacity-0"
             }`}
           >
+            <div className="relative">
             <input
               type="range"
               min={0}
@@ -713,18 +734,45 @@ export default function VideoPlayer({
                 background: `linear-gradient(to right, rgb(var(--accent)) ${progressPct}%, rgb(var(--ink-600)) ${progressPct}%)`,
               }}
             />
-            {/* Chapter tick marks */}
+            {/* Chapter markers */}
             {chapters.length > 0 && duration > 0 && (
-              <div className="pointer-events-none relative -mt-1 h-1">
-                {chapters.slice(1).map((ch) => (
-                  <div
-                    key={ch.startSec}
-                    className="absolute top-0 h-full w-0.5 -translate-x-1/2 rounded-full bg-white/50"
-                    style={{ left: `${(ch.startSec / duration) * 100}%` }}
-                  />
-                ))}
+              <div className="absolute inset-x-0 top-0 h-full">
+                {chapters.slice(1).map((ch, i) => {
+                  const chapterIndex = i + 1;
+                  const active = isChapterActive(chapters, chapterIndex, current);
+                  return (
+                    <button
+                      key={ch.startSec}
+                      type="button"
+                      className="group absolute top-1/2 z-10 h-4 w-3 -translate-x-1/2 -translate-y-1/2"
+                      style={{ left: `${(ch.startSec / duration) * 100}%` }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (videoRef.current) {
+                          videoRef.current.currentTime = ch.startSec;
+                        }
+                      }}
+                      title={`${formatTimestamp(ch.startSec)} — ${ch.title}`}
+                    >
+                      <span
+                        className={`absolute left-1/2 top-1/2 block h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors ${
+                          active
+                            ? "bg-accent"
+                            : "bg-white/50 group-hover:bg-accent"
+                        }`}
+                      />
+                      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden max-w-[200px] -translate-x-1/2 truncate rounded bg-black/90 px-2 py-1 text-xs text-gray-100 group-hover:block">
+                        <span className="font-mono text-accent">
+                          {formatTimestamp(ch.startSec)}
+                        </span>{" "}
+                        {ch.title}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
+            </div>
             {/* SponsorBlock skip notice */}
             {skipNotice && (
               <div className="pointer-events-none absolute right-4 top-4 rounded-lg bg-black/80 px-3 py-1.5 text-xs text-accent transition-opacity">
@@ -793,6 +841,14 @@ export default function VideoPlayer({
               </div>
 
               <span className="text-xs tabular-nums text-gray-300">
+                {chapters.length > 0 && (() => {
+                  const ch = activeChapterAt(chapters, current);
+                  return ch ? (
+                    <span className="mr-2 max-w-[140px] truncate text-gray-400">
+                      {ch.title} ·{" "}
+                    </span>
+                  ) : null;
+                })()}
                 {formatDuration(current)} / {formatDuration(duration)}
               </span>
 

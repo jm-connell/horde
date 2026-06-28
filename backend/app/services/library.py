@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from ..models import Video
 
 PROGRESS_EXPIRY_DAYS = 14
+CONTINUE_WATCHING_DAYS = 7
 
 SORT_COLUMNS = {
     "added_at": Video.added_at,
@@ -104,11 +105,18 @@ def query_videos(
     if needs_review is not None:
         statement = statement.where(Video.needs_review == needs_review)
     if continue_watching:
+        from .app_settings import load as load_app_settings
+
+        settings = load_app_settings()
+        cw_days = settings.get("continue_watching_days", CONTINUE_WATCHING_DAYS)
+        cw_cutoff = datetime.now(timezone.utc) - timedelta(days=cw_days)
         # Started but not effectively finished (within the last 10% of runtime).
         statement = statement.where(Video.last_position_sec >= 30).where(
             (Video.duration_sec.is_(None))
             | (Video.last_position_sec < Video.duration_sec * 0.9)
         )
+        statement = statement.where(Video.last_watched_at.is_not(None))
+        statement = statement.where(Video.last_watched_at >= cw_cutoff)
         statement = statement.order_by(Video.last_watched_at.desc()).limit(12)
         return list(session.exec(statement).all())
     if watched_only:

@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
+import PlaybackQueue from "../components/PlaybackQueue";
 import VideoCard from "../components/VideoCard";
 import { useDownloads } from "../context/DownloadContext";
+import { usePlayback } from "../context/PlaybackContext";
 import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss";
 import {
   LIBRARY_SORT_OPTIONS,
@@ -70,6 +72,7 @@ export default function Library() {
   const { showToast } = useToast();
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
   const { onJobCompleted } = useDownloads();
+  const { queue } = usePlayback();
 
   useEffect(() => {
     return onJobCompleted(() => setRefreshKey((k) => k + 1));
@@ -303,10 +306,17 @@ export default function Library() {
     setPlaylistOpen(true);
   };
 
+  const showQueuePanel = queue.length > 0 && !selectMode;
+
   return (
-    <div
-      className={`flex gap-6 ${settings.sidebarCollapsed ? "justify-center" : ""}`}
-    >
+    <div className={`flex gap-6${showQueuePanel ? " pb-48 lg:pb-0" : ""}`}>
+      {showQueuePanel && (
+        <div className="pointer-events-none fixed inset-y-0 right-0 z-40 hidden w-[26rem] p-3 pt-20 lg:block">
+          <div className="pointer-events-auto ml-auto flex max-h-full w-96 flex-col overflow-hidden">
+            <PlaybackQueue className="max-h-[calc(100vh-6rem)] overflow-y-auto shadow-2xl" />
+          </div>
+        </div>
+      )}
       {!settings.sidebarCollapsed && (
         <aside className="hidden w-56 shrink-0 lg:block">
           <div className="sticky top-20 space-y-6">
@@ -372,9 +382,7 @@ export default function Library() {
         </button>
       )}
 
-      <div
-        className={`min-w-0 flex-1 ${settings.sidebarCollapsed ? "max-w-6xl" : ""}`}
-      >
+      <div className="min-w-0 flex-1">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
           {activeChannel && renaming === activeChannel ? (
             <input
@@ -509,7 +517,11 @@ export default function Library() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+          <div
+            className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+              settings.sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
+            }`}
+          >
             {videos.map((v, idx) => (
               <VideoCard
                 key={v.id}
@@ -624,6 +636,12 @@ export default function Library() {
             </div>
           )}
       </div>
+
+      {showQueuePanel && (
+        <div className="fixed inset-x-0 bottom-0 z-30 max-h-[45vh] overflow-y-auto border-t border-ink-700 bg-ink-950/95 px-3 py-3 backdrop-blur lg:hidden">
+          <PlaybackQueue />
+        </div>
+      )}
     </div>
   );
 }

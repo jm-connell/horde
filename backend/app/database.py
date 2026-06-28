@@ -39,6 +39,7 @@ _DOWNLOAD_JOB_COLUMNS = [
     ("paused", "BOOLEAN DEFAULT 0"),
     ("normalize_volume", "BOOLEAN DEFAULT 0"),
     ("replace_video_id", "INTEGER"),
+    ("file_size", "INTEGER"),
 ]
 
 

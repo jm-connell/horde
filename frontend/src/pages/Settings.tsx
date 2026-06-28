@@ -316,7 +316,8 @@ export default function Settings() {
               Progress bar expiry (days)
             </label>
             <p className="mb-2 text-xs text-gray-500">
-              Watch position resets after this many days of inactivity.
+              Saved watch position resets after this many days of inactivity.
+              The continue watching row hides videos after 7 days.
             </p>
             <div className="flex items-center gap-3">
               <input

@@ -7,6 +7,7 @@ _lock = threading.Lock()
 
 DEFAULTS: dict[str, Any] = {
     "progress_expiry_days": 14,
+    "continue_watching_days": 7,
     "metadata_sync_interval_hours": 24,
 }
 

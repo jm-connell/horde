@@ -1,11 +1,36 @@
 export function formatDuration(seconds: number | null): string {
-  if (!seconds || seconds <= 0) return "";
-  const total = Math.floor(seconds);
+  if (seconds == null || seconds < 0) return "";
+  return formatTimestamp(seconds);
+}
+
+export function formatTimestamp(seconds: number): string {
+  const total = Math.floor(Math.max(0, seconds));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   const pad = (n: number) => n.toString().padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+export function parseTimestampToSeconds(
+  h: string | undefined,
+  min: string,
+  sec: string
+): number {
+  return (
+    (h ? parseInt(h, 10) * 3600 : 0) +
+    parseInt(min, 10) * 60 +
+    parseInt(sec, 10)
+  );
+}
+
+// Inline timestamps in description text (H:MM:SS or MM:SS).
+export const TIMESTAMP_INLINE_RE =
+  /(?<!\d)(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?!\d)/g;
+
+export function parseInlineTimestamp(match: RegExpExecArray): number {
+  const [, h, min, sec] = match;
+  return parseTimestampToSeconds(h, min, sec);
 }
 
 export interface Chapter {
@@ -23,10 +48,7 @@ export function parseChapters(description: string | null): Chapter[] {
     const m = line.match(TIME_RE);
     if (!m) continue;
     const [, h, min, sec, rest] = m;
-    const secs =
-      (h ? parseInt(h, 10) * 3600 : 0) +
-      parseInt(min, 10) * 60 +
-      parseInt(sec, 10);
+    const secs = parseTimestampToSeconds(h, min, sec);
     const title = rest.trim().replace(/^\((.+)\)$/, "$1");
     if (title) chapters.push({ startSec: secs, title });
   }

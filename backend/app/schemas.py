@@ -93,6 +93,7 @@ class DownloadJobRead(BaseModel):
     paused: bool
     error: Optional[str]
     video_id: Optional[int]
+    file_size: Optional[int]
     created_at: datetime
 
 

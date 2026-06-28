@@ -57,6 +57,8 @@ export interface Settings {
   sponsorBlockEnabled: boolean;
   sponsorBlockShowNotice: boolean;
   sidebarCollapsed: boolean;
+  chaptersExpanded: boolean;
+  descriptionExpanded: boolean;
 }
 
 const DEFAULT_CUSTOM_COLORS: CustomColors = {
@@ -86,6 +88,8 @@ const DEFAULTS: Settings = {
   sponsorBlockEnabled: false,
   sponsorBlockShowNotice: true,
   sidebarCollapsed: false,
+  chaptersExpanded: true,
+  descriptionExpanded: true,
 };
 
 const STORAGE_KEY = "horde.settings";

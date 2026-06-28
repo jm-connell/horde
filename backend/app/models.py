@@ -89,6 +89,7 @@ class DownloadJob(SQLModel, table=True):
     replace_video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
     error: Optional[str] = None
     video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
+    file_size: Optional[int] = None
     created_at: datetime = Field(default_factory=utcnow)
 
 

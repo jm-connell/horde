@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useDownloads, jobStatus } from "../context/DownloadContext";
 import type { ChannelStat, DownloadJob, ProgressEvent } from "../types";
+import { formatSize } from "../utils";
 import ChannelPicker from "./ChannelPicker";
 
 interface Props {
@@ -131,6 +132,22 @@ export default function DownloadJobCard({
   const errorMsg =
     failed && !completed ? stripAnsi(live?.error ?? job.error ?? "") : "";
 
+  const sizeLabel = (() => {
+    if (completed) {
+      const bytes = live?.file_size ?? job.file_size;
+      return bytes ? formatSize(bytes) : "";
+    }
+    if (status === "downloading" || status === "processing") {
+      const total = live?.total_bytes;
+      const downloaded = live?.downloaded_bytes;
+      if (total) {
+        return `${formatSize(downloaded ?? null)} / ${formatSize(total)}`;
+      }
+      if (downloaded) return formatSize(downloaded);
+    }
+    return "";
+  })();
+
   return (
     <div className={`rounded-xl bg-ink-900 p-5 ring-1 ${cardRing}`}>
       <div className="flex gap-4">
@@ -156,6 +173,9 @@ export default function DownloadJobCard({
               <span className="truncate">{title || "Working…"}</span>
             </span>
             <div className="flex shrink-0 items-center gap-2">
+              {sizeLabel && (
+                <span className="text-xs text-gray-500">{sizeLabel}</span>
+              )}
               <span className={failed ? "text-red-400" : "text-gray-400"}>
                 {statusLabel}
               </span>

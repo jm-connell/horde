@@ -363,6 +363,8 @@ def _make_progress_hook(job_id: int, cancel_event: threading.Event):
                     "progress": round(percent, 1),
                     "title": info.get("title"),
                     "channel": info.get("uploader") or info.get("channel"),
+                    "total_bytes": total,
+                    "downloaded_bytes": downloaded,
                 }
             elif status == "finished":
                 progress_store[job_id] = {"status": "processing", "progress": 99.0}
@@ -695,6 +697,7 @@ def _complete_download(
         "progress": 100.0,
         "video_id": video_id,
         "title": info.get("title"),
+        "file_size": file_size,
     }
     if quality_warning:
         snapshot["quality_warning"] = quality_warning
@@ -707,6 +710,7 @@ def _complete_download(
         progress=100.0,
         title=info.get("title"),
         video_id=video_id,
+        file_size=file_size,
         error=None,
     )
     progress_store[job_id] = snapshot

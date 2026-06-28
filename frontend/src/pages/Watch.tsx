@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, thumbnailUrl } from "../api";
 import AddToPlaylist from "../components/AddToPlaylist";
+import ChaptersList from "../components/ChaptersList";
 import LinkifiedText from "../components/LinkifiedText";
+import PlaybackQueue from "../components/PlaybackQueue";
 import VideoActionsMenu from "../components/VideoActionsMenu";
 import VideoEditForm from "../components/VideoEditForm";
 import { useDownloads } from "../context/DownloadContext";
@@ -11,7 +13,7 @@ import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
-import { formatDate, formatDuration, formatResolution, formatSize, parseChapters } from "../utils";
+import { formatDate, formatResolution, formatSize, parseChapters } from "../utils";
 
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
@@ -31,13 +33,12 @@ export default function Watch() {
   const [editing, setEditing] = useState(false);
   const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
   const [descExpanded, setDescExpanded] = useState(false);
-  const [chaptersExpanded, setChaptersExpanded] = useState(false);
   const [moreLikeThis, setMoreLikeThis] = useState<Video[]>([]);
   const [redownloadOpen, setRedownloadOpen] = useState(false);
   const [redownloadPreset, setRedownloadPreset] = useState("1080p");
   const [presets, setPresets] = useState<string[]>(["best"]);
   const [redownloading, setRedownloading] = useState(false);
-  const [settings] = useSettings();
+  const [settings, updateSettings] = useSettings();
   const { showToast } = useToast();
   const { onJobCompleted, refreshJobs } = useDownloads();
   const redownloadPending = useRef(false);
@@ -47,13 +48,9 @@ export default function Watch() {
     playVideo,
     registerDock,
     queue,
-    removeFromQueue,
-    reorderQueue,
-    clearQueue,
   } = usePlayback();
 
   const dockRef = useRef<HTMLDivElement>(null);
-  const dragIndex = useRef<number | null>(null);
 
   useEffect(() => {
     if (!videoId) return;
@@ -142,10 +139,9 @@ export default function Watch() {
 
   const isWide = !isMobile && mode === "theater";
   const resolution = formatResolution(video.height_px);
-  // Theater: full-bleed black bar, player at least as wide as standard (max-w-5xl).
-  const theaterWidthClass =
-    "mx-auto w-[clamp(min(100%,64rem),85vw,100vw)]";
-  const contentClass = isWide ? theaterWidthClass : "mx-auto max-w-5xl";
+  // Theater: full width on narrower viewports; ~85vw with side bars on xl+.
+  const theaterWidthClass = "mx-auto w-full xl:w-[85vw]";
+  const contentClass = "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-7xl";
 
   const playerOuterClass = isMobile
     ? "bg-black"
@@ -223,164 +219,89 @@ export default function Watch() {
             )}
           </div>
 
-          {settings.showDescription && (video.description || video.notes) && (
-            <div className="mt-4 rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700">
-              {video.description && (
-                <>
-                  <p
-                    className={`whitespace-pre-wrap text-sm text-gray-300 ${
-                      descExpanded ? "" : "line-clamp-3"
-                    }`}
-                  >
-                    <LinkifiedText text={video.description} />
-                  </p>
+          <div
+            className={
+              queue.length > 0
+                ? "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
+                : "mt-4 space-y-4"
+            }
+          >
+            <div className="min-w-0 space-y-4">
+              <ChaptersList chapters={parseChapters(video.description)} />
+
+              {settings.showDescription && (video.description || video.notes) && (
+                <div className="rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700">
                   <button
-                    onClick={() => setDescExpanded((v) => !v)}
-                    className="mt-2 text-xs font-medium text-accent hover:underline"
+                    type="button"
+                    onClick={() =>
+                      updateSettings({
+                        descriptionExpanded: !settings.descriptionExpanded,
+                      })
+                    }
+                    className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
                   >
-                    {descExpanded ? "Show less" : "Show more"}
+                    <span>Description</span>
+                    <span>{settings.descriptionExpanded ? "▲" : "▼"}</span>
                   </button>
-                </>
+
+                  {settings.descriptionExpanded && (
+                    <>
+                      {video.description && (
+                        <>
+                          <p
+                            className={`mt-3 whitespace-pre-wrap text-sm text-gray-300 ${
+                              descExpanded ? "" : "line-clamp-3"
+                            }`}
+                          >
+                            <LinkifiedText text={video.description} />
+                          </p>
+                          <button
+                            onClick={() => setDescExpanded((v) => !v)}
+                            className="mt-2 text-xs font-medium text-accent hover:underline"
+                          >
+                            {descExpanded ? "Show less" : "Show more"}
+                          </button>
+                        </>
+                      )}
+
+                      {video.notes &&
+                        (descExpanded || !video.description) && (
+                          <div
+                            className={
+                              video.description
+                                ? "mt-4 border-t border-ink-700 pt-4"
+                                : "mt-3"
+                            }
+                          >
+                            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
+                              Your notes
+                            </h3>
+                            <p className="whitespace-pre-wrap text-sm text-gray-300">
+                              <LinkifiedText text={video.notes} />
+                            </p>
+                          </div>
+                        )}
+                    </>
+                  )}
+                </div>
               )}
 
-              {video.notes &&
-                (descExpanded || !video.description) && (
-                  <div
-                    className={
-                      video.description
-                        ? "mt-4 border-t border-ink-700 pt-4"
-                        : ""
-                    }
-                  >
-                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
-                      Your notes
-                    </h3>
-                    <p className="whitespace-pre-wrap text-sm text-gray-300">
-                      <LinkifiedText text={video.notes} />
-                    </p>
-                  </div>
-                )}
+              {!settings.showDescription && video.notes && (
+                <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
+                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
+                    Your notes
+                  </h3>
+                  <p className="whitespace-pre-wrap text-sm text-gray-300">
+                    <LinkifiedText text={video.notes} />
+                  </p>
+                </div>
+              )}
             </div>
-          )}
 
-          {!settings.showDescription && video.notes && (
-            <div className="mt-4 rounded-xl border border-accent/30 bg-accent/5 p-4">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
-                Your notes
-              </h3>
-              <p className="whitespace-pre-wrap text-sm text-gray-300">
-                <LinkifiedText text={video.notes} />
-              </p>
-            </div>
-          )}
-
-          {/* Chapters */}
-          {(() => {
-            const chapters = parseChapters(video.description);
-            if (chapters.length === 0) return null;
-            return (
-              <div className="mt-4 rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700">
-                <button
-                  onClick={() => setChaptersExpanded((v) => !v)}
-                  className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
-                >
-                  <span>Chapters ({chapters.length})</span>
-                  <span>{chaptersExpanded ? "▲" : "▼"}</span>
-                </button>
-                {chaptersExpanded && (
-                  <ul className="mt-3 space-y-1">
-                    {chapters.map((ch) => (
-                      <li key={ch.startSec}>
-                        <button
-                          onClick={() =>
-                            window.dispatchEvent(
-                              new CustomEvent("horde:seek", {
-                                detail: { sec: ch.startSec },
-                              })
-                            )
-                          }
-                          className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm text-gray-300 hover:bg-ink-800 hover:text-accent"
-                        >
-                          <span className="w-12 shrink-0 font-mono text-xs text-gray-500">
-                            {formatDuration(ch.startSec)}
-                          </span>
-                          <span>{ch.title}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            );
-          })()}
-
-          {queue.length > 0 && (
-            <div className="mt-4 rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  Up next ({queue.length})
-                </h3>
-                <button
-                  onClick={clearQueue}
-                  className="text-xs text-gray-500 hover:text-accent"
-                >
-                  Clear
-                </button>
-              </div>
-              <ul className="space-y-1">
-                {queue.map((v, index) => {
-                  const thumb = thumbnailUrl(v);
-                  return (
-                    <li
-                      key={v.id}
-                      draggable
-                      onDragStart={() => (dragIndex.current = index)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
-                        if (dragIndex.current !== null) {
-                          reorderQueue(dragIndex.current, index);
-                        }
-                        dragIndex.current = null;
-                      }}
-                      onDragEnd={() => (dragIndex.current = null)}
-                      className="flex items-center gap-2 rounded-lg p-1 hover:bg-ink-800"
-                    >
-                      <span
-                        className="shrink-0 cursor-grab px-1 text-gray-600 active:cursor-grabbing"
-                        title="Drag to reorder"
-                      >
-                        ⠿
-                      </span>
-                      <button
-                        onClick={() => playVideo(v)}
-                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                      >
-                        <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-ink-800">
-                          {thumb && (
-                            <img
-                              src={thumb}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          )}
-                        </div>
-                        <span className="min-w-0 flex-1 truncate text-sm text-gray-200">
-                          {v.title}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => removeFromQueue(v.id)}
-                        className="shrink-0 px-2 text-gray-500 hover:text-accent"
-                        title="Remove"
-                      >
-                        ✕
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+            {queue.length > 0 && (
+              <PlaybackQueue className="lg:sticky lg:top-20 lg:self-start" />
+            )}
+          </div>
 
           {editing && (
             <div className="mt-4">

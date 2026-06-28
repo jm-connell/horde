@@ -77,6 +77,7 @@ export interface DownloadJob {
   paused: boolean;
   error: string | null;
   video_id: number | null;
+  file_size: number | null;
   created_at: string;
 }
 
@@ -87,6 +88,9 @@ export interface ProgressEvent {
   channel?: string;
   video_id?: number;
   error?: string;
+  total_bytes?: number;
+  downloaded_bytes?: number;
+  file_size?: number;
   quality_warning?: string;
   volume_warning?: string;
 }
