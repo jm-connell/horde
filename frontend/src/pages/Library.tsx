@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
@@ -20,6 +20,8 @@ import type { ChannelStat, Playlist, TagStat, Video } from "../types";
 
 const TAG_MIN_COUNT = 3;
 const TAG_PAGE_SIZE = 20;
+// Fixed queue overlay width (w-[26rem]) — dock to bottom when grid extends into this zone.
+const QUEUE_RESERVE_PX = 416;
 
 function videoProgress(video: Video): number | undefined {
   if (!video.duration_sec || video.duration_sec <= 0) return undefined;
@@ -40,6 +42,8 @@ export default function Library() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const lastSelectedIndex = useRef<number | null>(null);
+  const mainContentRef = useRef<HTMLDivElement>(null);
+  const [queueDockedBottom, setQueueDockedBottom] = useState(true);
 
   // Bulk action popover state
   const [bulkNote, setBulkNote] = useState("");
@@ -308,9 +312,41 @@ export default function Library() {
 
   const showQueuePanel = queue.length > 0 && !selectMode;
 
+  const updateQueuePlacement = useCallback(() => {
+    if (window.innerWidth < 1024) {
+      setQueueDockedBottom(true);
+      return;
+    }
+    const el = mainContentRef.current;
+    if (!el) return;
+    setQueueDockedBottom(
+      el.getBoundingClientRect().right > window.innerWidth - QUEUE_RESERVE_PX
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!showQueuePanel) return;
+    updateQueuePlacement();
+    const el = mainContentRef.current;
+    const ro = new ResizeObserver(updateQueuePlacement);
+    if (el) ro.observe(el);
+    window.addEventListener("resize", updateQueuePlacement);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateQueuePlacement);
+    };
+  }, [
+    showQueuePanel,
+    updateQueuePlacement,
+    settings.sidebarCollapsed,
+    videos.length,
+    showContinueRow,
+    loading,
+  ]);
+
   return (
-    <div className={`flex gap-6${showQueuePanel ? " pb-48 lg:pb-0" : ""}`}>
-      {showQueuePanel && (
+    <div className={`flex gap-6${showQueuePanel && queueDockedBottom ? " pb-4" : ""}`}>
+      {showQueuePanel && !queueDockedBottom && (
         <div className="pointer-events-none fixed inset-y-0 right-0 z-40 hidden w-[26rem] p-3 pt-20 lg:block">
           <div className="pointer-events-auto ml-auto flex max-h-full w-96 flex-col overflow-hidden">
             <PlaybackQueue className="max-h-[calc(100vh-6rem)] overflow-y-auto shadow-2xl" />
@@ -382,7 +418,7 @@ export default function Library() {
         </button>
       )}
 
-      <div className="min-w-0 flex-1">
+      <div ref={mainContentRef} className="min-w-0 flex-1">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
           {activeChannel && renaming === activeChannel ? (
             <input
@@ -637,9 +673,15 @@ export default function Library() {
           )}
       </div>
 
-      {showQueuePanel && (
-        <div className="fixed inset-x-0 bottom-0 z-30 max-h-[45vh] overflow-y-auto border-t border-ink-700 bg-ink-950/95 px-3 py-3 backdrop-blur lg:hidden">
-          <PlaybackQueue />
+      {showQueuePanel && queueDockedBottom && (
+        <div className="pointer-events-none fixed bottom-0 right-0 z-30 w-[26rem] p-3">
+          <div className="pointer-events-auto ml-auto w-96">
+            <PlaybackQueue
+              collapsible
+              listMaxHeightClass="max-h-[20vh] lg:max-h-[30vh]"
+              className="shadow-2xl"
+            />
+          </div>
         </div>
       )}
     </div>

@@ -92,7 +92,7 @@ export default function ContinueWatchingRow({
 
         <div
           ref={scrollRef}
-          className="overflow-x-auto scroll-smooth py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="overflow-x-auto scroll-smooth px-1 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <div className="flex gap-4">
             {videos.map((v) => (
