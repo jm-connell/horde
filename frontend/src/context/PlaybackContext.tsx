@@ -8,7 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { api, streamUrl, subtitleUrl } from "../api";
+import { api, streamUrl, subtitleUrl, thumbnailUrl } from "../api";
 import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -36,6 +36,20 @@ const Ctx = createContext<PlaybackValue | null>(null);
 const QUEUE_KEY = "horde.queue";
 const DEFAULT_MINI_WIDTH_MOBILE = 224;
 const DEFAULT_MINI_WIDTH_DESKTOP = 704;
+
+function mimeFromPath(filePath: string): string {
+  const ext = filePath.split(".").pop()?.toLowerCase();
+  switch (ext) {
+    case "mp4":
+      return "video/mp4";
+    case "webm":
+      return "video/webm";
+    case "mkv":
+      return "video/x-matroska";
+    default:
+      return "video/mp4";
+  }
+}
 
 function loadQueue(): Video[] {
   try {
@@ -229,6 +243,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         createPortal(
           <VideoPlayer
             src={streamUrl(current.id)}
+            videoId={current.id}
+            mimeType={mimeFromPath(current.file_path)}
+            poster={thumbnailUrl(current)}
             mode={effectiveMode}
             onModeChange={setMode}
             variant={dock ? "full" : "mini"}

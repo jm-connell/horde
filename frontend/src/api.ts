@@ -320,6 +320,10 @@ export function thumbnailUrl(video: Video): string | null {
   return video.has_thumbnail ? `/api/thumbnails/${video.id}` : null;
 }
 
+export function absoluteUrl(path: string): string {
+  return new URL(path, window.location.origin).href;
+}
+
 export function streamUrl(id: number): string {
   return `/api/videos/${id}/stream`;
 }

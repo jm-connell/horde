@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { formatDuration, formatTimestamp, type Chapter } from "../utils";
+import { absoluteUrl, streamUrl } from "../api";
+import { useAirPlay } from "../hooks/useAirPlay";
+import { useChromecast } from "../hooks/useChromecast";
 import type { SubtitleSize } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
+import { formatDuration, formatTimestamp, type Chapter } from "../utils";
 
 export type ViewMode = "standard" | "theater" | "windowed";
 
@@ -46,6 +49,9 @@ function isChapterActive(
 
 interface Props {
   src: string;
+  videoId?: number;
+  mimeType?: string;
+  poster?: string | null;
   mode: ViewMode;
   onModeChange: (mode: ViewMode) => void;
   tracks?: SubtitleSource[];
@@ -71,6 +77,9 @@ interface Props {
 
 export default function VideoPlayer({
   src,
+  videoId,
+  mimeType = "video/mp4",
+  poster = null,
   mode,
   onModeChange,
   tracks = [],
@@ -96,6 +105,8 @@ export default function VideoPlayer({
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const chromecast = useChromecast();
+  const airplay = useAirPlay(videoRef, src);
   const playerRootRef = useRef<HTMLDivElement>(null);
   const userInitiatedFullscreen = useRef(false);
   const hideControlsTimer = useRef<number | null>(null);
@@ -129,6 +140,90 @@ export default function VideoPlayer({
 
   // Subtitle drag
   const subtitleDragRef = useRef<{ startY: number; startOffset: number } | null>(null);
+
+  const castAvailable = chromecast.available || airplay.available;
+  const casting = chromecast.casting || airplay.casting;
+  const castDeviceName = chromecast.casting
+    ? chromecast.deviceName
+    : airplay.casting
+      ? "AirPlay"
+      : null;
+
+  useEffect(() => {
+    chromecast.setOnSessionEnd((position) => {
+      const v = videoRef.current;
+      if (!v) return;
+      if (position > 0) {
+        v.currentTime = position;
+        setCurrent(position);
+        onProgress?.(position);
+      }
+      v.play().catch(() => undefined);
+    });
+  }, [chromecast.setOnSessionEnd, onProgress]);
+
+  useEffect(() => {
+    if (!chromecast.casting) return;
+    setCurrent(chromecast.remoteCurrentTime);
+    setDuration(chromecast.remoteDuration);
+    setPlaying(!chromecast.remoteIsPaused);
+  }, [
+    chromecast.casting,
+    chromecast.remoteCurrentTime,
+    chromecast.remoteDuration,
+    chromecast.remoteIsPaused,
+  ]);
+
+  const startChromecast = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v || videoId == null) return;
+    v.pause();
+    try {
+      await chromecast.castMedia({
+        contentUrl: absoluteUrl(streamUrl(videoId)),
+        mimeType,
+        title: title ?? "Video",
+        posterUrl: poster ? absoluteUrl(poster) : null,
+        currentTime: v.currentTime,
+        subtitles: tracks.map((t) => ({
+          lang: t.lang,
+          src: absoluteUrl(t.src),
+        })),
+        activeSubtitleLang: captionLang,
+      });
+    } catch {
+      // User cancelled device picker or load failed.
+    }
+  }, [
+    videoId,
+    mimeType,
+    title,
+    poster,
+    tracks,
+    captionLang,
+    chromecast.castMedia,
+  ]);
+
+  const onCastClick = useCallback(() => {
+    if (chromecast.casting) {
+      chromecast.stop();
+      return;
+    }
+    if (chromecast.available) {
+      void startChromecast();
+      return;
+    }
+    if (airplay.available) {
+      airplay.showPicker();
+    }
+  }, [
+    chromecast.casting,
+    chromecast.available,
+    chromecast.stop,
+    startChromecast,
+    airplay.available,
+    airplay.showPicker,
+  ]);
 
   const applyCueLines = useCallback(() => {
     const v = videoRef.current;
@@ -215,11 +310,16 @@ export default function VideoPlayer({
   useEffect(() => {
     const handler = (e: Event) => {
       const { sec } = (e as CustomEvent<{ sec: number }>).detail;
+      if (chromecast.casting) {
+        chromecast.remoteSeek(sec);
+        setCurrent(sec);
+        return;
+      }
       if (videoRef.current) videoRef.current.currentTime = sec;
     };
     window.addEventListener("horde:seek", handler);
     return () => window.removeEventListener("horde:seek", handler);
-  }, []);
+  }, [chromecast.casting, chromecast.remoteSeek]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = rate;
@@ -230,8 +330,9 @@ export default function VideoPlayer({
   }, [src]);
 
   useEffect(() => {
+    if (chromecast.casting) return;
     videoRef.current?.play().catch(() => undefined);
-  }, [src]);
+  }, [src, chromecast.casting]);
 
   const cycleCaptions = useCallback(() => {
     if (tracks.length === 0) return;
@@ -242,11 +343,15 @@ export default function VideoPlayer({
 
   const togglePlay = useCallback(() => {
     if (suppressClick.current) return;
+    if (chromecast.casting) {
+      chromecast.remotePlay();
+      return;
+    }
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) v.play();
     else v.pause();
-  }, []);
+  }, [chromecast.casting, chromecast.remotePlay]);
 
   const toggleTheater = useCallback(() => {
     onModeChange(mode === "theater" ? "standard" : "theater");
@@ -474,9 +579,15 @@ export default function VideoPlayer({
   ]);
 
   const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const t = Number(e.target.value);
+    if (chromecast.casting) {
+      chromecast.remoteSeek(t);
+      setCurrent(t);
+      return;
+    }
     const v = videoRef.current;
     if (!v) return;
-    v.currentTime = Number(e.target.value);
+    v.currentTime = t;
   };
 
   const onVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -782,6 +893,7 @@ export default function VideoPlayer({
           ref={videoRef}
           src={src}
           playsInline
+          {...{ "x-webkit-airplay": "allow" }}
           controls={false}
           onClick={onVideoClick}
           onPlay={() => {
@@ -852,6 +964,14 @@ export default function VideoPlayer({
             />
           ))}
         </video>
+
+        {chromecast.casting && !isMini && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+            <p className="text-sm text-gray-200">
+              Casting to {castDeviceName ?? "TV"}
+            </p>
+          </div>
+        )}
 
         {isMini ? (
           <>
@@ -1094,6 +1214,23 @@ export default function VideoPlayer({
                     title="Subtitles"
                   >
                     CC
+                  </button>
+                )}
+                {castAvailable && (
+                  <button
+                    onClick={onCastClick}
+                    className={`rounded px-2 py-1 text-xs font-medium ${
+                      casting
+                        ? "bg-accent text-ink-950"
+                        : "bg-ink-700 text-gray-200 hover:text-accent"
+                    }`}
+                    title={
+                      casting
+                        ? `Casting to ${castDeviceName ?? "TV"}`
+                        : "Cast to TV"
+                    }
+                  >
+                    Cast
                   </button>
                 )}
                 {isMobile && (
