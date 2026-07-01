@@ -139,8 +139,6 @@ export default function Watch() {
 
   const isWide = !isMobile && mode === "theater";
   const resolution = formatResolution(video.height_px);
-  // Theater: full width on narrower viewports; ~85vw with side bars on xl+.
-  const theaterWidthClass = "mx-auto w-full xl:w-[85vw]";
   const contentClass = "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-7xl";
 
   const playerOuterClass = isMobile
@@ -148,7 +146,7 @@ export default function Watch() {
     : isWide
       ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
       : "mx-auto max-w-5xl";
-  const playerInnerClass = isWide && !isMobile ? theaterWidthClass : "w-full";
+  const playerInnerClass = isWide && !isMobile ? "mx-auto w-full" : "w-full";
 
   return (
     <div>

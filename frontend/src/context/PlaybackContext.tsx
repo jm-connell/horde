@@ -34,6 +34,8 @@ interface PlaybackValue {
 const Ctx = createContext<PlaybackValue | null>(null);
 
 const QUEUE_KEY = "horde.queue";
+const DEFAULT_MINI_WIDTH_MOBILE = 224;
+const DEFAULT_MINI_WIDTH_DESKTOP = 704;
 
 function loadQueue(): Video[] {
   try {
@@ -54,6 +56,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ViewMode>(
     () => loadSettings().playbackMode
   );
+  const [miniWidth, setMiniWidth] = useState<number | null>(null);
 
   // Persist the chosen view mode so it is remembered across sessions.
   const setMode = useCallback(
@@ -94,18 +97,30 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     if (!isMobile && mode === "windowed" && current) {
       document.body.appendChild(host);
       host.className = "fixed inset-0 z-50";
+      host.style.width = "";
+      host.style.maxWidth = "";
     } else if (dock) {
       dock.appendChild(host);
       host.className = "w-full";
+      host.style.width = "";
+      host.style.maxWidth = "";
     } else if (current) {
       document.body.appendChild(host);
+      const defaultWidth = isMobile
+        ? DEFAULT_MINI_WIDTH_MOBILE
+        : DEFAULT_MINI_WIDTH_DESKTOP;
+      const width = miniWidth ?? defaultWidth;
       host.className = isMobile
-        ? "fixed bottom-3 right-3 z-40 w-56 max-w-[70vw] overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700"
-        : "fixed bottom-4 right-4 z-40 w-[44rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
+        ? "fixed bottom-3 right-3 z-40 overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700"
+        : "fixed bottom-4 right-4 z-40 overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
+      host.style.width = `${width}px`;
+      host.style.maxWidth = isMobile ? "70vw" : "calc(100vw - 2rem)";
     } else {
       host.className = "hidden";
+      host.style.width = "";
+      host.style.maxWidth = "";
     }
-  }, [dock, current, isMobile, mode]);
+  }, [dock, current, isMobile, mode, miniWidth]);
 
   // Hide page scroll while windowed fullscreen is active.
   useEffect(() => {
@@ -238,6 +253,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             chapters={chapters}
             sponsorSegments={sponsorSegments}
             sponsorShowNotice={settings.sponsorBlockShowNotice}
+            miniWidth={miniWidth}
+            onMiniResize={setMiniWidth}
           />,
           hostRef.current
         )}

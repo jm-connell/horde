@@ -174,7 +174,9 @@ export default function DownloadJobCard({
             </span>
             <div className="flex shrink-0 items-center gap-2">
               {sizeLabel && (
-                <span className="text-xs text-gray-500">{sizeLabel}</span>
+                <span className="hidden text-xs text-gray-500 sm:inline">
+                  {sizeLabel}
+                </span>
               )}
               <span className={failed ? "text-red-400" : "text-gray-400"}>
                 {statusLabel}
@@ -198,6 +200,10 @@ export default function DownloadJobCard({
               </button>
             </div>
           </div>
+
+          {sizeLabel && (
+            <p className="mb-2 text-xs text-gray-500 sm:hidden">{sizeLabel}</p>
+          )}
 
           {!completed && !failed && !cancelled && (
             <div className="mb-4 h-2.5 w-full overflow-hidden rounded-full bg-ink-700">

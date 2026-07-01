@@ -180,6 +180,8 @@ export default function Library() {
     return "Library";
   }, [activeChannel, activeTag]);
 
+  const isHome = !activeChannel && !activeTag;
+
   const showContinueRow =
     settings.showContinueWatching &&
     !activeChannel &&
@@ -434,7 +436,9 @@ export default function Library() {
               className="rounded-lg border border-accent bg-ink-950 px-3 py-1 text-2xl font-bold text-gray-100 outline-none"
             />
           ) : (
-            <h1 className="group flex items-center gap-2 text-2xl font-bold text-gray-100">
+            <h1
+              className={`group ${isHome ? "hidden md:flex" : "flex"} items-center gap-2 text-2xl font-bold text-gray-100`}
+            >
               {headline}
               {activeChannel && (
                 <button

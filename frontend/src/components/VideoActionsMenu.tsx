@@ -56,7 +56,7 @@ export default function VideoActionsMenu({
         •••
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-lg bg-ink-800 py-1 shadow-2xl ring-1 ring-ink-600">
+        <div className="absolute right-0 bottom-full z-50 mb-1 w-52 overflow-hidden rounded-lg bg-ink-800 py-1 shadow-2xl ring-1 ring-ink-600">
           <button
             onClick={() => {
               onEdit();

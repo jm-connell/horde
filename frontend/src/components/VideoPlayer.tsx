@@ -14,13 +14,8 @@ export interface SubtitleSource {
 const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 const CONTROLS_HIDE_DELAY_MS = 2500;
 const HOLD_DELAY_MS = 250;
-
-function isIOS(): boolean {
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
-}
+const MIN_MINI_WIDTH = 160;
+const MAX_MINI_WIDTH = 960;
 
 function snapRateToStep(r: number): number {
   if (SPEED_STEPS.includes(r)) return r;
@@ -70,6 +65,8 @@ interface Props {
   chapters?: Chapter[];
   sponsorSegments?: SponsorSegment[];
   sponsorShowNotice?: boolean;
+  miniWidth?: number | null;
+  onMiniResize?: (width: number) => void;
 }
 
 export default function VideoPlayer({
@@ -93,6 +90,8 @@ export default function VideoPlayer({
   chapters = [],
   sponsorSegments = [],
   sponsorShowNotice = true,
+  miniWidth = null,
+  onMiniResize,
 }: Props) {
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
@@ -111,7 +110,12 @@ export default function VideoPlayer({
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
   const [showSpeed, setShowSpeed] = useState(false);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+  const [miniControlsVisible, setMiniControlsVisible] = useState(true);
   const [videoAspect, setVideoAspect] = useState<number | null>(null);
+  const miniHideTimer = useRef<number | null>(null);
+  const miniResizeDrag = useRef<{ startX: number; startWidth: number } | null>(
+    null
+  );
   const heldRate = useRef<number | null>(null);
   const holdTimer = useRef<number | null>(null);
   const holdActive = useRef(false);
@@ -271,14 +275,6 @@ export default function VideoPlayer({
 
     userInitiatedFullscreen.current = true;
 
-    if (isIOS()) {
-      const el = video as HTMLVideoElement & {
-        webkitEnterFullscreen?: () => void;
-      };
-      el.webkitEnterFullscreen?.();
-      return;
-    }
-
     const req =
       root.requestFullscreen?.bind(root) ??
       (
@@ -286,26 +282,34 @@ export default function VideoPlayer({
           webkitRequestFullscreen?: () => Promise<void>;
         }
       ).webkitRequestFullscreen?.bind(root);
-    if (!req) {
-      userInitiatedFullscreen.current = false;
+    if (req) {
+      try {
+        await req();
+        try {
+          const lock = (
+            screen.orientation as ScreenOrientation & {
+              lock?: (orientation: string) => Promise<void>;
+            }
+          ).lock;
+          await lock?.("landscape");
+        } catch {
+          // Orientation lock may be unsupported or denied.
+        }
+        return;
+      } catch {
+        userInitiatedFullscreen.current = false;
+      }
+    }
+
+    const el = video as HTMLVideoElement & {
+      webkitEnterFullscreen?: () => void;
+    };
+    if (el.webkitEnterFullscreen) {
+      el.webkitEnterFullscreen();
       return;
     }
 
-    try {
-      await req();
-      try {
-        const lock = (
-          screen.orientation as ScreenOrientation & {
-            lock?: (orientation: string) => Promise<void>;
-          }
-        ).lock;
-        await lock?.("landscape");
-      } catch {
-        // Orientation lock may be unsupported or denied.
-      }
-    } catch {
-      userInitiatedFullscreen.current = false;
-    }
+    userInitiatedFullscreen.current = false;
   }, []);
 
   const toggleNativeFullscreen = useCallback(async () => {
@@ -367,10 +371,34 @@ export default function VideoPlayer({
     scheduleHideControls();
   }, [scheduleHideControls]);
 
+  const clearMiniHideTimer = useCallback(() => {
+    if (miniHideTimer.current !== null) {
+      clearTimeout(miniHideTimer.current);
+      miniHideTimer.current = null;
+    }
+  }, []);
+
+  const scheduleHideMiniControls = useCallback(() => {
+    clearMiniHideTimer();
+    if (!playing) return;
+    miniHideTimer.current = window.setTimeout(() => {
+      setMiniControlsVisible(false);
+      miniHideTimer.current = null;
+    }, CONTROLS_HIDE_DELAY_MS);
+  }, [playing, clearMiniHideTimer]);
+
+  const revealMiniControls = useCallback(() => {
+    setMiniControlsVisible(true);
+    scheduleHideMiniControls();
+  }, [scheduleHideMiniControls]);
+
   const onPlayerMouseMove = useCallback(() => {
-    if (isMini) return;
+    if (isMini) {
+      revealMiniControls();
+      return;
+    }
     revealControls();
-  }, [isMini, revealControls]);
+  }, [isMini, revealControls, revealMiniControls]);
 
   const onPlayerMouseLeave = useCallback(() => {
     if (isMini || !playing || showSpeed || controlsInteracting.current) return;
@@ -642,6 +670,60 @@ export default function VideoPlayer({
   );
 
   useEffect(() => {
+    if (!isMini) return;
+    if (!playing) {
+      clearMiniHideTimer();
+      setMiniControlsVisible(true);
+    } else {
+      scheduleHideMiniControls();
+    }
+  }, [isMini, playing, clearMiniHideTimer, scheduleHideMiniControls]);
+
+  useEffect(() => () => clearMiniHideTimer(), [clearMiniHideTimer]);
+
+  const clampMiniWidth = useCallback((width: number) => {
+    const max = Math.min(window.innerWidth * 0.9, MAX_MINI_WIDTH);
+    return Math.min(max, Math.max(MIN_MINI_WIDTH, width));
+  }, []);
+
+  const onMiniResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const startWidth =
+        miniWidth ??
+        playerRootRef.current?.getBoundingClientRect().width ??
+        (isMobile ? 224 : 704);
+      miniResizeDrag.current = { startX: e.clientX, startWidth };
+    },
+    [miniWidth, isMobile]
+  );
+
+  const onMiniResizePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!miniResizeDrag.current || !onMiniResize) return;
+      const { startX, startWidth } = miniResizeDrag.current;
+      const next = clampMiniWidth(startWidth + (startX - e.clientX));
+      onMiniResize(next);
+    },
+    [clampMiniWidth, onMiniResize]
+  );
+
+  const onMiniResizePointerEnd = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!miniResizeDrag.current) return;
+      miniResizeDrag.current = null;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
     if (isMini) return;
     if (!playing) {
       clearHideControlsTimer();
@@ -700,10 +782,10 @@ export default function VideoPlayer({
         className={`${innerClass}${
           !isMini && playing && !controlsVisible ? " cursor-none" : ""
         }`}
-        style={isMini ? undefined : { touchAction: "manipulation" }}
+        style={{ touchAction: "manipulation" }}
         onMouseMove={onPlayerMouseMove}
         onMouseLeave={onPlayerMouseLeave}
-        onTouchStart={isMini ? undefined : revealControls}
+        onTouchStart={isMini ? revealMiniControls : revealControls}
       >
         <video
           ref={videoRef}
@@ -781,34 +863,54 @@ export default function VideoPlayer({
         </video>
 
         {isMini ? (
-          <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/90 to-transparent px-2 pb-1 pt-8 text-gray-100">
-            <button
-              onClick={togglePlay}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center text-xl leading-none hover:text-accent"
-              aria-label={playing ? "Pause" : "Play"}
+          <>
+            {onMiniResize && (
+              <div
+                className="absolute left-0 top-0 z-20 h-4 w-4 cursor-nwse-resize touch-none"
+                style={{ touchAction: "none" }}
+                title="Drag to resize"
+                aria-label="Drag to resize mini player"
+                onPointerDown={onMiniResizePointerDown}
+                onPointerMove={onMiniResizePointerMove}
+                onPointerUp={onMiniResizePointerEnd}
+                onPointerCancel={onMiniResizePointerEnd}
+              />
+            )}
+            <div
+              className={`absolute inset-x-0 top-0 flex items-center gap-1 bg-gradient-to-b from-black/90 to-transparent px-2 pb-2 pt-1 text-gray-100 transition-opacity duration-300 ${
+                miniControlsVisible
+                  ? "pointer-events-auto opacity-100"
+                  : "pointer-events-none opacity-0"
+              }`}
             >
-              {playing ? "❚❚" : "►"}
-            </button>
-            <span className="min-w-0 flex-1 truncate text-xs text-gray-200">
-              {title}
-            </span>
-            <button
-              onClick={onExpand}
-              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-base hover:text-accent"
-              title="Expand"
-              aria-label="Expand"
-            >
-              ⤢
-            </button>
-            <button
-              onClick={onClose}
-              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-base hover:text-accent"
-              title="Close"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-          </div>
+              <button
+                onClick={togglePlay}
+                className="flex min-h-[48px] min-w-[48px] items-center justify-center text-2xl leading-none hover:text-accent"
+                aria-label={playing ? "Pause" : "Play"}
+              >
+                {playing ? "❚❚" : "►"}
+              </button>
+              <span className="min-w-0 flex-1 truncate text-sm text-gray-200">
+                {title}
+              </span>
+              <button
+                onClick={onExpand}
+                className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center text-lg hover:text-accent"
+                title="Expand"
+                aria-label="Expand"
+              >
+                ⤢
+              </button>
+              <button
+                onClick={onClose}
+                className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center text-lg hover:text-accent"
+                title="Close"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+          </>
         ) : (
           <div
             className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent px-4 pb-3 pt-10 transition-opacity duration-300 ${
