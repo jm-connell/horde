@@ -690,37 +690,28 @@ export default function VideoPlayer({
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
-      e.currentTarget.setPointerCapture(e.pointerId);
       const startWidth =
         miniWidth ??
         playerRootRef.current?.getBoundingClientRect().width ??
         (isMobile ? 224 : 704);
       miniResizeDrag.current = { startX: e.clientX, startWidth };
-    },
-    [miniWidth, isMobile]
-  );
 
-  const onMiniResizePointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!miniResizeDrag.current || !onMiniResize) return;
-      const { startX, startWidth } = miniResizeDrag.current;
-      const next = clampMiniWidth(startWidth + (startX - e.clientX));
-      onMiniResize(next);
+      const onMove = (ev: PointerEvent) => {
+        if (!miniResizeDrag.current || !onMiniResize) return;
+        const { startX, startWidth: sw } = miniResizeDrag.current;
+        onMiniResize(clampMiniWidth(sw + (startX - ev.clientX)));
+      };
+      const onEnd = () => {
+        miniResizeDrag.current = null;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onEnd);
+        window.removeEventListener("pointercancel", onEnd);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onEnd);
+      window.addEventListener("pointercancel", onEnd);
     },
-    [clampMiniWidth, onMiniResize]
-  );
-
-  const onMiniResizePointerEnd = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!miniResizeDrag.current) return;
-      miniResizeDrag.current = null;
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        // ignore
-      }
-    },
-    []
+    [miniWidth, isMobile, clampMiniWidth, onMiniResize]
   );
 
   useEffect(() => {
@@ -871,9 +862,6 @@ export default function VideoPlayer({
                 title="Drag to resize"
                 aria-label="Drag to resize mini player"
                 onPointerDown={onMiniResizePointerDown}
-                onPointerMove={onMiniResizePointerMove}
-                onPointerUp={onMiniResizePointerEnd}
-                onPointerCancel={onMiniResizePointerEnd}
               />
             )}
             <div

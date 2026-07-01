@@ -201,10 +201,6 @@ export default function DownloadJobCard({
             </div>
           </div>
 
-          {sizeLabel && (
-            <p className="mb-2 text-xs text-gray-500 sm:hidden">{sizeLabel}</p>
-          )}
-
           {!completed && !failed && !cancelled && (
             <div className="mb-4 h-2.5 w-full overflow-hidden rounded-full bg-ink-700">
               <div
@@ -297,6 +293,9 @@ export default function DownloadJobCard({
               </button>
             )}
             {saved && <span className="text-xs text-accent">Saved</span>}
+            {sizeLabel && (
+              <span className="text-xs text-gray-500 sm:hidden">{sizeLabel}</span>
+            )}
           </div>
         </div>
       </div>

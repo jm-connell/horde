@@ -465,7 +465,7 @@ export default function Library() {
               <select
                 value={sort}
                 onChange={(e) => handleSortChange(e.target.value)}
-                className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                className="w-[7.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-sm text-gray-100 outline-none focus:border-accent md:min-w-0 md:flex-1 md:px-3"
               >
                 {LIBRARY_SORT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -492,6 +492,14 @@ export default function Library() {
               >
                 {selectMode ? "Cancel" : "Select"}
               </button>
+              {tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
+                <button
+                  onClick={() => setShowTags((s) => !s)}
+                  className="shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
+                >
+                  {showTags ? "Hide tags" : "Tags"}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -508,7 +516,7 @@ export default function Library() {
           {tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
             <button
               onClick={() => setShowTags((s) => !s)}
-              className="rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
+              className="hidden rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent md:inline-block"
             >
               {showTags ? "Hide tags" : "Show tags"}
             </button>
