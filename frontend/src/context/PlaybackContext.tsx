@@ -100,7 +100,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     } else if (current) {
       document.body.appendChild(host);
       host.className = isMobile
-        ? "fixed bottom-0 inset-x-0 z-40 overflow-hidden shadow-2xl ring-1 ring-ink-700"
+        ? "fixed bottom-3 right-3 z-40 w-56 max-w-[70vw] overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700"
         : "fixed bottom-4 right-4 z-40 w-[44rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
     } else {
       host.className = "hidden";

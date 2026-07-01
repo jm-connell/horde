@@ -103,7 +103,7 @@ export default function VideoCard({
             className={`absolute right-2 top-2 rounded bg-black/70 px-2 py-1 text-xs font-medium text-gray-100 transition-opacity hover:bg-accent hover:text-ink-950 ${
               hideQueueButton
                 ? "hidden"
-                : "opacity-0 group-hover:opacity-100"
+                : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100"
             }`}
           >
             + Queue

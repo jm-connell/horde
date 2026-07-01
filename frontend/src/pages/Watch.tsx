@@ -144,7 +144,7 @@ export default function Watch() {
   const contentClass = "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-7xl";
 
   const playerOuterClass = isMobile
-    ? "bg-black"
+    ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
     : isWide
       ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
       : "mx-auto max-w-5xl";

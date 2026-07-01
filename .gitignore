@@ -18,6 +18,9 @@ backend/downloads/
 # Env
 .env
 
+# Local dev helpers (not committed)
+.local/
+
 # OS / editor
 .DS_Store
 Thumbs.db

@@ -166,11 +166,11 @@ export default function DownloadJobCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="mb-3 flex items-start justify-between gap-3 text-sm">
-            <span className="flex min-w-0 items-center gap-2 font-medium text-gray-200">
-              {completed && <span className="text-accent">✓</span>}
-              {failed && <span className="text-red-400">✗</span>}
-              <span className="truncate">{title || "Working…"}</span>
+          <div className="mb-3 flex items-start justify-between gap-3 overflow-hidden text-sm">
+            <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
+              {completed && <span className="shrink-0 text-accent">✓</span>}
+              {failed && <span className="shrink-0 text-red-400">✗</span>}
+              <span className="min-w-0 truncate">{title || "Working…"}</span>
             </span>
             <div className="flex shrink-0 items-center gap-2">
               {sizeLabel && (

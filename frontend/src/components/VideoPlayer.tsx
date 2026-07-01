@@ -15,6 +15,13 @@ const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 const CONTROLS_HIDE_DELAY_MS = 2500;
 const HOLD_DELAY_MS = 250;
 
+function isIOS(): boolean {
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
 function snapRateToStep(r: number): number {
   if (SPEED_STEPS.includes(r)) return r;
   return SPEED_STEPS.reduce((best, s) =>
@@ -90,6 +97,8 @@ export default function VideoPlayer({
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const playerRootRef = useRef<HTMLDivElement>(null);
+  const userInitiatedFullscreen = useRef(false);
   const hideControlsTimer = useRef<number | null>(null);
   const controlsInteracting = useRef(false);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -101,6 +110,7 @@ export default function VideoPlayer({
   const [captionLang, setCaptionLang] = useState<string | null>(null);
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
   const [showSpeed, setShowSpeed] = useState(false);
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [videoAspect, setVideoAspect] = useState<number | null>(null);
   const heldRate = useRef<number | null>(null);
   const holdTimer = useRef<number | null>(null);
@@ -241,6 +251,91 @@ export default function VideoPlayer({
   const toggleWindowed = useCallback(() => {
     onModeChange(mode === "windowed" ? "standard" : "windowed");
   }, [mode, onModeChange]);
+
+  const exitNativeFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+      screen.orientation?.unlock?.();
+    } catch {
+      // Browser may reject unlock or exit.
+    }
+    userInitiatedFullscreen.current = false;
+  }, []);
+
+  const enterNativeFullscreen = useCallback(async () => {
+    const root = playerRootRef.current;
+    const video = videoRef.current;
+    if (!root || !video) return;
+
+    userInitiatedFullscreen.current = true;
+
+    if (isIOS()) {
+      const el = video as HTMLVideoElement & {
+        webkitEnterFullscreen?: () => void;
+      };
+      el.webkitEnterFullscreen?.();
+      return;
+    }
+
+    const req =
+      root.requestFullscreen?.bind(root) ??
+      (
+        root as HTMLElement & {
+          webkitRequestFullscreen?: () => Promise<void>;
+        }
+      ).webkitRequestFullscreen?.bind(root);
+    if (!req) {
+      userInitiatedFullscreen.current = false;
+      return;
+    }
+
+    try {
+      await req();
+      try {
+        const lock = (
+          screen.orientation as ScreenOrientation & {
+            lock?: (orientation: string) => Promise<void>;
+          }
+        ).lock;
+        await lock?.("landscape");
+      } catch {
+        // Orientation lock may be unsupported or denied.
+      }
+    } catch {
+      userInitiatedFullscreen.current = false;
+    }
+  }, []);
+
+  const toggleNativeFullscreen = useCallback(async () => {
+    if (document.fullscreenElement || isNativeFullscreen) {
+      await exitNativeFullscreen();
+    } else {
+      await enterNativeFullscreen();
+    }
+  }, [enterNativeFullscreen, exitNativeFullscreen, isNativeFullscreen]);
+
+  useEffect(() => {
+    const onChange = () => {
+      const active = !!document.fullscreenElement;
+      setIsNativeFullscreen(active);
+      document.body.classList.toggle("player-fullscreen", active);
+      if (!active) {
+        userInitiatedFullscreen.current = false;
+        try {
+          screen.orientation?.unlock?.();
+        } catch {
+          // ignore
+        }
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.body.classList.remove("player-fullscreen");
+    };
+  }, []);
 
   const stepRate = useCallback((dir: 1 | -1) => {
     setRate((r) => {
@@ -424,12 +519,12 @@ export default function VideoPlayer({
     return () => v.removeEventListener("enterpictureinpicture", onEnterPiP);
   }, [applyCueLines]);
 
-  // Block iOS native fullscreen hijack; keep playback inline unless windowed.
+  // Block iOS native fullscreen hijack unless the user tapped Fullscreen.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
     const onBeginFullscreen = () => {
-      if (mode !== "windowed") {
+      if (mode !== "windowed" && !userInitiatedFullscreen.current) {
         const el = v as HTMLVideoElement & {
           webkitExitFullscreen?: () => void;
         };
@@ -571,13 +666,17 @@ export default function VideoPlayer({
   const progressPct = duration > 0 ? (current / duration) * 100 : 0;
 
   const wrapperClass = isMini
-    ? `relative w-full bg-black${isMobile ? " max-h-32" : ""}`
-    : mode === "windowed"
+    ? "relative w-full bg-black"
+    : isNativeFullscreen
       ? "relative flex h-full w-full items-center justify-center bg-black"
-      : "relative w-full bg-black";
+      : mode === "windowed"
+        ? "relative flex h-full w-full items-center justify-center bg-black"
+        : "relative w-full bg-black";
 
   const innerClass =
-    !isMini && mode === "windowed" ? "relative h-full w-full" : "relative";
+    !isMini && (mode === "windowed" || isNativeFullscreen)
+      ? "relative h-full w-full"
+      : "relative";
 
   const miniStyle =
     isMini && videoAspect
@@ -588,7 +687,7 @@ export default function VideoPlayer({
 
   const videoClass = isMini
     ? "h-full w-full bg-black object-contain"
-    : mode === "windowed"
+    : isNativeFullscreen || mode === "windowed"
       ? "h-full w-full object-contain"
       : isMobile
         ? "max-h-[70vh] w-full bg-black object-contain"
@@ -596,7 +695,7 @@ export default function VideoPlayer({
   const subtitleClass = `sub-${subtitleSize}`;
 
   return (
-    <div className={wrapperClass} style={miniStyle}>
+    <div ref={playerRootRef} className={wrapperClass} style={miniStyle}>
       <div
         className={`${innerClass}${
           !isMini && playing && !controlsVisible ? " cursor-none" : ""
@@ -736,7 +835,7 @@ export default function VideoPlayer({
             />
             {/* Chapter markers */}
             {chapters.length > 0 && duration > 0 && (
-              <div className="absolute inset-x-0 top-0 h-full">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-full">
                 {chapters.slice(1).map((ch, i) => {
                   const chapterIndex = i + 1;
                   const active = isChapterActive(chapters, chapterIndex, current);
@@ -744,7 +843,7 @@ export default function VideoPlayer({
                     <button
                       key={ch.startSec}
                       type="button"
-                      className="group absolute top-1/2 z-10 h-4 w-3 -translate-x-1/2 -translate-y-1/2"
+                      className="group pointer-events-auto absolute top-1/2 z-10 h-4 w-3 -translate-x-1/2 -translate-y-1/2"
                       style={{ left: `${(ch.startSec / duration) * 100}%` }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -820,11 +919,11 @@ export default function VideoPlayer({
                 {playing ? "❚❚" : "►"}
               </button>
 
-              <div className="flex items-center gap-2">
-                <button onClick={toggleMute} className="hover:text-accent">
-                  {muted || volume === 0 ? "🔇" : "🔊"}
-                </button>
-                {!isMobile && (
+              {!isMobile && (
+                <div className="flex items-center gap-2">
+                  <button onClick={toggleMute} className="hover:text-accent">
+                    {muted || volume === 0 ? "🔇" : "🔊"}
+                  </button>
                   <input
                     type="range"
                     min={0}
@@ -837,8 +936,8 @@ export default function VideoPlayer({
                     onPointerCancel={onControlsInteractionEnd}
                     className="accent-scrubber w-20"
                   />
-                )}
-              </div>
+                </div>
+              )}
 
               <span className="text-xs tabular-nums text-gray-300">
                 {chapters.length > 0 && (() => {
@@ -905,6 +1004,19 @@ export default function VideoPlayer({
                     title="Subtitles"
                   >
                     CC
+                  </button>
+                )}
+                {isMobile && (
+                  <button
+                    onClick={toggleNativeFullscreen}
+                    className={`rounded px-2 py-1 text-xs font-medium ${
+                      isNativeFullscreen
+                        ? "bg-accent text-ink-950"
+                        : "bg-ink-700 text-gray-200 hover:text-accent"
+                    }`}
+                    title="Fullscreen"
+                  >
+                    {isNativeFullscreen ? "Exit" : "Fullscreen"}
                   </button>
                 )}
                 {!isMobile && (

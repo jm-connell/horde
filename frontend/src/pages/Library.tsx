@@ -6,6 +6,7 @@ import PlaybackQueue from "../components/PlaybackQueue";
 import VideoCard from "../components/VideoCard";
 import { useDownloads } from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
+import { useSearch } from "../context/SearchContext";
 import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss";
 import {
   LIBRARY_SORT_OPTIONS,
@@ -53,7 +54,7 @@ export default function Library() {
   const [metadataSyncing, setMetadataSyncing] = useState(false);
 
   const [searchParams] = useSearchParams();
-  const [search, setSearch] = useState("");
+  const { search, setSearch } = useSearch();
   const [activeChannel, setActiveChannel] = useState<string | null>(
     searchParams.get("channel")
   );
@@ -454,38 +455,40 @@ export default function Library() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search videos..."
-              className="w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:w-64"
+              className="hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
             />
-            <select
-              value={sort}
-              onChange={(e) => handleSortChange(e.target.value)}
-              className="rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-            >
-              {LIBRARY_SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={toggleOrder}
-              className="rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
-              title={
-                sort === "random" ? "Shuffle again" : "Toggle sort direction"
-              }
-            >
-              {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
-            </button>
-            <button
-              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-              className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                selectMode
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
-              }`}
-            >
-              {selectMode ? "Cancel" : "Select"}
-            </button>
+            <div className="flex flex-row items-center gap-2">
+              <select
+                value={sort}
+                onChange={(e) => handleSortChange(e.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+              >
+                {LIBRARY_SORT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={toggleOrder}
+                className="shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                title={
+                  sort === "random" ? "Shuffle again" : "Toggle sort direction"
+                }
+              >
+                {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
+              </button>
+              <button
+                onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+                className={`shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  selectMode
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
+                }`}
+              >
+                {selectMode ? "Cancel" : "Select"}
+              </button>
+            </div>
           </div>
         </div>
 

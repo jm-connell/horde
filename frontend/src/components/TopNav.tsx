@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useDownloads } from "../context/DownloadContext";
+import { useSearch } from "../context/SearchContext";
 import { useSettings } from "../hooks/useSettings";
 
 const NAV_LINKS = [
@@ -19,6 +20,12 @@ export default function TopNav() {
   const { activeCount } = useDownloads();
   const [settings] = useSettings();
   const location = useLocation();
+  const { search, setSearch } = useSearch();
+  const isLibrary = location.pathname === "/";
+
+  useEffect(() => {
+    if (!isLibrary) setSearch("");
+  }, [isLibrary, setSearch]);
 
   const showDownloadBadge =
     settings.showDownloadNavBadge && activeCount > 0;
@@ -101,6 +108,14 @@ export default function TopNav() {
             </NavLink>
           ))}
         </nav>
+
+        <input
+          value={isLibrary ? search : ""}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search videos..."
+          disabled={!isLibrary}
+          className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent disabled:opacity-40 md:hidden"
+        />
 
         <button
           onClick={() => setMenuOpen((v) => !v)}
