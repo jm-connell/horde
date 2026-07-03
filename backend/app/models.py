@@ -90,6 +90,8 @@ class DownloadJob(SQLModel, table=True):
     error: Optional[str] = None
     video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
     file_size: Optional[int] = None
+    # Lower values run first among queued jobs; user-reorderable in the UI.
+    queue_position: Optional[int] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=utcnow)
 
 

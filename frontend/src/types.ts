@@ -78,6 +78,7 @@ export interface DownloadJob {
   error: string | null;
   video_id: number | null;
   file_size: number | null;
+  queue_position: number | null;
   created_at: string;
 }
 

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
-import { useDownloads, isActiveJob } from "../context/DownloadContext";
+import { useDownloads, isActiveJob, jobStatus } from "../context/DownloadContext";
 import { useSettings } from "../hooks/useSettings";
 import ChannelPicker from "../components/ChannelPicker";
 import DownloadJobCard from "../components/DownloadJobCard";
@@ -26,6 +26,7 @@ export default function Download() {
     submitDownload,
     pauseQueue,
     resumeQueue,
+    reorderQueue,
     dismissFinishedJobs,
   } = useDownloads();
   const [settings] = useSettings();
@@ -98,17 +99,50 @@ export default function Download() {
 
   const isPlaylist = preview?.is_playlist ?? false;
 
-  const { activeJobs, recentJobs } = useMemo(() => {
-    const active: typeof jobs = [];
+  const { downloadingJob, queuedJobs } = useMemo(() => {
+    const downloading: typeof jobs = [];
+    const queued: typeof jobs = [];
+    for (const job of jobs) {
+      if (!isActiveJob(job, progress[job.id])) continue;
+      const status = jobStatus(job, progress[job.id]);
+      if (status === "downloading" || status === "processing") {
+        downloading.push(job);
+      } else {
+        queued.push(job);
+      }
+    }
+    queued.sort((a, b) => {
+      const ap = a.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const bp = b.queue_position ?? Number.MAX_SAFE_INTEGER;
+      if (ap !== bp) return ap - bp;
+      return (
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+    });
+    return {
+      downloadingJob: downloading[0] ?? null,
+      queuedJobs: queued,
+    };
+  }, [jobs, progress]);
+
+  const dragIndex = useRef<number | null>(null);
+
+  const reorderQueued = (from: number, to: number) => {
+    if (from === to) return;
+    const next = [...queuedJobs];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    reorderQueue(next.map((j) => j.id));
+  };
+
+  const { recentJobs } = useMemo(() => {
     const recent: typeof jobs = [];
     for (const job of jobs) {
-      if (isActiveJob(job, progress[job.id])) {
-        active.push(job);
-      } else {
+      if (!isActiveJob(job, progress[job.id])) {
         recent.push(job);
       }
     }
-    return { activeJobs: active, recentJobs: recent };
+    return { recentJobs: recent };
   }, [jobs, progress]);
 
   const submit = async (e: React.FormEvent) => {
@@ -318,20 +352,63 @@ export default function Download() {
             </div>
           </div>
           <p className="mb-3 text-xs text-gray-400">
-            {activeCount} active -
-            Pause all stops every download; nothing new starts until you resume.
+            {downloadingJob ? "1 downloading" : "No active download"}
+            {queuedJobs.length > 0 &&
+              ` · ${queuedJobs.length} queued`}
+            {" — "}
+            Downloads run one at a time.
+            {queuedJobs.length > 1 && " Drag queued items to reorder."}
           </p>
           {!activeCollapsed && (
             <div className="space-y-4">
-              {activeJobs.map((job) => (
+              {downloadingJob && (
                 <DownloadJobCard
-                  key={job.id}
-                  job={job}
-                  live={progress[job.id]}
+                  key={downloadingJob.id}
+                  job={downloadingJob}
+                  live={progress[downloadingJob.id]}
                   channels={channels}
                   active
                 />
-              ))}
+              )}
+              {queuedJobs.length > 0 && (
+                <ul className="space-y-4">
+                  {queuedJobs.map((job, index) => (
+                    <li
+                      key={job.id}
+                      draggable
+                      onDragStart={() => {
+                        dragIndex.current = index;
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        if (dragIndex.current !== null) {
+                          reorderQueued(dragIndex.current, index);
+                        }
+                        dragIndex.current = null;
+                      }}
+                      onDragEnd={() => {
+                        dragIndex.current = null;
+                      }}
+                      className="flex items-start gap-2"
+                    >
+                      <span
+                        className="mt-6 shrink-0 cursor-grab px-1 text-gray-600 active:cursor-grabbing"
+                        title="Drag to reorder"
+                      >
+                        ⠿
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <DownloadJobCard
+                          job={job}
+                          live={progress[job.id]}
+                          channels={channels}
+                          active
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </section>

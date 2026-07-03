@@ -309,6 +309,7 @@ def redownload_video(
         channel_override=video.channel,
         normalize_volume=payload.normalize_volume,
         replace_video_id=video_id,
+        queue_position=downloader.next_queue_position(session),
     )
     session.add(job)
     session.commit()

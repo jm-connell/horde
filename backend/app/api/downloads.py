@@ -13,6 +13,7 @@ from ..schemas import (
     DownloadJobRead,
     DownloadJobUpdate,
     DownloadPreview,
+    DownloadQueueReorder,
     DownloadQueueStatus,
 )
 from ..services import downloader
@@ -67,6 +68,26 @@ def resume_queue():
     )
 
 
+@router.patch("/queue/reorder", response_model=list[DownloadJobRead])
+def reorder_queue(
+    payload: DownloadQueueReorder,
+    session: Session = Depends(get_session),
+):
+    try:
+        downloader.download_queue.reorder(payload.job_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    statement = (
+        select(DownloadJob)
+        .where(DownloadJob.status == JobStatus.queued)
+        .order_by(
+            DownloadJob.queue_position.asc(),  # type: ignore[attr-defined]
+            DownloadJob.created_at.asc(),  # type: ignore[attr-defined]
+        )
+    )
+    return list(session.exec(statement).all())
+
+
 @router.post("", response_model=DownloadJobRead)
 def create_download(payload: DownloadCreate, session: Session = Depends(get_session)):
     if not payload.url.strip():
@@ -90,6 +111,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         title_override=(payload.title_override or "").strip() or None,
         channel_override=(payload.channel_override or "").strip() or None,
         normalize_volume=payload.normalize_volume,
+        queue_position=downloader.next_queue_position(session),
     )
     session.add(job)
     session.commit()
