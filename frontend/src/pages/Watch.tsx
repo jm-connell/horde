@@ -13,7 +13,7 @@ import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
-import { formatDate, formatResolution, formatSize, parseChapters } from "../utils";
+import { formatDate, formatDuration, formatResolution, formatSize, parseChapters } from "../utils";
 
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
@@ -138,25 +138,92 @@ export default function Watch() {
   }
 
   const isWide = !isMobile && mode === "theater";
+  const showRelatedRight =
+    !isMobile &&
+    mode === "standard" &&
+    settings.showRelatedVideos &&
+    moreLikeThis.length > 0;
   const resolution = formatResolution(video.height_px);
-  const contentClass = "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-7xl";
+  const contentClass = showRelatedRight
+    ? "mx-auto max-w-[90rem]"
+    : "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-7xl";
 
   const playerOuterClass = isMobile
     ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
     : isWide
       ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
-      : "mx-auto max-w-5xl";
+      : showRelatedRight
+        ? "w-full bg-black"
+        : "mx-auto max-w-5xl";
   const playerInnerClass = isWide && !isMobile ? "mx-auto w-full" : "w-full";
 
-  return (
-    <div>
-      <div className={playerOuterClass}>
-        <div className={playerInnerClass}>
-          <div ref={dockRef} className="w-full" />
-        </div>
+  const relatedList = (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+        More like this
+      </h3>
+      <div className="space-y-2">
+        {moreLikeThis.map((v) => {
+          const thumb = thumbnailUrl(v);
+          return (
+            <Link
+              key={v.id}
+              to={`/watch/${v.id}`}
+              className="group flex gap-2 rounded-lg p-1 transition-colors hover:bg-ink-800"
+            >
+              <div className="aspect-video w-40 shrink-0 overflow-hidden rounded-lg bg-ink-800">
+                {thumb ? (
+                  <img
+                    src={thumb}
+                    alt={v.title}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-ink-600">
+                    <span className="text-xl">▶</span>
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1 py-0.5">
+                <p className="line-clamp-2 text-sm font-medium text-gray-200 group-hover:text-accent">
+                  {v.title}
+                </p>
+                {v.channel && (
+                  <p className="mt-0.5 truncate text-xs text-gray-500">
+                    {v.channel}
+                  </p>
+                )}
+                {v.duration_sec != null && (
+                  <p className="mt-0.5 text-xs text-gray-600">
+                    {formatDuration(v.duration_sec)}
+                  </p>
+                )}
+              </div>
+            </Link>
+          );
+        })}
       </div>
+    </div>
+  );
 
-      <div className={contentClass}>
+  return (
+    <div className={contentClass}>
+      <div
+        className={
+          showRelatedRight
+            ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]"
+            : undefined
+        }
+      >
+        <div className="min-w-0">
+          <div className={playerOuterClass}>
+            <div className={playerInnerClass}>
+              <div ref={dockRef} className="w-full" />
+            </div>
+          </div>
+
+          <div>
         {/* Metadata change banner */}
         {video.title_is_custom &&
           video.source_title &&
@@ -219,7 +286,7 @@ export default function Watch() {
 
           <div
             className={
-              queue.length > 0
+              !showRelatedRight && queue.length > 0
                 ? "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
                 : "mt-4 space-y-4"
             }
@@ -296,7 +363,7 @@ export default function Watch() {
               )}
             </div>
 
-            {queue.length > 0 && (
+            {!showRelatedRight && queue.length > 0 && (
               <PlaybackQueue className="lg:sticky lg:top-20 lg:self-start" />
             )}
           </div>
@@ -343,8 +410,8 @@ export default function Watch() {
             />
           </div>
 
-          {/* More like this */}
-          {moreLikeThis.length > 0 && (
+          {/* More like this — bottom grid when sidebar is off */}
+          {!showRelatedRight && moreLikeThis.length > 0 && (
             <div className="mt-6">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
                 More like this
@@ -384,6 +451,19 @@ export default function Watch() {
             </div>
           )}
         </div>
+          </div>
+        </div>
+
+        {showRelatedRight && (
+          <aside className="hidden space-y-6 xl:block">
+            {queue.length > 0 && (
+              <PlaybackQueue className="sticky top-20" />
+            )}
+            <div className={queue.length > 0 ? "" : "sticky top-20"}>
+              {relatedList}
+            </div>
+          </aside>
+        )}
       </div>
 
       {redownloadOpen && (

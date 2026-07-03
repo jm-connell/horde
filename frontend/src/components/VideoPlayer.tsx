@@ -1150,15 +1150,15 @@ export default function VideoPlayer({
               )}
 
               <span className="text-xs tabular-nums text-gray-300">
+                {formatDuration(current)} / {formatDuration(duration)}
                 {chapters.length > 0 && (() => {
                   const ch = activeChapterAt(chapters, current);
                   return ch ? (
-                    <span className="mr-2 max-w-[140px] truncate text-gray-400">
-                      {ch.title} ·{" "}
+                    <span className="ml-2 max-w-[140px] truncate text-gray-400">
+                      · {ch.title}
                     </span>
                   ) : null;
                 })()}
-                {formatDuration(current)} / {formatDuration(duration)}
               </span>
 
               <div className="ml-auto flex items-center gap-2">

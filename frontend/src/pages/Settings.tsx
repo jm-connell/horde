@@ -258,6 +258,28 @@ export default function Settings() {
           />
         </div>
 
+        {/* ── Watch page ── */}
+        <div className="border-t border-ink-700 pt-6">
+          <h2 className="mb-1 text-sm font-medium text-gray-200">Watch page</h2>
+          <p className="mb-4 text-xs text-gray-500">
+            Layout options on the video watch page.
+          </p>
+          <SettingRow
+            title="Show related videos sidebar"
+            description="On desktop in normal view, show recommended videos in a column to the right of the player."
+            control={
+              <Toggle
+                checked={settings.showRelatedVideos}
+                onChange={() =>
+                  update({
+                    showRelatedVideos: !settings.showRelatedVideos,
+                  })
+                }
+              />
+            }
+          />
+        </div>
+
         {/* ── Library ── */}
         <div className="border-t border-ink-700 pt-6">
           <h2 className="mb-1 text-sm font-medium text-gray-200">Library</h2>

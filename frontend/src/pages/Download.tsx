@@ -4,8 +4,8 @@ import { useDownloads, isActiveJob } from "../context/DownloadContext";
 import { useSettings } from "../hooks/useSettings";
 import ChannelPicker from "../components/ChannelPicker";
 import DownloadJobCard from "../components/DownloadJobCard";
-import type { ChannelStat, DownloadPreview } from "../types";
-import { formatSize } from "../utils";
+import type { ChannelStat, DownloadPreview, PlaylistPreviewEntry } from "../types";
+import { formatDuration, formatSize } from "../utils";
 
 const PRESET_ORDER = [
   "best",
@@ -77,6 +77,16 @@ export default function Download() {
 
   const [importMessage, setImportMessage] = useState<string | null>(null);
 
+  const [playlistEntries, setPlaylistEntries] = useState<PlaylistPreviewEntry[]>(
+    []
+  );
+  const [playlistName, setPlaylistName] = useState("");
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
+  const [playlistSizes, setPlaylistSizes] = useState<
+    Record<string, Record<string, number>>
+  >({});
+  const [loadingPlaylist, setLoadingPlaylist] = useState(false);
+
   const [activeCollapsed, setActiveCollapsed] = useState(() => {
     try {
       return localStorage.getItem(ACTIVE_COLLAPSE_KEY) === "true";
@@ -134,6 +144,47 @@ export default function Download() {
     };
   }, [url]);
 
+  useEffect(() => {
+    const trimmed = url.trim();
+    if (!trimmed || !preview?.is_playlist) {
+      setPlaylistEntries([]);
+      setPlaylistName("");
+      setSelectedUrls(new Set());
+      setPlaylistSizes({});
+      return;
+    }
+    setLoadingPlaylist(true);
+    api
+      .previewPlaylist(trimmed)
+      .then((data) => {
+        setPlaylistEntries(data.entries);
+        setPlaylistName(data.title ?? "");
+        setSelectedUrls(new Set(data.entries.map((e) => e.url)));
+      })
+      .catch(() => {
+        setPlaylistEntries([]);
+        setSelectedUrls(new Set());
+      })
+      .finally(() => setLoadingPlaylist(false));
+  }, [url, preview?.is_playlist]);
+
+  useEffect(() => {
+    if (!preview?.is_playlist || playlistEntries.length === 0) {
+      setPlaylistSizes({});
+      return;
+    }
+    let cancelled = false;
+    api
+      .estimatePlaylistSizes(playlistEntries.map((e) => e.url))
+      .then((result) => {
+        if (!cancelled) setPlaylistSizes(result.sizes);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [preview?.is_playlist, playlistEntries]);
+
   const metadataLoaded =
     preview != null && !preview.is_playlist && preview.available_presets.length > 0;
 
@@ -151,6 +202,51 @@ export default function Download() {
     const approx = formatApproxSize(selectedPresetSize);
     return approx ? `Download (${approx})` : "Download";
   }, [submitting, selectedPresetSize]);
+
+  const playlistTotalSize = useMemo(() => {
+    if (!isPlaylist || selectedUrls.size === 0) return undefined;
+    let total = 0;
+    let any = false;
+    for (const entryUrl of selectedUrls) {
+      const bytes = playlistSizes[entryUrl]?.[preset];
+      if (bytes) {
+        total += bytes;
+        any = true;
+      }
+    }
+    return any ? total : undefined;
+  }, [isPlaylist, selectedUrls, playlistSizes, preset]);
+
+  const importButtonLabel = useMemo(() => {
+    if (submitting) return "Starting...";
+    const count = selectedUrls.size;
+    const approx = formatApproxSize(playlistTotalSize);
+    const base =
+      count === 0
+        ? "Download"
+        : `Download ${count} video${count === 1 ? "" : "s"}`;
+    return approx ? `${base} (${approx})` : base;
+  }, [submitting, selectedUrls.size, playlistTotalSize]);
+
+  const allPlaylistSelected =
+    playlistEntries.length > 0 && selectedUrls.size === playlistEntries.length;
+
+  const togglePlaylistEntry = (entryUrl: string) => {
+    setSelectedUrls((prev) => {
+      const next = new Set(prev);
+      if (next.has(entryUrl)) next.delete(entryUrl);
+      else next.add(entryUrl);
+      return next;
+    });
+  };
+
+  const toggleAllPlaylistEntries = () => {
+    if (allPlaylistSelected) {
+      setSelectedUrls(new Set());
+    } else {
+      setSelectedUrls(new Set(playlistEntries.map((e) => e.url)));
+    }
+  };
 
   const { activeJobs, recentJobs } = useMemo(() => {
     const active: typeof jobs = [];
@@ -191,17 +287,24 @@ export default function Download() {
   };
 
   const importAll = async () => {
-    if (!url.trim()) return;
+    const selected = [...selectedUrls];
+    if (!url.trim() || selected.length === 0) return;
     setSubmitting(true);
     setError(null);
     setImportMessage(null);
     try {
-      const created = await api.importPlaylist(url.trim(), preset);
+      const created = await api.importPlaylist(url.trim(), preset, {
+        name: playlistName.trim() || undefined,
+        entries: selected,
+      });
       setImportMessage(
         `Importing "${created.name}" — videos will appear in your library as they finish.`
       );
       setUrl("");
       setPreview(null);
+      setPlaylistEntries([]);
+      setSelectedUrls(new Set());
+      setPlaylistName("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -244,12 +347,28 @@ export default function Download() {
               </span>
             </span>
           </label>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=..."
-            className="w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
-          />
+          <div className="flex gap-2">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard
+                  .readText()
+                  .then((text) => {
+                    if (text.trim()) setUrl(text.trim());
+                  })
+                  .catch(() => undefined);
+              }}
+              className="shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
+            >
+              Paste
+            </button>
+          </div>
           {previewing && (
             <p className="mt-1 text-xs text-gray-500">Reading link...</p>
           )}
@@ -283,15 +402,81 @@ export default function Download() {
         )}
 
         {preview && isPlaylist && (
-          <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 text-sm text-gray-300">
-            <p className="font-medium text-accent">
-              Playlist detected: {preview.title ?? "Untitled"}
-            </p>
-            <p className="mt-1 text-xs text-gray-400">
-              {preview.entry_count ?? 0} video
-              {preview.entry_count === 1 ? "" : "s"}. Use “Download all” to import
-              the whole playlist.
-            </p>
+          <div className="space-y-4 rounded-lg border border-accent/30 bg-accent/5 p-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-300">
+                Playlist name
+              </label>
+              <input
+                value={playlistName}
+                onChange={(e) => setPlaylistName(e.target.value)}
+                placeholder="Playlist name"
+                className="w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+              />
+            </div>
+
+            {loadingPlaylist ? (
+              <p className="text-xs text-gray-500">Loading playlist...</p>
+            ) : playlistEntries.length > 0 ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-300">
+                    {selectedUrls.size} of {playlistEntries.length} selected
+                  </p>
+                  <button
+                    type="button"
+                    onClick={toggleAllPlaylistEntries}
+                    className="text-xs text-accent hover:underline"
+                  >
+                    {allPlaylistSelected ? "Deselect all" : "Select all"}
+                  </button>
+                </div>
+                <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg border border-ink-700 bg-ink-950/50 p-2">
+                  {playlistEntries.map((entry) => (
+                    <label
+                      key={entry.url}
+                      className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-ink-900"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedUrls.has(entry.url)}
+                        onChange={() => togglePlaylistEntry(entry.url)}
+                        className="mt-1 shrink-0 accent-accent"
+                      />
+                      <div className="h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
+                        {entry.thumbnail_url ? (
+                          <img
+                            src={entry.thumbnail_url}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-xs text-gray-600">
+                            No preview
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-sm text-gray-200">
+                          {entry.title ?? "Untitled"}
+                        </p>
+                        <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-gray-500">
+                          {entry.channel && <span>{entry.channel}</span>}
+                          {entry.duration != null && (
+                            <span>{formatDuration(entry.duration)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400">
+                {preview.entry_count ?? 0} video
+                {preview.entry_count === 1 ? "" : "s"} detected.
+              </p>
+            )}
           </div>
         )}
 
@@ -316,10 +501,10 @@ export default function Download() {
           <button
             type="button"
             onClick={importAll}
-            disabled={submitting || !url.trim()}
+            disabled={submitting || !url.trim() || selectedUrls.size === 0}
             className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-ink-950 transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? "Starting..." : "Download all"}
+            {importButtonLabel}
           </button>
         ) : (
           <button

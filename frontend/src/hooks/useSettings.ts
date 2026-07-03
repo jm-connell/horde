@@ -59,6 +59,7 @@ export interface Settings {
   sidebarCollapsed: boolean;
   chaptersExpanded: boolean;
   descriptionExpanded: boolean;
+  showRelatedVideos: boolean;
 }
 
 const DEFAULT_CUSTOM_COLORS: CustomColors = {
@@ -90,6 +91,7 @@ const DEFAULTS: Settings = {
   sidebarCollapsed: false,
   chaptersExpanded: true,
   descriptionExpanded: true,
+  showRelatedVideos: true,
 };
 
 const STORAGE_KEY = "horde.settings";

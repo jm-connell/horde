@@ -175,6 +175,31 @@ class PlaylistReorder(BaseModel):
 class PlaylistImport(BaseModel):
     url: str
     quality_preset: str = "best"
+    name: Optional[str] = None
+    entries: list[str] = []
+
+
+class PlaylistPreviewEntry(BaseModel):
+    id: Optional[str] = None
+    url: str
+    title: Optional[str] = None
+    channel: Optional[str] = None
+    duration: Optional[float] = None
+    thumbnail_url: Optional[str] = None
+
+
+class PlaylistPreview(BaseModel):
+    title: Optional[str] = None
+    channel: Optional[str] = None
+    entries: list[PlaylistPreviewEntry] = []
+
+
+class PlaylistSizeEstimateRequest(BaseModel):
+    urls: list[str]
+
+
+class PlaylistSizeEstimate(BaseModel):
+    sizes: dict[str, dict[str, int]] = {}
 
 
 class BulkVideoDelete(BaseModel):

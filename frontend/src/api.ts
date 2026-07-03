@@ -7,6 +7,7 @@ import type {
   DownloadQueueStatus,
   Playlist,
   PlaylistDetail,
+  PlaylistPreviewData,
   StorageStats,
   TagStat,
   Video,
@@ -307,11 +308,36 @@ export const api = {
     });
   },
 
-  importPlaylist(url: string, quality_preset: string): Promise<Playlist> {
+  importPlaylist(
+    url: string,
+    quality_preset: string,
+    opts: { name?: string; entries?: string[] } = {}
+  ): Promise<Playlist> {
     return request<Playlist>("/api/playlists/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, quality_preset }),
+      body: JSON.stringify({
+        url,
+        quality_preset,
+        name: opts.name,
+        entries: opts.entries,
+      }),
+    });
+  },
+
+  previewPlaylist(url: string): Promise<PlaylistPreviewData> {
+    return request<PlaylistPreviewData>(
+      `/api/playlists/preview?url=${encodeURIComponent(url)}`
+    );
+  },
+
+  estimatePlaylistSizes(
+    urls: string[]
+  ): Promise<{ sizes: Record<string, Record<string, number>> }> {
+    return request("/api/playlists/estimate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls }),
     });
   },
 };

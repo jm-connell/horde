@@ -1062,6 +1062,67 @@ def extract_preview(url: str) -> dict[str, Any]:
     }
 
 
+def extract_playlist_entries(url: str) -> dict[str, Any]:
+    """Fast flat extraction of playlist metadata and entry list."""
+    import yt_dlp
+
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": "in_playlist",
+            "skip_download": True,
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = _as_info(ydl.extract_info(url, download=False))
+
+    entries: list[dict[str, Any]] = []
+    for entry in info.get("entries") or []:
+        if not isinstance(entry, dict):
+            continue
+        entry_url = entry.get("url") or entry.get("webpage_url")
+        vid = entry.get("id")
+        if entry_url and not str(entry_url).startswith("http"):
+            entry_url = None
+        if not entry_url and vid:
+            entry_url = f"https://www.youtube.com/watch?v={vid}"
+        if not entry_url:
+            continue
+        entries.append(
+            {
+                "id": vid,
+                "url": entry_url,
+                "title": entry.get("title"),
+                "channel": entry.get("uploader") or entry.get("channel"),
+                "duration": entry.get("duration"),
+                "thumbnail_url": entry.get("thumbnail"),
+            }
+        )
+
+    return {
+        "title": info.get("title") or "Imported playlist",
+        "channel": info.get("uploader") or info.get("channel"),
+        "entries": entries,
+    }
+
+
+def estimate_playlist_sizes(
+    urls: list[str], max_entries: int = 100
+) -> dict[str, dict[str, int]]:
+    """Best-effort per-URL preset size estimates (may be partial)."""
+    sizes: dict[str, dict[str, int]] = {}
+    for url in urls[:max_entries]:
+        try:
+            preview = extract_preview(url)
+            if preview.get("preset_sizes"):
+                sizes[url] = preview["preset_sizes"]
+        except Exception:  # noqa: BLE001
+            continue
+    return sizes
+
+
 def extract_playlist(url: str) -> tuple[str, list[str]]:
     import yt_dlp
 

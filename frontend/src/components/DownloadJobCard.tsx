@@ -112,7 +112,7 @@ export default function DownloadJobCard({
     : cancelled
       ? "Cancelled"
       : completed
-        ? "Complete"
+        ? "Done"
         : status === "processing"
           ? "Processing…"
           : status === "queued"
@@ -178,9 +178,18 @@ export default function DownloadJobCard({
                   {sizeLabel}
                 </span>
               )}
-              <span className={failed ? "text-red-400" : "text-gray-400"}>
+              <span
+                className={`hidden sm:inline ${failed ? "text-red-400" : "text-gray-400"}`}
+              >
                 {statusLabel}
               </span>
+              {!completed && (
+                <span
+                  className={`sm:hidden ${failed ? "text-red-400" : "text-gray-400"}`}
+                >
+                  {statusLabel}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={onDismiss}
@@ -293,8 +302,11 @@ export default function DownloadJobCard({
               </button>
             )}
             {saved && <span className="text-xs text-accent">Saved</span>}
-            {sizeLabel && (
-              <span className="text-xs text-gray-500 sm:hidden">{sizeLabel}</span>
+            {(sizeLabel || completed) && (
+              <span className="ml-auto flex items-center gap-2 text-xs text-gray-500 sm:hidden">
+                {sizeLabel && <span>{sizeLabel}</span>}
+                {completed && <span className="text-gray-400">Done</span>}
+              </span>
             )}
           </div>
         </div>

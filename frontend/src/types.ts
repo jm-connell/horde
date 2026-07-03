@@ -165,3 +165,18 @@ export interface Playlist {
 export interface PlaylistDetail extends Playlist {
   videos: Video[];
 }
+
+export interface PlaylistPreviewEntry {
+  id: string | null;
+  url: string;
+  title: string | null;
+  channel: string | null;
+  duration: number | null;
+  thumbnail_url: string | null;
+}
+
+export interface PlaylistPreviewData {
+  title: string | null;
+  channel: string | null;
+  entries: PlaylistPreviewEntry[];
+}

@@ -11,8 +11,11 @@ from ..schemas import (
     PlaylistDetail,
     PlaylistImport,
     PlaylistItemAdd,
+    PlaylistPreview,
     PlaylistRead,
     PlaylistReorder,
+    PlaylistSizeEstimate,
+    PlaylistSizeEstimateRequest,
     PlaylistUpdate,
 )
 from ..services import downloader
@@ -57,6 +60,25 @@ def _ordered_videos(session: Session, playlist_id: int) -> list[Video]:
         if video is not None:
             videos.append(video)
     return videos
+
+
+@router.get("/preview", response_model=PlaylistPreview)
+def preview_playlist(url: str):
+    if not url.strip():
+        raise HTTPException(status_code=400, detail="URL is required")
+    try:
+        data = downloader.extract_playlist_entries(clean_url(url, keep_playlist=True))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Could not read playlist: {exc}")
+    return PlaylistPreview(**data)
+
+
+@router.post("/estimate", response_model=PlaylistSizeEstimate)
+def estimate_playlist_sizes(payload: PlaylistSizeEstimateRequest):
+    if not payload.urls:
+        return PlaylistSizeEstimate(sizes={})
+    sizes = downloader.estimate_playlist_sizes(payload.urls)
+    return PlaylistSizeEstimate(sizes=sizes)
 
 
 @router.get("", response_model=list[PlaylistRead])
@@ -232,10 +254,25 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
     url = clean_url(payload.url, keep_playlist=True)
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
-    try:
-        title, entries = downloader.extract_playlist(url)
-    except Exception as exc:  # noqa: BLE001 - surface extraction failures
-        raise HTTPException(status_code=400, detail=f"Could not read playlist: {exc}")
+
+    selected_entries = [e.strip() for e in payload.entries if e.strip()]
+    if selected_entries:
+        title = (payload.name or "").strip()
+        if not title:
+            try:
+                preview = downloader.extract_playlist_entries(url)
+                title = preview.get("title") or "Imported playlist"
+            except Exception:  # noqa: BLE001
+                title = "Imported playlist"
+        entries = selected_entries
+    else:
+        try:
+            title, entries = downloader.extract_playlist(url)
+        except Exception as exc:  # noqa: BLE001 - surface extraction failures
+            raise HTTPException(status_code=400, detail=f"Could not read playlist: {exc}")
+        if payload.name and payload.name.strip():
+            title = payload.name.strip()
+
     if not entries:
         raise HTTPException(status_code=400, detail="No videos found in playlist")
 

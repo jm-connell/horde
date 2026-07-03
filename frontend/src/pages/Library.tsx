@@ -482,6 +482,14 @@ export default function Library() {
               >
                 {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
               </button>
+              {tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
+                <button
+                  onClick={() => setShowTags((s) => !s)}
+                  className="shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
+                >
+                  {showTags ? "Hide tags" : "Tags"}
+                </button>
+              )}
               <button
                 onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
                 className={`shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors ${
@@ -492,14 +500,6 @@ export default function Library() {
               >
                 {selectMode ? "Cancel" : "Select"}
               </button>
-              {tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
-                <button
-                  onClick={() => setShowTags((s) => !s)}
-                  className="shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
-                >
-                  {showTags ? "Hide tags" : "Tags"}
-                </button>
-              )}
             </div>
           </div>
         </div>
