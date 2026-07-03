@@ -172,6 +172,17 @@ class _YtdlpLogger:
             return
 
 
+def next_queue_position(session: Session) -> int:
+    rows = session.exec(
+        select(DownloadJob.queue_position).where(
+            DownloadJob.status == JobStatus.queued
+        )
+    ).all()
+    if not rows:
+        return 0
+    return max((p for p in rows if p is not None), default=-1) + 1
+
+
 class DownloadQueue:
     """FIFO download scheduler with global pause and bounded concurrency."""
 
@@ -288,6 +299,27 @@ class DownloadQueue:
                 ).all()
             )
 
+    def reorder(self, job_ids: list[int]) -> None:
+        """Reorder queued jobs; downloading jobs are not included."""
+        with Session(engine) as session:
+            queued = list(
+                session.exec(
+                    select(DownloadJob).where(
+                        DownloadJob.status == JobStatus.queued
+                    )
+                ).all()
+            )
+            queued_ids = {job.id for job in queued}
+            if set(job_ids) != queued_ids:
+                raise ValueError("job_ids must match all queued jobs exactly")
+            for position, job_id in enumerate(job_ids):
+                job = session.get(DownloadJob, job_id)
+                if job is None:
+                    raise ValueError(f"Job {job_id} not found")
+                job.queue_position = position
+                session.add(job)
+            session.commit()
+
     def _dispatch(self) -> None:
         with self._lock:
             if self._global_paused:
@@ -313,7 +345,10 @@ class DownloadQueue:
                     DownloadJob.status == JobStatus.queued,
                     DownloadJob.paused == False,  # noqa: E712
                 )
-                .order_by(DownloadJob.created_at.asc())
+                .order_by(
+                    DownloadJob.queue_position.asc(),  # type: ignore[attr-defined]
+                    DownloadJob.created_at.asc(),  # type: ignore[attr-defined]
+                )
             ).first()
             return job.id if job else None
 
@@ -1012,6 +1047,7 @@ def _run_playlist_import(
                 title=preview.get("title"),
                 channel=preview.get("channel"),
                 thumbnail_url=preview.get("thumbnail_url"),
+                queue_position=next_queue_position(session),
             )
             session.add(job)
             session.commit()

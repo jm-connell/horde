@@ -242,6 +242,14 @@ export const api = {
     });
   },
 
+  reorderDownloadQueue(jobIds: number[]): Promise<DownloadJob[]> {
+    return request<DownloadJob[]>("/api/downloads/queue/reorder", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_ids: jobIds }),
+    });
+  },
+
   redownloadVideo(
     id: number,
     quality_preset: string,

@@ -35,6 +35,7 @@ interface DownloadContextValue {
   dismissFinishedJobs: () => Promise<void>;
   pauseQueue: () => Promise<void>;
   resumeQueue: () => Promise<void>;
+  reorderQueue: (jobIds: number[]) => Promise<void>;
   refreshJobs: () => void;
   onJobCompleted: (cb: (videoId: number | null, event?: ProgressEvent) => void) => () => void;
 }
@@ -230,6 +231,26 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     refreshJobs();
   }, [refreshJobs]);
 
+  const reorderQueue = useCallback(
+    async (jobIds: number[]) => {
+      setJobs((prev) =>
+        prev.map((job) => {
+          const index = jobIds.indexOf(job.id);
+          if (index === -1) return job;
+          return { ...job, queue_position: index };
+        })
+      );
+      try {
+        const updated = await api.reorderDownloadQueue(jobIds);
+        const byId = new Map(updated.map((j) => [j.id, j]));
+        setJobs((prev) => prev.map((j) => byId.get(j.id) ?? j));
+      } catch {
+        refreshJobs();
+      }
+    },
+    [refreshJobs]
+  );
+
   const onJobCompleted = useCallback(
     (cb: (videoId: number | null, event?: ProgressEvent) => void) => {
       completionListeners.current.add(cb);
@@ -252,6 +273,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     dismissFinishedJobs,
     pauseQueue,
     resumeQueue,
+    reorderQueue,
     refreshJobs,
     onJobCompleted,
   };

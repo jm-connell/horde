@@ -1,7 +1,7 @@
 from collections.abc import Generator
 
 from sqlalchemy import inspect, text
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from .config import DATABASE_URL
 
@@ -40,6 +40,7 @@ _DOWNLOAD_JOB_COLUMNS = [
     ("normalize_volume", "BOOLEAN DEFAULT 0"),
     ("replace_video_id", "INTEGER"),
     ("file_size", "INTEGER"),
+    ("queue_position", "INTEGER"),
 ]
 
 
@@ -59,6 +60,35 @@ def _migrate_table(table: str, columns: list[tuple[str, str]]) -> None:
 def _migrate_columns() -> None:
     _migrate_table("videos", _VIDEO_COLUMNS)
     _migrate_table("download_jobs", _DOWNLOAD_JOB_COLUMNS)
+    _backfill_queue_positions()
+
+
+def _backfill_queue_positions() -> None:
+    """Assign queue_position to queued jobs that predate the column."""
+    inspector = inspect(engine)
+    if "download_jobs" not in inspector.get_table_names():
+        return
+    existing = {col["name"] for col in inspector.get_columns("download_jobs")}
+    if "queue_position" not in existing:
+        return
+    with Session(engine) as session:
+        from .models import DownloadJob, JobStatus
+
+        jobs = list(
+            session.exec(
+                select(DownloadJob)
+                .where(DownloadJob.status == JobStatus.queued)
+                .order_by(DownloadJob.created_at.asc())  # type: ignore[attr-defined]
+            ).all()
+        )
+        changed = False
+        for index, job in enumerate(jobs):
+            if job.queue_position is None:
+                job.queue_position = index
+                session.add(job)
+                changed = True
+        if changed:
+            session.commit()
 
 
 def verify_schema() -> None:

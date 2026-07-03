@@ -94,7 +94,12 @@ class DownloadJobRead(BaseModel):
     error: Optional[str]
     video_id: Optional[int]
     file_size: Optional[int]
+    queue_position: Optional[int]
     created_at: datetime
+
+
+class DownloadQueueReorder(BaseModel):
+    job_ids: list[int]
 
 
 class DownloadJobUpdate(BaseModel):
