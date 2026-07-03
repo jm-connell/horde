@@ -24,6 +24,7 @@ progress_store: dict[int, dict[str, Any]] = {}
 # Strict capped presets — no unrestricted fallback that can grab a lower tier.
 QUALITY_FORMATS = {
     "best": "bv*+ba/b",
+    "2160p": "bv*[height<=2160]+ba/b[height<=2160]/b[height<=2160]",
     "1440p": "bv*[height<=1440]+ba/b[height<=1440]/b[height<=1440]",
     "1080p": "bv*[height<=1080]+ba/b[height<=1080]/b[height<=1080]",
     "720p": "bv*[height<=720]+ba/b[height<=720]/b[height<=720]",
@@ -33,12 +34,16 @@ QUALITY_FORMATS = {
 
 PRESET_MAX_HEIGHT: dict[str, Optional[int]] = {
     "best": None,
+    "2160p": 2160,
     "1440p": 1440,
     "1080p": 1080,
     "720p": 720,
     "480p": 480,
     "audio": None,
 }
+
+# Standard tiers offered in the UI when present in source formats.
+STANDARD_HEIGHTS = (2160, 1440, 1080, 720, 480)
 
 OUTPUT_TEMPLATE = str(
     DOWNLOADS_DIR / "%(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s"
@@ -929,6 +934,80 @@ def start_download(
     enqueue_download(job_id)
 
 
+def _video_heights(info: dict[str, Any]) -> set[int]:
+    heights: set[int] = set()
+    for fmt in info.get("formats") or []:
+        height = fmt.get("height")
+        if height and fmt.get("vcodec") not in (None, "none"):
+            heights.add(int(height))
+    return heights
+
+
+def _has_audio(info: dict[str, Any]) -> bool:
+    for fmt in info.get("formats") or []:
+        if fmt.get("acodec") not in (None, "none"):
+            return True
+    return False
+
+
+def _available_presets(info: dict[str, Any]) -> list[str]:
+    """Return resolution presets present in source, highest first, then audio."""
+    heights = _video_heights(info)
+    presets: list[str] = []
+    for tier in STANDARD_HEIGHTS:
+        if tier in heights:
+            presets.append(f"{tier}p")
+    if _has_audio(info):
+        presets.append("audio")
+    return presets
+
+
+def _format_byte_size(fmt: dict[str, Any]) -> Optional[int]:
+    size = fmt.get("filesize") or fmt.get("filesize_approx")
+    return int(size) if size else None
+
+
+def _estimate_preset_bytes(ydl: Any, info: dict[str, Any], format_spec: str) -> Optional[int]:
+    formats = info.get("formats") or []
+    if not formats:
+        return None
+    try:
+        selector = ydl.build_format_selector(format_spec)
+        selected = list(selector({"formats": formats, "incomplete": False}))
+    except Exception:  # noqa: BLE001
+        return None
+    if not selected:
+        return None
+    total = 0
+    for fmt in selected:
+        size = _format_byte_size(fmt)
+        if size is None:
+            return None
+        total += size
+    return total
+
+
+def _estimate_preset_sizes(
+    info: dict[str, Any], presets: list[str]
+) -> dict[str, int]:
+    import yt_dlp
+
+    sizes: dict[str, int] = {}
+    opts = apply_cookie_opts({"quiet": True, "no_warnings": True, "skip_download": True})
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        for preset in presets:
+            format_spec = QUALITY_FORMATS.get(preset)
+            if not format_spec:
+                continue
+            try:
+                size = _estimate_preset_bytes(ydl, info, format_spec)
+            except Exception:  # noqa: BLE001
+                size = None
+            if size:
+                sizes[preset] = size
+    return sizes
+
+
 def extract_preview(url: str) -> dict[str, Any]:
     import yt_dlp
 
@@ -953,8 +1032,11 @@ def extract_preview(url: str) -> dict[str, Any]:
             "channel_url": info.get("uploader_url") or info.get("channel_url"),
             "thumbnail_url": info.get("thumbnail"),
             "entry_count": len(entries),
+            "available_presets": [],
+            "preset_sizes": {},
         }
 
+    available = _available_presets(info)
     return {
         "is_playlist": False,
         "title": info.get("title"),
@@ -962,6 +1044,8 @@ def extract_preview(url: str) -> dict[str, Any]:
         "channel_url": info.get("uploader_url") or info.get("channel_url"),
         "thumbnail_url": info.get("thumbnail"),
         "entry_count": None,
+        "available_presets": available,
+        "preset_sizes": _estimate_preset_sizes(info, available),
     }
 
 

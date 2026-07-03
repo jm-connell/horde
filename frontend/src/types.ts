@@ -102,6 +102,8 @@ export interface DownloadPreview {
   channel_url: string | null;
   thumbnail_url: string | null;
   entry_count: number | null;
+  available_presets: string[];
+  preset_sizes: Record<string, number>;
 }
 
 export interface DownloadOverrides {

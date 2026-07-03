@@ -5,15 +5,47 @@ import { useSettings } from "../hooks/useSettings";
 import ChannelPicker from "../components/ChannelPicker";
 import DownloadJobCard from "../components/DownloadJobCard";
 import type { ChannelStat, DownloadPreview } from "../types";
+import { formatSize } from "../utils";
+
+const PRESET_ORDER = [
+  "best",
+  "2160p",
+  "1440p",
+  "1080p",
+  "720p",
+  "480p",
+  "audio",
+] as const;
 
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
+  "2160p": "4K (2160p)",
   "1440p": "1440p (2K)",
   "1080p": "1080p",
   "720p": "720p",
   "480p": "480p",
   audio: "Audio only",
 };
+
+function formatApproxSize(bytes: number | undefined): string {
+  const label = formatSize(bytes ?? null);
+  return label ? `~${label}` : "";
+}
+
+function presetOptionLabel(
+  preset: string,
+  sizes: Record<string, number> | undefined
+): string {
+  const base = PRESET_LABELS[preset] ?? preset;
+  const approx = formatApproxSize(sizes?.[preset]);
+  return approx ? `${base} (${approx})` : base;
+}
+
+function mergePinnedPreset(available: string[], pinned: string): string[] {
+  if (pinned === "best" || available.includes(pinned)) return available;
+  const merged = new Set([...available, pinned]);
+  return PRESET_ORDER.filter((p) => merged.has(p));
+}
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
@@ -32,7 +64,7 @@ export default function Download() {
 
   const [url, setUrl] = useState("");
   const [preset, setPreset] = useState("best");
-  const [presets, setPresets] = useState<string[]>(["best"]);
+  const [allPresets, setAllPresets] = useState<string[]>([...PRESET_ORDER]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +100,7 @@ export default function Download() {
   };
 
   useEffect(() => {
-    api.listPresets().then(setPresets).catch(() => undefined);
+    api.listPresets().then(setAllPresets).catch(() => undefined);
     api.listChannels().then(setChannels).catch(() => undefined);
   }, []);
 
@@ -76,6 +108,7 @@ export default function Download() {
     const trimmed = url.trim();
     if (!trimmed) {
       setPreview(null);
+      setPreset("best");
       return;
     }
     setPreviewing(true);
@@ -86,6 +119,11 @@ export default function Download() {
           setPreview(p);
           setTitle(p.title ?? "");
           setChannel(p.channel ?? "");
+          if (!p.is_playlist && p.available_presets.length > 0) {
+            setPreset((current) =>
+              current !== "best" ? current : p.available_presets[0]
+            );
+          }
         })
         .catch(() => setPreview(null))
         .finally(() => setPreviewing(false));
@@ -96,7 +134,23 @@ export default function Download() {
     };
   }, [url]);
 
+  const metadataLoaded =
+    preview != null && !preview.is_playlist && preview.available_presets.length > 0;
+
+  const qualityOptions = useMemo(() => {
+    if (!metadataLoaded) return allPresets;
+    return mergePinnedPreset(preview!.available_presets, preset);
+  }, [metadataLoaded, preview, preset, allPresets]);
+
   const isPlaylist = preview?.is_playlist ?? false;
+  const presetSizes = preview?.preset_sizes;
+  const selectedPresetSize = presetSizes?.[preset];
+
+  const downloadButtonLabel = useMemo(() => {
+    if (submitting) return "Starting...";
+    const approx = formatApproxSize(selectedPresetSize);
+    return approx ? `Download (${approx})` : "Download";
+  }, [submitting, selectedPresetSize]);
 
   const { activeJobs, recentJobs } = useMemo(() => {
     const active: typeof jobs = [];
@@ -250,9 +304,9 @@ export default function Download() {
             onChange={(e) => setPreset(e.target.value)}
             className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-accent"
           >
-            {presets.map((p) => (
+            {qualityOptions.map((p) => (
               <option key={p} value={p}>
-                {PRESET_LABELS[p] ?? p}
+                {presetOptionLabel(p, metadataLoaded ? presetSizes : undefined)}
               </option>
             ))}
           </select>
@@ -273,7 +327,7 @@ export default function Download() {
             disabled={submitting || !url.trim()}
             className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-ink-950 transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? "Starting..." : "Download"}
+            {submitting ? "Starting..." : downloadButtonLabel}
           </button>
         )}
 

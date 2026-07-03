@@ -74,6 +74,8 @@ class DownloadPreview(BaseModel):
     channel_url: Optional[str]
     thumbnail_url: Optional[str] = None
     entry_count: Optional[int]
+    available_presets: list[str] = []
+    preset_sizes: dict[str, int] = {}
 
 
 class DownloadJobRead(BaseModel):
