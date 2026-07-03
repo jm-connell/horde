@@ -950,12 +950,25 @@ def _has_audio(info: dict[str, Any]) -> bool:
     return False
 
 
+def _height_to_tier(height: int) -> int:
+    """Map an actual pixel height to the nearest standard quality tier."""
+    best = STANDARD_HEIGHTS[-1]
+    best_dist = abs(height - best)
+    for tier in STANDARD_HEIGHTS:
+        dist = abs(height - tier)
+        if dist < best_dist or (dist == best_dist and tier > best):
+            best = tier
+            best_dist = dist
+    return best
+
+
 def _available_presets(info: dict[str, Any]) -> list[str]:
     """Return resolution presets present in source, highest first, then audio."""
     heights = _video_heights(info)
+    tiers_present = {_height_to_tier(h) for h in heights}
     presets: list[str] = []
     for tier in STANDARD_HEIGHTS:
-        if tier in heights:
+        if tier in tiers_present:
             presets.append(f"{tier}p")
     if _has_audio(info):
         presets.append("audio")
