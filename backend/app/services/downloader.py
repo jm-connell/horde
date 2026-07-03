@@ -16,6 +16,7 @@ from ..models import DownloadJob, JobStatus, Video, VideoStatus
 from . import library, scanner
 from .metadata import probe_dimensions, probe_duration
 from .paths import find_video_by_path, to_rel_path
+from .ytdlp_common import apply_cookie_opts, youtube_extractor_args
 
 # Live progress snapshots keyed by job id, consumed by the SSE endpoint.
 progress_store: dict[int, dict[str, Any]] = {}
@@ -459,20 +460,20 @@ def _cleanup_subtitle_partials(parent: Path, stem: str) -> None:
 
 
 def _subtitle_ydl_opts(outtmpl: str) -> dict[str, Any]:
-    return {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "writesubtitles": True,
-        "writeautomaticsub": True,
-        "subtitleslangs": ["en"],
-        "subtitlesformat": "vtt/best",
-        "outtmpl": outtmpl,
-        "postprocessors": [{"key": "FFmpegSubtitlesConvertor", "format": "vtt"}],
-        "extractor_args": {
-            "youtube": {"player_client": ["android_vr", "web", "ios"]},
-        },
-    }
+    return apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "writesubtitles": True,
+            "writeautomaticsub": True,
+            "subtitleslangs": ["en"],
+            "subtitlesformat": "vtt/best",
+            "outtmpl": outtmpl,
+            "postprocessors": [{"key": "FFmpegSubtitlesConvertor", "format": "vtt"}],
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
 
 
 def download_subtitles(media: Path, source_url: str) -> list[dict[str, Any]]:
@@ -747,23 +748,21 @@ def _run_download(
     final_path: Optional[Path] = None
     last_exc: Optional[Exception] = None
 
-    base_ydl_opts: dict[str, Any] = {
-        "outtmpl": OUTPUT_TEMPLATE,
-        "progress_hooks": [_make_progress_hook(job_id, cancel)],
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-        "logger": _YtdlpLogger(),
-        "merge_output_format": "mp4",
-        "ignoreerrors": True,
-        "file_access_retries": 10,
-        "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android_vr", "web", "ios"],
-            },
-        },
-    }
+    base_ydl_opts: dict[str, Any] = apply_cookie_opts(
+        {
+            "outtmpl": OUTPUT_TEMPLATE,
+            "progress_hooks": [_make_progress_hook(job_id, cancel)],
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "logger": _YtdlpLogger(),
+            "merge_output_format": "mp4",
+            "ignoreerrors": True,
+            "file_access_retries": 10,
+            "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
 
     try:
         for fmt in _format_chain(quality_preset):
@@ -933,15 +932,15 @@ def start_download(
 def extract_preview(url: str) -> dict[str, Any]:
     import yt_dlp
 
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "extract_flat": "in_playlist",
-        "extractor_args": {
-            "youtube": {"player_client": ["android_vr", "web", "ios"]},
-        },
-    }
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "extract_flat": "in_playlist",
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = _as_info(ydl.extract_info(url, download=False))
 
@@ -969,12 +968,15 @@ def extract_preview(url: str) -> dict[str, Any]:
 def extract_playlist(url: str) -> tuple[str, list[str]]:
     import yt_dlp
 
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "extract_flat": "in_playlist",
-        "skip_download": True,
-    }
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": "in_playlist",
+            "skip_download": True,
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = _as_info(ydl.extract_info(url, download=False))
 

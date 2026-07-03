@@ -121,6 +121,18 @@ errors that show up as instant 500s in the UI.
 | `DOWNLOADS_PATH`    | `/mnt/tank/media/youtube_archive`  | Host media dataset                        |
 | `DATA_PATH`         | `/opt/dockge/horde/data`           | Host persistent data (DB, thumbnails)     |
 | `SCAN_INTERVAL_SEC` | `60`                               | Folder rescan interval                    |
+| `YTDLP_POT_BASE_URL`| `http://bgutil-pot:4416` (Docker)  | bgutil PO-token sidecar (auto, no login)  |
+
+## YouTube bot checks
+
+Docker Compose runs a `bgutil-pot` sidecar that generates proof-of-origin tokens
+automatically — no Google login and no cookies to rotate. Keep
+`MAX_DOWNLOAD_CONCURRENCY` at 1–2 to reduce IP flagging.
+
+If downloads still fail with "Sign in to confirm you're not a bot" and YouTube
+also blocks you in a logged-out browser, your IP may be hard-blocked. Try a new
+IP (router restart) or set `YTDLP_COOKIE_FILE` to a guest cookie export as a
+fallback.
 
 ## Notes
 

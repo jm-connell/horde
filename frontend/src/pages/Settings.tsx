@@ -578,6 +578,25 @@ export default function Settings() {
                 <dt className="text-gray-400">yt-dlp</dt>
                 <dd className="font-mono text-gray-200">{health.yt_dlp_version}</dd>
               </div>
+              {health.pot_provider && (
+                <div className="flex justify-between">
+                  <dt className="text-gray-400">PO token provider</dt>
+                  <dd className="text-gray-200">
+                    {health.pot_provider.status === "ok" ? (
+                      <>
+                        Connected
+                        {health.pot_provider.version
+                          ? ` (v${health.pot_provider.version})`
+                          : ""}
+                      </>
+                    ) : (
+                      <span className="text-red-400">
+                        {health.pot_provider.detail ?? "Unavailable"}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-gray-400">Library</dt>
                 <dd className="text-gray-200">{health.library_video_count} videos</dd>

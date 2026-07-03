@@ -10,6 +10,7 @@ from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import engine
 from ..models import Video
 from . import library
+from .ytdlp_common import apply_cookie_opts, youtube_extractor_args
 
 _sync_lock = threading.Lock()
 
@@ -17,14 +18,14 @@ _sync_lock = threading.Lock()
 def _extract_metadata(url: str) -> dict[str, Any]:
     import yt_dlp
 
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "extractor_args": {
-            "youtube": {"player_client": ["android_vr", "web", "ios"]},
-        },
-    }
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
     return info or {}

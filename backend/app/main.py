@@ -2,13 +2,14 @@ import shutil
 import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import DOWNLOADS_DIR, ensure_dirs
+from .config import DOWNLOADS_DIR, YTDLP_POT_BASE_URL, ensure_dirs
 from .database import engine, init_db
 from .api import app_settings, downloads, playlists, review, videos
 from .services.scanner import cleanup_orphans, start_scanner
@@ -23,6 +24,9 @@ async def lifespan(app: FastAPI):
     ensure_dirs()
     init_db()
     cleanup_orphans()
+    from .services.ytdlp_common import ensure_plugins_loaded
+
+    ensure_plugins_loaded()
     downloader.download_queue.recover()
     observer = start_scanner()
 
@@ -68,6 +72,34 @@ def _yt_dlp_version() -> str:
         return "unknown"
 
 
+def _pot_provider_status() -> Optional[dict[str, Any]]:
+    if not YTDLP_POT_BASE_URL:
+        return None
+    try:
+        import httpx
+
+        url = f"{YTDLP_POT_BASE_URL.rstrip('/')}/ping"
+        response = httpx.get(url, timeout=2.0)
+        if response.is_success:
+            data = response.json()
+            return {
+                "status": "ok",
+                "url": YTDLP_POT_BASE_URL,
+                "version": data.get("version"),
+            }
+        return {
+            "status": "error",
+            "url": YTDLP_POT_BASE_URL,
+            "detail": f"HTTP {response.status_code}",
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "status": "error",
+            "url": YTDLP_POT_BASE_URL,
+            "detail": str(exc),
+        }
+
+
 @app.get("/api/health")
 def health():
     from .models import DownloadJob, JobStatus, Video
@@ -98,6 +130,7 @@ def health():
     return {
         "status": "ok",
         "yt_dlp_version": _yt_dlp_version(),
+        "pot_provider": _pot_provider_status(),
         "disk": disk,
         "library_video_count": video_count,
         "review_pending_count": review_count,

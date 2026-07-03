@@ -136,6 +136,12 @@ export interface AppSettings {
 export interface HealthStats {
   status: string;
   yt_dlp_version: string;
+  pot_provider: {
+    status: string;
+    url?: string;
+    version?: string;
+    detail?: string;
+  } | null;
   disk: { total_bytes: number; used_bytes: number; free_bytes: number } | null;
   library_video_count: number;
   review_pending_count: number;

@@ -1,8 +1,16 @@
 services:
+  bgutil-pot:
+    image: brainicism/bgutil-ytdlp-pot-provider:1.3.1
+    container_name: horde-bgutil-pot
+    init: true
+    restart: unless-stopped
+
   horde:
     build: .
     image: horde:latest
     container_name: horde
+    depends_on:
+      - bgutil-pot
     ports:
       - "8080:8080"
     environment:
@@ -12,6 +20,9 @@ services:
       - DOWNLOADS_DIR=/downloads
       - DATA_DIR=/app/data
       - SCAN_INTERVAL_SEC=${SCAN_INTERVAL_SEC:-60}
+      - YTDLP_POT_BASE_URL=${YTDLP_POT_BASE_URL:-http://bgutil-pot:4416}
+      - YTDLP_COOKIE_FILE=${YTDLP_COOKIE_FILE:-}
+      - YTDLP_COOKIES_FROM_BROWSER=${YTDLP_COOKIES_FROM_BROWSER:-}
     volumes:
       # Media library on your ZFS dataset.
       - ${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}:/downloads

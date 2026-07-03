@@ -1,9 +1,17 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 
 def _env_path(name: str, default: str) -> Path:
     return Path(os.environ.get(name, default)).resolve()
+
+
+def _optional_env_path(name: str) -> Optional[Path]:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve()
 
 
 DOWNLOADS_DIR: Path = _env_path("DOWNLOADS_DIR", "./downloads")
@@ -25,6 +33,14 @@ PORT: int = int(os.environ.get("PORT", "8080"))
 
 # Max simultaneous download workers (FIFO queue).
 MAX_DOWNLOAD_CONCURRENCY: int = int(os.environ.get("MAX_DOWNLOAD_CONCURRENCY", "2"))
+
+# YouTube bot checks — bgutil POT sidecar (default in Docker) or cookie fallback.
+# See https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
+YTDLP_POT_BASE_URL: str = os.environ.get("YTDLP_POT_BASE_URL", "").strip()
+YTDLP_COOKIE_FILE: Optional[Path] = _optional_env_path("YTDLP_COOKIE_FILE")
+YTDLP_COOKIES_FROM_BROWSER: str = os.environ.get(
+    "YTDLP_COOKIES_FROM_BROWSER", ""
+).strip()
 
 
 def ensure_dirs() -> None:
