@@ -34,6 +34,7 @@ export interface Video {
   metadata_synced_at: string | null;
   source_title: string | null;
   title_is_custom: boolean;
+  subtitles_pending: boolean;
 }
 
 export interface VideoUpdate {
@@ -194,6 +195,7 @@ export interface PlaylistPreviewEntry {
   channel: string | null;
   duration: number | null;
   thumbnail_url: string | null;
+  view_count: number | null;
 }
 
 export interface PlaylistPreviewData {

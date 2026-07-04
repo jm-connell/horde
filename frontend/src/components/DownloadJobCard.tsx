@@ -28,7 +28,26 @@ export default function DownloadJobCard({
   const { updateJobOverrides, submitDownload, cancelJob, dismissJob } =
     useDownloads();
   const status = jobStatus(job, live);
-  const percent = Math.round(live?.progress ?? job.progress);
+  const maxPercentRef = useRef(0);
+  const maxBytesRef = useRef(0);
+  if (status === "downloading" || status === "processing") {
+    const raw = live?.progress ?? job.progress;
+    maxPercentRef.current = Math.max(maxPercentRef.current, raw);
+    if (live?.downloaded_bytes) {
+      maxBytesRef.current = Math.max(
+        maxBytesRef.current,
+        live.downloaded_bytes
+      );
+    }
+  } else {
+    maxPercentRef.current = 0;
+    maxBytesRef.current = 0;
+  }
+  const percent = Math.round(
+    status === "downloading" || status === "processing"
+      ? maxPercentRef.current
+      : (live?.progress ?? job.progress)
+  );
   const completed = status === "completed";
   const failed = status === "error";
   const cancelled = status === "cancelled";
@@ -139,9 +158,12 @@ export default function DownloadJobCard({
     }
     if (status === "downloading" || status === "processing") {
       const total = live?.total_bytes;
-      const downloaded = live?.downloaded_bytes;
+      const downloaded = Math.max(
+        maxBytesRef.current,
+        live?.downloaded_bytes ?? 0
+      );
       if (total) {
-        return `${formatSize(downloaded ?? null)} / ${formatSize(total)}`;
+        return `${formatSize(downloaded || null)} / ${formatSize(total)}`;
       }
       if (downloaded) return formatSize(downloaded);
     }
@@ -173,19 +195,9 @@ export default function DownloadJobCard({
               <span className="min-w-0 truncate">{title || "Working…"}</span>
             </span>
             <div className="flex shrink-0 items-center gap-2">
-              {sizeLabel && (
-                <span className="hidden text-xs text-gray-500 sm:inline">
-                  {sizeLabel}
-                </span>
-              )}
-              <span
-                className={`hidden sm:inline ${failed ? "text-red-400" : "text-gray-400"}`}
-              >
-                {statusLabel}
-              </span>
               {!completed && (
                 <span
-                  className={`sm:hidden ${failed ? "text-red-400" : "text-gray-400"}`}
+                  className={`${failed ? "text-red-400" : "text-gray-400"}`}
                 >
                   {statusLabel}
                 </span>
@@ -303,7 +315,7 @@ export default function DownloadJobCard({
             )}
             {saved && <span className="text-xs text-accent">Saved</span>}
             {(sizeLabel || completed) && (
-              <span className="ml-auto flex items-center gap-2 text-xs text-gray-500 sm:hidden">
+              <span className="ml-auto flex items-center gap-2 text-xs text-gray-500">
                 {sizeLabel && <span>{sizeLabel}</span>}
                 {completed && <span className="text-gray-400">Done</span>}
               </span>

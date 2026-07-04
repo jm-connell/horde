@@ -11,7 +11,7 @@ import {
   presetOptionLabel,
 } from "../presets";
 import type { ChannelStat, DownloadPreview, PlaylistPreviewEntry } from "../types";
-import { formatDuration } from "../utils";
+import { formatDuration, formatViewCount } from "../utils";
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
@@ -317,7 +317,7 @@ export default function Download() {
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
+              placeholder="Video or playlist URL (YouTube, etc.)"
               className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
             />
             <button
@@ -428,6 +428,9 @@ export default function Download() {
                         </p>
                         <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-gray-500">
                           {entry.channel && <span>{entry.channel}</span>}
+                          {entry.view_count != null && (
+                            <span>{formatViewCount(entry.view_count)}</span>
+                          )}
                           {entry.duration != null && (
                             <span>{formatDuration(entry.duration)}</span>
                           )}

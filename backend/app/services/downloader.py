@@ -14,7 +14,7 @@ from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, THUMBNAILS_DIR, VI
 from ..database import engine
 from ..models import DownloadJob, JobStatus, Video, VideoStatus
 from . import library, scanner
-from .metadata import probe_dimensions, probe_duration
+from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .paths import find_video_by_path, to_rel_path
 from .ytdlp_common import apply_cookie_opts, youtube_extractor_args
 
@@ -266,6 +266,18 @@ class DownloadQueue:
                     "error": "Cancelled",
                 }
                 return True
+            if event is None and job.status == JobStatus.downloading:
+                # Orphaned job — no worker thread to signal.
+                job.status = JobStatus.cancelled
+                job.error = "Cancelled"
+                job.progress = 0.0
+                session.add(job)
+                session.commit()
+                progress_store[job_id] = {
+                    "status": "cancelled",
+                    "error": "Cancelled",
+                }
+                return True
             # downloading — hook will mark cancelled when thread exits
             return True
 
@@ -352,7 +364,14 @@ def _update_job(job_id: int, **fields: Any) -> None:
 
 
 def _make_progress_hook(job_id: int, cancel_event: threading.Event):
+    accumulated_bytes = 0
+    last_stream_downloaded = 0
+    max_displayed_bytes = 0
+    max_percent = 0.0
+
     def hook(d: dict[str, Any]) -> None:
+        nonlocal accumulated_bytes, last_stream_downloaded
+        nonlocal max_displayed_bytes, max_percent
         if cancel_event.is_set():
             raise DownloadCancelled()
         if not isinstance(d, dict):
@@ -361,19 +380,39 @@ def _make_progress_hook(job_id: int, cancel_event: threading.Event):
             status = d.get("status")
             if status == "downloading":
                 total = d.get("total_bytes") or d.get("total_bytes_estimate")
-                downloaded = d.get("downloaded_bytes", 0)
-                percent = (downloaded / total * 100) if total else 0.0
+                downloaded = d.get("downloaded_bytes", 0) or 0
+                # yt-dlp resets byte counters per stream (video then audio).
+                if downloaded < last_stream_downloaded - 512 * 1024:
+                    accumulated_bytes += last_stream_downloaded
+                    last_stream_downloaded = 0
+                last_stream_downloaded = max(last_stream_downloaded, downloaded)
+                combined = accumulated_bytes + last_stream_downloaded
+                max_displayed_bytes = max(max_displayed_bytes, combined)
+                percent = (combined / total * 100) if total else 0.0
+                max_percent = max(max_percent, percent)
                 info = _as_info(d.get("info_dict"))
                 progress_store[job_id] = {
                     "status": "downloading",
-                    "progress": round(percent, 1),
+                    "progress": round(max_percent, 1),
                     "title": info.get("title"),
                     "channel": info.get("uploader") or info.get("channel"),
                     "total_bytes": total,
-                    "downloaded_bytes": downloaded,
+                    "downloaded_bytes": max_displayed_bytes,
                 }
             elif status == "finished":
-                progress_store[job_id] = {"status": "processing", "progress": 99.0}
+                info = _as_info(d.get("info_dict"))
+                size = (
+                    info.get("filesize")
+                    or info.get("filesize_approx")
+                    or last_stream_downloaded
+                )
+                if size:
+                    accumulated_bytes += int(size)
+                last_stream_downloaded = 0
+                progress_store[job_id] = {
+                    "status": "processing",
+                    "progress": max(max_percent, 99.0),
+                }
         except Exception:  # noqa: BLE001 — never fail a download over progress UI
             return
 
@@ -546,8 +585,15 @@ def _published_at(info: dict[str, Any]) -> Optional[datetime]:
         return None
 
 
-def _cleanup_partial_files(paths: set[str]) -> None:
-    """Remove in-progress fragments only — never delete a finished merged video."""
+def _validate_playable(path: Path) -> bool:
+    """Return True when the file is a complete, decodable video."""
+    return probe_is_playable(path)
+
+
+def _cleanup_download_artifacts(
+    paths: set[str], *, remove_final: bool = False
+) -> None:
+    """Remove in-progress fragments and optionally corrupt final files."""
     for rel in paths:
         full = DOWNLOADS_DIR / rel
         parent = full.parent
@@ -559,6 +605,15 @@ def _cleanup_partial_files(paths: set[str]) -> None:
                 continue
             if entry.name.endswith(".part") or _FRAGMENT_RE.search(entry.name):
                 _safe_unlink(entry)
+                continue
+            if remove_final and entry.suffix.lower() in VIDEO_EXTENSIONS:
+                if _FRAGMENT_RE.search(entry.name) is None:
+                    _safe_unlink(entry)
+
+
+def _cleanup_partial_files(paths: set[str]) -> None:
+    """Remove in-progress fragments only — never delete a finished merged video."""
+    _cleanup_download_artifacts(paths, remove_final=False)
 
 
 def _check_quality(
@@ -606,6 +661,37 @@ def _apply_loudnorm(path: Path) -> Optional[str]:
         return "Volume normalization failed"
 
 
+def _finalize_in_background(
+    video_id: int,
+    final_path: Path,
+    source_url: str,
+    thumbnail_url: Optional[str],
+) -> None:
+    """Fetch subtitles and thumbnail without blocking watchability."""
+
+    def run() -> None:
+        tracks: list[dict[str, Any]] = []
+        thumb: Optional[str] = None
+        try:
+            tracks = download_subtitles(final_path, source_url)
+            thumb = _save_thumbnail(thumbnail_url, video_id)
+        except Exception:  # noqa: BLE001
+            pass
+        with Session(engine) as session:
+            video = session.get(Video, video_id)
+            if video is None:
+                return
+            if tracks:
+                video.subtitles = library.dump_subtitles(tracks)
+            if thumb:
+                video.thumbnail_path = thumb
+            video.subtitles_pending = False
+            session.add(video)
+            session.commit()
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 def _complete_download(
     job_id: int,
     final_path: Path,
@@ -617,24 +703,34 @@ def _complete_download(
     normalize_volume: bool,
     replace_video_id: Optional[int],
     notes_pending: Optional[str],
+    cancel_event: Optional[threading.Event] = None,
 ) -> int:
+    if cancel_event is not None and cancel_event.is_set():
+        raise DownloadCancelled()
+
     info = _as_info(info)
     source_url = info.get("webpage_url") or url
-    subtitle_tracks = download_subtitles(final_path, source_url)
 
     volume_warning: Optional[str] = None
     if normalize_volume and final_path.exists():
         volume_warning = _apply_loudnorm(final_path)
 
+    if cancel_event is not None and cancel_event.is_set():
+        raise DownloadCancelled()
+
     rel_path = to_rel_path(final_path)
     file_size = final_path.stat().st_size if final_path.exists() else None
-    duration = info.get("duration") or probe_duration(final_path)
-    width = info.get("width")
-    height = info.get("height")
-    if not (width and height):
-        dims = probe_dimensions(final_path)
-        if dims:
-            width, height = dims
+    duration = probe_duration(final_path) or info.get("duration")
+    width: Optional[int] = None
+    height: Optional[int] = None
+    dims = probe_dimensions(final_path)
+    if dims:
+        width, height = dims
+    else:
+        raw_w = info.get("width")
+        raw_h = info.get("height")
+        width = int(raw_w) if raw_w else None
+        height = int(raw_h) if raw_h else None
 
     quality_warning = _check_quality(quality_preset, int(height) if height else None)
 
@@ -672,12 +768,13 @@ def _complete_download(
         video.source_url = source_url
         video.duration_sec = duration
         video.file_size = file_size
-        video.width_px = int(width) if width else None
-        video.height_px = int(height) if height else None
+        video.width_px = width
+        video.height_px = height
         video.published_at = _published_at(info)
         video.view_count = info.get("view_count")
         video.channel_subscriber_count = info.get("channel_follower_count")
-        video.subtitles = library.dump_subtitles(subtitle_tracks)
+        video.subtitles = library.dump_subtitles([])
+        video.subtitles_pending = True
         video.needs_review = False
         video.platform = info.get("extractor_key")
         video.status = VideoStatus.ready
@@ -690,13 +787,11 @@ def _complete_download(
 
         _remove_review_duplicates(session, info.get("id"), keep_id=video.id)
 
-        thumb = _save_thumbnail(info.get("thumbnail"), video.id)
-        if thumb:
-            video.thumbnail_path = thumb
-            session.add(video)
-            session.commit()
-
         video_id = video.id
+
+    _finalize_in_background(
+        video_id, final_path, source_url, info.get("thumbnail")
+    )
 
     snapshot: dict[str, Any] = {
         "status": "completed",
@@ -721,6 +816,21 @@ def _complete_download(
     )
     progress_store[job_id] = snapshot
     return video_id
+
+
+def _reject_unplayable(
+    path: Optional[Path], attempt_paths: set[str]
+) -> Optional[Path]:
+    """Return path if playable; otherwise remove corrupt artifacts and return None."""
+    if path is None or not path.exists() or path.stat().st_size <= 0:
+        return None
+    if _validate_playable(path):
+        return path
+    rel = _safe_rel(path)
+    if rel:
+        _cleanup_download_artifacts({rel}, remove_final=True)
+    _cleanup_partial_files(attempt_paths)
+    return None
 
 
 def _run_download(
@@ -763,6 +873,7 @@ def _run_download(
             "logger": _YtdlpLogger(),
             "merge_output_format": "mp4",
             "ignoreerrors": True,
+            "overwrites": True,
             "file_access_retries": 10,
             "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
             "extractor_args": youtube_extractor_args(),
@@ -802,6 +913,7 @@ def _run_download(
                         if not _is_recoverable_download_error(exc):
                             raise
                         final_path = _resolve_merged_video(prepared, active_paths)
+                        final_path = _reject_unplayable(final_path, attempt_paths)
                         if final_path is None:
                             raise
 
@@ -813,11 +925,14 @@ def _run_download(
                         if not final_path.exists():
                             final_path = candidate if candidate.exists() else None
 
+                    final_path = _reject_unplayable(final_path, attempt_paths)
+
                 if final_path is not None and final_path.exists():
                     break
             except Exception as exc:
                 last_exc = exc
                 recovered = _resolve_merged_video(prepared, active_paths)
+                recovered = _reject_unplayable(recovered, attempt_paths)
                 if recovered is not None:
                     final_path = recovered
                     break
@@ -825,8 +940,12 @@ def _run_download(
 
         if final_path is None or not final_path.exists():
             final_path = _resolve_merged_video(prepared, active_paths)
+        final_path = _reject_unplayable(final_path, active_paths)
         if final_path is None or not final_path.exists() or final_path.stat().st_size <= 0:
             raise last_exc or RuntimeError("Download produced no file")
+
+        if cancel.is_set():
+            raise DownloadCancelled()
 
         effective_info = _merge_info(_as_info(metadata_info), _as_info(info))
 
@@ -841,6 +960,7 @@ def _run_download(
             normalize_volume,
             replace_video_id,
             notes_pending,
+            cancel_event=cancel,
         )
 
     except DownloadCancelled:
@@ -874,11 +994,13 @@ def _run_download(
 
     except Exception as exc:  # noqa: BLE001
         recovered = _resolve_merged_video(prepared, active_paths)
+        recovered = _reject_unplayable(recovered, active_paths)
         effective_info = _merge_info(_as_info(metadata_info), _as_info(info))
         if (
             recovered is not None
             and recovered.exists()
             and recovered.stat().st_size > 0
+            and not cancel.is_set()
         ):
             try:
                 return _complete_download(
@@ -892,6 +1014,7 @@ def _run_download(
                     normalize_volume,
                     replace_video_id,
                     notes_pending,
+                    cancel_event=cancel,
                 )
             except Exception:  # noqa: BLE001
                 pass
@@ -1097,6 +1220,12 @@ def extract_playlist_entries(url: str) -> dict[str, Any]:
             entry_url = f"https://www.youtube.com/watch?v={vid}"
         if not entry_url:
             continue
+        view_count = entry.get("view_count")
+        if view_count is not None:
+            try:
+                view_count = int(view_count)
+            except (TypeError, ValueError):
+                view_count = None
         entries.append(
             {
                 "id": vid,
@@ -1105,6 +1234,7 @@ def extract_playlist_entries(url: str) -> dict[str, Any]:
                 "channel": entry.get("uploader") or entry.get("channel"),
                 "duration": entry.get("duration"),
                 "thumbnail_url": _entry_thumbnail_url(entry, vid),
+                "view_count": view_count,
             }
         )
 

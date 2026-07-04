@@ -65,19 +65,19 @@ export default function Watch() {
 
   useEffect(() => {
     if (!video) return;
-    const channel = video.channel;
-    const tag = video.tags[0];
-    const query = channel
-      ? api.listVideos({ channel, sort: "added_at", order: "desc" })
-      : tag
-        ? api.listVideos({ tag, sort: "added_at", order: "desc" })
-        : Promise.resolve([] as Video[]);
-    query
-      .then((results) =>
-        setMoreLikeThis(results.filter((v) => v.id !== video.id).slice(0, 8))
-      )
-      .catch(() => undefined);
-  }, [video?.id, video?.channel, video?.tags[0]]); // eslint-disable-line react-hooks/exhaustive-deps
+    api
+      .getRelatedVideos(video.id, 6)
+      .then(setMoreLikeThis)
+      .catch(() => setMoreLikeThis([]));
+  }, [video?.id]);
+
+  useEffect(() => {
+    if (!video?.subtitles_pending) return;
+    const timer = window.setInterval(() => {
+      api.getVideo(videoId).then(setVideo).catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [videoId, video?.subtitles_pending]);
 
   useEffect(() => {
     registerDock(dockRef.current);
@@ -126,7 +126,7 @@ export default function Watch() {
   const onDelete = async () => {
     if (!video) return;
     if (!confirm(`Delete "${video.title}" from the library?`)) return;
-    await api.deleteVideo(video.id);
+    await api.deleteVideo(video.id, true);
     navigate("/");
   };
 

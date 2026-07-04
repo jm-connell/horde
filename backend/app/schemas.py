@@ -40,6 +40,7 @@ class VideoRead(BaseModel):
     metadata_synced_at: Optional[datetime]
     source_title: Optional[str]
     title_is_custom: bool
+    subtitles_pending: bool = False
 
 
 class VideoUpdate(BaseModel):
@@ -208,6 +209,7 @@ class PlaylistPreviewEntry(BaseModel):
     channel: Optional[str] = None
     duration: Optional[float] = None
     thumbnail_url: Optional[str] = None
+    view_count: Optional[int] = None
 
 
 class PlaylistPreview(BaseModel):

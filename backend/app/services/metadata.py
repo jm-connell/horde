@@ -31,6 +31,51 @@ def probe_duration(path: Path) -> Optional[float]:
         return None
 
 
+def probe_is_playable(path: Path) -> bool:
+    """Return True when ffprobe finds a decodable video stream with duration."""
+    if not path.exists() or path.stat().st_size <= 0:
+        return False
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=codec_type,width,height",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return False
+        data = json.loads(result.stdout)
+        streams = data.get("streams", [])
+        if not streams:
+            return False
+        stream = streams[0]
+        if stream.get("codec_type") != "video":
+            return False
+        width = stream.get("width")
+        height = stream.get("height")
+        if not width or not height or int(width) <= 0 or int(height) <= 0:
+            return False
+        duration = data.get("format", {}).get("duration")
+        if duration is None:
+            return False
+        return float(duration) > 0
+    except (subprocess.SubprocessError, ValueError, OSError):
+        return False
+
+
 def probe_dimensions(path: Path) -> Optional[tuple[int, int]]:
     """Return (width, height) in pixels of the first video stream via ffprobe."""
     try:

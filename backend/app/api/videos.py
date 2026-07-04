@@ -78,6 +78,7 @@ def _to_read(video: Video) -> VideoRead:
         metadata_synced_at=video.metadata_synced_at,
         source_title=video.source_title,
         title_is_custom=video.title_is_custom,
+        subtitles_pending=video.subtitles_pending,
     )
 
 
@@ -242,6 +243,19 @@ def get_video(video_id: int, session: Session = Depends(get_session)):
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     return _to_read(video)
+
+
+@router.get("/videos/{video_id}/related", response_model=list[VideoRead])
+def related_videos(
+    video_id: int,
+    limit: int = Query(6, ge=1, le=24),
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    rows = library.related_videos(session, video_id, limit=limit)
+    return [_to_read(v) for v in rows]
 
 
 @router.patch("/videos/{video_id}", response_model=VideoRead)

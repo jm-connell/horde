@@ -607,7 +607,7 @@ export default function Library() {
               <select
                 value={sort}
                 onChange={(e) => handleSortChange(e.target.value)}
-                className="min-w-[10.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                className="min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
               >
                 {LIBRARY_SORT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>

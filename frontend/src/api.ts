@@ -75,6 +75,12 @@ export const api = {
     return request<Video>(`/api/videos/${id}`);
   },
 
+  getRelatedVideos(id: number, limit = 6): Promise<Video[]> {
+    return request<Video[]>(
+      `/api/videos/${id}/related?limit=${encodeURIComponent(String(limit))}`
+    );
+  },
+
   updateVideo(id: number, payload: VideoUpdate): Promise<Video> {
     return request<Video>(`/api/videos/${id}`, {
       method: "PATCH",

@@ -71,6 +71,8 @@ interface Props {
   chapters?: Chapter[];
   sponsorSegments?: SponsorSegment[];
   sponsorShowNotice?: boolean;
+  subtitlesPending?: boolean;
+  onSubtitlesRefresh?: () => void;
   miniWidth?: number | null;
   onMiniResize?: (width: number) => void;
 }
@@ -99,6 +101,8 @@ export default function VideoPlayer({
   chapters = [],
   sponsorSegments = [],
   sponsorShowNotice = true,
+  subtitlesPending = false,
+  onSubtitlesRefresh,
   miniWidth = null,
   onMiniResize,
 }: Props) {
@@ -136,7 +140,15 @@ export default function VideoPlayer({
 
   // SponsorBlock skip notice
   const [skipNotice, setSkipNotice] = useState<string | null>(null);
+  const [skippedSegment, setSkippedSegment] = useState<{
+    startSec: number;
+    endSec: number;
+    label: string;
+  } | null>(null);
   const skipNoticeTimer = useRef<number | null>(null);
+  const prevTimeRef = useRef(0);
+  const suppressedSegmentsRef = useRef(new Set<string>());
+  const [ccNotice, setCcNotice] = useState<string | null>(null);
 
   // Subtitle drag
   const subtitleDragRef = useRef<{ startY: number; startOffset: number } | null>(null);
@@ -148,6 +160,36 @@ export default function VideoPlayer({
     : airplay.casting
       ? "AirPlay"
       : null;
+
+  useEffect(() => {
+    suppressedSegmentsRef.current.clear();
+    prevTimeRef.current = 0;
+    setSkippedSegment(null);
+    setSkipNotice(null);
+    setCcNotice(null);
+  }, [src]);
+
+  const undoSkip = useCallback(() => {
+    const seg = skippedSegment;
+    const v = videoRef.current;
+    if (!seg || !v) return;
+    suppressedSegmentsRef.current.add(`${seg.startSec}-${seg.endSec}`);
+    v.currentTime = seg.startSec;
+    setSkipNotice(null);
+    setSkippedSegment(null);
+    if (skipNoticeTimer.current !== null) {
+      clearTimeout(skipNoticeTimer.current);
+      skipNoticeTimer.current = null;
+    }
+  }, [skippedSegment]);
+
+  const segmentLabel = useCallback((category: string) => {
+    if (category === "sponsor") return "Sponsor";
+    if (category === "selfpromo") return "Self-promo";
+    if (category === "intro") return "Intro";
+    if (category === "outro") return "Outro";
+    return "Segment";
+  }, []);
 
   useEffect(() => {
     chromecast.setOnSessionEnd((position) => {
@@ -335,11 +377,19 @@ export default function VideoPlayer({
   }, [src, chromecast.casting]);
 
   const cycleCaptions = useCallback(() => {
-    if (tracks.length === 0) return;
+    if (tracks.length === 0) {
+      if (subtitlesPending) {
+        setCcNotice("Subtitles still loading…");
+        onSubtitlesRefresh?.();
+        window.setTimeout(() => setCcNotice(null), 3000);
+      }
+      return;
+    }
     const order = [null, ...tracks.map((t) => t.lang)];
     const idx = order.indexOf(captionLang);
     setCaptionLang(order[(idx + 1) % order.length]);
-  }, [tracks, captionLang]);
+    setCcNotice(null);
+  }, [tracks, captionLang, subtitlesPending, onSubtitlesRefresh]);
 
   const togglePlay = useCallback(() => {
     if (suppressClick.current) return;
@@ -903,31 +953,43 @@ export default function VideoPlayer({
           onPause={() => setPlaying(false)}
           onTimeUpdate={(e) => {
             const t = e.currentTarget.currentTime;
+            const prev = prevTimeRef.current;
+            prevTimeRef.current = t;
             setCurrent(t);
             onProgress?.(t);
-            // SponsorBlock: auto-skip segments
+            // SponsorBlock: auto-skip segments on forward playback only
             if (sponsorSegments.length > 0) {
+              const movingForward = t >= prev - 0.05;
               for (const seg of sponsorSegments) {
-                if (t >= seg.startSec && t < seg.endSec - 0.3) {
+                const key = `${seg.startSec}-${seg.endSec}`;
+                if (suppressedSegmentsRef.current.has(key)) {
+                  if (t >= seg.endSec) {
+                    suppressedSegmentsRef.current.delete(key);
+                  }
+                  continue;
+                }
+                if (
+                  movingForward &&
+                  t >= seg.startSec &&
+                  t < seg.endSec - 0.3
+                ) {
                   e.currentTarget.currentTime = seg.endSec;
+                  prevTimeRef.current = seg.endSec;
+                  const label = segmentLabel(seg.category);
                   if (sponsorShowNotice) {
-                    const label =
-                      seg.category === "sponsor"
-                        ? "Sponsor"
-                        : seg.category === "selfpromo"
-                          ? "Self-promo"
-                          : seg.category === "intro"
-                            ? "Intro"
-                            : seg.category === "outro"
-                              ? "Outro"
-                              : "Segment";
+                    setSkippedSegment({
+                      startSec: seg.startSec,
+                      endSec: seg.endSec,
+                      label,
+                    });
                     setSkipNotice(`Skipped: ${label}`);
                     if (skipNoticeTimer.current !== null)
                       clearTimeout(skipNoticeTimer.current);
                     skipNoticeTimer.current = window.setTimeout(() => {
                       setSkipNotice(null);
+                      setSkippedSegment(null);
                       skipNoticeTimer.current = null;
-                    }, 2000);
+                    }, 4000);
                   }
                   break;
                 }
@@ -1084,8 +1146,22 @@ export default function VideoPlayer({
             </div>
             {/* SponsorBlock skip notice */}
             {skipNotice && (
-              <div className="pointer-events-none absolute right-4 top-4 rounded-lg bg-black/80 px-3 py-1.5 text-xs text-accent transition-opacity">
-                {skipNotice}
+              <div className="absolute right-4 top-4 flex items-center gap-2 rounded-lg bg-black/80 px-3 py-1.5 text-xs text-accent">
+                <span>{skipNotice}</span>
+                {skippedSegment && (
+                  <button
+                    type="button"
+                    onClick={undoSkip}
+                    className="rounded bg-ink-700 px-2 py-0.5 text-gray-200 hover:bg-ink-600"
+                  >
+                    Go back
+                  </button>
+                )}
+              </div>
+            )}
+            {ccNotice && (
+              <div className="absolute left-4 top-4 rounded-lg bg-black/70 px-3 py-1.5 text-xs text-gray-300">
+                {ccNotice}
               </div>
             )}
             {/* Subtitle drag handle — only shown when CC is active */}
@@ -1203,7 +1279,7 @@ export default function VideoPlayer({
                     </div>
                   )}
                 </div>
-                {tracks.length > 0 && (
+                {(tracks.length > 0 || subtitlesPending) && (
                   <button
                     onClick={cycleCaptions}
                     className={`rounded px-2 py-1 text-xs font-medium ${
@@ -1211,7 +1287,11 @@ export default function VideoPlayer({
                         ? "bg-accent text-ink-950"
                         : "bg-ink-700 text-gray-200 hover:text-accent"
                     }`}
-                    title="Subtitles"
+                    title={
+                      subtitlesPending && tracks.length === 0
+                        ? "Subtitles loading"
+                        : "Subtitles"
+                    }
                   >
                     CC
                   </button>

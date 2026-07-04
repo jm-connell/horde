@@ -221,6 +221,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     settings.sponsorBlockEnabled
   );
 
+  const refreshCurrentVideo = useCallback(() => {
+    if (!current) return;
+    api.getVideo(current.id).then(setCurrent).catch(() => undefined);
+  }, [current]);
+
+  useEffect(() => {
+    if (!current?.subtitles_pending) return;
+    const timer = window.setInterval(refreshCurrentVideo, 3000);
+    return () => window.clearInterval(timer);
+  }, [current?.id, current?.subtitles_pending, refreshCurrentVideo]);
+
   const value: PlaybackValue = {
     current,
     queue,
@@ -270,6 +281,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             chapters={chapters}
             sponsorSegments={sponsorSegments}
             sponsorShowNotice={settings.sponsorBlockShowNotice}
+            subtitlesPending={current.subtitles_pending}
+            onSubtitlesRefresh={refreshCurrentVideo}
             miniWidth={miniWidth}
             onMiniResize={setMiniWidth}
           />,

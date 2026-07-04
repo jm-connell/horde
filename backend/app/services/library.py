@@ -276,3 +276,69 @@ def tag_stats(
         for tag in parse_tags(raw):
             counts[tag] = counts.get(tag, 0) + 1
     return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
+def related_videos(
+    session: Session,
+    video_id: int,
+    limit: int = 6,
+) -> list[Video]:
+    """Return related library videos: same channel, then tag overlap, then random."""
+    source = session.get(Video, video_id)
+    if source is None:
+        return []
+
+    limit = max(1, min(limit, 24))
+    picked: list[Video] = []
+    seen: set[int] = {video_id}
+
+    def add_candidates(candidates: list[Video]) -> None:
+        for video in candidates:
+            if video.id in seen or video.needs_review:
+                continue
+            seen.add(video.id)
+            picked.append(video)
+            if len(picked) >= limit:
+                return
+
+    if source.channel:
+        channel_rows = query_videos(
+            session,
+            channel=source.channel,
+            sort="added_at",
+            order="desc",
+            needs_review=False,
+        )
+        add_candidates(channel_rows)
+        if len(picked) >= limit:
+            return picked[:limit]
+
+    source_tags = {t.lower() for t in parse_tags(source.tags)}
+    if source_tags:
+        scored: list[tuple[int, Video]] = []
+        for row in query_videos(session, needs_review=False, sort="added_at", order="desc"):
+            if row.id in seen or row.needs_review:
+                continue
+            row_tags = {t.lower() for t in parse_tags(row.tags)}
+            overlap = len(source_tags & row_tags)
+            if overlap > 0:
+                scored.append((overlap, row))
+        scored.sort(
+            key=lambda item: (
+                item[0],
+                item[1].added_at or datetime.min.replace(tzinfo=timezone.utc),
+            ),
+            reverse=True,
+        )
+        add_candidates([v for _, v in scored])
+        if len(picked) >= limit:
+            return picked[:limit]
+
+    pool = query_videos(
+        session,
+        needs_review=False,
+        sort="random",
+        seed=video_id,
+    )
+    add_candidates(pool)
+    return picked[:limit]

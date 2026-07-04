@@ -28,6 +28,7 @@ _VIDEO_COLUMNS = [
     ("source_description", "VARCHAR"),
     ("title_is_custom", "BOOLEAN DEFAULT 0"),
     ("description_is_custom", "BOOLEAN DEFAULT 0"),
+    ("subtitles_pending", "BOOLEAN DEFAULT 0"),
 ]
 
 _DOWNLOAD_JOB_COLUMNS = [

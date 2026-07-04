@@ -49,6 +49,9 @@ function jobStatus(job: DownloadJob, live?: ProgressEvent): string {
   if (job.status === "completed" || job.status === "cancelled") {
     return job.status;
   }
+  if (live?.status === "cancelled") {
+    return "cancelled";
+  }
   return live?.status ?? job.status;
 }
 
@@ -185,8 +188,18 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const cancelJob = useCallback(
     async (jobId: number) => {
+      setProgress((prev) => ({
+        ...prev,
+        [jobId]: { status: "cancelled", error: "Cancelled", progress: 0 },
+      }));
       const updated = await api.cancelJob(jobId);
       setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
+      if (updated.status !== "cancelled") {
+        setProgress((prev) => ({
+          ...prev,
+          [jobId]: { status: "cancelled", error: "Cancelled", progress: 0 },
+        }));
+      }
       syncQueue();
     },
     [syncQueue]

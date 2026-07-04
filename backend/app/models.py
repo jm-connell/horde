@@ -68,6 +68,7 @@ class Video(SQLModel, table=True):
     source_description: Optional[str] = None
     title_is_custom: bool = Field(default=False)
     description_is_custom: bool = Field(default=False)
+    subtitles_pending: bool = Field(default=False)
 
 
 class DownloadJob(SQLModel, table=True):
