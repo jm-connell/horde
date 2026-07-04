@@ -64,6 +64,7 @@ class DownloadCreate(BaseModel):
     quality_preset: str = "best"
     title_override: Optional[str] = None
     channel_override: Optional[str] = None
+    notes_pending: Optional[str] = None
     normalize_volume: bool = False
 
 
@@ -74,6 +75,7 @@ class DownloadPreview(BaseModel):
     channel_url: Optional[str]
     thumbnail_url: Optional[str] = None
     entry_count: Optional[int]
+    view_count: Optional[int] = None
     available_presets: list[str] = []
     preset_sizes: dict[str, int] = {}
 
@@ -121,6 +123,26 @@ class ChannelStat(BaseModel):
     count: int
     last_download_at: Optional[datetime] = None
     subscriber_count: Optional[int] = None
+    channel_url: Optional[str] = None
+
+
+class ChannelFeedEntry(BaseModel):
+    id: Optional[str] = None
+    url: str
+    title: Optional[str] = None
+    duration: Optional[float] = None
+    thumbnail_url: Optional[str] = None
+    view_count: Optional[int] = None
+    in_library: bool = False
+    video_id: Optional[int] = None
+    library_height_px: Optional[int] = None
+
+
+class ChannelFeedPage(BaseModel):
+    channel: Optional[str] = None
+    channel_url: Optional[str] = None
+    entries: list[ChannelFeedEntry] = []
+    has_more: bool = False
 
 
 class TagStat(BaseModel):

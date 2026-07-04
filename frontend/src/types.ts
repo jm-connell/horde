@@ -53,6 +53,26 @@ export interface ChannelStat {
   count: number;
   last_download_at: string | null;
   subscriber_count: number | null;
+  channel_url: string | null;
+}
+
+export interface ChannelFeedEntry {
+  id: string | null;
+  url: string;
+  title: string | null;
+  duration: number | null;
+  thumbnail_url: string | null;
+  view_count: number | null;
+  in_library: boolean;
+  video_id: number | null;
+  library_height_px: number | null;
+}
+
+export interface ChannelFeedPage {
+  channel: string | null;
+  channel_url: string | null;
+  entries: ChannelFeedEntry[];
+  has_more: boolean;
 }
 
 export type JobStatus =
@@ -102,6 +122,7 @@ export interface DownloadPreview {
   channel_url: string | null;
   thumbnail_url: string | null;
   entry_count: number | null;
+  view_count?: number | null;
   available_presets: string[];
   preset_sizes: Record<string, number>;
 }

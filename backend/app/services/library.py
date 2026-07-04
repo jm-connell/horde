@@ -29,6 +29,7 @@ class ChannelStatRow:
     count: int
     last_download_at: Optional[datetime]
     subscriber_count: Optional[int]
+    channel_url: Optional[str]
 
 
 def parse_tags(raw: str) -> list[str]:
@@ -167,6 +168,7 @@ def channel_stats(
             func.count(Video.id),
             func.max(Video.added_at),
             func.max(Video.channel_subscriber_count),
+            func.max(Video.channel_url),
         )
         .where(Video.channel.is_not(None))
         .where(Video.needs_review == False)  # noqa: E712
@@ -178,8 +180,9 @@ def channel_stats(
             count=int(n),
             last_download_at=last_dl,
             subscriber_count=int(sub) if sub is not None else None,
+            channel_url=url,
         )
-        for c, n, last_dl, sub in session.exec(statement).all()
+        for c, n, last_dl, sub, url in session.exec(statement).all()
         if c
     ]
 
@@ -207,6 +210,45 @@ def channel_stats(
 
     rows.sort(key=sort_key, reverse=reverse)
     return rows
+
+
+def resolve_channel_url(session: Session, channel_name: str) -> Optional[str]:
+    """Return a canonical channel URL for a library channel name, if known."""
+    for row in channel_stats(session):
+        if row.channel == channel_name and row.channel_url:
+            return row.channel_url
+    return None
+
+
+def youtube_library_map(
+    session: Session, channel: Optional[str] = None
+) -> dict[str, tuple[int, Optional[int], Optional[int]]]:
+    """Map YouTube video IDs to local library video IDs, heights, and view counts."""
+    from urllib.parse import urlparse
+
+    from .url_clean import _youtube_video_id
+
+    statement = select(
+        Video.id, Video.source_url, Video.height_px, Video.view_count
+    ).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
+    if channel:
+        statement = statement.where(Video.channel == channel)
+    mapping: dict[str, tuple[int, Optional[int], Optional[int]]] = {}
+    for video_id, source_url, height_px, views in session.exec(statement).all():
+        if not source_url:
+            continue
+        try:
+            parsed = urlparse(source_url)
+        except ValueError:
+            continue
+        yt_id = _youtube_video_id(parsed)
+        if yt_id:
+            mapping[yt_id] = (
+                int(video_id),
+                int(height_px) if height_px else None,
+                int(views) if views is not None else None,
+            )
+    return mapping
 
 
 def all_tags(session: Session) -> list[str]:

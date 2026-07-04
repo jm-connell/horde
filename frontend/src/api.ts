@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  ChannelFeedPage,
   ChannelStat,
   DownloadJob,
   DownloadOverrides,
@@ -44,6 +45,13 @@ export interface LibraryQuery {
 export interface ChannelQuery {
   sort?: string;
   order?: string;
+}
+
+export interface ChannelFeedQuery {
+  channel?: string;
+  url?: string;
+  offset?: number;
+  limit?: number;
 }
 
 export const api = {
@@ -129,6 +137,17 @@ export const api = {
     });
     const query = qs.toString();
     return request<ChannelStat[]>(`/api/channels${query ? `?${query}` : ""}`);
+  },
+
+  getChannelFeed(params: ChannelFeedQuery = {}): Promise<ChannelFeedPage> {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    });
+    const query = qs.toString();
+    return request<ChannelFeedPage>(
+      `/api/channels/feed${query ? `?${query}` : ""}`
+    );
   },
 
   renameChannel(oldName: string, newName: string): Promise<{ updated: number }> {

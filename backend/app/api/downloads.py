@@ -89,6 +89,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         thumbnail_url=preview.get("thumbnail_url"),
         title_override=(payload.title_override or "").strip() or None,
         channel_override=(payload.channel_override or "").strip() or None,
+        notes_pending=(payload.notes_pending or "").strip() or None,
         normalize_volume=payload.normalize_volume,
     )
     session.add(job)

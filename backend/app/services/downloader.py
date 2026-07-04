@@ -1050,6 +1050,12 @@ def extract_preview(url: str) -> dict[str, Any]:
         }
 
     available = _available_presets(info)
+    view_count = info.get("view_count")
+    if view_count is not None:
+        try:
+            view_count = int(view_count)
+        except (TypeError, ValueError):
+            view_count = None
     return {
         "is_playlist": False,
         "title": info.get("title"),
@@ -1057,6 +1063,7 @@ def extract_preview(url: str) -> dict[str, Any]:
         "channel_url": info.get("uploader_url") or info.get("channel_url"),
         "thumbnail_url": info.get("thumbnail"),
         "entry_count": None,
+        "view_count": view_count,
         "available_presets": available,
         "preset_sizes": _estimate_preset_sizes(info, available),
     }
@@ -1097,7 +1104,7 @@ def extract_playlist_entries(url: str) -> dict[str, Any]:
                 "title": entry.get("title"),
                 "channel": entry.get("uploader") or entry.get("channel"),
                 "duration": entry.get("duration"),
-                "thumbnail_url": entry.get("thumbnail"),
+                "thumbnail_url": _entry_thumbnail_url(entry, vid),
             }
         )
 
@@ -1106,6 +1113,105 @@ def extract_playlist_entries(url: str) -> dict[str, Any]:
         "channel": info.get("uploader") or info.get("channel"),
         "entries": entries,
     }
+
+
+_FEED_CACHE_TTL_SEC = 300
+_feed_cache: dict[tuple[str, int, int, int], tuple[float, dict[str, Any]]] = {}
+_feed_cache_lock = threading.Lock()
+
+
+def _entry_thumbnail_url(entry: dict[str, Any], vid: Optional[str]) -> Optional[str]:
+    """Resolve a thumbnail URL from flat extract data or YouTube video id."""
+    thumb = entry.get("thumbnail")
+    if thumb:
+        s = str(thumb).strip()
+        if s.startswith("//"):
+            return f"https:{s}"
+        if s.startswith("http"):
+            return s
+    if vid:
+        return f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
+    return None
+
+
+def _channel_videos_url(channel_url: str) -> str:
+    url = channel_url.strip().rstrip("/")
+    if url.endswith("/videos"):
+        return url
+    for suffix in ("/shorts", "/streams", "/playlists", "/featured", "/about"):
+        if url.endswith(suffix):
+            return url[: -len(suffix)] + "/videos"
+    return f"{url}/videos"
+
+
+def fetch_channel_feed(
+    channel_url: str, offset: int = 0, limit: int = 30
+) -> dict[str, Any]:
+    """Fetch a page of uploads from a YouTube channel tab."""
+    import yt_dlp
+
+    offset = max(0, offset)
+    limit = max(1, min(limit, 100))
+    feed_url = _channel_videos_url(channel_url)
+    cache_key = (feed_url, offset, limit, 3)
+    now = time.time()
+    with _feed_cache_lock:
+        cached = _feed_cache.get(cache_key)
+        if cached and now - cached[0] < _FEED_CACHE_TTL_SEC:
+            return cached[1]
+
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": "in_playlist",
+            "skip_download": True,
+            "playliststart": offset + 1,
+            "playlistend": offset + limit,
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = _as_info(ydl.extract_info(feed_url, download=False))
+
+    entries: list[dict[str, Any]] = []
+    for entry in info.get("entries") or []:
+        if not isinstance(entry, dict):
+            continue
+        entry_url = entry.get("url") or entry.get("webpage_url")
+        vid = entry.get("id")
+        if entry_url and not str(entry_url).startswith("http"):
+            entry_url = None
+        if not entry_url and vid:
+            entry_url = f"https://www.youtube.com/watch?v={vid}"
+        if not entry_url:
+            continue
+        view_count = entry.get("view_count")
+        if view_count is not None:
+            try:
+                view_count = int(view_count)
+            except (TypeError, ValueError):
+                view_count = None
+        entries.append(
+            {
+                "id": vid,
+                "url": entry_url,
+                "title": entry.get("title"),
+                "duration": entry.get("duration"),
+                "thumbnail_url": _entry_thumbnail_url(entry, vid),
+                "view_count": view_count,
+            }
+        )
+
+    result = {
+        "channel": info.get("uploader") or info.get("channel"),
+        "channel_url": info.get("uploader_url") or info.get("channel_url") or channel_url,
+        "entries": entries,
+        "has_more": len(entries) == limit,
+    }
+    with _feed_cache_lock:
+        _feed_cache[cache_key] = (now, result)
+    return result
 
 
 def estimate_playlist_sizes(

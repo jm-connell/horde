@@ -14,6 +14,7 @@ import type { DownloadJob, DownloadQueueStatus, ProgressEvent } from "../types";
 interface SubmitOverrides {
   title?: string;
   channel?: string;
+  notes?: string;
 }
 
 interface DownloadContextValue {
@@ -153,6 +154,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       const job = await api.createDownload(url, preset, {
         title_override: overrides.title?.trim() || undefined,
         channel_override: overrides.channel?.trim() || undefined,
+        notes_pending: overrides.notes?.trim() || undefined,
         normalize_volume: settings.normalizeVolumeOnDownload,
       });
       setJobs((prev) => [job, ...prev]);

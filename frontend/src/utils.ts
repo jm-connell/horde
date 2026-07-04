@@ -120,6 +120,19 @@ export function formatViewCount(count: number | null): string {
   return `${count} views`;
 }
 
+export function youtubeThumbnailUrl(
+  videoId: string | null,
+  thumbnailUrl?: string | null
+): string | null {
+  const raw = thumbnailUrl?.trim();
+  if (raw) {
+    if (raw.startsWith("//")) return `https:${raw}`;
+    if (raw.startsWith("http")) return raw;
+  }
+  if (videoId) return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+  return null;
+}
+
 export function formatRelative(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);

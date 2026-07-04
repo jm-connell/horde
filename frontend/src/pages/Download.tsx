@@ -4,48 +4,14 @@ import { useDownloads, isActiveJob } from "../context/DownloadContext";
 import { useSettings } from "../hooks/useSettings";
 import ChannelPicker from "../components/ChannelPicker";
 import DownloadJobCard from "../components/DownloadJobCard";
+import {
+  formatApproxSize,
+  mergePinnedPreset,
+  PRESET_ORDER,
+  presetOptionLabel,
+} from "../presets";
 import type { ChannelStat, DownloadPreview, PlaylistPreviewEntry } from "../types";
-import { formatDuration, formatSize } from "../utils";
-
-const PRESET_ORDER = [
-  "best",
-  "2160p",
-  "1440p",
-  "1080p",
-  "720p",
-  "480p",
-  "audio",
-] as const;
-
-const PRESET_LABELS: Record<string, string> = {
-  best: "Best available",
-  "2160p": "4K (2160p)",
-  "1440p": "1440p (2K)",
-  "1080p": "1080p",
-  "720p": "720p",
-  "480p": "480p",
-  audio: "Audio only",
-};
-
-function formatApproxSize(bytes: number | undefined): string {
-  const label = formatSize(bytes ?? null);
-  return label ? `~${label}` : "";
-}
-
-function presetOptionLabel(
-  preset: string,
-  sizes: Record<string, number> | undefined
-): string {
-  const base = PRESET_LABELS[preset] ?? preset;
-  const approx = formatApproxSize(sizes?.[preset]);
-  return approx ? `${base} (${approx})` : base;
-}
-
-function mergePinnedPreset(available: string[], pinned: string): string[] {
-  if (pinned === "best" || available.includes(pinned)) return available;
-  const merged = new Set([...available, pinned]);
-  return PRESET_ORDER.filter((p) => merged.has(p));
-}
+import { formatDuration } from "../utils";
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 

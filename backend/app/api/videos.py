@@ -14,6 +14,8 @@ from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
     BulkVideoNotes,
+    ChannelFeedEntry,
+    ChannelFeedPage,
     ChannelRename,
     ChannelStat,
     MetadataRefreshResult,
@@ -130,6 +132,7 @@ def list_channels(
             count=row.count,
             last_download_at=row.last_download_at,
             subscriber_count=row.subscriber_count,
+            channel_url=row.channel_url,
         )
         for row in library.channel_stats(session, sort=sort, order=order)
     ]
@@ -143,6 +146,57 @@ def rename_channel(payload: ChannelRename, session: Session = Depends(get_sessio
         raise HTTPException(status_code=400, detail="Both names are required")
     updated = library.rename_channel(session, old, new)
     return {"updated": updated}
+
+
+@router.get("/channels/feed", response_model=ChannelFeedPage)
+def channel_feed(
+    channel: Optional[str] = None,
+    url: Optional[str] = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(30, ge=1, le=100),
+    session: Session = Depends(get_session),
+):
+    channel_url = (url or "").strip() or None
+    channel_name = (channel or "").strip() or None
+    if not channel_url and channel_name:
+        channel_url = library.resolve_channel_url(session, channel_name)
+    if not channel_url:
+        return ChannelFeedPage(channel=channel_name, channel_url=None, entries=[], has_more=False)
+    try:
+        data = downloader.fetch_channel_feed(channel_url, offset=offset, limit=limit)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=400, detail=f"Could not load channel feed: {exc}"
+        ) from exc
+
+    lib_map = library.youtube_library_map(session, channel=channel_name)
+    entries: list[ChannelFeedEntry] = []
+    for raw in data.get("entries") or []:
+        yt_id = raw.get("id")
+        lib = lib_map.get(yt_id) if yt_id else None
+        video_id = lib[0] if lib else None
+        library_height = lib[1] if lib else None
+        library_views = lib[2] if lib else None
+        feed_views = raw.get("view_count")
+        entries.append(
+            ChannelFeedEntry(
+                id=yt_id,
+                url=raw["url"],
+                title=raw.get("title"),
+                duration=raw.get("duration"),
+                thumbnail_url=raw.get("thumbnail_url"),
+                view_count=feed_views if feed_views is not None else library_views,
+                in_library=video_id is not None,
+                video_id=video_id,
+                library_height_px=library_height,
+            )
+        )
+    return ChannelFeedPage(
+        channel=channel_name or data.get("channel"),
+        channel_url=data.get("channel_url") or channel_url,
+        entries=entries,
+        has_more=bool(data.get("has_more")),
+    )
 
 
 @router.get("/tags", response_model=list[str])

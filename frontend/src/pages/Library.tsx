@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
+import ChannelFeed from "../components/ChannelFeed";
 import PlaybackQueue from "../components/PlaybackQueue";
 import VideoCard from "../components/VideoCard";
 import { useDownloads } from "../context/DownloadContext";
@@ -21,8 +22,17 @@ import type { ChannelStat, Playlist, TagStat, Video } from "../types";
 
 const TAG_MIN_COUNT = 3;
 const TAG_PAGE_SIZE = 20;
+const FEED_LAYOUT_KEY = "horde.channelFeed.layout";
 // Fixed queue overlay width (w-[26rem]) — dock to bottom when grid extends into this zone.
 const QUEUE_RESERVE_PX = 416;
+
+function loadFeedLayout(): "grid" | "list" {
+  try {
+    return localStorage.getItem(FEED_LAYOUT_KEY) === "list" ? "list" : "grid";
+  } catch {
+    return "grid";
+  }
+}
 
 function videoProgress(video: Video): number | undefined {
   if (!video.duration_sec || video.duration_sec <= 0) return undefined;
@@ -72,6 +82,20 @@ export default function Library() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [channelTab, setChannelTab] = useState<"library" | "feed">("library");
+  const [feedSearch, setFeedSearch] = useState("");
+  const [feedSort, setFeedSort] = useState<"recent" | "popular">("recent");
+  const [feedOrder, setFeedOrder] = useState<"asc" | "desc">("desc");
+  const [feedLayout, setFeedLayoutState] = useState(loadFeedLayout);
+
+  const setFeedLayout = useCallback((layout: "grid" | "list") => {
+    setFeedLayoutState(layout);
+    try {
+      localStorage.setItem(FEED_LAYOUT_KEY, layout);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
 
   const [settings, update] = useSettings();
   const { showToast } = useToast();
@@ -102,6 +126,13 @@ export default function Library() {
     setActiveTag(searchParams.get("tag"));
     setActiveChannel(searchParams.get("channel"));
   }, [searchParams]);
+
+  useEffect(() => {
+    setChannelTab("library");
+    setFeedSearch("");
+    setFeedSort("recent");
+    setFeedOrder("desc");
+  }, [activeChannel]);
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -181,6 +212,13 @@ export default function Library() {
   }, [activeChannel, activeTag]);
 
   const isHome = !activeChannel && !activeTag;
+
+  const activeChannelUrl = useMemo(() => {
+    if (!activeChannel) return null;
+    return channels.find((c) => c.channel === activeChannel)?.channel_url ?? null;
+  }, [activeChannel, channels]);
+
+  const onFeedTab = Boolean(activeChannel) && channelTab === "feed";
 
   const showContinueRow =
     settings.showContinueWatching &&
@@ -454,7 +492,111 @@ export default function Library() {
               )}
             </h1>
           )}
+          {activeChannel && !activeTag && (
+            <div className="flex gap-1 rounded-lg border border-ink-700 bg-ink-900 p-1 sm:order-first">
+              <button
+                type="button"
+                onClick={() => setChannelTab("library")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  channelTab === "library"
+                    ? "bg-accent/15 text-accent"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Library
+              </button>
+              <button
+                type="button"
+                onClick={() => setChannelTab("feed")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  channelTab === "feed"
+                    ? "bg-accent/15 text-accent"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Channel feed
+              </button>
+            </div>
+          )}
           <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:justify-end">
+            {onFeedTab ? (
+              <>
+                <input
+                  value={feedSearch}
+                  onChange={(e) => setFeedSearch(e.target.value)}
+                  placeholder="Search channel videos..."
+                  className="hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
+                />
+                <div className="flex flex-row items-center gap-2">
+                  <select
+                    value={feedSort}
+                    onChange={(e) =>
+                      setFeedSort(e.target.value as "recent" | "popular")
+                    }
+                    className="min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  >
+                    <option value="recent">Recent</option>
+                    <option value="popular">Popular</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFeedOrder((o) => (o === "desc" ? "asc" : "desc"))
+                    }
+                    className="shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                    title="Toggle sort direction"
+                  >
+                    {feedOrder === "desc" ? "↓" : "↑"}
+                  </button>
+                  <div className="flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setFeedLayout("grid")}
+                      title="Grid view"
+                      className={`rounded-md px-2.5 py-1.5 transition-colors ${
+                        feedLayout === "grid"
+                          ? "bg-accent/15 text-accent"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        className="h-4 w-4"
+                        fill="currentColor"
+                        aria-hidden
+                      >
+                        <rect x="1" y="1" width="6" height="6" rx="1" />
+                        <rect x="9" y="1" width="6" height="6" rx="1" />
+                        <rect x="1" y="9" width="6" height="6" rx="1" />
+                        <rect x="9" y="9" width="6" height="6" rx="1" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFeedLayout("list")}
+                      title="List view"
+                      className={`rounded-md px-2.5 py-1.5 transition-colors ${
+                        feedLayout === "list"
+                          ? "bg-accent/15 text-accent"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        className="h-4 w-4"
+                        fill="currentColor"
+                        aria-hidden
+                      >
+                        <rect x="1" y="2" width="14" height="2.5" rx="0.5" />
+                        <rect x="1" y="6.75" width="14" height="2.5" rx="0.5" />
+                        <rect x="1" y="11.5" width="14" height="2.5" rx="0.5" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -465,7 +607,7 @@ export default function Library() {
               <select
                 value={sort}
                 onChange={(e) => handleSortChange(e.target.value)}
-                className="w-[7.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-sm text-gray-100 outline-none focus:border-accent md:min-w-0 md:flex-1 md:px-3"
+                className="min-w-[10.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
               >
                 {LIBRARY_SORT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -501,6 +643,8 @@ export default function Library() {
                 {selectMode ? "Cancel" : "Select"}
               </button>
             </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -548,7 +692,14 @@ export default function Library() {
           </div>
         )}
 
-        {showContinueRow && (
+        {onFeedTab && feedSort === "popular" && (
+          <p className="mb-4 text-xs text-gray-600">
+            Popularity is based on loaded videos, not full channel history
+            (YouTube limitation).
+          </p>
+        )}
+
+        {showContinueRow && !onFeedTab && (
           <ContinueWatchingRow
             videos={visibleContinueWatching}
             showProgress={settings.showProgressOnContinueWatching}
@@ -557,7 +708,17 @@ export default function Library() {
           />
         )}
 
-        {loading ? (
+        {onFeedTab ? (
+          <ChannelFeed
+            channel={activeChannel!}
+            channelUrl={activeChannelUrl}
+            channels={channels}
+            feedSearch={feedSearch}
+            feedSort={feedSort}
+            feedOrder={feedOrder}
+            feedLayout={feedLayout}
+          />
+        ) : loading ? (
           <p className="py-20 text-center text-gray-500">Loading...</p>
         ) : videos.length === 0 ? (
           <div className="py-20 text-center text-gray-500">
