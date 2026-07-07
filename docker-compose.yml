@@ -12,7 +12,7 @@ services:
     depends_on:
       - bgutil-pot
     ports:
-      - "8080:8080"
+      - "8686:8080"
     environment:
       # UID/GID that owns the TrueNAS dataset (see README).
       - PUID=${PUID:-1000}
