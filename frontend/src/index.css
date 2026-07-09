@@ -263,3 +263,101 @@ body.player-fullscreen header {
   display: none;
 }
 
+/* ─── UI motion (driven by data-* on <html>) ─── */
+
+html[data-page-fade="on"] .page-shell.page-shell--animate {
+  animation: page-fade-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hover motion on cards / interactive surfaces */
+html[data-hover-motion="subtle"] .ui-card,
+html[data-hover-motion="lift"] .ui-card,
+html[data-hover-motion="glow"] .ui-card {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    ring-color 220ms ease,
+    border-color 220ms ease;
+}
+
+html[data-hover-motion="subtle"] .ui-card:hover {
+  transform: translateY(-2px);
+}
+
+html[data-hover-motion="lift"] .ui-card:hover {
+  transform: translateY(-5px) scale(1.01);
+  box-shadow: 0 14px 28px -18px rgb(0 0 0 / 0.55);
+}
+
+html[data-hover-motion="glow"] .ui-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px rgb(var(--accent) / 0.35), 0 0 24px rgb(var(--accent) / 0.18);
+}
+
+html[data-hover-motion="subtle"] .ui-interactive:hover,
+html[data-hover-motion="lift"] .ui-interactive:hover,
+html[data-hover-motion="glow"] .ui-interactive:hover {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+html[data-hover-motion="subtle"] button:not(:disabled):hover,
+html[data-hover-motion="subtle"] .ui-interactive:hover {
+  filter: brightness(1.06);
+}
+
+html[data-hover-motion="lift"] button:not(:disabled):hover,
+html[data-hover-motion="lift"] .ui-interactive:hover {
+  transform: translateY(-1px);
+}
+
+html[data-hover-motion="glow"] button:not(:disabled):hover,
+html[data-hover-motion="glow"] .ui-interactive:hover {
+  box-shadow: 0 0 0 1px rgb(var(--accent) / 0.25), 0 0 16px rgb(var(--accent) / 0.12);
+}
+
+/* Button press feedback */
+html[data-button-press="on"] button:not(:disabled):active,
+html[data-button-press="on"] .ui-interactive:active,
+html[data-button-press="on"] a.ui-card:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-page-fade="on"] .page-shell {
+    animation: none;
+  }
+
+  html[data-hover-motion="subtle"] .ui-card,
+  html[data-hover-motion="lift"] .ui-card,
+  html[data-hover-motion="glow"] .ui-card,
+  html[data-hover-motion="subtle"] .ui-interactive,
+  html[data-hover-motion="lift"] .ui-interactive,
+  html[data-hover-motion="glow"] .ui-interactive,
+  html[data-button-press="on"] button,
+  html[data-button-press="on"] .ui-interactive,
+  html[data-button-press="on"] a.ui-card {
+    transition: none !important;
+    transform: none !important;
+    filter: none !important;
+    box-shadow: none !important;
+    animation: none !important;
+  }
+}
+

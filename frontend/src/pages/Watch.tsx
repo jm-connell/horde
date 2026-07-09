@@ -423,7 +423,7 @@ export default function Watch() {
                     <Link
                       key={v.id}
                       to={`/watch/${v.id}`}
-                      className="group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-all hover:ring-accent/60"
+                      className="ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-all hover:ring-accent/60"
                     >
                       <div className="aspect-video w-full overflow-hidden bg-ink-800">
                         {thumb ? (

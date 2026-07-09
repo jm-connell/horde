@@ -35,9 +35,36 @@ export type LibrarySort =
   | "view_count"
   | "random";
 
+export type BackgroundEffect =
+  | "none"
+  | "rain"
+  | "constellation"
+  | "perlin-flow"
+  | "aurora"
+  | "matrix"
+  | "snow"
+  | "fireflies"
+  | "dust"
+  | "bokeh"
+  | "warp-grid"
+  | "scanlines"
+  | "grain";
+
+export type HoverMotion = "off" | "subtle" | "lift" | "glow";
+
 export interface Settings {
   theme: Theme;
   customColors: CustomColors;
+  backgroundEffect: BackgroundEffect;
+  backgroundOpacity: number;
+  backgroundEffectSpeed: number;
+  backgroundEffectColorMode: "accent" | "custom";
+  backgroundEffectColor: string;
+  pauseBackgroundWhileWatching: boolean;
+  liquidNav: boolean;
+  hoverMotion: HoverMotion;
+  buttonPress: boolean;
+  pageFade: boolean;
   showDescription: boolean;
   subtitleSize: SubtitleSize;
   subtitleOffset: number;
@@ -70,6 +97,16 @@ const DEFAULT_CUSTOM_COLORS: CustomColors = {
 const DEFAULTS: Settings = {
   theme: "default",
   customColors: DEFAULT_CUSTOM_COLORS,
+  backgroundEffect: "none",
+  backgroundOpacity: 0.45,
+  backgroundEffectSpeed: 1,
+  backgroundEffectColorMode: "accent",
+  backgroundEffectColor: "#22d3ee",
+  pauseBackgroundWhileWatching: true,
+  liquidNav: true,
+  hoverMotion: "subtle",
+  buttonPress: true,
+  pageFade: true,
   showDescription: true,
   subtitleSize: "medium",
   subtitleOffset: 12,
@@ -180,11 +217,90 @@ const VALID_THEMES = new Set<string>([
   "custom",
 ]);
 
+const VALID_BACKGROUND_EFFECTS = new Set<string>([
+  "none",
+  "rain",
+  "constellation",
+  "perlin-flow",
+  "aurora",
+  "matrix",
+  "snow",
+  "fireflies",
+  "dust",
+  "bokeh",
+  "warp-grid",
+  "scanlines",
+  "grain",
+]);
+
 function normalizeTheme(theme: string | undefined): Theme {
   if (!theme) return DEFAULTS.theme;
   if (theme in LEGACY_THEMES) return LEGACY_THEMES[theme];
   if (VALID_THEMES.has(theme)) return theme as Theme;
   return DEFAULTS.theme;
+}
+
+function normalizeBackgroundEffect(
+  effect: string | undefined
+): BackgroundEffect {
+  if (effect && VALID_BACKGROUND_EFFECTS.has(effect)) {
+    return effect as BackgroundEffect;
+  }
+  return DEFAULTS.backgroundEffect;
+}
+
+function normalizeBackgroundOpacity(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULTS.backgroundOpacity;
+  return Math.min(1, Math.max(0.1, n));
+}
+
+function normalizeBackgroundSpeed(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULTS.backgroundEffectSpeed;
+  return Math.min(3, Math.max(0.25, n));
+}
+
+function normalizeBackgroundColorMode(
+  value: unknown
+): "accent" | "custom" {
+  return value === "custom" ? "custom" : "accent";
+}
+
+function normalizeBackgroundColor(value: unknown): string {
+  if (typeof value !== "string") return DEFAULTS.backgroundEffectColor;
+  const hex = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) return hex.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
+    const raw = hex.slice(1);
+    return `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`.toLowerCase();
+  }
+  return DEFAULTS.backgroundEffectColor;
+}
+
+const VALID_HOVER_MOTION = new Set<string>(["off", "subtle", "lift", "glow"]);
+
+function normalizeHoverMotion(value: unknown): HoverMotion {
+  if (typeof value === "string" && VALID_HOVER_MOTION.has(value)) {
+    return value as HoverMotion;
+  }
+  return DEFAULTS.hoverMotion;
+}
+
+function normalizeBool(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+export function applyMotionPrefs(settings: Settings): void {
+  const root = document.documentElement;
+  const reduced =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  root.dataset.liquidNav = !reduced && settings.liquidNav ? "on" : "off";
+  root.dataset.hoverMotion = reduced ? "off" : settings.hoverMotion;
+  root.dataset.buttonPress = !reduced && settings.buttonPress ? "on" : "off";
+  root.dataset.pageFade = !reduced && settings.pageFade ? "on" : "off";
 }
 
 export function loadSettings(): Settings {
@@ -196,6 +312,25 @@ export function loadSettings(): Settings {
       ...DEFAULTS,
       ...parsed,
       theme: normalizeTheme(parsed.theme),
+      backgroundEffect: normalizeBackgroundEffect(parsed.backgroundEffect),
+      backgroundOpacity: normalizeBackgroundOpacity(parsed.backgroundOpacity),
+      backgroundEffectSpeed: normalizeBackgroundSpeed(
+        parsed.backgroundEffectSpeed
+      ),
+      backgroundEffectColorMode: normalizeBackgroundColorMode(
+        parsed.backgroundEffectColorMode
+      ),
+      backgroundEffectColor: normalizeBackgroundColor(
+        parsed.backgroundEffectColor
+      ),
+      pauseBackgroundWhileWatching: normalizeBool(
+        parsed.pauseBackgroundWhileWatching,
+        DEFAULTS.pauseBackgroundWhileWatching
+      ),
+      liquidNav: normalizeBool(parsed.liquidNav, DEFAULTS.liquidNav),
+      hoverMotion: normalizeHoverMotion(parsed.hoverMotion),
+      buttonPress: normalizeBool(parsed.buttonPress, DEFAULTS.buttonPress),
+      pageFade: normalizeBool(parsed.pageFade, DEFAULTS.pageFade),
     };
   } catch {
     return DEFAULTS;
@@ -240,6 +375,22 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   useEffect(() => {
     applyTheme(settings.theme, settings.customColors);
   }, [settings.theme, settings.customColors]);
+
+  useEffect(() => {
+    applyMotionPrefs(settings);
+  }, [
+    settings.liquidNav,
+    settings.hoverMotion,
+    settings.buttonPress,
+    settings.pageFade,
+  ]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = () => applyMotionPrefs(loadSettings());
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   const update = useCallback((patch: Partial<Settings>) => {
     const next = { ...loadSettings(), ...patch };

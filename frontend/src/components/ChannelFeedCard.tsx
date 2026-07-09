@@ -277,7 +277,7 @@ export default function ChannelFeedCard({
   return (
     <div
       ref={cardRef}
-      className="group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700"
+      className="ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700"
     >
       <FeedThumbnail
         thumbSrc={thumbSrc}

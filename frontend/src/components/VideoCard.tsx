@@ -38,7 +38,7 @@ export default function VideoCard({
     <Link
       to={`/watch/${video.id}`}
       onClick={handleClick}
-      className={`group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 transition-all hover:ring-accent/60 ${
+      className={`ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 transition-all hover:ring-accent/60 ${
         selected ? "ring-accent" : "ring-ink-700"
       }`}
     >

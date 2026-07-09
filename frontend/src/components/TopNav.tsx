@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useDownloads } from "../context/DownloadContext";
 import { useSearch } from "../context/SearchContext";
 import { useSettings } from "../hooks/useSettings";
+import LiquidNav from "./LiquidNav";
 
 const NAV_LINKS = [
   { to: "/", label: "Library", end: true },
@@ -14,6 +15,11 @@ const NAV_LINKS = [
   { to: "/settings", label: "Settings", end: false },
 ];
 
+function isLinkActive(pathname: string, to: string, end: boolean): boolean {
+  if (end) return pathname === to;
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
 export default function TopNav() {
   const [reviewCount, setReviewCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -22,6 +28,7 @@ export default function TopNav() {
   const location = useLocation();
   const { search, setSearch } = useSearch();
   const isLibrary = location.pathname === "/";
+  const liquid = settings.liquidNav;
 
   useEffect(() => {
     if (!isLibrary) setSearch("");
@@ -45,24 +52,27 @@ export default function TopNav() {
     };
   }, []);
 
-  // Close the mobile menu whenever the route changes.
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+    `relative z-10 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
       isActive
-        ? "bg-accent/15 text-accent"
-        : "text-gray-400 hover:text-gray-100 hover:bg-ink-800"
-    }`;
+        ? liquid
+          ? "text-accent"
+          : "bg-accent/15 text-accent"
+        : "text-gray-400 hover:text-gray-100"
+    } ${!liquid && !isActive ? "hover:bg-ink-800" : ""}`;
 
   const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+    `relative z-10 block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 ${
       isActive
-        ? "bg-accent/15 text-accent"
-        : "text-gray-300 hover:text-gray-100 hover:bg-ink-800"
-    }`;
+        ? liquid
+          ? "text-accent"
+          : "bg-accent/15 text-accent"
+        : "text-gray-300 hover:text-gray-100"
+    } ${!liquid && !isActive ? "hover:bg-ink-800" : ""}`;
 
   const badge = (count: number) =>
     count > 0 ? (
@@ -84,30 +94,39 @@ export default function TopNav() {
         ? downloadBadge
         : null;
 
+  const desktopLinks = NAV_LINKS.map((link) => {
+    const active = isLinkActive(location.pathname, link.to, link.end);
+    return (
+      <NavLink
+        key={link.to}
+        to={link.to}
+        end={link.end}
+        className={linkClass}
+        data-liquid-active={active ? "true" : undefined}
+      >
+        <span className="flex items-center gap-2">
+          {link.label}
+          {linkBadge(link.label)}
+        </span>
+      </NavLink>
+    );
+  });
+
   return (
     <header className="sticky top-0 z-30 border-b border-ink-700 bg-ink-950/90 backdrop-blur">
       <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 md:px-6">
-        <NavLink to="/" className="mr-4 flex items-center gap-2">
+        <NavLink to="/" className="ui-interactive mr-4 flex items-center gap-2">
           <span className="text-xl font-bold tracking-tight text-accent">
             HORDE
           </span>
         </NavLink>
 
-        <nav className="hidden items-center gap-1 md:flex">
-          {NAV_LINKS.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.end}
-              className={linkClass}
-            >
-              <span className="flex items-center gap-2">
-                {link.label}
-                {linkBadge(link.label)}
-              </span>
-            </NavLink>
-          ))}
-        </nav>
+        <LiquidNav
+          className="hidden items-center gap-1 md:flex"
+          dependency={location.pathname}
+        >
+          {desktopLinks}
+        </LiquidNav>
 
         <input
           value={isLibrary ? search : ""}
@@ -119,7 +138,7 @@ export default function TopNav() {
 
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="ml-auto rounded-lg p-2 text-gray-300 hover:bg-ink-800 md:hidden"
+          className="ui-interactive ml-auto rounded-lg p-2 text-gray-300 hover:bg-ink-800 md:hidden"
           aria-label="Toggle navigation menu"
           aria-expanded={menuOpen}
         >
@@ -131,21 +150,28 @@ export default function TopNav() {
       </div>
 
       {menuOpen && (
-        <nav className="border-t border-ink-700 bg-ink-950 px-3 py-2 md:hidden">
-          {NAV_LINKS.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.end}
-              className={mobileLinkClass}
-            >
-              <span className="flex items-center gap-2">
-                {link.label}
-                {linkBadge(link.label)}
-              </span>
-            </NavLink>
-          ))}
-        </nav>
+        <LiquidNav
+          className="border-t border-ink-700 bg-ink-950 px-3 py-2 md:hidden"
+          dependency={location.pathname}
+        >
+          {NAV_LINKS.map((link) => {
+            const active = isLinkActive(location.pathname, link.to, link.end);
+            return (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.end}
+                className={mobileLinkClass}
+                data-liquid-active={active ? "true" : undefined}
+              >
+                <span className="flex items-center gap-2">
+                  {link.label}
+                  {linkBadge(link.label)}
+                </span>
+              </NavLink>
+            );
+          })}
+        </LiquidNav>
       )}
     </header>
   );
