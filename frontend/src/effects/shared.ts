@@ -16,6 +16,8 @@ export interface EffectContext {
   /** Unscaled delta time. */
   rawDt: number;
   speed: number;
+  /** Particle density / scale multiplier (0.5–2). */
+  size: number;
 }
 
 export interface EffectController {
@@ -25,6 +27,7 @@ export interface EffectController {
   setOpacity: (opacity: number) => void;
   setSpeed: (speed: number) => void;
   setColor: (color: Rgb | null) => void;
+  setSize: (size: number) => void;
 }
 
 export function readAccent(): Rgb {
@@ -78,6 +81,7 @@ const noopController: EffectController = {
   setOpacity: () => undefined,
   setSpeed: () => undefined,
   setColor: () => undefined,
+  setSize: () => undefined,
 };
 
 export function createCanvasLoop(
@@ -94,6 +98,7 @@ export function createCanvasLoop(
   let paused = false;
   let opacity = 1;
   let speed = 1;
+  let effectSize = 1;
   let customColor: Rgb | null = null;
   let cachedAccent = readAccent();
   let last = performance.now();
@@ -168,6 +173,7 @@ export function createCanvasLoop(
       dt: scaledDt,
       rawDt,
       speed,
+      size: effectSize,
     });
     raf = requestAnimationFrame(frame);
   };
@@ -217,6 +223,9 @@ export function createCanvasLoop(
     },
     setSpeed(next: number) {
       speed = clamp(next, 0.1, 4);
+    },
+    setSize(next: number) {
+      effectSize = clamp(next, 0.5, 2);
     },
     setColor(color: Rgb | null) {
       customColor = color;

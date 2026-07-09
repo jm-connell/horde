@@ -17,12 +17,12 @@ export function createConstellationEffect(
   let lastW = 0;
   let lastH = 0;
 
-  const rebuild = (w: number, h: number) => {
-    const count = Math.floor((w * h) / 14000) + 40;
+  const rebuild = (w: number, h: number, size = 1) => {
+    const count = Math.floor(((w * h) / 14000) * size) + Math.floor(40 * size);
     stars = Array.from({ length: count }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      r: rand(0.6, 1.8),
+      r: rand(0.6, 1.8) * Math.sqrt(size),
       tw: rand(0.4, 1.2),
       phase: Math.random() * Math.PI * 2,
       vx: rand(-8, 8),
@@ -30,11 +30,18 @@ export function createConstellationEffect(
     }));
   };
 
-  return createCanvasLoop(canvas, ({ ctx, width, height, accent, time, dt }) => {
-    if (width !== lastW || height !== lastH) {
+  let lastSize = 0;
+
+  return createCanvasLoop(canvas, ({ ctx, width, height, accent, time, dt, size }) => {
+    if (
+      width !== lastW ||
+      height !== lastH ||
+      Math.abs(size - lastSize) > 0.05
+    ) {
       lastW = width;
       lastH = height;
-      rebuild(width, height);
+      lastSize = size;
+      rebuild(width, height, size);
     }
 
     ctx.clearRect(0, 0, width, height);

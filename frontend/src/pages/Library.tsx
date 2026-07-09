@@ -395,7 +395,7 @@ export default function Library() {
         </div>
       )}
       {!settings.sidebarCollapsed && (
-        <aside className="hidden w-56 shrink-0 lg:block">
+        <aside className="ui-panel hidden w-56 shrink-0 lg:block">
           <div className="sticky top-20 space-y-6">
             <div>
               <div className="mb-2 flex items-center justify-between px-2">
@@ -405,7 +405,7 @@ export default function Library() {
                 <button
                   onClick={() => update({ sidebarCollapsed: true })}
                   title="Collapse sidebar"
-                  className="rounded p-1 text-gray-500 hover:bg-ink-800 hover:text-accent"
+                  className="ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
                 >
                   ‹
                 </button>
@@ -453,7 +453,7 @@ export default function Library() {
         <button
           onClick={() => update({ sidebarCollapsed: false })}
           title="Expand channels"
-          className="sticky top-20 hidden h-fit rounded-lg border border-ink-700 bg-ink-900 px-2 py-3 text-sm text-gray-400 hover:border-accent hover:text-accent lg:block"
+          className="ui-panel ui-interactive sticky top-20 hidden h-fit items-center justify-center rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-3.5 text-sm text-gray-400 hover:border-accent hover:text-accent lg:flex"
         >
           ›
         </button>
@@ -525,7 +525,7 @@ export default function Library() {
                   value={feedSearch}
                   onChange={(e) => setFeedSearch(e.target.value)}
                   placeholder="Search channel videos..."
-                  className="hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
+                  className="ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
                 />
                 <div className="flex flex-row items-center gap-2">
                   <select
@@ -533,7 +533,7 @@ export default function Library() {
                     onChange={(e) =>
                       setFeedSort(e.target.value as "recent" | "popular")
                     }
-                    className="min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    className="ui-interactive min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                   >
                     <option value="recent">Recent</option>
                     <option value="popular">Popular</option>
@@ -543,7 +543,7 @@ export default function Library() {
                     onClick={() =>
                       setFeedOrder((o) => (o === "desc" ? "asc" : "desc"))
                     }
-                    className="shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                    className="ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
                     title="Toggle sort direction"
                   >
                     {feedOrder === "desc" ? "↓" : "↑"}
@@ -601,13 +601,13 @@ export default function Library() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search videos..."
-              className="hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
+              className="ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
             />
             <div className="flex flex-row items-center gap-2">
               <select
                 value={sort}
                 onChange={(e) => handleSortChange(e.target.value)}
-                className="min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                className="ui-interactive min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
               >
                 {LIBRARY_SORT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -617,7 +617,7 @@ export default function Library() {
               </select>
               <button
                 onClick={toggleOrder}
-                className="shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                className="ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
                 title={
                   sort === "random" ? "Shuffle again" : "Toggle sort direction"
                 }

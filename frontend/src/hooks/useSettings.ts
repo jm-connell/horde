@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api } from "../api";
 import type { ViewMode } from "../components/VideoPlayer";
 
 export type SubtitleSize = "small" | "medium" | "large";
@@ -51,6 +52,7 @@ export type BackgroundEffect =
   | "grain";
 
 export type HoverMotion = "off" | "subtle" | "lift" | "glow";
+export type NavIndicator = "none" | "liquid" | "underline" | "fade";
 
 export interface Settings {
   theme: Theme;
@@ -58,13 +60,15 @@ export interface Settings {
   backgroundEffect: BackgroundEffect;
   backgroundOpacity: number;
   backgroundEffectSpeed: number;
+  backgroundEffectSize: number;
   backgroundEffectColorMode: "accent" | "custom";
   backgroundEffectColor: string;
   pauseBackgroundWhileWatching: boolean;
-  liquidNav: boolean;
+  navIndicator: NavIndicator;
   hoverMotion: HoverMotion;
-  buttonPress: boolean;
-  pageFade: boolean;
+  translucentPanels: boolean;
+  /** 0.15–1 when panels are translucent; higher = more see-through. */
+  translucentPanelStrength: number;
   showDescription: boolean;
   subtitleSize: SubtitleSize;
   subtitleOffset: number;
@@ -100,13 +104,14 @@ const DEFAULTS: Settings = {
   backgroundEffect: "none",
   backgroundOpacity: 0.45,
   backgroundEffectSpeed: 1,
+  backgroundEffectSize: 1,
   backgroundEffectColorMode: "accent",
   backgroundEffectColor: "#22d3ee",
   pauseBackgroundWhileWatching: true,
-  liquidNav: true,
+  navIndicator: "liquid",
   hoverMotion: "subtle",
-  buttonPress: true,
-  pageFade: true,
+  translucentPanels: false,
+  translucentPanelStrength: 0.65,
   showDescription: true,
   subtitleSize: "medium",
   subtitleOffset: 12,
@@ -130,6 +135,42 @@ const DEFAULTS: Settings = {
   descriptionExpanded: true,
   showRelatedVideos: true,
 };
+
+/** Keys persisted to server `ui` blob (excludes ephemeral/session fields). */
+const SERVER_UI_KEYS: (keyof Settings)[] = [
+  "theme",
+  "customColors",
+  "backgroundEffect",
+  "backgroundOpacity",
+  "backgroundEffectSpeed",
+  "backgroundEffectSize",
+  "backgroundEffectColorMode",
+  "backgroundEffectColor",
+  "pauseBackgroundWhileWatching",
+  "navIndicator",
+  "hoverMotion",
+  "translucentPanels",
+  "translucentPanelStrength",
+  "showDescription",
+  "subtitleSize",
+  "subtitleOffset",
+  "defaultPlaybackRate",
+  "playbackMode",
+  "showContinueWatching",
+  "showDownloadNavBadge",
+  "normalizeVolumeOnDownload",
+  "channelSort",
+  "channelOrder",
+  "defaultLibrarySort",
+  "showProgressOnContinueWatching",
+  "showProgressOnAllVideos",
+  "sponsorBlockEnabled",
+  "sponsorBlockShowNotice",
+  "sidebarCollapsed",
+  "chaptersExpanded",
+  "descriptionExpanded",
+  "showRelatedVideos",
+];
 
 const STORAGE_KEY = "horde.settings";
 
@@ -233,6 +274,14 @@ const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "grain",
 ]);
 
+const VALID_HOVER_MOTION = new Set<string>(["off", "subtle", "lift", "glow"]);
+const VALID_NAV_INDICATOR = new Set<string>([
+  "none",
+  "liquid",
+  "underline",
+  "fade",
+]);
+
 function normalizeTheme(theme: string | undefined): Theme {
   if (!theme) return DEFAULTS.theme;
   if (theme in LEGACY_THEMES) return LEGACY_THEMES[theme];
@@ -261,6 +310,18 @@ function normalizeBackgroundSpeed(value: unknown): number {
   return Math.min(3, Math.max(0.25, n));
 }
 
+function normalizeBackgroundSize(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULTS.backgroundEffectSize;
+  return Math.min(2, Math.max(0.5, n));
+}
+
+function normalizeTranslucentStrength(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULTS.translucentPanelStrength;
+  return Math.min(1, Math.max(0.15, n));
+}
+
 function normalizeBackgroundColorMode(
   value: unknown
 ): "accent" | "custom" {
@@ -278,8 +339,6 @@ function normalizeBackgroundColor(value: unknown): string {
   return DEFAULTS.backgroundEffectColor;
 }
 
-const VALID_HOVER_MOTION = new Set<string>(["off", "subtle", "lift", "glow"]);
-
 function normalizeHoverMotion(value: unknown): HoverMotion {
   if (typeof value === "string" && VALID_HOVER_MOTION.has(value)) {
     return value as HoverMotion;
@@ -287,8 +346,106 @@ function normalizeHoverMotion(value: unknown): HoverMotion {
   return DEFAULTS.hoverMotion;
 }
 
+function normalizeNavIndicator(
+  value: unknown,
+  legacyLiquid?: unknown
+): NavIndicator {
+  if (typeof value === "string" && VALID_NAV_INDICATOR.has(value)) {
+    return value as NavIndicator;
+  }
+  // Migrate old liquidNav boolean
+  if (typeof legacyLiquid === "boolean") {
+    return legacyLiquid ? "liquid" : "none";
+  }
+  return DEFAULTS.navIndicator;
+}
+
 function normalizeBool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function normalizeCustomColors(value: unknown): CustomColors {
+  if (!value || typeof value !== "object") return DEFAULT_CUSTOM_COLORS;
+  const v = value as Partial<CustomColors>;
+  return {
+    accent:
+      typeof v.accent === "string" ? v.accent : DEFAULT_CUSTOM_COLORS.accent,
+    background:
+      typeof v.background === "string"
+        ? v.background
+        : DEFAULT_CUSTOM_COLORS.background,
+  };
+}
+
+function camelToSnake(key: string): string {
+  return key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+}
+
+function snakeToCamel(key: string): string {
+  return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+export function settingsToServerUi(settings: Settings): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of SERVER_UI_KEYS) {
+    const val = settings[key];
+    out[camelToSnake(key)] = val;
+  }
+  return out;
+}
+
+export function serverUiToSettingsPatch(
+  ui: Record<string, unknown>
+): Partial<Settings> {
+  const patch: Record<string, unknown> = {};
+  for (const [snake, val] of Object.entries(ui)) {
+    const camel = snakeToCamel(snake);
+    if (camel in DEFAULTS || SERVER_UI_KEYS.includes(camel as keyof Settings)) {
+      patch[camel] = val;
+    }
+  }
+  // custom_colors arrives as object
+  if (ui.custom_colors && typeof ui.custom_colors === "object") {
+    patch.customColors = ui.custom_colors;
+  }
+  return patch as Partial<Settings>;
+}
+
+function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }): Settings {
+  return {
+    ...DEFAULTS,
+    ...parsed,
+    theme: normalizeTheme(parsed.theme),
+    customColors: normalizeCustomColors(parsed.customColors),
+    backgroundEffect: normalizeBackgroundEffect(parsed.backgroundEffect),
+    backgroundOpacity: normalizeBackgroundOpacity(parsed.backgroundOpacity),
+    backgroundEffectSpeed: normalizeBackgroundSpeed(
+      parsed.backgroundEffectSpeed
+    ),
+    backgroundEffectSize: normalizeBackgroundSize(parsed.backgroundEffectSize),
+    backgroundEffectColorMode: normalizeBackgroundColorMode(
+      parsed.backgroundEffectColorMode
+    ),
+    backgroundEffectColor: normalizeBackgroundColor(
+      parsed.backgroundEffectColor
+    ),
+    pauseBackgroundWhileWatching: normalizeBool(
+      parsed.pauseBackgroundWhileWatching,
+      DEFAULTS.pauseBackgroundWhileWatching
+    ),
+    navIndicator: normalizeNavIndicator(
+      parsed.navIndicator,
+      (parsed as { liquidNav?: boolean }).liquidNav
+    ),
+    hoverMotion: normalizeHoverMotion(parsed.hoverMotion),
+    translucentPanels: normalizeBool(
+      parsed.translucentPanels,
+      DEFAULTS.translucentPanels
+    ),
+    translucentPanelStrength: normalizeTranslucentStrength(
+      parsed.translucentPanelStrength
+    ),
+  };
 }
 
 export function applyMotionPrefs(settings: Settings): void {
@@ -297,44 +454,38 @@ export function applyMotionPrefs(settings: Settings): void {
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  root.dataset.liquidNav = !reduced && settings.liquidNav ? "on" : "off";
+  root.dataset.navIndicator = reduced ? "none" : settings.navIndicator;
   root.dataset.hoverMotion = reduced ? "off" : settings.hoverMotion;
-  root.dataset.buttonPress = !reduced && settings.buttonPress ? "on" : "off";
-  root.dataset.pageFade = !reduced && settings.pageFade ? "on" : "off";
+  root.dataset.buttonPress = reduced ? "off" : "on";
+  root.dataset.pageFade = reduced ? "off" : "on";
+  root.dataset.translucentPanels = settings.translucentPanels ? "on" : "off";
+  // Strength → panel fill alpha (lower = more see-through) and blur.
+  // High strength keeps blur low so particle effects stay visible.
+  const s = settings.translucentPanelStrength;
+  const fill = (0.78 - s * 0.55).toFixed(3); // 0.15→0.70, 1→0.23
+  const headerFill = (0.85 - s * 0.5).toFixed(3);
+  const cardFill = (0.82 - s * 0.5).toFixed(3);
+  const blur = Math.max(0, Math.round(14 - s * 12)); // 0.15→12px, 1→2px
+  root.style.setProperty("--ui-panel-alpha", fill);
+  root.style.setProperty("--ui-panel-header-alpha", headerFill);
+  root.style.setProperty("--ui-panel-card-alpha", cardFill);
+  root.style.setProperty("--ui-panel-blur", `${blur}px`);
 }
 
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    return {
-      ...DEFAULTS,
-      ...parsed,
-      theme: normalizeTheme(parsed.theme),
-      backgroundEffect: normalizeBackgroundEffect(parsed.backgroundEffect),
-      backgroundOpacity: normalizeBackgroundOpacity(parsed.backgroundOpacity),
-      backgroundEffectSpeed: normalizeBackgroundSpeed(
-        parsed.backgroundEffectSpeed
-      ),
-      backgroundEffectColorMode: normalizeBackgroundColorMode(
-        parsed.backgroundEffectColorMode
-      ),
-      backgroundEffectColor: normalizeBackgroundColor(
-        parsed.backgroundEffectColor
-      ),
-      pauseBackgroundWhileWatching: normalizeBool(
-        parsed.pauseBackgroundWhileWatching,
-        DEFAULTS.pauseBackgroundWhileWatching
-      ),
-      liquidNav: normalizeBool(parsed.liquidNav, DEFAULTS.liquidNav),
-      hoverMotion: normalizeHoverMotion(parsed.hoverMotion),
-      buttonPress: normalizeBool(parsed.buttonPress, DEFAULTS.buttonPress),
-      pageFade: normalizeBool(parsed.pageFade, DEFAULTS.pageFade),
-    };
+    const parsed = JSON.parse(raw) as Partial<Settings> & { liquidNav?: boolean };
+    return normalizeSettings(parsed);
   } catch {
     return DEFAULTS;
   }
+}
+
+function persistLocal(settings: Settings): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  window.dispatchEvent(new Event(EVENT));
 }
 
 export function applyTheme(theme: Theme, customColors?: CustomColors): void {
@@ -355,12 +506,22 @@ export function applyTheme(theme: Theme, customColors?: CustomColors): void {
   }
 }
 
-// Notify listeners in the same tab (the native "storage" event only fires in
-// other tabs).
 const EVENT = "horde:settings-changed";
+
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleServerSync(settings: Settings): void {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    const ui = settingsToServerUi(settings);
+    api.updateAppSettings({ ui }).catch(() => undefined);
+  }, 300);
+}
 
 export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   const [settings, setSettings] = useState<Settings>(loadSettings);
+  const hydrated = useRef(false);
 
   useEffect(() => {
     const sync = () => setSettings(loadSettings());
@@ -372,6 +533,53 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
     };
   }, []);
 
+  // Hydrate from server once
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getAppSettings()
+      .then((remote) => {
+        if (cancelled) return;
+        const local = loadSettings();
+        const ui = remote.ui && typeof remote.ui === "object" ? remote.ui : {};
+        const hasServerUi = Object.keys(ui).length > 0;
+
+        if (hasServerUi) {
+          const patch = serverUiToSettingsPatch(ui);
+          const next = normalizeSettings({
+            ...local,
+            ...patch,
+            progressExpiryDays: remote.progress_expiry_days,
+          });
+          persistLocal(next);
+        } else {
+          // Migrate local → server
+          const uiPayload = settingsToServerUi(local);
+          if (Object.keys(uiPayload).length > 0) {
+            api
+              .updateAppSettings({
+                ui: uiPayload,
+                progress_expiry_days: remote.progress_expiry_days,
+              })
+              .catch(() => undefined);
+          }
+          if (remote.progress_expiry_days !== local.progressExpiryDays) {
+            persistLocal({
+              ...local,
+              progressExpiryDays: remote.progress_expiry_days,
+            });
+          }
+        }
+        hydrated.current = true;
+      })
+      .catch(() => {
+        hydrated.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     applyTheme(settings.theme, settings.customColors);
   }, [settings.theme, settings.customColors]);
@@ -379,10 +587,10 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   useEffect(() => {
     applyMotionPrefs(settings);
   }, [
-    settings.liquidNav,
+    settings.navIndicator,
     settings.hoverMotion,
-    settings.buttonPress,
-    settings.pageFade,
+    settings.translucentPanels,
+    settings.translucentPanelStrength,
   ]);
 
   useEffect(() => {
@@ -393,9 +601,9 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   }, []);
 
   const update = useCallback((patch: Partial<Settings>) => {
-    const next = { ...loadSettings(), ...patch };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event(EVENT));
+    const next = normalizeSettings({ ...loadSettings(), ...patch });
+    persistLocal(next);
+    scheduleServerSync(next);
   }, []);
 
   return [settings, update];

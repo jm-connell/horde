@@ -3,6 +3,7 @@ import { api } from "../api";
 import { useDownloads, isActiveJob } from "../context/DownloadContext";
 import { useSettings } from "../hooks/useSettings";
 import ChannelPicker from "../components/ChannelPicker";
+import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
 import {
   formatApproxSize,
@@ -289,7 +290,7 @@ export default function Download() {
 
       <form
         onSubmit={submit}
-        className="space-y-4 rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700"
+        className="ui-panel space-y-4 rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700"
       >
         <div>
           <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-gray-300">
@@ -340,8 +341,8 @@ export default function Download() {
           )}
         </div>
 
-        {!isPlaylist && (
-          <>
+        <Collapse open={!isPlaylist}>
+          <div className="space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-300">
                 Title
@@ -350,7 +351,7 @@ export default function Download() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Auto-detected from the link"
-                className="w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
               />
             </div>
             <div>
@@ -364,10 +365,10 @@ export default function Download() {
                 placeholder={settings.lastCustomChannel || "Detected channel"}
               />
             </div>
-          </>
-        )}
+          </div>
+        </Collapse>
 
-        {preview && isPlaylist && (
+        <Collapse open={!!(preview && isPlaylist)}>
           <div className="space-y-4 rounded-lg border border-accent/30 bg-accent/5 p-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-300">
@@ -377,7 +378,7 @@ export default function Download() {
                 value={playlistName}
                 onChange={(e) => setPlaylistName(e.target.value)}
                 placeholder="Playlist name"
-                className="w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
               />
             </div>
 
@@ -442,12 +443,12 @@ export default function Download() {
               </>
             ) : (
               <p className="text-xs text-gray-400">
-                {preview.entry_count ?? 0} video
-                {preview.entry_count === 1 ? "" : "s"} detected.
+                {preview?.entry_count ?? 0} video
+                {(preview?.entry_count ?? 0) === 1 ? "" : "s"} detected.
               </p>
             )}
           </div>
-        )}
+        </Collapse>
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-300">
@@ -490,12 +491,12 @@ export default function Download() {
       </form>
 
       {activeCount > 0 && (
-        <section className="mt-6 rounded-xl bg-accent/5 p-4 ring-1 ring-accent/40">
+        <section className="ui-panel mt-6 rounded-xl bg-accent/5 p-4 ring-1 ring-accent/40">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               onClick={toggleActiveCollapsed}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              className="ui-interactive flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left"
             >
               <span className="text-gray-400">{activeCollapsed ? "▶" : "▼"}</span>
               <span className="text-sm font-semibold text-gray-100">
@@ -510,7 +511,7 @@ export default function Download() {
                 <button
                   type="button"
                   onClick={() => resumeQueue()}
-                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-ink-950 hover:bg-accent-soft"
+                  className="ui-interactive rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-ink-950 hover:bg-accent-soft"
                 >
                   Resume all
                 </button>
@@ -518,7 +519,7 @@ export default function Download() {
                 <button
                   type="button"
                   onClick={() => pauseQueue()}
-                  className="rounded-lg bg-ink-800 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-700"
+                  className="ui-interactive rounded-lg bg-ink-800 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-700"
                 >
                   Pause all
                 </button>
@@ -529,7 +530,7 @@ export default function Download() {
             {activeCount} active -
             Pause all stops every download; nothing new starts until you resume.
           </p>
-          {!activeCollapsed && (
+          <Collapse open={!activeCollapsed}>
             <div className="space-y-4">
               {activeJobs.map((job) => (
                 <DownloadJobCard
@@ -541,7 +542,7 @@ export default function Download() {
                 />
               ))}
             </div>
-          )}
+          </Collapse>
         </section>
       )}
 

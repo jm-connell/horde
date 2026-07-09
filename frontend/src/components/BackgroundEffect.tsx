@@ -19,6 +19,7 @@ export default function BackgroundEffect() {
   const effect = settings.backgroundEffect;
   const opacity = settings.backgroundOpacity;
   const speed = settings.backgroundEffectSpeed;
+  const size = settings.backgroundEffectSize;
   const colorMode = settings.backgroundEffectColorMode;
   const customColor = settings.backgroundEffectColor;
   const pauseWhileWatching = settings.pauseBackgroundWhileWatching;
@@ -60,6 +61,7 @@ export default function BackgroundEffect() {
 
     controller.setOpacity(opacity);
     controller.setSpeed(speed);
+    controller.setSize(size);
     controller.setColor(
       colorMode === "custom" ? parseHexColor(customColor) : null
     );
@@ -73,7 +75,6 @@ export default function BackgroundEffect() {
         controllerRef.current = null;
       }
     };
-    // Runtime knobs applied in separate effects so they don't remount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, effect]);
 
@@ -84,6 +85,10 @@ export default function BackgroundEffect() {
   useEffect(() => {
     controllerRef.current?.setSpeed(speed);
   }, [speed]);
+
+  useEffect(() => {
+    controllerRef.current?.setSize(size);
+  }, [size]);
 
   useEffect(() => {
     controllerRef.current?.setColor(

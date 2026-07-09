@@ -9,6 +9,7 @@ DEFAULTS: dict[str, Any] = {
     "progress_expiry_days": 14,
     "continue_watching_days": 7,
     "metadata_sync_interval_hours": 24,
+    "ui": {},
 }
 
 
@@ -22,7 +23,14 @@ def load() -> dict[str, Any]:
     try:
         if p.exists():
             data = json.loads(p.read_text())
-            return {**DEFAULTS, **data}
+            merged = {**DEFAULTS, **data}
+            # Deep-merge ui so partial saves don't wipe nested keys on read.
+            ui = data.get("ui")
+            if isinstance(ui, dict):
+                merged["ui"] = ui
+            else:
+                merged["ui"] = {}
+            return merged
     except Exception:  # noqa: BLE001
         pass
     return dict(DEFAULTS)
@@ -31,6 +39,10 @@ def load() -> dict[str, Any]:
 def save(updates: dict[str, Any]) -> dict[str, Any]:
     with _lock:
         current = load()
+        if "ui" in updates and isinstance(updates["ui"], dict):
+            existing_ui = current.get("ui") if isinstance(current.get("ui"), dict) else {}
+            current["ui"] = {**existing_ui, **updates["ui"]}
+            updates = {k: v for k, v in updates.items() if k != "ui"}
         current.update(updates)
         p = _path()
         p.parent.mkdir(parents=True, exist_ok=True)

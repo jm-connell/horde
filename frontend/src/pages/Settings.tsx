@@ -7,6 +7,7 @@ import {
   type ChannelSort,
   type HoverMotion,
   type LibrarySort,
+  type NavIndicator,
   type SubtitleSize,
   type Theme,
 } from "../hooks/useSettings";
@@ -15,6 +16,7 @@ import { LIBRARY_SORT_OPTIONS } from "../hooks/useLibrarySort";
 import type { AppSettings, HealthStats, StorageStats } from "../types";
 import { formatSize } from "../utils";
 import LiquidNav from "../components/LiquidNav";
+import Collapse from "../components/Collapse";
 
 const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "small", label: "Small" },
@@ -83,6 +85,29 @@ const HOVER_MOTION_OPTIONS: {
   },
 ];
 
+const NAV_INDICATOR_OPTIONS: {
+  value: NavIndicator;
+  label: string;
+  description: string;
+}[] = [
+  { value: "none", label: "None", description: "Static active state only" },
+  {
+    value: "liquid",
+    label: "Liquid",
+    description: "Jelly pill that morphs between items",
+  },
+  {
+    value: "underline",
+    label: "Underline",
+    description: "Sliding accent bar under the active item",
+  },
+  {
+    value: "fade",
+    label: "Fade",
+    description: "Soft pill that eases between items",
+  },
+];
+
 const TAB_STORAGE_KEY = "horde.settings.tab";
 
 function loadTab(): SettingsTab {
@@ -107,7 +132,7 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className={`flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+      className={`ui-interactive flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
         checked ? "bg-accent" : "bg-ink-700"
       }`}
     >
@@ -237,11 +262,11 @@ export default function Settings() {
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-1 text-2xl font-bold text-gray-100">Settings</h1>
       <p className="mb-6 text-sm text-gray-400">
-        Preferences are stored in this browser.
+        Preferences sync to this Horde install and are cached in this browser.
       </p>
 
       <LiquidNav
-        className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
+        className="ui-panel mb-4 flex gap-1 overflow-x-auto rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
         pillClassName="bg-ink-800"
         dependency={tab}
       >
@@ -254,12 +279,12 @@ export default function Settings() {
             onClick={() => selectTab(t.id)}
             className={`ui-interactive relative z-10 shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               tab === t.id
-                ? settings.liquidNav
+                ? settings.navIndicator !== "none"
                   ? "text-gray-100"
                   : "bg-ink-800 text-gray-100"
                 : "text-gray-400 hover:text-gray-200"
             } ${
-              !settings.liquidNav && tab !== t.id
+              settings.navIndicator === "none" && tab !== t.id
                 ? "hover:bg-ink-800/60"
                 : ""
             }`}
@@ -271,7 +296,7 @@ export default function Settings() {
 
       <div
         role="tabpanel"
-        className="space-y-6 rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700"
+        className="ui-panel space-y-6 rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700"
       >
         {tab === "appearance" && (
           <>
@@ -292,7 +317,7 @@ export default function Settings() {
                 ))}
               </select>
 
-              {settings.theme === "custom" && (
+              <Collapse open={settings.theme === "custom"}>
                 <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
                   <p className="text-xs text-gray-500">
                     Pick your own accent and background. Surface colors are
@@ -345,7 +370,7 @@ export default function Settings() {
                     />
                   </div>
                 </div>
-              )}
+              </Collapse>
             </Section>
 
             <Section
@@ -367,7 +392,7 @@ export default function Settings() {
                   </option>
                 ))}
               </select>
-              {settings.backgroundEffect !== "none" && (
+              <Collapse open={settings.backgroundEffect !== "none"}>
                 <p className="mt-2 text-xs text-gray-500">
                   {
                     BACKGROUND_EFFECT_OPTIONS.find(
@@ -375,9 +400,9 @@ export default function Settings() {
                     )?.description
                   }
                 </p>
-              )}
+              </Collapse>
 
-              {settings.backgroundEffect !== "none" && (
+              <Collapse open={settings.backgroundEffect !== "none"}>
                 <div className="mt-4 space-y-4">
                   <label className="block">
                     <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
@@ -421,6 +446,28 @@ export default function Settings() {
                     />
                   </label>
 
+                  <label className="block">
+                    <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
+                      <span>Size</span>
+                      <span className="tabular-nums text-gray-500">
+                        {settings.backgroundEffectSize.toFixed(2)}x
+                      </span>
+                    </span>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={2}
+                      step={0.05}
+                      value={settings.backgroundEffectSize}
+                      onChange={(e) =>
+                        update({
+                          backgroundEffectSize: Number(e.target.value),
+                        })
+                      }
+                      className="accent-scrubber w-full"
+                    />
+                  </label>
+
                   <div>
                     <p className="mb-2 text-sm text-gray-300">Color</p>
                     <div className="mb-3 flex flex-wrap gap-2">
@@ -435,7 +482,7 @@ export default function Settings() {
                           onClick={() =>
                             update({ backgroundEffectColorMode: opt.value })
                           }
-                          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          className={`ui-interactive rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                             settings.backgroundEffectColorMode === opt.value
                               ? "bg-accent text-ink-950"
                               : "bg-ink-800 text-gray-300 hover:bg-ink-700"
@@ -478,26 +525,44 @@ export default function Settings() {
                     }
                   />
                 </div>
-              )}
+              </Collapse>
             </Section>
 
             <Section
               title="Interface motion"
-              description="Hover, press, and navigation transitions. Automatically reduced when the system prefers reduced motion."
+              description="Hover and navigation transitions. Button press and page fade are always on. Automatically reduced when the system prefers reduced motion."
             >
               <div className="space-y-5">
-                <SettingRow
-                  title="Liquid navigation"
-                  description="Sliding highlight that morphs between nav items and settings tabs."
-                  control={
-                    <Toggle
-                      checked={settings.liquidNav}
-                      onChange={() =>
-                        update({ liquidNav: !settings.liquidNav })
-                      }
-                    />
-                  }
-                />
+                <div>
+                  <p className="mb-2 text-sm font-medium text-gray-200">
+                    Navigation indicator
+                  </p>
+                  <p className="mb-3 text-xs text-gray-500">
+                    How the active nav item and settings tabs are highlighted.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {NAV_INDICATOR_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => update({ navIndicator: opt.value })}
+                        className={`ui-interactive rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          settings.navIndicator === opt.value
+                            ? "bg-accent text-ink-950"
+                            : "bg-ink-800 text-gray-300 hover:bg-ink-700"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    {
+                      NAV_INDICATOR_OPTIONS.find(
+                        (o) => o.value === settings.navIndicator
+                      )?.description
+                    }
+                  </p>
+                </div>
 
                 <div>
                   <p className="mb-2 text-sm font-medium text-gray-200">
@@ -531,30 +596,47 @@ export default function Settings() {
                 </div>
 
                 <SettingRow
-                  title="Button press"
-                  description="Slight scale-down when clicking buttons and interactive controls."
+                  title="Translucent panels"
+                  description="Let background animations show through nav, cards, and settings panels."
                   control={
                     <Toggle
-                      checked={settings.buttonPress}
+                      checked={settings.translucentPanels}
                       onChange={() =>
-                        update({ buttonPress: !settings.buttonPress })
+                        update({
+                          translucentPanels: !settings.translucentPanels,
+                        })
                       }
                     />
                   }
                 />
-
-                <SettingRow
-                  title="Page fade"
-                  description="Soft fade/slide when navigating between pages."
-                  control={
-                    <Toggle
-                      checked={settings.pageFade}
-                      onChange={() =>
-                        update({ pageFade: !settings.pageFade })
+                <Collapse open={settings.translucentPanels}>
+                  <label className="mt-1 block">
+                    <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
+                      <span>Panel transparency</span>
+                      <span className="tabular-nums text-gray-500">
+                        {Math.round(settings.translucentPanelStrength * 100)}%
+                      </span>
+                    </span>
+                    <input
+                      type="range"
+                      min={0.15}
+                      max={1}
+                      step={0.05}
+                      value={settings.translucentPanelStrength}
+                      onChange={(e) =>
+                        update({
+                          translucentPanelStrength: Number(e.target.value),
+                        })
                       }
+                      className="accent-scrubber w-full"
                     />
-                  }
-                />
+                    <p className="mt-2 text-xs text-gray-500">
+                      Higher values make panels more see-through so effects stay
+                      visible. Turn intensity up on the background animation if
+                      needed.
+                    </p>
+                  </label>
+                </Collapse>
               </div>
             </Section>
           </>

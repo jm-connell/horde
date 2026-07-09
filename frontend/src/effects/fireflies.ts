@@ -17,8 +17,10 @@ export function createFirefliesEffect(
   let lastW = 0;
   let lastH = 0;
 
-  const rebuild = (w: number, h: number) => {
-    const count = Math.floor((w * h) / 28000) + 18;
+  let lastSize = 0;
+
+  const rebuild = (w: number, h: number, size: number) => {
+    const count = Math.floor(((w * h) / 28000) * size) + Math.floor(18 * size);
     bugs = Array.from({ length: count }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
@@ -26,15 +28,20 @@ export function createFirefliesEffect(
       vy: rand(-10, 10),
       phase: Math.random() * Math.PI * 2,
       speed: rand(0.6, 1.4),
-      size: rand(1.5, 3),
+      size: rand(1.5, 3) * Math.sqrt(size),
     }));
   };
 
-  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, time }) => {
-    if (width !== lastW || height !== lastH) {
+  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, time, size }) => {
+    if (
+      width !== lastW ||
+      height !== lastH ||
+      Math.abs(size - lastSize) > 0.05
+    ) {
       lastW = width;
       lastH = height;
-      rebuild(width, height);
+      lastSize = size;
+      rebuild(width, height, size);
     }
 
     ctx.clearRect(0, 0, width, height);

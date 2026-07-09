@@ -14,23 +14,30 @@ export function createBokehEffect(canvas: HTMLCanvasElement): EffectController {
   let lastW = 0;
   let lastH = 0;
 
-  const rebuild = (w: number, h: number) => {
-    const count = Math.floor((w * h) / 45000) + 12;
+  let lastSize = 0;
+
+  const rebuild = (w: number, h: number, size: number) => {
+    const count = Math.floor(((w * h) / 45000) * size) + Math.floor(12 * size);
     orbs = Array.from({ length: count }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      r: rand(30, 110),
+      r: rand(30, 110) * size,
       vx: rand(-8, 8),
       vy: rand(-6, 6),
       alpha: rand(0.08, 0.2),
     }));
   };
 
-  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt }) => {
-    if (width !== lastW || height !== lastH) {
+  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, size }) => {
+    if (
+      width !== lastW ||
+      height !== lastH ||
+      Math.abs(size - lastSize) > 0.05
+    ) {
       lastW = width;
       lastH = height;
-      rebuild(width, height);
+      lastSize = size;
+      rebuild(width, height, size);
     }
 
     ctx.clearRect(0, 0, width, height);

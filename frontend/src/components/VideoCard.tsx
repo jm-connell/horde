@@ -48,7 +48,7 @@ export default function VideoCard({
             src={thumb}
             alt={video.title}
             loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+            className="h-full w-full object-cover"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-ink-600">
@@ -61,7 +61,7 @@ export default function VideoCard({
           </span>
         )}
         {progress !== undefined && progress > 0 && (
-          <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-1 bg-black/50">
             <div
               className="h-full bg-accent"
               style={{ width: `${Math.min(100, progress * 100)}%` }}

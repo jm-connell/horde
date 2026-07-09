@@ -16,6 +16,7 @@ export function createPerlinFlowEffect(
   let particles: Particle[] = [];
   let lastW = 0;
   let lastH = 0;
+  let lastSize = 0;
   const seed = Math.floor(Math.random() * 1000);
 
   const spawn = (w: number, h: number): Particle => {
@@ -25,16 +26,21 @@ export function createPerlinFlowEffect(
     return { x, y, px: x, py: y, life: Math.random() * maxLife, maxLife };
   };
 
-  const rebuild = (w: number, h: number) => {
-    const count = Math.floor((w * h) / 6500) + 90;
+  const rebuild = (w: number, h: number, size: number) => {
+    const count = Math.floor(((w * h) / 6500) * size) + Math.floor(90 * size);
     particles = Array.from({ length: count }, () => spawn(w, h));
   };
 
-  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, time }) => {
-    if (width !== lastW || height !== lastH) {
+  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, time, size }) => {
+    if (
+      width !== lastW ||
+      height !== lastH ||
+      Math.abs(size - lastSize) > 0.05
+    ) {
       lastW = width;
       lastH = height;
-      rebuild(width, height);
+      lastSize = size;
+      rebuild(width, height, size);
     }
 
     // Soft trail fade that works on a transparent canvas

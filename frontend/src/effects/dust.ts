@@ -15,12 +15,14 @@ export function createDustEffect(canvas: HTMLCanvasElement): EffectController {
   let lastW = 0;
   let lastH = 0;
 
-  const rebuild = (w: number, h: number) => {
-    const count = Math.floor((w * h) / 9000) + 60;
+  let lastSize = 0;
+
+  const rebuild = (w: number, h: number, size: number) => {
+    const count = Math.floor(((w * h) / 9000) * size) + Math.floor(60 * size);
     specks = Array.from({ length: count }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      r: rand(0.5, 1.6),
+      r: rand(0.5, 1.6) * Math.sqrt(size),
       speed: rand(8, 22),
       wobble: rand(6, 18),
       phase: Math.random() * Math.PI * 2,
@@ -28,11 +30,16 @@ export function createDustEffect(canvas: HTMLCanvasElement): EffectController {
     }));
   };
 
-  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, time }) => {
-    if (width !== lastW || height !== lastH) {
+  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, time, size }) => {
+    if (
+      width !== lastW ||
+      height !== lastH ||
+      Math.abs(size - lastSize) > 0.05
+    ) {
       lastW = width;
       lastH = height;
-      rebuild(width, height);
+      lastSize = size;
+      rebuild(width, height, size);
     }
 
     ctx.clearRect(0, 0, width, height);

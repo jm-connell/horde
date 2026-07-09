@@ -171,7 +171,7 @@ export default function DownloadJobCard({
   })();
 
   return (
-    <div className={`rounded-xl bg-ink-900 p-5 ring-1 ${cardRing}`}>
+    <div className={`ui-panel rounded-xl bg-ink-900 p-5 ring-1 ${cardRing}`}>
       <div className="flex gap-4">
         <div className="hidden h-20 w-36 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block">
           {thumbSrc ? (

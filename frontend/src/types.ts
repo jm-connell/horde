@@ -155,6 +155,7 @@ export interface StorageStats {
 
 export interface AppSettings {
   progress_expiry_days: number;
+  ui: Record<string, unknown>;
 }
 
 export interface HealthStats {

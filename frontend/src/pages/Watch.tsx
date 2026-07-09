@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, thumbnailUrl } from "../api";
 import AddToPlaylist from "../components/AddToPlaylist";
 import ChaptersList from "../components/ChaptersList";
+import Collapse from "../components/Collapse";
 import LinkifiedText from "../components/LinkifiedText";
 import PlaybackQueue from "../components/PlaybackQueue";
 import VideoActionsMenu from "../components/VideoActionsMenu";
@@ -208,7 +209,7 @@ export default function Watch() {
   );
 
   return (
-    <div className={contentClass}>
+    <div className={`${contentClass} ${isWide ? "-mt-6" : ""}`}>
       <div
         className={
           showRelatedRight
@@ -223,7 +224,7 @@ export default function Watch() {
             </div>
           </div>
 
-          <div>
+          <div className={isWide ? "px-3 md:px-6" : undefined}>
         {/* Metadata change banner */}
         {video.title_is_custom &&
           video.source_title &&
@@ -295,7 +296,7 @@ export default function Watch() {
               <ChaptersList chapters={parseChapters(video.description)} />
 
               {settings.showDescription && (video.description || video.notes) && (
-                <div className="rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700">
+                <div className="ui-panel overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
                   <button
                     type="button"
                     onClick={() =>
@@ -303,23 +304,31 @@ export default function Watch() {
                         descriptionExpanded: !settings.descriptionExpanded,
                       })
                     }
-                    className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
+                    className="ui-interactive flex w-full items-center justify-between px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:bg-ink-800/50 hover:text-accent"
                   >
                     <span>Description</span>
                     <span>{settings.descriptionExpanded ? "▲" : "▼"}</span>
                   </button>
 
-                  {settings.descriptionExpanded && (
-                    <>
+                  <Collapse open={settings.descriptionExpanded}>
+                    <div className="px-4 pb-4">
                       {video.description && (
                         <>
-                          <p
-                            className={`mt-3 whitespace-pre-wrap text-sm text-gray-300 ${
-                              descExpanded ? "" : "line-clamp-3"
+                          <div
+                            className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                              descExpanded
+                                ? "grid-rows-[1fr]"
+                                : "grid-rows-[minmax(0,4.5rem)]"
                             }`}
                           >
-                            <LinkifiedText text={video.description} />
-                          </p>
+                            <p
+                              className={`min-h-0 overflow-hidden whitespace-pre-wrap text-sm text-gray-300 ${
+                                descExpanded ? "" : "line-clamp-3"
+                              }`}
+                            >
+                              <LinkifiedText text={video.description} />
+                            </p>
+                          </div>
                           <button
                             onClick={() => setDescExpanded((v) => !v)}
                             className="mt-2 text-xs font-medium text-accent hover:underline"
@@ -329,25 +338,29 @@ export default function Watch() {
                         </>
                       )}
 
-                      {video.notes &&
-                        (descExpanded || !video.description) && (
-                          <div
-                            className={
-                              video.description
-                                ? "mt-4 border-t border-ink-700 pt-4"
-                                : "mt-3"
-                            }
-                          >
-                            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
-                              Your notes
-                            </h3>
-                            <p className="whitespace-pre-wrap text-sm text-gray-300">
-                              <LinkifiedText text={video.notes} />
-                            </p>
-                          </div>
-                        )}
-                    </>
-                  )}
+                      <Collapse
+                        open={
+                          !!video.notes &&
+                          (descExpanded || !video.description)
+                        }
+                      >
+                        <div
+                          className={
+                            video.description
+                              ? "mt-4 border-t border-ink-700 pt-4"
+                              : ""
+                          }
+                        >
+                          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
+                            Your notes
+                          </h3>
+                          <p className="whitespace-pre-wrap text-sm text-gray-300">
+                            <LinkifiedText text={video.notes ?? ""} />
+                          </p>
+                        </div>
+                      </Collapse>
+                    </div>
+                  </Collapse>
                 </div>
               )}
 
@@ -431,7 +444,7 @@ export default function Watch() {
                             src={thumb}
                             alt={v.title}
                             loading="lazy"
-                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                            className="h-full w-full object-cover"
                           />
                         ) : (
                           <div className="flex h-full items-center justify-center text-ink-600">
