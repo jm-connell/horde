@@ -14,9 +14,18 @@ interface Props {
 }
 
 const labelClass = "mb-1 block text-xs font-medium text-gray-400";
+const SKIP_DISMISS_CONFIRM_KEY = "horde.downloads.skip-dismiss-confirm";
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+function skipDismissConfirm(): boolean {
+  try {
+    return localStorage.getItem(SKIP_DISMISS_CONFIRM_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 export default function DownloadJobCard({
@@ -61,6 +70,8 @@ export default function DownloadJobCard({
   const [note, setNote] = useState(job.notes_pending ?? "");
   const [saved, setSaved] = useState(false);
   const [showNote, setShowNote] = useState(Boolean(job.notes_pending));
+  const [dismissConfirm, setDismissConfirm] = useState(false);
+  const [dontAskAgain, setDontAskAgain] = useState(false);
 
   const savedTitle = useRef(resolveTitle());
   const savedChannel = useRef(resolveChannel());
@@ -115,11 +126,26 @@ export default function DownloadJobCard({
     }
   };
 
+  const confirmDismiss = async () => {
+    if (dontAskAgain) {
+      try {
+        localStorage.setItem(SKIP_DISMISS_CONFIRM_KEY, "1");
+      } catch {
+        /* ignore */
+      }
+    }
+    setDismissConfirm(false);
+    await dismissJob(job.id);
+  };
+
   const onDismiss = async () => {
     if (completed || failed || cancelled) {
-      if (!confirm("Remove this card from the list? The video stays in your library."))
+      if (skipDismissConfirm()) {
+        await dismissJob(job.id);
         return;
-      await dismissJob(job.id);
+      }
+      setDontAskAgain(false);
+      setDismissConfirm(true);
       return;
     }
     if (!confirm("Cancel this download?")) return;
@@ -171,6 +197,7 @@ export default function DownloadJobCard({
   })();
 
   return (
+    <>
     <div className={`ui-panel rounded-xl bg-ink-900 p-5 ring-1 ${cardRing}`}>
       <div className="flex gap-4">
         <div className="hidden h-20 w-36 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block">
@@ -324,5 +351,40 @@ export default function DownloadJobCard({
         </div>
       </div>
     </div>
+    {dismissConfirm && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+        <div className="ui-panel w-full max-w-sm rounded-xl bg-ink-900 p-5 ring-1 ring-ink-600 shadow-xl">
+          <p className="text-sm text-gray-200">
+            Remove this card from the list? The video stays in your library.
+          </p>
+          <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-gray-400">
+            <input
+              type="checkbox"
+              checked={dontAskAgain}
+              onChange={(e) => setDontAskAgain(e.target.checked)}
+              className="rounded border-ink-600"
+            />
+            Don&apos;t ask again
+          </label>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setDismissConfirm(false)}
+              className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-300 hover:bg-ink-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDismiss}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

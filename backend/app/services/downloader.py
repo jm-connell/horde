@@ -85,16 +85,27 @@ def _video_stem(path: Path) -> str:
     return stem
 
 
+def _is_intermediate_media(name: str) -> bool:
+    """True for yt-dlp/ffmpeg sidecars that are not the final library file."""
+    low = name.lower()
+    if _FRAGMENT_RE.search(name) or low.endswith(".part"):
+        return True
+    if ".temp." in low or low.endswith(".temp.mp4"):
+        return True
+    if ".norm." in low or low.endswith(".norm.mp4"):
+        return True
+    return False
+
+
 def _find_merged_video(prepared: Path) -> Optional[Path]:
     """Locate the final merged video when yt-dlp errors on fragment cleanup."""
     mp4 = prepared.with_suffix(".mp4")
-    if mp4.exists() and _FRAGMENT_RE.search(mp4.name) is None:
+    if mp4.exists() and not _is_intermediate_media(mp4.name):
         return mp4
     if (
         prepared.exists()
         and prepared.suffix.lower() in VIDEO_EXTENSIONS
-        and _FRAGMENT_RE.search(prepared.name) is None
-        and not prepared.name.endswith(".part")
+        and not _is_intermediate_media(prepared.name)
     ):
         return prepared
 
@@ -111,7 +122,7 @@ def _find_merged_video(prepared: Path) -> Optional[Path]:
             continue
         if entry.suffix.lower() not in VIDEO_EXTENSIONS:
             continue
-        if _FRAGMENT_RE.search(entry.name) or entry.name.endswith(".part"):
+        if _is_intermediate_media(entry.name):
             continue
         try:
             size = entry.stat().st_size
@@ -138,14 +149,17 @@ def _resolve_merged_video(
 
 
 def _format_chain(preset: str) -> list[str]:
+    """Build yt-dlp format selectors. Height-capped presets never fall back to unbounded best."""
     primary = QUALITY_FORMATS.get(preset, QUALITY_FORMATS["best"])
     max_h = PRESET_MAX_HEIGHT.get(preset)
     chain = [primary]
     if max_h:
-        chain.append(
-            f"best[ext=mp4][height<={max_h}]/best[height<={max_h}]/best"
-        )
-    chain.append("best[ext=mp4]/best")
+        # Stay within the height cap — do not append unrestricted best/best.
+        chain.append(f"best[ext=mp4][height<={max_h}]/best[height<={max_h}]")
+    elif preset == "best":
+        chain.append("best[ext=mp4]/best")
+    elif preset == "audio":
+        chain.append("bestaudio/best")
     unique: list[str] = []
     seen: set[str] = set()
     for fmt in chain:
@@ -324,16 +338,20 @@ class DownloadQueue:
                 ).start()
 
     def _next_job_id(self) -> Optional[int]:
+        """Return next queued job not already claimed. Caller must hold _lock."""
         with Session(engine) as session:
-            job = session.exec(
+            jobs = session.exec(
                 select(DownloadJob)
                 .where(
                     DownloadJob.status == JobStatus.queued,
                     DownloadJob.paused == False,  # noqa: E712
                 )
                 .order_by(DownloadJob.created_at.asc())
-            ).first()
-            return job.id if job else None
+            ).all()
+            for job in jobs:
+                if job.id is not None and job.id not in self._running:
+                    return job.id
+            return None
 
     def _worker(self, job_id: int, cancel_event: threading.Event) -> None:
         try:
@@ -612,23 +630,33 @@ def _cleanup_download_artifacts(
 
 
 def _cleanup_partial_files(paths: set[str]) -> None:
-    """Remove in-progress fragments only — never delete a finished merged video."""
+    """Remove in-progress fragments; also drop unplayable merged files left by cancel."""
     _cleanup_download_artifacts(paths, remove_final=False)
+    for rel in paths:
+        full = DOWNLOADS_DIR / rel
+        if not full.is_file():
+            continue
+        if _FRAGMENT_RE.search(full.name) or full.name.endswith(".part"):
+            continue
+        if full.suffix.lower() not in VIDEO_EXTENSIONS:
+            continue
+        if not _validate_playable(full):
+            _safe_unlink(full)
 
 
 def _check_quality(
     preset: str, height: Optional[int]
 ) -> Optional[str]:
-    """Return a warning string if actual height is well below the requested cap."""
+    """Return a warning string if actual height is below the requested cap tier."""
     max_h = PRESET_MAX_HEIGHT.get(preset)
     if max_h is None or height is None:
         return None
-    tiers = [480, 720, 1080, 1440]
+    tiers = [480, 720, 1080, 1440, 2160]
     cap_idx = next((i for i, t in enumerate(tiers) if t >= max_h), len(tiers) - 1)
     actual_idx = next(
         (i for i, t in enumerate(tiers) if t >= height), len(tiers) - 1
     )
-    if actual_idx < cap_idx - 1:
+    if actual_idx < cap_idx:
         return (
             f"Requested {preset} but file is {height}p — "
             "source may not offer higher quality."
@@ -636,11 +664,39 @@ def _check_quality(
     return None
 
 
+def _replace_with_retries(src: Path, dest: Path, retries: int = 8) -> None:
+    """Atomically replace dest with src, retrying Windows file-lock errors."""
+    last_exc: Optional[OSError] = None
+    for attempt in range(retries):
+        try:
+            src.replace(dest)
+            return
+        except PermissionError as exc:
+            last_exc = exc
+            time.sleep(0.2 * (attempt + 1))
+        except OSError as exc:
+            # WinError 5 (access denied) can also be transient on Windows.
+            if getattr(exc, "winerror", None) not in (5, 32) and not isinstance(
+                exc, PermissionError
+            ):
+                raise
+            last_exc = exc
+            time.sleep(0.2 * (attempt + 1))
+    if last_exc is not None:
+        raise last_exc
+
+
 def _apply_loudnorm(path: Path) -> Optional[str]:
     """Normalize loudness via ffmpeg; returns warning if skipped."""
     if not shutil.which("ffmpeg"):
         return "Volume normalization skipped: ffmpeg not found"
-    tmp = path.with_suffix(".norm.mp4")
+    # Unique sidecar so concurrent workers / scanner never share one .norm.mp4.
+    tmp = path.with_name(
+        f"{path.stem}.norm.{threading.get_ident()}.mp4"
+    )
+    tmp_rel = _safe_rel(tmp)
+    if tmp_rel:
+        scanner.mark_active(tmp_rel)
     cmd = [
         "ffmpeg",
         "-y",
@@ -654,11 +710,16 @@ def _apply_loudnorm(path: Path) -> Optional[str]:
     ]
     try:
         subprocess.run(cmd, check=True, capture_output=True, timeout=3600)
-        tmp.replace(path)
+        _replace_with_retries(tmp, path)
         return None
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
-        tmp.unlink(missing_ok=True)
+        _safe_unlink(tmp)
         return "Volume normalization failed"
+    finally:
+        if tmp_rel:
+            scanner.unmark_active(tmp_rel)
+        if tmp.exists():
+            _safe_unlink(tmp)
 
 
 def _finalize_in_background(
@@ -742,6 +803,14 @@ def _complete_download(
             or channel_override
             or (job.channel if job else None)
         )
+
+        if replace_video_id is None:
+            # Same YouTube id already in library → replace in place (avoids duplicates).
+            yt_id = info.get("id")
+            if isinstance(yt_id, str) and yt_id:
+                existing = library.find_video_by_youtube_id(session, yt_id)
+                if existing is not None:
+                    replace_video_id = existing.id
 
         if replace_video_id:
             video = session.get(Video, replace_video_id)
@@ -1181,6 +1250,7 @@ def extract_preview(url: str) -> dict[str, Any]:
             view_count = None
     return {
         "is_playlist": False,
+        "id": info.get("id"),
         "title": info.get("title"),
         "channel": info.get("uploader") or info.get("channel"),
         "channel_url": info.get("uploader_url") or info.get("channel_url"),
@@ -1322,6 +1392,11 @@ def fetch_channel_feed(
                 view_count = int(view_count)
             except (TypeError, ValueError):
                 view_count = None
+        from .feed_meta_cache import parse_upload_date
+
+        published_at = parse_upload_date(
+            entry.get("upload_date") or entry.get("release_timestamp") or entry.get("timestamp")
+        )
         entries.append(
             {
                 "id": vid,
@@ -1330,6 +1405,7 @@ def fetch_channel_feed(
                 "duration": entry.get("duration"),
                 "thumbnail_url": _entry_thumbnail_url(entry, vid),
                 "view_count": view_count,
+                "published_at": published_at,
             }
         )
 

@@ -337,6 +337,13 @@ html[data-hover-motion="subtle"] .ui-card:hover {
 html[data-hover-motion="lift"] .ui-card:hover {
   transform: translateY(-5px) scale(1.01);
   box-shadow: 0 14px 28px -18px rgb(0 0 0 / 0.55);
+  /* Keep ring color stable so it doesn't flash while the lift shadow animates. */
+  --tw-ring-color: rgb(var(--ink-700) / 1);
+}
+
+html[data-hover-motion="lift"] .ui-card.ring-accent:hover,
+html[data-hover-motion="lift"] .ui-card[class*="ring-accent"]:hover {
+  --tw-ring-color: rgb(var(--accent) / 1);
 }
 
 html[data-hover-motion="glow"] .ui-card:hover {
@@ -395,6 +402,34 @@ html[data-button-press="on"] a.ui-card:active {
     filter: none !important;
     box-shadow: none !important;
     animation: none !important;
+  }
+}
+
+@keyframes horde-load-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes horde-load-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes horde-load-bar {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
   }
 }
 

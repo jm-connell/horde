@@ -34,8 +34,20 @@ interface PlaybackValue {
 const Ctx = createContext<PlaybackValue | null>(null);
 
 const QUEUE_KEY = "horde.queue";
+const MINI_WIDTH_KEY = "horde.mini-width";
 const DEFAULT_MINI_WIDTH_MOBILE = 224;
 const DEFAULT_MINI_WIDTH_DESKTOP = 704;
+
+function loadMiniWidth(): number | null {
+  try {
+    const raw = localStorage.getItem(MINI_WIDTH_KEY);
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 160 && n <= 960 ? n : null;
+  } catch {
+    return null;
+  }
+}
 
 function mimeFromPath(filePath: string): string {
   const ext = filePath.split(".").pop()?.toLowerCase();
@@ -70,7 +82,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ViewMode>(
     () => loadSettings().playbackMode
   );
-  const [miniWidth, setMiniWidth] = useState<number | null>(null);
+  const [miniWidth, setMiniWidthState] = useState<number | null>(loadMiniWidth);
+
+  const setMiniWidth = useCallback((w: number | null) => {
+    setMiniWidthState(w);
+    try {
+      if (w == null) localStorage.removeItem(MINI_WIDTH_KEY);
+      else localStorage.setItem(MINI_WIDTH_KEY, String(w));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Persist the chosen view mode so it is remembered across sessions.
   const setMode = useCallback(

@@ -26,7 +26,7 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import downloader, library
+from ..services import downloader, feed_meta_cache, library
 
 router = APIRouter(prefix="/api", tags=["videos"])
 
@@ -171,6 +171,9 @@ def channel_feed(
         ) from exc
 
     lib_map = library.youtube_library_map(session, channel=channel_name)
+    yt_ids = [str(e["id"]) for e in (data.get("entries") or []) if e.get("id")]
+    meta_cache = feed_meta_cache.get_many(yt_ids)
+    to_cache: list[dict] = []
     entries: list[ChannelFeedEntry] = []
     for raw in data.get("entries") or []:
         yt_id = raw.get("id")
@@ -178,20 +181,97 @@ def channel_feed(
         video_id = lib[0] if lib else None
         library_height = lib[1] if lib else None
         library_views = lib[2] if lib else None
+        cached = meta_cache.get(str(yt_id)) if yt_id else None
         feed_views = raw.get("view_count")
+        view_count = (
+            feed_views
+            if feed_views is not None
+            else (cached.get("view_count") if cached else None)
+        )
+        if view_count is None:
+            view_count = library_views
+        published_at = raw.get("published_at") or (
+            cached.get("published_at") if cached else None
+        )
+        duration = raw.get("duration")
+        if duration is None and cached:
+            duration = cached.get("duration")
+        thumbnail_url = raw.get("thumbnail_url") or (
+            cached.get("thumbnail_url") if cached else None
+        )
+        max_height = cached.get("max_height") if cached else None
+        if yt_id and (
+            feed_views is not None
+            or raw.get("published_at")
+            or raw.get("duration")
+            or raw.get("thumbnail_url")
+        ):
+            to_cache.append(
+                {
+                    "id": yt_id,
+                    "view_count": feed_views,
+                    "published_at": raw.get("published_at"),
+                    "duration": raw.get("duration"),
+                    "thumbnail_url": raw.get("thumbnail_url"),
+                    "title": raw.get("title"),
+                }
+            )
         entries.append(
             ChannelFeedEntry(
                 id=yt_id,
                 url=raw["url"],
-                title=raw.get("title"),
-                duration=raw.get("duration"),
-                thumbnail_url=raw.get("thumbnail_url"),
-                view_count=feed_views if feed_views is not None else library_views,
+                title=raw.get("title")
+                or (cached.get("title") if cached else None),
+                duration=duration,
+                thumbnail_url=thumbnail_url,
+                view_count=view_count,
+                published_at=published_at,
                 in_library=video_id is not None,
                 video_id=video_id,
                 library_height_px=library_height,
+                max_height=int(max_height) if max_height else None,
             )
         )
+    if to_cache:
+        feed_meta_cache.upsert_many(to_cache)
+
+    # Background-fill missing view counts / dates for a few entries (non-blocking).
+    missing = [
+        e
+        for e in entries
+        if e.id and (e.view_count is None or not e.published_at)
+    ][:8]
+    if missing:
+
+        def _enrich(ids_urls: list[tuple[str, str]]) -> None:
+            updates: list[dict] = []
+            for yt_id, entry_url in ids_urls:
+                try:
+                    preview = downloader.extract_preview(entry_url)
+                except Exception:  # noqa: BLE001
+                    continue
+                if preview.get("is_playlist"):
+                    continue
+                row: dict = {"id": yt_id}
+                if preview.get("view_count") is not None:
+                    row["view_count"] = preview["view_count"]
+                if preview.get("thumbnail_url"):
+                    row["thumbnail_url"] = preview["thumbnail_url"]
+                # Best-effort published date from a second light extract is expensive;
+                # view_count alone already improves the next feed load.
+                if len(row) > 1:
+                    updates.append(row)
+            if updates:
+                feed_meta_cache.upsert_many(updates)
+
+        import threading
+
+        threading.Thread(
+            target=_enrich,
+            args=([(e.id, e.url) for e in missing if e.id]),
+            daemon=True,
+        ).start()
+
     return ChannelFeedPage(
         channel=channel_name or data.get("channel"),
         channel_url=data.get("channel_url") or channel_url,

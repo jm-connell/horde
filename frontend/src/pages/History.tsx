@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import LoadingIndicator from "../components/LoadingIndicator";
 import VideoCard from "../components/VideoCard";
 import type { Video } from "../types";
 import { formatRelative } from "../utils";
@@ -26,7 +27,7 @@ export default function History() {
       <h1 className="mb-5 text-2xl font-bold text-gray-100">History</h1>
 
       {loading ? (
-        <p className="py-20 text-center text-gray-500">Loading...</p>
+        <LoadingIndicator />
       ) : videos.length === 0 ? (
         <div className="py-20 text-center text-gray-500">
           <p className="text-lg">No watch history yet.</p>

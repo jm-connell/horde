@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import LoadingIndicator from "../components/LoadingIndicator";
 import VideoEditForm from "../components/VideoEditForm";
+import { useToast } from "../context/ToastContext";
 import type { Video } from "../types";
 
 export default function Review() {
+  const { showToast } = useToast();
   const [items, setItems] = useState<Video[]>([]);
   const [groups, setGroups] = useState<Video[][]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +38,7 @@ export default function Review() {
       </p>
 
       {loading ? (
-        <p className="py-20 text-center text-gray-500">Loading...</p>
+        <LoadingIndicator />
       ) : items.length === 0 && groups.length === 0 ? (
         <div className="py-20 text-center text-gray-500">
           <p className="text-lg">Nothing to review.</p>
@@ -67,8 +70,12 @@ export default function Review() {
                     <button
                       onClick={async () => {
                         if (!confirm(`Delete "${v.title}" and its file?`)) return;
-                        await api.deleteVideo(v.id, true).catch(() => undefined);
-                        load();
+                        try {
+                          await api.deleteVideo(v.id, true);
+                          load();
+                        } catch {
+                          showToast("Could not delete video");
+                        }
                       }}
                       className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10"
                     >
@@ -125,10 +132,12 @@ export default function Review() {
                                   )
                                 )
                                   return;
-                                await api
-                                  .deleteVideo(v.id, true)
-                                  .catch(() => undefined);
-                                load();
+                                try {
+                                  await api.deleteVideo(v.id, true);
+                                  load();
+                                } catch {
+                                  showToast("Could not delete video");
+                                }
                               }}
                               className="shrink-0 rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
                             >

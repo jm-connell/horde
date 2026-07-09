@@ -101,9 +101,21 @@ export function formatResolution(height: number | null): string {
   return `${height}p`;
 }
 
+/** Parse API datetimes; treat timezone-less ISO as UTC (SQLite/FastAPI often omit Z). */
+export function parseApiDate(iso: string): Date {
+  const trimmed = iso.trim();
+  if (
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(trimmed) &&
+    !/[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)
+  ) {
+    return new Date(`${trimmed}Z`);
+  }
+  return new Date(trimmed);
+}
+
 export function formatDate(iso: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
+  const d = parseApiDate(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString(undefined, {
     year: "numeric",
@@ -135,7 +147,7 @@ export function youtubeThumbnailUrl(
 
 export function formatRelative(iso: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
+  const d = parseApiDate(iso);
   if (Number.isNaN(d.getTime())) return "";
   const diffSec = Math.round((Date.now() - d.getTime()) / 1000);
   if (diffSec < 60) return "just now";

@@ -16,7 +16,13 @@ from ..config import (
 )
 from ..database import engine
 from ..models import Video, VideoStatus
-from .metadata import grab_frame, probe_dimensions, probe_duration, probe_frame_rate
+from .metadata import (
+    grab_frame,
+    probe_dimensions,
+    probe_duration,
+    probe_frame_rate,
+    probe_is_playable,
+)
 from .paths import find_video_by_path, to_rel_path
 
 _scan_lock = threading.Lock()
@@ -60,8 +66,15 @@ def _is_active(rel_path: str) -> bool:
 def _is_media(path: Path) -> bool:
     if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
         return False
-    # Skip yt-dlp intermediate fragment files (e.g. ".f137.mp4").
-    return _FRAGMENT_RE.search(path.name) is None
+    name = path.name.lower()
+    # Skip yt-dlp / ffmpeg intermediates that must never become review items.
+    if _FRAGMENT_RE.search(path.name) is not None:
+        return False
+    if ".temp." in name or name.endswith(".temp.mp4"):
+        return False
+    if ".norm." in name or name.endswith(".norm.mp4"):
+        return False
+    return True
 
 
 def _is_stable(path: Path) -> bool:
@@ -90,6 +103,9 @@ def _ingest_file(session: Session, path: Path) -> bool:
         return False
 
     if not _is_stable(path):
+        return False
+
+    if not probe_is_playable(path):
         return False
 
     try:

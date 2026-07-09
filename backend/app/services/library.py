@@ -1,5 +1,6 @@
 import json
 import random as py_random
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -220,6 +221,36 @@ def resolve_channel_url(session: Session, channel_name: str) -> Optional[str]:
     return None
 
 
+def find_video_by_youtube_id(session: Session, yt_id: str) -> Optional[Video]:
+    """Find a library video by YouTube id in source_url or [id] in file_path."""
+    if not yt_id:
+        return None
+    token = f"[{yt_id}]"
+    # Prefer path match (works even without source_url).
+    by_path = session.exec(
+        select(Video).where(Video.file_path.contains(token))  # type: ignore[attr-defined]
+    ).first()
+    if by_path is not None:
+        return by_path
+    from urllib.parse import urlparse
+
+    from .url_clean import _youtube_video_id
+
+    rows = session.exec(
+        select(Video).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
+    ).all()
+    for video in rows:
+        if not video.source_url:
+            continue
+        try:
+            parsed = urlparse(video.source_url)
+        except ValueError:
+            continue
+        if _youtube_video_id(parsed) == yt_id:
+            return video
+    return None
+
+
 def youtube_library_map(
     session: Session, channel: Optional[str] = None
 ) -> dict[str, tuple[int, Optional[int], Optional[int]]]:
@@ -229,19 +260,23 @@ def youtube_library_map(
     from .url_clean import _youtube_video_id
 
     statement = select(
-        Video.id, Video.source_url, Video.height_px, Video.view_count
-    ).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
+        Video.id, Video.source_url, Video.height_px, Video.view_count, Video.file_path
+    )
     if channel:
         statement = statement.where(Video.channel == channel)
     mapping: dict[str, tuple[int, Optional[int], Optional[int]]] = {}
-    for video_id, source_url, height_px, views in session.exec(statement).all():
-        if not source_url:
-            continue
-        try:
-            parsed = urlparse(source_url)
-        except ValueError:
-            continue
-        yt_id = _youtube_video_id(parsed)
+    for video_id, source_url, height_px, views, file_path in session.exec(statement).all():
+        yt_id = None
+        if source_url:
+            try:
+                parsed = urlparse(source_url)
+                yt_id = _youtube_video_id(parsed)
+            except ValueError:
+                yt_id = None
+        if not yt_id and file_path:
+            match = re.search(r"\[([A-Za-z0-9_-]{11})\]", file_path)
+            if match:
+                yt_id = match.group(1)
         if yt_id:
             mapping[yt_id] = (
                 int(video_id),

@@ -14,6 +14,7 @@ import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
+import LoadingIndicator from "../components/LoadingIndicator";
 import { formatDate, formatDuration, formatResolution, formatSize, parseChapters } from "../utils";
 
 const PRESET_LABELS: Record<string, string> = {
@@ -127,15 +128,21 @@ export default function Watch() {
   const onDelete = async () => {
     if (!video) return;
     if (!confirm(`Delete "${video.title}" from the library?`)) return;
-    await api.deleteVideo(video.id, true);
-    navigate("/");
+    try {
+      await api.deleteVideo(video.id, true);
+      navigate("/");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Could not delete video"
+      );
+    }
   };
 
   if (error) {
     return <p className="py-20 text-center text-gray-500">{error}</p>;
   }
   if (!video) {
-    return <p className="py-20 text-center text-gray-500">Loading...</p>;
+    return <LoadingIndicator />;
   }
 
   const isWide = !isMobile && mode === "theater";
@@ -144,6 +151,10 @@ export default function Watch() {
     mode === "standard" &&
     settings.showRelatedVideos &&
     moreLikeThis.length > 0;
+  const chapters = parseChapters(video.description);
+  const showDescriptionPanel =
+    settings.showDescription && !!(video.description || video.notes);
+  const metaSideBySide = chapters.length > 0 && showDescriptionPanel;
   const resolution = formatResolution(video.height_px);
   const contentClass = showRelatedRight
     ? "mx-auto max-w-[90rem]"
@@ -292,10 +303,16 @@ export default function Watch() {
                 : "mt-4 space-y-4"
             }
           >
-            <div className="min-w-0 space-y-4">
-              <ChaptersList chapters={parseChapters(video.description)} />
+            <div
+              className={
+                metaSideBySide
+                  ? "min-w-0 space-y-4 lg:grid lg:grid-cols-[minmax(12rem,0.75fr)_minmax(0,1.75fr)] lg:items-start lg:gap-4 lg:space-y-0"
+                  : "min-w-0 space-y-4"
+              }
+            >
+              <ChaptersList chapters={chapters} />
 
-              {settings.showDescription && (video.description || video.notes) && (
+              {showDescriptionPanel && (
                 <div className="ui-panel overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
                   <button
                     type="button"
@@ -331,7 +348,7 @@ export default function Watch() {
                           </div>
                           <button
                             onClick={() => setDescExpanded((v) => !v)}
-                            className="mt-2 text-xs font-medium text-accent hover:underline"
+                            className="mt-2 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
                           >
                             {descExpanded ? "Show less" : "Show more"}
                           </button>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import LoadingIndicator from "../components/LoadingIndicator";
 import type { Playlist } from "../types";
 
 export default function Playlists() {
@@ -48,7 +49,7 @@ export default function Playlists() {
       </p>
 
       <div className="mb-6">
-        <div className="rounded-xl bg-ink-900 p-5 ring-1 ring-ink-700">
+        <div className="ui-panel rounded-xl bg-ink-900 p-5 ring-1 ring-ink-700">
           <h2 className="mb-3 text-sm font-medium text-gray-200">New playlist</h2>
           <div className="flex gap-2">
             <input
@@ -72,7 +73,7 @@ export default function Playlists() {
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
       {loading ? (
-        <p className="py-20 text-center text-gray-500">Loading...</p>
+        <LoadingIndicator />
       ) : playlists.length === 0 ? (
         <p className="py-20 text-center text-gray-500">No playlists yet.</p>
       ) : (
@@ -81,7 +82,7 @@ export default function Playlists() {
             <Link
               key={p.id}
               to={`/playlists/${p.id}`}
-              className="flex items-center justify-between rounded-xl bg-ink-900 px-5 py-4 ring-1 ring-ink-700 transition-colors hover:ring-accent/60"
+              className="ui-panel ui-card flex items-center justify-between rounded-xl bg-ink-900 px-5 py-4 ring-1 ring-ink-700 transition-colors hover:ring-accent/60"
             >
               <div className="min-w-0">
                 <h3 className="truncate font-semibold text-gray-100">{p.name}</h3>
@@ -89,15 +90,7 @@ export default function Playlists() {
                   {p.item_count} video{p.item_count === 1 ? "" : "s"}
                 </p>
               </div>
-              <span
-                className={`ml-3 shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  p.source_type === "youtube"
-                    ? "bg-red-500/15 text-red-300"
-                    : "bg-accent/15 text-accent"
-                }`}
-              >
-                {p.source_type === "youtube" ? "YouTube" : "Custom"}
-              </span>
+              <span className="text-gray-500">→</span>
             </Link>
           ))}
         </div>

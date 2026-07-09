@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import ChannelDownloadPanel from "./ChannelDownloadPanel";
 import ChannelFeedCard from "./ChannelFeedCard";
+import LoadingIndicator from "./LoadingIndicator";
 import { useChannelDownloadQueue } from "../hooks/useChannelDownloadQueue";
 import { useSettings } from "../hooks/useSettings";
 import type { ChannelFeedEntry, ChannelStat } from "../types";
@@ -151,7 +152,7 @@ export default function ChannelFeed({
       )}
 
       {loading ? (
-        <p className="py-20 text-center text-gray-500">Loading channel feed…</p>
+        <LoadingIndicator label="Loading channel feed" />
       ) : filteredEntries.length === 0 ? (
         <div className="py-20 text-center text-gray-500">
           <p className="text-lg">No videos found</p>
@@ -191,7 +192,7 @@ export default function ChannelFeed({
           </div>
           <div ref={loadMoreRef} className="h-1" aria-hidden />
           {loadingMore && (
-            <p className="py-6 text-center text-sm text-gray-500">Loading more…</p>
+            <LoadingIndicator label="Loading more" className="py-6" />
           )}
         </>
       )}

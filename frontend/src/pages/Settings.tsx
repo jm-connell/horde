@@ -17,6 +17,7 @@ import type { AppSettings, HealthStats, StorageStats } from "../types";
 import { formatSize } from "../utils";
 import LiquidNav from "../components/LiquidNav";
 import Collapse from "../components/Collapse";
+import LoadingIndicator from "../components/LoadingIndicator";
 
 const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "small", label: "Small" },
@@ -180,11 +181,13 @@ function Section({
 }) {
   return (
     <div className={first ? undefined : "border-t border-ink-700 pt-6"}>
-      <h2 className="mb-1 text-sm font-medium text-gray-200">{title}</h2>
+      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        {title}
+      </h2>
       {description && (
         <p className="mb-3 text-xs text-gray-500">{description}</p>
       )}
-      {children}
+      <div className={description ? undefined : "mt-3"}>{children}</div>
     </div>
   );
 }
@@ -260,10 +263,7 @@ export default function Settings() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mb-1 text-2xl font-bold text-gray-100">Settings</h1>
-      <p className="mb-6 text-sm text-gray-400">
-        Preferences sync to this Horde install and are cached in this browser.
-      </p>
+      <h1 className="mb-6 text-2xl font-bold text-gray-100">Settings</h1>
 
       <LiquidNav
         className="ui-panel mb-4 flex gap-1 overflow-x-auto rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
@@ -637,6 +637,37 @@ export default function Settings() {
                     </p>
                   </label>
                 </Collapse>
+
+                <div>
+                  <span className="mb-2 block text-sm font-medium text-gray-200">
+                    Loading animation
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { value: "dots", label: "Dots" },
+                        { value: "spinner", label: "Spinner" },
+                        { value: "bar", label: "Bar" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => update({ loadingStyle: opt.value })}
+                        className={`rounded-lg px-3 py-1.5 text-sm ${
+                          settings.loadingStyle === opt.value
+                            ? "bg-accent text-ink-950"
+                            : "bg-ink-800 text-gray-300 hover:bg-ink-700"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Style used for page and list loading states.
+                  </p>
+                </div>
               </div>
             </Section>
           </>
@@ -703,6 +734,18 @@ export default function Settings() {
                           showProgressOnAllVideos:
                             !settings.showProgressOnAllVideos,
                         })
+                      }
+                    />
+                  }
+                />
+                <SettingRow
+                  title="Show dates on video cards"
+                  description="Display the published date (e.g. May 14, 2023) on library cards."
+                  control={
+                    <Toggle
+                      checked={settings.showCardDates}
+                      onChange={() =>
+                        update({ showCardDates: !settings.showCardDates })
                       }
                     />
                   }
@@ -1050,7 +1093,7 @@ export default function Settings() {
                   )}
                 </dl>
               ) : (
-                <p className="text-sm text-gray-500">Loading...</p>
+                <LoadingIndicator label="Loading" className="py-4" />
               )}
             </Section>
           </>

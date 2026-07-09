@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, thumbnailUrl } from "../api";
+import LoadingIndicator from "../components/LoadingIndicator";
 import { usePlayback } from "../context/PlaybackContext";
 import type { PlaylistDetail as PlaylistDetailType } from "../types";
 import { formatDuration } from "../utils";
@@ -48,7 +49,7 @@ export default function PlaylistDetail() {
     return <p className="py-20 text-center text-gray-500">{error}</p>;
   }
   if (!playlist) {
-    return <p className="py-20 text-center text-gray-500">Loading...</p>;
+    return <LoadingIndicator />;
   }
 
   return (

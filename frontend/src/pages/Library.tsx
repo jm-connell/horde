@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import ChannelFeed from "../components/ChannelFeed";
+import LoadingIndicator from "../components/LoadingIndicator";
 import PlaybackQueue from "../components/PlaybackQueue";
 import VideoCard from "../components/VideoCard";
 import { useDownloads } from "../context/DownloadContext";
@@ -294,9 +295,13 @@ export default function Library() {
   const bulkDelete = async () => {
     if (!selectedIds.size) return;
     if (!confirm(`Delete ${selectedIds.size} video(s) from your library? Files will not be removed.`)) return;
-    await api.bulkDeleteVideos([...selectedIds]).catch(() => undefined);
-    exitSelectMode();
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.bulkDeleteVideos([...selectedIds]);
+      exitSelectMode();
+      setRefreshKey((k) => k + 1);
+    } catch {
+      showToast("Could not delete selected videos");
+    }
   };
 
   const bulkSaveNote = async () => {
@@ -394,23 +399,26 @@ export default function Library() {
           </div>
         </div>
       )}
-      {!settings.sidebarCollapsed && (
-        <aside className="ui-panel hidden w-56 shrink-0 lg:block">
-          <div className="sticky top-20 space-y-6">
-            <div>
-              <div className="mb-2 flex items-center justify-between px-2">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Channels
-                </h2>
-                <button
-                  onClick={() => update({ sidebarCollapsed: true })}
-                  title="Collapse sidebar"
-                  className="ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
-                >
-                  ‹
-                </button>
-              </div>
-              <ul className="space-y-0.5">
+      <aside
+        className={`hidden shrink-0 overflow-hidden transition-[width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
+          settings.sidebarCollapsed ? "w-0 opacity-0" : "w-56 opacity-100"
+        }`}
+      >
+        <div className="sticky top-20 w-56">
+          <div className="ui-panel h-fit rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
+            <div className="mb-2 flex items-center justify-between px-2 pt-1">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Channels
+              </h2>
+              <button
+                onClick={() => update({ sidebarCollapsed: true })}
+                title="Collapse sidebar"
+                className="ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
+              >
+                ‹
+              </button>
+            </div>
+            <ul className="space-y-0.5">
               <li>
                 <button
                   onClick={() => setActiveChannel(null)}
@@ -447,7 +455,6 @@ export default function Library() {
           </div>
         </div>
       </aside>
-      )}
 
       {settings.sidebarCollapsed && (
         <button
@@ -493,7 +500,7 @@ export default function Library() {
             </h1>
           )}
           {activeChannel && !activeTag && (
-            <div className="flex gap-1 rounded-lg border border-ink-700 bg-ink-900 p-1 sm:order-first">
+            <div className="ui-panel flex gap-1 rounded-lg border border-ink-700 bg-ink-900 p-1 sm:order-first">
               <button
                 type="button"
                 onClick={() => setChannelTab("library")}
@@ -525,7 +532,7 @@ export default function Library() {
                   value={feedSearch}
                   onChange={(e) => setFeedSearch(e.target.value)}
                   placeholder="Search channel videos..."
-                  className="ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
+                  className="ui-panel ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
                 />
                 <div className="flex flex-row items-center gap-2">
                   <select
@@ -533,7 +540,7 @@ export default function Library() {
                     onChange={(e) =>
                       setFeedSort(e.target.value as "recent" | "popular")
                     }
-                    className="ui-interactive min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    className="ui-panel ui-interactive min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                   >
                     <option value="recent">Recent</option>
                     <option value="popular">Popular</option>
@@ -543,12 +550,12 @@ export default function Library() {
                     onClick={() =>
                       setFeedOrder((o) => (o === "desc" ? "asc" : "desc"))
                     }
-                    className="ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                    className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
                     title="Toggle sort direction"
                   >
                     {feedOrder === "desc" ? "↓" : "↑"}
                   </button>
-                  <div className="flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+                  <div className="ui-panel flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
                     <button
                       type="button"
                       onClick={() => setFeedLayout("grid")}
@@ -601,13 +608,13 @@ export default function Library() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search videos..."
-              className="ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
+              className="ui-panel ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
             />
             <div className="flex flex-row items-center gap-2">
               <select
                 value={sort}
                 onChange={(e) => handleSortChange(e.target.value)}
-                className="ui-interactive min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                className="ui-panel ui-interactive min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
               >
                 {LIBRARY_SORT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -617,7 +624,7 @@ export default function Library() {
               </select>
               <button
                 onClick={toggleOrder}
-                className="ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
                 title={
                   sort === "random" ? "Shuffle again" : "Toggle sort direction"
                 }
@@ -627,7 +634,7 @@ export default function Library() {
               {tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
                 <button
                   onClick={() => setShowTags((s) => !s)}
-                  className="shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
+                  className="ui-panel shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
                 >
                   {showTags ? "Hide tags" : "Tags"}
                 </button>
@@ -708,6 +715,10 @@ export default function Library() {
           />
         )}
 
+        <div
+          key={onFeedTab ? "feed" : "library"}
+          className="page-shell page-shell--animate"
+        >
         {onFeedTab ? (
           <ChannelFeed
             channel={activeChannel!}
@@ -719,7 +730,7 @@ export default function Library() {
             feedLayout={feedLayout}
           />
         ) : loading ? (
-          <p className="py-20 text-center text-gray-500">Loading...</p>
+          <LoadingIndicator />
         ) : videos.length === 0 ? (
           <div className="py-20 text-center text-gray-500">
             <p className="text-lg">No videos yet.</p>
@@ -747,6 +758,7 @@ export default function Library() {
             ))}
           </div>
         )}
+        </div>
 
         {selectMode && selectedIds.size > 0 && (
             <div className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-700 bg-ink-900/95 px-4 py-3 backdrop-blur">

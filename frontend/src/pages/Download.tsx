@@ -5,6 +5,7 @@ import { useSettings } from "../hooks/useSettings";
 import ChannelPicker from "../components/ChannelPicker";
 import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
+import LoadingIndicator from "../components/LoadingIndicator";
 import {
   formatApproxSize,
   mergePinnedPreset,
@@ -383,7 +384,7 @@ export default function Download() {
             </div>
 
             {loadingPlaylist ? (
-              <p className="text-xs text-gray-500">Loading playlist...</p>
+              <LoadingIndicator label="Loading playlist" className="py-4" />
             ) : playlistEntries.length > 0 ? (
               <>
                 <div className="flex items-center justify-between gap-3">

@@ -10,6 +10,7 @@ import { api } from "../api";
 import { useSettings } from "../hooks/useSettings";
 import { subscribeToJob } from "../hooks/useJobEvents";
 import type { DownloadJob, DownloadQueueStatus, ProgressEvent } from "../types";
+import { useToast } from "./ToastContext";
 
 interface SubmitOverrides {
   title?: string;
@@ -61,12 +62,14 @@ function isActiveJob(job: DownloadJob, live?: ProgressEvent): boolean {
 }
 
 export function DownloadProvider({ children }: { children: React.ReactNode }) {
+  const { showToast } = useToast();
   const [settings, updateSettings] = useSettings();
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [progress, setProgress] = useState<Record<number, ProgressEvent>>({});
   const [queuePaused, setQueuePaused] = useState(false);
 
   const sources = useRef<Map<number, () => void>>(new Map());
+  const toastedErrors = useRef<Set<number>>(new Set());
   const completionListeners = useRef<
     Set<(videoId: number | null, event?: ProgressEvent) => void>
   >(new Set());
@@ -103,12 +106,18 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           if (event.status === "completed") {
             const videoId = event.video_id ?? null;
             completionListeners.current.forEach((cb) => cb(videoId, event));
+            if (event.quality_warning) {
+              showToast(event.quality_warning);
+            }
+          } else if (event.status === "error" && !toastedErrors.current.has(jobId)) {
+            toastedErrors.current.add(jobId);
+            showToast(event.error || "Download failed");
           }
         }
       });
       sources.current.set(jobId, close);
     },
-    [refreshJob]
+    [refreshJob, showToast]
   );
 
   const refreshJobs = useCallback(() => {

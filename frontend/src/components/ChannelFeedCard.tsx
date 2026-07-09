@@ -4,6 +4,7 @@ import { api } from "../api";
 import { maxPresetLabel } from "../presets";
 import type { ChannelFeedEntry } from "../types";
 import {
+  formatDate,
   formatDuration,
   formatResolution,
   formatViewCount,
@@ -11,7 +12,6 @@ import {
 } from "../utils";
 
 const maxResCache = new Map<string, string>();
-const viewCountCache = new Map<string, number>();
 
 function FeedMetaRow({
   channelName,
@@ -54,10 +54,15 @@ function FeedMetaRow({
     </button>
   );
 
+  const dateLabel = entry.published_at ? formatDate(entry.published_at) : "";
+
   return (
     <div className="flex items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-x-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
         <span className="truncate text-xs text-gray-400">{channelName}</span>
+        {dateLabel && (
+          <span className="shrink-0 text-xs text-gray-500">{dateLabel}</span>
+        )}
         {entry.view_count != null && (
           <span className="shrink-0 text-xs text-gray-500">
             {formatViewCount(entry.view_count)}
@@ -179,29 +184,30 @@ export default function ChannelFeedCard({
     if (entry.library_height_px) {
       return formatResolution(entry.library_height_px);
     }
+    if (entry.max_height) {
+      return formatResolution(entry.max_height);
+    }
     return maxResCache.get(entry.url) ?? "";
   });
-  const [viewCount, setViewCount] = useState<number | null>(
-    () => entry.view_count ?? viewCountCache.get(entry.url) ?? null
-  );
-
-  useEffect(() => {
-    setViewCount(entry.view_count ?? viewCountCache.get(entry.url) ?? null);
-  }, [entry.view_count, entry.url]);
+  const viewCount = entry.view_count;
+  const dateLabel = entry.published_at ? formatDate(entry.published_at) : "";
 
   useEffect(() => {
     if (entry.library_height_px) {
       setMaxRes(formatResolution(entry.library_height_px));
+      return;
+    }
+    if (entry.max_height) {
+      setMaxRes(formatResolution(entry.max_height));
+      return;
     }
     const cachedRes = maxResCache.get(entry.url);
-    if (cachedRes) setMaxRes(cachedRes);
+    if (cachedRes) {
+      setMaxRes(cachedRes);
+      return;
+    }
 
-    const needsPreview =
-      !entry.library_height_px ||
-      entry.view_count == null ||
-      !maxResCache.has(entry.url);
-    if (!needsPreview && entry.view_count != null) return;
-
+    // Only fetch preview for max-res badge when not already known.
     const el = cardRef.current;
     if (!el) return;
     let cancelled = false;
@@ -213,16 +219,10 @@ export default function ChannelFeedCard({
           .previewDownload(entry.url)
           .then((preview) => {
             if (cancelled || preview.is_playlist) return;
-            if (!entry.library_height_px) {
-              const label = maxPresetLabel(preview.available_presets);
-              if (label) {
-                maxResCache.set(entry.url, label);
-                setMaxRes(label);
-              }
-            }
-            if (entry.view_count == null && preview.view_count != null) {
-              viewCountCache.set(entry.url, preview.view_count);
-              setViewCount(preview.view_count);
+            const label = maxPresetLabel(preview.available_presets);
+            if (label) {
+              maxResCache.set(entry.url, label);
+              setMaxRes(label);
             }
           })
           .catch(() => undefined);
@@ -234,7 +234,7 @@ export default function ChannelFeedCard({
       cancelled = true;
       observer.disconnect();
     };
-  }, [entry.url, entry.library_height_px, entry.view_count]);
+  }, [entry.url, entry.library_height_px, entry.max_height]);
 
   if (layout === "list") {
     return (
@@ -256,7 +256,11 @@ export default function ChannelFeedCard({
             <span className="truncate text-xs text-gray-400">{channelName}</span>
             <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
               {duration && <span>{duration}</span>}
-              {duration && viewCount != null && (
+              {duration && dateLabel && (
+                <span className="text-gray-600">·</span>
+              )}
+              {dateLabel && <span>{dateLabel}</span>}
+              {(duration || dateLabel) && viewCount != null && (
                 <span className="text-gray-600">·</span>
               )}
               {viewCount != null && <span>{formatViewCount(viewCount)}</span>}
@@ -290,7 +294,7 @@ export default function ChannelFeedCard({
         </h3>
         <FeedMetaRow
           channelName={channelName}
-          entry={{ ...entry, view_count: viewCount }}
+          entry={entry}
           maxRes={maxRes}
           inLibrary={inLibrary}
           videoId={videoId}

@@ -149,6 +149,7 @@ export default function VideoPlayer({
   const prevTimeRef = useRef(0);
   const suppressedSegmentsRef = useRef(new Set<string>());
   const [ccNotice, setCcNotice] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   // Subtitle drag
   const subtitleDragRef = useRef<{ startY: number; startOffset: number } | null>(null);
@@ -167,6 +168,7 @@ export default function VideoPlayer({
     setSkippedSegment(null);
     setSkipNotice(null);
     setCcNotice(null);
+    setMediaError(null);
   }, [src]);
 
   const undoSkip = useCallback(() => {
@@ -957,15 +959,22 @@ export default function VideoPlayer({
             prevTimeRef.current = t;
             setCurrent(t);
             onProgress?.(t);
-            // SponsorBlock: auto-skip segments on forward playback only
+            // SponsorBlock: auto-skip on forward playback; seeking back into a
+            // segment suppresses it for the rest of this source.
             if (sponsorSegments.length > 0) {
               const movingForward = t >= prev - 0.05;
+              const seekingBack = t < prev - 0.05;
               for (const seg of sponsorSegments) {
                 const key = `${seg.startSec}-${seg.endSec}`;
                 if (suppressedSegmentsRef.current.has(key)) {
-                  if (t >= seg.endSec) {
-                    suppressedSegmentsRef.current.delete(key);
-                  }
+                  continue;
+                }
+                if (
+                  seekingBack &&
+                  t >= seg.startSec &&
+                  t < seg.endSec
+                ) {
+                  suppressedSegmentsRef.current.add(key);
                   continue;
                 }
                 if (
@@ -1010,6 +1019,9 @@ export default function VideoPlayer({
             }
           }}
           onEnded={onEnded}
+          onError={() => {
+            setMediaError("This video could not be played. The file may be incomplete or corrupt.");
+          }}
           onPointerDown={isMini ? undefined : onVideoPointerDown}
           onPointerUp={isMini ? undefined : onVideoPointerUp}
           onPointerCancel={isMini ? undefined : onVideoPointerCancel}
@@ -1026,6 +1038,12 @@ export default function VideoPlayer({
             />
           ))}
         </video>
+
+        {mediaError && !isMini && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/80 px-4">
+            <p className="max-w-sm text-center text-sm text-red-300">{mediaError}</p>
+          </div>
+        )}
 
         {chromecast.casting && !isMini && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/80">

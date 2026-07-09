@@ -53,6 +53,7 @@ export type BackgroundEffect =
 
 export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator = "none" | "liquid" | "underline" | "fade";
+export type LoadingStyle = "dots" | "spinner" | "bar";
 
 export interface Settings {
   theme: Theme;
@@ -69,6 +70,7 @@ export interface Settings {
   translucentPanels: boolean;
   /** 0.15–1 when panels are translucent; higher = more see-through. */
   translucentPanelStrength: number;
+  loadingStyle: LoadingStyle;
   showDescription: boolean;
   subtitleSize: SubtitleSize;
   subtitleOffset: number;
@@ -84,6 +86,7 @@ export interface Settings {
   defaultLibrarySort: LibrarySort;
   showProgressOnContinueWatching: boolean;
   showProgressOnAllVideos: boolean;
+  showCardDates: boolean;
   progressExpiryDays: number;
   sponsorBlockEnabled: boolean;
   sponsorBlockShowNotice: boolean;
@@ -112,6 +115,7 @@ const DEFAULTS: Settings = {
   hoverMotion: "subtle",
   translucentPanels: false,
   translucentPanelStrength: 0.65,
+  loadingStyle: "dots",
   showDescription: true,
   subtitleSize: "medium",
   subtitleOffset: 12,
@@ -121,12 +125,13 @@ const DEFAULTS: Settings = {
   lastCustomChannel: "",
   showContinueWatching: true,
   showDownloadNavBadge: true,
-  normalizeVolumeOnDownload: false,
+  normalizeVolumeOnDownload: true,
   channelSort: "recent_download",
   channelOrder: "desc",
   defaultLibrarySort: "added_at",
   showProgressOnContinueWatching: true,
   showProgressOnAllVideos: false,
+  showCardDates: true,
   progressExpiryDays: 14,
   sponsorBlockEnabled: false,
   sponsorBlockShowNotice: true,
@@ -151,6 +156,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "hoverMotion",
   "translucentPanels",
   "translucentPanelStrength",
+  "loadingStyle",
   "showDescription",
   "subtitleSize",
   "subtitleOffset",
@@ -164,6 +170,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "defaultLibrarySort",
   "showProgressOnContinueWatching",
   "showProgressOnAllVideos",
+  "showCardDates",
   "sponsorBlockEnabled",
   "sponsorBlockShowNotice",
   "sidebarCollapsed",

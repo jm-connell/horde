@@ -43,9 +43,9 @@ export function createPerlinFlowEffect(
       rebuild(width, height, size);
     }
 
-    // Soft trail fade that works on a transparent canvas
+    // Stronger trail fade so the canvas doesn't accumulate to solid color
     ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = "rgba(0,0,0,0.08)";
+    ctx.fillStyle = "rgba(0,0,0,0.2)";
     ctx.fillRect(0, 0, width, height);
     ctx.globalCompositeOperation = "source-over";
 

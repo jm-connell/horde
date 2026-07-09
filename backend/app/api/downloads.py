@@ -15,8 +15,9 @@ from ..schemas import (
     DownloadPreview,
     DownloadQueueStatus,
 )
-from ..services import downloader
-from ..services.url_clean import clean_url
+from ..services import downloader, library
+from ..services.url_clean import _youtube_video_id, clean_url
+from urllib.parse import urlparse
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 
@@ -80,6 +81,19 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
     except Exception:  # noqa: BLE001
         pass
 
+    # If this YouTube id is already in the library, replace that row on completion.
+    replace_video_id = None
+    yt_id = preview.get("id") if isinstance(preview, dict) else None
+    if not yt_id:
+        try:
+            yt_id = _youtube_video_id(urlparse(url))
+        except Exception:  # noqa: BLE001
+            yt_id = None
+    if yt_id:
+        existing = library.find_video_by_youtube_id(session, str(yt_id))
+        if existing is not None:
+            replace_video_id = existing.id
+
     job = DownloadJob(
         url=url,
         quality_preset=payload.quality_preset,
@@ -91,6 +105,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         channel_override=(payload.channel_override or "").strip() or None,
         notes_pending=(payload.notes_pending or "").strip() or None,
         normalize_volume=payload.normalize_volume,
+        replace_video_id=replace_video_id,
     )
     session.add(job)
     session.commit()

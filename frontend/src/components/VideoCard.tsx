@@ -1,8 +1,14 @@
 import { Link, useNavigate } from "react-router-dom";
 import { thumbnailUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
+import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
-import { formatDuration, formatResolution, formatViewCount } from "../utils";
+import {
+  formatDate,
+  formatDuration,
+  formatResolution,
+  formatViewCount,
+} from "../utils";
 
 export default function VideoCard({
   video,
@@ -23,9 +29,14 @@ export default function VideoCard({
 }) {
   const navigate = useNavigate();
   const { addToQueue } = usePlayback();
+  const [settings] = useSettings();
   const thumb = thumbnailUrl(video);
   const duration = formatDuration(video.duration_sec);
   const resolution = formatResolution(video.height_px);
+  const dateLabel =
+    settings.showCardDates && video.published_at
+      ? formatDate(video.published_at)
+      : "";
 
   const handleClick = (e: React.MouseEvent) => {
     if (selectable) {
@@ -38,11 +49,11 @@ export default function VideoCard({
     <Link
       to={`/watch/${video.id}`}
       onClick={handleClick}
-      className={`ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 transition-all hover:ring-accent/60 ${
-        selected ? "ring-accent" : "ring-ink-700"
+      className={`ui-card group flex flex-col rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-colors ${
+        selected ? "ring-accent" : "hover:ring-accent/60"
       }`}
     >
-      <div className="relative aspect-video w-full overflow-hidden bg-ink-800">
+      <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-ink-800">
         {thumb ? (
           <img
             src={thumb}
@@ -128,6 +139,9 @@ export default function VideoCard({
               >
                 {video.channel}
               </span>
+            )}
+            {dateLabel && (
+              <span className="text-xs text-gray-500">{dateLabel}</span>
             )}
             {showViewCount && video.view_count !== null && (
               <span className="text-xs text-gray-500">
