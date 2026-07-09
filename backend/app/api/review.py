@@ -26,7 +26,7 @@ class DuplicateGroupRead(BaseModel):
 @router.get("", response_model=list[VideoRead])
 def review_queue(session: Session = Depends(get_session)):
     videos = library.query_videos(session, needs_review=True, sort="added_at", order="desc")
-    return [_to_read(v) for v in videos]
+    return [_to_read(v, session) for v in videos]
 
 
 @router.post("/{video_id}/skip", response_model=VideoRead)
@@ -46,7 +46,7 @@ def skip_review(video_id: int, session: Session = Depends(get_session)):
         enqueue_for_video(video_id, include_tags=True, force=False)
     except Exception:  # noqa: BLE001
         pass
-    return _to_read(video)
+    return _to_read(video, session)
 
 
 def _yt_id(video: Video) -> str | None:
@@ -131,7 +131,7 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
     out: list[dict[str, Any]] = []
     for match_type, group in raw_groups:
         entry: dict[str, Any] = {
-            "videos": [_to_read(v) for v in group],
+            "videos": [_to_read(v, session) for v in group],
             "match_type": match_type,
             "ai_score": None,
             "ai_verdict": None,

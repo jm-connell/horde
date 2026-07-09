@@ -83,15 +83,15 @@ def enqueue_for_video(
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)
 
 
-def enqueue_library_backlog(*, force: bool = True) -> int:
-    """Enqueue missing embeds/tags for the whole library. Returns jobs created."""
+def enqueue_library_backlog(*, force: bool = True) -> dict:
+    """Enqueue missing embeds/tags. Returns enqueued count + breakdown."""
     del force  # reserved for future "reprocess all" behavior
-    created = 0
+    breakdown = {"embed": 0, "tags": 0, "categories": 0}
     with Session(engine) as session:
         need = embeddings.videos_needing_embed(session, limit=2000)
     for video_id in need:
         if enqueue_job(AiJobKind.embed_video, video_id, force=False) is not None:
-            created += 1
+            breakdown["embed"] += 1
 
     ai = app_settings.ai_settings()
     if ai.get("enrich_tags", True):
@@ -109,11 +109,25 @@ def enqueue_library_backlog(*, force: bool = True) -> int:
                 pending_tag_ids.append(video.id)
         for video_id in pending_tag_ids:
             if enqueue_job(AiJobKind.enrich_tags, video_id, force=False) is not None:
-                created += 1
+                breakdown["tags"] += 1
 
     if enqueue_job(AiJobKind.refresh_categories, None, force=False) is not None:
-        created += 1
-    return created
+        breakdown["categories"] += 1
+
+    enqueued = sum(breakdown.values())
+    parts: list[str] = []
+    if breakdown["embed"]:
+        parts.append(f"{breakdown['embed']} embed")
+    if breakdown["tags"]:
+        parts.append(f"{breakdown['tags']} tag enrich")
+    if breakdown["categories"]:
+        parts.append(f"{breakdown['categories']} category refresh")
+    detail = (
+        ", ".join(parts)
+        if parts
+        else "Nothing new to process (library already indexed)"
+    )
+    return {"enqueued": enqueued, "breakdown": breakdown, "detail": detail}
 
 
 def queue_depth() -> int:
@@ -124,6 +138,44 @@ def queue_depth() -> int:
             )
         ).all()
         return len(rows)
+
+
+def queue_breakdown() -> dict[str, int]:
+    counts: dict[str, int] = {
+        "embed_video": 0,
+        "enrich_tags": 0,
+        "refresh_categories": 0,
+        "score_duplicates": 0,
+        "running": 0,
+    }
+    with Session(engine) as session:
+        rows = session.exec(
+            select(AiJob).where(
+                AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
+            )
+        ).all()
+        for job in rows:
+            key = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
+            counts[key] = counts.get(key, 0) + 1
+            if job.status == AiJobStatus.running:
+                counts["running"] += 1
+    return counts
+
+
+def current_job_label() -> Optional[str]:
+    with Session(engine) as session:
+        job = session.exec(
+            select(AiJob)
+            .where(AiJob.status == AiJobStatus.running)
+            .order_by(AiJob.updated_at.desc())
+            .limit(1)
+        ).first()
+        if job is None:
+            return None
+        kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
+        if job.video_id:
+            return f"{kind} (video {job.video_id})"
+        return kind
 
 
 def _next_job(session: Session) -> Optional[AiJob]:
@@ -198,21 +250,51 @@ def _worker_loop() -> None:
         _wake.clear()
 
 
+def _maybe_run_daily() -> None:
+    """Run backlog once per local calendar day at schedule_time (HH:MM)."""
+    from datetime import datetime
+
+    ai = app_settings.ai_settings()
+    if not ai.get("enabled", True) or ai.get("paused"):
+        return
+    if str(ai.get("schedule") or "") != "set_time":
+        return
+    raw = str(ai.get("schedule_time") or "03:00").strip()
+    try:
+        hour_s, minute_s = raw.split(":", 1)
+        hour, minute = int(hour_s), int(minute_s)
+    except ValueError:
+        hour, minute = 3, 0
+    now = datetime.now().astimezone()
+    today = now.strftime("%Y-%m-%d")
+    if str(ai.get("last_daily_run") or "") == today:
+        return
+    if now.hour > hour or (now.hour == hour and now.minute >= minute):
+        enqueue_library_backlog(force=False)
+        app_settings.save({"ai": {"last_daily_run": today}})
+
+
 def _timer_loop() -> None:
     while not _stop.is_set():
         try:
             ai = app_settings.ai_settings()
-            hours = float(ai.get("timer_hours") or 6)
-            hours = max(0.25, min(hours, 168.0))
-            if (
-                ai.get("enabled", True)
-                and not ai.get("paused")
-                and str(ai.get("schedule") or "") == "timer"
-            ):
-                enqueue_library_backlog(force=False)
-                enqueue_job(AiJobKind.refresh_categories, None, force=False)
-            deadline = time.time() + hours * 3600
-            while time.time() < deadline and not _stop.is_set():
+            schedule = str(ai.get("schedule") or "")
+            if ai.get("enabled", True) and not ai.get("paused"):
+                if schedule == "timer":
+                    hours = float(ai.get("timer_hours") or 6)
+                    hours = max(0.25, min(hours, 168.0))
+                    enqueue_library_backlog(force=False)
+                    enqueue_job(AiJobKind.refresh_categories, None, force=False)
+                    deadline = time.time() + hours * 3600
+                    while time.time() < deadline and not _stop.is_set():
+                        time.sleep(5)
+                    continue
+                if schedule == "set_time":
+                    _maybe_run_daily()
+            # Poll frequently for set_time / schedule changes
+            for _ in range(12):
+                if _stop.is_set():
+                    break
                 time.sleep(5)
         except Exception:  # noqa: BLE001
             logger.exception("AI timer loop error")

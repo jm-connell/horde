@@ -75,9 +75,11 @@ export function createFlowingGradientEffect(
       const g = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
       const alpha = isLight ? 0.22 : 0.32;
       g.addColorStop(0, rgba(colors[0], alpha));
-      g.addColorStop(0.33, rgba(colors[1], alpha * 0.9));
-      g.addColorStop(0.66, rgba(colors[2], alpha * 0.85));
-      g.addColorStop(1, rgba(colors[3], alpha));
+      g.addColorStop(0.2, rgba(colors[1], alpha * 0.95));
+      g.addColorStop(0.4, rgba(colors[2], alpha * 0.9));
+      g.addColorStop(0.6, rgba(colors[3], alpha * 0.88));
+      g.addColorStop(0.8, rgba(colors[1], alpha * 0.85));
+      g.addColorStop(1, rgba(colors[0], alpha));
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, width, height);
 
@@ -94,6 +96,18 @@ export function createFlowingGradientEffect(
       g2.addColorStop(1, rgba(colors[1], 0));
       ctx.fillStyle = g2;
       ctx.fillRect(0, 0, width, height);
+
+      // Subtle dither noise to break banding on large gradients
+      const step = 4;
+      for (let y = 0; y < height; y += step) {
+        for (let x = 0; x < width; x += step) {
+          const n = ((x * 12.9898 + y * 78.233 + time * 40) % 1 + 1) % 1;
+          const a = (n - 0.5) * 0.035;
+          if (Math.abs(a) < 0.004) continue;
+          ctx.fillStyle = a > 0 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${-a})`;
+          ctx.fillRect(x, y, step, step);
+        }
+      }
     }
   );
 }

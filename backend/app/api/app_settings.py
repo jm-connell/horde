@@ -15,8 +15,9 @@ class AiSettingsRead(BaseModel):
     base_url: str = ""
     embed_model: str = "nomic-embed-text"
     chat_model: str = "llama3.2:3b"
-    schedule: Literal["on_download", "on_request", "timer"] = "on_download"
+    schedule: Literal["on_download", "on_request", "timer", "set_time"] = "on_download"
     timer_hours: float = 6
+    schedule_time: str = "03:00"
     auto_pull_models: bool = True
     use_subtitles: bool = True
     enrich_tags: bool = True
@@ -30,8 +31,9 @@ class AiSettingsUpdate(BaseModel):
     base_url: Optional[str] = None
     embed_model: Optional[str] = None
     chat_model: Optional[str] = None
-    schedule: Optional[Literal["on_download", "on_request", "timer"]] = None
+    schedule: Optional[Literal["on_download", "on_request", "timer", "set_time"]] = None
     timer_hours: Optional[float] = Field(default=None, ge=0.25, le=168)
+    schedule_time: Optional[str] = None
     auto_pull_models: Optional[bool] = None
     use_subtitles: Optional[bool] = None
     enrich_tags: Optional[bool] = None
@@ -53,7 +55,10 @@ class AppSettingsUpdate(BaseModel):
 
 def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     raw = data.get("ai") if isinstance(data.get("ai"), dict) else {}
-    return AiSettingsRead(**{**app_settings.AI_DEFAULTS, **raw})
+    merged = {**app_settings.AI_DEFAULTS, **raw}
+    # Drop internal-only keys (e.g. last_daily_run) before validating.
+    allowed = set(AiSettingsRead.model_fields)
+    return AiSettingsRead(**{k: v for k, v in merged.items() if k in allowed})
 
 
 @router.get("", response_model=AppSettingsRead)

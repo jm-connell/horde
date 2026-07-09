@@ -3,7 +3,6 @@ import type { EffectController } from "./shared";
 import { createAuroraEffect } from "./aurora";
 import { createBokehEffect } from "./bokeh";
 import { createCityscapeEffect } from "./cityscape";
-import { createColorOrbsEffect } from "./colorOrbs";
 import { createConstellationEffect } from "./constellation";
 import { createDustEffect } from "./dust";
 import { createFirefliesEffect } from "./fireflies";
@@ -59,11 +58,6 @@ export const BACKGROUND_EFFECT_OPTIONS: {
     description: "Slow RGB color wash",
   },
   {
-    value: "color-orbs",
-    label: "Color orbs",
-    description: "Large soft floating color orbs",
-  },
-  {
     value: "lightspeed",
     label: "Lightspeed",
     description: "Subtle tunnel of light streaks",
@@ -71,7 +65,7 @@ export const BACKGROUND_EFFECT_OPTIONS: {
   {
     value: "cityscape",
     label: "Cityscape",
-    description: "Scrolling skyline with window lights",
+    description: "Calm scrolling skyline silhouette",
   },
 ];
 
@@ -92,7 +86,6 @@ const FACTORIES: Partial<Record<BackgroundEffect, EffectFactory>> = {
   grain: createGrainEffect,
   "modern-grid": createModernGridEffect,
   "flowing-gradient": createFlowingGradientEffect,
-  "color-orbs": createColorOrbsEffect,
   lightspeed: createLightspeedEffect,
   cityscape: createCityscapeEffect,
 };

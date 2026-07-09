@@ -186,7 +186,8 @@ export default function Watch() {
     moreLikeThis.length > 0;
   const chapters = parseChapters(video.description);
   const showDescriptionPanel =
-    settings.showDescription && !!(video.description || video.notes);
+    settings.showDescription &&
+    !!(video.description || video.notes || video.tags?.length || video.ai_tags?.length);
   const metaSideBySide = chapters.length > 0 && showDescriptionPanel;
   const resolution = formatResolution(video.height_px);
   const contentClass = showRelatedRight
@@ -336,16 +337,8 @@ export default function Watch() {
                 : "mt-4 space-y-4"
             }
           >
-            <div
-              className={
-                metaSideBySide
-                  ? "min-w-0 space-y-4 lg:grid lg:grid-cols-[minmax(12rem,0.75fr)_minmax(0,1.75fr)] lg:items-start lg:gap-4 lg:space-y-0"
-                  : "min-w-0 space-y-4"
-              }
-            >
-              <ChaptersList chapters={chapters} />
-
-              {showDescriptionPanel && (
+            <div className="min-w-0 space-y-4">
+              {(showDescriptionPanel || chapters.length > 0) && (
                 <div>
                   <button
                     type="button"
@@ -364,57 +357,115 @@ export default function Watch() {
                     </span>
                   </button>
                   <Collapse open={settings.descriptionExpanded}>
-                    <div className="ui-panel isolate overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
-                      <div className="px-4 py-3">
-                        {video.description && (
-                          <>
-                            <p
-                              className={`overflow-hidden text-sm text-gray-300 ${
-                                descExpanded
-                                  ? "whitespace-pre-wrap"
-                                  : "line-clamp-3 whitespace-normal"
-                              }`}
-                            >
-                              <LinkifiedText text={video.description} />
-                            </p>
-                            <button
-                              onClick={() => setDescExpanded((v) => !v)}
-                              className="mt-2 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
-                            >
-                              {descExpanded ? "Show less" : "Show more"}
-                            </button>
-                          </>
-                        )}
+                    <div
+                      className={
+                        metaSideBySide
+                          ? "grid gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(12rem,0.85fr)] lg:items-stretch"
+                          : undefined
+                      }
+                    >
+                      {showDescriptionPanel && (
+                        <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
+                          <div className="px-4 py-3">
+                            {video.description && (
+                              <>
+                                <p
+                                  className={`overflow-hidden text-sm text-gray-300 ${
+                                    descExpanded
+                                      ? "whitespace-pre-wrap"
+                                      : "line-clamp-5 whitespace-normal"
+                                  }`}
+                                >
+                                  <LinkifiedText text={video.description} />
+                                </p>
+                                <button
+                                  onClick={() => setDescExpanded((v) => !v)}
+                                  className="mt-2 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
+                                >
+                                  {descExpanded ? "Show less" : "Show more"}
+                                </button>
+                              </>
+                            )}
 
-                        <Collapse
-                          open={
-                            !!video.notes &&
-                            (descExpanded || !video.description)
-                          }
-                        >
-                          <div
-                            className={
-                              video.description
-                                ? "mt-4 border-t border-ink-700 pt-4"
-                                : ""
-                            }
-                          >
-                            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
-                              Your notes
-                            </h3>
-                            <p className="whitespace-pre-wrap text-sm text-gray-300">
-                              <LinkifiedText text={video.notes ?? ""} />
-                            </p>
+                            {(video.ai_tags?.length > 0 ||
+                              video.tags?.length > 0) && (
+                              <div
+                                className={`flex flex-wrap gap-1.5 ${
+                                  video.description || video.notes
+                                    ? "mt-3 border-t border-ink-700 pt-3"
+                                    : ""
+                                }`}
+                              >
+                                {[
+                                  ...(video.ai_tags || []).map((t) => ({
+                                    tag: t,
+                                    ai: true,
+                                  })),
+                                  ...(video.tags || [])
+                                    .filter(
+                                      (t) =>
+                                        !(video.ai_tags || [])
+                                          .map((a) => a.toLowerCase())
+                                          .includes(t.toLowerCase())
+                                    )
+                                    .map((t) => ({ tag: t, ai: false })),
+                                ].map(({ tag, ai }) => (
+                                  <Link
+                                    key={`${ai ? "ai" : "meta"}-${tag}`}
+                                    to={`/?tag=${encodeURIComponent(tag)}`}
+                                    className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${
+                                      ai
+                                        ? "border border-accent/35 bg-accent/10 text-accent hover:bg-accent/20"
+                                        : "border border-ink-600 bg-ink-800 text-gray-300 hover:border-accent hover:text-accent"
+                                    }`}
+                                    title={ai ? "AI tag" : "Metadata tag"}
+                                  >
+                                    #{tag}
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+
+                            <Collapse
+                              open={
+                                !!video.notes &&
+                                (descExpanded || !video.description)
+                              }
+                            >
+                              <div
+                                className={
+                                  video.description
+                                    ? "mt-4 border-t border-ink-700 pt-4"
+                                    : ""
+                                }
+                              >
+                                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
+                                  Your notes
+                                </h3>
+                                <p className="whitespace-pre-wrap text-sm text-gray-300">
+                                  <LinkifiedText text={video.notes ?? ""} />
+                                </p>
+                              </div>
+                            </Collapse>
                           </div>
-                        </Collapse>
-                      </div>
+                        </div>
+                      )}
+                      {chapters.length > 0 && (
+                        <ChaptersList
+                          chapters={chapters}
+                          maxHeightClass={
+                            descExpanded ? "max-h-[28rem]" : "max-h-48"
+                          }
+                          className="h-full min-h-0"
+                        />
+                      )}
                     </div>
                   </Collapse>
                 </div>
               )}
 
               {!settings.showDescription && video.notes && (
-                <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
+                <div className="ui-panel rounded-xl border border-accent/30 bg-accent/5 p-4 ring-1 ring-ink-700">
                   <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
                     Your notes
                   </h3>

@@ -133,6 +133,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       progressTimer.current = window.setTimeout(() => {
         progressTimer.current = null;
       }, 5000);
+      // Resuming watch (≥30s) should bring the video back to Continue watching.
+      if (sec >= 30) {
+        import("../hooks/useContinueWatchingDismiss").then((m) =>
+          m.undismissContinueWatching(id)
+        );
+      }
       api.saveProgress(id, sec).catch(() => undefined);
     },
     []

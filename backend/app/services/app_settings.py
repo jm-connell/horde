@@ -11,8 +11,11 @@ AI_DEFAULTS: dict[str, Any] = {
     "base_url": "",
     "embed_model": "nomic-embed-text",
     "chat_model": "llama3.2:3b",
-    "schedule": "on_download",  # on_download | on_request | timer
+    # on_download | on_request | timer | set_time
+    "schedule": "on_download",
     "timer_hours": 6,
+    "schedule_time": "03:00",  # local HH:MM for set_time
+    "last_daily_run": "",  # YYYY-MM-DD when set_time last ran
     "auto_pull_models": True,
     "use_subtitles": True,
     "enrich_tags": True,

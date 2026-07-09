@@ -1,4 +1,5 @@
 import type {
+  AiProcessResult,
   AiSettings,
   AiStatus,
   AppSettings,
@@ -212,8 +213,8 @@ export const api = {
     });
   },
 
-  processAiLibrary(): Promise<{ enqueued: number }> {
-    return request<{ enqueued: number }>("/api/ai/process", { method: "POST" });
+  processAiLibrary(): Promise<AiProcessResult> {
+    return request<AiProcessResult>("/api/ai/process", { method: "POST" });
   },
 
   pauseAi(): Promise<{ paused: boolean }> {

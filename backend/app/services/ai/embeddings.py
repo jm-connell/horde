@@ -222,7 +222,14 @@ def videos_needing_embed(session: Session, *, limit: int = 500) -> list[int]:
 
 
 def lock_tags_on_manual_edit(session: Session, video_id: int) -> None:
+    from .. import library as lib
+
     meta = _get_or_create_meta(session, video_id)
     meta.tags_locked = True
+    video = session.get(Video, video_id)
+    if video is not None and meta.ai_tags:
+        current = {t.lower() for t in lib.parse_tags(video.tags)}
+        kept = [t for t in lib.parse_tags(meta.ai_tags) if t.lower() in current]
+        meta.ai_tags = lib.dump_tags(kept)
     meta.updated_at = utcnow()
     session.add(meta)

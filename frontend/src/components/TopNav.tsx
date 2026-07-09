@@ -8,8 +8,8 @@ import LiquidNav from "./LiquidNav";
 
 const NAV_LINKS = [
   { to: "/", label: "Home", end: true },
-  { to: "/history", label: "History", end: false },
   { to: "/playlists", label: "Playlists", end: false },
+  { to: "/history", label: "History", end: false },
   { to: "/download", label: "Download", end: false },
   { to: "/review", label: "Review", end: false },
   { to: "/settings", label: "Settings", end: false },

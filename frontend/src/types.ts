@@ -11,6 +11,7 @@ export interface Video {
   channel: string | null;
   channel_url: string | null;
   tags: string[];
+  ai_tags: string[];
   description: string | null;
   notes: string | null;
   source_url: string | null;
@@ -155,7 +156,7 @@ export interface StorageStats {
   video_count: number;
 }
 
-export type AiSchedule = "on_download" | "on_request" | "timer";
+export type AiSchedule = "on_download" | "on_request" | "timer" | "set_time";
 
 export interface AiSettings {
   enabled: boolean;
@@ -165,6 +166,7 @@ export interface AiSettings {
   chat_model: string;
   schedule: AiSchedule;
   timer_hours: number;
+  schedule_time: string;
   auto_pull_models: boolean;
   use_subtitles: boolean;
   enrich_tags: boolean;
@@ -195,10 +197,13 @@ export interface AiStatus {
   indexed_videos: number;
   total_videos: number;
   queue_depth: number;
+  queue_breakdown: Record<string, number>;
+  current_job: string | null;
 }
 
 export interface RecommendationSection {
   title: string;
+  kind?: string;
   seed_video_id: number | null;
   videos: Video[];
 }
@@ -206,6 +211,13 @@ export interface RecommendationSection {
 export interface RecommendationsResponse {
   categories: string[];
   sections: RecommendationSection[];
+  hint?: string;
+}
+
+export interface AiProcessResult {
+  enqueued: number;
+  breakdown: Record<string, number>;
+  detail: string;
 }
 
 export interface DuplicateGroup {

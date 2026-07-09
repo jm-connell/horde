@@ -73,6 +73,7 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     suggested = data.get("tags") if isinstance(data.get("tags"), list) else []
     merged = list(existing)
     seen = {t.lower() for t in existing}
+    added_ai: list[str] = []
     for tag in suggested:
         if not isinstance(tag, str):
             continue
@@ -84,6 +85,7 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
             continue
         seen.add(key)
         merged.append(cleaned)
+        added_ai.append(cleaned)
         if len(merged) >= 24:
             break
 
@@ -91,6 +93,13 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     session.add(video)
     if meta is None:
         meta = VideoAiMeta(video_id=video_id)
+    prev_ai = library.parse_tags(meta.ai_tags) if meta.ai_tags else []
+    prev_seen = {t.lower() for t in prev_ai}
+    for tag in added_ai:
+        if tag.lower() not in prev_seen:
+            prev_ai.append(tag)
+            prev_seen.add(tag.lower())
+    meta.ai_tags = library.dump_tags(prev_ai)
     meta.tags_enriched_at = utcnow()
     meta.updated_at = utcnow()
     session.add(meta)

@@ -17,6 +17,7 @@ class VideoRead(BaseModel):
     channel: Optional[str]
     channel_url: Optional[str]
     tags: list[str]
+    ai_tags: list[str] = []
     description: Optional[str]
     notes: Optional[str]
     source_url: Optional[str]

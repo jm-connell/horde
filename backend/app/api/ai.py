@@ -33,6 +33,8 @@ class AiStatusRead(BaseModel):
     indexed_videos: int = 0
     total_videos: int = 0
     queue_depth: int = 0
+    queue_breakdown: dict[str, int] = Field(default_factory=dict)
+    current_job: Optional[str] = None
 
 
 class AiTestRequest(BaseModel):
@@ -41,12 +43,8 @@ class AiTestRequest(BaseModel):
 
 class AiProcessResult(BaseModel):
     enqueued: int
-
-
-class RecommendationSectionRead(BaseModel):
-    title: str
-    seed_video_id: Optional[int] = None
-    videos: list[Any]
+    breakdown: dict[str, int] = Field(default_factory=dict)
+    detail: str = ""
 
 
 @router.get("/status", response_model=AiStatusRead)
@@ -57,7 +55,13 @@ def ai_status(session: Session = Depends(get_session)):
         total_videos=total,
         queue_depth=worker.queue_depth(),
     )
-    return AiStatusRead(**status.__dict__)
+    breakdown = worker.queue_breakdown()
+    current = worker.current_job_label()
+    return AiStatusRead(
+        **status.__dict__,
+        queue_breakdown=breakdown,
+        current_job=current,
+    )
 
 
 @router.post("/test")
@@ -68,8 +72,12 @@ def ai_test(payload: AiTestRequest):
 @router.post("/process", response_model=AiProcessResult)
 def ai_process_library():
     invalidate_resolved_url()
-    enqueued = worker.enqueue_library_backlog(force=True)
-    return AiProcessResult(enqueued=enqueued)
+    result = worker.enqueue_library_backlog(force=True)
+    return AiProcessResult(
+        enqueued=result["enqueued"],
+        breakdown=result["breakdown"],
+        detail=result["detail"],
+    )
 
 
 @router.post("/pause")
@@ -99,29 +107,45 @@ def ai_recommendations(
         raise HTTPException(status_code=503, detail="AI not ready")
 
     if category:
-        videos = recommend.videos_for_category(session, category)
-        return {
-            "categories": recommend.list_categories(session),
-            "sections": [
+        result = recommend.videos_for_category(session, category)
+        sections: list[dict[str, Any]] = []
+        if result.category_videos:
+            sections.append(
                 {
-                    "title": category,
+                    "title": "",
+                    "kind": "category",
                     "seed_video_id": None,
-                    "videos": [_to_read(v) for v in videos],
+                    "videos": [_to_read(v, session) for v in result.category_videos],
                 }
-            ],
+            )
+        if result.more_videos:
+            sections.append(
+                {
+                    "title": "End of category — other recommendations",
+                    "kind": "more",
+                    "seed_video_id": None,
+                    "videos": [_to_read(v, session) for v in result.more_videos],
+                }
+            )
+        return {
+            "categories": result.categories,
+            "sections": sections,
+            "hint": "Videos match this category by similarity to your library.",
         }
 
-    sections = recommend.homepage_recommendations(session)
+    sections_out = recommend.homepage_recommendations(session)
     return {
         "categories": recommend.list_categories(session),
         "sections": [
             {
-                "title": s.title,
+                "title": "",
+                "kind": s.kind,
                 "seed_video_id": s.seed_video_id,
-                "videos": [_to_read(v) for v in s.videos],
+                "videos": [_to_read(v, session) for v in s.videos],
             }
-            for s in sections
+            for s in sections_out
         ],
+        "hint": "Based on recent watches and similarity across your library.",
     }
 
 

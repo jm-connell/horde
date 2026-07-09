@@ -155,6 +155,8 @@ class VideoAiMeta(SQLModel, table=True):
     embed_status: str = Field(default="pending", index=True)
     content_hash: str = Field(default="")
     summary: Optional[str] = None
+    # JSON list of tags added by AI (subset of Video.tags).
+    ai_tags: str = Field(default="[]")
     tags_enriched_at: Optional[datetime] = None
     tags_locked: bool = Field(default=False)
     updated_at: datetime = Field(default_factory=utcnow)

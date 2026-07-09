@@ -10,6 +10,7 @@ import {
   type NavIndicator,
   type SubtitleSize,
   type Theme,
+  type UiScale,
 } from "../hooks/useSettings";
 import { BACKGROUND_EFFECT_OPTIONS } from "../effects";
 import { LIBRARY_SORT_OPTIONS } from "../hooks/useLibrarySort";
@@ -79,15 +80,35 @@ const AI_SCHEDULE_OPTIONS: { value: AiSchedule; label: string; description: stri
     description: "Embed and enrich tags when a video finishes downloading",
   },
   {
-    value: "on_request",
-    label: "Only when requested",
-    description: "No automatic work — use Process library now",
-  },
-  {
     value: "timer",
-    label: "On a timer",
+    label: "Timer",
     description: "Periodically index videos missing embeddings",
   },
+  {
+    value: "set_time",
+    label: "Set time",
+    description: "Run once per day at a chosen local clock time",
+  },
+  {
+    value: "on_request",
+    label: "When requested",
+    description: "No automatic work — use Process library now",
+  },
+];
+
+const EMBED_MODEL_OPTIONS = [
+  { value: "nomic-embed-text", label: "nomic-embed-text (default)" },
+  { value: "mxbai-embed-large", label: "mxbai-embed-large" },
+  { value: "all-minilm", label: "all-minilm" },
+  { value: "__custom__", label: "Custom…" },
+];
+
+const CHAT_MODEL_OPTIONS = [
+  { value: "llama3.2:3b", label: "llama3.2:3b (default)" },
+  { value: "llama3.2:1b", label: "llama3.2:1b" },
+  { value: "qwen2.5:3b", label: "qwen2.5:3b" },
+  { value: "phi3:mini", label: "phi3:mini" },
+  { value: "__custom__", label: "Custom…" },
 ];
 
 const DEFAULT_AI: AiSettings = {
@@ -98,6 +119,7 @@ const DEFAULT_AI: AiSettings = {
   chat_model: "llama3.2:3b",
   schedule: "on_download",
   timer_hours: 6,
+  schedule_time: "03:00",
   auto_pull_models: true,
   use_subtitles: true,
   enrich_tags: true,
@@ -245,6 +267,8 @@ export default function Settings() {
   const [aiDraft, setAiDraft] = useState<AiSettings>(DEFAULT_AI);
   const [aiTesting, setAiTesting] = useState(false);
   const [aiProcessing, setAiProcessing] = useState(false);
+  const [embedCustom, setEmbedCustom] = useState(false);
+  const [chatCustom, setChatCustom] = useState(false);
   const [expiryInput, setExpiryInput] = useState<string>("");
   const [metadataSyncing, setMetadataSyncing] = useState(false);
 
@@ -261,7 +285,20 @@ export default function Settings() {
       .then((s) => {
         setAppSettings(s);
         setExpiryInput(String(s.progress_expiry_days));
-        if (s.ai) setAiDraft({ ...DEFAULT_AI, ...s.ai });
+        if (s.ai) {
+          const merged = { ...DEFAULT_AI, ...s.ai };
+          setAiDraft(merged);
+          setEmbedCustom(
+            !EMBED_MODEL_OPTIONS.some(
+              (o) => o.value !== "__custom__" && o.value === merged.embed_model
+            )
+          );
+          setChatCustom(
+            !CHAT_MODEL_OPTIONS.some(
+              (o) => o.value !== "__custom__" && o.value === merged.chat_model
+            )
+          );
+        }
       })
       .catch(() => undefined);
     fetch("/api/health")
@@ -379,7 +416,7 @@ export default function Settings() {
               <select
                 value={settings.theme}
                 onChange={(e) => update({ theme: e.target.value as Theme })}
-                className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                className="ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
               >
                 {THEMES.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -455,7 +492,7 @@ export default function Settings() {
                     backgroundEffect: e.target.value as BackgroundEffect,
                   })
                 }
-                className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                className="ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
               >
                 {BACKGROUND_EFFECT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -725,7 +762,7 @@ export default function Settings() {
                         key={opt.value}
                         type="button"
                         onClick={() => update({ loadingStyle: opt.value })}
-                        className={`rounded-lg px-3 py-1.5 text-sm ${
+                        className={`ui-interactive rounded-lg px-3 py-1.5 text-sm ${
                           settings.loadingStyle === opt.value
                             ? "bg-accent text-ink-950"
                             : "bg-ink-800 text-gray-300 hover:bg-ink-700"
@@ -739,6 +776,51 @@ export default function Settings() {
                     Style used for page and list loading states.
                   </p>
                 </div>
+
+                <div>
+                  <span className="mb-2 block text-sm font-medium text-gray-200">
+                    UI scale
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { value: "90", label: "90%" },
+                        { value: "100", label: "100%" },
+                        { value: "110", label: "110%" },
+                        { value: "125", label: "125%" },
+                      ] as { value: UiScale; label: string }[]
+                    ).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => update({ uiScale: opt.value })}
+                        className={`ui-interactive rounded-lg px-3 py-1.5 text-sm ${
+                          settings.uiScale === opt.value
+                            ? "bg-accent text-ink-950"
+                            : "bg-ink-800 text-gray-300 hover:bg-ink-700"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Scales text and spacing across the app (rem-based).
+                  </p>
+                </div>
+
+                <SettingRow
+                  title="Debug layout"
+                  description="Outline page shells and panels to diagnose content jumping on navigation."
+                  control={
+                    <Toggle
+                      checked={settings.debugLayout}
+                      onChange={() =>
+                        update({ debugLayout: !settings.debugLayout })
+                      }
+                    />
+                  }
+                />
               </div>
             </Section>
           </>
@@ -947,6 +1029,20 @@ export default function Settings() {
                     />
                   }
                 />
+                <SettingRow
+                  title="Autoplay related"
+                  description="When a video ends and the queue is empty, count down and play a related video. Also available in the player controls."
+                  control={
+                    <Toggle
+                      checked={settings.autoplayRelated}
+                      onChange={() =>
+                        update({
+                          autoplayRelated: !settings.autoplayRelated,
+                        })
+                      }
+                    />
+                  }
+                />
               </div>
             </Section>
 
@@ -1105,7 +1201,7 @@ export default function Settings() {
                     />
                   }
                 />
-                <label className="block">
+                <label className="block max-w-md">
                   <span className="mb-1 block text-xs text-gray-500">
                     Ollama base URL
                   </span>
@@ -1121,7 +1217,7 @@ export default function Settings() {
                     className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                   />
                 </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     disabled={aiTesting}
@@ -1142,7 +1238,7 @@ export default function Settings() {
                       );
                       refreshAiStatus();
                     }}
-                    className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700 disabled:opacity-50"
+                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:opacity-50"
                   >
                     {aiTesting ? "Testing…" : "Test connection"}
                   </button>
@@ -1154,7 +1250,7 @@ export default function Settings() {
                         await saveAi({ paused: false });
                         showToast("AI queue resumed");
                       }}
-                      className="rounded-lg bg-accent/15 px-3 py-1.5 text-sm text-accent hover:bg-accent/25"
+                      className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm text-accent hover:bg-accent/25"
                     >
                       Resume queue
                     </button>
@@ -1166,14 +1262,20 @@ export default function Settings() {
                         await saveAi({ paused: true });
                         showToast("AI queue paused");
                       }}
-                      className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700"
+                      className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
                     >
                       Pause queue
                     </button>
                   )}
+                  {aiStatus && (aiStatus.ready || aiStatus.reachable) && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      {aiStatus.ready ? "Connected" : "Reachable"}
+                    </span>
+                  )}
                 </div>
                 {aiStatus && (
-                  <dl className="space-y-1.5 text-sm">
+                  <dl className="max-w-md space-y-1.5 text-sm">
                     <div className="flex justify-between gap-3">
                       <dt className="text-gray-400">Status</dt>
                       <dd className="text-gray-200">
@@ -1201,6 +1303,35 @@ export default function Settings() {
                           : ""}
                       </dd>
                     </div>
+                    {aiStatus.current_job && (
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-400">Running</dt>
+                        <dd className="truncate text-xs text-gray-300">
+                          {aiStatus.current_job}
+                        </dd>
+                      </div>
+                    )}
+                    {aiStatus.queue_breakdown &&
+                      aiStatus.queue_depth > 0 && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-gray-400">Queue</dt>
+                          <dd className="text-right text-xs text-gray-300">
+                            {[
+                              aiStatus.queue_breakdown.embed_video
+                                ? `${aiStatus.queue_breakdown.embed_video} embed`
+                                : null,
+                              aiStatus.queue_breakdown.enrich_tags
+                                ? `${aiStatus.queue_breakdown.enrich_tags} tags`
+                                : null,
+                              aiStatus.queue_breakdown.refresh_categories
+                                ? `${aiStatus.queue_breakdown.refresh_categories} categories`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || `${aiStatus.queue_depth} jobs`}
+                          </dd>
+                        </div>
+                      )}
                     {aiStatus.pulling.length > 0 && (
                       <div className="flex justify-between gap-3">
                         <dt className="text-gray-400">Pulling</dt>
@@ -1219,39 +1350,115 @@ export default function Settings() {
 
             <Section
               title="Models"
-              description="Defaults work well on a 1660 Super-class GPU. Models are pulled automatically on first connect when enabled."
+              description="Models are pulled automatically on first connect when auto-pull is enabled."
             >
-              <div className="space-y-3">
+              <div className="max-w-md space-y-3">
                 <label className="block">
-                  <span className="mb-1 block text-xs text-gray-500">
+                  <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
                     Embedding model
+                    <span
+                      className="cursor-help text-gray-600"
+                      title="Embeddings are lighter on GPU than chat. nomic-embed-text is a good default."
+                    >
+                      (?)
+                    </span>
                   </span>
-                  <input
-                    value={aiDraft.embed_model}
-                    onChange={(e) =>
-                      setAiDraft((d) => ({ ...d, embed_model: e.target.value }))
+                  <select
+                    value={
+                      embedCustom ? "__custom__" : aiDraft.embed_model
                     }
-                    onBlur={(e) =>
-                      saveAi({ embed_model: e.target.value.trim() })
-                    }
+                    onChange={(e) => {
+                      if (e.target.value === "__custom__") {
+                        setEmbedCustom(true);
+                        return;
+                      }
+                      setEmbedCustom(false);
+                      setAiDraft((d) => ({
+                        ...d,
+                        embed_model: e.target.value,
+                      }));
+                    }}
                     className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                  />
+                  >
+                    {EMBED_MODEL_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  {embedCustom && (
+                    <input
+                      value={aiDraft.embed_model}
+                      onChange={(e) =>
+                        setAiDraft((d) => ({
+                          ...d,
+                          embed_model: e.target.value,
+                        }))
+                      }
+                      placeholder="Ollama model name"
+                      className="ui-panel mt-2 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    />
+                  )}
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-xs text-gray-500">
+                  <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
                     Chat model (tags, categories, duplicates)
+                    <span
+                      className="cursor-help text-gray-600"
+                      title="Chat models need more VRAM. 3B-class models fit a 6GB GPU; larger models need more."
+                    >
+                      (?)
+                    </span>
                   </span>
-                  <input
-                    value={aiDraft.chat_model}
-                    onChange={(e) =>
-                      setAiDraft((d) => ({ ...d, chat_model: e.target.value }))
-                    }
-                    onBlur={(e) =>
-                      saveAi({ chat_model: e.target.value.trim() })
-                    }
+                  <select
+                    value={chatCustom ? "__custom__" : aiDraft.chat_model}
+                    onChange={(e) => {
+                      if (e.target.value === "__custom__") {
+                        setChatCustom(true);
+                        return;
+                      }
+                      setChatCustom(false);
+                      setAiDraft((d) => ({
+                        ...d,
+                        chat_model: e.target.value,
+                      }));
+                    }}
                     className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                  />
+                  >
+                    {CHAT_MODEL_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  {chatCustom && (
+                    <input
+                      value={aiDraft.chat_model}
+                      onChange={(e) =>
+                        setAiDraft((d) => ({
+                          ...d,
+                          chat_model: e.target.value,
+                        }))
+                      }
+                      placeholder="Ollama model name"
+                      className="ui-panel mt-2 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    />
+                  )}
                 </label>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await saveAi({
+                      embed_model: aiDraft.embed_model.trim(),
+                      chat_model: aiDraft.chat_model.trim(),
+                    });
+                    showToast("Models saved");
+                    refreshAiStatus();
+                  }}
+                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+                >
+                  Save models
+                </button>
                 <SettingRow
                   title="Auto-pull missing models"
                   description="Ask Ollama to download configured models when they are missing."
@@ -1271,7 +1478,7 @@ export default function Settings() {
               title="When to run"
               description="Important for large libraries — process on a schedule or only when you ask."
             >
-              <div className="space-y-3">
+              <div className="max-w-md space-y-3">
                 <select
                   value={aiDraft.schedule}
                   onChange={(e) =>
@@ -1317,6 +1524,29 @@ export default function Settings() {
                     />
                   </label>
                 )}
+                {aiDraft.schedule === "set_time" && (
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-gray-500">
+                      Daily run time (local)
+                    </span>
+                    <input
+                      type="time"
+                      value={aiDraft.schedule_time || "03:00"}
+                      onChange={(e) =>
+                        setAiDraft((d) => ({
+                          ...d,
+                          schedule_time: e.target.value || "03:00",
+                        }))
+                      }
+                      onBlur={(e) =>
+                        saveAi({
+                          schedule_time: e.target.value || "03:00",
+                        })
+                      }
+                      className="ui-panel rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    />
+                  </label>
+                )}
                 <button
                   type="button"
                   disabled={aiProcessing}
@@ -1331,13 +1561,13 @@ export default function Settings() {
                       return;
                     }
                     showToast(
-                      `Queued ${result.enqueued} AI job${
-                        result.enqueued === 1 ? "" : "s"
-                      }`
+                      result.enqueued > 0
+                        ? `Queued ${result.enqueued}: ${result.detail}`
+                        : result.detail || "Nothing to process"
                     );
                     refreshAiStatus();
                   }}
-                  className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                  className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent px-3 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-50"
                 >
                   {aiProcessing ? "Queuing…" : "Process library now"}
                 </button>

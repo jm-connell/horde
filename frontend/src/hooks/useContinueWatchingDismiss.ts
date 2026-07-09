@@ -51,5 +51,21 @@ export function useContinueWatchingDismiss() {
     [dismissed]
   );
 
-  return { dismissed, dismiss, dismissAll, isDismissed };
+  const undismiss = useCallback((id: number) => {
+    const next = new Set(loadDismissed());
+    if (!next.has(id)) return;
+    next.delete(id);
+    saveDismissed(next);
+    setDismissed(next);
+  }, []);
+
+  return { dismissed, dismiss, dismissAll, isDismissed, undismiss };
+}
+
+/** Clear a video from the dismissed set (e.g. user resumed watching). */
+export function undismissContinueWatching(id: number) {
+  const next = new Set(loadDismissed());
+  if (!next.has(id)) return;
+  next.delete(id);
+  saveDismissed(next);
 }

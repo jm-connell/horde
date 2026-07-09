@@ -34,7 +34,7 @@ export default function PlaybackQueue({
 
   return (
     <div
-      className={`rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700 ${className}`}
+      className={`ui-panel rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700 ${className}`}
     >
       {collapsible ? (
         <div className="mb-2 flex items-center justify-between gap-2">

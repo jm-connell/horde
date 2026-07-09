@@ -17,14 +17,14 @@ export default function LoadingIndicator({
       aria-live="polite"
     >
       {style === "dots" && (
-        <div className="flex items-center gap-1.5" aria-hidden>
+        <div className="flex items-center gap-2" aria-hidden>
           {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="h-2 w-2 rounded-full bg-accent"
+              className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_10px_rgb(var(--accent)/0.45)]"
               style={{
-                animation: "horde-load-dot 1.05s ease-in-out infinite",
-                animationDelay: `${i * 0.15}s`,
+                animation: "horde-load-dot 0.95s ease-in-out infinite",
+                animationDelay: `${i * 0.12}s`,
               }}
             />
           ))}
@@ -32,19 +32,19 @@ export default function LoadingIndicator({
       )}
       {style === "spinner" && (
         <span
-          className="h-7 w-7 rounded-full border-2 border-ink-600 border-t-accent"
-          style={{ animation: "horde-load-spin 0.7s linear infinite" }}
+          className="h-8 w-8 rounded-full border-2 border-ink-600 border-t-accent shadow-[0_0_12px_rgb(var(--accent)/0.25)]"
+          style={{ animation: "horde-load-spin 0.65s linear infinite" }}
           aria-hidden
         />
       )}
       {style === "bar" && (
         <span
-          className="relative h-1 w-28 overflow-hidden rounded-full bg-ink-700"
+          className="relative h-1.5 w-32 overflow-hidden rounded-full bg-ink-700"
           aria-hidden
         >
           <span
-            className="absolute inset-y-0 w-1/3 rounded-full bg-accent"
-            style={{ animation: "horde-load-bar 1.1s ease-in-out infinite" }}
+            className="absolute inset-y-0 rounded-full bg-accent shadow-[0_0_8px_rgb(var(--accent)/0.5)]"
+            style={{ animation: "horde-load-bar 1s ease-in-out infinite" }}
           />
         </span>
       )}

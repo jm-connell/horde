@@ -718,7 +718,7 @@ export default function Library() {
                   </div>
                 </div>
               </>
-            ) : onRecommendedTab ? null : (
+            ) : (
               <>
             <input
               value={search}
@@ -749,17 +749,19 @@ export default function Library() {
               >
                 {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
               </button>
-              {tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
+              {!onRecommendedTab &&
+                tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
                 <button
                   onClick={() => setShowTags((s) => !s)}
-                  className="ui-panel shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
+                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
                 >
                   {showTags ? "Hide tags" : "Tags"}
                 </button>
               )}
+              {!onRecommendedTab && (
               <button
                 onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-                className={`shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                className={`ui-panel ui-interactive shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors ${
                   selectMode
                     ? "border-accent bg-accent/10 text-accent"
                     : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
@@ -767,6 +769,7 @@ export default function Library() {
               >
                 {selectMode ? "Cancel" : "Select"}
               </button>
+              )}
             </div>
               </>
             )}
@@ -786,17 +789,13 @@ export default function Library() {
           {tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
             <button
               onClick={() => setShowTags((s) => !s)}
-              className="hidden rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent md:inline-block"
+              className="ui-panel ui-interactive hidden rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-gray-300 hover:border-accent hover:text-accent md:inline-block"
             >
               {showTags ? "Hide tags" : "Show tags"}
             </button>
           )}
-        </div>
-        )}
-
-        {!onRecommendedTab && showTags && visibleTags.length > 0 && (
-          <div className="mb-5 flex flex-wrap gap-2">
-            {visibleTags
+          {showTags &&
+            visibleTags
               .filter((t) => t.tag !== activeTag)
               .map((t) => (
                 <button
@@ -808,15 +807,15 @@ export default function Library() {
                   <span className="ml-1.5 text-gray-500">{t.count}</span>
                 </button>
               ))}
-            {hiddenTagCount > 0 && (
-              <button
-                onClick={() => setShowAllTags(true)}
-                className="rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-400 hover:border-accent hover:text-accent"
-              >
-                Show more ({hiddenTagCount})
-              </button>
-            )}
-          </div>
+          {showTags && hiddenTagCount > 0 && (
+            <button
+              onClick={() => setShowAllTags(true)}
+              className="rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-400 hover:border-accent hover:text-accent"
+            >
+              Show more ({hiddenTagCount})
+            </button>
+          )}
+        </div>
         )}
 
         {onFeedTab && feedSort === "popular" && (

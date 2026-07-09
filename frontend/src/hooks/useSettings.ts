@@ -52,13 +52,13 @@ export type BackgroundEffect =
   | "grain"
   | "modern-grid"
   | "flowing-gradient"
-  | "color-orbs"
   | "lightspeed"
   | "cityscape";
 
 export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator = "none" | "liquid" | "underline" | "fade";
 export type LoadingStyle = "dots" | "spinner" | "bar";
+export type UiScale = "90" | "100" | "110" | "125";
 
 export interface Settings {
   theme: Theme;
@@ -76,6 +76,9 @@ export interface Settings {
   /** 0.15–1 when panels are translucent; higher = more see-through. */
   translucentPanelStrength: number;
   loadingStyle: LoadingStyle;
+  /** Rem-based UI scale applied to documentElement font-size. */
+  uiScale: UiScale;
+  debugLayout: boolean;
   showDescription: boolean;
   subtitleSize: SubtitleSize;
   subtitleOffset: number;
@@ -123,6 +126,8 @@ const DEFAULTS: Settings = {
   translucentPanels: false,
   translucentPanelStrength: 0.65,
   loadingStyle: "dots",
+  uiScale: "100",
+  debugLayout: false,
   showDescription: true,
   subtitleSize: "medium",
   subtitleOffset: 12,
@@ -165,6 +170,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "translucentPanels",
   "translucentPanelStrength",
   "loadingStyle",
+  "uiScale",
   "showDescription",
   "subtitleSize",
   "subtitleOffset",
@@ -290,7 +296,6 @@ const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "grain",
   "modern-grid",
   "flowing-gradient",
-  "color-orbs",
   "lightspeed",
   "cityscape",
 ]);
@@ -432,6 +437,13 @@ export function serverUiToSettingsPatch(
   return patch as Partial<Settings>;
 }
 
+function normalizeUiScale(value: unknown): UiScale {
+  if (value === "90" || value === "100" || value === "110" || value === "125") {
+    return value;
+  }
+  return DEFAULTS.uiScale;
+}
+
 function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }): Settings {
   return {
     ...DEFAULTS,
@@ -466,6 +478,8 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
     translucentPanelStrength: normalizeTranslucentStrength(
       parsed.translucentPanelStrength
     ),
+    uiScale: normalizeUiScale(parsed.uiScale),
+    debugLayout: normalizeBool(parsed.debugLayout, DEFAULTS.debugLayout),
   };
 }
 
@@ -480,6 +494,7 @@ export function applyMotionPrefs(settings: Settings): void {
   root.dataset.buttonPress = reduced ? "off" : "on";
   root.dataset.pageFade = reduced ? "off" : "on";
   root.dataset.translucentPanels = settings.translucentPanels ? "on" : "off";
+  root.dataset.debugLayout = settings.debugLayout ? "on" : "off";
   // Strength → panel fill alpha (lower = more see-through) and blur.
   // High strength keeps blur low so particle effects stay visible.
   const s = settings.translucentPanelStrength;
@@ -491,6 +506,9 @@ export function applyMotionPrefs(settings: Settings): void {
   root.style.setProperty("--ui-panel-header-alpha", headerFill);
   root.style.setProperty("--ui-panel-card-alpha", cardFill);
   root.style.setProperty("--ui-panel-blur", `${blur}px`);
+
+  const scalePct = Number(settings.uiScale) || 100;
+  root.style.fontSize = `${(16 * scalePct) / 100}px`;
 }
 
 export function loadSettings(): Settings {

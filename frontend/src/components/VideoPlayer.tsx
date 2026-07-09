@@ -1510,7 +1510,7 @@ export default function VideoPlayer({
                     {upNext.channel}
                   </p>
                 )}
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={onPlayUpNext}
@@ -1525,6 +1525,21 @@ export default function VideoPlayer({
                   >
                     Cancel
                   </button>
+                  {onAutoplayRelatedChange && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAutoplayRelatedChange(!autoplayRelated)
+                      }
+                      className={`w-full rounded-lg px-3 py-2 text-sm font-medium ${
+                        autoplayRelated
+                          ? "bg-accent/15 text-accent ring-1 ring-accent/40"
+                          : "bg-ink-800 text-gray-300 ring-1 ring-ink-600"
+                      }`}
+                    >
+                      Autoplay {autoplayRelated ? "on" : "off"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { downloadFileUrl } from "../api";
+import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 import type { Video } from "../types";
 import { effectiveSourceUrl } from "../utils";
 
@@ -22,6 +23,7 @@ export default function VideoActionsMenu({
 }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const flip = useFlipMenu(open, 320);
   const canChangeResolution = Boolean(effectiveSourceUrl(video));
   const canNormalize = Boolean(effectiveSourceUrl(video) && onNormalizeVolume);
 
@@ -58,73 +60,71 @@ export default function VideoActionsMenu({
       >
         •••
       </button>
-      {open && (
-        <div className="absolute right-0 bottom-full z-50 mb-1 w-52 overflow-hidden rounded-lg bg-ink-800 py-1 shadow-2xl ring-1 ring-ink-600">
+      <FlipMenuPanel open={open} flip={flip} align="right" className="w-52">
+        <button
+          onClick={() => {
+            onEdit();
+            setOpen(false);
+          }}
+          className={itemClass}
+        >
+          Edit details
+        </button>
+        <button
+          onClick={() => {
+            onAddNote();
+            setOpen(false);
+          }}
+          className={itemClass}
+        >
+          Add note
+        </button>
+        {canChangeResolution && (
           <button
             onClick={() => {
-              onEdit();
+              onChangeResolution();
               setOpen(false);
             }}
             className={itemClass}
           >
-            Edit details
+            Change resolution
           </button>
+        )}
+        {canNormalize && (
           <button
             onClick={() => {
-              onAddNote();
+              onNormalizeVolume?.();
               setOpen(false);
             }}
             className={itemClass}
           >
-            Add note
+            Normalize volume
           </button>
-          {canChangeResolution && (
-            <button
-              onClick={() => {
-                onChangeResolution();
-                setOpen(false);
-              }}
-              className={itemClass}
-            >
-              Change resolution
-            </button>
-          )}
-          {canNormalize && (
-            <button
-              onClick={() => {
-                onNormalizeVolume?.();
-                setOpen(false);
-              }}
-              className={itemClass}
-            >
-              Normalize volume
-            </button>
-          )}
-          <button onClick={downloadFile} className={itemClass}>
-            Download file
-          </button>
-          {video.source_url && (
-            <a
-              href={video.source_url}
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => setOpen(false)}
-              className={itemClass}
-            >
-              Source link ↗
-            </a>
-          )}
-          <button
-            onClick={() => {
-              onDelete();
-              setOpen(false);
-            }}
-            className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
+        )}
+        <button onClick={downloadFile} className={itemClass}>
+          Download file
+        </button>
+        {video.source_url && (
+          <a
+            href={video.source_url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setOpen(false)}
+            className={itemClass}
           >
-            Delete
-          </button>
-        </div>
-      )}
+            Source link ↗
+          </a>
+        )}
+        <button
+          onClick={() => {
+            onDelete();
+            setOpen(false);
+          }}
+          className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
+        >
+          Delete
+        </button>
+      </FlipMenuPanel>
     </div>
   );
 }

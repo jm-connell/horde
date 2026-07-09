@@ -21,6 +21,7 @@ export default function RecommendedHome({
 }) {
   const [categories, setCategories] = useState<string[]>([]);
   const [sections, setSections] = useState<RecommendationSection[]>([]);
+  const [hint, setHint] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(loadCategory);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,11 +36,13 @@ export default function RecommendedHome({
         if (!active) return;
         setCategories(data.categories);
         setSections(data.sections);
+        setHint(data.hint ?? null);
       })
       .catch(() => {
         if (!active) return;
         setError("Could not load recommendations. Index more videos in Settings → AI.");
         setSections([]);
+        setHint(null);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -59,36 +62,51 @@ export default function RecommendedHome({
     }
   };
 
+  const chipClass = (selected: boolean) =>
+    `shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+      selected
+        ? "bg-accent text-ink-950"
+        : "border border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
+    }`;
+
+  const gridClass = `grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+    sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
+  }`;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {(categories.length > 0 || activeCategory) && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => selectCategory(null)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              !activeCategory
-                ? "bg-accent text-ink-950"
-                : "border border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
-            }`}
-          >
-            For you
-          </button>
-          {categories.map((name) => (
+        <div className="relative">
+          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
             <button
-              key={name}
               type="button"
-              onClick={() => selectCategory(name)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeCategory === name
-                  ? "bg-accent text-ink-950"
-                  : "border border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
-              }`}
+              onClick={() => selectCategory(null)}
+              className={chipClass(!activeCategory)}
             >
-              {name}
+              For you
             </button>
-          ))}
+            {categories.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => selectCategory(name)}
+                className={chipClass(activeCategory === name)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          <div
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-ink-950 to-transparent"
+            aria-hidden
+          />
         </div>
+      )}
+
+      {hint && !loading && !error && (
+        <p className="text-xs text-gray-500" title={hint}>
+          {hint}
+        </p>
       )}
 
       {loading ? (
@@ -97,7 +115,8 @@ export default function RecommendedHome({
         <div className="py-16 text-center text-gray-500">
           <p className="text-sm">{error}</p>
         </div>
-      ) : sections.length === 0 ? (
+      ) : sections.length === 0 ||
+        sections.every((s) => s.videos.length === 0) ? (
         <div className="py-16 text-center text-gray-500">
           <p className="text-lg">No recommendations yet.</p>
           <p className="mt-1 text-sm">
@@ -105,22 +124,30 @@ export default function RecommendedHome({
           </p>
         </div>
       ) : (
-        sections.map((section) => (
-          <section key={`${section.title}-${section.seed_video_id ?? "x"}`}>
-            <h2 className="mb-3 text-lg font-semibold text-gray-100">
-              {section.title}
-            </h2>
-            <div
-              className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
-                sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
-              }`}
-            >
-              {section.videos.map((v) => (
-                <VideoCard key={v.id} video={v} />
-              ))}
-            </div>
-          </section>
-        ))
+        sections.map((section, idx) => {
+          if (section.videos.length === 0) return null;
+          const showDivider =
+            section.kind === "more" ||
+            (section.title && section.title.startsWith("End of category"));
+          return (
+            <section key={`${section.kind}-${section.title}-${idx}`}>
+              {showDivider && (
+                <div className="mb-4 flex items-center gap-3">
+                  <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+                  <span className="shrink-0 text-xs text-gray-500">
+                    {section.title || "End of category — other recommendations"}
+                  </span>
+                  <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+                </div>
+              )}
+              <div className={gridClass}>
+                {section.videos.map((v) => (
+                  <VideoCard key={v.id} video={v} />
+                ))}
+              </div>
+            </section>
+          );
+        })
       )}
     </div>
   );

@@ -20,7 +20,8 @@ export function createPerlinFlowEffect(
   const seed = Math.floor(Math.random() * 1000);
 
   const spawn = (w: number, h: number): Particle => {
-    const maxLife = rand(2.5, 6);
+    // Short lives so trails clear quickly instead of filling the canvas.
+    const maxLife = rand(0.7, 1.6);
     const x = Math.random() * w;
     const y = Math.random() * h;
     return { x, y, px: x, py: y, life: Math.random() * maxLife, maxLife };
@@ -43,9 +44,9 @@ export function createPerlinFlowEffect(
       rebuild(width, height, size);
     }
 
-    // Stronger trail fade so the canvas doesn't accumulate to solid color
+    // Aggressive trail fade — trails disappear quickly
     ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
     ctx.fillRect(0, 0, width, height);
     ctx.globalCompositeOperation = "source-over";
 

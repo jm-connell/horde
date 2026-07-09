@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -9,7 +10,7 @@ from sqlmodel import Session, func, select
 
 from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import get_session
-from ..models import DownloadJob, JobStatus, Video, utcnow
+from ..models import DownloadJob, JobStatus, Video, VideoAiMeta, utcnow
 from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
@@ -45,13 +46,28 @@ def _safe_filename(name: str) -> str:
     return cleaned or "video"
 
 
-def _to_read(video: Video) -> VideoRead:
+def _as_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Ensure datetimes are timezone-aware UTC so JSON includes a Z offset."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
+    ai_tags: list[str] = []
+    if session is not None and video.id is not None:
+        meta = session.get(VideoAiMeta, video.id)
+        if meta is not None and meta.ai_tags:
+            ai_tags = library.parse_tags(meta.ai_tags)
     return VideoRead(
         id=video.id,
         title=video.title,
         channel=video.channel,
         channel_url=video.channel_url,
         tags=library.parse_tags(video.tags),
+        ai_tags=ai_tags,
         description=video.description,
         notes=video.notes,
         source_url=video.source_url,
@@ -68,14 +84,14 @@ def _to_read(video: Video) -> VideoRead:
         frame_rate=video.frame_rate,
         view_count=video.view_count,
         channel_subscriber_count=video.channel_subscriber_count,
-        published_at=video.published_at,
-        added_at=video.added_at,
+        published_at=_as_utc(video.published_at),
+        added_at=_as_utc(video.added_at) or video.added_at,
         last_position_sec=video.last_position_sec,
-        last_watched_at=video.last_watched_at,
+        last_watched_at=_as_utc(video.last_watched_at),
         needs_review=video.needs_review,
         platform=video.platform,
         status=video.status,
-        metadata_synced_at=video.metadata_synced_at,
+        metadata_synced_at=_as_utc(video.metadata_synced_at),
         source_title=video.source_title,
         title_is_custom=video.title_is_custom,
         subtitles_pending=video.subtitles_pending,
@@ -132,7 +148,7 @@ def list_videos(
             watched_only=watched_only,
             seed=seed,
         )
-    return [_to_read(v) for v in videos]
+    return [_to_read(v, session) for v in videos]
 
 
 @router.get("/channels", response_model=list[ChannelStat])
@@ -336,7 +352,7 @@ def get_video(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video)
+    return _to_read(video, session)
 
 
 @router.get("/videos/{video_id}/related", response_model=list[VideoRead])
@@ -349,7 +365,7 @@ def related_videos(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     rows = library.related_videos(session, video_id, limit=limit)
-    return [_to_read(v) for v in rows]
+    return [_to_read(v, session) for v in rows]
 
 
 @router.patch("/videos/{video_id}", response_model=VideoRead)
@@ -408,7 +424,7 @@ def update_video(
         except Exception:  # noqa: BLE001
             pass
 
-    return _to_read(video)
+    return _to_read(video, session)
 
 
 @router.patch("/videos/{video_id}/progress", status_code=204)
@@ -509,7 +525,7 @@ def redownload_video(
     session.refresh(job)
 
     downloader.enqueue_download(job.id)
-    return _to_read(video)
+    return _to_read(video, session)
 
 
 def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
@@ -612,7 +628,7 @@ def refresh_metadata(video_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}")
     session.expire_all()
     video = session.get(Video, video_id)
-    return _to_read(video)
+    return _to_read(video, session)
 
 
 @router.post("/videos/{video_id}/thumbnail", response_model=VideoRead)
@@ -630,7 +646,7 @@ async def upload_thumbnail(
     session.add(video)
     session.commit()
     session.refresh(video)
-    return _to_read(video)
+    return _to_read(video, session)
 
 
 @router.get("/thumbnails/{video_id}")

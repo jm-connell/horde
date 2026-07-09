@@ -112,7 +112,7 @@ def get_playlist(playlist_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Playlist not found")
     videos = _ordered_videos(session, playlist_id)
     base = _to_playlist_read(session, playlist)
-    return PlaylistDetail(**base.model_dump(), videos=[_to_read(v) for v in videos])
+    return PlaylistDetail(**base.model_dump(), videos=[_to_read(v, session) for v in videos])
 
 
 @router.patch("/{playlist_id}", response_model=PlaylistRead)

@@ -271,18 +271,27 @@ body.player-fullscreen header {
 /* ─── UI motion (driven by data-* on <html>) ─── */
 
 html[data-page-fade="on"] .page-shell.page-shell--animate {
-  animation: page-fade-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: page-fade-in 220ms ease-out;
 }
 
 @keyframes page-fade-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
+}
+
+html[data-debug-layout="on"] .page-shell {
+  outline: 1px dashed rgb(var(--accent) / 0.55);
+  outline-offset: -1px;
+}
+
+html[data-debug-layout="on"] header,
+html[data-debug-layout="on"] aside,
+html[data-debug-layout="on"] .ui-panel {
+  outline: 1px dotted rgb(255 100 100 / 0.35);
 }
 
 /* Translucent panels — let background effects show through.
@@ -420,14 +429,14 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
 
 @keyframes horde-load-dot {
   0%,
-  80%,
+  70%,
   100% {
-    opacity: 0.35;
-    transform: translateY(0);
+    opacity: 0.3;
+    transform: translateY(0) scale(0.85);
   }
-  40% {
+  35% {
     opacity: 1;
-    transform: translateY(-3px);
+    transform: translateY(-4px) scale(1);
   }
 }
 
@@ -439,10 +448,15 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
 
 @keyframes horde-load-bar {
   0% {
-    left: -35%;
+    left: -40%;
+    width: 35%;
+  }
+  50% {
+    width: 45%;
   }
   100% {
-    left: 100%;
+    left: 105%;
+    width: 35%;
   }
 }
 

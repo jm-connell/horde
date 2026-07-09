@@ -4,7 +4,6 @@ interface Building {
   x: number;
   w: number;
   h: number;
-  windows: { ox: number; oy: number; on: boolean; phase: number }[];
 }
 
 function mix(a: Rgb, b: Rgb, t: number): Rgb {
@@ -15,6 +14,7 @@ function mix(a: Rgb, b: Rgb, t: number): Rgb {
   ];
 }
 
+/** Calm scrolling skyline — soft silhouettes, no flashing window lights. */
 export function createCityscapeEffect(
   canvas: HTMLCanvasElement
 ): EffectController {
@@ -25,55 +25,26 @@ export function createCityscapeEffect(
   let scroll = 0;
 
   const rebuild = (w: number, h: number, size: number) => {
-    const count = Math.max(12, Math.floor((w / 55) * size) + 8);
-    const ground = h * 0.72;
+    const count = Math.max(14, Math.floor((w / 48) * size) + 10);
     buildings = [];
     let x = -40;
     for (let i = 0; i < count; i++) {
-      const bw = rand(28, 70) * Math.sqrt(size);
-      const bh = rand(h * 0.12, h * 0.45) * (0.7 + 0.3 * size);
-      const windows: Building["windows"] = [];
-      const cols = Math.max(2, Math.floor(bw / 10));
-      const rows = Math.max(3, Math.floor(bh / 14));
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          windows.push({
-            ox: 4 + col * (bw / cols),
-            oy: 6 + row * (bh / rows),
-            on: Math.random() > 0.35,
-            phase: Math.random() * Math.PI * 2,
-          });
-        }
-      }
-      buildings.push({ x, w: bw, h: bh, windows });
-      x += bw + rand(4, 18);
+      const bw = rand(22, 58) * Math.sqrt(size);
+      const bh = rand(h * 0.1, h * 0.38) * (0.75 + 0.25 * size);
+      buildings.push({ x, w: bw, h: bh });
+      x += bw + rand(6, 22);
     }
-    // Ensure strip is wider than viewport for seamless scroll
-    while (x < w * 2) {
-      const bw = rand(28, 70) * Math.sqrt(size);
-      const bh = rand(h * 0.12, h * 0.45) * (0.7 + 0.3 * size);
-      buildings.push({
-        x,
-        w: bw,
-        h: bh,
-        windows: Array.from(
-          { length: Math.max(6, Math.floor((bw * bh) / 400)) },
-          () => ({
-            ox: rand(4, bw - 8),
-            oy: rand(6, bh - 10),
-            on: Math.random() > 0.35,
-            phase: Math.random() * Math.PI * 2,
-          })
-        ),
-      });
-      x += bw + rand(4, 18);
+    while (x < w * 2.2) {
+      const bw = rand(22, 58) * Math.sqrt(size);
+      const bh = rand(h * 0.1, h * 0.38) * (0.75 + 0.25 * size);
+      buildings.push({ x, w: bw, h: bh });
+      x += bw + rand(6, 22);
     }
-    void ground;
   };
 
   return createCanvasLoop(
     canvas,
-    ({ ctx, width, height, accent, dt, time, size, isLight }) => {
+    ({ ctx, width, height, accent, dt, size, isLight }) => {
       if (
         width !== lastW ||
         height !== lastH ||
@@ -88,50 +59,49 @@ export function createCityscapeEffect(
       ctx.clearRect(0, 0, width, height);
 
       const skyTop = isLight
-        ? mix(accent, [180, 210, 255], 0.7)
-        : mix(accent, [10, 14, 28], 0.65);
+        ? mix(accent, [190, 215, 245], 0.75)
+        : mix(accent, [12, 16, 28], 0.7);
       const skyBot = isLight
-        ? mix(accent, [255, 220, 180], 0.5)
-        : mix(accent, [20, 24, 40], 0.4);
+        ? mix(accent, [240, 230, 210], 0.55)
+        : mix(accent, [18, 22, 36], 0.45);
       const sky = ctx.createLinearGradient(0, 0, 0, height);
-      sky.addColorStop(0, rgba(skyTop, isLight ? 0.2 : 0.35));
-      sky.addColorStop(0.65, rgba(skyBot, isLight ? 0.12 : 0.22));
+      sky.addColorStop(0, rgba(skyTop, isLight ? 0.18 : 0.3));
+      sky.addColorStop(0.7, rgba(skyBot, isLight ? 0.1 : 0.18));
       sky.addColorStop(1, rgba(skyBot, 0));
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, width, height);
 
-      scroll += 18 * dt;
+      // Slow, steady scroll — no flicker
+      scroll += 8 * dt;
       const stripW =
         buildings.reduce((max, b) => Math.max(max, b.x + b.w), 0) || width;
       const offset = scroll % stripW;
-      const groundY = height * 0.72;
-      const silhouette = isLight
-        ? mix(accent, [40, 50, 70], 0.75)
-        : mix(accent, [8, 10, 16], 0.85);
-      const windowOn = mix(accent, [255, 220, 120], 0.35);
+      const groundY = height * 0.74;
+      const far = isLight
+        ? mix(accent, [90, 105, 130], 0.7)
+        : mix(accent, [14, 18, 28], 0.8);
+      const near = isLight
+        ? mix(accent, [50, 60, 80], 0.75)
+        : mix(accent, [6, 8, 14], 0.9);
 
-      const drawStrip = (shift: number) => {
+      const drawStrip = (shift: number, color: Rgb, alpha: number, yScale: number) => {
         for (const b of buildings) {
           const bx = b.x - offset + shift;
           if (bx + b.w < -20 || bx > width + 20) continue;
-          const by = groundY - b.h;
-          ctx.fillStyle = rgba(silhouette, isLight ? 0.35 : 0.55);
-          ctx.fillRect(bx, by, b.w, b.h);
-          for (const win of b.windows) {
-            const lit =
-              win.on &&
-              (0.55 + 0.45 * Math.sin(time * 0.8 + win.phase)) > 0.35;
-            if (!lit) continue;
-            ctx.fillStyle = rgba(windowOn, isLight ? 0.35 : 0.55);
-            ctx.fillRect(bx + win.ox, by + win.oy, 3, 4);
-          }
+          const bh = b.h * yScale;
+          const by = groundY - bh;
+          ctx.fillStyle = rgba(color, alpha);
+          ctx.fillRect(bx, by, b.w, bh);
         }
       };
 
-      drawStrip(0);
-      drawStrip(stripW);
+      // Two depth layers for a softer skyline
+      drawStrip(0, far, isLight ? 0.22 : 0.35, 0.72);
+      drawStrip(stripW * 0.35, far, isLight ? 0.18 : 0.28, 0.72);
+      drawStrip(0, near, isLight ? 0.32 : 0.5, 1);
+      drawStrip(stripW, near, isLight ? 0.32 : 0.5, 1);
 
-      ctx.fillStyle = rgba(silhouette, isLight ? 0.4 : 0.65);
+      ctx.fillStyle = rgba(near, isLight ? 0.35 : 0.55);
       ctx.fillRect(0, groundY, width, height - groundY);
     }
   );

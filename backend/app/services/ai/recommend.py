@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -12,12 +12,24 @@ from .. import library
 from . import embeddings
 from .provider import get_provider
 
+# Stronger threshold so category shelves don't pad with unrelated videos.
+CATEGORY_MIN_SCORE = 0.42
+FOR_YOU_MIN_SCORE = 0.28
+
 
 @dataclass
 class RecommendationSection:
     title: str
     seed_video_id: Optional[int]
     videos: list[Video]
+    kind: str = "for_you"  # for_you | category | more
+
+
+@dataclass
+class CategoryBrowseResult:
+    category_videos: list[Video]
+    more_videos: list[Video]
+    categories: list[str] = field(default_factory=list)
 
 
 def list_categories(session: Session) -> list[str]:
@@ -26,29 +38,51 @@ def list_categories(session: Session) -> list[str]:
 
 
 def videos_for_category(
-    session: Session, category: str, *, limit: int = 24
-) -> list[Video]:
+    session: Session, category: str, *, limit: int = 48
+) -> CategoryBrowseResult:
+    """Return strong category matches, plus separate For You filler (not mixed)."""
+    categories = list_categories(session)
     row = session.exec(
         select(AiCategory).where(AiCategory.name == category)
     ).first()
     if row is None:
-        return []
+        return CategoryBrowseResult([], [], categories)
+
     vec = embeddings.unpack_vector(row.embedding, row.dim)
     if not vec:
-        return []
-    hits = embeddings.similar_video_ids(session, vec, limit=limit, min_score=0.18)
-    videos: list[Video] = []
+        return CategoryBrowseResult([], [], categories)
+
+    hits = embeddings.similar_video_ids(
+        session, vec, limit=limit, min_score=CATEGORY_MIN_SCORE
+    )
+    category_videos: list[Video] = []
+    used: set[int] = set()
     for vid, _score in hits:
         video = session.get(Video, vid)
-        if video is None or video.needs_review:
+        if video is None or video.needs_review or video.id is None:
             continue
-        videos.append(video)
-    return videos
+        category_videos.append(video)
+        used.add(video.id)
+
+    more: list[Video] = []
+    for section in homepage_recommendations(session, limit=24):
+        for video in section.videos:
+            if video.id is None or video.id in used:
+                continue
+            more.append(video)
+            used.add(video.id)
+            if len(more) >= 24:
+                break
+        if len(more) >= 24:
+            break
+
+    return CategoryBrowseResult(category_videos, more, categories)
 
 
 def homepage_recommendations(
-    session: Session, *, limit_per_section: int = 12, max_sections: int = 4
+    session: Session, *, limit: int = 36
 ) -> list[RecommendationSection]:
+    """Single For You shelf ordered by recommendation strength (no 'because you watched')."""
     if get_provider() is None:
         return []
 
@@ -58,10 +92,10 @@ def homepage_recommendations(
         sort="last_watched_at",
         order="desc",
         needs_review=False,
-    )[:12]
+    )[:16]
 
-    sections: list[RecommendationSection] = []
     used: set[int] = {v.id for v in history if v.id is not None}
+    scored: dict[int, float] = {}
 
     for seed in history:
         if seed.id is None:
@@ -72,43 +106,46 @@ def homepage_recommendations(
         hits = embeddings.similar_video_ids(
             session,
             centroid,
-            limit=limit_per_section + 8,
+            limit=limit,
             exclude_ids=used | {seed.id},
-            min_score=0.25,
+            min_score=FOR_YOU_MIN_SCORE,
         )
-        videos: list[Video] = []
-        for vid, _score in hits:
-            video = session.get(Video, vid)
-            if video is None or video.needs_review:
-                continue
-            videos.append(video)
-            used.add(vid)
-            if len(videos) >= limit_per_section:
-                break
-        if videos:
-            sections.append(
-                RecommendationSection(
-                    title=f"Because you watched {seed.title}",
-                    seed_video_id=seed.id,
-                    videos=videos,
-                )
-            )
-        if len(sections) >= max_sections:
+        for vid, score in hits:
+            prev = scored.get(vid)
+            if prev is None or score > prev:
+                scored[vid] = score
+
+    ranked_ids = sorted(scored.keys(), key=lambda i: scored[i], reverse=True)
+    videos: list[Video] = []
+    for vid in ranked_ids:
+        video = session.get(Video, vid)
+        if video is None or video.needs_review:
+            continue
+        videos.append(video)
+        if len(videos) >= limit:
             break
 
-    if sections:
-        return sections
+    if videos:
+        return [
+            RecommendationSection(
+                title="Recommended",
+                seed_video_id=None,
+                videos=videos,
+                kind="for_you",
+            )
+        ]
 
-    # Cold start: newest library videos that have embeddings, as a single shelf.
+    # Cold start: newest library videos.
     recent = library.query_videos(
         session, sort="added_at", order="desc", needs_review=False
-    )[:limit_per_section]
+    )[:limit]
     if recent:
         return [
             RecommendationSection(
-                title="From your library",
+                title="Recommended",
                 seed_video_id=None,
                 videos=recent,
+                kind="for_you",
             )
         ]
     return []

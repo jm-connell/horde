@@ -4,10 +4,21 @@ import LoadingIndicator from "../components/LoadingIndicator";
 import VideoCard from "../components/VideoCard";
 import type { Video } from "../types";
 
+/** Parse API datetimes as UTC when no timezone is present (legacy naive strings). */
+function parseUtc(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const raw = iso.trim();
+  if (!raw) return null;
+  const hasTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const normalized = hasTz ? raw : `${raw.replace(/ /, "T")}Z`;
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
 function dayKey(iso: string | null | undefined): string {
-  if (!iso) return "unknown";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "unknown";
+  const d = parseUtc(iso);
+  if (!d) return "unknown";
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -36,9 +47,8 @@ function dayLabel(key: string): string {
 }
 
 function formatTime(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
+  const d = parseUtc(iso);
+  if (!d) return "";
   return d.toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
