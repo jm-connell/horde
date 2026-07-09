@@ -51,7 +51,7 @@ export default function VideoActionsMenu({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+        className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
         title="More actions"
         aria-haspopup="menu"
         aria-expanded={open}

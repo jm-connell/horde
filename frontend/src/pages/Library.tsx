@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import ChannelFeed from "../components/ChannelFeed";
+import Collapse from "../components/Collapse";
 import LoadingIndicator from "../components/LoadingIndicator";
 import PlaybackQueue from "../components/PlaybackQueue";
 import VideoCard from "../components/VideoCard";
@@ -23,6 +24,7 @@ import type { ChannelStat, Playlist, TagStat, Video } from "../types";
 
 const TAG_MIN_COUNT = 3;
 const TAG_PAGE_SIZE = 20;
+const CHANNEL_SIDEBAR_LIMIT = 30;
 const FEED_LAYOUT_KEY = "horde.channelFeed.layout";
 // Fixed queue overlay width (w-[26rem]) — dock to bottom when grid extends into this zone.
 const QUEUE_RESERVE_PX = 416;
@@ -48,6 +50,7 @@ export default function Library() {
   const [tags, setTags] = useState<TagStat[]>([]);
   const [showTags, setShowTags] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
+  const [showAllChannels, setShowAllChannels] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Multi-select state
@@ -432,7 +435,7 @@ export default function Library() {
                     All channels
                   </button>
                 </li>
-                {channels.map((c) => (
+                {channels.slice(0, CHANNEL_SIDEBAR_LIMIT).map((c) => (
                   <li key={c.channel}>
                     <button
                       onClick={() => setActiveChannel(c.channel)}
@@ -452,6 +455,45 @@ export default function Library() {
                     </button>
                   </li>
                 ))}
+                {channels.length > CHANNEL_SIDEBAR_LIMIT && (
+                  <>
+                    <Collapse open={showAllChannels}>
+                      <ul className="space-y-0.5">
+                        {channels.slice(CHANNEL_SIDEBAR_LIMIT).map((c) => (
+                          <li key={c.channel}>
+                            <button
+                              onClick={() => setActiveChannel(c.channel)}
+                              className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
+                                activeChannel === c.channel
+                                  ? "bg-accent/15 text-accent"
+                                  : "text-gray-300 hover:bg-ink-800"
+                              }`}
+                            >
+                              <span className="truncate">{c.channel}</span>
+                              <span className="ml-2 shrink-0 text-xs text-gray-500">
+                                {settings.channelSort === "subscriber_count" &&
+                                c.subscriber_count !== null
+                                  ? formatSubscriberCount(c.subscriber_count)
+                                  : c.count}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </Collapse>
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => setShowAllChannels((v) => !v)}
+                        className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-accent hover:bg-ink-800"
+                      >
+                        {showAllChannels
+                          ? "Show less"
+                          : `Show more (${channels.length - CHANNEL_SIDEBAR_LIMIT})`}
+                      </button>
+                    </li>
+                  </>
+                )}
               </ul>
             </div>
           ) : (

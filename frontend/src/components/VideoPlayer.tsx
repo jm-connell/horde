@@ -83,6 +83,8 @@ interface Props {
   } | null;
   onCancelUpNext?: () => void;
   onPlayUpNext?: () => void;
+  autoplayRelated?: boolean;
+  onAutoplayRelatedChange?: (enabled: boolean) => void;
 }
 
 export default function VideoPlayer({
@@ -116,6 +118,8 @@ export default function VideoPlayer({
   upNext = null,
   onCancelUpNext,
   onPlayUpNext,
+  autoplayRelated = true,
+  onAutoplayRelatedChange,
 }: Props) {
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
@@ -416,12 +420,20 @@ export default function VideoPlayer({
     else v.pause();
   }, [chromecast.casting, chromecast.remotePlay]);
 
+  const modeBeforeWindowed = useRef<ViewMode>("standard");
+
   const toggleTheater = useCallback(() => {
+    if (mode === "windowed") return;
     onModeChange(mode === "theater" ? "standard" : "theater");
   }, [mode, onModeChange]);
 
   const toggleWindowed = useCallback(() => {
-    onModeChange(mode === "windowed" ? "standard" : "windowed");
+    if (mode === "windowed") {
+      onModeChange(modeBeforeWindowed.current);
+    } else {
+      modeBeforeWindowed.current = mode;
+      onModeChange("windowed");
+    }
   }, [mode, onModeChange]);
 
   const exitNativeFullscreen = useCallback(async () => {
@@ -611,7 +623,7 @@ export default function VideoPlayer({
       } else if (e.key === "f") {
         toggleWindowed();
       } else if (e.key === "Escape" && mode === "windowed") {
-        onModeChange("standard");
+        onModeChange(modeBeforeWindowed.current);
       } else if (e.key === "ArrowRight" && videoRef.current) {
         videoRef.current.currentTime += 5;
       } else if (e.key === "ArrowLeft" && videoRef.current) {
@@ -1344,6 +1356,26 @@ export default function VideoPlayer({
                 )}
                 {isMobile && (
                   <button
+                    type="button"
+                    onClick={() =>
+                      onAutoplayRelatedChange?.(!autoplayRelated)
+                    }
+                    className={`rounded px-2 py-1 text-xs font-medium ${
+                      autoplayRelated
+                        ? "bg-accent text-ink-950"
+                        : "bg-ink-700 text-gray-200 hover:text-accent"
+                    }`}
+                    title={
+                      autoplayRelated
+                        ? "Autoplay related videos on"
+                        : "Autoplay related videos off"
+                    }
+                  >
+                    Autoplay
+                  </button>
+                )}
+                {isMobile && (
+                  <button
                     onClick={toggleNativeFullscreen}
                     className={`rounded px-2 py-1 text-xs font-medium ${
                       isNativeFullscreen
@@ -1363,6 +1395,24 @@ export default function VideoPlayer({
                       title="Picture in picture"
                     >
                       PiP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAutoplayRelatedChange?.(!autoplayRelated)
+                      }
+                      className={`rounded px-2 py-1 text-xs font-medium ${
+                        autoplayRelated
+                          ? "bg-accent text-ink-950"
+                          : "bg-ink-700 text-gray-200 hover:text-accent"
+                      }`}
+                      title={
+                        autoplayRelated
+                          ? "Autoplay related videos on"
+                          : "Autoplay related videos off"
+                      }
+                    >
+                      Autoplay
                     </button>
                     <button
                       onClick={toggleTheater}

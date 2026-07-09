@@ -49,7 +49,12 @@ export type BackgroundEffect =
   | "bokeh"
   | "warp-grid"
   | "scanlines"
-  | "grain";
+  | "grain"
+  | "modern-grid"
+  | "flowing-gradient"
+  | "color-orbs"
+  | "lightspeed"
+  | "cityscape";
 
 export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator = "none" | "liquid" | "underline" | "fade";
@@ -94,6 +99,8 @@ export interface Settings {
   chaptersExpanded: boolean;
   descriptionExpanded: boolean;
   showRelatedVideos: boolean;
+  /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
+  autoplayRelated: boolean;
 }
 
 const DEFAULT_CUSTOM_COLORS: CustomColors = {
@@ -139,6 +146,7 @@ const DEFAULTS: Settings = {
   chaptersExpanded: true,
   descriptionExpanded: true,
   showRelatedVideos: true,
+  autoplayRelated: true,
 };
 
 /** Keys persisted to server `ui` blob (excludes ephemeral/session fields). */
@@ -177,6 +185,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "chaptersExpanded",
   "descriptionExpanded",
   "showRelatedVideos",
+  "autoplayRelated",
 ];
 
 const STORAGE_KEY = "horde.settings";
@@ -279,6 +288,11 @@ const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "warp-grid",
   "scanlines",
   "grain",
+  "modern-grid",
+  "flowing-gradient",
+  "color-orbs",
+  "lightspeed",
+  "cityscape",
 ]);
 
 const VALID_HOVER_MOTION = new Set<string>(["off", "subtle", "lift", "glow"]);

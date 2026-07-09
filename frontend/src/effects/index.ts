@@ -2,11 +2,16 @@ import type { BackgroundEffect } from "../hooks/useSettings";
 import type { EffectController } from "./shared";
 import { createAuroraEffect } from "./aurora";
 import { createBokehEffect } from "./bokeh";
+import { createCityscapeEffect } from "./cityscape";
+import { createColorOrbsEffect } from "./colorOrbs";
 import { createConstellationEffect } from "./constellation";
 import { createDustEffect } from "./dust";
 import { createFirefliesEffect } from "./fireflies";
+import { createFlowingGradientEffect } from "./flowingGradient";
 import { createGrainEffect } from "./grain";
+import { createLightspeedEffect } from "./lightspeed";
 import { createMatrixEffect } from "./matrix";
+import { createModernGridEffect } from "./modernGrid";
 import { createPerlinFlowEffect } from "./perlinFlow";
 import { createRainEffect } from "./rain";
 import { createScanlinesEffect } from "./scanlines";
@@ -43,6 +48,31 @@ export const BACKGROUND_EFFECT_OPTIONS: {
   },
   { value: "scanlines", label: "Scanlines", description: "CRT-style line sweep" },
   { value: "grain", label: "Film grain", description: "Subtle animated noise" },
+  {
+    value: "modern-grid",
+    label: "Modern grid",
+    description: "Color gradient with a grid and floating dust",
+  },
+  {
+    value: "flowing-gradient",
+    label: "Flowing gradient",
+    description: "Slow RGB color wash",
+  },
+  {
+    value: "color-orbs",
+    label: "Color orbs",
+    description: "Large soft floating color orbs",
+  },
+  {
+    value: "lightspeed",
+    label: "Lightspeed",
+    description: "Subtle tunnel of light streaks",
+  },
+  {
+    value: "cityscape",
+    label: "Cityscape",
+    description: "Scrolling skyline with window lights",
+  },
 ];
 
 type EffectFactory = (canvas: HTMLCanvasElement) => EffectController;
@@ -60,6 +90,11 @@ const FACTORIES: Partial<Record<BackgroundEffect, EffectFactory>> = {
   "warp-grid": createWarpGridEffect,
   scanlines: createScanlinesEffect,
   grain: createGrainEffect,
+  "modern-grid": createModernGridEffect,
+  "flowing-gradient": createFlowingGradientEffect,
+  "color-orbs": createColorOrbsEffect,
+  lightspeed: createLightspeedEffect,
+  cityscape: createCityscapeEffect,
 };
 
 export function createBackgroundEffect(

@@ -60,6 +60,25 @@ export default function Download() {
       return false;
     }
   });
+  const [activeSectionVisible, setActiveSectionVisible] = useState(
+    () => activeCount > 0
+  );
+  const [activeSectionEntered, setActiveSectionEntered] = useState(
+    () => activeCount > 0
+  );
+
+  useEffect(() => {
+    if (activeCount > 0) {
+      setActiveSectionVisible(true);
+      const id = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setActiveSectionEntered(true));
+      });
+      return () => cancelAnimationFrame(id);
+    }
+    setActiveSectionEntered(false);
+    const t = window.setTimeout(() => setActiveSectionVisible(false), 320);
+    return () => window.clearTimeout(t);
+  }, [activeCount]);
 
   useEffect(() => {
     if (activeCount > 0 && activeCollapsed) {
@@ -489,8 +508,14 @@ export default function Download() {
         {importMessage && <p className="text-sm text-accent">{importMessage}</p>}
       </form>
 
-      {activeCount > 0 && (
-        <section className="ui-panel mt-6 rounded-xl bg-accent/5 p-4 ring-1 ring-accent/40">
+      {activeSectionVisible && (
+        <section
+          className={`ui-panel mt-6 rounded-xl bg-accent/5 p-4 ring-1 ring-accent/40 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            activeSectionEntered
+              ? "translate-y-0 opacity-100"
+              : "pointer-events-none translate-y-2 opacity-0"
+          }`}
+        >
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"

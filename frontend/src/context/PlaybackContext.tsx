@@ -255,6 +255,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     clearUpNext();
   }, [current?.id, clearUpNext]);
 
+  // Turning autoplay off mid-countdown cancels the overlay.
+  useEffect(() => {
+    if (!settings.autoplayRelated) clearUpNext();
+  }, [settings.autoplayRelated, clearUpNext]);
+
   const playSuggested = useCallback(
     (video: Video) => {
       clearUpNext();
@@ -298,14 +303,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [navigate]);
 
   // Reset saved progress when a video finishes so it leaves Continue watching.
-  // If the queue is empty, show a YouTube-style "Playing Next" suggestion.
+  // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
     if (current) api.saveProgress(current.id, 0).catch(() => undefined);
     if (queueRef.current.length > 0) {
       advance();
       return;
     }
-    if (!current) return;
+    if (!current || !settings.autoplayRelated) return;
     const endedId = current.id;
     api
       .getRelatedVideos(endedId, 1)
@@ -315,7 +320,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         if (next) startUpNextCountdown(next);
       })
       .catch(() => undefined);
-  }, [current, advance, startUpNextCountdown]);
+  }, [current, advance, startUpNextCountdown, settings.autoplayRelated]);
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
 
@@ -405,6 +410,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             onCancelUpNext={clearUpNext}
             onPlayUpNext={
               upNext ? () => playSuggested(upNext) : undefined
+            }
+            autoplayRelated={settings.autoplayRelated}
+            onAutoplayRelatedChange={(enabled) =>
+              updateSettings({ autoplayRelated: enabled })
             }
           />,
           hostRef.current

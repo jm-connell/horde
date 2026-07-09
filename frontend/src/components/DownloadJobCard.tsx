@@ -169,9 +169,11 @@ export default function DownloadJobCard({
               : "Queued"
             : `${percent}%`;
 
-  const thumbSrc = completed && videoId
-    ? `/api/thumbnails/${videoId}`
-    : job.thumbnail_url;
+  const thumbSrc = job.thumbnail_url
+    ? job.thumbnail_url
+    : completed && videoId
+      ? `/api/thumbnails/${videoId}`
+      : null;
 
   const cardRing = active
     ? "overflow-hidden border-l-4 border-l-accent ring-ink-700"
@@ -209,6 +211,22 @@ export default function DownloadJobCard({
               src={thumbSrc}
               alt=""
               className="h-full w-full object-cover"
+              onError={(e) => {
+                const el = e.currentTarget;
+                if (el.dataset.fallbackTried) return;
+                const local =
+                  completed && videoId ? `/api/thumbnails/${videoId}` : null;
+                const remote = job.thumbnail_url ?? null;
+                const next =
+                  remote && !el.currentSrc.includes(remote)
+                    ? remote
+                    : local && !el.currentSrc.includes(String(videoId))
+                      ? local
+                      : null;
+                if (!next) return;
+                el.dataset.fallbackTried = "1";
+                el.src = next;
+              }}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-gray-600">
@@ -225,11 +243,6 @@ export default function DownloadJobCard({
               <span className="min-w-0 truncate">{title || "Working…"}</span>
             </span>
             <div className="flex shrink-0 items-center gap-2">
-              {active && job.quality_preset && (
-                <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400">
-                  {job.quality_preset}
-                </span>
-              )}
               {!completed && (
                 <span
                   className={`${failed ? "text-red-400" : "text-gray-400"}`}
@@ -349,9 +362,14 @@ export default function DownloadJobCard({
               </button>
             )}
             {saved && <span className="text-xs text-accent">Saved</span>}
-            {(sizeLabel || completed) && (
+            {(sizeLabel || completed || (active && job.quality_preset)) && (
               <span className="ml-auto flex items-center gap-2 text-xs text-gray-500">
                 {sizeLabel && <span>{sizeLabel}</span>}
+                {active && job.quality_preset && (
+                  <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400">
+                    {job.quality_preset}
+                  </span>
+                )}
                 {completed && <span className="text-gray-400">Done</span>}
               </span>
             )}

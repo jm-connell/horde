@@ -25,7 +25,7 @@ export default function ChaptersList({ chapters }: Props) {
         </span>
       </button>
       <Collapse open={expanded}>
-        <div className="ui-panel overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
+        <div className="ui-panel isolate overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
           <ul className="space-y-1 px-4 py-3">
             {chapters.map((ch) => (
               <li key={`${ch.startSec}-${ch.title}`}>

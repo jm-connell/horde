@@ -7,6 +7,7 @@ import Collapse from "../components/Collapse";
 import LinkifiedText from "../components/LinkifiedText";
 import PlaybackQueue from "../components/PlaybackQueue";
 import VideoActionsMenu from "../components/VideoActionsMenu";
+import VideoCard from "../components/VideoCard";
 import VideoEditForm from "../components/VideoEditForm";
 import { useDownloads } from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
@@ -363,25 +364,19 @@ export default function Watch() {
                     </span>
                   </button>
                   <Collapse open={settings.descriptionExpanded}>
-                    <div className="ui-panel overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
+                    <div className="ui-panel isolate overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
                       <div className="px-4 py-3">
                         {video.description && (
                           <>
-                            <div
-                              className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                            <p
+                              className={`overflow-hidden text-sm text-gray-300 ${
                                 descExpanded
-                                  ? "grid-rows-[1fr]"
-                                  : "grid-rows-[minmax(0,4.5rem)]"
+                                  ? "whitespace-pre-wrap"
+                                  : "line-clamp-3 whitespace-normal"
                               }`}
                             >
-                              <p
-                                className={`min-h-0 overflow-hidden whitespace-pre-wrap text-sm text-gray-300 ${
-                                  descExpanded ? "" : "line-clamp-3"
-                                }`}
-                              >
-                                <LinkifiedText text={video.description} />
-                              </p>
-                            </div>
+                              <LinkifiedText text={video.description} />
+                            </p>
                             <button
                               onClick={() => setDescExpanded((v) => !v)}
                               className="mt-2 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
@@ -457,7 +452,7 @@ export default function Watch() {
           <div className="mt-5 flex gap-2">
             <Link
               to="/"
-              className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+              className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
             >
               ← Back to library
             </Link>
@@ -485,41 +480,9 @@ export default function Watch() {
                 More like this
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {moreLikeThis.map((v) => {
-                  const thumb = thumbnailUrl(v);
-                  return (
-                    <Link
-                      key={v.id}
-                      to={`/watch/${v.id}`}
-                      className="ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-all hover:ring-accent/60"
-                    >
-                      <div className="aspect-video w-full overflow-hidden bg-ink-800">
-                        {thumb ? (
-                          <img
-                            src={thumb}
-                            alt={v.title}
-                            loading="lazy"
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-ink-600">
-                            <span className="text-3xl">▶</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-2">
-                        <p className="line-clamp-2 text-xs font-medium text-gray-200 group-hover:text-accent">
-                          {v.title}
-                        </p>
-                        {v.channel && (
-                          <p className="mt-0.5 truncate text-xs text-gray-500">
-                            {v.channel}
-                          </p>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
+                {moreLikeThis.map((v) => (
+                  <VideoCard key={v.id} video={v} />
+                ))}
               </div>
             </div>
           )}
