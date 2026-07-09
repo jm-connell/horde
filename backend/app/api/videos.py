@@ -106,18 +106,32 @@ def list_videos(
 ):
     if continue_watching or watched_only:
         library.expire_stale_progress(session)
-    videos = library.query_videos(
-        session,
-        q=q,
-        channel=channel,
-        tag=tag,
-        sort=sort,
-        order=order,
-        needs_review=False,
-        continue_watching=continue_watching,
-        watched_only=watched_only,
-        seed=seed,
-    )
+    if q and not continue_watching and not watched_only:
+        from ..services.ai.search import hybrid_search
+
+        videos = hybrid_search(
+            session,
+            q,
+            channel=channel,
+            tag=tag,
+            sort=sort,
+            order=order,
+            needs_review=False,
+            seed=seed,
+        )
+    else:
+        videos = library.query_videos(
+            session,
+            q=q,
+            channel=channel,
+            tag=tag,
+            sort=sort,
+            order=order,
+            needs_review=False,
+            continue_watching=continue_watching,
+            watched_only=watched_only,
+            seed=seed,
+        )
     return [_to_read(v) for v in videos]
 
 
@@ -350,8 +364,10 @@ def update_video(
 
     data = payload.model_dump(exclude_unset=True)
 
+    tags_edited = False
     if "tags" in data and data["tags"] is not None:
         video.tags = library.dump_tags(data.pop("tags"))
+        tags_edited = True
     if "thumbnail_url" in data and data["thumbnail_url"]:
         _fetch_thumbnail_from_url(video, data.pop("thumbnail_url"))
     data.pop("thumbnail_url", None)
@@ -365,6 +381,7 @@ def update_video(
     for key, value in data.items():
         setattr(video, key, value)
 
+    was_review = video.needs_review
     # Auto-clear the review flag once the required fields are present.
     if video.needs_review and video.title and video.channel:
         video.needs_review = False
@@ -372,6 +389,25 @@ def update_video(
     session.add(video)
     session.commit()
     session.refresh(video)
+
+    if tags_edited:
+        try:
+            from ..services.ai.embeddings import lock_tags_on_manual_edit
+
+            lock_tags_on_manual_edit(session, video.id)
+            session.commit()
+        except Exception:  # noqa: BLE001
+            pass
+
+    # After leaving review, queue AI enrichment for scanner-ingested files.
+    if was_review and not video.needs_review and video.id is not None:
+        try:
+            from ..services.ai import enqueue_for_video
+
+            enqueue_for_video(video.id, include_tags=True, force=False)
+        except Exception:  # noqa: BLE001
+            pass
+
     return _to_read(video)
 
 

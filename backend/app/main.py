@@ -11,9 +11,10 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import DOWNLOADS_DIR, YTDLP_POT_BASE_URL, ensure_dirs
 from .database import engine, init_db
-from .api import app_settings, downloads, playlists, review, videos
+from .api import ai, app_settings, downloads, playlists, review, videos
 from .services.scanner import cleanup_orphans, start_scanner
 from .services import downloader, app_settings as app_settings_svc
+from .services.ai import start_ai_worker, stop_ai_worker
 
 # Static frontend build copied next to the backend in the Docker image.
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -33,10 +34,12 @@ async def lifespan(app: FastAPI):
     from .services.metadata_sync import start_sync_worker
     settings = app_settings_svc.load()
     start_sync_worker(interval_hours=settings.get("metadata_sync_interval_hours", 24))
+    start_ai_worker()
 
     try:
         yield
     finally:
+        stop_ai_worker()
         observer.stop()
         observer.join(timeout=5)
 
@@ -57,6 +60,7 @@ app.include_router(downloads.router)
 app.include_router(review.router)
 app.include_router(playlists.router)
 app.include_router(app_settings.router)
+app.include_router(ai.router)
 
 
 def _yt_dlp_version() -> str:
@@ -127,10 +131,36 @@ def health():
     except OSError:
         pass
 
+    ollama = None
+    try:
+        from .services import app_settings as settings_svc
+        from .services.ai.provider import (
+            last_error,
+            pulling_models,
+            resolve_base_url,
+        )
+
+        # Keep health cheap for readiness probes (dev.bat Wait-ForBackend).
+        # Full model status lives on GET /api/ai/status.
+        ai = settings_svc.ai_settings()
+        enabled = bool(ai.get("enabled", True))
+        url = resolve_base_url() if enabled else None
+        ollama = {
+            "enabled": enabled,
+            "ready": bool(url),
+            "reachable": bool(url),
+            "base_url": url,
+            "pulling": pulling_models(),
+            "last_error": last_error(),
+        }
+    except Exception:  # noqa: BLE001
+        ollama = {"enabled": False, "ready": False, "reachable": False}
+
     return {
         "status": "ok",
         "yt_dlp_version": _yt_dlp_version(),
         "pot_provider": _pot_provider_status(),
+        "ollama": ollama,
         "disk": disk,
         "library_video_count": video_count,
         "review_pending_count": review_count,

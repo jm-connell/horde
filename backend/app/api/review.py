@@ -1,5 +1,8 @@
 import re
+from typing import Any, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..database import get_session
@@ -9,6 +12,15 @@ from ..services import library
 from .videos import _to_read
 
 router = APIRouter(prefix="/api/review", tags=["review"])
+
+
+class DuplicateGroupRead(BaseModel):
+    videos: list[VideoRead]
+    match_type: str  # youtube_id | heuristic
+    ai_score: Optional[float] = None
+    ai_verdict: Optional[str] = None
+    ai_confidence: Optional[float] = None
+    ai_reason: Optional[str] = None
 
 
 @router.get("", response_model=list[VideoRead])
@@ -28,6 +40,12 @@ def skip_review(video_id: int, session: Session = Depends(get_session)):
     session.add(video)
     session.commit()
     session.refresh(video)
+    try:
+        from ..services.ai import enqueue_for_video
+
+        enqueue_for_video(video_id, include_tags=True, force=False)
+    except Exception:  # noqa: BLE001
+        pass
     return _to_read(video)
 
 
@@ -48,8 +66,12 @@ def _title_tokens(title: str) -> set[str]:
 
 
 @router.get("/groups")
-def duplicate_groups(session: Session = Depends(get_session)) -> list[list[VideoRead]]:
-    """Return heuristic clusters of likely duplicate videos in the library."""
+def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
+    """Return heuristic clusters of likely duplicate videos in the library.
+
+    Response is a list of DuplicateGroupRead objects. Older clients that expect
+    ``list[list[VideoRead]]`` can still read ``.videos`` from each group.
+    """
     all_videos = session.exec(
         select(Video).where(Video.needs_review == False)  # noqa: E712
     ).all()
@@ -63,11 +85,11 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[list[Video
 
     # Group 2: same channel + high title similarity + duration within 5s
     used: set[int] = set()
-    groups: list[list[Video]] = []
+    raw_groups: list[tuple[str, list[Video]]] = []
 
     for yt_id, vids in by_yt_id.items():
         if len(vids) > 1:
-            groups.append(vids)
+            raw_groups.append(("youtube_id", vids))
             for v in vids:
                 used.add(v.id)
 
@@ -94,6 +116,39 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[list[Video
         if len(cluster) > 1:
             for v in cluster:
                 used.add(v.id)
-            groups.append(cluster)
+            raw_groups.append(("heuristic", cluster))
 
-    return [[_to_read(v) for v in g] for g in groups]
+    annotate = False
+    try:
+        from ..services import app_settings
+        from ..services.ai.provider import get_provider
+
+        ai = app_settings.ai_settings()
+        annotate = bool(ai.get("ai_duplicates", True)) and get_provider() is not None
+    except Exception:  # noqa: BLE001
+        annotate = False
+
+    out: list[dict[str, Any]] = []
+    for match_type, group in raw_groups:
+        entry: dict[str, Any] = {
+            "videos": [_to_read(v) for v in group],
+            "match_type": match_type,
+            "ai_score": None,
+            "ai_verdict": None,
+            "ai_confidence": None,
+            "ai_reason": None,
+        }
+        if annotate and match_type == "heuristic":
+            try:
+                from ..services.ai.duplicates import annotate_group
+
+                scored = annotate_group(session, group)
+                entry.update(scored)
+            except Exception:  # noqa: BLE001
+                pass
+        elif match_type == "youtube_id":
+            entry["ai_verdict"] = "same"
+            entry["ai_confidence"] = 1.0
+            entry["ai_reason"] = "Same YouTube video ID"
+        out.append(entry)
+    return out

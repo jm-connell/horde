@@ -27,8 +27,12 @@ designed to run on TrueNAS via Dockge, but it works with any Docker host.
   browsed and played the same way.
 - Playback queue with auto-advance, a floating mini-player that keeps playing
   while you browse, and a Picture-in-Picture button.
-- Library grid with channel sidebar, global keyword search (title, channel,
-  description, notes, tags), tag filters, and sorting.
+- Home page with library grid, continue watching, and (when Ollama is connected)
+  a Recommended tab with history-based shelves and browse categories.
+- Channel sidebar, hybrid search (keyword + optional semantic embeddings over
+  title, description, notes, tags, and subtitles), tag filters, and sorting.
+- Optional local AI via Ollama: better search/related videos, auto-tags,
+  duplicate confirmation, and homepage recommendations.
 - Settings for the default playback mode and whether descriptions are shown.
 - Custom player with standard, theater, and windowed-fullscreen modes,
   subtitles, plus keyboard shortcuts (`space`/`k` play, `t` theater,
@@ -122,6 +126,35 @@ errors that show up as instant 500s in the UI.
 | `DATA_PATH`         | `/opt/dockge/horde/data`           | Host persistent data (DB, thumbnails)     |
 | `SCAN_INTERVAL_SEC` | `60`                               | Folder rescan interval                    |
 | `YTDLP_POT_BASE_URL`| `http://bgutil-pot:4416` (Docker)  | bgutil PO-token sidecar (auto, no login)  |
+| `OLLAMA_BASE_URL`   | _(auto-discover)_                  | Ollama API URL; blank tries compose + host |
+| `OLLAMA_DATA_PATH`  | `./ollama`                         | Host path for Ollama model data (profile) |
+
+## AI (optional, Ollama)
+
+Horde does not bundle models. It talks to [Ollama](https://ollama.com) over HTTP
+for embeddings (`nomic-embed-text`) and a small chat model (`llama3.2:3b`) used
+for tags, browse categories, and duplicate confirmation. Without Ollama, the
+app works as before (keyword search and heuristic related videos).
+
+**Same host (compose sidecar):**
+
+```bash
+docker compose --profile ai up -d
+```
+
+Horde auto-discovers `http://ollama:11434`. Models are pulled on first connect
+when Settings → AI → Auto-pull is enabled.
+
+**Ollama on another machine (e.g. NAS runs Horde, PC has the GPU):** leave the
+`ai` profile off and set `OLLAMA_BASE_URL=http://<pc-ip>:11434` in `.env`, or
+enter that URL under Settings → AI. Use Settings → **Process library now** for
+backlogs after enabling AI for the first time.
+
+Schedule modes (Settings → AI):
+
+- **On download** — embed + tag enrich when a download finishes
+- **Only when requested** — no automatic jobs
+- **On a timer** — periodic sweep for missing embeddings
 
 ## YouTube bot checks
 

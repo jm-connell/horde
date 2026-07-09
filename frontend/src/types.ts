@@ -155,9 +155,66 @@ export interface StorageStats {
   video_count: number;
 }
 
+export type AiSchedule = "on_download" | "on_request" | "timer";
+
+export interface AiSettings {
+  enabled: boolean;
+  provider: string;
+  base_url: string;
+  embed_model: string;
+  chat_model: string;
+  schedule: AiSchedule;
+  timer_hours: number;
+  auto_pull_models: boolean;
+  use_subtitles: boolean;
+  enrich_tags: boolean;
+  ai_duplicates: boolean;
+  paused: boolean;
+}
+
 export interface AppSettings {
   progress_expiry_days: number;
   ui: Record<string, unknown>;
+  ai: AiSettings;
+}
+
+export interface AiStatus {
+  enabled: boolean;
+  provider: string;
+  ready: boolean;
+  reachable: boolean;
+  base_url: string | null;
+  embed_model: string;
+  chat_model: string;
+  embed_model_present: boolean;
+  chat_model_present: boolean;
+  pulling: string[];
+  last_error: string | null;
+  paused: boolean;
+  schedule: AiSchedule;
+  indexed_videos: number;
+  total_videos: number;
+  queue_depth: number;
+}
+
+export interface RecommendationSection {
+  title: string;
+  seed_video_id: number | null;
+  videos: Video[];
+}
+
+export interface RecommendationsResponse {
+  categories: string[];
+  sections: RecommendationSection[];
+}
+
+export interface DuplicateGroup {
+  videos: Video[];
+  match_type: string;
+  ai_score: number | null;
+  ai_verdict: string | null;
+  ai_confidence: number | null;
+  ai_reason: string | null;
 }
 
 export interface HealthStats {
@@ -168,6 +225,14 @@ export interface HealthStats {
     url?: string;
     version?: string;
     detail?: string;
+  } | null;
+  ollama?: {
+    enabled: boolean;
+    ready: boolean;
+    reachable: boolean;
+    base_url?: string | null;
+    pulling?: string[];
+    last_error?: string | null;
   } | null;
   disk: { total_bytes: number; used_bytes: number; free_bytes: number } | null;
   library_video_count: number;

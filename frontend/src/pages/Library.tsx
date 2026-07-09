@@ -6,6 +6,7 @@ import ChannelFeed from "../components/ChannelFeed";
 import Collapse from "../components/Collapse";
 import LoadingIndicator from "../components/LoadingIndicator";
 import PlaybackQueue from "../components/PlaybackQueue";
+import RecommendedHome from "../components/RecommendedHome";
 import VideoCard from "../components/VideoCard";
 import { useDownloads } from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
@@ -26,8 +27,21 @@ const TAG_MIN_COUNT = 3;
 const TAG_PAGE_SIZE = 20;
 const CHANNEL_SIDEBAR_LIMIT = 30;
 const FEED_LAYOUT_KEY = "horde.channelFeed.layout";
+const HOME_TAB_KEY = "horde.home.tab";
 // Fixed queue overlay width (w-[26rem]) — dock to bottom when grid extends into this zone.
 const QUEUE_RESERVE_PX = 416;
+
+type HomeTab = "library" | "recommended";
+
+function loadHomeTab(): HomeTab {
+  try {
+    return localStorage.getItem(HOME_TAB_KEY) === "recommended"
+      ? "recommended"
+      : "library";
+  } catch {
+    return "library";
+  }
+}
 
 function loadFeedLayout(): "grid" | "list" {
   try {
@@ -87,10 +101,21 @@ export default function Library() {
   const [renameValue, setRenameValue] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [channelTab, setChannelTab] = useState<"library" | "feed">("library");
+  const [homeTab, setHomeTabState] = useState<HomeTab>(loadHomeTab);
+  const [aiReady, setAiReady] = useState(false);
   const [feedSearch, setFeedSearch] = useState("");
   const [feedSort, setFeedSort] = useState<"recent" | "popular">("recent");
   const [feedOrder, setFeedOrder] = useState<"asc" | "desc">("desc");
   const [feedLayout, setFeedLayoutState] = useState(loadFeedLayout);
+
+  const setHomeTab = useCallback((tab: HomeTab) => {
+    setHomeTabState(tab);
+    try {
+      localStorage.setItem(HOME_TAB_KEY, tab);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const setFeedLayout = useCallback((layout: "grid" | "list") => {
     setFeedLayoutState(layout);
@@ -110,6 +135,25 @@ export default function Library() {
   useEffect(() => {
     return onJobCompleted(() => setRefreshKey((k) => k + 1));
   }, [onJobCompleted]);
+
+  useEffect(() => {
+    let active = true;
+    const poll = () =>
+      api
+        .getAiStatus()
+        .then((s) => {
+          if (active) setAiReady(Boolean(s.ready && s.enabled && !s.paused));
+        })
+        .catch(() => {
+          if (active) setAiReady(false);
+        });
+    poll();
+    const id = setInterval(poll, 15000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
 
   const reloadChannels = () =>
     api
@@ -212,10 +256,12 @@ export default function Library() {
   const headline = useMemo(() => {
     if (activeChannel) return activeChannel;
     if (activeTag) return `#${activeTag}`;
-    return "Library";
+    return "Home";
   }, [activeChannel, activeTag]);
 
   const isHome = !activeChannel && !activeTag;
+  const showHomeTabs = isHome && aiReady;
+  const onRecommendedTab = showHomeTabs && homeTab === "recommended";
 
   const activeChannelUrl = useMemo(() => {
     if (!activeChannel) return null;
@@ -228,6 +274,7 @@ export default function Library() {
     settings.showContinueWatching &&
     !activeChannel &&
     !activeTag &&
+    !onRecommendedTab &&
     !debouncedSearch &&
     visibleContinueWatching.length > 0;
 
@@ -541,6 +588,33 @@ export default function Library() {
               )}
             </h1>
           )}
+
+          {showHomeTabs && (
+            <div className="ui-panel flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+              <button
+                type="button"
+                onClick={() => setHomeTab("library")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  homeTab === "library"
+                    ? "bg-accent/15 text-accent"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Library
+              </button>
+              <button
+                type="button"
+                onClick={() => setHomeTab("recommended")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  homeTab === "recommended"
+                    ? "bg-accent/15 text-accent"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Recommended
+              </button>
+            </div>
+          )}
           {activeChannel && !activeTag && (
             <div className="ui-panel flex gap-1 rounded-lg border border-ink-700 bg-ink-900 p-1 sm:order-first">
               <button
@@ -644,12 +718,14 @@ export default function Library() {
                   </div>
                 </div>
               </>
-            ) : (
+            ) : onRecommendedTab ? null : (
               <>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search videos..."
+              placeholder={
+                aiReady ? "Search videos or describe a topic..." : "Search videos..."
+              }
               className="ui-panel ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
             />
             <div className="flex flex-row items-center gap-2">
@@ -697,6 +773,7 @@ export default function Library() {
           </div>
         </div>
 
+        {!onRecommendedTab && (
         <div className="mb-5 flex flex-wrap items-center gap-2">
           {activeTag && (
             <button
@@ -715,8 +792,9 @@ export default function Library() {
             </button>
           )}
         </div>
+        )}
 
-        {showTags && visibleTags.length > 0 && (
+        {!onRecommendedTab && showTags && visibleTags.length > 0 && (
           <div className="mb-5 flex flex-wrap gap-2">
             {visibleTags
               .filter((t) => t.tag !== activeTag)
@@ -748,7 +826,7 @@ export default function Library() {
           </p>
         )}
 
-        {showContinueRow && !onFeedTab && (
+        {showContinueRow && !onFeedTab && !onRecommendedTab && (
           <ContinueWatchingRow
             videos={visibleContinueWatching}
             showProgress={settings.showProgressOnContinueWatching}
@@ -758,7 +836,7 @@ export default function Library() {
         )}
 
         <div
-          key={onFeedTab ? "feed" : "library"}
+          key={onFeedTab ? "feed" : onRecommendedTab ? "recommended" : "library"}
           className="page-shell page-shell--animate"
         >
         {onFeedTab ? (
@@ -771,6 +849,8 @@ export default function Library() {
             feedOrder={feedOrder}
             feedLayout={feedLayout}
           />
+        ) : onRecommendedTab ? (
+          <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
         ) : loading ? (
           <LoadingIndicator />
         ) : videos.length === 0 ? (

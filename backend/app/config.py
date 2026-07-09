@@ -42,6 +42,9 @@ YTDLP_COOKIES_FROM_BROWSER: str = os.environ.get(
     "YTDLP_COOKIES_FROM_BROWSER", ""
 ).strip()
 
+# Ollama base URL. Empty = auto-discover (compose service, then host.docker.internal).
+OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "").strip()
+
 
 def ensure_dirs() -> None:
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)

@@ -7,7 +7,7 @@ import { useSettings } from "../hooks/useSettings";
 import LiquidNav from "./LiquidNav";
 
 const NAV_LINKS = [
-  { to: "/", label: "Library", end: true },
+  { to: "/", label: "Home", end: true },
   { to: "/history", label: "History", end: false },
   { to: "/playlists", label: "Playlists", end: false },
   { to: "/download", label: "Download", end: false },

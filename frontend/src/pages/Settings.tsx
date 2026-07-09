@@ -13,7 +13,14 @@ import {
 } from "../hooks/useSettings";
 import { BACKGROUND_EFFECT_OPTIONS } from "../effects";
 import { LIBRARY_SORT_OPTIONS } from "../hooks/useLibrarySort";
-import type { AppSettings, HealthStats, StorageStats } from "../types";
+import type {
+  AiSchedule,
+  AiSettings,
+  AiStatus,
+  AppSettings,
+  HealthStats,
+  StorageStats,
+} from "../types";
 import { formatSize } from "../utils";
 import LiquidNav from "../components/LiquidNav";
 import Collapse from "../components/Collapse";
@@ -53,6 +60,7 @@ type SettingsTab =
   | "library"
   | "playback"
   | "downloads"
+  | "ai"
   | "system";
 
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -60,8 +68,42 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "library", label: "Library" },
   { id: "playback", label: "Playback" },
   { id: "downloads", label: "Downloads" },
+  { id: "ai", label: "AI" },
   { id: "system", label: "System" },
 ];
+
+const AI_SCHEDULE_OPTIONS: { value: AiSchedule; label: string; description: string }[] = [
+  {
+    value: "on_download",
+    label: "On download",
+    description: "Embed and enrich tags when a video finishes downloading",
+  },
+  {
+    value: "on_request",
+    label: "Only when requested",
+    description: "No automatic work — use Process library now",
+  },
+  {
+    value: "timer",
+    label: "On a timer",
+    description: "Periodically index videos missing embeddings",
+  },
+];
+
+const DEFAULT_AI: AiSettings = {
+  enabled: true,
+  provider: "ollama",
+  base_url: "",
+  embed_model: "nomic-embed-text",
+  chat_model: "llama3.2:3b",
+  schedule: "on_download",
+  timer_hours: 6,
+  auto_pull_models: true,
+  use_subtitles: true,
+  enrich_tags: true,
+  ai_duplicates: true,
+  paused: false,
+};
 
 const HOVER_MOTION_OPTIONS: {
   value: HoverMotion;
@@ -199,8 +241,18 @@ export default function Settings() {
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [health, setHealth] = useState<HealthStats | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [aiDraft, setAiDraft] = useState<AiSettings>(DEFAULT_AI);
+  const [aiTesting, setAiTesting] = useState(false);
+  const [aiProcessing, setAiProcessing] = useState(false);
   const [expiryInput, setExpiryInput] = useState<string>("");
   const [metadataSyncing, setMetadataSyncing] = useState(false);
+
+  const refreshAiStatus = () =>
+    api
+      .getAiStatus()
+      .then(setAiStatus)
+      .catch(() => setAiStatus(null));
 
   useEffect(() => {
     api.storageStats().then(setStorage).catch(() => undefined);
@@ -209,13 +261,32 @@ export default function Settings() {
       .then((s) => {
         setAppSettings(s);
         setExpiryInput(String(s.progress_expiry_days));
+        if (s.ai) setAiDraft({ ...DEFAULT_AI, ...s.ai });
       })
       .catch(() => undefined);
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
       .catch(() => undefined);
+    refreshAiStatus();
   }, []);
+
+  useEffect(() => {
+    if (tab !== "ai") return;
+    const id = setInterval(refreshAiStatus, 5000);
+    return () => clearInterval(id);
+  }, [tab]);
+
+  const saveAi = async (patch: Partial<AiSettings>) => {
+    const next = { ...aiDraft, ...patch };
+    setAiDraft(next);
+    const updated = await api.updateAppSettings({ ai: patch }).catch(() => null);
+    if (updated?.ai) {
+      setAppSettings(updated);
+      setAiDraft({ ...DEFAULT_AI, ...updated.ai });
+    }
+    refreshAiStatus();
+  };
 
   const selectTab = (next: SettingsTab) => {
     setTab(next);
@@ -1016,6 +1087,306 @@ export default function Settings() {
           </Section>
         )}
 
+        {tab === "ai" && (
+          <>
+            <Section
+              first
+              title="Ollama connection"
+              description="Horde uses a local Ollama instance for embeddings and small LLM tasks. Leave the URL blank to auto-discover (compose sidecar or host.docker.internal)."
+            >
+              <div className="space-y-4">
+                <SettingRow
+                  title="Enable AI features"
+                  description="When off, search and related videos use keyword heuristics only."
+                  control={
+                    <Toggle
+                      checked={aiDraft.enabled}
+                      onChange={() => saveAi({ enabled: !aiDraft.enabled })}
+                    />
+                  }
+                />
+                <label className="block">
+                  <span className="mb-1 block text-xs text-gray-500">
+                    Ollama base URL
+                  </span>
+                  <input
+                    value={aiDraft.base_url}
+                    onChange={(e) =>
+                      setAiDraft((d) => ({ ...d, base_url: e.target.value }))
+                    }
+                    onBlur={(e) =>
+                      saveAi({ base_url: e.target.value.trim() })
+                    }
+                    placeholder="http://ollama:11434 or http://192.168.x.x:11434"
+                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={aiTesting}
+                    onClick={async () => {
+                      setAiTesting(true);
+                      const result = await api
+                        .testAiConnection(aiDraft.base_url || undefined)
+                        .catch(() => null);
+                      setAiTesting(false);
+                      if (!result) {
+                        showToast("Connection test failed");
+                        return;
+                      }
+                      showToast(
+                        result.ok
+                          ? `Connected${result.base_url ? ` at ${result.base_url}` : ""}`
+                          : result.detail || "Unreachable"
+                      );
+                      refreshAiStatus();
+                    }}
+                    className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700 disabled:opacity-50"
+                  >
+                    {aiTesting ? "Testing…" : "Test connection"}
+                  </button>
+                  {aiStatus?.paused ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await api.resumeAi().catch(() => undefined);
+                        await saveAi({ paused: false });
+                        showToast("AI queue resumed");
+                      }}
+                      className="rounded-lg bg-accent/15 px-3 py-1.5 text-sm text-accent hover:bg-accent/25"
+                    >
+                      Resume queue
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await api.pauseAi().catch(() => undefined);
+                        await saveAi({ paused: true });
+                        showToast("AI queue paused");
+                      }}
+                      className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700"
+                    >
+                      Pause queue
+                    </button>
+                  )}
+                </div>
+                {aiStatus && (
+                  <dl className="space-y-1.5 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-gray-400">Status</dt>
+                      <dd className="text-gray-200">
+                        {!aiStatus.enabled
+                          ? "Disabled"
+                          : aiStatus.ready
+                            ? "Ready"
+                            : aiStatus.reachable
+                              ? "Connected (models loading)"
+                              : "Offline"}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-gray-400">URL</dt>
+                      <dd className="truncate font-mono text-xs text-gray-300">
+                        {aiStatus.base_url || "—"}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-gray-400">Indexed</dt>
+                      <dd className="text-gray-200">
+                        {aiStatus.indexed_videos} / {aiStatus.total_videos}
+                        {aiStatus.queue_depth > 0
+                          ? ` · ${aiStatus.queue_depth} queued`
+                          : ""}
+                      </dd>
+                    </div>
+                    {aiStatus.pulling.length > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-400">Pulling</dt>
+                        <dd className="text-amber-300">
+                          {aiStatus.pulling.join(", ")}
+                        </dd>
+                      </div>
+                    )}
+                    {aiStatus.last_error && (
+                      <p className="text-xs text-red-400">{aiStatus.last_error}</p>
+                    )}
+                  </dl>
+                )}
+              </div>
+            </Section>
+
+            <Section
+              title="Models"
+              description="Defaults work well on a 1660 Super-class GPU. Models are pulled automatically on first connect when enabled."
+            >
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs text-gray-500">
+                    Embedding model
+                  </span>
+                  <input
+                    value={aiDraft.embed_model}
+                    onChange={(e) =>
+                      setAiDraft((d) => ({ ...d, embed_model: e.target.value }))
+                    }
+                    onBlur={(e) =>
+                      saveAi({ embed_model: e.target.value.trim() })
+                    }
+                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-gray-500">
+                    Chat model (tags, categories, duplicates)
+                  </span>
+                  <input
+                    value={aiDraft.chat_model}
+                    onChange={(e) =>
+                      setAiDraft((d) => ({ ...d, chat_model: e.target.value }))
+                    }
+                    onBlur={(e) =>
+                      saveAi({ chat_model: e.target.value.trim() })
+                    }
+                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  />
+                </label>
+                <SettingRow
+                  title="Auto-pull missing models"
+                  description="Ask Ollama to download configured models when they are missing."
+                  control={
+                    <Toggle
+                      checked={aiDraft.auto_pull_models}
+                      onChange={() =>
+                        saveAi({ auto_pull_models: !aiDraft.auto_pull_models })
+                      }
+                    />
+                  }
+                />
+              </div>
+            </Section>
+
+            <Section
+              title="When to run"
+              description="Important for large libraries — process on a schedule or only when you ask."
+            >
+              <div className="space-y-3">
+                <select
+                  value={aiDraft.schedule}
+                  onChange={(e) =>
+                    saveAi({ schedule: e.target.value as AiSchedule })
+                  }
+                  className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                >
+                  {AI_SCHEDULE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500">
+                  {
+                    AI_SCHEDULE_OPTIONS.find((o) => o.value === aiDraft.schedule)
+                      ?.description
+                  }
+                </p>
+                {aiDraft.schedule === "timer" && (
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-gray-500">
+                      Timer interval (hours)
+                    </span>
+                    <input
+                      type="number"
+                      min={0.25}
+                      max={168}
+                      step={0.25}
+                      value={aiDraft.timer_hours}
+                      onChange={(e) =>
+                        setAiDraft((d) => ({
+                          ...d,
+                          timer_hours: Number(e.target.value) || 6,
+                        }))
+                      }
+                      onBlur={(e) =>
+                        saveAi({
+                          timer_hours: Number(e.target.value) || 6,
+                        })
+                      }
+                      className="ui-panel w-32 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    />
+                  </label>
+                )}
+                <button
+                  type="button"
+                  disabled={aiProcessing}
+                  onClick={async () => {
+                    setAiProcessing(true);
+                    const result = await api
+                      .processAiLibrary()
+                      .catch(() => null);
+                    setAiProcessing(false);
+                    if (!result) {
+                      showToast("Could not enqueue library");
+                      return;
+                    }
+                    showToast(
+                      `Queued ${result.enqueued} AI job${
+                        result.enqueued === 1 ? "" : "s"
+                      }`
+                    );
+                    refreshAiStatus();
+                  }}
+                  className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                >
+                  {aiProcessing ? "Queuing…" : "Process library now"}
+                </button>
+              </div>
+            </Section>
+
+            <Section title="Features" description="Toggle individual AI jobs.">
+              <div className="space-y-3">
+                <SettingRow
+                  title="Use subtitles in embeddings"
+                  description="Include caption text for better search and recommendations."
+                  control={
+                    <Toggle
+                      checked={aiDraft.use_subtitles}
+                      onChange={() =>
+                        saveAi({ use_subtitles: !aiDraft.use_subtitles })
+                      }
+                    />
+                  }
+                />
+                <SettingRow
+                  title="Enrich tags with LLM"
+                  description="Suggest extra tags after download (skipped if you edit tags manually)."
+                  control={
+                    <Toggle
+                      checked={aiDraft.enrich_tags}
+                      onChange={() =>
+                        saveAi({ enrich_tags: !aiDraft.enrich_tags })
+                      }
+                    />
+                  }
+                />
+                <SettingRow
+                  title="AI duplicate confirmation"
+                  description="Score heuristic duplicate groups in Review."
+                  control={
+                    <Toggle
+                      checked={aiDraft.ai_duplicates}
+                      onChange={() =>
+                        saveAi({ ai_duplicates: !aiDraft.ai_duplicates })
+                      }
+                    />
+                  }
+                />
+              </div>
+            </Section>
+          </>
+        )}
+
         {tab === "system" && (
           <>
             <Section
@@ -1063,6 +1434,20 @@ export default function Settings() {
                             {health.pot_provider.detail ?? "Unavailable"}
                           </span>
                         )}
+                      </dd>
+                    </div>
+                  )}
+                  {health.ollama && (
+                    <div className="flex justify-between">
+                      <dt className="text-gray-400">Ollama</dt>
+                      <dd className="text-gray-200">
+                        {!health.ollama.enabled
+                          ? "Disabled"
+                          : health.ollama.ready
+                            ? "Ready"
+                            : health.ollama.reachable
+                              ? "Connected"
+                              : "Offline"}
                       </dd>
                     </div>
                   )}

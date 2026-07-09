@@ -1,4 +1,6 @@
 import type {
+  AiSettings,
+  AiStatus,
   AppSettings,
   ChannelFeedPage,
   ChannelStat,
@@ -6,9 +8,11 @@ import type {
   DownloadOverrides,
   DownloadPreview,
   DownloadQueueStatus,
+  DuplicateGroup,
   Playlist,
   PlaylistDetail,
   PlaylistPreviewData,
+  RecommendationsResponse,
   StorageStats,
   TagStat,
   Video,
@@ -181,12 +185,52 @@ export const api = {
     return request<AppSettings>("/api/settings");
   },
 
-  updateAppSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+  updateAppSettings(
+    patch: Partial<Omit<AppSettings, "ai">> & { ai?: Partial<AiSettings> }
+  ): Promise<AppSettings> {
     return request<AppSettings>("/api/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
+  },
+
+  getAiStatus(): Promise<AiStatus> {
+    return request<AiStatus>("/api/ai/status");
+  },
+
+  testAiConnection(base_url?: string): Promise<{
+    ok: boolean;
+    base_url?: string | null;
+    detail?: string;
+    models?: string[];
+  }> {
+    return request("/api/ai/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ base_url: base_url || null }),
+    });
+  },
+
+  processAiLibrary(): Promise<{ enqueued: number }> {
+    return request<{ enqueued: number }>("/api/ai/process", { method: "POST" });
+  },
+
+  pauseAi(): Promise<{ paused: boolean }> {
+    return request<{ paused: boolean }>("/api/ai/pause", { method: "POST" });
+  },
+
+  resumeAi(): Promise<{ paused: boolean }> {
+    return request<{ paused: boolean }>("/api/ai/resume", { method: "POST" });
+  },
+
+  getRecommendations(category?: string): Promise<RecommendationsResponse> {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : "";
+    return request<RecommendationsResponse>(`/api/ai/recommendations${qs}`);
+  },
+
+  listDuplicateGroups(): Promise<DuplicateGroup[]> {
+    return request<DuplicateGroup[]>("/api/review/groups");
   },
 
   listReview(): Promise<Video[]> {

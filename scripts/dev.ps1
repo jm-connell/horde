@@ -16,9 +16,10 @@ function Get-PythonCmd {
 
 function Wait-ForBackend {
     $url = "http://127.0.0.1:8080/api/health"
-    for ($i = 0; $i -lt 60; $i++) {
+    for ($i = 0; $i -lt 90; $i++) {
         try {
-            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 1
+            # Allow a few seconds — health may briefly probe optional services.
+            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5
             if ($resp.StatusCode -eq 200) { return }
         } catch {
             Start-Sleep -Milliseconds 500

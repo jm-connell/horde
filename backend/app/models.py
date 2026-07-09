@@ -117,3 +117,69 @@ class PlaylistItem(SQLModel, table=True):
     playlist_id: int = Field(foreign_key="playlists.id", index=True)
     video_id: int = Field(foreign_key="videos.id", index=True)
     position: int = 0
+
+
+class AiJobStatus(str, Enum):
+    queued = "queued"
+    running = "running"
+    completed = "completed"
+    error = "error"
+    cancelled = "cancelled"
+
+
+class AiJobKind(str, Enum):
+    embed_video = "embed_video"
+    enrich_tags = "enrich_tags"
+    score_duplicates = "score_duplicates"
+    refresh_categories = "refresh_categories"
+
+
+class VideoEmbedding(SQLModel, table=True):
+    __tablename__ = "video_embeddings"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    video_id: int = Field(foreign_key="videos.id", index=True)
+    # -1 = metadata document; 0+ = subtitle chunk index.
+    chunk_index: int = Field(default=-1, index=True)
+    model: str = Field(default="nomic-embed-text")
+    dim: int = 0
+    vector: bytes = Field(default=b"")
+    content_hash: str = Field(default="")
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class VideoAiMeta(SQLModel, table=True):
+    __tablename__ = "video_ai_meta"
+
+    video_id: int = Field(primary_key=True, foreign_key="videos.id")
+    embed_status: str = Field(default="pending", index=True)
+    content_hash: str = Field(default="")
+    summary: Optional[str] = None
+    tags_enriched_at: Optional[datetime] = None
+    tags_locked: bool = Field(default=False)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class AiCategory(SQLModel, table=True):
+    __tablename__ = "ai_categories"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    embedding: bytes = Field(default=b"")
+    dim: int = 0
+    model: str = Field(default="nomic-embed-text")
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class AiJob(SQLModel, table=True):
+    __tablename__ = "ai_jobs"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    kind: AiJobKind = Field(index=True)
+    video_id: Optional[int] = Field(default=None, foreign_key="videos.id", index=True)
+    status: AiJobStatus = Field(default=AiJobStatus.queued, index=True)
+    attempts: int = 0
+    run_after: Optional[datetime] = Field(default=None, index=True)
+    error: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)

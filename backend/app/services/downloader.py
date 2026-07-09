@@ -751,6 +751,13 @@ def _finalize_in_background(
             video.subtitles_pending = False
             session.add(video)
             session.commit()
+        # Re-embed with subtitle text once captions are on disk.
+        try:
+            from .ai import enqueue_for_video
+
+            enqueue_for_video(video_id, include_tags=False, force=False)
+        except Exception:  # noqa: BLE001
+            pass
 
     threading.Thread(target=run, daemon=True).start()
 
@@ -859,6 +866,14 @@ def _complete_download(
         _remove_review_duplicates(session, info.get("id"), keep_id=video.id)
 
         video_id = video.id
+
+    # Queue metadata embed + tag enrich (subtitles re-embed after finalize).
+    try:
+        from .ai import enqueue_for_video
+
+        enqueue_for_video(video_id, include_tags=True, force=False)
+    except Exception:  # noqa: BLE001
+        pass
 
     _finalize_in_background(
         video_id, final_path, source_url, info.get("thumbnail")

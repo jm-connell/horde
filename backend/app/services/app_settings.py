@@ -5,17 +5,40 @@ from typing import Any
 
 _lock = threading.Lock()
 
+AI_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "provider": "ollama",
+    "base_url": "",
+    "embed_model": "nomic-embed-text",
+    "chat_model": "llama3.2:3b",
+    "schedule": "on_download",  # on_download | on_request | timer
+    "timer_hours": 6,
+    "auto_pull_models": True,
+    "use_subtitles": True,
+    "enrich_tags": True,
+    "ai_duplicates": True,
+    "paused": False,
+}
+
 DEFAULTS: dict[str, Any] = {
     "progress_expiry_days": 14,
     "continue_watching_days": 7,
     "metadata_sync_interval_hours": 24,
     "ui": {},
+    "ai": dict(AI_DEFAULTS),
 }
 
 
 def _path() -> Path:
     from ..config import DATA_DIR
     return DATA_DIR / "app_settings.json"
+
+
+def _merge_ai(raw: Any) -> dict[str, Any]:
+    merged = dict(AI_DEFAULTS)
+    if isinstance(raw, dict):
+        merged.update({k: v for k, v in raw.items() if k in AI_DEFAULTS})
+    return merged
 
 
 def load() -> dict[str, Any]:
@@ -30,10 +53,13 @@ def load() -> dict[str, Any]:
                 merged["ui"] = ui
             else:
                 merged["ui"] = {}
+            merged["ai"] = _merge_ai(data.get("ai"))
             return merged
     except Exception:  # noqa: BLE001
         pass
-    return dict(DEFAULTS)
+    out = dict(DEFAULTS)
+    out["ai"] = dict(AI_DEFAULTS)
+    return out
 
 
 def save(updates: dict[str, Any]) -> dict[str, Any]:
@@ -43,8 +69,15 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
             existing_ui = current.get("ui") if isinstance(current.get("ui"), dict) else {}
             current["ui"] = {**existing_ui, **updates["ui"]}
             updates = {k: v for k, v in updates.items() if k != "ui"}
+        if "ai" in updates and isinstance(updates["ai"], dict):
+            current["ai"] = _merge_ai({**current.get("ai", {}), **updates["ai"]})
+            updates = {k: v for k, v in updates.items() if k != "ai"}
         current.update(updates)
         p = _path()
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(current, indent=2))
         return current
+
+
+def ai_settings() -> dict[str, Any]:
+    return _merge_ai(load().get("ai"))

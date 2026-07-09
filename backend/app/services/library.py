@@ -318,7 +318,11 @@ def related_videos(
     video_id: int,
     limit: int = 6,
 ) -> list[Video]:
-    """Return related library videos: same channel, then tag overlap, then random."""
+    """Return related library videos.
+
+    Prefer embedding neighbors when AI is ready; fall back to same channel,
+    tag overlap, then random.
+    """
     source = session.get(Video, video_id)
     if source is None:
         return []
@@ -336,6 +340,41 @@ def related_videos(
             if len(picked) >= limit:
                 return
 
+    # 1) Embedding nearest neighbors (soft-boost same channel / tag overlap).
+    try:
+        from .ai import embeddings as ai_embeddings
+        from .ai.provider import get_provider
+
+        if get_provider() is not None:
+            centroid = ai_embeddings.video_centroid(session, video_id)
+            if centroid is not None:
+                source_tags = {t.lower() for t in parse_tags(source.tags)}
+                hits = ai_embeddings.similar_video_ids(
+                    session,
+                    centroid,
+                    limit=limit * 4,
+                    exclude_ids={video_id},
+                    min_score=0.2,
+                )
+                scored: list[tuple[float, Video]] = []
+                for vid, score in hits:
+                    video = session.get(Video, vid)
+                    if video is None or video.needs_review:
+                        continue
+                    boost = 0.0
+                    if source.channel and video.channel == source.channel:
+                        boost += 0.05
+                    if source_tags:
+                        row_tags = {t.lower() for t in parse_tags(video.tags)}
+                        boost += 0.02 * len(source_tags & row_tags)
+                    scored.append((score + boost, video))
+                scored.sort(key=lambda item: item[0], reverse=True)
+                add_candidates([v for _, v in scored])
+                if len(picked) >= limit:
+                    return picked[:limit]
+    except Exception:  # noqa: BLE001
+        pass
+
     if source.channel:
         channel_rows = query_videos(
             session,
@@ -350,22 +389,22 @@ def related_videos(
 
     source_tags = {t.lower() for t in parse_tags(source.tags)}
     if source_tags:
-        scored: list[tuple[int, Video]] = []
+        scored_tags: list[tuple[int, Video]] = []
         for row in query_videos(session, needs_review=False, sort="added_at", order="desc"):
             if row.id in seen or row.needs_review:
                 continue
             row_tags = {t.lower() for t in parse_tags(row.tags)}
             overlap = len(source_tags & row_tags)
             if overlap > 0:
-                scored.append((overlap, row))
-        scored.sort(
+                scored_tags.append((overlap, row))
+        scored_tags.sort(
             key=lambda item: (
                 item[0],
                 item[1].added_at or datetime.min.replace(tzinfo=timezone.utc),
             ),
             reverse=True,
         )
-        add_candidates([v for _, v in scored])
+        add_candidates([v for _, v in scored_tags])
         if len(picked) >= limit:
             return picked[:limit]
 
