@@ -75,6 +75,14 @@ interface Props {
   onSubtitlesRefresh?: () => void;
   miniWidth?: number | null;
   onMiniResize?: (width: number) => void;
+  upNext?: {
+    title: string;
+    channel: string | null;
+    poster: string | null;
+    seconds: number;
+  } | null;
+  onCancelUpNext?: () => void;
+  onPlayUpNext?: () => void;
 }
 
 export default function VideoPlayer({
@@ -105,6 +113,9 @@ export default function VideoPlayer({
   onSubtitlesRefresh,
   miniWidth = null,
   onMiniResize,
+  upNext = null,
+  onCancelUpNext,
+  onPlayUpNext,
 }: Props) {
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
@@ -1371,12 +1382,100 @@ export default function VideoPlayer({
                           ? "bg-accent text-ink-950"
                           : "bg-ink-700 text-gray-200 hover:text-accent"
                       }`}
-                      title="Windowed fullscreen (f)"
+                      title="Fit window (f)"
                     >
-                      {mode === "windowed" ? "Exit" : "Fullscreen"}
+                      {mode === "windowed" ? "Exit Fit" : "Fit Window"}
+                    </button>
+                    <button
+                      onClick={toggleNativeFullscreen}
+                      className={`flex items-center justify-center rounded px-2 py-1 text-xs font-medium ${
+                        isNativeFullscreen
+                          ? "bg-accent text-ink-950"
+                          : "bg-ink-700 text-gray-200 hover:text-accent"
+                      }`}
+                      title={
+                        isNativeFullscreen
+                          ? "Exit fullscreen"
+                          : "Fullscreen"
+                      }
+                      aria-label={
+                        isNativeFullscreen
+                          ? "Exit fullscreen"
+                          : "Fullscreen"
+                      }
+                    >
+                      {isNativeFullscreen ? (
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          aria-hidden
+                        >
+                          <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" />
+                        </svg>
+                      ) : (
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          aria-hidden
+                        >
+                          <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+                        </svg>
+                      )}
                     </button>
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {upNext && !isMini && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/65 p-4">
+            <div className="w-full max-w-sm overflow-hidden rounded-xl bg-ink-900/95 ring-1 ring-ink-600 shadow-2xl">
+              {upNext.poster && (
+                <div className="aspect-video w-full overflow-hidden bg-ink-800">
+                  <img
+                    src={upNext.poster}
+                    alt=""
+                    className="h-full w-full object-cover opacity-90"
+                  />
+                </div>
+              )}
+              <div className="p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+                  Playing next
+                  {upNext.seconds > 0 ? ` in ${upNext.seconds}s` : ""}
+                </p>
+                <p className="mt-1 line-clamp-2 text-sm font-medium text-gray-100">
+                  {upNext.title}
+                </p>
+                {upNext.channel && (
+                  <p className="mt-0.5 truncate text-xs text-gray-500">
+                    {upNext.channel}
+                  </p>
+                )}
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={onPlayUpNext}
+                    className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft"
+                  >
+                    Play now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onCancelUpNext}
+                    className="rounded-lg bg-ink-800 px-3 py-2 text-sm text-gray-200 hover:bg-ink-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           </div>

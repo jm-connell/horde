@@ -48,7 +48,7 @@ export default function AddToPlaylist({ videoId }: { videoId: number }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+        className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
       >
         + Playlist
       </button>

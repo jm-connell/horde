@@ -121,7 +121,7 @@ export default function VideoEditForm({
     "mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500";
 
   return (
-    <div className="rounded-xl bg-ink-900 p-5 ring-1 ring-ink-700">
+    <div className="ui-panel rounded-xl bg-ink-900 p-5 ring-1 ring-ink-700">
       <div className="grid grid-cols-1 gap-5 md:grid-cols-[240px_1fr]">
         <div>
           <div className="aspect-video w-full overflow-hidden rounded-lg bg-ink-800">

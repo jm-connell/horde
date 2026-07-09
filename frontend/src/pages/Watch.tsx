@@ -125,6 +125,38 @@ export default function Watch() {
     }
   };
 
+  const onNormalizeVolume = async () => {
+    if (!video) return;
+    const h = video.height_px;
+    let preset = "best";
+    if (h && h > 0) {
+      if (h >= 2160) preset = "2160p";
+      else if (h >= 1440) preset = "1440p";
+      else if (h >= 1080) preset = "1080p";
+      else if (h >= 720) preset = "720p";
+      else if (h >= 480) preset = "480p";
+    }
+    if (!presets.includes(preset)) {
+      preset = presets.includes("1080p") ? "1080p" : presets[0] ?? "best";
+    }
+    setRedownloading(true);
+    try {
+      redownloadPending.current = true;
+      await api.redownloadVideo(videoId, preset, true);
+      showToast(
+        "Normalizing via redownload — check the Download page for progress."
+      );
+      refreshJobs();
+    } catch (err) {
+      redownloadPending.current = false;
+      showToast(
+        err instanceof Error ? err.message : "Could not start download"
+      );
+    } finally {
+      setRedownloading(false);
+    }
+  };
+
   const onDelete = async () => {
     if (!video) return;
     if (!confirm(`Delete "${video.title}" from the library?`)) return;
@@ -313,7 +345,7 @@ export default function Watch() {
               <ChaptersList chapters={chapters} />
 
               {showDescriptionPanel && (
-                <div className="ui-panel overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
+                <div>
                   <button
                     type="button"
                     onClick={() =>
@@ -321,61 +353,66 @@ export default function Watch() {
                         descriptionExpanded: !settings.descriptionExpanded,
                       })
                     }
-                    className="ui-interactive flex w-full items-center justify-between px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:bg-ink-800/50 hover:text-accent"
+                    className="ui-panel-toggle ui-interactive flex w-full items-center justify-between py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
                   >
-                    <span>Description</span>
-                    <span>{settings.descriptionExpanded ? "▲" : "▼"}</span>
+                    <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
+                      <span>Description</span>
+                      <span>
+                        {settings.descriptionExpanded ? "▲" : "▼"}
+                      </span>
+                    </span>
                   </button>
-
                   <Collapse open={settings.descriptionExpanded}>
-                    <div className="px-4 pb-4">
-                      {video.description && (
-                        <>
-                          <div
-                            className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                              descExpanded
-                                ? "grid-rows-[1fr]"
-                                : "grid-rows-[minmax(0,4.5rem)]"
-                            }`}
-                          >
-                            <p
-                              className={`min-h-0 overflow-hidden whitespace-pre-wrap text-sm text-gray-300 ${
-                                descExpanded ? "" : "line-clamp-3"
+                    <div className="ui-panel overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
+                      <div className="px-4 py-3">
+                        {video.description && (
+                          <>
+                            <div
+                              className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                descExpanded
+                                  ? "grid-rows-[1fr]"
+                                  : "grid-rows-[minmax(0,4.5rem)]"
                               }`}
                             >
-                              <LinkifiedText text={video.description} />
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => setDescExpanded((v) => !v)}
-                            className="mt-2 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
-                          >
-                            {descExpanded ? "Show less" : "Show more"}
-                          </button>
-                        </>
-                      )}
+                              <p
+                                className={`min-h-0 overflow-hidden whitespace-pre-wrap text-sm text-gray-300 ${
+                                  descExpanded ? "" : "line-clamp-3"
+                                }`}
+                              >
+                                <LinkifiedText text={video.description} />
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => setDescExpanded((v) => !v)}
+                              className="mt-2 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
+                            >
+                              {descExpanded ? "Show less" : "Show more"}
+                            </button>
+                          </>
+                        )}
 
-                      <Collapse
-                        open={
-                          !!video.notes &&
-                          (descExpanded || !video.description)
-                        }
-                      >
-                        <div
-                          className={
-                            video.description
-                              ? "mt-4 border-t border-ink-700 pt-4"
-                              : ""
+                        <Collapse
+                          open={
+                            !!video.notes &&
+                            (descExpanded || !video.description)
                           }
                         >
-                          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
-                            Your notes
-                          </h3>
-                          <p className="whitespace-pre-wrap text-sm text-gray-300">
-                            <LinkifiedText text={video.notes ?? ""} />
-                          </p>
-                        </div>
-                      </Collapse>
+                          <div
+                            className={
+                              video.description
+                                ? "mt-4 border-t border-ink-700 pt-4"
+                                : ""
+                            }
+                          >
+                            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
+                              Your notes
+                            </h3>
+                            <p className="whitespace-pre-wrap text-sm text-gray-300">
+                              <LinkifiedText text={video.notes ?? ""} />
+                            </p>
+                          </div>
+                        </Collapse>
+                      </div>
                     </div>
                   </Collapse>
                 </div>
@@ -420,7 +457,7 @@ export default function Watch() {
           <div className="mt-5 flex gap-2">
             <Link
               to="/"
-              className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+              className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
             >
               ← Back to library
             </Link>
@@ -436,6 +473,7 @@ export default function Watch() {
                 setEditing(true);
               }}
               onChangeResolution={() => setRedownloadOpen(true)}
+              onNormalizeVolume={onNormalizeVolume}
               onDelete={onDelete}
             />
           </div>
@@ -473,6 +511,11 @@ export default function Watch() {
                         <p className="line-clamp-2 text-xs font-medium text-gray-200 group-hover:text-accent">
                           {v.title}
                         </p>
+                        {v.channel && (
+                          <p className="mt-0.5 truncate text-xs text-gray-500">
+                            {v.channel}
+                          </p>
+                        )}
                       </div>
                     </Link>
                   );

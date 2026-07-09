@@ -62,7 +62,7 @@ export default function Review() {
                         await api.skipReview(v.id).catch(() => undefined);
                         load();
                       }}
-                      className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+                      className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
                       title="Keep in library without a channel"
                     >
                       Skip
@@ -77,7 +77,7 @@ export default function Review() {
                           showToast("Could not delete video");
                         }
                       }}
-                      className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                      className="ui-panel rounded-lg border border-red-500/40 bg-ink-900 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10"
                     >
                       Delete
                     </button>
@@ -105,7 +105,7 @@ export default function Review() {
                   {groups.map((group, gi) => (
                     <div
                       key={gi}
-                      className="rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700"
+                      className="ui-panel rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700"
                     >
                       <p className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500">
                         Duplicate group {gi + 1}
@@ -114,7 +114,7 @@ export default function Review() {
                         {group.map((v) => (
                           <div
                             key={v.id}
-                            className="flex items-center justify-between gap-3 rounded-lg bg-ink-800 px-3 py-2"
+                            className="ui-card flex items-center justify-between gap-3 rounded-lg bg-ink-800 px-3 py-2"
                           >
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium text-gray-200">

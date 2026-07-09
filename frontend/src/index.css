@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scrollbar-gutter: stable;
+}
+
 /* ─── Default theme (cyan-on-dark) ─── */
 :root {
   color-scheme: dark;
@@ -375,10 +379,17 @@ html[data-hover-motion="glow"] input:not([type="range"]):not([type="color"]):hov
     0 0 16px rgb(var(--accent) / 0.12);
 }
 
-/* Button press feedback (always on unless reduced motion) */
-html[data-button-press="on"] button:not(:disabled):active,
-html[data-button-press="on"] .ui-interactive:active,
+/* Button press feedback (always on unless reduced motion).
+   Panel headers use .ui-panel-toggle so only the label/arrow scale, not the
+   full-width hover background. */
+html[data-button-press="on"] button:not(:disabled):not(.ui-panel-toggle):active,
+html[data-button-press="on"] .ui-interactive:not(.ui-panel-toggle):active,
 html[data-button-press="on"] a.ui-card:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   transform: scale(0.97);
   transition-duration: 80ms;
 }
@@ -396,6 +407,7 @@ html[data-button-press="on"] a.ui-card:active {
   html[data-hover-motion="glow"] .ui-interactive,
   html[data-button-press="on"] button,
   html[data-button-press="on"] .ui-interactive,
+  html[data-button-press="on"] .ui-panel-toggle-press,
   html[data-button-press="on"] a.ui-card {
     transition: none !important;
     transform: none !important;

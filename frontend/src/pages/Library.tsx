@@ -400,71 +400,71 @@ export default function Library() {
         </div>
       )}
       <aside
-        className={`hidden shrink-0 overflow-hidden transition-[width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
-          settings.sidebarCollapsed ? "w-0 opacity-0" : "w-56 opacity-100"
+        className={`relative hidden shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
+          settings.sidebarCollapsed ? "w-10" : "w-56"
         }`}
       >
-        <div className="sticky top-20 w-56">
-          <div className="ui-panel h-fit rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
-            <div className="mb-2 flex items-center justify-between px-2 pt-1">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Channels
-              </h2>
-              <button
-                onClick={() => update({ sidebarCollapsed: true })}
-                title="Collapse sidebar"
-                className="ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
-              >
-                ‹
-              </button>
-            </div>
-            <ul className="space-y-0.5">
-              <li>
+        <div className="sticky top-20">
+          {!settings.sidebarCollapsed ? (
+            <div className="ui-panel h-fit w-56 rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
+              <div className="mb-2 flex items-center justify-between px-2 pt-1">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Channels
+                </h2>
                 <button
-                  onClick={() => setActiveChannel(null)}
-                  className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
-                    !activeChannel
-                      ? "bg-accent/15 text-accent"
-                      : "text-gray-300 hover:bg-ink-800"
-                  }`}
+                  onClick={() => update({ sidebarCollapsed: true })}
+                  title="Collapse sidebar"
+                  className="ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
                 >
-                  All channels
+                  ‹
                 </button>
-              </li>
-              {channels.map((c) => (
-                <li key={c.channel}>
+              </div>
+              <ul className="space-y-0.5">
+                <li>
                   <button
-                    onClick={() => setActiveChannel(c.channel)}
-                    className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
-                      activeChannel === c.channel
+                    onClick={() => setActiveChannel(null)}
+                    className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
+                      !activeChannel
                         ? "bg-accent/15 text-accent"
                         : "text-gray-300 hover:bg-ink-800"
                     }`}
                   >
-                    <span className="truncate">{c.channel}</span>
-                    <span className="ml-2 shrink-0 text-xs text-gray-500">
-                      {settings.channelSort === "subscriber_count" &&
-                      c.subscriber_count !== null
-                        ? formatSubscriberCount(c.subscriber_count)
-                        : c.count}
-                    </span>
+                    All channels
                   </button>
                 </li>
-              ))}
-            </ul>
-          </div>
+                {channels.map((c) => (
+                  <li key={c.channel}>
+                    <button
+                      onClick={() => setActiveChannel(c.channel)}
+                      className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
+                        activeChannel === c.channel
+                          ? "bg-accent/15 text-accent"
+                          : "text-gray-300 hover:bg-ink-800"
+                      }`}
+                    >
+                      <span className="truncate">{c.channel}</span>
+                      <span className="ml-2 shrink-0 text-xs text-gray-500">
+                        {settings.channelSort === "subscriber_count" &&
+                        c.subscriber_count !== null
+                          ? formatSubscriberCount(c.subscriber_count)
+                          : c.count}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <button
+              onClick={() => update({ sidebarCollapsed: false })}
+              title="Expand channels"
+              className="ui-panel ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
+            >
+              ›
+            </button>
+          )}
         </div>
       </aside>
-
-      {settings.sidebarCollapsed && (
-        <button
-          onClick={() => update({ sidebarCollapsed: false })}
-          title="Expand channels"
-          className="ui-panel ui-interactive sticky top-20 hidden h-fit items-center justify-center rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-3.5 text-sm text-gray-400 hover:border-accent hover:text-accent lg:flex"
-        >
-          ›
-        </button>
-      )}
 
       <div ref={mainContentRef} className="min-w-0 flex-1">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">

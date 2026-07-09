@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { useDownloads, isActiveJob } from "../context/DownloadContext";
-import { useSettings } from "../hooks/useSettings";
 import ChannelPicker from "../components/ChannelPicker";
 import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
@@ -28,7 +27,6 @@ export default function Download() {
     resumeQueue,
     dismissFinishedJobs,
   } = useDownloads();
-  const [settings] = useSettings();
 
   const [url, setUrl] = useState("");
   const [preset, setPreset] = useState("best");
@@ -96,7 +94,7 @@ export default function Download() {
         .then((p) => {
           setPreview(p);
           setTitle(p.title ?? "");
-          setChannel(p.channel ?? "");
+          // Leave channel empty so the picker stays on "Auto-detected".
           if (!p.is_playlist && p.available_presets.length > 0) {
             setPreset((current) =>
               current !== "best" ? current : p.available_presets[0]
@@ -351,7 +349,7 @@ export default function Download() {
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Auto-detected from the link"
+                placeholder="Auto-detected"
                 className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
               />
             </div>
@@ -363,7 +361,7 @@ export default function Download() {
                 value={channel}
                 onChange={setChannel}
                 channels={channels}
-                placeholder={settings.lastCustomChannel || "Detected channel"}
+                placeholder="Auto-detected"
               />
             </div>
           </div>

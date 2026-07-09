@@ -406,8 +406,10 @@ def _make_progress_hook(job_id: int, cancel_event: threading.Event):
                 last_stream_downloaded = max(last_stream_downloaded, downloaded)
                 combined = accumulated_bytes + last_stream_downloaded
                 max_displayed_bytes = max(max_displayed_bytes, combined)
-                percent = (combined / total * 100) if total else 0.0
-                max_percent = max(max_percent, percent)
+                # Per-stream totals make combined/total exceed 100% across
+                # video+audio; clamp so the UI never shows 800%+.
+                percent = min(100.0, (combined / total * 100) if total else 0.0)
+                max_percent = min(100.0, max(max_percent, percent))
                 info = _as_info(d.get("info_dict"))
                 progress_store[job_id] = {
                     "status": "downloading",
@@ -429,7 +431,7 @@ def _make_progress_hook(job_id: int, cancel_event: threading.Event):
                 last_stream_downloaded = 0
                 progress_store[job_id] = {
                     "status": "processing",
-                    "progress": max(max_percent, 99.0),
+                    "progress": min(100.0, max(max_percent, 99.0)),
                 }
         except Exception:  # noqa: BLE001 — never fail a download over progress UI
             return
@@ -1235,7 +1237,7 @@ def extract_preview(url: str) -> dict[str, Any]:
             "title": info.get("title"),
             "channel": info.get("uploader") or info.get("channel"),
             "channel_url": info.get("uploader_url") or info.get("channel_url"),
-            "thumbnail_url": info.get("thumbnail"),
+            "thumbnail_url": _best_thumbnail_url(info),
             "entry_count": len(entries),
             "available_presets": [],
             "preset_sizes": {},
@@ -1254,7 +1256,7 @@ def extract_preview(url: str) -> dict[str, Any]:
         "title": info.get("title"),
         "channel": info.get("uploader") or info.get("channel"),
         "channel_url": info.get("uploader_url") or info.get("channel_url"),
-        "thumbnail_url": info.get("thumbnail"),
+        "thumbnail_url": _best_thumbnail_url(info),
         "entry_count": None,
         "view_count": view_count,
         "available_presets": available,
@@ -1320,18 +1322,50 @@ _feed_cache: dict[tuple[str, int, int, int], tuple[float, dict[str, Any]]] = {}
 _feed_cache_lock = threading.Lock()
 
 
-def _entry_thumbnail_url(entry: dict[str, Any], vid: Optional[str]) -> Optional[str]:
-    """Resolve a thumbnail URL from flat extract data or YouTube video id."""
-    thumb = entry.get("thumbnail")
+def _best_thumbnail_url(
+    info: dict[str, Any], vid: Optional[str] = None
+) -> Optional[str]:
+    """Pick the highest-res thumbnail from yt-dlp info, or a YouTube CDN URL."""
+    thumbs = info.get("thumbnails")
+    best_url: Optional[str] = None
+    best_area = -1
+    if isinstance(thumbs, list):
+        for item in thumbs:
+            if not isinstance(item, dict):
+                continue
+            url = item.get("url")
+            if not url:
+                continue
+            w = item.get("width") or 0
+            h = item.get("height") or 0
+            try:
+                area = int(w) * int(h)
+            except (TypeError, ValueError):
+                area = 0
+            if area >= best_area:
+                best_area = area
+                best_url = str(url).strip()
+    if best_url:
+        if best_url.startswith("//"):
+            return f"https:{best_url}"
+        return best_url
+    thumb = info.get("thumbnail")
     if thumb:
         s = str(thumb).strip()
         if s.startswith("//"):
             return f"https:{s}"
         if s.startswith("http"):
             return s
-    if vid:
-        return f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
+    video_id = vid or info.get("id")
+    if isinstance(video_id, str) and video_id:
+        # hqdefault is reliably available; maxresdefault 404s for some videos.
+        return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     return None
+
+
+def _entry_thumbnail_url(entry: dict[str, Any], vid: Optional[str]) -> Optional[str]:
+    """Resolve a thumbnail URL from flat extract data or YouTube video id."""
+    return _best_thumbnail_url(entry, vid)
 
 
 def _channel_videos_url(channel_url: str) -> str:

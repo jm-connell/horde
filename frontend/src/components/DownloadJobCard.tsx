@@ -40,8 +40,8 @@ export default function DownloadJobCard({
   const maxPercentRef = useRef(0);
   const maxBytesRef = useRef(0);
   if (status === "downloading" || status === "processing") {
-    const raw = live?.progress ?? job.progress;
-    maxPercentRef.current = Math.max(maxPercentRef.current, raw);
+    const raw = Math.min(100, live?.progress ?? job.progress);
+    maxPercentRef.current = Math.min(100, Math.max(maxPercentRef.current, raw));
     if (live?.downloaded_bytes) {
       maxBytesRef.current = Math.max(
         maxBytesRef.current,
@@ -52,10 +52,13 @@ export default function DownloadJobCard({
     maxPercentRef.current = 0;
     maxBytesRef.current = 0;
   }
-  const percent = Math.round(
-    status === "downloading" || status === "processing"
-      ? maxPercentRef.current
-      : (live?.progress ?? job.progress)
+  const percent = Math.min(
+    100,
+    Math.round(
+      status === "downloading" || status === "processing"
+        ? maxPercentRef.current
+        : (live?.progress ?? job.progress)
+    )
   );
   const completed = status === "completed";
   const failed = status === "error";
@@ -171,7 +174,7 @@ export default function DownloadJobCard({
     : job.thumbnail_url;
 
   const cardRing = active
-    ? "ring-accent/50 border-l-4 border-l-accent"
+    ? "overflow-hidden border-l-4 border-l-accent ring-ink-700"
     : "ring-ink-700";
 
   const errorMsg =
@@ -222,6 +225,11 @@ export default function DownloadJobCard({
               <span className="min-w-0 truncate">{title || "Working…"}</span>
             </span>
             <div className="flex shrink-0 items-center gap-2">
+              {active && job.quality_preset && (
+                <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400">
+                  {job.quality_preset}
+                </span>
+              )}
               {!completed && (
                 <span
                   className={`${failed ? "text-red-400" : "text-gray-400"}`}

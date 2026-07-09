@@ -99,7 +99,7 @@ function SelectPicker({
       }}
       className={inputClass}
     >
-      <option value="">{placeholder ?? "Detected channel"}</option>
+      <option value="">{placeholder ?? "Auto-detected"}</option>
       {showCurrent && <option value={value}>{value}</option>}
       {names.map((name) => (
         <option key={name} value={name}>

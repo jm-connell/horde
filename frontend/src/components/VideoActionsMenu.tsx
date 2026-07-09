@@ -8,6 +8,7 @@ interface Props {
   onEdit: () => void;
   onAddNote: () => void;
   onChangeResolution: () => void;
+  onNormalizeVolume?: () => void;
   onDelete: () => void;
 }
 
@@ -16,11 +17,13 @@ export default function VideoActionsMenu({
   onEdit,
   onAddNote,
   onChangeResolution,
+  onNormalizeVolume,
   onDelete,
 }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const canChangeResolution = Boolean(effectiveSourceUrl(video));
+  const canNormalize = Boolean(effectiveSourceUrl(video) && onNormalizeVolume);
 
   useEffect(() => {
     if (!open) return;
@@ -48,7 +51,7 @@ export default function VideoActionsMenu({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+        className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
         title="More actions"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -64,7 +67,7 @@ export default function VideoActionsMenu({
             }}
             className={itemClass}
           >
-            Edit
+            Edit details
           </button>
           <button
             onClick={() => {
@@ -84,6 +87,17 @@ export default function VideoActionsMenu({
               className={itemClass}
             >
               Change resolution
+            </button>
+          )}
+          {canNormalize && (
+            <button
+              onClick={() => {
+                onNormalizeVolume?.();
+                setOpen(false);
+              }}
+              className={itemClass}
+            >
+              Normalize volume
             </button>
           )}
           <button onClick={downloadFile} className={itemClass}>

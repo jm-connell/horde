@@ -51,18 +51,18 @@ export default function Playlists() {
       <div className="mb-6">
         <div className="ui-panel rounded-xl bg-ink-900 p-5 ring-1 ring-ink-700">
           <h2 className="mb-3 text-sm font-medium text-gray-200">New playlist</h2>
-          <div className="flex gap-2">
+          <div className="flex max-w-md gap-2">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && create()}
               placeholder="Playlist name"
-              className="flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+              className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
             />
             <button
               onClick={create}
               disabled={busy || !name.trim()}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+              className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
             >
               Create
             </button>

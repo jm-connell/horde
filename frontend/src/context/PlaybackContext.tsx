@@ -112,14 +112,31 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }
 
   // Persist watch position at most once every 5s while playing.
+  // Skip saving near the end (>=90%) — treat as finished (restart next time).
   const progressTimer = useRef<number | null>(null);
-  const saveProgress = useCallback((id: number, sec: number) => {
-    if (progressTimer.current !== null) return;
-    progressTimer.current = window.setTimeout(() => {
-      progressTimer.current = null;
-    }, 5000);
-    api.saveProgress(id, sec).catch(() => undefined);
-  }, []);
+  const saveProgress = useCallback(
+    (id: number, sec: number, durationSec?: number | null) => {
+      if (
+        durationSec
+        && durationSec > 0
+        && sec > 0
+        && sec >= durationSec * 0.9
+      ) {
+        if (progressTimer.current !== null) return;
+        progressTimer.current = window.setTimeout(() => {
+          progressTimer.current = null;
+        }, 5000);
+        api.saveProgress(id, 0).catch(() => undefined);
+        return;
+      }
+      if (progressTimer.current !== null) return;
+      progressTimer.current = window.setTimeout(() => {
+        progressTimer.current = null;
+      }, 5000);
+      api.saveProgress(id, sec).catch(() => undefined);
+    },
+    []
+  );
 
   useEffect(() => {
     sessionStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
@@ -218,6 +235,58 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setDock(null);
   }, []);
 
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+
+  const [upNext, setUpNext] = useState<Video | null>(null);
+  const [upNextSeconds, setUpNextSeconds] = useState<number | null>(null);
+  const upNextTimer = useRef<number | null>(null);
+
+  const clearUpNext = useCallback(() => {
+    if (upNextTimer.current !== null) {
+      window.clearInterval(upNextTimer.current);
+      upNextTimer.current = null;
+    }
+    setUpNext(null);
+    setUpNextSeconds(null);
+  }, []);
+
+  useEffect(() => {
+    clearUpNext();
+  }, [current?.id, clearUpNext]);
+
+  const playSuggested = useCallback(
+    (video: Video) => {
+      clearUpNext();
+      setCurrent(video);
+      setQueue((q) => q.filter((v) => v.id !== video.id));
+      navigate(`/watch/${video.id}`);
+    },
+    [clearUpNext, navigate]
+  );
+
+  const startUpNextCountdown = useCallback(
+    (video: Video) => {
+      clearUpNext();
+      setUpNext(video);
+      setUpNextSeconds(8);
+      upNextTimer.current = window.setInterval(() => {
+        setUpNextSeconds((s) => {
+          if (s == null || s <= 1) {
+            if (upNextTimer.current !== null) {
+              window.clearInterval(upNextTimer.current);
+              upNextTimer.current = null;
+            }
+            playSuggested(video);
+            return null;
+          }
+          return s - 1;
+        });
+      }, 1000);
+    },
+    [clearUpNext, playSuggested]
+  );
+
   const advance = useCallback(() => {
     setQueue((q) => {
       if (q.length === 0) return q;
@@ -229,10 +298,24 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [navigate]);
 
   // Reset saved progress when a video finishes so it leaves Continue watching.
+  // If the queue is empty, show a YouTube-style "Playing Next" suggestion.
   const handleEnded = useCallback(() => {
     if (current) api.saveProgress(current.id, 0).catch(() => undefined);
-    advance();
-  }, [current, advance]);
+    if (queueRef.current.length > 0) {
+      advance();
+      return;
+    }
+    if (!current) return;
+    const endedId = current.id;
+    api
+      .getRelatedVideos(endedId, 1)
+      .then((rows) => {
+        if (queueRef.current.length > 0) return;
+        const next = rows[0];
+        if (next) startUpNextCountdown(next);
+      })
+      .catch(() => undefined);
+  }, [current, advance, startUpNextCountdown]);
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
 
@@ -299,7 +382,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             volume={settings.volume}
             onVolumeChange={(v) => updateSettings({ volume: v })}
             initialPosition={current.last_position_sec}
-            onProgress={(sec) => saveProgress(current.id, sec)}
+            onProgress={(sec) =>
+              saveProgress(current.id, sec, current.duration_sec)
+            }
             chapters={chapters}
             sponsorSegments={sponsorSegments}
             sponsorShowNotice={settings.sponsorBlockShowNotice}
@@ -307,6 +392,20 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             onSubtitlesRefresh={refreshCurrentVideo}
             miniWidth={miniWidth}
             onMiniResize={setMiniWidth}
+            upNext={
+              upNext
+                ? {
+                    title: upNext.title,
+                    channel: upNext.channel,
+                    poster: thumbnailUrl(upNext),
+                    seconds: upNextSeconds ?? 0,
+                  }
+                : null
+            }
+            onCancelUpNext={clearUpNext}
+            onPlayUpNext={
+              upNext ? () => playSuggested(upNext) : undefined
+            }
           />,
           hostRef.current
         )}
