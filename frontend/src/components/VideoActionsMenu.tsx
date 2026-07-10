@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { downloadFileUrl } from "../api";
+import { useEffect, useState } from "react";
+import { api, downloadFileUrl } from "../api";
+import { useSettings } from "../hooks/useSettings";
+import { useToast } from "../context/ToastContext";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 import type { Video } from "../types";
 import { effectiveSourceUrl } from "../utils";
@@ -11,6 +13,7 @@ interface Props {
   onChangeResolution: () => void;
   onNormalizeVolume?: () => void;
   onDelete: () => void;
+  onVideoUpdated?: (video: Video) => void;
 }
 
 export default function VideoActionsMenu({
@@ -20,21 +23,25 @@ export default function VideoActionsMenu({
   onChangeResolution,
   onNormalizeVolume,
   onDelete,
+  onVideoUpdated,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const flip = useFlipMenu(open, 320);
+  const [settings, update] = useSettings();
+  const { showToast } = useToast();
+  const { flip, anchorRef } = useFlipMenu(open, 360);
   const canChangeResolution = Boolean(effectiveSourceUrl(video));
   const canNormalize = Boolean(effectiveSourceUrl(video) && onNormalizeVolume);
 
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     };
     window.addEventListener("mousedown", onClick);
     return () => window.removeEventListener("mousedown", onClick);
-  }, [open]);
+  }, [open, anchorRef]);
 
   const downloadFile = () => {
     const a = document.createElement("a");
@@ -46,21 +53,33 @@ export default function VideoActionsMenu({
     setOpen(false);
   };
 
+  const refreshTags = async () => {
+    setOpen(false);
+    try {
+      const updated = await api.refreshVideoTags(video.id);
+      onVideoUpdated?.(updated);
+      showToast("Tag refresh queued");
+    } catch {
+      showToast("Could not refresh tags");
+    }
+  };
+
   const itemClass =
     "block w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-ink-700";
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={anchorRef} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+        className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
         title="More actions"
         aria-haspopup="menu"
         aria-expanded={open}
       >
         •••
       </button>
-      <FlipMenuPanel open={open} flip={flip} align="right" className="w-52">
+      {/* align left = panel extends to the right of the trigger */}
+      <FlipMenuPanel open={open} flip={flip} align="left" className="w-52">
         <button
           onClick={() => {
             onEdit();
@@ -78,6 +97,18 @@ export default function VideoActionsMenu({
           className={itemClass}
         >
           Add note
+        </button>
+        <button
+          onClick={() => {
+            update({ autoplayRelated: !settings.autoplayRelated });
+            setOpen(false);
+          }}
+          className={itemClass}
+        >
+          Autoplay related {settings.autoplayRelated ? "✓" : ""}
+        </button>
+        <button onClick={refreshTags} className={itemClass}>
+          Refresh tags (AI)
         </button>
         {canChangeResolution && (
           <button

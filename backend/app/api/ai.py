@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -14,6 +14,14 @@ from ..services.ai.provider import build_status, invalidate_resolved_url, test_c
 from .videos import _to_read
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+
+
+class AiCurrentJob(BaseModel):
+    kind: str
+    video_id: Optional[int] = None
+    title: Optional[str] = None
+    channel: Optional[str] = None
+    has_thumbnail: bool = False
 
 
 class AiStatusRead(BaseModel):
@@ -34,11 +42,21 @@ class AiStatusRead(BaseModel):
     total_videos: int = 0
     queue_depth: int = 0
     queue_breakdown: dict[str, int] = Field(default_factory=dict)
-    current_job: Optional[str] = None
+    current_job: Optional[AiCurrentJob] = None
 
 
 class AiTestRequest(BaseModel):
     base_url: Optional[str] = None
+
+
+class AiProcessRequest(BaseModel):
+    action: Literal[
+        "all",
+        "embeds",
+        "missing_tags",
+        "full_tags",
+        "categories",
+    ] = "all"
 
 
 class AiProcessResult(BaseModel):
@@ -56,11 +74,11 @@ def ai_status(session: Session = Depends(get_session)):
         queue_depth=worker.queue_depth(),
     )
     breakdown = worker.queue_breakdown()
-    current = worker.current_job_label()
+    current = worker.current_job_info()
     return AiStatusRead(
         **status.__dict__,
         queue_breakdown=breakdown,
-        current_job=current,
+        current_job=AiCurrentJob(**current) if current else None,
     )
 
 
@@ -70,9 +88,19 @@ def ai_test(payload: AiTestRequest):
 
 
 @router.post("/process", response_model=AiProcessResult)
-def ai_process_library():
+def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
     invalidate_resolved_url()
-    result = worker.enqueue_library_backlog(force=True)
+    action = payload.action
+    if action == "embeds":
+        result = worker.enqueue_missing_embeds()
+    elif action == "missing_tags":
+        result = worker.enqueue_missing_tags()
+    elif action == "full_tags":
+        result = worker.enqueue_full_tag_refresh()
+    elif action == "categories":
+        result = worker.enqueue_refresh_categories(force=True)
+    else:
+        result = worker.enqueue_library_backlog(force=True)
     return AiProcessResult(
         enqueued=result["enqueued"],
         breakdown=result["breakdown"],
@@ -100,6 +128,8 @@ def ai_resume():
 @router.get("/recommendations")
 def ai_recommendations(
     category: Optional[str] = Query(default=None),
+    limit: int = Query(default=24, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ):
     status = build_status()
@@ -131,21 +161,26 @@ def ai_recommendations(
             "categories": result.categories,
             "sections": sections,
             "hint": "Videos match this category by similarity to your library.",
+            "has_more": False,
         }
 
-    sections_out = recommend.homepage_recommendations(session)
+    page = recommend.homepage_recommendations_page(
+        session, limit=limit, offset=offset
+    )
     return {
         "categories": recommend.list_categories(session),
         "sections": [
             {
                 "title": "",
-                "kind": s.kind,
-                "seed_video_id": s.seed_video_id,
-                "videos": [_to_read(v, session) for v in s.videos],
+                "kind": "for_you",
+                "seed_video_id": None,
+                "videos": [_to_read(v, session) for v in page.videos],
             }
-            for s in sections_out
-        ],
+        ]
+        if page.videos
+        else [],
         "hint": "Based on recent watches and similarity across your library.",
+        "has_more": page.has_more,
     }
 
 

@@ -8,6 +8,7 @@ interface Particle {
   py: number;
   life: number;
   maxLife: number;
+  radius: number;
 }
 
 export function createPerlinFlowEffect(
@@ -19,17 +20,28 @@ export function createPerlinFlowEffect(
   let lastSize = 0;
   const seed = Math.floor(Math.random() * 1000);
 
-  const spawn = (w: number, h: number): Particle => {
+  const spawn = (w: number, h: number, size: number): Particle => {
     // Short lives so trails clear quickly instead of filling the canvas.
     const maxLife = rand(0.7, 1.6);
     const x = Math.random() * w;
     const y = Math.random() * h;
-    return { x, y, px: x, py: y, life: Math.random() * maxLife, maxLife };
+    return {
+      x,
+      y,
+      px: x,
+      py: y,
+      life: Math.random() * maxLife,
+      maxLife,
+      radius: rand(1.1, 2.4) * size,
+    };
   };
 
   const rebuild = (w: number, h: number, size: number) => {
-    const count = Math.floor(((w * h) / 6500) * size) + Math.floor(90 * size);
-    particles = Array.from({ length: count }, () => spawn(w, h));
+    // Mild density scaling — size mainly drives stroke radius / visibility.
+    const density = 0.65 + 0.35 * size;
+    const count =
+      Math.floor(((w * h) / 6500) * density) + Math.floor(90 * density);
+    particles = Array.from({ length: count }, () => spawn(w, h, size));
   };
 
   return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, time, size }) => {
@@ -51,6 +63,8 @@ export function createPerlinFlowEffect(
     ctx.globalCompositeOperation = "source-over";
 
     const scale = 0.0022;
+    // Mid size (~1x) reads clearly; larger size boosts alpha further.
+    const visibility = 0.55 + 0.35 * Math.min(size, 1.5);
     for (const p of particles) {
       p.px = p.x;
       p.py = p.y;
@@ -68,14 +82,15 @@ export function createPerlinFlowEffect(
         p.x > width + 20 ||
         p.y > height + 20
       ) {
-        Object.assign(p, spawn(width, height));
+        Object.assign(p, spawn(width, height, size));
         continue;
       }
 
       const t = p.life / p.maxLife;
       const alpha = t < 0.15 ? t / 0.15 : 1 - (t - 0.15) / 0.85;
-      ctx.strokeStyle = rgba(accent, alpha * 0.55);
-      ctx.lineWidth = 1.25;
+      ctx.strokeStyle = rgba(accent, alpha * visibility);
+      ctx.lineWidth = p.radius;
+      ctx.lineCap = "round";
       ctx.beginPath();
       ctx.moveTo(p.px, p.py);
       ctx.lineTo(p.x, p.y);

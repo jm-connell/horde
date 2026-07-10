@@ -57,10 +57,14 @@ def _as_utc(dt: Optional[datetime]) -> Optional[datetime]:
 
 def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
     ai_tags: list[str] = []
+    user_tags: list[str] = []
     if session is not None and video.id is not None:
         meta = session.get(VideoAiMeta, video.id)
-        if meta is not None and meta.ai_tags:
-            ai_tags = library.parse_tags(meta.ai_tags)
+        if meta is not None:
+            if meta.ai_tags:
+                ai_tags = library.parse_tags(meta.ai_tags)
+            if getattr(meta, "user_tags", None):
+                user_tags = library.parse_tags(meta.user_tags)
     return VideoRead(
         id=video.id,
         title=video.title,
@@ -68,6 +72,7 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
         channel_url=video.channel_url,
         tags=library.parse_tags(video.tags),
         ai_tags=ai_tags,
+        user_tags=user_tags,
         description=video.description,
         notes=video.notes,
         source_url=video.source_url,
@@ -381,6 +386,7 @@ def update_video(
     data = payload.model_dump(exclude_unset=True)
 
     tags_edited = False
+    user_tag = data.pop("user_tag", None)
     if "tags" in data and data["tags"] is not None:
         video.tags = library.dump_tags(data.pop("tags"))
         tags_edited = True
@@ -408,9 +414,13 @@ def update_video(
 
     if tags_edited:
         try:
-            from ..services.ai.embeddings import lock_tags_on_manual_edit
+            from ..services.ai.embeddings import sync_tag_provenance
 
-            lock_tags_on_manual_edit(session, video.id)
+            sync_tag_provenance(
+                session,
+                video.id,
+                user_tag=user_tag if isinstance(user_tag, str) else None,
+            )
             session.commit()
         except Exception:  # noqa: BLE001
             pass
@@ -628,6 +638,24 @@ def refresh_metadata(video_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}")
     session.expire_all()
     video = session.get(Video, video_id)
+    return _to_read(video, session)
+
+
+@router.post("/videos/{video_id}/ai/refresh-tags", response_model=VideoRead)
+def refresh_video_tags(video_id: int, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    try:
+        from ..services.ai.worker import enqueue_video_tag_refresh
+
+        ok = enqueue_video_tag_refresh(video_id)
+        if not ok:
+            raise HTTPException(status_code=400, detail="Could not queue tag refresh")
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _to_read(video, session)
 
 

@@ -13,7 +13,7 @@ from . import embeddings
 from .provider import get_provider
 
 # Stronger threshold so category shelves don't pad with unrelated videos.
-CATEGORY_MIN_SCORE = 0.42
+CATEGORY_MIN_SCORE = 0.55
 FOR_YOU_MIN_SCORE = 0.28
 
 
@@ -30,6 +30,12 @@ class CategoryBrowseResult:
     category_videos: list[Video]
     more_videos: list[Video]
     categories: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ForYouPage:
+    videos: list[Video]
+    has_more: bool
 
 
 def list_categories(session: Session) -> list[str]:
@@ -79,13 +85,7 @@ def videos_for_category(
     return CategoryBrowseResult(category_videos, more, categories)
 
 
-def homepage_recommendations(
-    session: Session, *, limit: int = 36
-) -> list[RecommendationSection]:
-    """Single For You shelf ordered by recommendation strength (no 'because you watched')."""
-    if get_provider() is None:
-        return []
-
+def _ranked_for_you_ids(session: Session, *, pool: int = 500) -> list[int]:
     history = library.query_videos(
         session,
         watched_only=True,
@@ -106,7 +106,7 @@ def homepage_recommendations(
         hits = embeddings.similar_video_ids(
             session,
             centroid,
-            limit=limit,
+            limit=pool,
             exclude_ids=used | {seed.id},
             min_score=FOR_YOU_MIN_SCORE,
         )
@@ -115,37 +115,45 @@ def homepage_recommendations(
             if prev is None or score > prev:
                 scored[vid] = score
 
-    ranked_ids = sorted(scored.keys(), key=lambda i: scored[i], reverse=True)
+    ranked = sorted(scored.keys(), key=lambda i: scored[i], reverse=True)
+    if ranked:
+        return ranked
+
+    recent = library.query_videos(
+        session, sort="added_at", order="desc", needs_review=False
+    )
+    return [v.id for v in recent if v.id is not None]
+
+
+def homepage_recommendations_page(
+    session: Session, *, limit: int = 24, offset: int = 0
+) -> ForYouPage:
+    if get_provider() is None:
+        return ForYouPage([], False)
+    ranked_ids = _ranked_for_you_ids(session, pool=max(500, offset + limit + 50))
+    slice_ids = ranked_ids[offset : offset + limit + 1]
+    has_more = len(slice_ids) > limit
     videos: list[Video] = []
-    for vid in ranked_ids:
+    for vid in slice_ids[:limit]:
         video = session.get(Video, vid)
         if video is None or video.needs_review:
             continue
         videos.append(video)
-        if len(videos) >= limit:
-            break
+    return ForYouPage(videos, has_more)
 
-    if videos:
-        return [
-            RecommendationSection(
-                title="Recommended",
-                seed_video_id=None,
-                videos=videos,
-                kind="for_you",
-            )
-        ]
 
-    # Cold start: newest library videos.
-    recent = library.query_videos(
-        session, sort="added_at", order="desc", needs_review=False
-    )[:limit]
-    if recent:
-        return [
-            RecommendationSection(
-                title="Recommended",
-                seed_video_id=None,
-                videos=recent,
-                kind="for_you",
-            )
-        ]
-    return []
+def homepage_recommendations(
+    session: Session, *, limit: int = 36
+) -> list[RecommendationSection]:
+    """Single For You shelf ordered by recommendation strength."""
+    page = homepage_recommendations_page(session, limit=limit, offset=0)
+    if not page.videos:
+        return []
+    return [
+        RecommendationSection(
+            title="Recommended",
+            seed_video_id=None,
+            videos=page.videos,
+            kind="for_you",
+        )
+    ]

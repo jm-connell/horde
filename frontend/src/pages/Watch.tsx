@@ -36,6 +36,7 @@ export default function Watch() {
   const [editing, setEditing] = useState(false);
   const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
   const [moreLikeThis, setMoreLikeThis] = useState<Video[]>([]);
   const [redownloadOpen, setRedownloadOpen] = useState(false);
   const [redownloadPreset, setRedownloadPreset] = useState("1080p");
@@ -365,19 +366,27 @@ export default function Watch() {
                       }
                     >
                       {showDescriptionPanel && (
-                        <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
+                        <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
                           <div className="px-4 py-3">
                             {video.description && (
                               <>
-                                <p
-                                  className={`overflow-hidden text-sm text-gray-300 ${
+                                <div
+                                  className={`overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                                     descExpanded
-                                      ? "whitespace-pre-wrap"
-                                      : "line-clamp-5 whitespace-normal"
+                                      ? "max-h-[80rem]"
+                                      : "max-h-[7.5rem]"
                                   }`}
                                 >
-                                  <LinkifiedText text={video.description} />
-                                </p>
+                                  <p
+                                    className={`text-sm text-gray-300 ${
+                                      descExpanded
+                                        ? "whitespace-pre-wrap"
+                                        : "line-clamp-5 whitespace-normal"
+                                    }`}
+                                  >
+                                    <LinkifiedText text={video.description} />
+                                  </p>
+                                </div>
                                 <button
                                   onClick={() => setDescExpanded((v) => !v)}
                                   className="mt-2 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
@@ -385,45 +394,6 @@ export default function Watch() {
                                   {descExpanded ? "Show less" : "Show more"}
                                 </button>
                               </>
-                            )}
-
-                            {(video.ai_tags?.length > 0 ||
-                              video.tags?.length > 0) && (
-                              <div
-                                className={`flex flex-wrap gap-1.5 ${
-                                  video.description || video.notes
-                                    ? "mt-3 border-t border-ink-700 pt-3"
-                                    : ""
-                                }`}
-                              >
-                                {[
-                                  ...(video.ai_tags || []).map((t) => ({
-                                    tag: t,
-                                    ai: true,
-                                  })),
-                                  ...(video.tags || [])
-                                    .filter(
-                                      (t) =>
-                                        !(video.ai_tags || [])
-                                          .map((a) => a.toLowerCase())
-                                          .includes(t.toLowerCase())
-                                    )
-                                    .map((t) => ({ tag: t, ai: false })),
-                                ].map(({ tag, ai }) => (
-                                  <Link
-                                    key={`${ai ? "ai" : "meta"}-${tag}`}
-                                    to={`/?tag=${encodeURIComponent(tag)}`}
-                                    className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${
-                                      ai
-                                        ? "border border-accent/35 bg-accent/10 text-accent hover:bg-accent/20"
-                                        : "border border-ink-600 bg-ink-800 text-gray-300 hover:border-accent hover:text-accent"
-                                    }`}
-                                    title={ai ? "AI tag" : "Metadata tag"}
-                                  >
-                                    #{tag}
-                                  </Link>
-                                ))}
-                              </div>
                             )}
 
                             <Collapse
@@ -445,6 +415,140 @@ export default function Watch() {
                                 <p className="whitespace-pre-wrap text-sm text-gray-300">
                                   <LinkifiedText text={video.notes ?? ""} />
                                 </p>
+                              </div>
+                            </Collapse>
+
+                            <Collapse open={descExpanded || !video.description}>
+                              <div
+                                className={`mt-4 border-t border-ink-700 pt-4 ${
+                                  video.description || video.notes ? "" : ""
+                                }`}
+                              >
+                                <div className="flex flex-wrap gap-1.5">
+                                  {[
+                                    ...(video.ai_tags || []).map((t) => ({
+                                      tag: t,
+                                      kind: "ai" as const,
+                                    })),
+                                    ...(video.user_tags || []).map((t) => ({
+                                      tag: t,
+                                      kind: "user" as const,
+                                    })),
+                                    ...(video.tags || [])
+                                      .filter((t) => {
+                                        const lower = t.toLowerCase();
+                                        const ai = (video.ai_tags || []).map(
+                                          (a) => a.toLowerCase()
+                                        );
+                                        const user = (video.user_tags || []).map(
+                                          (u) => u.toLowerCase()
+                                        );
+                                        return (
+                                          !ai.includes(lower) &&
+                                          !user.includes(lower)
+                                        );
+                                      })
+                                      .map((t) => ({
+                                        tag: t,
+                                        kind: "meta" as const,
+                                      })),
+                                  ].map(({ tag, kind }) => (
+                                    <span
+                                      key={`${kind}-${tag}`}
+                                      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs ${
+                                        kind === "ai"
+                                          ? "border-accent/40 bg-accent/10 text-accent"
+                                          : kind === "user"
+                                            ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                                            : "ui-panel border-ink-700 bg-ink-900 text-gray-300"
+                                      }`}
+                                      title={
+                                        kind === "ai"
+                                          ? "AI tag"
+                                          : kind === "user"
+                                            ? "Your tag"
+                                            : "Metadata tag"
+                                      }
+                                    >
+                                      <Link
+                                        to={`/?tag=${encodeURIComponent(tag)}`}
+                                        className="hover:underline"
+                                      >
+                                        #{tag}
+                                      </Link>
+                                      <button
+                                        type="button"
+                                        className="ml-0.5 text-[10px] opacity-60 hover:opacity-100"
+                                        title="Remove tag"
+                                        onClick={async () => {
+                                          const next = (video.tags || []).filter(
+                                            (t) =>
+                                              t.toLowerCase() !==
+                                              tag.toLowerCase()
+                                          );
+                                          try {
+                                            const updated =
+                                              await api.updateVideo(video.id, {
+                                                tags: next,
+                                              });
+                                            setVideo(updated);
+                                          } catch {
+                                            showToast("Could not remove tag");
+                                          }
+                                        }}
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                                <form
+                                  className="mt-2 flex gap-2"
+                                  onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    const cleaned = tagDraft.trim();
+                                    if (!cleaned) return;
+                                    const exists = (video.tags || []).some(
+                                      (t) =>
+                                        t.toLowerCase() === cleaned.toLowerCase()
+                                    );
+                                    if (exists) {
+                                      setTagDraft("");
+                                      return;
+                                    }
+                                    try {
+                                      const updated = await api.updateVideo(
+                                        video.id,
+                                        {
+                                          tags: [
+                                            ...(video.tags || []),
+                                            cleaned,
+                                          ],
+                                          user_tag: cleaned,
+                                        }
+                                      );
+                                      setVideo(updated);
+                                      setTagDraft("");
+                                    } catch {
+                                      showToast("Could not add tag");
+                                    }
+                                  }}
+                                >
+                                  <input
+                                    value={tagDraft}
+                                    onChange={(e) =>
+                                      setTagDraft(e.target.value)
+                                    }
+                                    placeholder="Add tag…"
+                                    className="ui-panel min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-1.5 text-xs text-gray-100 outline-none focus:border-accent"
+                                  />
+                                  <button
+                                    type="submit"
+                                    className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-gray-300 hover:border-accent hover:text-accent"
+                                  >
+                                    +
+                                  </button>
+                                </form>
                               </div>
                             </Collapse>
                           </div>
@@ -521,6 +625,7 @@ export default function Watch() {
               onChangeResolution={() => setRedownloadOpen(true)}
               onNormalizeVolume={onNormalizeVolume}
               onDelete={onDelete}
+              onVideoUpdated={setVideo}
             />
           </div>
 

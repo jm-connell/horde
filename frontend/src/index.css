@@ -283,17 +283,6 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
   }
 }
 
-html[data-debug-layout="on"] .page-shell {
-  outline: 1px dashed rgb(var(--accent) / 0.55);
-  outline-offset: -1px;
-}
-
-html[data-debug-layout="on"] header,
-html[data-debug-layout="on"] aside,
-html[data-debug-layout="on"] .ui-panel {
-  outline: 1px dotted rgb(255 100 100 / 0.35);
-}
-
 /* Translucent panels — let background effects show through.
    Alpha/blur come from --ui-panel-* set by applyMotionPrefs (strength slider). */
 html[data-translucent-panels="on"] .ui-panel {
@@ -316,6 +305,17 @@ html[data-translucent-panels="on"] .ui-card {
   ) !important;
   backdrop-filter: blur(var(--ui-panel-blur, 4px));
   -webkit-backdrop-filter: blur(var(--ui-panel-blur, 4px));
+}
+
+/* Stronger, theme-tinted fill for panels that need readable text over effects. */
+html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-panel-legible {
+  background-color: color-mix(
+    in srgb,
+    rgb(var(--ink-900) / 0.88) 82%,
+    rgb(var(--accent) / 0.22) 18%
+  ) !important;
+  backdrop-filter: blur(calc(var(--ui-panel-blur, 4px) + 4px));
+  -webkit-backdrop-filter: blur(calc(var(--ui-panel-blur, 4px) + 4px));
 }
 
 /* Hover motion — transitions on base so un-hover eases out */

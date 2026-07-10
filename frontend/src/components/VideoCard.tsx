@@ -121,40 +121,38 @@ export default function VideoCard({
           </button>
         )}
       </div>
-      <div className="flex flex-col gap-1 p-3">
-        <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 group-hover:text-accent">
+      <div className="relative flex flex-col gap-1 p-3">
+        <h3 className="line-clamp-2 min-h-[2.5rem] pr-10 text-sm font-semibold text-gray-100 group-hover:text-accent">
           {video.title}
         </h3>
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-            {video.channel && (
-              <span
-                role="link"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate(`/?channel=${encodeURIComponent(video.channel!)}`);
-                }}
-                className="w-fit truncate text-xs text-gray-400 hover:text-accent"
-              >
-                {video.channel}
-              </span>
-            )}
-            {dateLabel && (
-              <span className="text-xs text-gray-500">{dateLabel}</span>
-            )}
-            {showViewCount && video.view_count !== null && (
-              <span className="text-xs text-gray-500">
-                {formatViewCount(video.view_count)}
-              </span>
-            )}
-          </div>
-          {resolution && (
-            <span className="shrink-0 text-[10px] font-medium text-gray-500">
-              {resolution}
+        <div className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 ${resolution ? "pr-10" : ""}`}>
+          {video.channel && (
+            <span
+              role="link"
+              tabIndex={0}
+              onClick={(e) => {
+                e.preventDefault();
+                navigate(`/?channel=${encodeURIComponent(video.channel!)}`);
+              }}
+              className="max-w-full truncate text-xs text-gray-400 hover:text-accent"
+            >
+              {video.channel}
+            </span>
+          )}
+          {dateLabel && (
+            <span className="text-xs text-gray-500">{dateLabel}</span>
+          )}
+          {showViewCount && video.view_count !== null && (
+            <span className="text-xs text-gray-500">
+              {formatViewCount(video.view_count)}
             </span>
           )}
         </div>
+        {resolution && (
+          <span className="absolute bottom-3 right-3 text-[10px] font-medium text-gray-500">
+            {resolution}
+          </span>
+        )}
       </div>
     </Link>
   );

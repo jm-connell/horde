@@ -57,6 +57,104 @@ function videoProgress(video: Video): number | undefined {
   return Math.min(1, video.last_position_sec / video.duration_sec);
 }
 
+function formatSubscriberCount(count: number | null) {
+  if (count === null) return null;
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return String(count);
+}
+
+function ChannelSidebarList({
+  channels,
+  activeChannel,
+  channelSort,
+  showAllChannels,
+  onSelectChannel,
+  onToggleShowAll,
+}: {
+  channels: ChannelStat[];
+  activeChannel: string | null;
+  channelSort: string;
+  showAllChannels: boolean;
+  onSelectChannel: (channel: string | null) => void;
+  onToggleShowAll: () => void;
+}) {
+  return (
+    <ul className="space-y-0.5">
+      <li>
+        <button
+          onClick={() => onSelectChannel(null)}
+          className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
+            !activeChannel
+              ? "bg-accent/15 text-accent"
+              : "text-gray-300 hover:bg-ink-800"
+          }`}
+        >
+          All channels
+        </button>
+      </li>
+      {channels.slice(0, CHANNEL_SIDEBAR_LIMIT).map((c) => (
+        <li key={c.channel}>
+          <button
+            onClick={() => onSelectChannel(c.channel)}
+            className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
+              activeChannel === c.channel
+                ? "bg-accent/15 text-accent"
+                : "text-gray-300 hover:bg-ink-800"
+            }`}
+          >
+            <span className="truncate">{c.channel}</span>
+            <span className="ml-2 shrink-0 text-xs text-gray-500">
+              {channelSort === "subscriber_count" && c.subscriber_count !== null
+                ? formatSubscriberCount(c.subscriber_count)
+                : c.count}
+            </span>
+          </button>
+        </li>
+      ))}
+      {channels.length > CHANNEL_SIDEBAR_LIMIT && (
+        <>
+          <Collapse open={showAllChannels}>
+            <ul className="space-y-0.5">
+              {channels.slice(CHANNEL_SIDEBAR_LIMIT).map((c) => (
+                <li key={c.channel}>
+                  <button
+                    onClick={() => onSelectChannel(c.channel)}
+                    className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
+                      activeChannel === c.channel
+                        ? "bg-accent/15 text-accent"
+                        : "text-gray-300 hover:bg-ink-800"
+                    }`}
+                  >
+                    <span className="truncate">{c.channel}</span>
+                    <span className="ml-2 shrink-0 text-xs text-gray-500">
+                      {channelSort === "subscriber_count" &&
+                      c.subscriber_count !== null
+                        ? formatSubscriberCount(c.subscriber_count)
+                        : c.count}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Collapse>
+          <li>
+            <button
+              type="button"
+              onClick={onToggleShowAll}
+              className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-accent hover:bg-ink-800"
+            >
+              {showAllChannels
+                ? "Show less"
+                : `Show more (${channels.length - CHANNEL_SIDEBAR_LIMIT})`}
+            </button>
+          </li>
+        </>
+      )}
+    </ul>
+  );
+}
+
 export default function Library() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [continueWatching, setContinueWatching] = useState<Video[]>([]);
@@ -130,7 +228,41 @@ export default function Library() {
   const { showToast } = useToast();
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
   const { onJobCompleted } = useDownloads();
-  const { queue } = usePlayback();
+  const { queue, miniPlayerActive } = usePlayback();
+  const [narrowViewport, setNarrowViewport] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 1100
+  );
+  const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
+
+  useEffect(() => {
+    const onResize = () => {
+      const narrow = window.innerWidth < 1100;
+      setNarrowViewport(narrow);
+      if (!narrow) setSidebarOverlayOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // On narrow viewports, keep the rail collapsed; expand opens as overlay.
+  useEffect(() => {
+    if (narrowViewport && !settings.sidebarCollapsed && !sidebarOverlayOpen) {
+      update({ sidebarCollapsed: true });
+    }
+  }, [narrowViewport]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openSidebar = () => {
+    if (narrowViewport) {
+      setSidebarOverlayOpen(true);
+    } else {
+      update({ sidebarCollapsed: false });
+    }
+  };
+
+  const closeSidebar = () => {
+    setSidebarOverlayOpen(false);
+    update({ sidebarCollapsed: true });
+  };
 
   useEffect(() => {
     return onJobCompleted(() => setRefreshKey((k) => k + 1));
@@ -308,11 +440,9 @@ export default function Library() {
     saveLibrarySort(next);
   };
 
-  const formatSubscriberCount = (count: number | null) => {
-    if (count === null) return null;
-    if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-    if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
-    return String(count);
+  const selectChannel = (channel: string | null) => {
+    setActiveChannel(channel);
+    if (narrowViewport) closeSidebar();
   };
 
   const toggleSelect = (id: number, index: number, shiftHeld: boolean) => {
@@ -449,103 +579,76 @@ export default function Library() {
           </div>
         </div>
       )}
-      <aside
-        className={`relative hidden shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
-          settings.sidebarCollapsed ? "w-10" : "w-56"
-        }`}
-      >
-        <div className="sticky top-20">
-          {!settings.sidebarCollapsed ? (
-            <div className="ui-panel h-fit w-56 rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
-              <div className="mb-2 flex items-center justify-between px-2 pt-1">
+      {/* Narrow: fixed overlay channel panel */}
+      {narrowViewport && sidebarOverlayOpen && (
+        <div className="fixed inset-0 z-50 lg:block">
+          <button
+            type="button"
+            aria-label="Close channels"
+            className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm"
+            onClick={closeSidebar}
+          />
+          <div className="absolute left-0 top-0 flex h-full w-64 max-w-[85vw] flex-col p-3 pt-20">
+            <div className="ui-panel flex max-h-full flex-col overflow-hidden rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
+              <div className="mb-2 flex shrink-0 items-center justify-between px-2 pt-1">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Channels
                 </h2>
                 <button
-                  onClick={() => update({ sidebarCollapsed: true })}
+                  onClick={closeSidebar}
                   title="Collapse sidebar"
                   className="ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
                 >
                   ‹
                 </button>
               </div>
-              <ul className="space-y-0.5">
-                <li>
-                  <button
-                    onClick={() => setActiveChannel(null)}
-                    className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
-                      !activeChannel
-                        ? "bg-accent/15 text-accent"
-                        : "text-gray-300 hover:bg-ink-800"
-                    }`}
-                  >
-                    All channels
-                  </button>
-                </li>
-                {channels.slice(0, CHANNEL_SIDEBAR_LIMIT).map((c) => (
-                  <li key={c.channel}>
-                    <button
-                      onClick={() => setActiveChannel(c.channel)}
-                      className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
-                        activeChannel === c.channel
-                          ? "bg-accent/15 text-accent"
-                          : "text-gray-300 hover:bg-ink-800"
-                      }`}
-                    >
-                      <span className="truncate">{c.channel}</span>
-                      <span className="ml-2 shrink-0 text-xs text-gray-500">
-                        {settings.channelSort === "subscriber_count" &&
-                        c.subscriber_count !== null
-                          ? formatSubscriberCount(c.subscriber_count)
-                          : c.count}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-                {channels.length > CHANNEL_SIDEBAR_LIMIT && (
-                  <>
-                    <Collapse open={showAllChannels}>
-                      <ul className="space-y-0.5">
-                        {channels.slice(CHANNEL_SIDEBAR_LIMIT).map((c) => (
-                          <li key={c.channel}>
-                            <button
-                              onClick={() => setActiveChannel(c.channel)}
-                              className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
-                                activeChannel === c.channel
-                                  ? "bg-accent/15 text-accent"
-                                  : "text-gray-300 hover:bg-ink-800"
-                              }`}
-                            >
-                              <span className="truncate">{c.channel}</span>
-                              <span className="ml-2 shrink-0 text-xs text-gray-500">
-                                {settings.channelSort === "subscriber_count" &&
-                                c.subscriber_count !== null
-                                  ? formatSubscriberCount(c.subscriber_count)
-                                  : c.count}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </Collapse>
-                    <li>
-                      <button
-                        type="button"
-                        onClick={() => setShowAllChannels((v) => !v)}
-                        className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-accent hover:bg-ink-800"
-                      >
-                        {showAllChannels
-                          ? "Show less"
-                          : `Show more (${channels.length - CHANNEL_SIDEBAR_LIMIT})`}
-                      </button>
-                    </li>
-                  </>
-                )}
-              </ul>
+              <div className="min-h-0 overflow-y-auto">
+                <ChannelSidebarList
+                  channels={channels}
+                  activeChannel={activeChannel}
+                  channelSort={settings.channelSort}
+                  showAllChannels={showAllChannels}
+                  onSelectChannel={selectChannel}
+                  onToggleShowAll={() => setShowAllChannels((v) => !v)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <aside
+        className={`relative hidden shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
+          narrowViewport || settings.sidebarCollapsed ? "w-10" : "w-56"
+        }`}
+      >
+        <div className="sticky top-20">
+          {!narrowViewport && !settings.sidebarCollapsed ? (
+            <div className="ui-panel h-fit w-56 rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
+              <div className="mb-2 flex items-center justify-between px-2 pt-1">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Channels
+                </h2>
+                <button
+                  onClick={closeSidebar}
+                  title="Collapse sidebar"
+                  className="ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
+                >
+                  ‹
+                </button>
+              </div>
+              <ChannelSidebarList
+                channels={channels}
+                activeChannel={activeChannel}
+                channelSort={settings.channelSort}
+                showAllChannels={showAllChannels}
+                onSelectChannel={selectChannel}
+                onToggleShowAll={() => setShowAllChannels((v) => !v)}
+              />
             </div>
           ) : (
             <button
-              onClick={() => update({ sidebarCollapsed: false })}
+              onClick={openSidebar}
               title="Expand channels"
               className="ui-panel ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
             >
@@ -556,7 +659,8 @@ export default function Library() {
       </aside>
 
       <div ref={mainContentRef} className="min-w-0 flex-1">
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="mb-5 flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-3">
           {activeChannel && renaming === activeChannel ? (
             <input
               autoFocus
@@ -616,7 +720,7 @@ export default function Library() {
             </div>
           )}
           {activeChannel && !activeTag && (
-            <div className="ui-panel flex gap-1 rounded-lg border border-ink-700 bg-ink-900 p-1 sm:order-first">
+            <div className="ui-panel flex gap-1 rounded-lg border border-ink-700 bg-ink-900 p-1">
               <button
                 type="button"
                 onClick={() => setChannelTab("library")}
@@ -641,16 +745,17 @@ export default function Library() {
               </button>
             </div>
           )}
-          <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:justify-end">
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             {onFeedTab ? (
               <>
                 <input
                   value={feedSearch}
                   onChange={(e) => setFeedSearch(e.target.value)}
                   placeholder="Search channel videos..."
-                  className="ui-panel ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
+                  className="ui-panel ui-interactive block w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:w-64"
                 />
-                <div className="flex flex-row items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <select
                     value={feedSort}
                     onChange={(e) =>
@@ -726,9 +831,9 @@ export default function Library() {
               placeholder={
                 aiReady ? "Search videos or describe a topic..." : "Search videos..."
               }
-              className="ui-panel ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block sm:w-64"
+              className="ui-panel ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block md:w-64"
             />
-            <div className="flex flex-row items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={sort}
                 onChange={(e) => handleSortChange(e.target.value)}
@@ -801,7 +906,7 @@ export default function Library() {
                 <button
                   key={t.tag}
                   onClick={() => setActiveTag(t.tag)}
-                  className="rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
+                  className="ui-panel ui-interactive rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
                 >
                   #{t.tag}
                   <span className="ml-1.5 text-gray-500">{t.count}</span>
@@ -810,7 +915,7 @@ export default function Library() {
           {showTags && hiddenTagCount > 0 && (
             <button
               onClick={() => setShowAllTags(true)}
-              className="rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-400 hover:border-accent hover:text-accent"
+              className="ui-panel ui-interactive rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-400 hover:border-accent hover:text-accent"
             >
               Show more ({hiddenTagCount})
             </button>
@@ -882,7 +987,7 @@ export default function Library() {
         </div>
 
         {selectMode && selectedIds.size > 0 && (
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-700 bg-ink-900/95 px-4 py-3 backdrop-blur">
+            <div className="ui-panel ui-panel-legible fixed inset-x-0 bottom-0 z-40 border border-ink-700 px-4 py-3">
               <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3">
                 <span className="text-sm font-medium text-gray-300">
                   {selectedIds.size} selected
@@ -894,7 +999,7 @@ export default function Library() {
                     onClick={() =>
                       playlistOpen ? setPlaylistOpen(false) : openPlaylistPicker()
                     }
-                    className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700"
+                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
                   >
                     + Playlist
                   </button>
@@ -921,7 +1026,7 @@ export default function Library() {
                 <div className="relative">
                   <button
                     onClick={() => setBulkNoteOpen((v) => !v)}
-                    className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700"
+                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
                   >
                     Add note
                   </button>
@@ -950,7 +1055,7 @@ export default function Library() {
                 <button
                   onClick={bulkRefreshMetadata}
                   disabled={metadataSyncing}
-                  className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700 disabled:opacity-50"
+                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:opacity-50"
                 >
                   {metadataSyncing ? "Syncing…" : "Resync metadata"}
                 </button>
@@ -958,7 +1063,7 @@ export default function Library() {
                 {/* Download to device */}
                 <button
                   onClick={bulkDownload}
-                  className="rounded-lg bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:bg-ink-700"
+                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
                 >
                   Download
                 </button>
@@ -966,7 +1071,7 @@ export default function Library() {
                 {/* Delete */}
                 <button
                   onClick={bulkDelete}
-                  className="rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+                  className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
                 >
                   Delete
                 </button>
@@ -983,8 +1088,16 @@ export default function Library() {
       </div>
 
       {showQueuePanel && queueDockedBottom && (
-        <div className="pointer-events-none fixed bottom-0 right-0 z-30 w-[26rem] p-3">
-          <div className="pointer-events-auto ml-auto w-96">
+        <div
+          className={`pointer-events-none fixed bottom-0 z-30 w-[26rem] p-3 ${
+            miniPlayerActive ? "left-0" : "right-0"
+          }`}
+        >
+          <div
+            className={`pointer-events-auto w-96 ${
+              miniPlayerActive ? "mr-auto" : "ml-auto"
+            }`}
+          >
             <PlaybackQueue
               collapsible
               listMaxHeightClass="max-h-[20vh] lg:max-h-[30vh]"

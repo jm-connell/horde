@@ -213,8 +213,19 @@ export const api = {
     });
   },
 
-  processAiLibrary(): Promise<AiProcessResult> {
-    return request<AiProcessResult>("/api/ai/process", { method: "POST" });
+  processAiLibrary(
+    action:
+      | "all"
+      | "embeds"
+      | "missing_tags"
+      | "full_tags"
+      | "categories" = "all"
+  ): Promise<AiProcessResult> {
+    return request<AiProcessResult>("/api/ai/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
   },
 
   pauseAi(): Promise<{ paused: boolean }> {
@@ -225,9 +236,20 @@ export const api = {
     return request<{ paused: boolean }>("/api/ai/resume", { method: "POST" });
   },
 
-  getRecommendations(category?: string): Promise<RecommendationsResponse> {
-    const qs = category ? `?category=${encodeURIComponent(category)}` : "";
+  getRecommendations(
+    category?: string,
+    opts?: { limit?: number; offset?: number }
+  ): Promise<RecommendationsResponse> {
+    const params = new URLSearchParams();
+    if (category) params.set("category", category);
+    if (opts?.limit != null) params.set("limit", String(opts.limit));
+    if (opts?.offset != null) params.set("offset", String(opts.offset));
+    const qs = params.toString() ? `?${params}` : "";
     return request<RecommendationsResponse>(`/api/ai/recommendations${qs}`);
+  },
+
+  refreshVideoTags(id: number): Promise<Video> {
+    return request<Video>(`/api/videos/${id}/ai/refresh-tags`, { method: "POST" });
   },
 
   listDuplicateGroups(): Promise<DuplicateGroup[]> {

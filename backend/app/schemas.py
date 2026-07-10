@@ -18,6 +18,7 @@ class VideoRead(BaseModel):
     channel_url: Optional[str]
     tags: list[str]
     ai_tags: list[str] = []
+    user_tags: list[str] = []
     description: Optional[str]
     notes: Optional[str]
     source_url: Optional[str]
@@ -49,6 +50,7 @@ class VideoUpdate(BaseModel):
     channel: Optional[str] = None
     channel_url: Optional[str] = None
     tags: Optional[list[str]] = None
+    user_tag: Optional[str] = None  # mark a newly added tag as user-defined
     description: Optional[str] = None
     notes: Optional[str] = None
     source_url: Optional[str] = None

@@ -222,14 +222,41 @@ def videos_needing_embed(session: Session, *, limit: int = 500) -> list[int]:
 
 
 def lock_tags_on_manual_edit(session: Session, video_id: int) -> None:
+    sync_tag_provenance(session, video_id)
+
+
+def sync_tag_provenance(
+    session: Session,
+    video_id: int,
+    *,
+    user_tag: Optional[str] = None,
+) -> None:
+    """Lock auto-enrich and keep ai/user tag lists in sync with Video.tags."""
     from .. import library as lib
 
     meta = _get_or_create_meta(session, video_id)
     meta.tags_locked = True
     video = session.get(Video, video_id)
-    if video is not None and meta.ai_tags:
-        current = {t.lower() for t in lib.parse_tags(video.tags)}
-        kept = [t for t in lib.parse_tags(meta.ai_tags) if t.lower() in current]
-        meta.ai_tags = lib.dump_tags(kept)
+    if video is None:
+        meta.updated_at = utcnow()
+        session.add(meta)
+        return
+
+    current = lib.parse_tags(video.tags)
+    current_lower = {t.lower() for t in current}
+
+    ai = [t for t in lib.parse_tags(meta.ai_tags or "[]") if t.lower() in current_lower]
+    user = [t for t in lib.parse_tags(getattr(meta, "user_tags", None) or "[]") if t.lower() in current_lower]
+
+    if user_tag:
+        cleaned = user_tag.strip()
+        if cleaned and cleaned.lower() in current_lower:
+            if cleaned.lower() not in {t.lower() for t in user}:
+                user.append(cleaned)
+            # User override wins over AI provenance for the same label.
+            ai = [t for t in ai if t.lower() != cleaned.lower()]
+
+    meta.ai_tags = lib.dump_tags(ai)
+    meta.user_tags = lib.dump_tags(user)
     meta.updated_at = utcnow()
     session.add(meta)

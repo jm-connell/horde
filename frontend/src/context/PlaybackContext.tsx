@@ -29,6 +29,8 @@ interface PlaybackValue {
   clearQueue: () => void;
   close: () => void;
   registerDock: (el: HTMLElement | null) => void;
+  /** True when the floating mini-player is showing (browsing away from Watch). */
+  miniPlayerActive: boolean;
 }
 
 const Ctx = createContext<PlaybackValue | null>(null);
@@ -330,6 +332,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
 
+  const miniPlayerActive = Boolean(
+    current && !dock && !( !isMobile && mode === "windowed")
+  );
+
   const chapters = parseChapters(current?.description ?? null);
   const sponsorSegments = useSponsorBlock(
     current?.source_url ?? null,
@@ -361,6 +367,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     clearQueue,
     close,
     registerDock,
+    miniPlayerActive,
   };
 
   return (

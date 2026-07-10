@@ -15,6 +15,7 @@ import {
 import { BACKGROUND_EFFECT_OPTIONS } from "../effects";
 import { LIBRARY_SORT_OPTIONS } from "../hooks/useLibrarySort";
 import type {
+  AiCurrentJob,
   AiSchedule,
   AiSettings,
   AiStatus,
@@ -26,6 +27,40 @@ import { formatSize } from "../utils";
 import LiquidNav from "../components/LiquidNav";
 import Collapse from "../components/Collapse";
 import LoadingIndicator from "../components/LoadingIndicator";
+
+const CHIP =
+  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-accent hover:text-gray-100";
+const CHIP_ACTIVE =
+  "ui-panel ui-interactive rounded-lg border border-accent/50 bg-accent px-3 py-2 text-sm font-medium text-ink-950 transition-colors";
+const PANEL_BTN =
+  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50";
+const SELECT =
+  "ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
+
+const UI_SCALE_OPTIONS: { value: UiScale; label: string }[] = [
+  { value: "80", label: "80%" },
+  { value: "90", label: "90%" },
+  { value: "100", label: "100%" },
+  { value: "110", label: "110%" },
+  { value: "125", label: "125%" },
+  { value: "150", label: "150%" },
+  { value: "175", label: "175%" },
+];
+
+const AI_PROCESS_ACTIONS: {
+  action: "embeds" | "missing_tags" | "full_tags" | "categories";
+  label: string;
+}[] = [
+  { action: "embeds", label: "Index missing embeds" },
+  { action: "missing_tags", label: "Enrich missing AI tags" },
+  { action: "full_tags", label: "Full tag refresh" },
+  { action: "categories", label: "Refresh categories" },
+];
+
+const EMBED_MODEL_TIP =
+  "Embedding model — used for semantic search and related videos. Much lighter on VRAM than chat (typically ~0.5–1GB). nomic-embed-text is a solid default; mxbai-embed-large is higher quality but heavier; all-minilm is the lightest.";
+const CHAT_MODEL_TIP =
+  "Chat model — used for tag enrichment, categories, and duplicate scoring. Needs more VRAM than embeds: 1B ≈ 1–2GB, 3B-class ≈ 3–6GB. Prefer smaller models on 6GB GPUs.";
 
 const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "small", label: "Small" },
@@ -92,7 +127,7 @@ const AI_SCHEDULE_OPTIONS: { value: AiSchedule; label: string; description: stri
   {
     value: "on_request",
     label: "When requested",
-    description: "No automatic work — use Process library now",
+    description: "No automatic work — use the process actions below",
   },
 ];
 
@@ -210,15 +245,27 @@ function Toggle({
   );
 }
 
+function matchesQuery(
+  query: string,
+  ...parts: (string | undefined | null)[]
+): boolean {
+  if (!query) return true;
+  const hay = parts.filter(Boolean).join(" ").toLowerCase();
+  return hay.includes(query);
+}
+
 function SettingRow({
   title,
   description,
   control,
+  hidden = false,
 }: {
   title: string;
   description?: string;
   control: React.ReactNode;
+  hidden?: boolean;
 }) {
+  if (hidden) return null;
   return (
     <label className="flex items-center justify-between gap-4">
       <span>
@@ -237,12 +284,15 @@ function Section({
   description,
   children,
   first = false,
+  hidden = false,
 }: {
   title: string;
   description?: string;
   children: React.ReactNode;
   first?: boolean;
+  hidden?: boolean;
 }) {
+  if (hidden) return null;
   return (
     <div className={first ? undefined : "border-t border-ink-700 pt-6"}>
       <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
@@ -252,6 +302,67 @@ function Section({
         <p className="mb-3 text-xs text-gray-500">{description}</p>
       )}
       <div className={description ? undefined : "mt-3"}>{children}</div>
+    </div>
+  );
+}
+
+function Chip({
+  active,
+  onClick,
+  children,
+  className = "",
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${active ? CHIP_ACTIVE : CHIP} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
+  if (typeof job === "string") {
+    return (
+      <div className="flex justify-between gap-3">
+        <dt className="text-gray-400">Running</dt>
+        <dd className="truncate text-xs text-gray-300">{job}</dd>
+      </div>
+    );
+  }
+
+  const kindLabel = job.kind.replace(/_/g, " ");
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <dt className="shrink-0 pt-1 text-gray-400">Running</dt>
+      <dd className="flex min-w-0 items-center gap-2">
+        {job.has_thumbnail && job.video_id != null ? (
+          <img
+            src={`/api/thumbnails/${job.video_id}`}
+            alt=""
+            className="h-8 w-12 shrink-0 rounded object-cover ring-1 ring-ink-700"
+          />
+        ) : (
+          <span className="flex h-8 w-12 shrink-0 items-center justify-center rounded bg-ink-800 text-[10px] text-gray-500 ring-1 ring-ink-700">
+            —
+          </span>
+        )}
+        <span className="min-w-0">
+          <span className="block truncate text-xs text-gray-200">
+            {job.title || "Untitled"}
+          </span>
+          <span className="block truncate text-[11px] text-gray-500">
+            {[job.channel, kindLabel].filter(Boolean).join(" · ")}
+          </span>
+        </span>
+      </dd>
     </div>
   );
 }
@@ -266,11 +377,18 @@ export default function Settings() {
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [aiDraft, setAiDraft] = useState<AiSettings>(DEFAULT_AI);
   const [aiTesting, setAiTesting] = useState(false);
-  const [aiProcessing, setAiProcessing] = useState(false);
   const [embedCustom, setEmbedCustom] = useState(false);
   const [chatCustom, setChatCustom] = useState(false);
   const [expiryInput, setExpiryInput] = useState<string>("");
   const [metadataSyncing, setMetadataSyncing] = useState(false);
+  const [aiProcessingAction, setAiProcessingAction] = useState<string | null>(
+    null
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const q = searchQuery.trim().toLowerCase();
+  const match = (...parts: (string | undefined | null)[]) =>
+    matchesQuery(q, ...parts);
 
   const refreshAiStatus = () =>
     api
@@ -369,9 +487,33 @@ export default function Settings() {
     );
   };
 
+  const runAiProcess = async (
+    action: "embeds" | "missing_tags" | "full_tags" | "categories"
+  ) => {
+    if (aiProcessingAction) return;
+    setAiProcessingAction(action);
+    const result = await api.processAiLibrary(action).catch(() => null);
+    setAiProcessingAction(null);
+    if (!result) {
+      showToast("Could not enqueue library");
+      return;
+    }
+    showToast(result.detail || "Nothing to process");
+    refreshAiStatus();
+  };
+
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-6 text-2xl font-bold text-gray-100">Settings</h1>
+
+      <input
+        type="search"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Search settings…"
+        aria-label="Search settings"
+        className="ui-panel mb-4 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-accent"
+      />
 
       <LiquidNav
         className="ui-panel mb-4 flex gap-1 overflow-x-auto rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
@@ -412,11 +554,12 @@ export default function Settings() {
               first
               title="Theme"
               description="Choose a color palette for the app chrome."
+              hidden={!match("theme", "color palette", "chrome", "custom")}
             >
               <select
                 value={settings.theme}
                 onChange={(e) => update({ theme: e.target.value as Theme })}
-                className="ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                className={SELECT}
               >
                 {THEMES.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -484,6 +627,18 @@ export default function Settings() {
             <Section
               title="Background animation"
               description="Optional atmospheric effects behind the UI. Disabled automatically when the system prefers reduced motion."
+              hidden={
+                !match(
+                  "background animation",
+                  "atmospheric",
+                  "effects",
+                  "intensity",
+                  "speed",
+                  "size",
+                  "color",
+                  "pause while watching"
+                )
+              }
             >
               <select
                 value={settings.backgroundEffect}
@@ -492,7 +647,7 @@ export default function Settings() {
                     backgroundEffect: e.target.value as BackgroundEffect,
                   })
                 }
-                className="ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                className={SELECT}
               >
                 {BACKGROUND_EFFECT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -585,19 +740,17 @@ export default function Settings() {
                           { value: "custom", label: "Custom" },
                         ] as const
                       ).map((opt) => (
-                        <button
+                        <Chip
                           key={opt.value}
+                          active={
+                            settings.backgroundEffectColorMode === opt.value
+                          }
                           onClick={() =>
                             update({ backgroundEffectColorMode: opt.value })
                           }
-                          className={`ui-interactive rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                            settings.backgroundEffectColorMode === opt.value
-                              ? "bg-accent text-ink-950"
-                              : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                          }`}
                         >
                           {opt.label}
-                        </button>
+                        </Chip>
                       ))}
                     </div>
                     {settings.backgroundEffectColorMode === "custom" && (
@@ -639,9 +792,29 @@ export default function Settings() {
             <Section
               title="Interface motion"
               description="Hover and navigation transitions. Button press and page fade are always on. Automatically reduced when the system prefers reduced motion."
+              hidden={
+                !match(
+                  "interface motion",
+                  "navigation indicator",
+                  "hover motion",
+                  "translucent panels",
+                  "panel transparency",
+                  "legibility",
+                  "loading animation",
+                  "ui scale"
+                )
+              }
             >
               <div className="space-y-5">
-                <div>
+                <div
+                  className={
+                    match("navigation indicator", "nav", "liquid", "underline")
+                      ? undefined
+                      : q
+                        ? "hidden"
+                        : undefined
+                  }
+                >
                   <p className="mb-2 text-sm font-medium text-gray-200">
                     Navigation indicator
                   </p>
@@ -650,17 +823,13 @@ export default function Settings() {
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {NAV_INDICATOR_OPTIONS.map((opt) => (
-                      <button
+                      <Chip
                         key={opt.value}
+                        active={settings.navIndicator === opt.value}
                         onClick={() => update({ navIndicator: opt.value })}
-                        className={`ui-interactive rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                          settings.navIndicator === opt.value
-                            ? "bg-accent text-ink-950"
-                            : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                        }`}
                       >
                         {opt.label}
-                      </button>
+                      </Chip>
                     ))}
                   </div>
                   <p className="mt-2 text-xs text-gray-500">
@@ -672,7 +841,15 @@ export default function Settings() {
                   </p>
                 </div>
 
-                <div>
+                <div
+                  className={
+                    match("hover motion", "cards", "controls")
+                      ? undefined
+                      : q
+                        ? "hidden"
+                        : undefined
+                  }
+                >
                   <p className="mb-2 text-sm font-medium text-gray-200">
                     Hover motion
                   </p>
@@ -681,17 +858,13 @@ export default function Settings() {
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {HOVER_MOTION_OPTIONS.map((opt) => (
-                      <button
+                      <Chip
                         key={opt.value}
+                        active={settings.hoverMotion === opt.value}
                         onClick={() => update({ hoverMotion: opt.value })}
-                        className={`ui-interactive rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                          settings.hoverMotion === opt.value
-                            ? "bg-accent text-ink-950"
-                            : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                        }`}
                       >
                         {opt.label}
-                      </button>
+                      </Chip>
                     ))}
                   </div>
                   <p className="mt-2 text-xs text-gray-500">
@@ -706,6 +879,14 @@ export default function Settings() {
                 <SettingRow
                   title="Translucent panels"
                   description="Let background animations show through nav, cards, and settings panels."
+                  hidden={
+                    !!q &&
+                    !match(
+                      "translucent panels",
+                      "panel transparency",
+                      "legibility"
+                    )
+                  }
                   control={
                     <Toggle
                       checked={settings.translucentPanels}
@@ -718,35 +899,72 @@ export default function Settings() {
                   }
                 />
                 <Collapse open={settings.translucentPanels}>
-                  <label className="mt-1 block">
-                    <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
-                      <span>Panel transparency</span>
-                      <span className="tabular-nums text-gray-500">
-                        {Math.round(settings.translucentPanelStrength * 100)}%
+                  <div
+                    className={
+                      match(
+                        "translucent panels",
+                        "panel transparency",
+                        "legibility"
+                      )
+                        ? "mt-1 space-y-4"
+                        : q
+                          ? "hidden"
+                          : "mt-1 space-y-4"
+                    }
+                  >
+                    <label className="block">
+                      <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
+                        <span>Panel transparency</span>
+                        <span className="tabular-nums text-gray-500">
+                          {Math.round(settings.translucentPanelStrength * 100)}%
+                        </span>
                       </span>
-                    </span>
-                    <input
-                      type="range"
-                      min={0.15}
-                      max={1}
-                      step={0.05}
-                      value={settings.translucentPanelStrength}
-                      onChange={(e) =>
-                        update({
-                          translucentPanelStrength: Number(e.target.value),
-                        })
+                      <input
+                        type="range"
+                        min={0.15}
+                        max={1}
+                        step={0.05}
+                        value={settings.translucentPanelStrength}
+                        onChange={(e) =>
+                          update({
+                            translucentPanelStrength: Number(e.target.value),
+                          })
+                        }
+                        className="accent-scrubber w-full"
+                      />
+                      <p className="mt-2 text-xs text-gray-500">
+                        Higher values make panels more see-through so effects
+                        stay visible. Turn intensity up on the background
+                        animation if needed.
+                      </p>
+                    </label>
+                    <SettingRow
+                      title="Improve legibility on certain translucent panels"
+                      description="Raise opacity and add a theme tint on panels that need readable text over effects."
+                      control={
+                        <Toggle
+                          checked={settings.translucentPanelLegibility}
+                          onChange={() =>
+                            update({
+                              translucentPanelLegibility:
+                                !settings.translucentPanelLegibility,
+                            })
+                          }
+                        />
                       }
-                      className="accent-scrubber w-full"
                     />
-                    <p className="mt-2 text-xs text-gray-500">
-                      Higher values make panels more see-through so effects stay
-                      visible. Turn intensity up on the background animation if
-                      needed.
-                    </p>
-                  </label>
+                  </div>
                 </Collapse>
 
-                <div>
+                <div
+                  className={
+                    match("loading animation", "dots", "spinner", "bar")
+                      ? undefined
+                      : q
+                        ? "hidden"
+                        : undefined
+                  }
+                >
                   <span className="mb-2 block text-sm font-medium text-gray-200">
                     Loading animation
                   </span>
@@ -758,18 +976,14 @@ export default function Settings() {
                         { value: "bar", label: "Bar" },
                       ] as const
                     ).map((opt) => (
-                      <button
+                      <Chip
                         key={opt.value}
-                        type="button"
+                        active={settings.loadingStyle === opt.value}
                         onClick={() => update({ loadingStyle: opt.value })}
-                        className={`ui-interactive rounded-lg px-3 py-1.5 text-sm ${
-                          settings.loadingStyle === opt.value
-                            ? "bg-accent text-ink-950"
-                            : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                        }`}
+                        className="!py-1.5"
                       >
                         {opt.label}
-                      </button>
+                      </Chip>
                     ))}
                   </div>
                   <p className="mt-2 text-xs text-gray-500">
@@ -777,50 +991,34 @@ export default function Settings() {
                   </p>
                 </div>
 
-                <div>
+                <div
+                  className={
+                    match("ui scale", "scale", "text", "spacing")
+                      ? undefined
+                      : q
+                        ? "hidden"
+                        : undefined
+                  }
+                >
                   <span className="mb-2 block text-sm font-medium text-gray-200">
                     UI scale
                   </span>
                   <div className="flex flex-wrap gap-2">
-                    {(
-                      [
-                        { value: "90", label: "90%" },
-                        { value: "100", label: "100%" },
-                        { value: "110", label: "110%" },
-                        { value: "125", label: "125%" },
-                      ] as { value: UiScale; label: string }[]
-                    ).map((opt) => (
-                      <button
+                    {UI_SCALE_OPTIONS.map((opt) => (
+                      <Chip
                         key={opt.value}
-                        type="button"
+                        active={settings.uiScale === opt.value}
                         onClick={() => update({ uiScale: opt.value })}
-                        className={`ui-interactive rounded-lg px-3 py-1.5 text-sm ${
-                          settings.uiScale === opt.value
-                            ? "bg-accent text-ink-950"
-                            : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                        }`}
+                        className="!py-1.5"
                       >
                         {opt.label}
-                      </button>
+                      </Chip>
                     ))}
                   </div>
                   <p className="mt-2 text-xs text-gray-500">
                     Scales text and spacing across the app (rem-based).
                   </p>
                 </div>
-
-                <SettingRow
-                  title="Debug layout"
-                  description="Outline page shells and panels to diagnose content jumping on navigation."
-                  control={
-                    <Toggle
-                      checked={settings.debugLayout}
-                      onChange={() =>
-                        update({ debugLayout: !settings.debugLayout })
-                      }
-                    />
-                  }
-                />
               </div>
             </Section>
           </>
@@ -832,11 +1030,20 @@ export default function Settings() {
               first
               title="Library metadata"
               description="Pull fresh thumbnails, captions, view counts, and channel subscriber counts from each video's source URL."
+              hidden={
+                !match(
+                  "library metadata",
+                  "resync",
+                  "thumbnails",
+                  "captions",
+                  "view counts"
+                )
+              }
             >
               <button
                 onClick={resyncAllMetadata}
                 disabled={metadataSyncing}
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className={PANEL_BTN}
               >
                 {metadataSyncing ? "Syncing…" : "Resync all metadata"}
               </button>
@@ -845,11 +1052,23 @@ export default function Settings() {
             <Section
               title="Homepage"
               description="Homepage and continue watching preferences."
+              hidden={
+                !match(
+                  "homepage",
+                  "continue watching",
+                  "progress bar",
+                  "dates",
+                  "video cards"
+                )
+              }
             >
               <div className="space-y-4">
                 <SettingRow
                   title="Show continue watching"
                   description="Display the continue watching row on the library home page."
+                  hidden={
+                    !!q && !match("continue watching", "homepage")
+                  }
                   control={
                     <Toggle
                       checked={settings.showContinueWatching}
@@ -864,6 +1083,10 @@ export default function Settings() {
                 <SettingRow
                   title="Progress bar on continue watching"
                   description="Show watch progress on cards in the continue watching row."
+                  hidden={
+                    !!q &&
+                    !match("progress bar", "continue watching")
+                  }
                   control={
                     <Toggle
                       checked={settings.showProgressOnContinueWatching}
@@ -879,6 +1102,9 @@ export default function Settings() {
                 <SettingRow
                   title="Progress bar on all library videos"
                   description="Show watch progress on every card in the main library grid."
+                  hidden={
+                    !!q && !match("progress bar", "library videos")
+                  }
                   control={
                     <Toggle
                       checked={settings.showProgressOnAllVideos}
@@ -894,6 +1120,7 @@ export default function Settings() {
                 <SettingRow
                   title="Show dates on video cards"
                   description="Display the published date (e.g. May 14, 2023) on library cards."
+                  hidden={!!q && !match("dates", "video cards")}
                   control={
                     <Toggle
                       checked={settings.showCardDates}
@@ -909,6 +1136,7 @@ export default function Settings() {
             <Section
               title="Progress expiry"
               description="Saved watch position resets after this many days of inactivity. The continue watching row hides videos after 7 days."
+              hidden={!match("progress expiry", "inactivity", "days")}
             >
               <div className="flex items-center gap-3">
                 <input
@@ -917,7 +1145,7 @@ export default function Settings() {
                   max={365}
                   value={expiryInput}
                   onChange={(e) => setExpiryInput(e.target.value)}
-                  className="w-24 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  className="ui-panel w-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                 />
                 <button
                   onClick={saveExpiry}
@@ -926,7 +1154,7 @@ export default function Settings() {
                     parseInt(expiryInput, 10) ===
                       appSettings.progress_expiry_days
                   }
-                  className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className={PANEL_BTN}
                 >
                   Save
                 </button>
@@ -936,57 +1164,56 @@ export default function Settings() {
             <Section
               title="Default video sort"
               description="Used when you open the library or after a temporary sort expires (3 hours)."
+              hidden={!match("default video sort", "sort", "library")}
             >
               <div className="flex flex-wrap gap-2">
                 {LIBRARY_SORT_OPTIONS.filter((o) => o.value !== "random").map(
                   (opt) => (
-                    <button
+                    <Chip
                       key={opt.value}
+                      active={settings.defaultLibrarySort === opt.value}
                       onClick={() =>
                         update({ defaultLibrarySort: opt.value as LibrarySort })
                       }
-                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                        settings.defaultLibrarySort === opt.value
-                          ? "bg-accent text-ink-950"
-                          : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                      }`}
                     >
                       {opt.label}
-                    </button>
+                    </Chip>
                   )
                 )}
               </div>
             </Section>
 
-            <Section title="Channel list order (sidebar)">
+            <Section
+              title="Channel list order (sidebar)"
+              hidden={
+                !match(
+                  "channel list order",
+                  "sidebar",
+                  "ascending",
+                  "descending"
+                )
+              }
+            >
               <div className="mb-3 flex flex-wrap gap-2">
                 {CHANNEL_SORT_OPTIONS.map((opt) => (
-                  <button
+                  <Chip
                     key={opt.value}
+                    active={settings.channelSort === opt.value}
                     onClick={() => update({ channelSort: opt.value })}
-                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      settings.channelSort === opt.value
-                        ? "bg-accent text-ink-950"
-                        : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                    }`}
                   >
                     {opt.label}
-                  </button>
+                  </Chip>
                 ))}
               </div>
               <div className="flex gap-2">
                 {(["desc", "asc"] as const).map((dir) => (
-                  <button
+                  <Chip
                     key={dir}
+                    active={settings.channelOrder === dir}
                     onClick={() => update({ channelOrder: dir })}
-                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                      settings.channelOrder === dir
-                        ? "bg-accent text-ink-950"
-                        : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                    }`}
                   >
                     {dir === "desc" ? "Descending" : "Ascending"}
-                  </button>
+                  </Chip>
                 ))}
               </div>
             </Section>
@@ -999,11 +1226,20 @@ export default function Settings() {
               first
               title="Watch page"
               description="Layout options on the video watch page."
+              hidden={
+                !match(
+                  "watch page",
+                  "description",
+                  "related videos",
+                  "autoplay"
+                )
+              }
             >
               <div className="space-y-4">
                 <SettingRow
                   title="Show description"
                   description="Display the video description on the watch page."
+                  hidden={!!q && !match("description", "watch page")}
                   control={
                     <Toggle
                       checked={settings.showDescription}
@@ -1018,6 +1254,7 @@ export default function Settings() {
                 <SettingRow
                   title="Show related videos sidebar"
                   description="On desktop in normal view, show recommended videos in a column to the right of the player."
+                  hidden={!!q && !match("related videos", "sidebar")}
                   control={
                     <Toggle
                       checked={settings.showRelatedVideos}
@@ -1032,6 +1269,7 @@ export default function Settings() {
                 <SettingRow
                   title="Autoplay related"
                   description="When a video ends and the queue is empty, count down and play a related video. Also available in the player controls."
+                  hidden={!!q && !match("autoplay related")}
                   control={
                     <Toggle
                       checked={settings.autoplayRelated}
@@ -1049,20 +1287,17 @@ export default function Settings() {
             <Section
               title="Subtitles"
               description="Caption size and how far they sit above the player controls."
+              hidden={!match("subtitles", "caption", "vertical position")}
             >
               <div className="mb-4 flex flex-wrap gap-2">
                 {SUBTITLE_SIZES.map((opt) => (
-                  <button
+                  <Chip
                     key={opt.value}
+                    active={settings.subtitleSize === opt.value}
                     onClick={() => update({ subtitleSize: opt.value })}
-                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                      settings.subtitleSize === opt.value
-                        ? "bg-accent text-ink-950"
-                        : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                    }`}
                   >
                     {opt.label}
-                  </button>
+                  </Chip>
                 ))}
               </div>
               <label className="block text-xs text-gray-500">
@@ -1084,6 +1319,7 @@ export default function Settings() {
             <Section
               title="SponsorBlock"
               description="Automatically skip sponsored segments and other non-content during playback of YouTube videos."
+              hidden={!match("sponsorblock", "sponsor", "skip")}
             >
               <div className="space-y-4">
                 <SettingRow
@@ -1123,20 +1359,18 @@ export default function Settings() {
             <Section
               title="Default playback speed"
               description="Speed a video starts at. Hold-click the video for a temporary 2x."
+              hidden={!match("playback speed", "speed", "default")}
             >
               <div className="flex flex-wrap gap-2">
                 {SPEED_STEPS.map((s) => (
-                  <button
+                  <Chip
                     key={s}
+                    active={settings.defaultPlaybackRate === s}
                     onClick={() => update({ defaultPlaybackRate: s })}
-                    className={`rounded-lg px-3 py-2 text-sm font-medium tabular-nums transition-colors ${
-                      settings.defaultPlaybackRate === s
-                        ? "bg-accent text-ink-950"
-                        : "bg-ink-800 text-gray-300 hover:bg-ink-700"
-                    }`}
+                    className="tabular-nums"
                   >
                     {s}x
-                  </button>
+                  </Chip>
                 ))}
               </div>
             </Section>
@@ -1148,11 +1382,20 @@ export default function Settings() {
             first
             title="Downloads"
             description="Background download queue and navigation preferences."
+            hidden={
+              !match(
+                "downloads",
+                "download count",
+                "normalize volume",
+                "navigation"
+              )
+            }
           >
             <div className="space-y-4">
               <SettingRow
                 title="Show download count in navigation"
                 description="Badge on the Download tab while jobs are queued or in progress."
+                hidden={!!q && !match("download count", "navigation", "badge")}
                 control={
                   <Toggle
                     checked={settings.showDownloadNavBadge}
@@ -1167,6 +1410,7 @@ export default function Settings() {
               <SettingRow
                 title="Normalize volume on download"
                 description="Apply loudness normalization when saving new videos (requires ffmpeg)."
+                hidden={!!q && !match("normalize volume", "loudness")}
                 control={
                   <Toggle
                     checked={settings.normalizeVolumeOnDownload}
@@ -1189,11 +1433,22 @@ export default function Settings() {
               first
               title="Ollama connection"
               description="Horde uses a local Ollama instance for embeddings and small LLM tasks. Leave the URL blank to auto-discover (compose sidecar or host.docker.internal)."
+              hidden={
+                !match(
+                  "ollama",
+                  "connection",
+                  "enable ai",
+                  "base url",
+                  "queue",
+                  "indexed"
+                )
+              }
             >
               <div className="space-y-4">
                 <SettingRow
                   title="Enable AI features"
                   description="When off, search and related videos use keyword heuristics only."
+                  hidden={!!q && !match("enable ai", "features")}
                   control={
                     <Toggle
                       checked={aiDraft.enabled}
@@ -1214,7 +1469,7 @@ export default function Settings() {
                       saveAi({ base_url: e.target.value.trim() })
                     }
                     placeholder="http://ollama:11434 or http://192.168.x.x:11434"
-                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    className={SELECT}
                   />
                 </label>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1238,7 +1493,7 @@ export default function Settings() {
                       );
                       refreshAiStatus();
                     }}
-                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:opacity-50"
+                    className={PANEL_BTN}
                   >
                     {aiTesting ? "Testing…" : "Test connection"}
                   </button>
@@ -1262,7 +1517,7 @@ export default function Settings() {
                         await saveAi({ paused: true });
                         showToast("AI queue paused");
                       }}
-                      className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+                      className={PANEL_BTN}
                     >
                       Pause queue
                     </button>
@@ -1304,12 +1559,7 @@ export default function Settings() {
                       </dd>
                     </div>
                     {aiStatus.current_job && (
-                      <div className="flex justify-between gap-3">
-                        <dt className="text-gray-400">Running</dt>
-                        <dd className="truncate text-xs text-gray-300">
-                          {aiStatus.current_job}
-                        </dd>
-                      </div>
+                      <CurrentAiJob job={aiStatus.current_job} />
                     )}
                     {aiStatus.queue_breakdown &&
                       aiStatus.queue_depth > 0 && (
@@ -1351,6 +1601,15 @@ export default function Settings() {
             <Section
               title="Models"
               description="Models are pulled automatically on first connect when auto-pull is enabled."
+              hidden={
+                !match(
+                  "models",
+                  "embedding",
+                  "chat model",
+                  "vram",
+                  "auto-pull"
+                )
+              }
             >
               <div className="max-w-md space-y-3">
                 <label className="block">
@@ -1358,7 +1617,7 @@ export default function Settings() {
                     Embedding model
                     <span
                       className="cursor-help text-gray-600"
-                      title="Embeddings are lighter on GPU than chat. nomic-embed-text is a good default."
+                      title={EMBED_MODEL_TIP}
                     >
                       (?)
                     </span>
@@ -1378,7 +1637,8 @@ export default function Settings() {
                         embed_model: e.target.value,
                       }));
                     }}
-                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    className={SELECT}
+                    title={EMBED_MODEL_TIP}
                   >
                     {EMBED_MODEL_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
@@ -1396,7 +1656,7 @@ export default function Settings() {
                         }))
                       }
                       placeholder="Ollama model name"
-                      className="ui-panel mt-2 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                      className={`${SELECT} mt-2`}
                     />
                   )}
                 </label>
@@ -1405,7 +1665,7 @@ export default function Settings() {
                     Chat model (tags, categories, duplicates)
                     <span
                       className="cursor-help text-gray-600"
-                      title="Chat models need more VRAM. 3B-class models fit a 6GB GPU; larger models need more."
+                      title={CHAT_MODEL_TIP}
                     >
                       (?)
                     </span>
@@ -1423,7 +1683,8 @@ export default function Settings() {
                         chat_model: e.target.value,
                       }));
                     }}
-                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    className={SELECT}
+                    title={CHAT_MODEL_TIP}
                   >
                     {CHAT_MODEL_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
@@ -1441,7 +1702,7 @@ export default function Settings() {
                         }))
                       }
                       placeholder="Ollama model name"
-                      className="ui-panel mt-2 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                      className={`${SELECT} mt-2`}
                     />
                   )}
                 </label>
@@ -1455,7 +1716,7 @@ export default function Settings() {
                     showToast("Models saved");
                     refreshAiStatus();
                   }}
-                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+                  className={PANEL_BTN}
                 >
                   Save models
                 </button>
@@ -1477,6 +1738,17 @@ export default function Settings() {
             <Section
               title="When to run"
               description="Important for large libraries — process on a schedule or only when you ask."
+              hidden={
+                !match(
+                  "when to run",
+                  "schedule",
+                  "process",
+                  "embeds",
+                  "tags",
+                  "categories",
+                  "timer"
+                )
+              }
             >
               <div className="max-w-md space-y-3">
                 <select
@@ -1484,7 +1756,7 @@ export default function Settings() {
                   onChange={(e) =>
                     saveAi({ schedule: e.target.value as AiSchedule })
                   }
-                  className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  className={SELECT}
                 >
                   {AI_SCHEDULE_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -1520,7 +1792,7 @@ export default function Settings() {
                           timer_hours: Number(e.target.value) || 6,
                         })
                       }
-                      className="ui-panel w-32 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                      className="ui-panel w-32 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                     />
                   </label>
                 )}
@@ -1543,42 +1815,45 @@ export default function Settings() {
                           schedule_time: e.target.value || "03:00",
                         })
                       }
-                      className="ui-panel rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                      className="ui-panel rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                     />
                   </label>
                 )}
-                <button
-                  type="button"
-                  disabled={aiProcessing}
-                  onClick={async () => {
-                    setAiProcessing(true);
-                    const result = await api
-                      .processAiLibrary()
-                      .catch(() => null);
-                    setAiProcessing(false);
-                    if (!result) {
-                      showToast("Could not enqueue library");
-                      return;
-                    }
-                    showToast(
-                      result.enqueued > 0
-                        ? `Queued ${result.enqueued}: ${result.detail}`
-                        : result.detail || "Nothing to process"
-                    );
-                    refreshAiStatus();
-                  }}
-                  className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent px-3 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-50"
-                >
-                  {aiProcessing ? "Queuing…" : "Process library now"}
-                </button>
+                <div className="flex flex-col gap-2">
+                  {AI_PROCESS_ACTIONS.map((opt) => (
+                    <button
+                      key={opt.action}
+                      type="button"
+                      disabled={!!aiProcessingAction}
+                      onClick={() => runAiProcess(opt.action)}
+                      className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent px-3 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                    >
+                      {aiProcessingAction === opt.action
+                        ? "Queuing…"
+                        : opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </Section>
 
-            <Section title="Features" description="Toggle individual AI jobs.">
+            <Section
+              title="Features"
+              description="Toggle individual AI jobs."
+              hidden={
+                !match(
+                  "features",
+                  "subtitles",
+                  "enrich tags",
+                  "duplicate"
+                )
+              }
+            >
               <div className="space-y-3">
                 <SettingRow
                   title="Use subtitles in embeddings"
                   description="Include caption text for better search and recommendations."
+                  hidden={!!q && !match("subtitles", "embeddings")}
                   control={
                     <Toggle
                       checked={aiDraft.use_subtitles}
@@ -1591,6 +1866,7 @@ export default function Settings() {
                 <SettingRow
                   title="Enrich tags with LLM"
                   description="Suggest extra tags after download (skipped if you edit tags manually)."
+                  hidden={!!q && !match("enrich tags", "llm")}
                   control={
                     <Toggle
                       checked={aiDraft.enrich_tags}
@@ -1603,6 +1879,7 @@ export default function Settings() {
                 <SettingRow
                   title="AI duplicate confirmation"
                   description="Score heuristic duplicate groups in Review."
+                  hidden={!!q && !match("duplicate", "confirmation")}
                   control={
                     <Toggle
                       checked={aiDraft.ai_duplicates}
@@ -1623,6 +1900,7 @@ export default function Settings() {
               first
               title="Storage"
               description="Total space used by your library on disk."
+              hidden={!match("storage", "disk", "space", "library")}
             >
               {storage ? (
                 <div className="flex items-baseline gap-3">
@@ -1639,7 +1917,20 @@ export default function Settings() {
               )}
             </Section>
 
-            <Section title="Health" description="System status overview.">
+            <Section
+              title="Health"
+              description="System status overview."
+              hidden={
+                !match(
+                  "health",
+                  "yt-dlp",
+                  "ollama",
+                  "disk",
+                  "review",
+                  "downloads"
+                )
+              }
+            >
               {health ? (
                 <dl className="space-y-2 text-sm">
                   <div className="flex justify-between">

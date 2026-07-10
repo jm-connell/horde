@@ -83,50 +83,120 @@ def enqueue_for_video(
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)
 
 
-def enqueue_library_backlog(*, force: bool = True) -> dict:
-    """Enqueue missing embeds/tags. Returns enqueued count + breakdown."""
-    del force  # reserved for future "reprocess all" behavior
+def enqueue_missing_embeds(*, limit: int = 2000) -> dict:
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     with Session(engine) as session:
-        need = embeddings.videos_needing_embed(session, limit=2000)
+        need = embeddings.videos_needing_embed(session, limit=limit)
     for video_id in need:
         if enqueue_job(AiJobKind.embed_video, video_id, force=False) is not None:
             breakdown["embed"] += 1
+    return _result(breakdown, empty="No missing embeds")
 
+
+def enqueue_missing_tags(*, limit: int = 2000) -> dict:
+    breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
-    if ai.get("enrich_tags", True):
-        with Session(engine) as session:
-            videos = session.exec(
-                select(Video).where(Video.needs_review == False)  # noqa: E712
-            ).all()
-            pending_tag_ids: list[int] = []
-            for video in videos:
-                if video.id is None:
-                    continue
-                meta = session.get(VideoAiMeta, video.id)
-                if meta is not None and (meta.tags_locked or meta.tags_enriched_at):
-                    continue
-                pending_tag_ids.append(video.id)
-        for video_id in pending_tag_ids:
-            if enqueue_job(AiJobKind.enrich_tags, video_id, force=False) is not None:
-                breakdown["tags"] += 1
+    if not ai.get("enrich_tags", True):
+        return _result(breakdown, empty="Tag enrichment is disabled")
+    pending: list[int] = []
+    with Session(engine) as session:
+        videos = session.exec(
+            select(Video).where(Video.needs_review == False)  # noqa: E712
+        ).all()
+        for video in videos:
+            if video.id is None:
+                continue
+            meta = session.get(VideoAiMeta, video.id)
+            if meta is not None and (meta.tags_locked or meta.tags_enriched_at):
+                continue
+            pending.append(video.id)
+            if len(pending) >= limit:
+                break
+    for video_id in pending:
+        if enqueue_job(AiJobKind.enrich_tags, video_id, force=False) is not None:
+            breakdown["tags"] += 1
+    return _result(breakdown, empty="No videos missing AI tags")
 
-    if enqueue_job(AiJobKind.refresh_categories, None, force=False) is not None:
+
+def enqueue_full_tag_refresh(*, limit: int = 2000) -> dict:
+    """Re-queue tag enrich for unlocked videos (clears tags_enriched_at)."""
+    breakdown = {"embed": 0, "tags": 0, "categories": 0}
+    ai = app_settings.ai_settings()
+    if not ai.get("enrich_tags", True):
+        return _result(breakdown, empty="Tag enrichment is disabled")
+    ids: list[int] = []
+    with Session(engine) as session:
+        videos = session.exec(
+            select(Video).where(Video.needs_review == False)  # noqa: E712
+        ).all()
+        for video in videos:
+            if video.id is None:
+                continue
+            meta = session.get(VideoAiMeta, video.id)
+            if meta is not None and meta.tags_locked:
+                continue
+            if meta is None:
+                meta = VideoAiMeta(video_id=video.id)
+            meta.tags_enriched_at = None
+            meta.updated_at = utcnow()
+            session.add(meta)
+            ids.append(video.id)
+            if len(ids) >= limit:
+                break
+        session.commit()
+    for video_id in ids:
+        if enqueue_job(AiJobKind.enrich_tags, video_id, force=True) is not None:
+            breakdown["tags"] += 1
+    return _result(breakdown, empty="No unlocked videos to refresh")
+
+
+def enqueue_refresh_categories(*, force: bool = True) -> dict:
+    breakdown = {"embed": 0, "tags": 0, "categories": 0}
+    if enqueue_job(AiJobKind.refresh_categories, None, force=force) is not None:
         breakdown["categories"] += 1
+    return _result(breakdown, empty="Category refresh already queued")
 
+
+def enqueue_library_backlog(*, force: bool = True) -> dict:
+    """Default process: missing embeds + missing tags + categories."""
+    del force
+    a = enqueue_missing_embeds()
+    b = enqueue_missing_tags()
+    c = enqueue_refresh_categories(force=True)
+    breakdown = {
+        "embed": a["breakdown"]["embed"],
+        "tags": b["breakdown"]["tags"],
+        "categories": c["breakdown"]["categories"],
+    }
+    return _result(breakdown, empty="Nothing new to process (library already indexed)")
+
+
+def enqueue_video_tag_refresh(video_id: int) -> bool:
+    with Session(engine) as session:
+        video = session.get(Video, video_id)
+        if video is None or video.needs_review:
+            return False
+        meta = session.get(VideoAiMeta, video_id)
+        if meta is None:
+            meta = VideoAiMeta(video_id=video_id)
+        meta.tags_locked = False
+        meta.tags_enriched_at = None
+        meta.updated_at = utcnow()
+        session.add(meta)
+        session.commit()
+    return enqueue_job(AiJobKind.enrich_tags, video_id, force=True) is not None
+
+
+def _result(breakdown: dict[str, int], *, empty: str) -> dict:
     enqueued = sum(breakdown.values())
     parts: list[str] = []
-    if breakdown["embed"]:
+    if breakdown.get("embed"):
         parts.append(f"{breakdown['embed']} embed")
-    if breakdown["tags"]:
+    if breakdown.get("tags"):
         parts.append(f"{breakdown['tags']} tag enrich")
-    if breakdown["categories"]:
+    if breakdown.get("categories"):
         parts.append(f"{breakdown['categories']} category refresh")
-    detail = (
-        ", ".join(parts)
-        if parts
-        else "Nothing new to process (library already indexed)"
-    )
+    detail = ", ".join(parts) if parts else empty
     return {"enqueued": enqueued, "breakdown": breakdown, "detail": detail}
 
 
@@ -162,7 +232,7 @@ def queue_breakdown() -> dict[str, int]:
     return counts
 
 
-def current_job_label() -> Optional[str]:
+def current_job_info() -> Optional[dict]:
     with Session(engine) as session:
         job = session.exec(
             select(AiJob)
@@ -173,9 +243,31 @@ def current_job_label() -> Optional[str]:
         if job is None:
             return None
         kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
+        info: dict = {
+            "kind": kind,
+            "video_id": job.video_id,
+            "title": None,
+            "channel": None,
+            "has_thumbnail": False,
+        }
         if job.video_id:
-            return f"{kind} (video {job.video_id})"
-        return kind
+            video = session.get(Video, job.video_id)
+            if video is not None:
+                info["title"] = video.title
+                info["channel"] = video.channel
+                info["has_thumbnail"] = bool(video.thumbnail_path)
+        return info
+
+
+def current_job_label() -> Optional[str]:
+    info = current_job_info()
+    if info is None:
+        return None
+    if info.get("title"):
+        return f"{info['kind']}: {info['title']}"
+    if info.get("video_id"):
+        return f"{info['kind']} (video {info['video_id']})"
+    return str(info["kind"])
 
 
 def _next_job(session: Session) -> Optional[AiJob]:

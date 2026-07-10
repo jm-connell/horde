@@ -2,7 +2,6 @@ import type { BackgroundEffect } from "../hooks/useSettings";
 import type { EffectController } from "./shared";
 import { createAuroraEffect } from "./aurora";
 import { createBokehEffect } from "./bokeh";
-import { createCityscapeEffect } from "./cityscape";
 import { createConstellationEffect } from "./constellation";
 import { createDustEffect } from "./dust";
 import { createFirefliesEffect } from "./fireflies";
@@ -55,17 +54,12 @@ export const BACKGROUND_EFFECT_OPTIONS: {
   {
     value: "flowing-gradient",
     label: "Flowing gradient",
-    description: "Slow RGB color wash",
+    description: "Soft drifting color blooms",
   },
   {
     value: "lightspeed",
     label: "Lightspeed",
     description: "Subtle tunnel of light streaks",
-  },
-  {
-    value: "cityscape",
-    label: "Cityscape",
-    description: "Calm scrolling skyline silhouette",
   },
 ];
 
@@ -87,7 +81,6 @@ const FACTORIES: Partial<Record<BackgroundEffect, EffectFactory>> = {
   "modern-grid": createModernGridEffect,
   "flowing-gradient": createFlowingGradientEffect,
   lightspeed: createLightspeedEffect,
-  cityscape: createCityscapeEffect,
 };
 
 export function createBackgroundEffect(

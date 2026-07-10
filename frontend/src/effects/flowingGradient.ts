@@ -7,7 +7,7 @@ import {
 
 function hslToRgb(h: number, s: number, l: number): Rgb {
   const c = (1 - Math.abs(2 * l - 1)) * s;
-  const hp = ((h % 360) + 360) % 360 / 60;
+  const hp = (((h % 360) + 360) % 360) / 60;
   const x = c * (1 - Math.abs((hp % 2) - 1));
   let r = 0;
   let g = 0;
@@ -47,66 +47,93 @@ function mix(a: Rgb, b: Rgb, t: number): Rgb {
   ];
 }
 
+interface Blob {
+  hueOffset: number;
+  speed: number;
+  phaseX: number;
+  phaseY: number;
+  orbitX: number;
+  orbitY: number;
+  radius: number;
+  lightness: number;
+}
+
 export function createFlowingGradientEffect(
   canvas: HTMLCanvasElement
 ): EffectController {
+  const blobs: Blob[] = [
+    {
+      hueOffset: 0,
+      speed: 0.18,
+      phaseX: 0.2,
+      phaseY: 1.1,
+      orbitX: 0.22,
+      orbitY: 0.18,
+      radius: 0.72,
+      lightness: 0.45,
+    },
+    {
+      hueOffset: 120,
+      speed: 0.14,
+      phaseX: 2.4,
+      phaseY: 0.6,
+      orbitX: 0.28,
+      orbitY: 0.24,
+      radius: 0.85,
+      lightness: 0.4,
+    },
+    {
+      hueOffset: 240,
+      speed: 0.11,
+      phaseX: 4.1,
+      phaseY: 3.2,
+      orbitX: 0.2,
+      orbitY: 0.26,
+      radius: 0.78,
+      lightness: 0.42,
+    },
+  ];
+
   return createCanvasLoop(
     canvas,
-    ({ ctx, width, height, accent, time, isLight }) => {
+    ({ ctx, width, height, accent, time, isLight, size }) => {
       ctx.clearRect(0, 0, width, height);
 
       const baseHue =
         (Math.atan2(accent[1] - accent[0], accent[2] - accent[0]) * 180) /
           Math.PI +
         180;
-      const t = time * 28;
-      const colors: Rgb[] = [
-        mix(accent, hslToRgb(baseHue + t, 0.75, isLight ? 0.55 : 0.45), 0.55),
-        hslToRgb(baseHue + 120 + t * 0.7, 0.7, isLight ? 0.5 : 0.4),
-        hslToRgb(baseHue + 240 + t * 0.5, 0.65, isLight ? 0.48 : 0.38),
-        mix(accent, hslToRgb(baseHue + 60 + t, 0.8, isLight ? 0.52 : 0.42), 0.4),
-      ];
+      const maxDim = Math.max(width, height);
+      const alpha = isLight ? 0.2 : 0.28;
 
-      const angle = time * 0.12;
-      const cx = width * 0.5;
-      const cy = height * 0.5;
-      const dx = Math.cos(angle) * width;
-      const dy = Math.sin(angle) * height;
-      const g = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
-      const alpha = isLight ? 0.22 : 0.32;
-      g.addColorStop(0, rgba(colors[0], alpha));
-      g.addColorStop(0.2, rgba(colors[1], alpha * 0.95));
-      g.addColorStop(0.4, rgba(colors[2], alpha * 0.9));
-      g.addColorStop(0.6, rgba(colors[3], alpha * 0.88));
-      g.addColorStop(0.8, rgba(colors[1], alpha * 0.85));
-      g.addColorStop(1, rgba(colors[0], alpha));
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, width, height);
+      for (const blob of blobs) {
+        const cx =
+          width *
+          (0.5 +
+            Math.sin(time * blob.speed + blob.phaseX) * blob.orbitX * size);
+        const cy =
+          height *
+          (0.5 +
+            Math.cos(time * blob.speed * 0.85 + blob.phaseY) *
+              blob.orbitY *
+              size);
+        const radius = maxDim * blob.radius * (0.75 + 0.35 * size);
+        const color = mix(
+          accent,
+          hslToRgb(
+            baseHue + blob.hueOffset + time * 8,
+            0.72,
+            isLight ? blob.lightness + 0.1 : blob.lightness
+          ),
+          0.45
+        );
 
-      // Soft secondary wash for keyboard-RGB depth
-      const g2 = ctx.createRadialGradient(
-        width * (0.3 + 0.2 * Math.sin(time * 0.2)),
-        height * (0.4 + 0.15 * Math.cos(time * 0.17)),
-        0,
-        width * 0.5,
-        height * 0.5,
-        Math.max(width, height) * 0.7
-      );
-      g2.addColorStop(0, rgba(colors[1], isLight ? 0.1 : 0.16));
-      g2.addColorStop(1, rgba(colors[1], 0));
-      ctx.fillStyle = g2;
-      ctx.fillRect(0, 0, width, height);
-
-      // Subtle dither noise to break banding on large gradients
-      const step = 4;
-      for (let y = 0; y < height; y += step) {
-        for (let x = 0; x < width; x += step) {
-          const n = ((x * 12.9898 + y * 78.233 + time * 40) % 1 + 1) % 1;
-          const a = (n - 0.5) * 0.035;
-          if (Math.abs(a) < 0.004) continue;
-          ctx.fillStyle = a > 0 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${-a})`;
-          ctx.fillRect(x, y, step, step);
-        }
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        g.addColorStop(0, rgba(color, alpha));
+        g.addColorStop(0.45, rgba(color, alpha * 0.45));
+        g.addColorStop(1, rgba(color, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, width, height);
       }
     }
   );

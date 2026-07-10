@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
-import type { RecommendationSection } from "../types";
+import type { RecommendationSection, Video } from "../types";
 
 const HOME_CATEGORY_KEY = "horde.home.recommendedCategory";
+const PAGE_SIZE = 24;
 
 function loadCategory(): string | null {
   try {
@@ -21,22 +22,70 @@ export default function RecommendedHome({
 }) {
   const [categories, setCategories] = useState<string[]>([]);
   const [sections, setSections] = useState<RecommendationSection[]>([]);
+  const [forYouVideos, setForYouVideos] = useState<Video[]>([]);
+  const [forYouOffset, setForYouOffset] = useState(0);
+  const [forYouHasMore, setForYouHasMore] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(loadCategory);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const chipScrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const chipClass = (selected: boolean) =>
+    `ui-panel ui-interactive shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+      selected
+        ? "border-accent bg-accent/10 text-accent"
+        : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
+    }`;
+
+  const gridClass = `grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+    sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
+  }`;
+
+  const updateChipScroll = useCallback(() => {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    updateChipScroll();
+    el.addEventListener("scroll", updateChipScroll, { passive: true });
+    const ro = new ResizeObserver(updateChipScroll);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateChipScroll);
+      ro.disconnect();
+    };
+  }, [categories, updateChipScroll]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError(null);
+    setForYouVideos([]);
+    setForYouOffset(0);
     api
-      .getRecommendations(activeCategory || undefined)
+      .getRecommendations(activeCategory || undefined, {
+        limit: PAGE_SIZE,
+        offset: 0,
+      })
       .then((data) => {
         if (!active) return;
         setCategories(data.categories);
         setSections(data.sections);
         setHint(data.hint ?? null);
+        if (!activeCategory) {
+          const vids = data.sections.flatMap((s) => s.videos);
+          setForYouVideos(vids);
+          setForYouOffset(vids.length);
+          setForYouHasMore(Boolean(data.has_more ?? vids.length >= PAGE_SIZE));
+        }
       })
       .catch(() => {
         if (!active) return;
@@ -52,6 +101,42 @@ export default function RecommendedHome({
     };
   }, [activeCategory]);
 
+  const loadMoreForYou = useCallback(async () => {
+    if (activeCategory || loadingMore || !forYouHasMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await api.getRecommendations(undefined, {
+        limit: PAGE_SIZE,
+        offset: forYouOffset,
+      });
+      const vids = data.sections.flatMap((s) => s.videos);
+      setForYouVideos((prev) => {
+        const seen = new Set(prev.map((v) => v.id));
+        return [...prev, ...vids.filter((v) => !seen.has(v.id))];
+      });
+      setForYouOffset((o) => o + vids.length);
+      setForYouHasMore(Boolean(data.has_more && vids.length > 0));
+    } catch {
+      setForYouHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [activeCategory, loadingMore, forYouHasMore, forYouOffset]);
+
+  useEffect(() => {
+    if (activeCategory || !forYouHasMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMoreForYou();
+      },
+      { rootMargin: "240px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [activeCategory, forYouHasMore, loadMoreForYou]);
+
   const selectCategory = (name: string | null) => {
     setActiveCategory(name);
     try {
@@ -62,22 +147,22 @@ export default function RecommendedHome({
     }
   };
 
-  const chipClass = (selected: boolean) =>
-    `shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-      selected
-        ? "bg-accent text-ink-950"
-        : "border border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
-    }`;
+  const scrollChips = () => {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: Math.max(160, el.clientWidth * 0.6), behavior: "smooth" });
+  };
 
-  const gridClass = `grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
-    sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
-  }`;
+  const showForYou = !activeCategory;
 
   return (
     <div className="space-y-6">
       {(categories.length > 0 || activeCategory) && (
-        <div className="relative">
-          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
+        <div className="relative flex items-center gap-2">
+          <div
+            ref={chipScrollRef}
+            className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
             <button
               type="button"
               onClick={() => selectCategory(null)}
@@ -96,10 +181,16 @@ export default function RecommendedHome({
               </button>
             ))}
           </div>
-          <div
-            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-ink-950 to-transparent"
-            aria-hidden
-          />
+          {canScrollRight && (
+            <button
+              type="button"
+              onClick={scrollChips}
+              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
+              aria-label="Scroll categories"
+            >
+              ›
+            </button>
+          )}
         </div>
       )}
 
@@ -115,6 +206,25 @@ export default function RecommendedHome({
         <div className="py-16 text-center text-gray-500">
           <p className="text-sm">{error}</p>
         </div>
+      ) : showForYou ? (
+        forYouVideos.length === 0 ? (
+          <div className="py-16 text-center text-gray-500">
+            <p className="text-lg">No recommendations yet.</p>
+            <p className="mt-1 text-sm">
+              Watch a few videos or process your library under Settings → AI.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className={gridClass}>
+              {forYouVideos.map((v) => (
+                <VideoCard key={v.id} video={v} />
+              ))}
+            </div>
+            <div ref={sentinelRef} className="h-4" />
+            {loadingMore && <LoadingIndicator />}
+          </>
+        )
       ) : sections.length === 0 ||
         sections.every((s) => s.videos.length === 0) ? (
         <div className="py-16 text-center text-gray-500">

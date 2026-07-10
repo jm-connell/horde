@@ -157,6 +157,8 @@ class VideoAiMeta(SQLModel, table=True):
     summary: Optional[str] = None
     # JSON list of tags added by AI (subset of Video.tags).
     ai_tags: str = Field(default="[]")
+    # JSON list of tags added manually by the user.
+    user_tags: str = Field(default="[]")
     tags_enriched_at: Optional[datetime] = None
     tags_locked: bool = Field(default=False)
     updated_at: datetime = Field(default_factory=utcnow)

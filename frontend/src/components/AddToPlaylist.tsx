@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 import type { Playlist } from "../types";
@@ -8,8 +8,7 @@ export default function AddToPlaylist({ videoId }: { videoId: number }) {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-  const flip = useFlipMenu(open, 320);
+  const { flip, anchorRef } = useFlipMenu(open, 320);
 
   useEffect(() => {
     if (!open) return;
@@ -18,11 +17,13 @@ export default function AddToPlaylist({ videoId }: { videoId: number }) {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
-  }, []);
+  }, [anchorRef]);
 
   const add = async (playlistId: number, name: string) => {
     try {
@@ -47,10 +48,10 @@ export default function AddToPlaylist({ videoId }: { videoId: number }) {
   };
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={anchorRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+        className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
       >
         + Playlist
       </button>

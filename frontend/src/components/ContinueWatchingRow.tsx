@@ -22,6 +22,7 @@ export default function ContinueWatchingRow({
   onDismissAll,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollingRef = useRef(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -46,10 +47,27 @@ export default function ContinueWatchingRow({
     };
   }, [videos, updateScrollState]);
 
-  const scrollBy = (dir: -1 | 1) => {
+  const scrollByDir = (dir: -1 | 1) => {
     const el = scrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dir * el.clientWidth * 0.75, behavior: "smooth" });
+    if (!el || scrollingRef.current) return;
+    const card = el.querySelector<HTMLElement>(":scope > div > div");
+    const gap = 16;
+    const step = card ? card.offsetWidth + gap : el.clientWidth * 0.75;
+    scrollingRef.current = true;
+    el.scrollBy({ left: dir * step, behavior: "smooth" });
+    const done = () => {
+      scrollingRef.current = false;
+      updateScrollState();
+    };
+    const onEnd = () => {
+      el.removeEventListener("scrollend", onEnd);
+      done();
+    };
+    if (typeof (window as Window & { onscrollend?: unknown }).onscrollend !== "undefined") {
+      el.addEventListener("scrollend", onEnd, { once: true });
+    } else {
+      globalThis.setTimeout(done, 350);
+    }
   };
 
   if (videos.length === 0) return null;
@@ -72,7 +90,7 @@ export default function ContinueWatchingRow({
         {canScrollLeft && (
           <button
             type="button"
-            onClick={() => scrollBy(-1)}
+            onClick={() => scrollByDir(-1)}
             className="absolute -left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-ink-800 text-sm text-gray-300 shadow-md ring-1 ring-ink-600 hover:text-accent hover:ring-accent/60"
             aria-label="Scroll left"
           >
@@ -82,7 +100,7 @@ export default function ContinueWatchingRow({
         {canScrollRight && (
           <button
             type="button"
-            onClick={() => scrollBy(1)}
+            onClick={() => scrollByDir(1)}
             className="absolute -right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-ink-800 text-sm text-gray-300 shadow-md ring-1 ring-ink-600 hover:text-accent hover:ring-accent/60"
             aria-label="Scroll right"
           >

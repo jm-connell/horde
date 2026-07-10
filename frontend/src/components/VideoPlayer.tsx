@@ -1487,7 +1487,7 @@ export default function VideoPlayer({
 
         {upNext && !isMini && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/65 p-4">
-            <div className="w-full max-w-sm overflow-hidden rounded-xl bg-ink-900/95 ring-1 ring-ink-600 shadow-2xl">
+            <div className="w-full max-w-sm overflow-hidden rounded-xl border border-ink-700 bg-ink-900/95 shadow-2xl ring-1 ring-ink-600">
               {upNext.poster && (
                 <div className="aspect-video w-full overflow-hidden bg-ink-800">
                   <img
@@ -1510,7 +1510,7 @@ export default function VideoPlayer({
                     {upNext.channel}
                   </p>
                 )}
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={onPlayUpNext}
@@ -1521,26 +1521,31 @@ export default function VideoPlayer({
                   <button
                     type="button"
                     onClick={onCancelUpNext}
-                    className="rounded-lg bg-ink-800 px-3 py-2 text-sm text-gray-200 hover:bg-ink-700"
+                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-3 py-2 text-sm text-gray-200 hover:bg-ink-700"
                   >
                     Cancel
                   </button>
-                  {onAutoplayRelatedChange && (
+                </div>
+                {onAutoplayRelatedChange && (
+                  <label className="mt-4 flex items-center justify-between gap-3 border-t border-ink-700 pt-3">
+                    <span className="text-xs text-gray-400">Autoplay related</span>
                     <button
                       type="button"
-                      onClick={() =>
-                        onAutoplayRelatedChange(!autoplayRelated)
-                      }
-                      className={`w-full rounded-lg px-3 py-2 text-sm font-medium ${
-                        autoplayRelated
-                          ? "bg-accent/15 text-accent ring-1 ring-accent/40"
-                          : "bg-ink-800 text-gray-300 ring-1 ring-ink-600"
+                      role="switch"
+                      aria-checked={autoplayRelated}
+                      onClick={() => onAutoplayRelatedChange(!autoplayRelated)}
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                        autoplayRelated ? "bg-accent" : "bg-ink-700"
                       }`}
                     >
-                      Autoplay {autoplayRelated ? "on" : "off"}
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                          autoplayRelated ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
                     </button>
-                  )}
-                </div>
+                  </label>
+                )}
               </div>
             </div>
           </div>

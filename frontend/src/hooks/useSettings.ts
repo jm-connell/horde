@@ -52,13 +52,12 @@ export type BackgroundEffect =
   | "grain"
   | "modern-grid"
   | "flowing-gradient"
-  | "lightspeed"
-  | "cityscape";
+  | "lightspeed";
 
 export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator = "none" | "liquid" | "underline" | "fade";
 export type LoadingStyle = "dots" | "spinner" | "bar";
-export type UiScale = "90" | "100" | "110" | "125";
+export type UiScale = "80" | "90" | "100" | "110" | "125" | "150" | "175";
 
 export interface Settings {
   theme: Theme;
@@ -75,10 +74,11 @@ export interface Settings {
   translucentPanels: boolean;
   /** 0.15–1 when panels are translucent; higher = more see-through. */
   translucentPanelStrength: number;
+  /** Raise opacity / tint on panels marked .ui-panel-legible. */
+  translucentPanelLegibility: boolean;
   loadingStyle: LoadingStyle;
   /** Rem-based UI scale applied to documentElement font-size. */
   uiScale: UiScale;
-  debugLayout: boolean;
   showDescription: boolean;
   subtitleSize: SubtitleSize;
   subtitleOffset: number;
@@ -125,9 +125,9 @@ const DEFAULTS: Settings = {
   hoverMotion: "subtle",
   translucentPanels: false,
   translucentPanelStrength: 0.65,
+  translucentPanelLegibility: true,
   loadingStyle: "dots",
   uiScale: "100",
-  debugLayout: false,
   showDescription: true,
   subtitleSize: "medium",
   subtitleOffset: 12,
@@ -169,6 +169,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "hoverMotion",
   "translucentPanels",
   "translucentPanelStrength",
+  "translucentPanelLegibility",
   "loadingStyle",
   "uiScale",
   "showDescription",
@@ -297,7 +298,6 @@ const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "modern-grid",
   "flowing-gradient",
   "lightspeed",
-  "cityscape",
 ]);
 
 const VALID_HOVER_MOTION = new Set<string>(["off", "subtle", "lift", "glow"]);
@@ -437,9 +437,19 @@ export function serverUiToSettingsPatch(
   return patch as Partial<Settings>;
 }
 
+const VALID_UI_SCALES = new Set<string>([
+  "80",
+  "90",
+  "100",
+  "110",
+  "125",
+  "150",
+  "175",
+]);
+
 function normalizeUiScale(value: unknown): UiScale {
-  if (value === "90" || value === "100" || value === "110" || value === "125") {
-    return value;
+  if (typeof value === "string" && VALID_UI_SCALES.has(value)) {
+    return value as UiScale;
   }
   return DEFAULTS.uiScale;
 }
@@ -478,8 +488,11 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
     translucentPanelStrength: normalizeTranslucentStrength(
       parsed.translucentPanelStrength
     ),
+    translucentPanelLegibility: normalizeBool(
+      parsed.translucentPanelLegibility,
+      DEFAULTS.translucentPanelLegibility
+    ),
     uiScale: normalizeUiScale(parsed.uiScale),
-    debugLayout: normalizeBool(parsed.debugLayout, DEFAULTS.debugLayout),
   };
 }
 
@@ -494,7 +507,10 @@ export function applyMotionPrefs(settings: Settings): void {
   root.dataset.buttonPress = reduced ? "off" : "on";
   root.dataset.pageFade = reduced ? "off" : "on";
   root.dataset.translucentPanels = settings.translucentPanels ? "on" : "off";
-  root.dataset.debugLayout = settings.debugLayout ? "on" : "off";
+  root.dataset.panelLegibility =
+    settings.translucentPanels && settings.translucentPanelLegibility
+      ? "on"
+      : "off";
   // Strength → panel fill alpha (lower = more see-through) and blur.
   // High strength keeps blur low so particle effects stay visible.
   const s = settings.translucentPanelStrength;
@@ -630,6 +646,8 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
     settings.hoverMotion,
     settings.translucentPanels,
     settings.translucentPanelStrength,
+    settings.translucentPanelLegibility,
+    settings.uiScale,
   ]);
 
   useEffect(() => {

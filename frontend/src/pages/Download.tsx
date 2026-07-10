@@ -243,6 +243,12 @@ export default function Download() {
         recent.push(job);
       }
     }
+    // Oldest active first so the first download stays on top.
+    active.sort((a, b) => {
+      const ta = a.created_at ? Date.parse(a.created_at) : 0;
+      const tb = b.created_at ? Date.parse(b.created_at) : 0;
+      return ta - tb;
+    });
     return { activeJobs: active, recentJobs: recent };
   }, [jobs, progress]);
 
@@ -349,7 +355,7 @@ export default function Download() {
                   })
                   .catch(() => undefined);
               }}
-              className="shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
+              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
             >
               Paste
             </button>
@@ -557,13 +563,17 @@ export default function Download() {
           <Collapse open={!activeCollapsed}>
             <div className="space-y-4">
               {activeJobs.map((job) => (
-                <DownloadJobCard
+                <div
                   key={job.id}
-                  job={job}
-                  live={progress[job.id]}
-                  channels={channels}
-                  active
-                />
+                  className="origin-top transition-[opacity,transform,max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                >
+                  <DownloadJobCard
+                    job={job}
+                    live={progress[job.id]}
+                    channels={channels}
+                    active
+                  />
+                </div>
               ))}
             </div>
           </Collapse>

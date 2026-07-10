@@ -17,15 +17,18 @@ export function createSnowEffect(canvas: HTMLCanvasElement): EffectController {
   let lastSize = 0;
 
   const rebuild = (w: number, h: number, size: number) => {
-    const count = Math.floor(((w * h) / 11000) * size) + Math.floor(50 * size);
+    // Mild density scaling — size mainly drives flake radius.
+    const density = 0.7 + 0.3 * size;
+    const count =
+      Math.floor(((w * h) / 11000) * density) + Math.floor(50 * density);
     flakes = Array.from({ length: count }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      r: rand(1, 3.2) * size,
+      r: rand(1.2, 3.6) * size,
       speed: rand(18, 55),
       drift: rand(8, 28),
       phase: Math.random() * Math.PI * 2,
-      alpha: rand(0.25, 0.7),
+      alpha: rand(0.3, 0.78),
     }));
   };
 

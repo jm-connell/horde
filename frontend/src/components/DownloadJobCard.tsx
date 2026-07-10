@@ -176,7 +176,7 @@ export default function DownloadJobCard({
       : null;
 
   const cardRing = active
-    ? "overflow-hidden border-l-4 border-l-accent ring-ink-700"
+    ? "relative overflow-hidden ring-ink-700"
     : "ring-ink-700";
 
   const errorMsg =
@@ -203,8 +203,14 @@ export default function DownloadJobCard({
 
   return (
     <>
-    <div className={`ui-panel rounded-xl bg-ink-900 p-5 ring-1 ${cardRing}`}>
-      <div className="flex gap-4">
+    <div className={`ui-panel rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ${cardRing}`}>
+      {active && (
+        <span
+          className="absolute bottom-3 left-0 top-3 w-1 rounded-full bg-accent"
+          aria-hidden
+        />
+      )}
+      <div className={`flex gap-4 ${active ? "pl-2" : ""}`}>
         <div className="hidden h-20 w-36 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block">
           {thumbSrc ? (
             <img

@@ -45,6 +45,7 @@ _DOWNLOAD_JOB_COLUMNS = [
 
 _VIDEO_AI_META_COLUMNS = [
     ("ai_tags", "VARCHAR DEFAULT '[]'"),
+    ("user_tags", "VARCHAR DEFAULT '[]'"),
 ]
 
 

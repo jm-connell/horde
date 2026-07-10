@@ -12,6 +12,7 @@ export interface Video {
   channel_url: string | null;
   tags: string[];
   ai_tags: string[];
+  user_tags: string[];
   description: string | null;
   notes: string | null;
   source_url: string | null;
@@ -43,6 +44,7 @@ export interface VideoUpdate {
   channel?: string;
   channel_url?: string | null;
   tags?: string[];
+  user_tag?: string;
   description?: string;
   notes?: string | null;
   source_url?: string;
@@ -198,7 +200,7 @@ export interface AiStatus {
   total_videos: number;
   queue_depth: number;
   queue_breakdown: Record<string, number>;
-  current_job: string | null;
+  current_job: AiCurrentJob | string | null;
 }
 
 export interface RecommendationSection {
@@ -212,6 +214,15 @@ export interface RecommendationsResponse {
   categories: string[];
   sections: RecommendationSection[];
   hint?: string;
+  has_more?: boolean;
+}
+
+export interface AiCurrentJob {
+  kind: string;
+  video_id: number | null;
+  title: string | null;
+  channel: string | null;
+  has_thumbnail: boolean;
 }
 
 export interface AiProcessResult {
