@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { useToast } from "../context/ToastContext";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
 import type { RecommendationSection, Video } from "../types";
@@ -20,17 +21,19 @@ export default function RecommendedHome({
 }: {
   sidebarCollapsed: boolean;
 }) {
+  const { showToast } = useToast();
   const [categories, setCategories] = useState<string[]>([]);
   const [sections, setSections] = useState<RecommendationSection[]>([]);
   const [forYouVideos, setForYouVideos] = useState<Video[]>([]);
   const [forYouOffset, setForYouOffset] = useState(0);
   const [forYouHasMore, setForYouHasMore] = useState(false);
-  const [hint, setHint] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(loadCategory);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const chipScrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -79,7 +82,6 @@ export default function RecommendedHome({
         if (!active) return;
         setCategories(data.categories);
         setSections(data.sections);
-        setHint(data.hint ?? null);
         if (!activeCategory) {
           const vids = data.sections.flatMap((s) => s.videos);
           setForYouVideos(vids);
@@ -91,7 +93,6 @@ export default function RecommendedHome({
         if (!active) return;
         setError("Could not load recommendations. Index more videos in Settings → AI.");
         setSections([]);
-        setHint(null);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -99,7 +100,7 @@ export default function RecommendedHome({
     return () => {
       active = false;
     };
-  }, [activeCategory]);
+  }, [activeCategory, reloadKey]);
 
   const loadMoreForYou = useCallback(async () => {
     if (activeCategory || loadingMore || !forYouHasMore) return;
@@ -153,52 +154,71 @@ export default function RecommendedHome({
     el.scrollBy({ left: Math.max(160, el.clientWidth * 0.6), behavior: "smooth" });
   };
 
+  const refreshCategories = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const result = await api.processAiLibrary("categories");
+      showToast(result.detail || "Category refresh queued");
+      setReloadKey((k) => k + 1);
+      // Refetch again shortly in case the worker finishes category update quickly.
+      setTimeout(() => setReloadKey((k) => k + 1), 2500);
+    } catch {
+      showToast("Could not refresh categories");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const showForYou = !activeCategory;
 
   return (
     <div className="space-y-6">
-      {(categories.length > 0 || activeCategory) && (
-        <div className="relative flex items-center gap-2">
-          <div
-            ref={chipScrollRef}
-            className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      <div className="relative flex items-center gap-2">
+        <div
+          ref={chipScrollRef}
+          className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <button
+            type="button"
+            onClick={() => selectCategory(null)}
+            className={chipClass(!activeCategory)}
           >
+            For you
+          </button>
+          {categories.map((name) => (
             <button
+              key={name}
               type="button"
-              onClick={() => selectCategory(null)}
-              className={chipClass(!activeCategory)}
+              onClick={() => selectCategory(name)}
+              className={chipClass(activeCategory === name)}
             >
-              For you
+              {name}
             </button>
-            {categories.map((name) => (
-              <button
-                key={name}
-                type="button"
-                onClick={() => selectCategory(name)}
-                className={chipClass(activeCategory === name)}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-          {canScrollRight && (
-            <button
-              type="button"
-              onClick={scrollChips}
-              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
-              aria-label="Scroll categories"
-            >
-              ›
-            </button>
-          )}
+          ))}
         </div>
-      )}
-
-      {hint && !loading && !error && (
-        <p className="text-xs text-gray-500" title={hint}>
-          {hint}
-        </p>
-      )}
+        {canScrollRight && (
+          <button
+            type="button"
+            onClick={scrollChips}
+            className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
+            aria-label="Scroll categories"
+          >
+            ›
+          </button>
+        )}
+        {showForYou && (
+          <button
+            type="button"
+            onClick={refreshCategories}
+            disabled={refreshing}
+            title="Refresh category shelves (does not re-embed)"
+            className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-xs text-gray-400 hover:border-accent hover:text-accent disabled:opacity-50"
+          >
+            {refreshing ? "…" : "Update shelves"}
+          </button>
+        )}
+      </div>
 
       {loading ? (
         <LoadingIndicator />

@@ -5,6 +5,7 @@ import {
   useSettings,
   type BackgroundEffect,
   type ChannelSort,
+  type FlowingGradientPreset,
   type HoverMotion,
   type LibrarySort,
   type NavIndicator,
@@ -12,7 +13,10 @@ import {
   type Theme,
   type UiScale,
 } from "../hooks/useSettings";
-import { BACKGROUND_EFFECT_OPTIONS } from "../effects";
+import {
+  BACKGROUND_EFFECT_OPTIONS,
+  FLOWING_PRESET_OPTIONS,
+} from "../effects";
 import { LIBRARY_SORT_OPTIONS } from "../hooks/useLibrarySort";
 import type {
   AiCurrentJob,
@@ -22,20 +26,24 @@ import type {
   AppSettings,
   HealthStats,
   StorageStats,
+  SystemStats,
 } from "../types";
 import { formatSize } from "../utils";
 import LiquidNav from "../components/LiquidNav";
+import ThemedSelect from "../components/ThemedSelect";
 import Collapse from "../components/Collapse";
 import LoadingIndicator from "../components/LoadingIndicator";
 
 const CHIP =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-accent hover:text-gray-100";
 const CHIP_ACTIVE =
-  "ui-panel ui-interactive rounded-lg border border-accent/50 bg-accent px-3 py-2 text-sm font-medium text-ink-950 transition-colors";
+  "ui-panel ui-interactive rounded-lg border border-accent/50 bg-accent/15 px-3 py-2 text-sm font-medium text-accent transition-colors";
 const PANEL_BTN =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50";
-const SELECT =
+const INPUT =
   "ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
+const PROCESS_BTN =
+  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50";
 
 const UI_SCALE_OPTIONS: { value: UiScale; label: string }[] = [
   { value: "80", label: "80%" },
@@ -47,14 +55,50 @@ const UI_SCALE_OPTIONS: { value: UiScale; label: string }[] = [
   { value: "175", label: "175%" },
 ];
 
-const AI_PROCESS_ACTIONS: {
+const AI_PROCESS_PRIMARY: {
+  action: "all_recent" | "all_full";
+  label: string;
+  title: string;
+}[] = [
+  {
+    action: "all_recent",
+    label: "Run all (recent)",
+    title:
+      "Queue missing embeds and AI tags for videos watched or added in the last 30 days, then refresh categories.",
+  },
+  {
+    action: "all_full",
+    label: "Run all (full library)",
+    title:
+      "Queue missing embeds and AI tags across the whole library, then refresh categories.",
+  },
+];
+
+const AI_PROCESS_SECONDARY: {
   action: "embeds" | "missing_tags" | "full_tags" | "categories";
   label: string;
+  title: string;
 }[] = [
-  { action: "embeds", label: "Index missing embeds" },
-  { action: "missing_tags", label: "Enrich missing AI tags" },
-  { action: "full_tags", label: "Full tag refresh" },
-  { action: "categories", label: "Refresh categories" },
+  {
+    action: "embeds",
+    label: "Index missing embeds",
+    title: "Queue embedding jobs for videos that do not have an embedding yet.",
+  },
+  {
+    action: "missing_tags",
+    label: "Enrich missing AI tags",
+    title: "Ask the chat model to suggest tags only for videos missing AI tags.",
+  },
+  {
+    action: "full_tags",
+    label: "Full tag refresh",
+    title: "Re-run AI tag enrichment for every video in the library.",
+  },
+  {
+    action: "categories",
+    label: "Refresh categories",
+    title: "Rebuild recommendation category groupings from current tags and embeds.",
+  },
 ];
 
 const EMBED_MODEL_TIP =
@@ -210,6 +254,102 @@ const NAV_INDICATOR_OPTIONS: {
 
 const TAB_STORAGE_KEY = "horde.settings.tab";
 
+/** Search keywords / synonyms → tab. Used for cross-tab search + auto-switch. */
+const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
+  // Appearance
+  { tab: "appearance", keywords: "theme color palette chrome custom" },
+  {
+    tab: "appearance",
+    keywords:
+      "background animation atmospheric effects intensity speed size color pause while watching custom image upload blur tint palette flowing rgb wave cool warm mono",
+  },
+  {
+    tab: "appearance",
+    keywords:
+      "interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency legibility loading animation dots spinner bar ui scale scale text spacing font text size bigger smaller font size zoom rem",
+  },
+  // Library
+  {
+    tab: "library",
+    keywords:
+      "library metadata resync thumbnails captions view counts",
+  },
+  {
+    tab: "library",
+    keywords:
+      "homepage continue watching progress bar dates video cards",
+  },
+  {
+    tab: "library",
+    keywords: "progress expiry inactivity days",
+  },
+  {
+    tab: "library",
+    keywords: "default video sort sort library",
+  },
+  {
+    tab: "library",
+    keywords: "channel list order sidebar ascending descending",
+  },
+  // Playback
+  {
+    tab: "playback",
+    keywords: "watch page description related videos autoplay sidebar",
+  },
+  {
+    tab: "playback",
+    keywords: "subtitles caption vertical position",
+  },
+  {
+    tab: "playback",
+    keywords: "sponsorblock sponsor skip ad ads advertising commercial",
+  },
+  {
+    tab: "playback",
+    keywords: "playback speed speed default",
+  },
+  // Downloads
+  {
+    tab: "downloads",
+    keywords:
+      "download count navigation badge normalize volume loudness downloads",
+  },
+  // AI
+  {
+    tab: "ai",
+    keywords:
+      "ollama connection enable ai base url queue indexed features gpu vram",
+  },
+  {
+    tab: "ai",
+    keywords:
+      "models embedding chat model vram auto-pull gpu",
+  },
+  {
+    tab: "ai",
+    keywords:
+      "when to run schedule process run all recent full embeds tags categories timer",
+  },
+  {
+    tab: "ai",
+    keywords: "features subtitles enrich tags duplicate confirmation llm",
+  },
+  // System
+  {
+    tab: "system",
+    keywords: "storage disk space library",
+  },
+  {
+    tab: "system",
+    keywords:
+      "health yt-dlp ollama disk review downloads gpu system status",
+  },
+  {
+    tab: "system",
+    keywords: "resources cpu ram memory gpu vram temperature nvidia",
+  },
+];
+
 function loadTab(): SettingsTab {
   try {
     const raw = localStorage.getItem(TAB_STORAGE_KEY);
@@ -218,6 +358,33 @@ function loadTab(): SettingsTab {
     /* ignore */
   }
   return "appearance";
+}
+
+function matchesQuery(
+  query: string,
+  ...parts: (string | undefined | null)[]
+): boolean {
+  if (!query) return true;
+  const hay = parts.filter(Boolean).join(" ").toLowerCase();
+  if (hay.includes(query)) return true;
+  // Also match when every query token appears in the haystack (order-independent).
+  const tokens = query.split(/\s+/).filter(Boolean);
+  return tokens.length > 1 && tokens.every((t) => hay.includes(t));
+}
+
+function tabMatchesQuery(tabId: SettingsTab, query: string): boolean {
+  if (!query) return true;
+  return SEARCH_REGISTRY.some(
+    (entry) => entry.tab === tabId && matchesQuery(query, entry.keywords)
+  );
+}
+
+function firstMatchingTab(query: string): SettingsTab | null {
+  if (!query) return null;
+  for (const t of TABS) {
+    if (tabMatchesQuery(t.id, query)) return t.id;
+  }
+  return null;
 }
 
 function Toggle({
@@ -243,15 +410,6 @@ function Toggle({
       />
     </button>
   );
-}
-
-function matchesQuery(
-  query: string,
-  ...parts: (string | undefined | null)[]
-): boolean {
-  if (!query) return true;
-  const hay = parts.filter(Boolean).join(" ").toLowerCase();
-  return hay.includes(query);
 }
 
 function SettingRow({
@@ -328,40 +486,162 @@ function Chip({
   );
 }
 
+function SystemStatsSnippet({ stats }: { stats: SystemStats | null }) {
+  if (!stats) {
+    return <p className="text-sm text-gray-500">Loading…</p>;
+  }
+
+  const cards: { label: string; value: React.ReactNode }[] = [];
+
+  if (stats.cpu_model || stats.cpu_percent != null || stats.cpu_temp_c != null) {
+    cards.push({
+      label: "CPU",
+      value: (
+        <>
+          {stats.cpu_model && (
+            <span className="block text-xs text-gray-400">{stats.cpu_model}</span>
+          )}
+          <span className="block">
+            {[
+              stats.cpu_percent != null
+                ? `${Math.round(stats.cpu_percent)}%`
+                : null,
+              stats.cpu_temp_c != null
+                ? `${Math.round(stats.cpu_temp_c)}°C`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </>
+      ),
+    });
+  }
+
+  if (
+    stats.ram_used_bytes != null &&
+    stats.ram_total_bytes != null
+  ) {
+    cards.push({
+      label: "RAM",
+      value: (
+        <>
+          {formatSize(stats.ram_used_bytes)} / {formatSize(stats.ram_total_bytes)}
+          {stats.ram_percent != null
+            ? ` (${Math.round(stats.ram_percent)}%)`
+            : ""}
+        </>
+      ),
+    });
+  } else if (stats.ram_percent != null) {
+    cards.push({
+      label: "RAM",
+      value: `${Math.round(stats.ram_percent)}%`,
+    });
+  }
+
+  if (stats.gpu) {
+    const g = stats.gpu;
+    const lines: string[] = [];
+    if (g.util_percent != null) lines.push(`${Math.round(g.util_percent)}%`);
+    if (g.temp_c != null) lines.push(`${Math.round(g.temp_c)}°C`);
+    const vram =
+      g.vram_used_bytes != null && g.vram_total_bytes != null
+        ? `${formatSize(g.vram_used_bytes)} / ${formatSize(g.vram_total_bytes)}`
+        : null;
+    if (g.name || lines.length || vram) {
+      cards.push({
+        label: "GPU",
+        value: (
+          <>
+            {g.name && (
+              <span className="block text-xs text-gray-400">{g.name}</span>
+            )}
+            {lines.length > 0 && (
+              <span className="block">{lines.join(" · ")}</span>
+            )}
+            {vram && (
+              <span className="block text-xs text-gray-500">VRAM {vram}</span>
+            )}
+          </>
+        ),
+      });
+    }
+  }
+
+  if (stats.disk) {
+    cards.push({
+      label: "Disk",
+      value: (
+        <>
+          {formatSize(stats.disk.used_bytes)} /{" "}
+          {formatSize(stats.disk.total_bytes)}
+          <span className="block text-xs text-gray-500">
+            {formatSize(stats.disk.free_bytes)} free
+          </span>
+        </>
+      ),
+    });
+  }
+
+  if (cards.length === 0) {
+    return (
+      <p className="text-sm text-gray-500">No resource stats available.</p>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {cards.map((c) => (
+        <div
+          key={c.label}
+          className="rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5"
+        >
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            {c.label}
+          </p>
+          <div className="text-sm text-gray-200">{c.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
   if (typeof job === "string") {
     return (
       <div className="flex justify-between gap-3">
         <dt className="text-gray-400">Running</dt>
-        <dd className="truncate text-xs text-gray-300">{job}</dd>
+        <dd className="truncate text-right text-xs text-gray-300">{job}</dd>
       </div>
     );
   }
 
   const kindLabel = job.kind.replace(/_/g, " ");
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex items-stretch justify-between gap-3">
       <dt className="shrink-0 pt-1 text-gray-400">Running</dt>
-      <dd className="flex min-w-0 items-center gap-2">
-        {job.has_thumbnail && job.video_id != null ? (
-          <img
-            src={`/api/thumbnails/${job.video_id}`}
-            alt=""
-            className="h-8 w-12 shrink-0 rounded object-cover ring-1 ring-ink-700"
-          />
-        ) : (
-          <span className="flex h-8 w-12 shrink-0 items-center justify-center rounded bg-ink-800 text-[10px] text-gray-500 ring-1 ring-ink-700">
-            —
-          </span>
-        )}
+      <dd className="flex min-w-0 flex-1 items-start justify-end gap-3 text-right">
         <span className="min-w-0">
           <span className="block truncate text-xs text-gray-200">
-            {job.title || "Untitled"}
+            {job.title || (job.video_id == null ? kindLabel : "Untitled")}
           </span>
           <span className="block truncate text-[11px] text-gray-500">
             {[job.channel, kindLabel].filter(Boolean).join(" · ")}
           </span>
+          {job.model && (
+            <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-500">
+              {job.model}
+            </span>
+          )}
         </span>
+        {job.has_thumbnail && job.video_id != null ? (
+          <img
+            src={`/api/thumbnails/${job.video_id}`}
+            alt=""
+            className="aspect-video w-28 shrink-0 rounded object-cover ring-1 ring-ink-700"
+          />
+        ) : null}
       </dd>
     </div>
   );
@@ -374,6 +654,7 @@ export default function Settings() {
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [health, setHealth] = useState<HealthStats | null>(null);
+  const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [aiDraft, setAiDraft] = useState<AiSettings>(DEFAULT_AI);
   const [aiTesting, setAiTesting] = useState(false);
@@ -385,6 +666,12 @@ export default function Settings() {
     null
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [navPreview, setNavPreview] = useState<"home" | "library" | "settings">(
+    "home"
+  );
+  const [bgUploading, setBgUploading] = useState(false);
+  const [paletteColors, setPaletteColors] = useState<string[]>([]);
+  const [paletteLoading, setPaletteLoading] = useState(false);
 
   const q = searchQuery.trim().toLowerCase();
   const match = (...parts: (string | undefined | null)[]) =>
@@ -432,6 +719,40 @@ export default function Settings() {
     return () => clearInterval(id);
   }, [tab]);
 
+  const refreshSystemStats = () =>
+    api
+      .getSystemStats()
+      .then(setSystemStats)
+      .catch(() => setSystemStats(null));
+
+  useEffect(() => {
+    if (tab !== "system" && tab !== "ai") return;
+    refreshSystemStats();
+    const id = setInterval(refreshSystemStats, 3000);
+    return () => clearInterval(id);
+  }, [tab]);
+
+  useEffect(() => {
+    setPaletteColors([]);
+  }, [settings.customBackgroundId]);
+
+  const selectTab = (next: SettingsTab) => {
+    setTab(next);
+    try {
+      localStorage.setItem(TAB_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // Cross-tab search: jump to the first tab that matches when the current one doesn't.
+  useEffect(() => {
+    if (!q) return;
+    if (tabMatchesQuery(tab, q)) return;
+    const next = firstMatchingTab(q);
+    if (next && next !== tab) selectTab(next);
+  }, [q, tab]);
+
   const saveAi = async (patch: Partial<AiSettings>) => {
     const next = { ...aiDraft, ...patch };
     setAiDraft(next);
@@ -441,15 +762,6 @@ export default function Settings() {
       setAiDraft({ ...DEFAULT_AI, ...updated.ai });
     }
     refreshAiStatus();
-  };
-
-  const selectTab = (next: SettingsTab) => {
-    setTab(next);
-    try {
-      localStorage.setItem(TAB_STORAGE_KEY, next);
-    } catch {
-      /* ignore */
-    }
   };
 
   const saveExpiry = async () => {
@@ -488,7 +800,13 @@ export default function Settings() {
   };
 
   const runAiProcess = async (
-    action: "embeds" | "missing_tags" | "full_tags" | "categories"
+    action:
+      | "all_recent"
+      | "all_full"
+      | "embeds"
+      | "missing_tags"
+      | "full_tags"
+      | "categories"
   ) => {
     if (aiProcessingAction) return;
     setAiProcessingAction(action);
@@ -502,47 +820,106 @@ export default function Settings() {
     refreshAiStatus();
   };
 
+  const uploadCustomBackground = async (file: File | null) => {
+    if (!file) return;
+    setBgUploading(true);
+    const prevId = settings.customBackgroundId;
+    const result = await api.uploadBackground(file).catch(() => null);
+    setBgUploading(false);
+    if (!result) {
+      showToast("Background upload failed");
+      return;
+    }
+    update({
+      backgroundEffect: "custom-image",
+      customBackgroundId: result.id,
+      customBackgroundMime: result.mime,
+    });
+    setPaletteColors([]);
+    if (prevId && prevId !== result.id) {
+      api.deleteBackground(prevId).catch(() => undefined);
+    }
+    showToast("Background uploaded");
+  };
+
+  const extractPalette = async () => {
+    if (!settings.customBackgroundId || paletteLoading) return;
+    setPaletteLoading(true);
+    const result = await api
+      .extractBackgroundPalette(settings.customBackgroundId)
+      .catch(() => null);
+    setPaletteLoading(false);
+    if (!result?.colors?.length) {
+      showToast("Could not extract palette");
+      return;
+    }
+    setPaletteColors(result.colors);
+  };
+
+  const applyPaletteColor = (color: string) => {
+    const hex = color.replace("#", "");
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const dark = `#${Math.round(r * 0.12)
+      .toString(16)
+      .padStart(2, "0")}${Math.round(g * 0.12)
+      .toString(16)
+      .padStart(2, "0")}${Math.round(b * 0.12)
+      .toString(16)
+      .padStart(2, "0")}`;
+    update({
+      theme: "custom",
+      customColors: {
+        accent: color.toLowerCase(),
+        background: dark,
+      },
+      customBackgroundTint: dark,
+    });
+  };
+
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-6 text-2xl font-bold text-gray-100">Settings</h1>
 
-      <input
-        type="search"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="Search settings…"
-        aria-label="Search settings"
-        className="ui-panel mb-4 w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-accent"
-      />
-
-      <LiquidNav
-        className="ui-panel mb-4 flex gap-1 overflow-x-auto rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
-        pillClassName="bg-ink-800"
-        dependency={tab}
-      >
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            data-liquid-active={tab === t.id ? "true" : undefined}
-            onClick={() => selectTab(t.id)}
-            className={`ui-interactive relative z-10 shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              tab === t.id
-                ? settings.navIndicator !== "none"
-                  ? "text-gray-100"
-                  : "bg-ink-800 text-gray-100"
-                : "text-gray-400 hover:text-gray-200"
-            } ${
-              settings.navIndicator === "none" && tab !== t.id
-                ? "hover:bg-ink-800/60"
-                : ""
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </LiquidNav>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <LiquidNav
+          className="ui-panel inline-flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
+          pillClassName="bg-ink-800"
+          dependency={tab}
+        >
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
+              data-liquid-active={tab === t.id ? "true" : undefined}
+              onClick={() => selectTab(t.id)}
+              className={`ui-interactive relative z-10 shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                tab === t.id
+                  ? settings.navIndicator !== "none"
+                    ? "text-gray-100"
+                    : "bg-ink-800 text-gray-100"
+                  : "text-gray-400 hover:text-gray-200"
+              } ${
+                settings.navIndicator === "none" && tab !== t.id
+                  ? "hover:bg-ink-800/60"
+                  : ""
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </LiquidNav>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search…"
+          aria-label="Search settings"
+          className="ui-panel ml-auto w-36 shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-accent sm:w-44"
+        />
+      </div>
 
       <div
         role="tabpanel"
@@ -550,112 +927,145 @@ export default function Settings() {
       >
         {tab === "appearance" && (
           <>
-            <Section
-              first
-              title="Theme"
-              description="Choose a color palette for the app chrome."
-              hidden={!match("theme", "color palette", "chrome", "custom")}
-            >
-              <select
-                value={settings.theme}
-                onChange={(e) => update({ theme: e.target.value as Theme })}
-                className={SELECT}
-              >
-                {THEMES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-
-              <Collapse open={settings.theme === "custom"}>
-                <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
-                  <p className="text-xs text-gray-500">
-                    Pick your own accent and background. Surface colors are
-                    derived automatically.
-                  </p>
-                  <label className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-gray-300">Accent</span>
-                    <input
-                      type="color"
-                      value={settings.customColors.accent}
-                      onChange={(e) =>
-                        update({
-                          customColors: {
-                            ...settings.customColors,
-                            accent: e.target.value,
-                          },
-                        })
-                      }
-                      className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-gray-300">Background</span>
-                    <input
-                      type="color"
-                      value={settings.customColors.background}
-                      onChange={(e) =>
-                        update({
-                          customColors: {
-                            ...settings.customColors,
-                            background: e.target.value,
-                          },
-                        })
-                      }
-                      className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
-                    />
-                  </label>
-                  <div className="flex items-center gap-2 pt-1">
-                    <span
-                      className="h-6 flex-1 rounded-md ring-1 ring-ink-700"
-                      style={{
-                        backgroundColor: settings.customColors.background,
-                      }}
-                    />
-                    <span
-                      className="h-6 w-16 rounded-md ring-1 ring-ink-700"
-                      style={{
-                        backgroundColor: settings.customColors.accent,
-                      }}
-                    />
-                  </div>
-                </div>
-              </Collapse>
-            </Section>
-
-            <Section
-              title="Background animation"
-              description="Optional atmospheric effects behind the UI. Disabled automatically when the system prefers reduced motion."
-              hidden={
-                !match(
+            <div
+              className={
+                match(
+                  "theme",
+                  "color palette",
+                  "chrome",
+                  "custom",
                   "background animation",
                   "atmospheric",
                   "effects",
-                  "intensity",
-                  "speed",
-                  "size",
-                  "color",
-                  "pause while watching"
+                  "custom image",
+                  "upload",
+                  "flowing",
+                  "rgb",
+                  "wave"
                 )
+                  ? "grid grid-cols-1 gap-6 sm:grid-cols-2"
+                  : q
+                    ? "hidden"
+                    : "grid grid-cols-1 gap-6 sm:grid-cols-2"
               }
             >
-              <select
-                value={settings.backgroundEffect}
-                onChange={(e) =>
-                  update({
-                    backgroundEffect: e.target.value as BackgroundEffect,
-                  })
+              <div
+                className={
+                  match("theme", "color palette", "chrome", "custom")
+                    ? undefined
+                    : q
+                      ? "hidden"
+                      : undefined
                 }
-                className={SELECT}
               >
-                {BACKGROUND_EFFECT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <Collapse open={settings.backgroundEffect !== "none"}>
+                <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                  Theme
+                </h2>
+                <p className="mb-3 text-xs text-gray-500">
+                  Choose a color palette
+                </p>
+                <ThemedSelect
+                  aria-label="Theme"
+                  value={settings.theme}
+                  options={THEMES.map((t) => ({
+                    value: t.value,
+                    label: t.label,
+                  }))}
+                  onChange={(value) => update({ theme: value })}
+                  className="w-max"
+                />
+                <Collapse open={settings.theme === "custom"}>
+                  <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
+                    <p className="text-xs text-gray-500">
+                      Pick your own accent and background. Surface colors are
+                      derived automatically.
+                    </p>
+                    <label className="flex items-center justify-between gap-4">
+                      <span className="text-sm text-gray-300">Accent</span>
+                      <input
+                        type="color"
+                        value={settings.customColors.accent}
+                        onChange={(e) =>
+                          update({
+                            customColors: {
+                              ...settings.customColors,
+                              accent: e.target.value,
+                            },
+                          })
+                        }
+                        className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                      />
+                    </label>
+                    <label className="flex items-center justify-between gap-4">
+                      <span className="text-sm text-gray-300">Background</span>
+                      <input
+                        type="color"
+                        value={settings.customColors.background}
+                        onChange={(e) =>
+                          update({
+                            customColors: {
+                              ...settings.customColors,
+                              background: e.target.value,
+                            },
+                          })
+                        }
+                        className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                      />
+                    </label>
+                    <div className="flex items-center gap-2 pt-1">
+                      <span
+                        className="h-6 flex-1 rounded-md ring-1 ring-ink-700"
+                        style={{
+                          backgroundColor: settings.customColors.background,
+                        }}
+                      />
+                      <span
+                        className="h-6 w-16 rounded-md ring-1 ring-ink-700"
+                        style={{
+                          backgroundColor: settings.customColors.accent,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </Collapse>
+              </div>
+
+              <div
+                className={
+                  match(
+                    "background animation",
+                    "atmospheric",
+                    "effects",
+                    "custom image",
+                    "upload",
+                    "flowing",
+                    "rgb",
+                    "wave"
+                  )
+                    ? undefined
+                    : q
+                      ? "hidden"
+                      : undefined
+                }
+              >
+                <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                  Background animation
+                </h2>
+                <p className="mb-3 text-xs text-gray-500">
+                  Optional atmospheric effects behind the UI.
+                </p>
+                <ThemedSelect
+                  aria-label="Background animation"
+                  value={settings.backgroundEffect}
+                  options={BACKGROUND_EFFECT_OPTIONS.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
+                  onChange={(value) =>
+                    update({ backgroundEffect: value as BackgroundEffect })
+                  }
+                  className="w-max"
+                />
                 <p className="mt-2 text-xs text-gray-500">
                   {
                     BACKGROUND_EFFECT_OPTIONS.find(
@@ -663,10 +1073,176 @@ export default function Settings() {
                     )?.description
                   }
                 </p>
-              </Collapse>
+              </div>
+            </div>
 
-              <Collapse open={settings.backgroundEffect !== "none"}>
-                <div className="mt-4 space-y-4">
+            <Section
+              title="Background Settings"
+              description={
+                settings.backgroundEffect === "custom-image"
+                  ? "Upload an image or short loop, then tune blur and tint."
+                  : "Intensity, motion, and color for the selected effect."
+              }
+              hidden={
+                settings.backgroundEffect === "none" ||
+                (!!q &&
+                  !match(
+                    "background",
+                    "intensity",
+                    "speed",
+                    "size",
+                    "color",
+                    "pause while watching",
+                    "custom image",
+                    "upload",
+                    "blur",
+                    "tint",
+                    "palette",
+                    "flowing",
+                    "rgb",
+                    "wave",
+                    "cool",
+                    "warm",
+                    "mono"
+                  ))
+              }
+            >
+              {settings.backgroundEffect === "custom-image" ? (
+                <div className="space-y-4">
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-gray-500">
+                      Image or GIF / WebM
+                    </span>
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.gif,.webm,image/*,video/webm"
+                      disabled={bgUploading}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        e.target.value = "";
+                        void uploadCustomBackground(file);
+                      }}
+                      className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border file:border-ink-700 file:bg-ink-900 file:px-3 file:py-1.5 file:text-sm file:text-gray-200 hover:file:border-accent"
+                    />
+                    {bgUploading && (
+                      <p className="mt-1 text-xs text-gray-500">Uploading…</p>
+                    )}
+                  </label>
+
+                  {settings.customBackgroundId && (
+                    <div className="overflow-hidden rounded-lg border border-ink-700 bg-ink-950">
+                      {(settings.customBackgroundMime || "").startsWith(
+                        "video/"
+                      ) ? (
+                        <video
+                          src={`/api/backgrounds/${settings.customBackgroundId}`}
+                          className="max-h-40 w-full object-cover"
+                          muted
+                          loop
+                          autoPlay
+                          playsInline
+                        />
+                      ) : (
+                        <img
+                          src={`/api/backgrounds/${settings.customBackgroundId}`}
+                          alt="Custom background preview"
+                          className="max-h-40 w-full object-cover"
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  <label className="block">
+                    <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
+                      <span>Blur</span>
+                      <span className="tabular-nums text-gray-500">
+                        {Math.round(settings.customBackgroundBlur)}px
+                      </span>
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={40}
+                      step={1}
+                      value={settings.customBackgroundBlur}
+                      onChange={(e) =>
+                        update({
+                          customBackgroundBlur: Number(e.target.value),
+                        })
+                      }
+                      className="accent-scrubber w-full"
+                    />
+                  </label>
+
+                  <div className="flex flex-wrap items-end gap-4">
+                    <label className="flex items-center gap-3">
+                      <span className="text-sm text-gray-300">Tint</span>
+                      <input
+                        type="color"
+                        value={settings.customBackgroundTint}
+                        onChange={(e) =>
+                          update({ customBackgroundTint: e.target.value })
+                        }
+                        className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                      />
+                    </label>
+                    <label className="block min-w-[12rem] flex-1">
+                      <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
+                        <span>Tint opacity</span>
+                        <span className="tabular-nums text-gray-500">
+                          {Math.round(
+                            settings.customBackgroundTintOpacity * 100
+                          )}
+                          %
+                        </span>
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={settings.customBackgroundTintOpacity}
+                        onChange={(e) =>
+                          update({
+                            customBackgroundTintOpacity: Number(
+                              e.target.value
+                            ),
+                          })
+                        }
+                        className="accent-scrubber w-full"
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      disabled={
+                        !settings.customBackgroundId || paletteLoading
+                      }
+                      onClick={() => void extractPalette()}
+                      className={PANEL_BTN}
+                    >
+                      {paletteLoading ? "Extracting…" : "Extract palette"}
+                    </button>
+                    {paletteColors.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {paletteColors.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            title={`Use ${c} as accent`}
+                            onClick={() => applyPaletteColor(c)}
+                            className="ui-interactive h-8 w-8 rounded-full ring-1 ring-ink-700 hover:ring-accent"
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
                   <label className="block">
                     <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                       <span>Intensity</span>
@@ -770,6 +1346,32 @@ export default function Settings() {
                     )}
                   </div>
 
+                  {settings.backgroundEffect === "flowing-gradient" && (
+                    <div>
+                      <p className="mb-2 text-sm text-gray-300">
+                        Flowing palette
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {FLOWING_PRESET_OPTIONS.map((opt) => (
+                          <Chip
+                            key={opt.value}
+                            active={
+                              settings.flowingGradientPreset === opt.value
+                            }
+                            onClick={() =>
+                              update({
+                                flowingGradientPreset:
+                                  opt.value as FlowingGradientPreset,
+                              })
+                            }
+                          >
+                            {opt.label}
+                          </Chip>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <SettingRow
                     title="Pause while watching"
                     description="Stop the animation on the watch page to save GPU."
@@ -786,7 +1388,7 @@ export default function Settings() {
                     }
                   />
                 </div>
-              </Collapse>
+              )}
             </Section>
 
             <Section
@@ -796,19 +1398,39 @@ export default function Settings() {
                 !match(
                   "interface motion",
                   "navigation indicator",
+                  "nav",
+                  "liquid",
+                  "jelly",
+                  "underline",
+                  "fade",
+                  "glow",
+                  "lift",
                   "hover motion",
                   "translucent panels",
                   "panel transparency",
                   "legibility",
                   "loading animation",
-                  "ui scale"
+                  "ui scale",
+                  "font",
+                  "text size",
+                  "bigger",
+                  "smaller",
+                  "font size",
+                  "zoom"
                 )
               }
             >
               <div className="space-y-5">
                 <div
                   className={
-                    match("navigation indicator", "nav", "liquid", "underline")
+                    match(
+                      "navigation indicator",
+                      "nav",
+                      "liquid",
+                      "jelly",
+                      "underline",
+                      "fade"
+                    )
                       ? undefined
                       : q
                         ? "hidden"
@@ -816,7 +1438,7 @@ export default function Settings() {
                   }
                 >
                   <p className="mb-2 text-sm font-medium text-gray-200">
-                    Navigation indicator
+                    Navigation indicator style
                   </p>
                   <p className="mb-3 text-xs text-gray-500">
                     How the active nav item and settings tabs are highlighted.
@@ -839,11 +1461,42 @@ export default function Settings() {
                       )?.description
                     }
                   </p>
+                  <LiquidNav
+                    className="ui-panel mt-3 inline-flex w-fit gap-1 rounded-xl bg-ink-950 p-1 ring-1 ring-ink-700"
+                    pillClassName="bg-ink-800"
+                    dependency={navPreview}
+                  >
+                    {(
+                      [
+                        { id: "home", label: "Home" },
+                        { id: "library", label: "Library" },
+                        { id: "settings", label: "Settings" },
+                      ] as const
+                    ).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        data-liquid-active={
+                          navPreview === item.id ? "true" : undefined
+                        }
+                        onClick={() => setNavPreview(item.id)}
+                        className={`ui-interactive relative z-10 shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                          navPreview === item.id
+                            ? settings.navIndicator !== "none"
+                              ? "text-gray-100"
+                              : "bg-ink-800 text-gray-100"
+                            : "text-gray-400 hover:text-gray-200"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </LiquidNav>
                 </div>
 
                 <div
                   className={
-                    match("hover motion", "cards", "controls")
+                    match("hover motion", "cards", "controls", "glow", "lift")
                       ? undefined
                       : q
                         ? "hidden"
@@ -874,6 +1527,9 @@ export default function Settings() {
                       )?.description
                     }
                   </p>
+                  <div className="ui-card ui-interactive mt-3 inline-flex cursor-default items-center justify-center rounded-lg border border-ink-700 bg-ink-950 px-6 py-4 text-sm text-gray-300">
+                    Hover me
+                  </div>
                 </div>
 
                 <SettingRow
@@ -993,7 +1649,18 @@ export default function Settings() {
 
                 <div
                   className={
-                    match("ui scale", "scale", "text", "spacing")
+                    match(
+                      "ui scale",
+                      "scale",
+                      "text",
+                      "spacing",
+                      "font",
+                      "text size",
+                      "bigger",
+                      "smaller",
+                      "font size",
+                      "zoom"
+                    )
                       ? undefined
                       : q
                         ? "hidden"
@@ -1003,7 +1670,10 @@ export default function Settings() {
                   <span className="mb-2 block text-sm font-medium text-gray-200">
                     UI scale
                   </span>
-                  <div className="flex flex-wrap gap-2">
+                  <div
+                    data-ui-scale-control
+                    className="flex flex-wrap gap-2"
+                  >
                     {UI_SCALE_OPTIONS.map((opt) => (
                       <Chip
                         key={opt.value}
@@ -1319,7 +1989,17 @@ export default function Settings() {
             <Section
               title="SponsorBlock"
               description="Automatically skip sponsored segments and other non-content during playback of YouTube videos."
-              hidden={!match("sponsorblock", "sponsor", "skip")}
+              hidden={
+                !match(
+                  "sponsorblock",
+                  "sponsor",
+                  "skip",
+                  "ad",
+                  "ads",
+                  "advertising",
+                  "commercial"
+                )
+              }
             >
               <div className="space-y-4">
                 <SettingRow
@@ -1440,161 +2120,190 @@ export default function Settings() {
                   "enable ai",
                   "base url",
                   "queue",
-                  "indexed"
+                  "indexed",
+                  "gpu",
+                  "vram"
                 )
               }
             >
               <div className="space-y-4">
-                <SettingRow
-                  title="Enable AI features"
-                  description="When off, search and related videos use keyword heuristics only."
-                  hidden={!!q && !match("enable ai", "features")}
-                  control={
-                    <Toggle
-                      checked={aiDraft.enabled}
-                      onChange={() => saveAi({ enabled: !aiDraft.enabled })}
-                    />
+                <div
+                  className={
+                    !!q && !match("enable ai", "features")
+                      ? "hidden"
+                      : "flex items-center gap-3"
                   }
-                />
-                <label className="block max-w-md">
-                  <span className="mb-1 block text-xs text-gray-500">
-                    Ollama base URL
+                >
+                  <span className="text-sm font-medium text-gray-200">
+                    Enable AI
                   </span>
-                  <input
-                    value={aiDraft.base_url}
-                    onChange={(e) =>
-                      setAiDraft((d) => ({ ...d, base_url: e.target.value }))
-                    }
-                    onBlur={(e) =>
-                      saveAi({ base_url: e.target.value.trim() })
-                    }
-                    placeholder="http://ollama:11434 or http://192.168.x.x:11434"
-                    className={SELECT}
+                  <Toggle
+                    checked={aiDraft.enabled}
+                    onChange={() => saveAi({ enabled: !aiDraft.enabled })}
                   />
-                </label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={aiTesting}
-                    onClick={async () => {
-                      setAiTesting(true);
-                      const result = await api
-                        .testAiConnection(aiDraft.base_url || undefined)
-                        .catch(() => null);
-                      setAiTesting(false);
-                      if (!result) {
-                        showToast("Connection test failed");
-                        return;
+                </div>
+                <div className="max-w-md space-y-4">
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-gray-500">
+                      Ollama base URL
+                    </span>
+                    <input
+                      value={aiDraft.base_url}
+                      onChange={(e) =>
+                        setAiDraft((d) => ({ ...d, base_url: e.target.value }))
                       }
-                      showToast(
-                        result.ok
-                          ? `Connected${result.base_url ? ` at ${result.base_url}` : ""}`
-                          : result.detail || "Unreachable"
-                      );
-                      refreshAiStatus();
-                    }}
-                    className={PANEL_BTN}
-                  >
-                    {aiTesting ? "Testing…" : "Test connection"}
-                  </button>
-                  {aiStatus?.paused ? (
+                      onBlur={(e) =>
+                        saveAi({ base_url: e.target.value.trim() })
+                      }
+                      placeholder="http://ollama:11434 or http://192.168.x.x:11434"
+                      className={INPUT}
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
+                      disabled={aiTesting}
                       onClick={async () => {
-                        await api.resumeAi().catch(() => undefined);
-                        await saveAi({ paused: false });
-                        showToast("AI queue resumed");
-                      }}
-                      className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm text-accent hover:bg-accent/25"
-                    >
-                      Resume queue
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await api.pauseAi().catch(() => undefined);
-                        await saveAi({ paused: true });
-                        showToast("AI queue paused");
+                        setAiTesting(true);
+                        const result = await api
+                          .testAiConnection(aiDraft.base_url || undefined)
+                          .catch(() => null);
+                        setAiTesting(false);
+                        if (!result) {
+                          showToast("Connection test failed");
+                          return;
+                        }
+                        showToast(
+                          result.ok
+                            ? `Connected${result.base_url ? ` at ${result.base_url}` : ""}`
+                            : result.detail || "Unreachable"
+                        );
+                        refreshAiStatus();
                       }}
                       className={PANEL_BTN}
                     >
-                      Pause queue
+                      {aiTesting ? "Testing…" : "Test connection"}
                     </button>
-                  )}
-                  {aiStatus && (aiStatus.ready || aiStatus.reachable) && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                      {aiStatus.ready ? "Connected" : "Reachable"}
-                    </span>
-                  )}
-                </div>
-                {aiStatus && (
-                  <dl className="max-w-md space-y-1.5 text-sm">
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-gray-400">Status</dt>
-                      <dd className="text-gray-200">
-                        {!aiStatus.enabled
-                          ? "Disabled"
-                          : aiStatus.ready
-                            ? "Ready"
-                            : aiStatus.reachable
-                              ? "Connected (models loading)"
-                              : "Offline"}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-gray-400">URL</dt>
-                      <dd className="truncate font-mono text-xs text-gray-300">
-                        {aiStatus.base_url || "—"}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-gray-400">Indexed</dt>
-                      <dd className="text-gray-200">
-                        {aiStatus.indexed_videos} / {aiStatus.total_videos}
-                        {aiStatus.queue_depth > 0
-                          ? ` · ${aiStatus.queue_depth} queued`
-                          : ""}
-                      </dd>
-                    </div>
-                    {aiStatus.current_job && (
-                      <CurrentAiJob job={aiStatus.current_job} />
+                    {aiStatus?.paused ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await api.resumeAi().catch(() => undefined);
+                          await saveAi({ paused: false });
+                          showToast("AI queue resumed");
+                        }}
+                        className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm text-accent hover:bg-accent/25"
+                      >
+                        Resume queue
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await api.pauseAi().catch(() => undefined);
+                          await saveAi({ paused: true });
+                          showToast("AI queue paused");
+                        }}
+                        className={PANEL_BTN}
+                      >
+                        Pause queue
+                      </button>
                     )}
-                    {aiStatus.queue_breakdown &&
-                      aiStatus.queue_depth > 0 && (
+                    {aiStatus && (aiStatus.ready || aiStatus.reachable) && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                        {aiStatus.ready ? "Connected" : "Reachable"}
+                      </span>
+                    )}
+                  </div>
+                  {aiStatus && (
+                    <dl className="space-y-1.5 text-sm">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-400">Status</dt>
+                        <dd className="text-right text-gray-200">
+                          {!aiStatus.enabled
+                            ? "Disabled"
+                            : aiStatus.ready
+                              ? "Ready"
+                              : aiStatus.reachable
+                                ? "Connected (models loading)"
+                                : "Offline"}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-400">URL</dt>
+                        <dd className="truncate text-right font-mono text-xs text-gray-300">
+                          {aiStatus.base_url || "—"}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-400">Indexed</dt>
+                        <dd className="text-right text-gray-200">
+                          {aiStatus.indexed_videos} / {aiStatus.total_videos}
+                          {aiStatus.queue_depth > 0
+                            ? ` · ${aiStatus.queue_depth} queued`
+                            : ""}
+                        </dd>
+                      </div>
+                      {aiStatus.current_job && (
+                        <CurrentAiJob job={aiStatus.current_job} />
+                      )}
+                      {systemStats?.gpu &&
+                        (systemStats.gpu.util_percent != null ||
+                          systemStats.gpu.temp_c != null) && (
                         <div className="flex justify-between gap-3">
-                          <dt className="text-gray-400">Queue</dt>
-                          <dd className="text-right text-xs text-gray-300">
+                          <dt className="text-gray-400">GPU</dt>
+                          <dd className="text-right text-gray-200">
                             {[
-                              aiStatus.queue_breakdown.embed_video
-                                ? `${aiStatus.queue_breakdown.embed_video} embed`
+                              systemStats.gpu.util_percent != null
+                                ? `${Math.round(systemStats.gpu.util_percent)}%`
                                 : null,
-                              aiStatus.queue_breakdown.enrich_tags
-                                ? `${aiStatus.queue_breakdown.enrich_tags} tags`
-                                : null,
-                              aiStatus.queue_breakdown.refresh_categories
-                                ? `${aiStatus.queue_breakdown.refresh_categories} categories`
+                              systemStats.gpu.temp_c != null
+                                ? `${Math.round(systemStats.gpu.temp_c)}°C`
                                 : null,
                             ]
                               .filter(Boolean)
-                              .join(" · ") || `${aiStatus.queue_depth} jobs`}
+                              .join(" · ")}
                           </dd>
                         </div>
                       )}
-                    {aiStatus.pulling.length > 0 && (
-                      <div className="flex justify-between gap-3">
-                        <dt className="text-gray-400">Pulling</dt>
-                        <dd className="text-amber-300">
-                          {aiStatus.pulling.join(", ")}
-                        </dd>
-                      </div>
-                    )}
-                    {aiStatus.last_error && (
-                      <p className="text-xs text-red-400">{aiStatus.last_error}</p>
-                    )}
-                  </dl>
-                )}
+                      {aiStatus.queue_breakdown &&
+                        aiStatus.queue_depth > 0 && (
+                          <div className="flex justify-between gap-3">
+                            <dt className="text-gray-400">Queue</dt>
+                            <dd className="text-right text-xs text-gray-300">
+                              {[
+                                aiStatus.queue_breakdown.embed_video
+                                  ? `${aiStatus.queue_breakdown.embed_video} embed`
+                                  : null,
+                                aiStatus.queue_breakdown.enrich_tags
+                                  ? `${aiStatus.queue_breakdown.enrich_tags} tags`
+                                  : null,
+                                aiStatus.queue_breakdown.refresh_categories
+                                  ? `${aiStatus.queue_breakdown.refresh_categories} categories`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ") || `${aiStatus.queue_depth} jobs`}
+                            </dd>
+                          </div>
+                        )}
+                      {aiStatus.pulling.length > 0 && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-gray-400">Pulling</dt>
+                          <dd className="text-right text-amber-300">
+                            {aiStatus.pulling.join(", ")}
+                          </dd>
+                        </div>
+                      )}
+                      {aiStatus.last_error && (
+                        <p className="text-xs text-red-400">
+                          {aiStatus.last_error}
+                        </p>
+                      )}
+                    </dl>
+                  )}
+                </div>
               </div>
             </Section>
 
@@ -1607,7 +2316,8 @@ export default function Settings() {
                   "embedding",
                   "chat model",
                   "vram",
-                  "auto-pull"
+                  "auto-pull",
+                  "gpu"
                 )
               }
             >
@@ -1622,30 +2332,24 @@ export default function Settings() {
                       (?)
                     </span>
                   </span>
-                  <select
-                    value={
-                      embedCustom ? "__custom__" : aiDraft.embed_model
-                    }
-                    onChange={(e) => {
-                      if (e.target.value === "__custom__") {
+                  <ThemedSelect
+                    aria-label="Embedding model"
+                    value={embedCustom ? "__custom__" : aiDraft.embed_model}
+                    options={EMBED_MODEL_OPTIONS}
+                    onChange={(value) => {
+                      if (value === "__custom__") {
                         setEmbedCustom(true);
                         return;
                       }
                       setEmbedCustom(false);
                       setAiDraft((d) => ({
                         ...d,
-                        embed_model: e.target.value,
+                        embed_model: value,
                       }));
                     }}
-                    className={SELECT}
-                    title={EMBED_MODEL_TIP}
-                  >
-                    {EMBED_MODEL_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                    className="w-full max-w-md"
+                    buttonClassName="w-full"
+                  />
                   {embedCustom && (
                     <input
                       value={aiDraft.embed_model}
@@ -1656,7 +2360,7 @@ export default function Settings() {
                         }))
                       }
                       placeholder="Ollama model name"
-                      className={`${SELECT} mt-2`}
+                      className={`${INPUT} mt-2`}
                     />
                   )}
                 </label>
@@ -1670,28 +2374,24 @@ export default function Settings() {
                       (?)
                     </span>
                   </span>
-                  <select
+                  <ThemedSelect
+                    aria-label="Chat model"
                     value={chatCustom ? "__custom__" : aiDraft.chat_model}
-                    onChange={(e) => {
-                      if (e.target.value === "__custom__") {
+                    options={CHAT_MODEL_OPTIONS}
+                    onChange={(value) => {
+                      if (value === "__custom__") {
                         setChatCustom(true);
                         return;
                       }
                       setChatCustom(false);
                       setAiDraft((d) => ({
                         ...d,
-                        chat_model: e.target.value,
+                        chat_model: value,
                       }));
                     }}
-                    className={SELECT}
-                    title={CHAT_MODEL_TIP}
-                  >
-                    {CHAT_MODEL_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                    className="w-full max-w-md"
+                    buttonClassName="w-full"
+                  />
                   {chatCustom && (
                     <input
                       value={aiDraft.chat_model}
@@ -1702,7 +2402,7 @@ export default function Settings() {
                         }))
                       }
                       placeholder="Ollama model name"
-                      className={`${SELECT} mt-2`}
+                      className={`${INPUT} mt-2`}
                     />
                   )}
                 </label>
@@ -1736,34 +2436,84 @@ export default function Settings() {
             </Section>
 
             <Section
+              title="Process library"
+              description="Queue embedding, tagging, and category jobs on demand."
+              hidden={
+                !match(
+                  "process",
+                  "run all",
+                  "recent",
+                  "full",
+                  "embeds",
+                  "tags",
+                  "categories"
+                )
+              }
+            >
+              <div className="max-w-md space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  {AI_PROCESS_PRIMARY.map((opt) => (
+                    <button
+                      key={opt.action}
+                      type="button"
+                      title={opt.title}
+                      disabled={!!aiProcessingAction}
+                      onClick={() => runAiProcess(opt.action)}
+                      className={PROCESS_BTN}
+                    >
+                      {aiProcessingAction === opt.action
+                        ? "Queuing…"
+                        : opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {AI_PROCESS_SECONDARY.map((opt) => (
+                    <button
+                      key={opt.action}
+                      type="button"
+                      title={opt.title}
+                      disabled={!!aiProcessingAction}
+                      onClick={() => runAiProcess(opt.action)}
+                      className={PROCESS_BTN}
+                    >
+                      {aiProcessingAction === opt.action
+                        ? "Queuing…"
+                        : opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </Section>
+
+            <Section
               title="When to run"
               description="Important for large libraries — process on a schedule or only when you ask."
               hidden={
                 !match(
                   "when to run",
                   "schedule",
-                  "process",
-                  "embeds",
-                  "tags",
-                  "categories",
-                  "timer"
+                  "timer",
+                  "set time",
+                  "on download",
+                  "on request"
                 )
               }
             >
               <div className="max-w-md space-y-3">
-                <select
+                <ThemedSelect
+                  aria-label="AI schedule"
                   value={aiDraft.schedule}
-                  onChange={(e) =>
-                    saveAi({ schedule: e.target.value as AiSchedule })
+                  options={AI_SCHEDULE_OPTIONS.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
+                  onChange={(value) =>
+                    saveAi({ schedule: value as AiSchedule })
                   }
-                  className={SELECT}
-                >
-                  {AI_SCHEDULE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  className="w-full max-w-md"
+                  buttonClassName="w-full"
+                />
                 <p className="text-xs text-gray-500">
                   {
                     AI_SCHEDULE_OPTIONS.find((o) => o.value === aiDraft.schedule)
@@ -1819,21 +2569,6 @@ export default function Settings() {
                     />
                   </label>
                 )}
-                <div className="flex flex-col gap-2">
-                  {AI_PROCESS_ACTIONS.map((opt) => (
-                    <button
-                      key={opt.action}
-                      type="button"
-                      disabled={!!aiProcessingAction}
-                      onClick={() => runAiProcess(opt.action)}
-                      className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent px-3 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-50"
-                    >
-                      {aiProcessingAction === opt.action
-                        ? "Queuing…"
-                        : opt.label}
-                    </button>
-                  ))}
-                </div>
               </div>
             </Section>
 
@@ -1899,7 +2634,6 @@ export default function Settings() {
             <Section
               first
               title="Storage"
-              description="Total space used by your library on disk."
               hidden={!match("storage", "disk", "space", "library")}
             >
               {storage ? (
@@ -1918,8 +2652,25 @@ export default function Settings() {
             </Section>
 
             <Section
-              title="Health"
-              description="System status overview."
+              title="Resources"
+              hidden={
+                !match(
+                  "resources",
+                  "cpu",
+                  "ram",
+                  "gpu",
+                  "vram",
+                  "temperature",
+                  "nvidia",
+                  "system"
+                )
+              }
+            >
+              <SystemStatsSnippet stats={systemStats} />
+            </Section>
+
+            <Section
+              title="Status"
               hidden={
                 !match(
                   "health",
@@ -1927,7 +2678,9 @@ export default function Settings() {
                   "ollama",
                   "disk",
                   "review",
-                  "downloads"
+                  "downloads",
+                  "gpu",
+                  "system status"
                 )
               }
             >

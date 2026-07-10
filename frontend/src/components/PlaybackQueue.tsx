@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { thumbnailUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
@@ -20,7 +20,19 @@ export default function PlaybackQueue({
   const { queue, playVideo, removeFromQueue, reorderQueue, clearQueue } =
     usePlayback();
   const dragIndex = useRef<number | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const prevLen = useRef(queue.length);
   const [expanded, setExpanded] = useState(true);
+
+  useEffect(() => {
+    if (queue.length > prevLen.current && listRef.current) {
+      const el = listRef.current;
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+    prevLen.current = queue.length;
+  }, [queue.length]);
 
   if (queue.length === 0) return null;
 
@@ -31,6 +43,7 @@ export default function PlaybackQueue({
   };
 
   const showList = !collapsible || expanded;
+  const scrollable = Boolean(collapsible && listMaxHeightClass);
 
   return (
     <div
@@ -69,7 +82,10 @@ export default function PlaybackQueue({
 
       {showList && (
         <ul
-          className={`space-y-1 ${collapsible && listMaxHeightClass ? `${listMaxHeightClass} overflow-y-auto` : ""}`}
+          ref={listRef}
+          className={`space-y-1 horde-scrollbar ${
+            scrollable ? `${listMaxHeightClass} overflow-y-auto` : ""
+          }`}
         >
           {queue.map((v, index) => {
             const thumb = thumbnailUrl(v);

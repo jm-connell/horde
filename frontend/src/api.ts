@@ -15,6 +15,7 @@ import type {
   PlaylistPreviewData,
   RecommendationsResponse,
   StorageStats,
+  SystemStats,
   TagStat,
   Video,
   VideoUpdate,
@@ -216,6 +217,8 @@ export const api = {
   processAiLibrary(
     action:
       | "all"
+      | "all_recent"
+      | "all_full"
       | "embeds"
       | "missing_tags"
       | "full_tags"
@@ -227,6 +230,36 @@ export const api = {
       body: JSON.stringify({ action }),
     });
   },
+
+  getSystemStats(): Promise<SystemStats> {
+    return request<SystemStats>("/api/system/stats");
+  },
+
+  uploadBackground(
+    file: File
+  ): Promise<{ id: string; url: string; mime: string; animated: boolean }> {
+    const form = new FormData();
+    form.append("file", file);
+    return request("/api/backgrounds", {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  deleteBackground(id: string): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>(
+      `/api/backgrounds/${encodeURIComponent(id)}`,
+      { method: "DELETE" }
+    );
+  },
+
+  extractBackgroundPalette(id: string): Promise<{ colors: string[] }> {
+    return request<{ colors: string[] }>(
+      `/api/backgrounds/${encodeURIComponent(id)}/palette`,
+      { method: "POST" }
+    );
+  },
+
 
   pauseAi(): Promise<{ paused: boolean }> {
     return request<{ paused: boolean }>("/api/ai/pause", { method: "POST" });

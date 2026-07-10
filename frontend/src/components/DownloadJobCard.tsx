@@ -175,10 +175,6 @@ export default function DownloadJobCard({
       ? `/api/thumbnails/${videoId}`
       : null;
 
-  const cardRing = active
-    ? "relative overflow-hidden ring-ink-700"
-    : "ring-ink-700";
-
   const errorMsg =
     failed && !completed ? stripAnsi(live?.error ?? job.error ?? "") : "";
 
@@ -203,10 +199,10 @@ export default function DownloadJobCard({
 
   return (
     <>
-    <div className={`ui-panel rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ${cardRing}`}>
+    <div className="ui-panel relative overflow-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700">
       {active && (
         <span
-          className="absolute bottom-3 left-0 top-3 w-1 rounded-full bg-accent"
+          className="absolute inset-y-0 left-0 w-1 bg-accent"
           aria-hidden
         />
       )}

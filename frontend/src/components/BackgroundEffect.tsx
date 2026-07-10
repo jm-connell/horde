@@ -1,11 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { createBackgroundEffect } from "../effects";
+import {
+  createBackgroundEffect,
+  setFlowingGradientPresetGetter,
+} from "../effects";
 import { parseHexColor, type EffectController } from "../effects/shared";
 import { useSettings, type BackgroundEffect as EffectId } from "../hooks/useSettings";
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function hexToRgb(hex: string): string {
+  const h = hex.replace("#", "");
+  const full =
+    h.length === 3
+      ? h
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `${r} ${g} ${b}`;
 }
 
 export default function BackgroundEffect() {
@@ -26,7 +44,11 @@ export default function BackgroundEffect() {
   const onWatchPage = location.pathname.startsWith("/watch/");
   const shouldPause =
     playerFullscreen || (pauseWhileWatching && onWatchPage);
-  const active = effect !== "none" && !reducedMotion;
+  const isCustom = effect === "custom-image" && !!settings.customBackgroundId;
+  const active =
+    effect !== "none" &&
+    !reducedMotion &&
+    (effect !== "custom-image" || isCustom);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -50,11 +72,16 @@ export default function BackgroundEffect() {
   }, []);
 
   useEffect(() => {
+    setFlowingGradientPresetGetter(() => settings.flowingGradientPreset);
+    return () => setFlowingGradientPresetGetter(null);
+  }, [settings.flowingGradientPreset]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     controllerRef.current?.stop();
     controllerRef.current = null;
 
-    if (!canvas || !active) return;
+    if (!canvas || !active || isCustom) return;
 
     const controller = createBackgroundEffect(effect as EffectId, canvas);
     if (!controller) return;
@@ -76,7 +103,7 @@ export default function BackgroundEffect() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, effect]);
+  }, [active, effect, isCustom, settings.flowingGradientPreset]);
 
   useEffect(() => {
     controllerRef.current?.setOpacity(opacity);
@@ -101,6 +128,53 @@ export default function BackgroundEffect() {
   }, [shouldPause]);
 
   if (!active) return null;
+
+  if (isCustom && settings.customBackgroundId) {
+    const url = `/api/backgrounds/${settings.customBackgroundId}`;
+    const mime = settings.customBackgroundMime || "";
+    const isVideo = mime.includes("webm") || mime.includes("video");
+    const blur = settings.customBackgroundBlur;
+    const tintOpacity = settings.customBackgroundTintOpacity;
+    const tintRgb = hexToRgb(settings.customBackgroundTint);
+    return (
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+        style={{ opacity }}
+      >
+        {isVideo ? (
+          <video
+            key={url}
+            src={url}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{
+              filter: blur > 0 ? `blur(${blur}px)` : undefined,
+              transform: "scale(1.05)",
+            }}
+          />
+        ) : (
+          <img
+            key={url}
+            src={url}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{
+              filter: blur > 0 ? `blur(${blur}px)` : undefined,
+              transform: "scale(1.05)",
+            }}
+          />
+        )}
+        <div
+          className="absolute inset-0"
+          style={{ backgroundColor: `rgb(${tintRgb} / ${tintOpacity})` }}
+        />
+      </div>
+    );
+  }
 
   return (
     <canvas

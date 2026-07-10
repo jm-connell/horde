@@ -122,7 +122,7 @@ export default function VideoCard({
         )}
       </div>
       <div className="relative flex flex-col gap-1 p-3">
-        <h3 className="line-clamp-2 min-h-[2.5rem] pr-10 text-sm font-semibold text-gray-100 group-hover:text-accent">
+        <h3 className="line-clamp-2 min-h-[2.5rem] overflow-hidden break-words pr-10 text-sm font-semibold text-gray-100 group-hover:text-accent">
           {video.title}
         </h3>
         <div className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 ${resolution ? "pr-10" : ""}`}>

@@ -424,7 +424,7 @@ export default function Watch() {
                                   video.description || video.notes ? "" : ""
                                 }`}
                               >
-                                <div className="flex flex-wrap gap-1.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
                                   {[
                                     ...(video.ai_tags || []).map((t) => ({
                                       tag: t,
@@ -501,54 +501,55 @@ export default function Watch() {
                                       </button>
                                     </span>
                                   ))}
-                                </div>
-                                <form
-                                  className="mt-2 flex gap-2"
-                                  onSubmit={async (e) => {
-                                    e.preventDefault();
-                                    const cleaned = tagDraft.trim();
-                                    if (!cleaned) return;
-                                    const exists = (video.tags || []).some(
-                                      (t) =>
-                                        t.toLowerCase() === cleaned.toLowerCase()
-                                    );
-                                    if (exists) {
-                                      setTagDraft("");
-                                      return;
-                                    }
-                                    try {
-                                      const updated = await api.updateVideo(
-                                        video.id,
-                                        {
-                                          tags: [
-                                            ...(video.tags || []),
-                                            cleaned,
-                                          ],
-                                          user_tag: cleaned,
-                                        }
+                                  <form
+                                    className="inline-flex items-center gap-1.5"
+                                    onSubmit={async (e) => {
+                                      e.preventDefault();
+                                      const cleaned = tagDraft.trim();
+                                      if (!cleaned) return;
+                                      const exists = (video.tags || []).some(
+                                        (t) =>
+                                          t.toLowerCase() ===
+                                          cleaned.toLowerCase()
                                       );
-                                      setVideo(updated);
-                                      setTagDraft("");
-                                    } catch {
-                                      showToast("Could not add tag");
-                                    }
-                                  }}
-                                >
-                                  <input
-                                    value={tagDraft}
-                                    onChange={(e) =>
-                                      setTagDraft(e.target.value)
-                                    }
-                                    placeholder="Add tag…"
-                                    className="ui-panel min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-1.5 text-xs text-gray-100 outline-none focus:border-accent"
-                                  />
-                                  <button
-                                    type="submit"
-                                    className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-gray-300 hover:border-accent hover:text-accent"
+                                      if (exists) {
+                                        setTagDraft("");
+                                        return;
+                                      }
+                                      try {
+                                        const updated = await api.updateVideo(
+                                          video.id,
+                                          {
+                                            tags: [
+                                              ...(video.tags || []),
+                                              cleaned,
+                                            ],
+                                            user_tag: cleaned,
+                                          }
+                                        );
+                                        setVideo(updated);
+                                        setTagDraft("");
+                                      } catch {
+                                        showToast("Could not add tag");
+                                      }
+                                    }}
                                   >
-                                    +
-                                  </button>
-                                </form>
+                                    <input
+                                      value={tagDraft}
+                                      onChange={(e) =>
+                                        setTagDraft(e.target.value)
+                                      }
+                                      placeholder="Add tag…"
+                                      className="ui-panel w-28 max-w-[9rem] rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-100 outline-none focus:border-accent"
+                                    />
+                                    <button
+                                      type="submit"
+                                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
+                                    >
+                                      +
+                                    </button>
+                                  </form>
+                                </div>
                               </div>
                             </Collapse>
                           </div>

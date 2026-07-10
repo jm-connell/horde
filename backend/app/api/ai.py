@@ -22,6 +22,7 @@ class AiCurrentJob(BaseModel):
     title: Optional[str] = None
     channel: Optional[str] = None
     has_thumbnail: bool = False
+    model: Optional[str] = None
 
 
 class AiStatusRead(BaseModel):
@@ -52,6 +53,8 @@ class AiTestRequest(BaseModel):
 class AiProcessRequest(BaseModel):
     action: Literal[
         "all",
+        "all_recent",
+        "all_full",
         "embeds",
         "missing_tags",
         "full_tags",
@@ -99,6 +102,10 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
         result = worker.enqueue_full_tag_refresh()
     elif action == "categories":
         result = worker.enqueue_refresh_categories(force=True)
+    elif action == "all_recent":
+        result = worker.enqueue_all_recent()
+    elif action in ("all_full", "all"):
+        result = worker.enqueue_library_backlog(force=True)
     else:
         result = worker.enqueue_library_backlog(force=True)
     return AiProcessResult(
@@ -160,7 +167,6 @@ def ai_recommendations(
         return {
             "categories": result.categories,
             "sections": sections,
-            "hint": "Videos match this category by similarity to your library.",
             "has_more": False,
         }
 
@@ -179,7 +185,6 @@ def ai_recommendations(
         ]
         if page.videos
         else [],
-        "hint": "Based on recent watches and similarity across your library.",
         "has_more": page.has_more,
     }
 

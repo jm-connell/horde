@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import DOWNLOADS_DIR, YTDLP_POT_BASE_URL, ensure_dirs
 from .database import engine, init_db
-from .api import ai, app_settings, downloads, playlists, review, videos
+from .api import ai, app_settings, backgrounds, downloads, playlists, review, system, videos
 from .services.scanner import cleanup_orphans, start_scanner
 from .services import downloader, app_settings as app_settings_svc
 from .services.ai import start_ai_worker, stop_ai_worker
@@ -61,6 +61,8 @@ app.include_router(review.router)
 app.include_router(playlists.router)
 app.include_router(app_settings.router)
 app.include_router(ai.router)
+app.include_router(system.router)
+app.include_router(backgrounds.router)
 
 
 def _yt_dlp_version() -> str:

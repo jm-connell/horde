@@ -579,7 +579,7 @@ export default function Library() {
           </div>
         </div>
       )}
-      {/* Narrow: fixed overlay channel panel */}
+      {/* Narrow: fixed overlay channel panel — close lives on the sticky rail */}
       {narrowViewport && sidebarOverlayOpen && (
         <div className="fixed inset-0 z-50 lg:block">
           <button
@@ -588,19 +588,12 @@ export default function Library() {
             className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm"
             onClick={closeSidebar}
           />
-          <div className="absolute left-0 top-0 flex h-full w-64 max-w-[85vw] flex-col p-3 pt-20">
-            <div className="ui-panel flex max-h-full flex-col overflow-hidden rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
-              <div className="mb-2 flex shrink-0 items-center justify-between px-2 pt-1">
+          <div className="absolute left-0 top-0 flex h-full max-w-[85vw] flex-col p-3 pt-20 pl-[3.25rem]">
+            <div className="ui-panel flex max-h-full w-56 flex-col overflow-hidden rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
+              <div className="mb-2 flex shrink-0 items-center px-2 pt-1">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Channels
                 </h2>
-                <button
-                  onClick={closeSidebar}
-                  title="Collapse sidebar"
-                  className="ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
-                >
-                  ‹
-                </button>
               </div>
               <div className="min-h-0 overflow-y-auto">
                 <ChannelSidebarList
@@ -620,10 +613,18 @@ export default function Library() {
       <aside
         className={`relative hidden shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
           narrowViewport || settings.sidebarCollapsed ? "w-10" : "w-56"
-        }`}
+        }${narrowViewport && sidebarOverlayOpen ? " z-[60]" : ""}`}
       >
         <div className="sticky top-20">
-          {!narrowViewport && !settings.sidebarCollapsed ? (
+          {narrowViewport && sidebarOverlayOpen ? (
+            <button
+              onClick={closeSidebar}
+              title="Collapse sidebar"
+              className="ui-panel ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
+            >
+              ‹
+            </button>
+          ) : !narrowViewport && !settings.sidebarCollapsed ? (
             <div className="ui-panel h-fit w-56 rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
               <div className="mb-2 flex items-center justify-between px-2 pt-1">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -659,8 +660,7 @@ export default function Library() {
       </aside>
 
       <div ref={mainContentRef} className="min-w-0 flex-1">
-        <div className="mb-5 flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="mb-5 flex flex-wrap items-center gap-3">
           {activeChannel && renaming === activeChannel ? (
             <input
               autoFocus
@@ -745,137 +745,135 @@ export default function Library() {
               </button>
             </div>
           )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             {onFeedTab ? (
               <>
                 <input
                   value={feedSearch}
                   onChange={(e) => setFeedSearch(e.target.value)}
-                  placeholder="Search channel videos..."
+                  placeholder="Search"
                   className="ui-panel ui-interactive block w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:w-64"
                 />
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={feedSort}
-                    onChange={(e) =>
-                      setFeedSort(e.target.value as "recent" | "popular")
-                    }
-                    className="ui-panel ui-interactive min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                  >
-                    <option value="recent">Recent</option>
-                    <option value="popular">Popular</option>
-                  </select>
+                <select
+                  value={feedSort}
+                  onChange={(e) =>
+                    setFeedSort(e.target.value as "recent" | "popular")
+                  }
+                  className="ui-panel ui-interactive min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                >
+                  <option value="recent">Recent</option>
+                  <option value="popular">Popular</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFeedOrder((o) => (o === "desc" ? "asc" : "desc"))
+                  }
+                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                  title="Toggle sort direction"
+                >
+                  {feedOrder === "desc" ? "↓" : "↑"}
+                </button>
+                <div className="ui-panel flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
                   <button
                     type="button"
-                    onClick={() =>
-                      setFeedOrder((o) => (o === "desc" ? "asc" : "desc"))
-                    }
-                    className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
-                    title="Toggle sort direction"
+                    onClick={() => setFeedLayout("grid")}
+                    title="Grid view"
+                    className={`rounded-md px-2.5 py-1.5 transition-colors ${
+                      feedLayout === "grid"
+                        ? "bg-accent/15 text-accent"
+                        : "text-gray-400 hover:text-gray-200"
+                    }`}
                   >
-                    {feedOrder === "desc" ? "↓" : "↑"}
+                    <svg
+                      viewBox="0 0 16 16"
+                      className="h-4 w-4"
+                      fill="currentColor"
+                      aria-hidden
+                    >
+                      <rect x="1" y="1" width="6" height="6" rx="1" />
+                      <rect x="9" y="1" width="6" height="6" rx="1" />
+                      <rect x="1" y="9" width="6" height="6" rx="1" />
+                      <rect x="9" y="9" width="6" height="6" rx="1" />
+                    </svg>
                   </button>
-                  <div className="ui-panel flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setFeedLayout("grid")}
-                      title="Grid view"
-                      className={`rounded-md px-2.5 py-1.5 transition-colors ${
-                        feedLayout === "grid"
-                          ? "bg-accent/15 text-accent"
-                          : "text-gray-400 hover:text-gray-200"
-                      }`}
+                  <button
+                    type="button"
+                    onClick={() => setFeedLayout("list")}
+                    title="List view"
+                    className={`rounded-md px-2.5 py-1.5 transition-colors ${
+                      feedLayout === "list"
+                        ? "bg-accent/15 text-accent"
+                        : "text-gray-400 hover:text-gray-200"
+                    }`}
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      className="h-4 w-4"
+                      fill="currentColor"
+                      aria-hidden
                     >
-                      <svg
-                        viewBox="0 0 16 16"
-                        className="h-4 w-4"
-                        fill="currentColor"
-                        aria-hidden
-                      >
-                        <rect x="1" y="1" width="6" height="6" rx="1" />
-                        <rect x="9" y="1" width="6" height="6" rx="1" />
-                        <rect x="1" y="9" width="6" height="6" rx="1" />
-                        <rect x="9" y="9" width="6" height="6" rx="1" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFeedLayout("list")}
-                      title="List view"
-                      className={`rounded-md px-2.5 py-1.5 transition-colors ${
-                        feedLayout === "list"
-                          ? "bg-accent/15 text-accent"
-                          : "text-gray-400 hover:text-gray-200"
-                      }`}
-                    >
-                      <svg
-                        viewBox="0 0 16 16"
-                        className="h-4 w-4"
-                        fill="currentColor"
-                        aria-hidden
-                      >
-                        <rect x="1" y="2" width="14" height="2.5" rx="0.5" />
-                        <rect x="1" y="6.75" width="14" height="2.5" rx="0.5" />
-                        <rect x="1" y="11.5" width="14" height="2.5" rx="0.5" />
-                      </svg>
-                    </button>
-                  </div>
+                      <rect x="1" y="2" width="14" height="2.5" rx="0.5" />
+                      <rect x="1" y="6.75" width="14" height="2.5" rx="0.5" />
+                      <rect x="1" y="11.5" width="14" height="2.5" rx="0.5" />
+                    </svg>
+                  </button>
                 </div>
               </>
             ) : (
               <>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={
-                aiReady ? "Search videos or describe a topic..." : "Search videos..."
-              }
-              className="ui-panel ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block md:w-64"
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={sort}
-                onChange={(e) => handleSortChange(e.target.value)}
-                className="ui-panel ui-interactive min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-              >
-                {LIBRARY_SORT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={toggleOrder}
-                className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
-                title={
-                  sort === "random" ? "Shuffle again" : "Toggle sort direction"
-                }
-              >
-                {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
-              </button>
-              {!onRecommendedTab &&
-                tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
-                <button
-                  onClick={() => setShowTags((s) => !s)}
-                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search"
+                  className="ui-panel ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block md:w-64"
+                />
+                <select
+                  value={sort}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                  className="ui-panel ui-interactive min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                 >
-                  {showTags ? "Hide tags" : "Tags"}
+                  {LIBRARY_SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={toggleOrder}
+                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                  title={
+                    sort === "random" ? "Shuffle again" : "Toggle sort direction"
+                  }
+                >
+                  {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
                 </button>
-              )}
-              {!onRecommendedTab && (
-              <button
-                onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-                className={`ui-panel ui-interactive shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  selectMode
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
-                }`}
-              >
-                {selectMode ? "Cancel" : "Select"}
-              </button>
-              )}
-            </div>
+                {!onRecommendedTab &&
+                  tags.some(
+                    (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
+                  ) && (
+                    <button
+                      onClick={() => setShowTags((s) => !s)}
+                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
+                    >
+                      {showTags ? "Hide tags" : "Tags"}
+                    </button>
+                  )}
+                {!onRecommendedTab && (
+                  <button
+                    onClick={() =>
+                      selectMode ? exitSelectMode() : setSelectMode(true)
+                    }
+                    className={`ui-panel ui-interactive shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                      selectMode
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
+                    }`}
+                  >
+                    {selectMode ? "Cancel" : "Select"}
+                  </button>
+                )}
               </>
             )}
           </div>

@@ -85,7 +85,8 @@ def videos_for_category(
     return CategoryBrowseResult(category_videos, more, categories)
 
 
-def _ranked_for_you_ids(session: Session, *, pool: int = 500) -> list[int]:
+def _ranked_for_you_ids(session: Session, *, pool: int = 2000) -> list[int]:
+    """Score by watch history similarity, then append remaining library by recency."""
     history = library.query_videos(
         session,
         watched_only=True,
@@ -116,13 +117,20 @@ def _ranked_for_you_ids(session: Session, *, pool: int = 500) -> list[int]:
                 scored[vid] = score
 
     ranked = sorted(scored.keys(), key=lambda i: scored[i], reverse=True)
-    if ranked:
-        return ranked
+    ranked_set = set(ranked)
 
-    recent = library.query_videos(
+    # Pad with unscored remainder (and history seeds not already listed) by recency
+    # so infinite scroll can page through essentially the whole library.
+    remainder = library.query_videos(
         session, sort="added_at", order="desc", needs_review=False
     )
-    return [v.id for v in recent if v.id is not None]
+    for video in remainder:
+        if video.id is None or video.id in ranked_set:
+            continue
+        ranked.append(video.id)
+        ranked_set.add(video.id)
+
+    return ranked
 
 
 def homepage_recommendations_page(
@@ -130,7 +138,7 @@ def homepage_recommendations_page(
 ) -> ForYouPage:
     if get_provider() is None:
         return ForYouPage([], False)
-    ranked_ids = _ranked_for_you_ids(session, pool=max(500, offset + limit + 50))
+    ranked_ids = _ranked_for_you_ids(session, pool=max(2000, offset + limit + 100))
     slice_ids = ranked_ids[offset : offset + limit + 1]
     has_more = len(slice_ids) > limit
     videos: list[Video] = []

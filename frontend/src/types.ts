@@ -223,6 +223,28 @@ export interface AiCurrentJob {
   title: string | null;
   channel: string | null;
   has_thumbnail: boolean;
+  model?: string | null;
+}
+
+export interface SystemStats {
+  cpu_percent: number | null;
+  cpu_model?: string | null;
+  cpu_temp_c?: number | null;
+  ram_used_bytes: number | null;
+  ram_total_bytes: number | null;
+  ram_percent: number | null;
+  gpu: {
+    name?: string | null;
+    util_percent: number | null;
+    temp_c: number | null;
+    vram_used_bytes: number | null;
+    vram_total_bytes: number | null;
+  } | null;
+  disk?: {
+    total_bytes: number;
+    used_bytes: number;
+    free_bytes: number;
+  } | null;
 }
 
 export interface AiProcessResult {

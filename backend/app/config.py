@@ -18,6 +18,7 @@ DOWNLOADS_DIR: Path = _env_path("DOWNLOADS_DIR", "./downloads")
 DATA_DIR: Path = _env_path("DATA_DIR", "./data")
 
 THUMBNAILS_DIR: Path = DATA_DIR / "thumbnails"
+BACKGROUNDS_DIR: Path = DATA_DIR / "backgrounds"
 DB_PATH: Path = DATA_DIR / "horde.db"
 DATABASE_URL: str = f"sqlite:///{DB_PATH}"
 
@@ -50,3 +51,4 @@ def ensure_dirs() -> None:
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
+    BACKGROUNDS_DIR.mkdir(parents=True, exist_ok=True)

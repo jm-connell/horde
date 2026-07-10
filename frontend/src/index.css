@@ -7,6 +7,27 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Themed thin scrollbars (queue / panels) */
+.horde-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--accent) / 0.45) rgb(var(--ink-800));
+}
+.horde-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.horde-scrollbar::-webkit-scrollbar-track {
+  background: rgb(var(--ink-800));
+  border-radius: 999px;
+}
+.horde-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(var(--accent) / 0.45);
+  border-radius: 999px;
+}
+.horde-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--accent) / 0.7);
+}
+
 /* ─── Default theme (cyan-on-dark) ─── */
 :root {
   color-scheme: dark;
@@ -221,6 +242,17 @@ input[type="range"].accent-scrubber::-webkit-slider-thumb {
   border-radius: 9999px;
   background: rgb(var(--accent));
   box-shadow: 0 0 8px rgb(var(--accent) / 0.6);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+input[type="range"].accent-scrubber::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px rgb(var(--accent) / 0.25), 0 0 10px rgb(var(--accent) / 0.7);
+}
+
+input[type="range"].accent-scrubber::-webkit-slider-thumb:active {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 5px rgb(var(--accent) / 0.3), 0 0 12px rgb(var(--accent) / 0.8);
 }
 
 input[type="range"].accent-scrubber::-moz-range-thumb {
@@ -229,6 +261,16 @@ input[type="range"].accent-scrubber::-moz-range-thumb {
   border: none;
   border-radius: 9999px;
   background: rgb(var(--accent));
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+input[type="range"].accent-scrubber::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px rgb(var(--accent) / 0.25);
+}
+
+input[type="range"].accent-scrubber::-moz-range-thumb:active {
+  transform: scale(1.2);
 }
 
 /* Subtitle (WebVTT cue) styling. Vertical position is controlled in JS via

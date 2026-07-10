@@ -158,7 +158,7 @@ def enqueue_refresh_categories(*, force: bool = True) -> dict:
 
 
 def enqueue_library_backlog(*, force: bool = True) -> dict:
-    """Default process: missing embeds + missing tags + categories."""
+    """Default / full process: missing embeds + missing tags + categories."""
     del force
     a = enqueue_missing_embeds()
     b = enqueue_missing_tags()
@@ -169,6 +169,63 @@ def enqueue_library_backlog(*, force: bool = True) -> dict:
         "categories": c["breakdown"]["categories"],
     }
     return _result(breakdown, empty="Nothing new to process (library already indexed)")
+
+
+def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
+    """Missing embeds/tags for videos watched or added recently, plus categories."""
+    cutoff = utcnow() - timedelta(days=days)
+    breakdown = {"embed": 0, "tags": 0, "categories": 0}
+    ai = app_settings.ai_settings()
+    enrich = bool(ai.get("enrich_tags", True))
+
+    need_embed: list[int] = []
+    need_tags: list[int] = []
+    with Session(engine) as session:
+        videos = session.exec(
+            select(Video).where(Video.needs_review == False)  # noqa: E712
+        ).all()
+        recent_ids: list[int] = []
+        for video in videos:
+            if video.id is None:
+                continue
+            recent = False
+            if video.added_at and video.added_at >= cutoff:
+                recent = True
+            if video.last_watched_at and video.last_watched_at >= cutoff:
+                recent = True
+            if not recent:
+                continue
+            recent_ids.append(video.id)
+
+        # Prefer embedding helper list intersected with recent set.
+        need_embed_all = set(embeddings.videos_needing_embed(session, limit=limit * 2))
+        for vid in recent_ids:
+            if vid in need_embed_all:
+                need_embed.append(vid)
+                if len(need_embed) >= limit:
+                    break
+
+        if enrich:
+            for vid in recent_ids:
+                meta = session.get(VideoAiMeta, vid)
+                if meta is not None and (meta.tags_locked or meta.tags_enriched_at):
+                    continue
+                need_tags.append(vid)
+                if len(need_tags) >= limit:
+                    break
+
+    for video_id in need_embed:
+        if enqueue_job(AiJobKind.embed_video, video_id, force=False) is not None:
+            breakdown["embed"] += 1
+    for video_id in need_tags:
+        if enqueue_job(AiJobKind.enrich_tags, video_id, force=False) is not None:
+            breakdown["tags"] += 1
+    cats = enqueue_refresh_categories(force=True)
+    breakdown["categories"] = cats["breakdown"]["categories"]
+    return _result(
+        breakdown,
+        empty="Nothing recent to process (last 30 days already indexed)",
+    )
 
 
 def enqueue_video_tag_refresh(video_id: int) -> bool:
@@ -243,12 +300,18 @@ def current_job_info() -> Optional[dict]:
         if job is None:
             return None
         kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
+        ai = app_settings.ai_settings()
+        if kind == AiJobKind.embed_video.value or kind == "embed_video":
+            model = str(ai.get("embed_model") or "")
+        else:
+            model = str(ai.get("chat_model") or "")
         info: dict = {
             "kind": kind,
             "video_id": job.video_id,
             "title": None,
             "channel": None,
             "has_thumbnail": False,
+            "model": model or None,
         }
         if job.video_id:
             video = session.get(Video, job.video_id)

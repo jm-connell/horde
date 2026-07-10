@@ -38,10 +38,10 @@ export type LibrarySort =
 
 export type BackgroundEffect =
   | "none"
+  | "custom-image"
   | "rain"
   | "constellation"
   | "perlin-flow"
-  | "aurora"
   | "matrix"
   | "snow"
   | "fireflies"
@@ -53,6 +53,13 @@ export type BackgroundEffect =
   | "modern-grid"
   | "flowing-gradient"
   | "lightspeed";
+
+export type FlowingGradientPreset =
+  | "theme"
+  | "rgb"
+  | "cool"
+  | "warm"
+  | "mono";
 
 export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator = "none" | "liquid" | "underline" | "fade";
@@ -68,6 +75,12 @@ export interface Settings {
   backgroundEffectSize: number;
   backgroundEffectColorMode: "accent" | "custom";
   backgroundEffectColor: string;
+  flowingGradientPreset: FlowingGradientPreset;
+  customBackgroundId: string | null;
+  customBackgroundMime: string | null;
+  customBackgroundBlur: number;
+  customBackgroundTint: string;
+  customBackgroundTintOpacity: number;
   pauseBackgroundWhileWatching: boolean;
   navIndicator: NavIndicator;
   hoverMotion: HoverMotion;
@@ -118,6 +131,12 @@ const DEFAULTS: Settings = {
   backgroundOpacity: 0.45,
   backgroundEffectSpeed: 1,
   backgroundEffectSize: 1,
+  flowingGradientPreset: "theme",
+  customBackgroundId: null,
+  customBackgroundMime: null,
+  customBackgroundBlur: 12,
+  customBackgroundTint: "#08090c",
+  customBackgroundTintOpacity: 0.45,
   backgroundEffectColorMode: "accent",
   backgroundEffectColor: "#22d3ee",
   pauseBackgroundWhileWatching: true,
@@ -164,6 +183,12 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "backgroundEffectSize",
   "backgroundEffectColorMode",
   "backgroundEffectColor",
+  "flowingGradientPreset",
+  "customBackgroundId",
+  "customBackgroundMime",
+  "customBackgroundBlur",
+  "customBackgroundTint",
+  "customBackgroundTintOpacity",
   "pauseBackgroundWhileWatching",
   "navIndicator",
   "hoverMotion",
@@ -283,10 +308,10 @@ const VALID_THEMES = new Set<string>([
 
 const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "none",
+  "custom-image",
   "rain",
   "constellation",
   "perlin-flow",
-  "aurora",
   "matrix",
   "snow",
   "fireflies",
@@ -298,6 +323,14 @@ const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "modern-grid",
   "flowing-gradient",
   "lightspeed",
+]);
+
+const VALID_FLOWING_PRESETS = new Set<string>([
+  "theme",
+  "rgb",
+  "cool",
+  "warm",
+  "mono",
 ]);
 
 const VALID_HOVER_MOTION = new Set<string>(["off", "subtle", "lift", "glow"]);
@@ -318,6 +351,7 @@ function normalizeTheme(theme: string | undefined): Theme {
 function normalizeBackgroundEffect(
   effect: string | undefined
 ): BackgroundEffect {
+  if (effect === "aurora") return "flowing-gradient";
   if (effect && VALID_BACKGROUND_EFFECTS.has(effect)) {
     return effect as BackgroundEffect;
   }
@@ -454,6 +488,30 @@ function normalizeUiScale(value: unknown): UiScale {
   return DEFAULTS.uiScale;
 }
 
+function normalizeFlowingPreset(value: unknown): FlowingGradientPreset {
+  if (typeof value === "string" && VALID_FLOWING_PRESETS.has(value)) {
+    return value as FlowingGradientPreset;
+  }
+  return DEFAULTS.flowingGradientPreset;
+}
+
+function normalizeCustomBgId(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return null;
+}
+
+function normalizeCustomBgBlur(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULTS.customBackgroundBlur;
+  return Math.min(40, Math.max(0, n));
+}
+
+function normalizeTintOpacity(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULTS.customBackgroundTintOpacity;
+  return Math.min(1, Math.max(0, n));
+}
+
 function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }): Settings {
   return {
     ...DEFAULTS,
@@ -471,6 +529,19 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
     ),
     backgroundEffectColor: normalizeBackgroundColor(
       parsed.backgroundEffectColor
+    ),
+    flowingGradientPreset: normalizeFlowingPreset(parsed.flowingGradientPreset),
+    customBackgroundId: normalizeCustomBgId(parsed.customBackgroundId),
+    customBackgroundMime:
+      typeof parsed.customBackgroundMime === "string"
+        ? parsed.customBackgroundMime
+        : null,
+    customBackgroundBlur: normalizeCustomBgBlur(parsed.customBackgroundBlur),
+    customBackgroundTint: normalizeBackgroundColor(
+      parsed.customBackgroundTint ?? DEFAULTS.customBackgroundTint
+    ),
+    customBackgroundTintOpacity: normalizeTintOpacity(
+      parsed.customBackgroundTintOpacity
     ),
     pauseBackgroundWhileWatching: normalizeBool(
       parsed.pauseBackgroundWhileWatching,
@@ -639,8 +710,30 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
     applyTheme(settings.theme, settings.customColors);
   }, [settings.theme, settings.customColors]);
 
+  const prevUiScale = useRef(settings.uiScale);
+
   useEffect(() => {
+    const scaleChanged = prevUiScale.current !== settings.uiScale;
+    const pinEl = scaleChanged
+      ? document.querySelector<HTMLElement>("[data-ui-scale-control]")
+      : null;
+    const oldTop = pinEl?.getBoundingClientRect().top ?? null;
+    prevUiScale.current = settings.uiScale;
+
     applyMotionPrefs(settings);
+
+    if (oldTop != null) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = document.querySelector<HTMLElement>(
+            "[data-ui-scale-control]"
+          );
+          if (!el) return;
+          const newTop = el.getBoundingClientRect().top;
+          window.scrollBy(0, newTop - oldTop);
+        });
+      });
+    }
   }, [
     settings.navIndicator,
     settings.hoverMotion,

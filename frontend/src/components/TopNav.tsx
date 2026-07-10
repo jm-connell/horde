@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useDownloads } from "../context/DownloadContext";
@@ -23,12 +23,18 @@ function isLinkActive(pathname: string, to: string, end: boolean): boolean {
 export default function TopNav() {
   const [reviewCount, setReviewCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [useHamburger, setUseHamburger] = useState(false);
   const { activeCount } = useDownloads();
   const [settings] = useSettings();
   const location = useLocation();
   const { search, setSearch } = useSearch();
   const isLibrary = location.pathname === "/";
   const indicatorOn = settings.navIndicator !== "none";
+  const measureRef = useRef<HTMLDivElement>(null);
+  const headerRowRef = useRef<HTMLDivElement>(null);
+  const brandRef = useRef<HTMLAnchorElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!isLibrary) setSearch("");
@@ -56,8 +62,38 @@ export default function TopNav() {
     setMenuOpen(false);
   }, [location.pathname]);
 
+  // Overflow check is authoritative — force hamburger whenever nav won't fit.
+  useLayoutEffect(() => {
+    const check = () => {
+      const measure = measureRef.current;
+      const row = headerRowRef.current;
+      if (!measure || !row) return;
+      const brandW = brandRef.current?.offsetWidth ?? 110;
+      const gap = 16;
+      const menuW = 48;
+      const searchW = isLibrary ? Math.min(200, Math.max(120, row.clientWidth * 0.2)) : 0;
+      const available = row.clientWidth - brandW - menuW - searchW - gap * 3;
+      setUseHamburger(measure.scrollWidth > available - 4);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    if (headerRowRef.current) ro.observe(headerRowRef.current);
+    if (measureRef.current) ro.observe(measureRef.current);
+    window.addEventListener("resize", check);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", check);
+    };
+  }, [
+    isLibrary,
+    settings.uiScale,
+    reviewCount,
+    showDownloadBadge,
+    activeCount,
+  ]);
+
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `ui-interactive relative z-10 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+    `ui-interactive relative z-10 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap ${
       isActive
         ? indicatorOn
           ? "text-accent"
@@ -114,47 +150,75 @@ export default function TopNav() {
 
   return (
     <header className="ui-panel sticky top-0 z-30 border-b border-ink-700 bg-ink-950/90 backdrop-blur">
-      <div className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 md:px-6">
+      <div
+        ref={headerRowRef}
+        className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 md:px-6"
+      >
         <NavLink
+          ref={brandRef}
           to="/"
-          className="ui-interactive mr-4 flex items-center gap-2 rounded-lg px-2 py-1"
+          className="ui-interactive mr-2 flex shrink-0 items-center gap-2 rounded-lg px-2 py-1 sm:mr-4"
         >
           <span className="text-xl font-bold tracking-tight text-accent">
             HORDE
           </span>
         </NavLink>
 
-        <LiquidNav
-          className="hidden items-center gap-1 md:flex"
-          dependency={location.pathname}
+        <div
+          ref={measureRef}
+          className="pointer-events-none invisible absolute flex items-center gap-1"
+          aria-hidden
         >
-          {desktopLinks}
-        </LiquidNav>
+          {NAV_LINKS.map((link) => (
+            <span
+              key={link.to}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap"
+            >
+              {link.label}
+              {linkBadge(link.label)}
+            </span>
+          ))}
+        </div>
 
-        <input
-          value={isLibrary ? search : ""}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search videos..."
-          disabled={!isLibrary}
-          className="ui-interactive min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent disabled:opacity-40 md:hidden"
-        />
+        {!useHamburger && (
+          <LiquidNav
+            className="flex min-w-0 items-center gap-1"
+            dependency={location.pathname}
+          >
+            {desktopLinks}
+          </LiquidNav>
+        )}
 
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          className="ui-interactive ml-auto rounded-lg p-2 text-gray-300 hover:bg-ink-800 md:hidden"
-          aria-label="Toggle navigation menu"
-          aria-expanded={menuOpen}
-        >
-          <span className="flex items-center gap-2">
-            {badge(mobileBadgeCount)}
-            <span className="text-xl leading-none">{menuOpen ? "✕" : "☰"}</span>
-          </span>
-        </button>
+        {useHamburger && (
+          <input
+            ref={searchRef}
+            value={isLibrary ? search : ""}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search"
+            disabled={!isLibrary}
+            className="ui-interactive min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent disabled:opacity-40"
+          />
+        )}
+
+        {useHamburger && (
+          <button
+            ref={menuBtnRef}
+            onClick={() => setMenuOpen((v) => !v)}
+            className="ui-interactive ml-auto shrink-0 rounded-lg p-2 text-gray-300 hover:bg-ink-800"
+            aria-label="Toggle navigation menu"
+            aria-expanded={menuOpen}
+          >
+            <span className="flex items-center gap-2">
+              {badge(mobileBadgeCount)}
+              <span className="text-xl leading-none">{menuOpen ? "✕" : "☰"}</span>
+            </span>
+          </button>
+        )}
       </div>
 
-      {menuOpen && (
+      {useHamburger && menuOpen && (
         <LiquidNav
-          className="ui-panel border-t border-ink-700 bg-ink-950 px-3 py-2 md:hidden"
+          className="ui-panel border-t border-ink-700 bg-ink-950 px-3 py-2"
           dependency={location.pathname}
         >
           {NAV_LINKS.map((link) => {

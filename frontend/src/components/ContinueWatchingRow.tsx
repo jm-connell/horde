@@ -23,6 +23,7 @@ export default function ContinueWatchingRow({
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollingRef = useRef(false);
+  const [scrolling, setScrolling] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -53,10 +54,14 @@ export default function ContinueWatchingRow({
     const card = el.querySelector<HTMLElement>(":scope > div > div");
     const gap = 16;
     const step = card ? card.offsetWidth + gap : el.clientWidth * 0.75;
+    if (step <= 0) return;
+    const idx = Math.round(el.scrollLeft / step);
     scrollingRef.current = true;
-    el.scrollBy({ left: dir * step, behavior: "smooth" });
+    setScrolling(true);
+    el.scrollTo({ left: (idx + dir) * step, behavior: "smooth" });
     const done = () => {
       scrollingRef.current = false;
+      setScrolling(false);
       updateScrollState();
     };
     const onEnd = () => {
@@ -91,7 +96,8 @@ export default function ContinueWatchingRow({
           <button
             type="button"
             onClick={() => scrollByDir(-1)}
-            className="absolute -left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-ink-800 text-sm text-gray-300 shadow-md ring-1 ring-ink-600 hover:text-accent hover:ring-accent/60"
+            disabled={scrolling}
+            className="absolute -left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-ink-800 text-sm text-gray-300 shadow-md ring-1 ring-ink-600 hover:text-accent hover:ring-accent/60 disabled:pointer-events-none disabled:opacity-40"
             aria-label="Scroll left"
           >
             ‹
@@ -101,7 +107,8 @@ export default function ContinueWatchingRow({
           <button
             type="button"
             onClick={() => scrollByDir(1)}
-            className="absolute -right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-ink-800 text-sm text-gray-300 shadow-md ring-1 ring-ink-600 hover:text-accent hover:ring-accent/60"
+            disabled={scrolling}
+            className="absolute -right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-ink-800 text-sm text-gray-300 shadow-md ring-1 ring-ink-600 hover:text-accent hover:ring-accent/60 disabled:pointer-events-none disabled:opacity-40"
             aria-label="Scroll right"
           >
             ›

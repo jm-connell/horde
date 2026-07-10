@@ -1,11 +1,13 @@
 import type { BackgroundEffect } from "../hooks/useSettings";
 import type { EffectController } from "./shared";
-import { createAuroraEffect } from "./aurora";
 import { createBokehEffect } from "./bokeh";
 import { createConstellationEffect } from "./constellation";
 import { createDustEffect } from "./dust";
 import { createFirefliesEffect } from "./fireflies";
-import { createFlowingGradientEffect } from "./flowingGradient";
+import {
+  createFlowingGradientEffect,
+  type FlowingGradientPreset,
+} from "./flowingGradient";
 import { createGrainEffect } from "./grain";
 import { createLightspeedEffect } from "./lightspeed";
 import { createMatrixEffect } from "./matrix";
@@ -16,12 +18,20 @@ import { createScanlinesEffect } from "./scanlines";
 import { createSnowEffect } from "./snow";
 import { createWarpGridEffect } from "./warpGrid";
 
+export type { FlowingGradientPreset } from "./flowingGradient";
+export { FLOWING_PRESET_OPTIONS } from "./flowingGradient";
+
 export const BACKGROUND_EFFECT_OPTIONS: {
   value: BackgroundEffect;
   label: string;
   description: string;
 }[] = [
   { value: "none", label: "None", description: "Solid theme background" },
+  {
+    value: "custom-image",
+    label: "Custom image",
+    description: "Uploaded still or animated background",
+  },
   { value: "rain", label: "Rain", description: "Falling rain streaks" },
   {
     value: "constellation",
@@ -33,7 +43,6 @@ export const BACKGROUND_EFFECT_OPTIONS: {
     label: "Perlin flow",
     description: "Particles drifting through a noise field",
   },
-  { value: "aurora", label: "Aurora", description: "Soft drifting color blooms" },
   { value: "matrix", label: "Matrix", description: "Cascading glyph rain" },
   { value: "snow", label: "Snow", description: "Gentle drifting flakes" },
   { value: "fireflies", label: "Fireflies", description: "Glowing wandering lights" },
@@ -54,7 +63,7 @@ export const BACKGROUND_EFFECT_OPTIONS: {
   {
     value: "flowing-gradient",
     label: "Flowing gradient",
-    description: "Soft drifting color blooms",
+    description: "Multi-hue RGB wave of soft color blooms",
   },
   {
     value: "lightspeed",
@@ -69,7 +78,6 @@ const FACTORIES: Partial<Record<BackgroundEffect, EffectFactory>> = {
   rain: createRainEffect,
   constellation: createConstellationEffect,
   "perlin-flow": createPerlinFlowEffect,
-  aurora: createAuroraEffect,
   matrix: createMatrixEffect,
   snow: createSnowEffect,
   fireflies: createFirefliesEffect,
@@ -79,14 +87,28 @@ const FACTORIES: Partial<Record<BackgroundEffect, EffectFactory>> = {
   scanlines: createScanlinesEffect,
   grain: createGrainEffect,
   "modern-grid": createModernGridEffect,
-  "flowing-gradient": createFlowingGradientEffect,
   lightspeed: createLightspeedEffect,
 };
+
+let flowingPresetGetter: (() => FlowingGradientPreset) | null = null;
+
+export function setFlowingGradientPresetGetter(
+  getter: (() => FlowingGradientPreset) | null
+) {
+  flowingPresetGetter = getter;
+}
 
 export function createBackgroundEffect(
   id: BackgroundEffect,
   canvas: HTMLCanvasElement
 ): EffectController | null {
+  if (id === "flowing-gradient") {
+    return createFlowingGradientEffect(
+      canvas,
+      () => flowingPresetGetter?.() ?? "theme"
+    );
+  }
+  if (id === "custom-image" || id === "none") return null;
   const factory = FACTORIES[id];
   if (!factory) return null;
   return factory(canvas);
