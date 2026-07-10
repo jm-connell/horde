@@ -66,9 +66,28 @@ export type NavIndicator = "none" | "liquid" | "underline" | "fade";
 export type LoadingStyle = "dots" | "spinner" | "bar";
 export type UiScale = "80" | "90" | "100" | "110" | "125" | "150" | "175";
 
+export interface CustomThemePreset {
+  id: string;
+  name: string;
+  customColors: CustomColors;
+  backgroundEffect: BackgroundEffect;
+  backgroundOpacity: number;
+  backgroundEffectSpeed: number;
+  backgroundEffectSize: number;
+  backgroundEffectColorMode: "accent" | "custom";
+  backgroundEffectColor: string;
+  flowingGradientPreset: FlowingGradientPreset;
+  customBackgroundId: string | null;
+  customBackgroundMime: string | null;
+  customBackgroundBlur: number;
+  customBackgroundTint: string;
+  customBackgroundTintOpacity: number;
+}
+
 export interface Settings {
   theme: Theme;
   customColors: CustomColors;
+  customThemes: CustomThemePreset[];
   backgroundEffect: BackgroundEffect;
   backgroundOpacity: number;
   backgroundEffectSpeed: number;
@@ -127,6 +146,7 @@ const DEFAULT_CUSTOM_COLORS: CustomColors = {
 const DEFAULTS: Settings = {
   theme: "default",
   customColors: DEFAULT_CUSTOM_COLORS,
+  customThemes: [],
   backgroundEffect: "none",
   backgroundOpacity: 0.45,
   backgroundEffectSpeed: 1,
@@ -177,6 +197,7 @@ const DEFAULTS: Settings = {
 const SERVER_UI_KEYS: (keyof Settings)[] = [
   "theme",
   "customColors",
+  "customThemes",
   "backgroundEffect",
   "backgroundOpacity",
   "backgroundEffectSpeed",
@@ -512,12 +533,50 @@ function normalizeTintOpacity(value: unknown): number {
   return Math.min(1, Math.max(0, n));
 }
 
+function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
+  if (!Array.isArray(value)) return [];
+  const out: CustomThemePreset[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Partial<CustomThemePreset>;
+    if (typeof r.id !== "string" || typeof r.name !== "string") continue;
+    out.push({
+      id: r.id,
+      name: r.name.slice(0, 64),
+      customColors: normalizeCustomColors(r.customColors),
+      backgroundEffect: normalizeBackgroundEffect(r.backgroundEffect),
+      backgroundOpacity: normalizeBackgroundOpacity(r.backgroundOpacity),
+      backgroundEffectSpeed: normalizeBackgroundSpeed(r.backgroundEffectSpeed),
+      backgroundEffectSize: normalizeBackgroundSize(r.backgroundEffectSize),
+      backgroundEffectColorMode: normalizeBackgroundColorMode(
+        r.backgroundEffectColorMode
+      ),
+      backgroundEffectColor: normalizeBackgroundColor(r.backgroundEffectColor),
+      flowingGradientPreset: normalizeFlowingPreset(r.flowingGradientPreset),
+      customBackgroundId: normalizeCustomBgId(r.customBackgroundId),
+      customBackgroundMime:
+        typeof r.customBackgroundMime === "string"
+          ? r.customBackgroundMime
+          : null,
+      customBackgroundBlur: normalizeCustomBgBlur(r.customBackgroundBlur),
+      customBackgroundTint: normalizeBackgroundColor(
+        r.customBackgroundTint ?? DEFAULTS.customBackgroundTint
+      ),
+      customBackgroundTintOpacity: normalizeTintOpacity(
+        r.customBackgroundTintOpacity
+      ),
+    });
+  }
+  return out.slice(0, 40);
+}
+
 function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }): Settings {
   return {
     ...DEFAULTS,
     ...parsed,
     theme: normalizeTheme(parsed.theme),
     customColors: normalizeCustomColors(parsed.customColors),
+    customThemes: normalizeCustomThemes(parsed.customThemes),
     backgroundEffect: normalizeBackgroundEffect(parsed.backgroundEffect),
     backgroundOpacity: normalizeBackgroundOpacity(parsed.backgroundOpacity),
     backgroundEffectSpeed: normalizeBackgroundSpeed(

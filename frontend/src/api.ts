@@ -237,13 +237,31 @@ export const api = {
 
   uploadBackground(
     file: File
-  ): Promise<{ id: string; url: string; mime: string; animated: boolean }> {
+  ): Promise<{
+    id: string;
+    url: string;
+    mime: string;
+    animated: boolean;
+    filename?: string;
+  }> {
     const form = new FormData();
     form.append("file", file);
     return request("/api/backgrounds", {
       method: "POST",
       body: form,
     });
+  },
+
+  listBackgrounds(): Promise<{
+    items: {
+      id: string;
+      url: string;
+      mime: string;
+      animated: boolean;
+      filename?: string;
+    }[];
+  }> {
+    return request("/api/backgrounds");
   },
 
   deleteBackground(id: string): Promise<{ ok: boolean }> {
@@ -259,7 +277,6 @@ export const api = {
       { method: "POST" }
     );
   },
-
 
   pauseAi(): Promise<{ paused: boolean }> {
     return request<{ paused: boolean }>("/api/ai/pause", { method: "POST" });

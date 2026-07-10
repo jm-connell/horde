@@ -12,24 +12,67 @@ from fastapi import APIRouter
 router = APIRouter(prefix="/api/system", tags=["system"])
 
 
-def _cpu_model() -> Optional[str]:
-    try:
-        import psutil  # type: ignore
+def _looks_like_arch_string(name: str) -> bool:
+    import re
 
-        info = getattr(psutil, "cpu_info", None)
-        if callable(info):
-            data = info()
-            brand = getattr(data, "brand_raw", None) or getattr(data, "brand", None)
-            if brand:
-                return str(brand).strip() or None
+    return bool(re.search(r"Family\s+\d+\s+Model", name, re.I))
+
+
+def _cpu_model() -> Optional[str]:
+    # Windows: marketing name from registry (not platform.processor arch string).
+    try:
+        import sys
+
+        if sys.platform == "win32":
+            import winreg  # type: ignore
+
+            key = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
+            )
+            try:
+                value, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+                name = str(value).strip()
+                if name and not _looks_like_arch_string(name):
+                    return name
+            finally:
+                winreg.CloseKey(key)
     except Exception:  # noqa: BLE001
         pass
+
+    # Linux
     try:
-        # Windows / generic fallback
-        name = platform.processor()
-        return name.strip() or None
+        with open("/proc/cpuinfo", encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                if line.lower().startswith("model name"):
+                    name = line.split(":", 1)[1].strip()
+                    if name:
+                        return name
     except Exception:  # noqa: BLE001
-        return None
+        pass
+
+    # macOS
+    try:
+        result = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        name = (result.stdout or "").strip()
+        if name:
+            return name
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        name = platform.processor().strip()
+        if name and not _looks_like_arch_string(name):
+            return name
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 def _cpu_temp() -> Optional[float]:

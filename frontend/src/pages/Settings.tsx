@@ -5,6 +5,7 @@ import {
   useSettings,
   type BackgroundEffect,
   type ChannelSort,
+  type CustomThemePreset,
   type FlowingGradientPreset,
   type HoverMotion,
   type LibrarySort,
@@ -33,6 +34,7 @@ import LiquidNav from "../components/LiquidNav";
 import ThemedSelect from "../components/ThemedSelect";
 import Collapse from "../components/Collapse";
 import LoadingIndicator from "../components/LoadingIndicator";
+import HelpTip from "../components/HelpTip";
 
 const CHIP =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-accent hover:text-gray-100";
@@ -64,13 +66,13 @@ const AI_PROCESS_PRIMARY: {
     action: "all_recent",
     label: "Run all (recent)",
     title:
-      "Queue missing embeds and AI tags for videos watched or added in the last 30 days, then refresh categories.",
+      "Queue missing search indexes and AI tags for videos watched or added in the last 30 days, then refresh categories.",
   },
   {
     action: "all_full",
     label: "Run all (full library)",
     title:
-      "Queue missing embeds and AI tags across the whole library, then refresh categories.",
+      "Queue missing search indexes and AI tags across the whole library, then refresh categories.",
   },
 ];
 
@@ -81,8 +83,9 @@ const AI_PROCESS_SECONDARY: {
 }[] = [
   {
     action: "embeds",
-    label: "Index missing embeds",
-    title: "Queue embedding jobs for videos that do not have an embedding yet.",
+    label: "Index missing videos for search",
+    title:
+      "Build search indexes for videos that are not indexed yet (used for semantic search and related videos).",
   },
   {
     action: "missing_tags",
@@ -97,14 +100,19 @@ const AI_PROCESS_SECONDARY: {
   {
     action: "categories",
     label: "Refresh categories",
-    title: "Rebuild recommendation category groupings from current tags and embeds.",
+    title:
+      "Rebuild recommendation category groupings from current tags and search indexes.",
   },
 ];
 
 const EMBED_MODEL_TIP =
-  "Embedding model — used for semantic search and related videos. Much lighter on VRAM than chat (typically ~0.5–1GB). nomic-embed-text is a solid default; mxbai-embed-large is higher quality but heavier; all-minilm is the lightest.";
+  "Search index model — used for semantic search and related videos. Much lighter on VRAM than chat (typically ~0.5–1GB). nomic-embed-text is a solid default; mxbai-embed-large is higher quality but heavier; all-minilm is the lightest.";
 const CHAT_MODEL_TIP =
-  "Chat model — used for tag enrichment, categories, and duplicate scoring. Needs more VRAM than embeds: 1B ≈ 1–2GB, 3B-class ≈ 3–6GB. Prefer smaller models on 6GB GPUs.";
+  "Chat model — used for tag enrichment, categories, and duplicate scoring. Needs more VRAM than search indexes: 1B ≈ 1–2GB, 3B-class ≈ 3–6GB. Prefer smaller models on 6GB GPUs.";
+
+function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`;
+}
 
 const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "small", label: "Small" },
@@ -161,7 +169,7 @@ const AI_SCHEDULE_OPTIONS: { value: AiSchedule; label: string; description: stri
   {
     value: "timer",
     label: "Timer",
-    description: "Periodically index videos missing embeddings",
+    description: "Periodically index videos missing search indexes",
   },
   {
     value: "set_time",
@@ -672,6 +680,16 @@ export default function Settings() {
   const [bgUploading, setBgUploading] = useState(false);
   const [paletteColors, setPaletteColors] = useState<string[]>([]);
   const [paletteLoading, setPaletteLoading] = useState(false);
+  const [bgLibrary, setBgLibrary] = useState<
+    {
+      id: string;
+      url: string;
+      mime: string;
+      animated: boolean;
+      filename?: string;
+    }[]
+  >([]);
+  const [lastUploadedName, setLastUploadedName] = useState<string | null>(null);
 
   const q = searchQuery.trim().toLowerCase();
   const match = (...parts: (string | undefined | null)[]) =>
@@ -735,6 +753,22 @@ export default function Settings() {
   useEffect(() => {
     setPaletteColors([]);
   }, [settings.customBackgroundId]);
+
+  const refreshBgLibrary = () =>
+    api
+      .listBackgrounds()
+      .then((r) => setBgLibrary(r.items ?? []))
+      .catch(() => setBgLibrary([]));
+
+  useEffect(() => {
+    if (
+      settings.backgroundEffect === "custom-image" ||
+      (tab === "appearance" &&
+        settings.backgroundEffect !== "none")
+    ) {
+      refreshBgLibrary();
+    }
+  }, [settings.backgroundEffect, tab]);
 
   const selectTab = (next: SettingsTab) => {
     setTab(next);
@@ -822,24 +856,102 @@ export default function Settings() {
 
   const uploadCustomBackground = async (file: File | null) => {
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      showToast("Large file (>10MB) — upload may be slow");
+    }
     setBgUploading(true);
-    const prevId = settings.customBackgroundId;
     const result = await api.uploadBackground(file).catch(() => null);
     setBgUploading(false);
     if (!result) {
       showToast("Background upload failed");
       return;
     }
+    const name = result.filename || file.name;
+    setLastUploadedName(name);
     update({
       backgroundEffect: "custom-image",
       customBackgroundId: result.id,
       customBackgroundMime: result.mime,
     });
     setPaletteColors([]);
-    if (prevId && prevId !== result.id) {
-      api.deleteBackground(prevId).catch(() => undefined);
-    }
+    await refreshBgLibrary();
     showToast("Background uploaded");
+  };
+
+  const deleteLibraryBackground = async (id: string) => {
+    const result = await api.deleteBackground(id).catch(() => null);
+    if (!result?.ok) {
+      showToast("Could not delete background");
+      return;
+    }
+    if (settings.customBackgroundId === id) {
+      const remaining = bgLibrary.filter((b) => b.id !== id);
+      const next = remaining[0];
+      if (next) {
+        update({
+          customBackgroundId: next.id,
+          customBackgroundMime: next.mime,
+        });
+      } else {
+        update({
+          customBackgroundId: null,
+          customBackgroundMime: null,
+        });
+      }
+    }
+    await refreshBgLibrary();
+  };
+
+  const saveCurrentAsTheme = () => {
+    const name = window.prompt("Theme name");
+    if (!name?.trim()) return;
+    const preset: CustomThemePreset = {
+      id:
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : String(Date.now()),
+      name: name.trim(),
+      customColors: { ...settings.customColors },
+      backgroundEffect: settings.backgroundEffect,
+      backgroundOpacity: settings.backgroundOpacity,
+      backgroundEffectSpeed: settings.backgroundEffectSpeed,
+      backgroundEffectSize: settings.backgroundEffectSize,
+      backgroundEffectColorMode: settings.backgroundEffectColorMode,
+      backgroundEffectColor: settings.backgroundEffectColor,
+      flowingGradientPreset: settings.flowingGradientPreset,
+      customBackgroundId: settings.customBackgroundId,
+      customBackgroundMime: settings.customBackgroundMime,
+      customBackgroundBlur: settings.customBackgroundBlur,
+      customBackgroundTint: settings.customBackgroundTint,
+      customBackgroundTintOpacity: settings.customBackgroundTintOpacity,
+    };
+    update({ customThemes: [...settings.customThemes, preset] });
+    showToast(`Saved theme “${preset.name}”`);
+  };
+
+  const applyCustomTheme = (preset: CustomThemePreset) => {
+    update({
+      theme: "custom",
+      customColors: { ...preset.customColors },
+      backgroundEffect: preset.backgroundEffect,
+      backgroundOpacity: preset.backgroundOpacity,
+      backgroundEffectSpeed: preset.backgroundEffectSpeed,
+      backgroundEffectSize: preset.backgroundEffectSize,
+      backgroundEffectColorMode: preset.backgroundEffectColorMode,
+      backgroundEffectColor: preset.backgroundEffectColor,
+      flowingGradientPreset: preset.flowingGradientPreset,
+      customBackgroundId: preset.customBackgroundId,
+      customBackgroundMime: preset.customBackgroundMime,
+      customBackgroundBlur: preset.customBackgroundBlur,
+      customBackgroundTint: preset.customBackgroundTint,
+      customBackgroundTintOpacity: preset.customBackgroundTintOpacity,
+    });
+  };
+
+  const deleteCustomTheme = (id: string) => {
+    update({
+      customThemes: settings.customThemes.filter((t) => t.id !== id),
+    });
   };
 
   const extractPalette = async () => {
@@ -972,7 +1084,7 @@ export default function Settings() {
                     label: t.label,
                   }))}
                   onChange={(value) => update({ theme: value })}
-                  className="w-max"
+                  className="w-[15rem] min-w-[14rem]"
                 />
                 <Collapse open={settings.theme === "custom"}>
                   <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
@@ -1028,6 +1140,45 @@ export default function Settings() {
                     </div>
                   </div>
                 </Collapse>
+                <div className="mt-4 space-y-2">
+                  <button
+                    type="button"
+                    onClick={saveCurrentAsTheme}
+                    className={PANEL_BTN}
+                  >
+                    Save current as theme…
+                  </button>
+                  {settings.customThemes.length > 0 && (
+                    <ul className="space-y-2">
+                      {settings.customThemes.map((preset) => (
+                        <li
+                          key={preset.id}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2"
+                        >
+                          <span className="truncate text-sm text-gray-200">
+                            {preset.name}
+                          </span>
+                          <span className="flex shrink-0 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => applyCustomTheme(preset)}
+                              className={PANEL_BTN}
+                            >
+                              Apply
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteCustomTheme(preset.id)}
+                              className={PANEL_BTN}
+                            >
+                              Delete
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
 
               <div
@@ -1064,7 +1215,7 @@ export default function Settings() {
                   onChange={(value) =>
                     update({ backgroundEffect: value as BackgroundEffect })
                   }
-                  className="w-max"
+                  className="w-[12rem] min-w-[11rem]"
                 />
                 <p className="mt-2 text-xs text-gray-500">
                   {
@@ -1124,10 +1275,73 @@ export default function Settings() {
                       }}
                       className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border file:border-ink-700 file:bg-ink-900 file:px-3 file:py-1.5 file:text-sm file:text-gray-200 hover:file:border-accent"
                     />
-                    {bgUploading && (
+                    {bgUploading ? (
                       <p className="mt-1 text-xs text-gray-500">Uploading…</p>
-                    )}
+                    ) : lastUploadedName ? (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Uploaded: {lastUploadedName}
+                      </p>
+                    ) : null}
                   </label>
+
+                  {bgLibrary.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                      {bgLibrary.map((item) => {
+                        const selected =
+                          settings.customBackgroundId === item.id;
+                        return (
+                          <div
+                            key={item.id}
+                            className={`group relative overflow-hidden rounded-lg border bg-ink-950 ${
+                              selected
+                                ? "border-accent ring-2 ring-accent"
+                                : "border-ink-700"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              title={item.filename || item.id}
+                              onClick={() =>
+                                update({
+                                  backgroundEffect: "custom-image",
+                                  customBackgroundId: item.id,
+                                  customBackgroundMime: item.mime,
+                                })
+                              }
+                              className="block w-full"
+                            >
+                              {(item.mime || "").startsWith("video/") ? (
+                                <video
+                                  src={item.url || `/api/backgrounds/${item.id}`}
+                                  className="aspect-video w-full object-cover"
+                                  muted
+                                  loop
+                                  playsInline
+                                />
+                              ) : (
+                                <img
+                                  src={item.url || `/api/backgrounds/${item.id}`}
+                                  alt={item.filename || "Background"}
+                                  className="aspect-video w-full object-cover"
+                                />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Delete background"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void deleteLibraryBackground(item.id);
+                              }}
+                              className="absolute right-1 top-1 rounded bg-ink-950/80 px-1.5 py-0.5 text-[10px] text-gray-300 opacity-0 ring-1 ring-ink-700 transition-opacity group-hover:opacity-100 hover:text-red-300"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {settings.customBackgroundId && (
                     <div className="overflow-hidden rounded-lg border border-ink-700 bg-ink-950">
@@ -1531,6 +1745,8 @@ export default function Settings() {
                     Hover me
                   </div>
                 </div>
+
+                <hr className="border-0 border-t border-ink-700" />
 
                 <SettingRow
                   title="Translucent panels"
@@ -2135,7 +2351,7 @@ export default function Settings() {
                   }
                 >
                   <span className="text-sm font-medium text-gray-200">
-                    Enable AI
+                    Enable Local AI
                   </span>
                   <Toggle
                     checked={aiDraft.enabled}
@@ -2274,13 +2490,26 @@ export default function Settings() {
                             <dd className="text-right text-xs text-gray-300">
                               {[
                                 aiStatus.queue_breakdown.embed_video
-                                  ? `${aiStatus.queue_breakdown.embed_video} embed`
+                                  ? plural(
+                                      aiStatus.queue_breakdown.embed_video,
+                                      "search index",
+                                      "search indexes"
+                                    )
                                   : null,
                                 aiStatus.queue_breakdown.enrich_tags
-                                  ? `${aiStatus.queue_breakdown.enrich_tags} tags`
+                                  ? plural(
+                                      aiStatus.queue_breakdown.enrich_tags,
+                                      "tag",
+                                      "tags"
+                                    )
                                   : null,
                                 aiStatus.queue_breakdown.refresh_categories
-                                  ? `${aiStatus.queue_breakdown.refresh_categories} categories`
+                                  ? plural(
+                                      aiStatus.queue_breakdown
+                                        .refresh_categories,
+                                      "category",
+                                      "categories"
+                                    )
                                   : null,
                               ]
                                 .filter(Boolean)
@@ -2325,12 +2554,7 @@ export default function Settings() {
                 <label className="block">
                   <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
                     Embedding model
-                    <span
-                      className="cursor-help text-gray-600"
-                      title={EMBED_MODEL_TIP}
-                    >
-                      (?)
-                    </span>
+                    <HelpTip text={EMBED_MODEL_TIP} />
                   </span>
                   <ThemedSelect
                     aria-label="Embedding model"
@@ -2367,12 +2591,7 @@ export default function Settings() {
                 <label className="block">
                   <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
                     Chat model (tags, categories, duplicates)
-                    <span
-                      className="cursor-help text-gray-600"
-                      title={CHAT_MODEL_TIP}
-                    >
-                      (?)
-                    </span>
+                    <HelpTip text={CHAT_MODEL_TIP} />
                   </span>
                   <ThemedSelect
                     aria-label="Chat model"
@@ -2437,7 +2656,7 @@ export default function Settings() {
 
             <Section
               title="Process library"
-              description="Queue embedding, tagging, and category jobs on demand."
+              description="Queue search indexing, tagging, and category jobs on demand."
               hidden={
                 !match(
                   "process",
@@ -2586,9 +2805,9 @@ export default function Settings() {
             >
               <div className="space-y-3">
                 <SettingRow
-                  title="Use subtitles in embeddings"
-                  description="Include caption text for better search and recommendations."
-                  hidden={!!q && !match("subtitles", "embeddings")}
+                  title="Use subtitles in search indexes"
+                  description="Include caption text to improve semantic search and related-video quality."
+                  hidden={!!q && !match("subtitles", "embeddings", "search indexes")}
                   control={
                     <Toggle
                       checked={aiDraft.use_subtitles}

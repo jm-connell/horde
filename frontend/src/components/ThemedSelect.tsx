@@ -75,7 +75,7 @@ export default function ThemedSelect<T extends string>({
             setOpen((v) => !v);
           }
         }}
-        className={`ui-panel ui-interactive inline-flex w-max max-w-full items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-left text-sm text-gray-100 outline-none hover:border-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 ${buttonClassName}`}
+        className={`ui-panel ui-panel-legible ui-interactive inline-flex w-max max-w-full items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-left text-sm text-gray-100 outline-none hover:border-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 ${buttonClassName}`}
       >
         <span className="min-w-0 truncate">{selected?.label ?? value}</span>
         <span className="shrink-0 text-gray-500" aria-hidden>
@@ -86,7 +86,7 @@ export default function ThemedSelect<T extends string>({
         <ul
           id={listId}
           role="listbox"
-          className="ui-panel absolute left-0 z-50 mt-1 max-h-64 min-w-full overflow-y-auto rounded-lg border border-ink-700 bg-ink-900 py-1 shadow-xl ring-1 ring-ink-700"
+          className="ui-panel ui-panel-legible absolute left-0 z-50 mt-1 max-h-64 min-w-full overflow-y-auto rounded-lg border border-ink-700 bg-ink-900 py-1 shadow-xl ring-1 ring-ink-700"
         >
           {options.map((opt) => {
             const active = opt.value === value;

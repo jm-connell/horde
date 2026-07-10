@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useDownloads } from "../context/DownloadContext";
-import { useSearch } from "../context/SearchContext";
 import { useSettings } from "../hooks/useSettings";
 import LiquidNav from "./LiquidNav";
 
@@ -27,18 +26,11 @@ export default function TopNav() {
   const { activeCount } = useDownloads();
   const [settings] = useSettings();
   const location = useLocation();
-  const { search, setSearch } = useSearch();
-  const isLibrary = location.pathname === "/";
   const indicatorOn = settings.navIndicator !== "none";
   const measureRef = useRef<HTMLDivElement>(null);
   const headerRowRef = useRef<HTMLDivElement>(null);
   const brandRef = useRef<HTMLAnchorElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!isLibrary) setSearch("");
-  }, [isLibrary, setSearch]);
 
   const showDownloadBadge =
     settings.showDownloadNavBadge && activeCount > 0;
@@ -71,8 +63,7 @@ export default function TopNav() {
       const brandW = brandRef.current?.offsetWidth ?? 110;
       const gap = 16;
       const menuW = 48;
-      const searchW = isLibrary ? Math.min(200, Math.max(120, row.clientWidth * 0.2)) : 0;
-      const available = row.clientWidth - brandW - menuW - searchW - gap * 3;
+      const available = row.clientWidth - brandW - menuW - gap * 2;
       setUseHamburger(measure.scrollWidth > available - 4);
     };
     check();
@@ -84,13 +75,7 @@ export default function TopNav() {
       ro.disconnect();
       window.removeEventListener("resize", check);
     };
-  }, [
-    isLibrary,
-    settings.uiScale,
-    reviewCount,
-    showDownloadBadge,
-    activeCount,
-  ]);
+  }, [settings.uiScale, reviewCount, showDownloadBadge, activeCount]);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `ui-interactive relative z-10 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap ${
@@ -187,17 +172,6 @@ export default function TopNav() {
           >
             {desktopLinks}
           </LiquidNav>
-        )}
-
-        {useHamburger && (
-          <input
-            ref={searchRef}
-            value={isLibrary ? search : ""}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search"
-            disabled={!isLibrary}
-            className="ui-interactive min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent disabled:opacity-40"
-          />
         )}
 
         {useHamburger && (
