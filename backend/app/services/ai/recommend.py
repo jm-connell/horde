@@ -38,9 +38,21 @@ class ForYouPage:
     has_more: bool
 
 
-def list_categories(session: Session) -> list[str]:
+def list_categories(session: Session, *, nonempty_only: bool = True) -> list[str]:
     rows = session.exec(select(AiCategory).order_by(AiCategory.name)).all()
-    return [r.name for r in rows]
+    if not nonempty_only:
+        return [r.name for r in rows]
+    names: list[str] = []
+    for row in rows:
+        vec = embeddings.unpack_vector(row.embedding, row.dim)
+        if not vec:
+            continue
+        hits = embeddings.similar_video_ids(
+            session, vec, limit=1, min_score=CATEGORY_MIN_SCORE
+        )
+        if hits:
+            names.append(row.name)
+    return names
 
 
 def videos_for_category(

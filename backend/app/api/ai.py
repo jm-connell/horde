@@ -94,20 +94,23 @@ def ai_test(payload: AiTestRequest):
 def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
     invalidate_resolved_url()
     action = payload.action
-    if action == "embeds":
-        result = worker.enqueue_missing_embeds()
-    elif action == "missing_tags":
-        result = worker.enqueue_missing_tags()
-    elif action == "full_tags":
-        result = worker.enqueue_full_tag_refresh()
-    elif action == "categories":
-        result = worker.enqueue_refresh_categories(force=True)
-    elif action == "all_recent":
-        result = worker.enqueue_all_recent()
-    elif action in ("all_full", "all"):
-        result = worker.enqueue_library_backlog(force=True)
-    else:
-        result = worker.enqueue_library_backlog(force=True)
+    try:
+        if action == "embeds":
+            result = worker.enqueue_missing_embeds()
+        elif action == "missing_tags":
+            result = worker.enqueue_missing_tags()
+        elif action == "full_tags":
+            result = worker.enqueue_full_tag_refresh()
+        elif action == "categories":
+            result = worker.enqueue_refresh_categories(force=True)
+        elif action == "all_recent":
+            result = worker.enqueue_all_recent()
+        elif action in ("all_full", "all"):
+            result = worker.enqueue_library_backlog(force=True)
+        else:
+            result = worker.enqueue_library_backlog(force=True)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc) or "Enqueue failed") from exc
     return AiProcessResult(
         enqueued=result["enqueued"],
         breakdown=result["breakdown"],

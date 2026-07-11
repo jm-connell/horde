@@ -146,10 +146,16 @@ def tag_enrich_prompt(video: Video, existing_tags: list[str]) -> str:
     excerpt = subtitle_excerpt(video)
     desc = (video.description or "")[:2000]
     return (
-        "Suggest additional short topical tags for this archived video. "
-        "Return JSON: {\"tags\": [\"tag1\", \"tag2\", ...]}. "
-        "Use 3-12 short tags (1-3 words). Do not repeat existing tags. "
-        "Prefer general topics over proper nouns unless distinctive.\n\n"
+        "Suggest a complete set of short topical tags for this archived video.\n"
+        "Return JSON: {\"tags\": [\"tag1\", \"tag2\", ...]}.\n"
+        "Rules:\n"
+        "- Return 3-12 short tags (1-3 words each) that are useful for browsing/search.\n"
+        "- Compare carefully against Existing tags; only add tags that fill real gaps.\n"
+        "- Do not repeat existing tags or near-duplicates (singular/plural, "
+        "\"Fight\" vs \"Fights\", reordered words, minor wording changes).\n"
+        "- Prefer general topics over proper nouns unless distinctive.\n"
+        "- If existing tags already cover the video well, return fewer new tags "
+        "(or an empty list) rather than inventing redundant ones.\n\n"
         f"Title: {video.title}\n"
         f"Channel: {video.channel or ''}\n"
         f"Existing tags: {', '.join(existing_tags) or '(none)'}\n"

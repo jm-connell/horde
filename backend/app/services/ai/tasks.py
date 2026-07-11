@@ -41,6 +41,35 @@ def run_embed_video(session: Session, video_id: Optional[int]) -> None:
     embeddings.embed_video(session, video_id)
 
 
+def _tag_norm_key(tag: str) -> str:
+    """Normalize for near-duplicate comparison (case + light plural folding)."""
+    words = re.sub(r"[^a-z0-9\s]", " ", tag.lower()).split()
+    folded: list[str] = []
+    for w in words:
+        if len(w) > 3 and w.endswith("ies"):
+            w = w[:-3] + "y"
+        elif len(w) > 3 and w.endswith("ses"):
+            w = w[:-2]
+        elif len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]
+        folded.append(w)
+    return " ".join(folded)
+
+
+def _is_near_duplicate(tag: str, seen_norms: set[str]) -> bool:
+    key = _tag_norm_key(tag)
+    if not key:
+        return True
+    if key in seen_norms:
+        return True
+    # Token-set equality (order-independent)
+    tokens = frozenset(key.split())
+    for existing in seen_norms:
+        if frozenset(existing.split()) == tokens:
+            return True
+    return False
+
+
 def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     if video_id is None:
         raise RuntimeError("enrich_tags requires video_id")
@@ -67,12 +96,17 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     raw = provider.chat(
         prompt,
         str(ai.get("chat_model") or "llama3.2:3b"),
-        system="You are a tagging assistant. Reply with JSON only.",
+        system=(
+            "You are a tagging assistant. Reply with JSON only. "
+            "Return as many useful non-duplicate tags as needed (typically 3-12), "
+            "not just one."
+        ),
     )
     data = _parse_json_object(raw)
     suggested = data.get("tags") if isinstance(data.get("tags"), list) else []
     merged = list(existing)
     seen = {t.lower() for t in existing}
+    seen_norms = {_tag_norm_key(t) for t in existing}
     added_ai: list[str] = []
     for tag in suggested:
         if not isinstance(tag, str):
@@ -81,9 +115,10 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
         if not cleaned or len(cleaned) > 40:
             continue
         key = cleaned.lower()
-        if key in seen:
+        if key in seen or _is_near_duplicate(cleaned, seen_norms):
             continue
         seen.add(key)
+        seen_norms.add(_tag_norm_key(cleaned))
         merged.append(cleaned)
         added_ai.append(cleaned)
         if len(merged) >= 24:

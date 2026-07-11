@@ -159,7 +159,7 @@ const DEFAULTS: Settings = {
   customBackgroundTintOpacity: 0.45,
   backgroundEffectColorMode: "accent",
   backgroundEffectColor: "#22d3ee",
-  pauseBackgroundWhileWatching: true,
+  pauseBackgroundWhileWatching: false,
   navIndicator: "liquid",
   hoverMotion: "subtle",
   translucentPanels: false,

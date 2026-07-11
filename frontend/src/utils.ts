@@ -38,14 +38,16 @@ export interface Chapter {
   title: string;
 }
 
+const CHAPTER_LINE_RE =
+  /^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\s*[-–—|·•:→]?\s*)(.+)/;
+
 export function parseChapters(description: string | null): Chapter[] {
   if (!description) return [];
-  const TIME_RE = /^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\s*[-–—|·•:→]?\s*)(.+)/;
   const chapters: Chapter[] = [];
   for (const rawLine of description.split("\n")) {
     const line = rawLine.trim();
     if (!line) continue;
-    const m = line.match(TIME_RE);
+    const m = line.match(CHAPTER_LINE_RE);
     if (!m) continue;
     const [, h, min, sec, rest] = m;
     const secs = parseTimestampToSeconds(h, min, sec);
@@ -58,6 +60,20 @@ export function parseChapters(description: string | null): Chapter[] {
     if (chapters[i].startSec <= chapters[i - 1].startSec) return [];
   }
   return chapters;
+}
+
+/** Remove chapter timestamp lines from description when chapters are shown separately. */
+export function stripChapterLines(description: string | null): string {
+  if (!description) return "";
+  if (parseChapters(description).length === 0) return description;
+  const lines = description.split("\n");
+  const kept: string[] = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line && CHAPTER_LINE_RE.test(line)) continue;
+    kept.push(rawLine);
+  }
+  return kept.join("\n").replace(/^\n+|\n+$/g, "").replace(/\n{3,}/g, "\n\n");
 }
 
 export function formatSize(bytes: number | null): string {

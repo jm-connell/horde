@@ -18,8 +18,11 @@ from ..schemas import (
     ChannelFeedEntry,
     ChannelFeedPage,
     ChannelRename,
+    ChannelSearchResponse,
+    ChannelSearchHit,
     ChannelStat,
     MetadataRefreshResult,
+    MetadataSyncStatus,
     StorageStats,
     TagStat,
     VideoRead,
@@ -184,6 +187,17 @@ def rename_channel(payload: ChannelRename, session: Session = Depends(get_sessio
     return {"updated": updated}
 
 
+@router.get("/channels/search", response_model=ChannelSearchResponse)
+def search_channels(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(8, ge=1, le=20),
+):
+    hits = downloader.search_youtube_channels(q, limit=limit)
+    return ChannelSearchResponse(
+        results=[ChannelSearchHit(**h) for h in hits]
+    )
+
+
 @router.get("/channels/feed", response_model=ChannelFeedPage)
 def channel_feed(
     channel: Optional[str] = None,
@@ -303,7 +317,7 @@ def channel_feed(
 
         threading.Thread(
             target=_enrich,
-            args=([(e.id, e.url) for e in missing if e.id]),
+            args=([(e.id, e.url) for e in missing if e.id],),
             daemon=True,
         ).start()
 
@@ -363,13 +377,14 @@ def get_video(video_id: int, session: Session = Depends(get_session)):
 @router.get("/videos/{video_id}/related", response_model=list[VideoRead])
 def related_videos(
     video_id: int,
-    limit: int = Query(6, ge=1, le=24),
+    limit: int = Query(8, ge=1, le=24),
+    offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
 ):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    rows = library.related_videos(session, video_id, limit=limit)
+    rows = library.related_videos(session, video_id, limit=limit, offset=offset)
     return [_to_read(v, session) for v in rows]
 
 
@@ -589,51 +604,46 @@ def bulk_refresh_metadata(
     payload: BulkMetadataRefresh,
     session: Session = Depends(get_session),
 ):
-    from ..services.metadata_sync import refresh_video_metadata
+    from ..services.metadata_sync import start_bulk_sync
 
+    # Validate ids exist when provided (start_bulk_sync also filters).
     if payload.video_ids:
-        candidates = [
-            session.get(Video, vid_id)
-            for vid_id in payload.video_ids
-        ]
-        videos = [v for v in candidates if v is not None]
-    else:
-        videos = list(
-            session.exec(
-                select(Video).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
-            ).all()
-        )
+        for vid_id in payload.video_ids:
+            if session.get(Video, vid_id) is None:
+                raise HTTPException(status_code=404, detail=f"Video {vid_id} not found")
 
-    refreshed = 0
-    failed = 0
-    skipped = 0
-
-    for video in videos:
-        if not video.source_url:
-            skipped += 1
-            continue
-        try:
-            refresh_video_metadata(video.id)
-            refreshed += 1
-        except Exception:  # noqa: BLE001
-            failed += 1
-
+    result = start_bulk_sync(payload.video_ids or None, payload.fields or None)
     return MetadataRefreshResult(
-        refreshed=refreshed,
-        failed=failed,
-        skipped=skipped,
+        started=bool(result.get("started")),
+        detail=str(result.get("detail") or ""),
+        total=int(result.get("total") or 0),
+        refreshed=0,
+        failed=0,
+        skipped=0,
     )
 
 
+@router.get("/videos/refresh-metadata/status", response_model=MetadataSyncStatus)
+def metadata_sync_status():
+    from ..services.metadata_sync import get_sync_status
+
+    return MetadataSyncStatus(**get_sync_status())
+
+
 @router.post("/videos/{video_id}/refresh-metadata", response_model=VideoRead)
-def refresh_metadata(video_id: int, session: Session = Depends(get_session)):
+def refresh_metadata(
+    video_id: int,
+    session: Session = Depends(get_session),
+    fields: Optional[str] = Query(None, description="Comma-separated sync fields"),
+):
     from ..services.metadata_sync import refresh_video_metadata
 
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    field_list = [f.strip() for f in fields.split(",") if f.strip()] if fields else None
     try:
-        refresh_video_metadata(video_id)
+        refresh_video_metadata(video_id, fields=field_list)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}")
     session.expire_all()

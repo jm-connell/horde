@@ -75,6 +75,8 @@ interface Props {
   onSubtitlesRefresh?: () => void;
   miniWidth?: number | null;
   onMiniResize?: (width: number) => void;
+  onMiniMove?: (left: number, top: number) => void;
+  onMiniMoveEnd?: () => void;
   upNext?: {
     title: string;
     channel: string | null;
@@ -115,6 +117,8 @@ export default function VideoPlayer({
   onSubtitlesRefresh,
   miniWidth = null,
   onMiniResize,
+  onMiniMove,
+  onMiniMoveEnd,
   upNext = null,
   onCancelUpNext,
   onPlayUpNext,
@@ -162,6 +166,7 @@ export default function VideoPlayer({
   } | null>(null);
   const skipNoticeTimer = useRef<number | null>(null);
   const prevTimeRef = useRef(0);
+  const isSeekingRef = useRef(false);
   const suppressedSegmentsRef = useRef(new Set<string>());
   const [ccNotice, setCcNotice] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -365,20 +370,30 @@ export default function VideoPlayer({
     };
   }, [captionLang, subtitleOffset, tracks, src, setCaptionMode, applyCueLines]);
 
+  const seekTo = useCallback(
+    (sec: number) => {
+      const t = Math.max(0, sec);
+      isSeekingRef.current = true;
+      prevTimeRef.current = t;
+      setCurrent(t);
+      if (chromecast.casting) {
+        chromecast.remoteSeek(t);
+        return;
+      }
+      if (videoRef.current) videoRef.current.currentTime = t;
+    },
+    [chromecast.casting, chromecast.remoteSeek]
+  );
+
   // Listen for programmatic seek requests (e.g., clicking a chapter in Watch.tsx)
   useEffect(() => {
     const handler = (e: Event) => {
       const { sec } = (e as CustomEvent<{ sec: number }>).detail;
-      if (chromecast.casting) {
-        chromecast.remoteSeek(sec);
-        setCurrent(sec);
-        return;
-      }
-      if (videoRef.current) videoRef.current.currentTime = sec;
+      seekTo(sec);
     };
     window.addEventListener("horde:seek", handler);
     return () => window.removeEventListener("horde:seek", handler);
-  }, [chromecast.casting, chromecast.remoteSeek]);
+  }, [seekTo]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = rate;
@@ -604,6 +619,8 @@ export default function VideoPlayer({
       const isPlayerKey =
         e.key === " " ||
         e.key === "k" ||
+        e.key === "c" ||
+        e.key === "C" ||
         e.key === "t" ||
         e.key === "f" ||
         e.key === "ArrowRight" ||
@@ -618,6 +635,9 @@ export default function VideoPlayer({
       if (e.key === " " || e.key === "k") {
         e.preventDefault();
         togglePlay();
+      } else if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        cycleCaptions();
       } else if (e.key === "t") {
         toggleTheater();
       } else if (e.key === "f") {
@@ -625,9 +645,9 @@ export default function VideoPlayer({
       } else if (e.key === "Escape" && mode === "windowed") {
         onModeChange(modeBeforeWindowed.current);
       } else if (e.key === "ArrowRight" && videoRef.current) {
-        videoRef.current.currentTime += 5;
+        seekTo(videoRef.current.currentTime + 5);
       } else if (e.key === "ArrowLeft" && videoRef.current) {
-        videoRef.current.currentTime -= 5;
+        seekTo(videoRef.current.currentTime - 5);
       } else if (e.key === ">" || e.key === ".") {
         stepRate(1);
       } else if (e.key === "<" || e.key === ",") {
@@ -636,7 +656,7 @@ export default function VideoPlayer({
         e.preventDefault();
         const t = videoRef.current.currentTime;
         const next = chapters.find((c) => c.startSec > t + 1);
-        if (next) videoRef.current.currentTime = next.startSec;
+        if (next) seekTo(next.startSec);
       }
     };
     window.addEventListener("keydown", handler);
@@ -651,18 +671,12 @@ export default function VideoPlayer({
     isMini,
     revealControls,
     chapters,
+    cycleCaptions,
+    seekTo,
   ]);
 
   const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const t = Number(e.target.value);
-    if (chromecast.casting) {
-      chromecast.remoteSeek(t);
-      setCurrent(t);
-      return;
-    }
-    const v = videoRef.current;
-    if (!v) return;
-    v.currentTime = t;
+    seekTo(Number(e.target.value));
   };
 
   const onVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -900,6 +914,80 @@ export default function VideoPlayer({
     [miniWidth, isMobile, clampMiniWidth, onMiniResize]
   );
 
+  const miniMoveDrag = useRef<{
+    startX: number;
+    startY: number;
+    origLeft: number;
+    origTop: number;
+    pointerId: number;
+    moved: boolean;
+  } | null>(null);
+
+  const onMiniMovePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (!onMiniMove || !isMini) return;
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      const hit = e.target as HTMLElement | null;
+      if (
+        hit?.closest(
+          "button, input, select, textarea, a, [data-mini-no-drag]"
+        )
+      ) {
+        return;
+      }
+      // Don't preventDefault here — that would swallow video click-to-play.
+      const root = playerRootRef.current;
+      if (!root) return;
+      const rect = root.getBoundingClientRect();
+      miniMoveDrag.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        origLeft: rect.left,
+        origTop: rect.top,
+        pointerId: e.pointerId,
+        moved: false,
+      };
+      // Window listeners keep tracking when the pointer outruns the mini.
+      const onMove = (ev: PointerEvent) => {
+        if (!miniMoveDrag.current || !onMiniMove) return;
+        if (ev.pointerId !== miniMoveDrag.current.pointerId) return;
+        const { startX, startY, origLeft, origTop } = miniMoveDrag.current;
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (!miniMoveDrag.current.moved && dx * dx + dy * dy < 16) return;
+        if (!miniMoveDrag.current.moved) {
+          miniMoveDrag.current.moved = true;
+          suppressClick.current = true;
+        }
+        ev.preventDefault();
+        onMiniMove(origLeft + dx, origTop + dy);
+      };
+      const onEnd = (ev: PointerEvent) => {
+        if (
+          miniMoveDrag.current &&
+          ev.pointerId !== miniMoveDrag.current.pointerId
+        ) {
+          return;
+        }
+        const didMove = miniMoveDrag.current?.moved ?? false;
+        miniMoveDrag.current = null;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onEnd);
+        window.removeEventListener("pointercancel", onEnd);
+        if (didMove) onMiniMoveEnd?.();
+        if (didMove) {
+          window.setTimeout(() => {
+            suppressClick.current = false;
+          }, 0);
+        }
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onEnd);
+      window.addEventListener("pointercancel", onEnd);
+    },
+    [isMini, onMiniMove, onMiniMoveEnd]
+  );
+
   useEffect(() => {
     if (isMini) return;
     if (!playing) {
@@ -925,7 +1013,7 @@ export default function VideoPlayer({
   const progressPct = duration > 0 ? (current / duration) * 100 : 0;
 
   const wrapperClass = isMini
-    ? "relative w-full bg-black"
+    ? `relative w-full bg-black${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
     : isNativeFullscreen
       ? "relative flex h-full w-full items-center justify-center bg-black"
       : mode === "windowed"
@@ -954,7 +1042,12 @@ export default function VideoPlayer({
   const subtitleClass = `sub-${subtitleSize}`;
 
   return (
-    <div ref={playerRootRef} className={wrapperClass} style={miniStyle}>
+    <div
+      ref={playerRootRef}
+      className={wrapperClass}
+      style={miniStyle}
+      onPointerDown={isMini && onMiniMove ? onMiniMovePointerDown : undefined}
+    >
       <div
         className={`${innerClass}${
           !isMini && playing && !controlsVisible ? " cursor-none" : ""
@@ -984,7 +1077,9 @@ export default function VideoPlayer({
             onProgress?.(t);
             // SponsorBlock: auto-skip on forward playback; seeking back into a
             // segment suppresses it for the rest of this source.
-            if (sponsorSegments.length > 0) {
+            // Skip while a programmatic/user seek is in flight so distant
+            // chapter jumps aren't redirected mid-seek.
+            if (sponsorSegments.length > 0 && !isSeekingRef.current) {
               const movingForward = t >= prev - 0.05;
               const seekingBack = t < prev - 0.05;
               for (const seg of sponsorSegments) {
@@ -1027,6 +1122,12 @@ export default function VideoPlayer({
                 }
               }
             }
+          }}
+          onSeeked={() => {
+            isSeekingRef.current = false;
+          }}
+          onSeeking={() => {
+            isSeekingRef.current = true;
           }}
           onLoadedMetadata={(e) => {
             const el = e.currentTarget;
@@ -1080,7 +1181,8 @@ export default function VideoPlayer({
           <>
             {onMiniResize && (
               <div
-                className="absolute left-0 top-0 z-20 h-4 w-4 cursor-nwse-resize touch-none"
+                data-mini-no-drag
+                className="absolute left-0 top-0 z-30 h-4 w-4 cursor-nwse-resize touch-none"
                 style={{ touchAction: "none" }}
                 title="Drag to resize"
                 aria-label="Drag to resize mini player"
@@ -1088,7 +1190,7 @@ export default function VideoPlayer({
               />
             )}
             <div
-              className={`absolute inset-x-0 top-0 flex items-center gap-1 bg-gradient-to-b from-black/90 to-transparent px-2 pb-2 pt-1 text-gray-100 transition-opacity duration-300 ${
+              className={`absolute inset-x-0 top-0 z-10 flex items-center gap-1 bg-gradient-to-b from-black/90 to-transparent px-2 pb-2 pt-1 text-gray-100 transition-opacity duration-300 ${
                 miniControlsVisible
                   ? "pointer-events-auto opacity-100"
                   : "pointer-events-none opacity-0"
@@ -1158,11 +1260,14 @@ export default function VideoPlayer({
                       type="button"
                       className="group pointer-events-auto absolute top-1/2 z-10 h-4 w-3 -translate-x-1/2 -translate-y-1/2"
                       style={{ left: `${(ch.startSec / duration) * 100}%` }}
-                      onClick={(e) => {
+                      onPointerDown={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
-                        if (videoRef.current) {
-                          videoRef.current.currentTime = ch.startSec;
-                        }
+                        seekTo(ch.startSec);
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
                       }}
                       title={`${formatTimestamp(ch.startSec)} — ${ch.title}`}
                     >
@@ -1356,35 +1461,42 @@ export default function VideoPlayer({
                 )}
                 {isMobile && (
                   <button
-                    type="button"
-                    onClick={() =>
-                      onAutoplayRelatedChange?.(!autoplayRelated)
-                    }
-                    className={`rounded px-2 py-1 text-xs font-medium ${
-                      autoplayRelated
-                        ? "bg-accent text-ink-950"
-                        : "bg-ink-700 text-gray-200 hover:text-accent"
-                    }`}
-                    title={
-                      autoplayRelated
-                        ? "Autoplay related videos on"
-                        : "Autoplay related videos off"
-                    }
-                  >
-                    Autoplay
-                  </button>
-                )}
-                {isMobile && (
-                  <button
                     onClick={toggleNativeFullscreen}
-                    className={`rounded px-2 py-1 text-xs font-medium ${
+                    className={`flex items-center justify-center rounded px-2 py-1 text-xs font-medium ${
                       isNativeFullscreen
                         ? "bg-accent text-ink-950"
                         : "bg-ink-700 text-gray-200 hover:text-accent"
                     }`}
-                    title="Fullscreen"
+                    title={
+                      isNativeFullscreen ? "Exit fullscreen" : "Fullscreen"
+                    }
+                    aria-label={
+                      isNativeFullscreen ? "Exit fullscreen" : "Fullscreen"
+                    }
                   >
-                    {isNativeFullscreen ? "Exit" : "Fullscreen"}
+                    {isNativeFullscreen ? (
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-3.5 w-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden
+                      >
+                        <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" />
+                      </svg>
+                    ) : (
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-3.5 w-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden
+                      >
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+                      </svg>
+                    )}
                   </button>
                 )}
                 {!isMobile && (
@@ -1395,24 +1507,6 @@ export default function VideoPlayer({
                       title="Picture in picture"
                     >
                       PiP
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onAutoplayRelatedChange?.(!autoplayRelated)
-                      }
-                      className={`rounded px-2 py-1 text-xs font-medium ${
-                        autoplayRelated
-                          ? "bg-accent text-ink-950"
-                          : "bg-ink-700 text-gray-200 hover:text-accent"
-                      }`}
-                      title={
-                        autoplayRelated
-                          ? "Autoplay related videos on"
-                          : "Autoplay related videos off"
-                      }
-                    >
-                      Autoplay
                     </button>
                     <button
                       onClick={toggleTheater}

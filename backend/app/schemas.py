@@ -130,6 +130,17 @@ class ChannelStat(BaseModel):
     channel_url: Optional[str] = None
 
 
+class ChannelSearchHit(BaseModel):
+    name: str
+    url: str
+    thumbnail_url: Optional[str] = None
+    subscriber_count: Optional[int] = None
+
+
+class ChannelSearchResponse(BaseModel):
+    results: list[ChannelSearchHit] = []
+
+
 class ChannelFeedEntry(BaseModel):
     id: Optional[str] = None
     url: str
@@ -243,12 +254,29 @@ class BulkVideoNotes(BaseModel):
 
 class BulkMetadataRefresh(BaseModel):
     video_ids: list[int] = []
+    fields: list[str] = []  # views | thumbnails | captions | titles_descriptions | all
 
 
 class MetadataRefreshResult(BaseModel):
-    refreshed: int
-    failed: int
-    skipped: int
+    refreshed: int = 0
+    failed: int = 0
+    skipped: int = 0
+    started: bool = False
+    detail: str = ""
+    total: int = 0
+
+
+class MetadataSyncStatus(BaseModel):
+    running: bool = False
+    total: int = 0
+    done: int = 0
+    failed: int = 0
+    skipped: int = 0
+    current_title: Optional[str] = None
+    current_video_id: Optional[int] = None
+    fields: list[str] = []
+    last_error: Optional[str] = None
+    finished_at: Optional[str] = None
 
 
 class BulkPlaylistAdd(BaseModel):

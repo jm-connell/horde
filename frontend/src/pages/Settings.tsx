@@ -475,11 +475,13 @@ function Section({
 function Chip({
   active,
   onClick,
+  onPointerDown,
   children,
   className = "",
 }: {
   active: boolean;
-  onClick: () => void;
+  onClick?: () => void;
+  onPointerDown?: () => void;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -487,6 +489,14 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
+      onPointerDown={
+        onPointerDown
+          ? (e) => {
+              e.preventDefault();
+              onPointerDown();
+            }
+          : undefined
+      }
       className={`${active ? CHIP_ACTIVE : CHIP} ${className}`}
     >
       {children}
@@ -670,6 +680,18 @@ export default function Settings() {
   const [chatCustom, setChatCustom] = useState(false);
   const [expiryInput, setExpiryInput] = useState<string>("");
   const [metadataSyncing, setMetadataSyncing] = useState(false);
+  const [metadataSyncFields, setMetadataSyncFields] = useState<string[]>([
+    "all",
+  ]);
+  const [metadataSyncStatus, setMetadataSyncStatus] = useState<{
+    running: boolean;
+    total: number;
+    done: number;
+    failed: number;
+    skipped: number;
+    current_title: string | null;
+    last_error: string | null;
+  } | null>(null);
   const [aiProcessingAction, setAiProcessingAction] = useState<string | null>(
     null
   );
@@ -812,25 +834,68 @@ export default function Settings() {
 
   const resyncAllMetadata = async () => {
     if (metadataSyncing) return;
+    const fields =
+      metadataSyncFields.includes("all") || metadataSyncFields.length === 0
+        ? ["all"]
+        : metadataSyncFields;
+    const label = fields.includes("all") ? "all metadata" : fields.join(", ");
     if (
       !confirm(
-        "Resync metadata for all videos with a source URL? This fetches thumbnails, captions, view counts, and channel stats."
+        `Resync ${label} for all videos with a source URL?`
       )
     ) {
       return;
     }
     setMetadataSyncing(true);
-    const result = await api.refreshMetadataBulk().catch(() => null);
-    setMetadataSyncing(false);
-    if (!result) {
-      showToast("Metadata sync failed");
-      return;
+    try {
+      const result = await api.refreshMetadataBulk(undefined, fields);
+      if (!result.started) {
+        showToast(result.detail || "Could not start metadata sync");
+        setMetadataSyncing(false);
+        return;
+      }
+      showToast(result.detail || "Metadata sync started");
+      const poll = async () => {
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 1500));
+          try {
+            const status = await api.getMetadataSyncStatus();
+            setMetadataSyncStatus(status);
+            if (!status.running) {
+              showToast(
+                `Synced ${status.done} video${status.done === 1 ? "" : "s"}` +
+                  (status.failed ? ` (${status.failed} failed)` : "") +
+                  (status.skipped ? ` (${status.skipped} skipped)` : "")
+              );
+              break;
+            }
+          } catch {
+            break;
+          }
+        }
+        setMetadataSyncing(false);
+      };
+      void poll();
+    } catch (err) {
+      showToast(
+        err instanceof Error && err.message
+          ? err.message
+          : "Metadata sync failed"
+      );
+      setMetadataSyncing(false);
     }
-    showToast(
-      `Synced ${result.refreshed} video${result.refreshed === 1 ? "" : "s"}` +
-        (result.failed ? ` (${result.failed} failed)` : "") +
-        (result.skipped ? ` (${result.skipped} skipped)` : "")
-    );
+  };
+
+  const toggleSyncField = (field: string) => {
+    setMetadataSyncFields((prev) => {
+      if (field === "all") return ["all"];
+      const withoutAll = prev.filter((f) => f !== "all");
+      if (withoutAll.includes(field)) {
+        const next = withoutAll.filter((f) => f !== field);
+        return next.length === 0 ? ["all"] : next;
+      }
+      return [...withoutAll, field];
+    });
   };
 
   const runAiProcess = async (
@@ -844,14 +909,19 @@ export default function Settings() {
   ) => {
     if (aiProcessingAction) return;
     setAiProcessingAction(action);
-    const result = await api.processAiLibrary(action).catch(() => null);
-    setAiProcessingAction(null);
-    if (!result) {
-      showToast("Could not enqueue library");
-      return;
+    try {
+      const result = await api.processAiLibrary(action);
+      showToast(result.detail || "Nothing to process");
+      refreshAiStatus();
+    } catch (err) {
+      const msg =
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not enqueue library";
+      showToast(msg);
+    } finally {
+      setAiProcessingAction(null);
     }
-    showToast(result.detail || "Nothing to process");
-    refreshAiStatus();
   };
 
   const uploadCustomBackground = async (file: File | null) => {
@@ -1894,7 +1964,7 @@ export default function Settings() {
                       <Chip
                         key={opt.value}
                         active={settings.uiScale === opt.value}
-                        onClick={() => update({ uiScale: opt.value })}
+                        onPointerDown={() => update({ uiScale: opt.value })}
                         className="!py-1.5"
                       >
                         {opt.label}
@@ -1915,7 +1985,7 @@ export default function Settings() {
             <Section
               first
               title="Library metadata"
-              description="Pull fresh thumbnails, captions, view counts, and channel subscriber counts from each video's source URL."
+              description="Pull fresh thumbnails, captions, view counts, and titles from each video's source URL. Choose what to sync."
               hidden={
                 !match(
                   "library metadata",
@@ -1926,13 +1996,54 @@ export default function Settings() {
                 )
               }
             >
+              <div className="mb-3 flex flex-wrap gap-2">
+                {(
+                  [
+                    ["all", "Everything"],
+                    ["views", "Views"],
+                    ["thumbnails", "Thumbnails"],
+                    ["captions", "Captions"],
+                    ["titles_descriptions", "Titles & descriptions"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Chip
+                    key={value}
+                    active={
+                      value === "all"
+                        ? metadataSyncFields.includes("all")
+                        : metadataSyncFields.includes(value) &&
+                          !metadataSyncFields.includes("all")
+                    }
+                    onClick={() => toggleSyncField(value)}
+                    className="!py-1.5"
+                  >
+                    {label}
+                  </Chip>
+                ))}
+              </div>
               <button
                 onClick={resyncAllMetadata}
                 disabled={metadataSyncing}
                 className={PANEL_BTN}
               >
-                {metadataSyncing ? "Syncing…" : "Resync all metadata"}
+                {metadataSyncing ? "Syncing…" : "Resync metadata"}
               </button>
+              {metadataSyncing && metadataSyncStatus && (
+                <div className="mt-3 rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-2 text-xs text-gray-400">
+                  <p>
+                    {metadataSyncStatus.done + metadataSyncStatus.failed}/
+                    {metadataSyncStatus.total}
+                    {metadataSyncStatus.current_title
+                      ? ` — ${metadataSyncStatus.current_title}`
+                      : ""}
+                  </p>
+                  {metadataSyncStatus.last_error && (
+                    <p className="mt-1 text-red-400">
+                      {metadataSyncStatus.last_error}
+                    </p>
+                  )}
+                </div>
+              )}
             </Section>
 
             <Section

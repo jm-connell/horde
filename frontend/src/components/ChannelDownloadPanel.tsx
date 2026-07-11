@@ -1,3 +1,4 @@
+import { usePlayback } from "../context/PlaybackContext";
 import {
   formatApproxSize,
   mergePinnedPreset,
@@ -20,6 +21,7 @@ export default function ChannelDownloadPanel({
   onUpdatePending,
   onCancel,
   onSubmitNow,
+  queueDockedBottom = false,
 }: {
   defaultPreset: string;
   onDefaultPresetChange: (preset: string) => void;
@@ -34,15 +36,38 @@ export default function ChannelDownloadPanel({
   ) => void;
   onCancel: (tempId: number) => void;
   onSubmitNow: (tempId: number) => void;
+  /** When true, lift panel above the bottom-docked playback queue. */
+  queueDockedBottom?: boolean;
 }) {
+  const { queue, miniPlayerActive } = usePlayback();
+  const queueVisible = queue.length > 0;
+  const liftAboveQueue = queueVisible && queueDockedBottom && !miniPlayerActive;
+  // Mini owns bottom-right; lift panel above it (and above queue when both).
+  const liftAboveMini = miniPlayerActive;
+
   const editingItem = pending.find((p) => p.tempId === editingId) ?? null;
   const presetOptions =
     allPresets.length > 0 ? allPresets : [...PRESET_ORDER];
 
+  let positionClass = "bottom-4 right-4";
+  if (liftAboveMini) {
+    positionClass =
+      queueVisible && queueDockedBottom
+        ? "bottom-[min(48vh,20rem)] right-4 left-auto"
+        : "bottom-[min(42vh,16rem)] right-4 left-auto";
+  } else if (liftAboveQueue) {
+    positionClass = "bottom-[min(34vh,17rem)] right-4 left-auto";
+  }
+
+  const panelShell =
+    "ui-panel ui-panel-legible pointer-events-auto rounded-xl border border-ink-700 bg-ink-900 p-3 shadow-2xl ring-1 ring-ink-700";
+
   if (pending.length === 0) {
     return (
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 w-[22rem] max-w-[calc(100vw-2rem)]">
-        <div className="pointer-events-auto rounded-xl bg-ink-900 p-4 shadow-2xl ring-1 ring-ink-700">
+      <div
+        className={`pointer-events-none fixed z-50 w-[22rem] max-w-[calc(100vw-2rem)] ${positionClass}`}
+      >
+        <div className={`${panelShell} p-4`}>
           <label className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution
           </label>
@@ -62,10 +87,16 @@ export default function ChannelDownloadPanel({
     );
   }
 
+  // Show at most one pending card (+ resolution picker) to stay ~1 video tall.
+  const visiblePending = pending.slice(0, 1);
+  const hiddenCount = pending.length - visiblePending.length;
+
   return (
     <>
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2">
-        <div className="pointer-events-auto rounded-xl bg-ink-900 p-3 shadow-2xl ring-1 ring-ink-700">
+      <div
+        className={`pointer-events-none fixed z-50 flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2 ${positionClass}`}
+      >
+        <div className={panelShell}>
           <label className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution
           </label>
@@ -82,7 +113,7 @@ export default function ChannelDownloadPanel({
           </select>
         </div>
 
-        {pending.map((item) => {
+        {visiblePending.map((item) => {
           const preview = item.preview;
           const qualityOptions =
             preview &&
@@ -99,10 +130,7 @@ export default function ChannelDownloadPanel({
           );
 
           return (
-            <div
-              key={item.tempId}
-              className="pointer-events-auto rounded-xl bg-ink-900 p-3 shadow-2xl ring-1 ring-ink-700"
-            >
+            <div key={item.tempId} className={panelShell}>
               <div className="flex gap-3">
                 <div className="h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-ink-800">
                   {thumbSrc ? (
@@ -146,7 +174,9 @@ export default function ChannelDownloadPanel({
                 <span className="text-xs text-gray-500">
                   {item.submitting
                     ? "Starting…"
-                    : `Downloading in ${item.secondsLeft}s`}
+                    : hiddenCount > 0
+                      ? `+${hiddenCount} more · ${item.secondsLeft}s`
+                      : `Downloading in ${item.secondsLeft}s`}
                 </span>
                 <div className="flex gap-1">
                   <button

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useDownloads, isActiveJob } from "../context/DownloadContext";
+import { useToast } from "../context/ToastContext";
 import ChannelPicker from "../components/ChannelPicker";
 import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
@@ -17,6 +18,7 @@ import { formatDuration, formatViewCount } from "../utils";
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
 export default function Download() {
+  const { showToast } = useToast();
   const {
     jobs,
     progress,
@@ -29,6 +31,7 @@ export default function Download() {
   } = useDownloads();
 
   const [url, setUrl] = useState("");
+  const urlInputRef = useRef<HTMLInputElement>(null);
   const [preset, setPreset] = useState("best");
   const [allPresets, setAllPresets] = useState<string[]>([...PRESET_ORDER]);
   const [submitting, setSubmitting] = useState(false);
@@ -340,6 +343,7 @@ export default function Download() {
           </label>
           <div className="flex gap-2">
             <input
+              ref={urlInputRef}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Video or playlist URL (YouTube, etc.)"
@@ -347,13 +351,29 @@ export default function Download() {
             />
             <button
               type="button"
-              onClick={() => {
-                navigator.clipboard
-                  .readText()
-                  .then((text) => {
-                    if (text.trim()) setUrl(text.trim());
-                  })
-                  .catch(() => undefined);
+              onClick={async () => {
+                try {
+                  if (navigator.clipboard?.readText) {
+                    const text = await navigator.clipboard.readText();
+                    if (text.trim()) {
+                      setUrl(text.trim());
+                      return;
+                    }
+                  }
+                } catch {
+                  /* Clipboard API unavailable (e.g. HTTP LAN) */
+                }
+                const el = urlInputRef.current;
+                if (el) {
+                  el.focus();
+                  try {
+                    const ok = document.execCommand("paste");
+                    if (ok) return;
+                  } catch {
+                    /* ignore */
+                  }
+                }
+                showToast("Press Ctrl+V to paste (clipboard needs HTTPS or localhost)");
               }}
               className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
             >

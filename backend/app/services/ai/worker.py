@@ -173,6 +173,8 @@ def enqueue_library_backlog(*, force: bool = True) -> dict:
 
 def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
     """Missing embeds/tags for videos watched or added recently, plus categories."""
+    from sqlalchemy import or_
+
     cutoff = utcnow() - timedelta(days=days)
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
@@ -181,23 +183,19 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
     need_embed: list[int] = []
     need_tags: list[int] = []
     with Session(engine) as session:
-        videos = session.exec(
-            select(Video).where(Video.needs_review == False)  # noqa: E712
-        ).all()
-        recent_ids: list[int] = []
-        for video in videos:
-            if video.id is None:
-                continue
-            recent = False
-            if video.added_at and video.added_at >= cutoff:
-                recent = True
-            if video.last_watched_at and video.last_watched_at >= cutoff:
-                recent = True
-            if not recent:
-                continue
-            recent_ids.append(video.id)
+        recent_ids = list(
+            session.exec(
+                select(Video.id).where(
+                    Video.needs_review == False,  # noqa: E712
+                    or_(
+                        Video.added_at >= cutoff,
+                        Video.last_watched_at >= cutoff,
+                    ),
+                )
+            ).all()
+        )
+        recent_ids = [vid for vid in recent_ids if vid is not None]
 
-        # Prefer embedding helper list intersected with recent set.
         need_embed_all = set(embeddings.videos_needing_embed(session, limit=limit * 2))
         for vid in recent_ids:
             if vid in need_embed_all:

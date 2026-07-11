@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, thumbnailUrl } from "../api";
 import AddToPlaylist from "../components/AddToPlaylist";
@@ -16,7 +16,17 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
 import LoadingIndicator from "../components/LoadingIndicator";
-import { formatDate, formatDuration, formatResolution, formatSize, parseChapters } from "../utils";
+import {
+  formatDate,
+  formatDuration,
+  formatResolution,
+  formatSize,
+  parseChapters,
+  stripChapterLines,
+} from "../utils";
+
+const RELATED_PAGE = 8;
+const RELATED_MAX = 48;
 
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
@@ -38,6 +48,9 @@ export default function Watch() {
   const [descExpanded, setDescExpanded] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [moreLikeThis, setMoreLikeThis] = useState<Video[]>([]);
+  const [relatedHasMore, setRelatedHasMore] = useState(false);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const relatedSentinelRef = useRef<HTMLDivElement>(null);
   const [redownloadOpen, setRedownloadOpen] = useState(false);
   const [redownloadPreset, setRedownloadPreset] = useState("1080p");
   const [presets, setPresets] = useState<string[]>(["best"]);
@@ -69,11 +82,61 @@ export default function Watch() {
 
   useEffect(() => {
     if (!video) return;
+    setMoreLikeThis([]);
+    setRelatedHasMore(false);
     api
-      .getRelatedVideos(video.id, 6)
-      .then(setMoreLikeThis)
+      .getRelatedVideos(video.id, RELATED_PAGE, 0)
+      .then((rows) => {
+        setMoreLikeThis(rows);
+        setRelatedHasMore(
+          rows.length >= RELATED_PAGE && rows.length < RELATED_MAX
+        );
+      })
       .catch(() => setMoreLikeThis([]));
   }, [video?.id]);
+
+  const loadMoreRelated = useCallback(async () => {
+    if (!video || relatedLoading || !relatedHasMore) return;
+    if (moreLikeThis.length >= RELATED_MAX) {
+      setRelatedHasMore(false);
+      return;
+    }
+    setRelatedLoading(true);
+    try {
+      const rows = await api.getRelatedVideos(
+        video.id,
+        RELATED_PAGE,
+        moreLikeThis.length
+      );
+      setMoreLikeThis((prev) => {
+        const seen = new Set(prev.map((v) => v.id));
+        const next = [...prev, ...rows.filter((v) => !seen.has(v.id))];
+        return next.slice(0, RELATED_MAX);
+      });
+      setRelatedHasMore(
+        rows.length >= RELATED_PAGE &&
+          moreLikeThis.length + rows.length < RELATED_MAX
+      );
+    } catch {
+      setRelatedHasMore(false);
+    } finally {
+      setRelatedLoading(false);
+    }
+  }, [video, relatedLoading, relatedHasMore, moreLikeThis.length]);
+
+  useEffect(() => {
+    if (!relatedHasMore) return;
+    const el = relatedSentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void loadMoreRelated();
+      },
+      { rootMargin: "200px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [relatedHasMore, loadMoreRelated]);
 
   useEffect(() => {
     if (!video?.subtitles_pending) return;
@@ -186,10 +249,13 @@ export default function Watch() {
     settings.showRelatedVideos &&
     moreLikeThis.length > 0;
   const chapters = parseChapters(video.description);
+  const descriptionBody = stripChapterLines(video.description);
   const showDescriptionPanel =
     settings.showDescription &&
-    !!(video.description || video.notes || video.tags?.length || video.ai_tags?.length);
-  const metaSideBySide = chapters.length > 0 && showDescriptionPanel;
+    !!(descriptionBody || video.notes || video.tags?.length || video.ai_tags?.length);
+  const queueVisible = queue.length > 0;
+  const metaSideBySide =
+    chapters.length > 0 && showDescriptionPanel && !queueVisible;
   const resolution = formatResolution(video.height_px);
   const contentClass = showRelatedRight
     ? "mx-auto max-w-[90rem]"
@@ -251,6 +317,10 @@ export default function Watch() {
           );
         })}
       </div>
+      <div ref={relatedSentinelRef} className="h-2" />
+      {relatedLoading && (
+        <p className="text-xs text-gray-500">Loading more…</p>
+      )}
     </div>
   );
 
@@ -368,7 +438,7 @@ export default function Watch() {
                       {showDescriptionPanel && (
                         <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
                           <div className="px-4 py-3">
-                            {video.description && (
+                            {descriptionBody && (
                               <>
                                 <div
                                   className={`overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
@@ -384,7 +454,7 @@ export default function Watch() {
                                         : "line-clamp-5 whitespace-normal"
                                     }`}
                                   >
-                                    <LinkifiedText text={video.description} />
+                                    <LinkifiedText text={descriptionBody} />
                                   </p>
                                 </div>
                                 <button
@@ -399,12 +469,12 @@ export default function Watch() {
                             <Collapse
                               open={
                                 !!video.notes &&
-                                (descExpanded || !video.description)
+                                (descExpanded || !descriptionBody)
                               }
                             >
                               <div
                                 className={
-                                  video.description
+                                  descriptionBody
                                     ? "mt-4 border-t border-ink-700 pt-4"
                                     : ""
                                 }
@@ -418,10 +488,10 @@ export default function Watch() {
                               </div>
                             </Collapse>
 
-                            <Collapse open={descExpanded || !video.description}>
+                            <Collapse open={descExpanded || !descriptionBody}>
                               <div
                                 className={`mt-4 border-t border-ink-700 pt-4 ${
-                                  video.description || video.notes ? "" : ""
+                                  descriptionBody || video.notes ? "" : ""
                                 }`}
                               >
                                 <div className="flex flex-wrap items-center gap-1.5">
@@ -641,6 +711,8 @@ export default function Watch() {
                   <VideoCard key={v.id} video={v} />
                 ))}
               </div>
+              <div ref={relatedSentinelRef} className="h-4" />
+              {relatedLoading && <LoadingIndicator />}
             </div>
           )}
         </div>

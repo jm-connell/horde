@@ -1586,3 +1586,69 @@ def start_playlist_import(
         daemon=True,
     )
     thread.start()
+
+
+def search_youtube_channels(query: str, *, limit: int = 8) -> list[dict[str, Any]]:
+    """Search YouTube for channels matching query (yt-dlp flat extract)."""
+    import urllib.parse
+
+    import yt_dlp
+
+    q = (query or "").strip()
+    if not q:
+        return []
+    limit = max(1, min(limit, 20))
+    # sp=EgIQAg%253D%253D filters YouTube results to Channels.
+    search_url = (
+        "https://www.youtube.com/results?search_query="
+        + urllib.parse.quote(q)
+        + "&sp=EgIQAg%253D%253D"
+    )
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": "in_playlist",
+            "skip_download": True,
+            "playlistend": limit,
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
+    results: list[dict[str, Any]] = []
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = _as_info(ydl.extract_info(search_url, download=False))
+    except Exception:  # noqa: BLE001
+        return []
+
+    for entry in info.get("entries") or []:
+        if not isinstance(entry, dict):
+            continue
+        url = entry.get("url") or entry.get("webpage_url") or entry.get("channel_url")
+        if not url:
+            channel_id = entry.get("channel_id") or entry.get("id")
+            if channel_id and str(channel_id).startswith("UC"):
+                url = f"https://www.youtube.com/channel/{channel_id}"
+        if not url or not str(url).startswith("http"):
+            continue
+        name = (
+            entry.get("channel")
+            or entry.get("uploader")
+            or entry.get("title")
+            or entry.get("id")
+        )
+        if not name:
+            continue
+        results.append(
+            {
+                "name": str(name),
+                "url": str(url).split("/videos")[0].rstrip("/"),
+                "thumbnail_url": entry.get("thumbnail")
+                or (entry.get("thumbnails") or [{}])[-1].get("url"),
+                "subscriber_count": entry.get("channel_follower_count")
+                or entry.get("subscriber_count"),
+            }
+        )
+        if len(results) >= limit:
+            break
+    return results

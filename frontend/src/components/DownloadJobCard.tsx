@@ -199,14 +199,12 @@ export default function DownloadJobCard({
 
   return (
     <>
-    <div className="ui-panel relative overflow-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700">
-      {active && (
-        <span
-          className="absolute inset-y-0 left-0 w-1 bg-accent"
-          aria-hidden
-        />
-      )}
-      <div className={`flex gap-4 ${active ? "pl-2" : ""}`}>
+    <div
+      className={`ui-panel relative overflow-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700 ${
+        active ? "border-l-4 border-l-accent pl-[calc(1.25rem-2px)]" : ""
+      }`}
+    >
+      <div className="flex gap-4">
         <div className="hidden h-20 w-36 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block">
           {thumbSrc ? (
             <img

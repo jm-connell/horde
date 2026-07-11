@@ -64,12 +64,36 @@ function formatSubscriberCount(count: number | null) {
   return String(count);
 }
 
+const CHANNEL_URLS_KEY = "horde.channelUrls";
+
+function loadChannelUrlMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(CHANNEL_URLS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveChannelUrl(name: string, url: string) {
+  try {
+    const map = loadChannelUrlMap();
+    map[name] = url;
+    localStorage.setItem(CHANNEL_URLS_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore */
+  }
+}
+
 function ChannelSidebarList({
   channels,
   activeChannel,
   channelSort,
   showAllChannels,
   onSelectChannel,
+  onSelectRemoteChannel,
   onToggleShowAll,
 }: {
   channels: ChannelStat[];
@@ -77,86 +101,199 @@ function ChannelSidebarList({
   channelSort: string;
   showAllChannels: boolean;
   onSelectChannel: (channel: string | null) => void;
+  onSelectRemoteChannel: (hit: {
+    name: string;
+    url: string;
+    subscriber_count: number | null;
+  }) => void;
   onToggleShowAll: () => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [remoteHits, setRemoteHits] = useState<
+    {
+      name: string;
+      url: string;
+      thumbnail_url: string | null;
+      subscriber_count: number | null;
+    }[]
+  >([]);
+  const [searching, setSearching] = useState(false);
+  const debounced = useMemo(() => query.trim().toLowerCase(), [query]);
+
+  const libraryMatches = useMemo(() => {
+    if (!debounced) return channels;
+    return channels.filter((c) => c.channel.toLowerCase().includes(debounced));
+  }, [channels, debounced]);
+
+  useEffect(() => {
+    if (!debounced || debounced.length < 2) {
+      setRemoteHits([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      api
+        .searchChannels(debounced, 8)
+        .then((data) => {
+          if (cancelled) return;
+          const libraryNames = new Set(
+            channels.map((c) => c.channel.toLowerCase())
+          );
+          setRemoteHits(
+            (data.results || []).filter(
+              (h) => !libraryNames.has(h.name.toLowerCase())
+            )
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setRemoteHits([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [debounced, channels]);
+
+  const visibleLibrary = debounced
+    ? libraryMatches
+    : channels.slice(0, CHANNEL_SIDEBAR_LIMIT);
+
   return (
-    <ul className="space-y-0.5">
-      <li>
-        <button
-          onClick={() => onSelectChannel(null)}
-          className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
-            !activeChannel
-              ? "bg-accent/15 text-accent"
-              : "text-gray-300 hover:bg-ink-800"
-          }`}
-        >
-          All channels
-        </button>
-      </li>
-      {channels.slice(0, CHANNEL_SIDEBAR_LIMIT).map((c) => (
-        <li key={c.channel}>
-          <button
-            onClick={() => onSelectChannel(c.channel)}
-            className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
-              activeChannel === c.channel
-                ? "bg-accent/15 text-accent"
-                : "text-gray-300 hover:bg-ink-800"
-            }`}
-          >
-            <span className="truncate">{c.channel}</span>
-            <span className="ml-2 shrink-0 text-xs text-gray-500">
-              {channelSort === "subscriber_count" && c.subscriber_count !== null
-                ? formatSubscriberCount(c.subscriber_count)
-                : c.count}
-            </span>
-          </button>
-        </li>
-      ))}
-      {channels.length > CHANNEL_SIDEBAR_LIMIT && (
-        <>
-          <Collapse open={showAllChannels}>
-            <ul className="space-y-0.5">
-              {channels.slice(CHANNEL_SIDEBAR_LIMIT).map((c) => (
-                <li key={c.channel}>
-                  <button
-                    onClick={() => onSelectChannel(c.channel)}
-                    className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
-                      activeChannel === c.channel
-                        ? "bg-accent/15 text-accent"
-                        : "text-gray-300 hover:bg-ink-800"
-                    }`}
-                  >
-                    <span className="truncate">{c.channel}</span>
-                    <span className="ml-2 shrink-0 text-xs text-gray-500">
-                      {channelSort === "subscriber_count" &&
-                      c.subscriber_count !== null
-                        ? formatSubscriberCount(c.subscriber_count)
-                        : c.count}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </Collapse>
+    <div className="space-y-2">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search channels"
+        className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-xs text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+      />
+      <ul className="space-y-0.5">
+        {!debounced && (
           <li>
             <button
-              type="button"
-              onClick={onToggleShowAll}
-              className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-accent hover:bg-ink-800"
+              onClick={() => onSelectChannel(null)}
+              className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
+                !activeChannel
+                  ? "bg-accent/15 text-accent"
+                  : "text-gray-300 hover:bg-ink-800"
+              }`}
             >
-              {showAllChannels
-                ? "Show less"
-                : `Show more (${channels.length - CHANNEL_SIDEBAR_LIMIT})`}
+              All channels
             </button>
           </li>
-        </>
-      )}
-    </ul>
+        )}
+        {visibleLibrary.map((c) => (
+          <li key={c.channel}>
+            <button
+              onClick={() => onSelectChannel(c.channel)}
+              className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
+                activeChannel === c.channel
+                  ? "bg-accent/15 text-accent"
+                  : "text-gray-300 hover:bg-ink-800"
+              }`}
+            >
+              <span className="truncate">{c.channel}</span>
+              <span className="ml-2 shrink-0 text-xs text-gray-500">
+                {channelSort === "subscriber_count" &&
+                c.subscriber_count !== null
+                  ? formatSubscriberCount(c.subscriber_count)
+                  : c.count}
+              </span>
+            </button>
+          </li>
+        ))}
+        {!debounced && channels.length > CHANNEL_SIDEBAR_LIMIT && (
+          <>
+            <Collapse open={showAllChannels}>
+              <ul className="space-y-0.5">
+                {channels.slice(CHANNEL_SIDEBAR_LIMIT).map((c) => (
+                  <li key={c.channel}>
+                    <button
+                      onClick={() => onSelectChannel(c.channel)}
+                      className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
+                        activeChannel === c.channel
+                          ? "bg-accent/15 text-accent"
+                          : "text-gray-300 hover:bg-ink-800"
+                      }`}
+                    >
+                      <span className="truncate">{c.channel}</span>
+                      <span className="ml-2 shrink-0 text-xs text-gray-500">
+                        {channelSort === "subscriber_count" &&
+                        c.subscriber_count !== null
+                          ? formatSubscriberCount(c.subscriber_count)
+                          : c.count}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Collapse>
+            <li>
+              <button
+                type="button"
+                onClick={onToggleShowAll}
+                className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-accent hover:bg-ink-800"
+              >
+                {showAllChannels
+                  ? "Show less"
+                  : `Show more (${channels.length - CHANNEL_SIDEBAR_LIMIT})`}
+              </button>
+            </li>
+          </>
+        )}
+        {debounced && (
+          <>
+            {searching && (
+              <li className="px-3 py-1.5 text-xs text-gray-500">Searching…</li>
+            )}
+            {remoteHits.length > 0 && (
+              <li className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                From YouTube
+              </li>
+            )}
+            {remoteHits.map((hit) => (
+              <li key={hit.url}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSelectRemoteChannel({
+                      name: hit.name,
+                      url: hit.url,
+                      subscriber_count: hit.subscriber_count,
+                    })
+                  }
+                  className="flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-ink-800"
+                >
+                  <span className="truncate">{hit.name}</span>
+                  <span className="ml-2 shrink-0 text-xs text-gray-500">
+                    {hit.subscriber_count != null
+                      ? formatSubscriberCount(hit.subscriber_count)
+                      : "New"}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {!searching &&
+              libraryMatches.length === 0 &&
+              remoteHits.length === 0 && (
+                <li className="px-3 py-1.5 text-xs text-gray-500">
+                  No channels found
+                </li>
+              )}
+          </>
+        )}
+      </ul>
+    </div>
   );
 }
 
 export default function Library() {
   const [videos, setVideos] = useState<Video[]>([]);
+  const [otherVideos, setOtherVideos] = useState<Video[]>([]);
   const [continueWatching, setContinueWatching] = useState<Video[]>([]);
   const [channels, setChannels] = useState<ChannelStat[]>([]);
   const [tags, setTags] = useState<TagStat[]>([]);
@@ -199,6 +336,9 @@ export default function Library() {
   const [renameValue, setRenameValue] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [channelTab, setChannelTab] = useState<"library" | "feed">("library");
+  const [channelUrlOverrides, setChannelUrlOverrides] = useState<
+    Record<string, string>
+  >(loadChannelUrlMap);
   const [homeTab, setHomeTabState] = useState<HomeTab>(loadHomeTab);
   const [aiReady, setAiReady] = useState(false);
   const [feedSearch, setFeedSearch] = useState("");
@@ -308,7 +448,6 @@ export default function Library() {
   }, [searchParams]);
 
   useEffect(() => {
-    setChannelTab("library");
     setFeedSearch("");
     setFeedSort("recent");
     setFeedOrder("desc");
@@ -350,8 +489,30 @@ export default function Library() {
         order,
         seed: sort === "random" ? randomSeed : undefined,
       })
-      .then(setVideos)
-      .catch(() => setVideos([]))
+      .then(async (matches) => {
+        setVideos(matches);
+        if (!debouncedSearch) {
+          setOtherVideos([]);
+          return;
+        }
+        try {
+          const all = await api.listVideos({
+            channel: activeChannel || undefined,
+            tag: activeTag || undefined,
+            sort,
+            order,
+            seed: sort === "random" ? randomSeed : undefined,
+          });
+          const matchIds = new Set(matches.map((v) => v.id));
+          setOtherVideos(all.filter((v) => !matchIds.has(v.id)));
+        } catch {
+          setOtherVideos([]);
+        }
+      })
+      .catch(() => {
+        setVideos([]);
+        setOtherVideos([]);
+      })
       .finally(() => setLoading(false));
   }, [
     debouncedSearch,
@@ -366,6 +527,11 @@ export default function Library() {
   const visibleContinueWatching = useMemo(
     () => continueWatching.filter((v) => !isDismissed(v.id)),
     [continueWatching, isDismissed]
+  );
+
+  const selectableVideos = useMemo(
+    () => (debouncedSearch ? [...videos, ...otherVideos] : videos),
+    [debouncedSearch, videos, otherVideos]
   );
 
   const visibleTags = useMemo(() => {
@@ -397,8 +563,22 @@ export default function Library() {
 
   const activeChannelUrl = useMemo(() => {
     if (!activeChannel) return null;
-    return channels.find((c) => c.channel === activeChannel)?.channel_url ?? null;
-  }, [activeChannel, channels]);
+    return (
+      channels.find((c) => c.channel === activeChannel)?.channel_url ??
+      channelUrlOverrides[activeChannel] ??
+      null
+    );
+  }, [activeChannel, channels, channelUrlOverrides]);
+
+  // Prefer channel feed when this channel has no library videos yet.
+  useEffect(() => {
+    if (!activeChannel) return;
+    const inLibrary = channels.find((c) => c.channel === activeChannel);
+    const count = inLibrary?.count ?? 0;
+    if (count === 0 && activeChannelUrl) {
+      setChannelTab("feed");
+    }
+  }, [activeChannel, channels, activeChannelUrl]);
 
   const onFeedTab = Boolean(activeChannel) && channelTab === "feed";
 
@@ -442,6 +622,20 @@ export default function Library() {
 
   const selectChannel = (channel: string | null) => {
     setActiveChannel(channel);
+    setChannelTab("library");
+    if (narrowViewport) closeSidebar();
+  };
+
+  const selectRemoteChannel = (hit: {
+    name: string;
+    url: string;
+    subscriber_count: number | null;
+  }) => {
+    saveChannelUrl(hit.name, hit.url);
+    setChannelUrlOverrides((prev) => ({ ...prev, [hit.name]: hit.url }));
+    setActiveChannel(hit.name);
+    setActiveTag(null);
+    setChannelTab("feed");
     if (narrowViewport) closeSidebar();
   };
 
@@ -452,7 +646,7 @@ export default function Library() {
         const lo = Math.min(index, lastSelectedIndex.current);
         const hi = Math.max(index, lastSelectedIndex.current);
         for (let i = lo; i <= hi; i++) {
-          next.add(videos[i].id);
+          next.add(selectableVideos[i].id);
         }
       } else {
         if (next.has(id)) {
@@ -602,6 +796,7 @@ export default function Library() {
                   channelSort={settings.channelSort}
                   showAllChannels={showAllChannels}
                   onSelectChannel={selectChannel}
+                  onSelectRemoteChannel={selectRemoteChannel}
                   onToggleShowAll={() => setShowAllChannels((v) => !v)}
                 />
               </div>
@@ -644,6 +839,7 @@ export default function Library() {
                 channelSort={settings.channelSort}
                 showAllChannels={showAllChannels}
                 onSelectChannel={selectChannel}
+                onSelectRemoteChannel={selectRemoteChannel}
                 onToggleShowAll={() => setShowAllChannels((v) => !v)}
               />
             </div>
@@ -760,7 +956,7 @@ export default function Library() {
                   onChange={(e) =>
                     setFeedSort(e.target.value as "recent" | "popular")
                   }
-                  className="ui-panel ui-interactive min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  className="min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                 >
                   <option value="recent">Recent</option>
                   <option value="popular">Popular</option>
@@ -832,7 +1028,7 @@ export default function Library() {
                 <select
                   value={sort}
                   onChange={(e) => handleSortChange(e.target.value)}
-                  className="ui-panel ui-interactive min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  className="min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                 >
                   {LIBRARY_SORT_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -950,12 +1146,13 @@ export default function Library() {
             feedSort={feedSort}
             feedOrder={feedOrder}
             feedLayout={feedLayout}
+            queueDockedBottom={showQueuePanel && queueDockedBottom}
           />
-        ) : onRecommendedTab ? (
+        ) : onRecommendedTab && !debouncedSearch ? (
           <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
         ) : loading ? (
           <LoadingIndicator />
-        ) : videos.length === 0 ? (
+        ) : videos.length === 0 && otherVideos.length === 0 ? (
           <div className="py-20 text-center text-gray-500">
             <p className="text-lg">No videos yet.</p>
             <p className="mt-1 text-sm">
@@ -964,22 +1161,54 @@ export default function Library() {
             </p>
           </div>
         ) : (
-          <div
-            className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
-              settings.sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
-            }`}
-          >
-            {videos.map((v, idx) => (
-              <VideoCard
-                key={v.id}
-                video={v}
-                showViewCount={sort === "view_count"}
-                progress={settings.showProgressOnAllVideos ? videoProgress(v) : undefined}
-                selectable={selectMode}
-                selected={selectedIds.has(v.id)}
-                onSelect={(id, e) => toggleSelect(id, idx, e.shiftKey)}
-              />
-            ))}
+          <div className="space-y-6">
+            {videos.length > 0 && (
+              <div
+                className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+                  settings.sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
+                }`}
+              >
+                {videos.map((v, idx) => (
+                  <VideoCard
+                    key={v.id}
+                    video={v}
+                    showViewCount={sort === "view_count"}
+                    progress={settings.showProgressOnAllVideos ? videoProgress(v) : undefined}
+                    selectable={selectMode}
+                    selected={selectedIds.has(v.id)}
+                    onSelect={(id, e) => toggleSelect(id, idx, e.shiftKey)}
+                  />
+                ))}
+              </div>
+            )}
+            {debouncedSearch && videos.length > 0 && otherVideos.length > 0 && (
+              <div className="flex items-center gap-3">
+                <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+                <span className="shrink-0 text-xs text-gray-500">Other videos</span>
+                <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+              </div>
+            )}
+            {debouncedSearch && otherVideos.length > 0 && (
+              <div
+                className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+                  settings.sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
+                }`}
+              >
+                {otherVideos.map((v, idx) => (
+                  <VideoCard
+                    key={v.id}
+                    video={v}
+                    showViewCount={sort === "view_count"}
+                    progress={settings.showProgressOnAllVideos ? videoProgress(v) : undefined}
+                    selectable={selectMode}
+                    selected={selectedIds.has(v.id)}
+                    onSelect={(id, e) =>
+                      toggleSelect(id, videos.length + idx, e.shiftKey)
+                    }
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
         </div>

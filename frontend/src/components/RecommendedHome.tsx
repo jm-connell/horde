@@ -5,16 +5,7 @@ import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
 import type { RecommendationSection, Video } from "../types";
 
-const HOME_CATEGORY_KEY = "horde.home.recommendedCategory";
 const PAGE_SIZE = 24;
-
-function loadCategory(): string | null {
-  try {
-    return localStorage.getItem(HOME_CATEGORY_KEY);
-  } catch {
-    return null;
-  }
-}
 
 export default function RecommendedHome({
   sidebarCollapsed,
@@ -27,11 +18,12 @@ export default function RecommendedHome({
   const [forYouVideos, setForYouVideos] = useState<Video[]>([]);
   const [forYouOffset, setForYouOffset] = useState(0);
   const [forYouHasMore, setForYouHasMore] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string | null>(loadCategory);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const chipScrollRef = useRef<HTMLDivElement>(null);
@@ -51,6 +43,7 @@ export default function RecommendedHome({
   const updateChipScroll = useCallback(() => {
     const el = chipScrollRef.current;
     if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
     setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
   }, []);
 
@@ -140,18 +133,15 @@ export default function RecommendedHome({
 
   const selectCategory = (name: string | null) => {
     setActiveCategory(name);
-    try {
-      if (name) localStorage.setItem(HOME_CATEGORY_KEY, name);
-      else localStorage.removeItem(HOME_CATEGORY_KEY);
-    } catch {
-      /* ignore */
-    }
   };
 
-  const scrollChips = () => {
+  const scrollChips = (dir: -1 | 1) => {
     const el = chipScrollRef.current;
     if (!el) return;
-    el.scrollBy({ left: Math.max(160, el.clientWidth * 0.6), behavior: "smooth" });
+    el.scrollBy({
+      left: dir * Math.max(160, el.clientWidth * 0.6),
+      behavior: "smooth",
+    });
   };
 
   const refreshCategories = async () => {
@@ -161,11 +151,30 @@ export default function RecommendedHome({
       const result = await api.processAiLibrary("categories");
       showToast(result.detail || "Category refresh queued");
       setReloadKey((k) => k + 1);
-      // Refetch again shortly in case the worker finishes category update quickly.
-      setTimeout(() => setReloadKey((k) => k + 1), 2500);
+
+      const started = Date.now();
+      const poll = async () => {
+        while (Date.now() - started < 90_000) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const status = await api.getAiStatus();
+            const busy =
+              status.queue_depth > 0 ||
+              Boolean(status.current_job) ||
+              Boolean(status.paused);
+            setReloadKey((k) => k + 1);
+            if (!busy && Date.now() - started > 2500) break;
+          } catch {
+            setReloadKey((k) => k + 1);
+            break;
+          }
+        }
+        setReloadKey((k) => k + 1);
+      };
+      void poll().finally(() => setRefreshing(false));
+      return;
     } catch {
       showToast("Could not refresh categories");
-    } finally {
       setRefreshing(false);
     }
   };
@@ -175,6 +184,16 @@ export default function RecommendedHome({
   return (
     <div className="space-y-6">
       <div className="relative flex items-center gap-2">
+        {canScrollLeft && (
+          <button
+            type="button"
+            onClick={() => scrollChips(-1)}
+            className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
+            aria-label="Scroll categories left"
+          >
+            ‹
+          </button>
+        )}
         <div
           ref={chipScrollRef}
           className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -200,9 +219,9 @@ export default function RecommendedHome({
         {canScrollRight && (
           <button
             type="button"
-            onClick={scrollChips}
+            onClick={() => scrollChips(1)}
             className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
-            aria-label="Scroll categories"
+            aria-label="Scroll categories right"
           >
             ›
           </button>
@@ -212,10 +231,10 @@ export default function RecommendedHome({
             type="button"
             onClick={refreshCategories}
             disabled={refreshing}
-            title="Refresh category shelves (does not re-embed)"
+            title="Refresh recommendations and category shelves"
             className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-xs text-gray-400 hover:border-accent hover:text-accent disabled:opacity-50"
           >
-            {refreshing ? "…" : "Update shelves"}
+            {refreshing ? "…" : "Refresh"}
           </button>
         )}
       </div>

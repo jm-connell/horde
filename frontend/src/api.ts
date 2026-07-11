@@ -81,9 +81,17 @@ export const api = {
     return request<Video>(`/api/videos/${id}`);
   },
 
-  getRelatedVideos(id: number, limit = 6): Promise<Video[]> {
+  getRelatedVideos(
+    id: number,
+    limit = 8,
+    offset = 0
+  ): Promise<Video[]> {
+    const qs = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
     return request<Video[]>(
-      `/api/videos/${id}/related?limit=${encodeURIComponent(String(limit))}`
+      `/api/videos/${id}/related?${qs.toString()}`
     );
   },
 
@@ -124,13 +132,39 @@ export const api = {
   },
 
   refreshMetadataBulk(
-    videoIds?: number[]
-  ): Promise<{ refreshed: number; failed: number; skipped: number }> {
+    videoIds?: number[],
+    fields?: string[]
+  ): Promise<{
+    refreshed: number;
+    failed: number;
+    skipped: number;
+    started?: boolean;
+    detail?: string;
+    total?: number;
+  }> {
     return request("/api/videos/refresh-metadata", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ video_ids: videoIds ?? [] }),
+      body: JSON.stringify({
+        video_ids: videoIds ?? [],
+        fields: fields ?? [],
+      }),
     });
+  },
+
+  getMetadataSyncStatus(): Promise<{
+    running: boolean;
+    total: number;
+    done: number;
+    failed: number;
+    skipped: number;
+    current_title: string | null;
+    current_video_id: number | null;
+    fields: string[];
+    last_error: string | null;
+    finished_at: string | null;
+  }> {
+    return request("/api/videos/refresh-metadata/status");
   },
 
   uploadThumbnail(id: number, file: File): Promise<Video> {
@@ -149,6 +183,24 @@ export const api = {
     });
     const query = qs.toString();
     return request<ChannelStat[]>(`/api/channels${query ? `?${query}` : ""}`);
+  },
+
+  searchChannels(
+    q: string,
+    limit = 8
+  ): Promise<{
+    results: {
+      name: string;
+      url: string;
+      thumbnail_url: string | null;
+      subscriber_count: number | null;
+    }[];
+  }> {
+    const qs = new URLSearchParams({
+      q,
+      limit: String(limit),
+    });
+    return request(`/api/channels/search?${qs.toString()}`);
   },
 
   getChannelFeed(params: ChannelFeedQuery = {}): Promise<ChannelFeedPage> {

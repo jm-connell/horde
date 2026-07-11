@@ -40,6 +40,8 @@ const MINI_WIDTH_KEY = "horde.mini-width";
 const DEFAULT_MINI_WIDTH_MOBILE = 224;
 const DEFAULT_MINI_WIDTH_DESKTOP = 704;
 
+type MiniPos = { left: number; top: number };
+
 function loadMiniWidth(): number | null {
   try {
     const raw = localStorage.getItem(MINI_WIDTH_KEY);
@@ -49,6 +51,21 @@ function loadMiniWidth(): number | null {
   } catch {
     return null;
   }
+}
+
+function clampMiniPos(
+  left: number,
+  top: number,
+  width: number,
+  height: number
+): MiniPos {
+  const margin = 8;
+  const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+  const maxTop = Math.max(margin, window.innerHeight - height - margin);
+  return {
+    left: Math.min(maxLeft, Math.max(margin, left)),
+    top: Math.min(maxTop, Math.max(margin, top)),
+  };
 }
 
 function mimeFromPath(filePath: string): string {
@@ -85,6 +102,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     () => loadSettings().playbackMode
   );
   const [miniWidth, setMiniWidthState] = useState<number | null>(loadMiniWidth);
+  // Session-only; always starts bottom-right when a miniplayer opens after close.
+  const [miniPos, setMiniPosState] = useState<MiniPos | null>(null);
+  const miniPosLiveRef = useRef<MiniPos | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.removeItem("horde.mini-pos");
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const setMiniWidth = useCallback((w: number | null) => {
     setMiniWidthState(w);
@@ -94,6 +122,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  const setMiniPos = useCallback((pos: MiniPos | null) => {
+    setMiniPosState(pos);
+    miniPosLiveRef.current = pos;
   }, []);
 
   // Persist the chosen view mode so it is remembered across sessions.
@@ -160,28 +193,51 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.className = "fixed inset-0 z-50";
       host.style.width = "";
       host.style.maxWidth = "";
+      host.style.left = "";
+      host.style.top = "";
+      host.style.right = "";
+      host.style.bottom = "";
     } else if (dock) {
       dock.appendChild(host);
       host.className = "w-full";
       host.style.width = "";
       host.style.maxWidth = "";
+      host.style.left = "";
+      host.style.top = "";
+      host.style.right = "";
+      host.style.bottom = "";
     } else if (current) {
       document.body.appendChild(host);
       const defaultWidth = isMobile
         ? DEFAULT_MINI_WIDTH_MOBILE
         : DEFAULT_MINI_WIDTH_DESKTOP;
       const width = miniWidth ?? defaultWidth;
-      host.className = isMobile
-        ? "fixed bottom-3 right-3 z-40 overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700"
-        : "fixed bottom-4 right-4 z-40 overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
+      host.className =
+        "fixed z-40 overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
       host.style.width = `${width}px`;
       host.style.maxWidth = isMobile ? "70vw" : "calc(100vw - 2rem)";
+      host.style.right = "";
+      host.style.bottom = "";
+      const height = host.getBoundingClientRect().height || width * (9 / 16);
+      if (miniPos) {
+        const clamped = clampMiniPos(miniPos.left, miniPos.top, width, height);
+        host.style.left = `${clamped.left}px`;
+        host.style.top = `${clamped.top}px`;
+      } else {
+        const margin = isMobile ? 12 : 16;
+        host.style.left = `${Math.max(margin, window.innerWidth - width - margin)}px`;
+        host.style.top = `${Math.max(margin, window.innerHeight - height - margin)}px`;
+      }
     } else {
       host.className = "hidden";
       host.style.width = "";
       host.style.maxWidth = "";
+      host.style.left = "";
+      host.style.top = "";
+      host.style.right = "";
+      host.style.bottom = "";
     }
-  }, [dock, current, isMobile, mode, miniWidth]);
+  }, [dock, current, isMobile, mode, miniWidth, miniPos]);
 
   // Hide page scroll while windowed fullscreen is active.
   useEffect(() => {
@@ -241,7 +297,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const close = useCallback(() => {
     setCurrent(null);
     setDock(null);
-  }, []);
+    setMiniPos(null);
+  }, [setMiniPos]);
 
   const queueRef = useRef(queue);
   queueRef.current = queue;
@@ -410,6 +467,23 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             onSubtitlesRefresh={refreshCurrentVideo}
             miniWidth={miniWidth}
             onMiniResize={setMiniWidth}
+            onMiniMove={(left, top) => {
+              const host = hostRef.current;
+              if (!host) return;
+              const width = host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
+              const height =
+                host.offsetHeight || width * (9 / 16);
+              const clamped = clampMiniPos(left, top, width, height);
+              // Apply immediately so fast drags don't lag behind React state.
+              host.style.left = `${clamped.left}px`;
+              host.style.top = `${clamped.top}px`;
+              miniPosLiveRef.current = clamped;
+            }}
+            onMiniMoveEnd={() => {
+              if (miniPosLiveRef.current) {
+                setMiniPos(miniPosLiveRef.current);
+              }
+            }}
             upNext={
               upNext
                 ? {

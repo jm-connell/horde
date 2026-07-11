@@ -5,6 +5,23 @@
 html {
   overflow-y: scroll;
   scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--accent) / 0.45) rgb(var(--ink-800));
+}
+html::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+html::-webkit-scrollbar-track {
+  background: rgb(var(--ink-800));
+  border-radius: 999px;
+}
+html::-webkit-scrollbar-thumb {
+  background: rgb(var(--accent) / 0.45);
+  border-radius: 999px;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--accent) / 0.7);
 }
 
 /* Themed thin scrollbars (queue / panels) */

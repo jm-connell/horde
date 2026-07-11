@@ -17,9 +17,9 @@ export default function ChaptersList({
 
   return (
     <div
-      className={`ui-panel isolate overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 ${className}`}
+      className={`ui-panel isolate overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700 ${className}`}
     >
-      <ul className={`space-y-1 overflow-y-auto px-4 py-3 ${maxHeightClass}`}>
+      <ul className={`horde-scrollbar space-y-1 overflow-y-auto px-4 py-3 ${maxHeightClass}`}>
         {chapters.map((ch) => (
           <li key={`${ch.startSec}-${ch.title}`}>
             <button

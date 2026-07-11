@@ -317,19 +317,25 @@ def related_videos(
     session: Session,
     video_id: int,
     limit: int = 6,
+    *,
+    offset: int = 0,
 ) -> list[Video]:
     """Return related library videos.
 
-    Prefer embedding neighbors when AI is ready; fall back to same channel,
-    tag overlap, then random.
+    First page (offset < 8) prefers embedding neighbors when AI is ready.
+    Later pages use cheaper same-channel / tag / recency signals to cut GPU load.
     """
     source = session.get(Video, video_id)
     if source is None:
         return []
 
+    offset = max(0, offset)
     limit = max(1, min(limit, 24))
+    # Build a larger pool then slice for pagination.
+    pool_limit = min(50, offset + limit)
     picked: list[Video] = []
     seen: set[int] = {video_id}
+    use_ai = offset < 8
 
     def add_candidates(candidates: list[Video]) -> None:
         for video in candidates:
@@ -337,45 +343,44 @@ def related_videos(
                 continue
             seen.add(video.id)
             picked.append(video)
-            if len(picked) >= limit:
+            if len(picked) >= pool_limit:
                 return
 
-    # 1) Embedding nearest neighbors (soft-boost same channel / tag overlap).
-    try:
-        from .ai import embeddings as ai_embeddings
-        from .ai.provider import get_provider
+    if use_ai:
+        # 1) Embedding nearest neighbors (soft-boost same channel / tag overlap).
+        try:
+            from .ai import embeddings as ai_embeddings
+            from .ai.provider import get_provider
 
-        if get_provider() is not None:
-            centroid = ai_embeddings.video_centroid(session, video_id)
-            if centroid is not None:
-                source_tags = {t.lower() for t in parse_tags(source.tags)}
-                hits = ai_embeddings.similar_video_ids(
-                    session,
-                    centroid,
-                    limit=limit * 4,
-                    exclude_ids={video_id},
-                    min_score=0.2,
-                )
-                scored: list[tuple[float, Video]] = []
-                for vid, score in hits:
-                    video = session.get(Video, vid)
-                    if video is None or video.needs_review:
-                        continue
-                    boost = 0.0
-                    if source.channel and video.channel == source.channel:
-                        boost += 0.05
-                    if source_tags:
-                        row_tags = {t.lower() for t in parse_tags(video.tags)}
-                        boost += 0.02 * len(source_tags & row_tags)
-                    scored.append((score + boost, video))
-                scored.sort(key=lambda item: item[0], reverse=True)
-                add_candidates([v for _, v in scored])
-                if len(picked) >= limit:
-                    return picked[:limit]
-    except Exception:  # noqa: BLE001
-        pass
+            if get_provider() is not None:
+                centroid = ai_embeddings.video_centroid(session, video_id)
+                if centroid is not None:
+                    source_tags = {t.lower() for t in parse_tags(source.tags)}
+                    hits = ai_embeddings.similar_video_ids(
+                        session,
+                        centroid,
+                        limit=max(pool_limit * 4, 32),
+                        exclude_ids={video_id},
+                        min_score=0.2,
+                    )
+                    scored: list[tuple[float, Video]] = []
+                    for vid, score in hits:
+                        video = session.get(Video, vid)
+                        if video is None or video.needs_review:
+                            continue
+                        boost = 0.0
+                        if source.channel and video.channel == source.channel:
+                            boost += 0.05
+                        if source_tags:
+                            row_tags = {t.lower() for t in parse_tags(video.tags)}
+                            boost += 0.02 * len(source_tags & row_tags)
+                        scored.append((score + boost, video))
+                    scored.sort(key=lambda item: item[0], reverse=True)
+                    add_candidates([v for _, v in scored])
+        except Exception:  # noqa: BLE001
+            pass
 
-    if source.channel:
+    if len(picked) < pool_limit and source.channel:
         channel_rows = query_videos(
             session,
             channel=source.channel,
@@ -384,35 +389,36 @@ def related_videos(
             needs_review=False,
         )
         add_candidates(channel_rows)
-        if len(picked) >= limit:
-            return picked[:limit]
 
-    source_tags = {t.lower() for t in parse_tags(source.tags)}
-    if source_tags:
-        scored_tags: list[tuple[int, Video]] = []
-        for row in query_videos(session, needs_review=False, sort="added_at", order="desc"):
-            if row.id in seen or row.needs_review:
-                continue
-            row_tags = {t.lower() for t in parse_tags(row.tags)}
-            overlap = len(source_tags & row_tags)
-            if overlap > 0:
-                scored_tags.append((overlap, row))
-        scored_tags.sort(
-            key=lambda item: (
-                item[0],
-                item[1].added_at or datetime.min.replace(tzinfo=timezone.utc),
-            ),
-            reverse=True,
+    if len(picked) < pool_limit:
+        source_tags = {t.lower() for t in parse_tags(source.tags)}
+        if source_tags:
+            scored_tags: list[tuple[int, Video]] = []
+            for row in query_videos(
+                session, needs_review=False, sort="added_at", order="desc"
+            ):
+                if row.id in seen or row.needs_review:
+                    continue
+                row_tags = {t.lower() for t in parse_tags(row.tags)}
+                overlap = len(source_tags & row_tags)
+                if overlap > 0:
+                    scored_tags.append((overlap, row))
+            scored_tags.sort(
+                key=lambda item: (
+                    item[0],
+                    item[1].added_at or datetime.min.replace(tzinfo=timezone.utc),
+                ),
+                reverse=True,
+            )
+            add_candidates([v for _, v in scored_tags])
+
+    if len(picked) < pool_limit:
+        pool = query_videos(
+            session,
+            needs_review=False,
+            sort="random",
+            seed=video_id,
         )
-        add_candidates([v for _, v in scored_tags])
-        if len(picked) >= limit:
-            return picked[:limit]
+        add_candidates(pool)
 
-    pool = query_videos(
-        session,
-        needs_review=False,
-        sort="random",
-        seed=video_id,
-    )
-    add_candidates(pool)
-    return picked[:limit]
+    return picked[offset : offset + limit]

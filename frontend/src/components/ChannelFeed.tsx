@@ -20,6 +20,7 @@ export default function ChannelFeed({
   feedSort,
   feedOrder,
   feedLayout,
+  queueDockedBottom = false,
 }: {
   channel: string;
   channelUrl: string | null;
@@ -28,6 +29,7 @@ export default function ChannelFeed({
   feedSort: FeedSort;
   feedOrder: "asc" | "desc";
   feedLayout: FeedLayout;
+  queueDockedBottom?: boolean;
 }) {
   const [settings] = useSettings();
   const [entries, setEntries] = useState<ChannelFeedEntry[]>([]);
@@ -208,6 +210,7 @@ export default function ChannelFeed({
         onUpdatePending={updatePending}
         onCancel={cancelPending}
         onSubmitNow={submitNow}
+        queueDockedBottom={queueDockedBottom}
       />
     </>
   );
