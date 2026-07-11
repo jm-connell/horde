@@ -310,6 +310,11 @@ def channel_feed(
     url: Optional[str] = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(30, ge=1, le=100),
+    live: bool = Query(
+        False,
+        description="If true, fetch from YouTube and merge into the catalog. "
+        "If false, prefer the local catalog for a fast response.",
+    ),
     session: Session = Depends(get_session),
 ):
     channel_url = (url or "").strip() or None
@@ -327,21 +332,69 @@ def channel_feed(
     except Exception:  # noqa: BLE001
         pass
 
-    data = channel_catalog.catalog_feed_page(
-        session, channel_url, offset=offset, limit=limit
-    )
-    from_catalog = bool(data and data.get("from_catalog"))
-    indexing = bool(data and data.get("indexing"))
+    data = None
+    from_catalog = False
+    indexing = False
 
-    if data is None:
+    if live:
+        # Blocking YouTube fetch — used as a soft refresh after catalog paint.
         try:
-            data = downloader.fetch_channel_feed(channel_url, offset=offset, limit=limit)
+            data = channel_catalog.sync_feed_head(
+                channel_url, channel_name=channel_name, limit=max(limit, 50)
+            )
+            # Re-read the requested page from the updated catalog when possible.
+            catalog_page = channel_catalog.catalog_feed_page(
+                session, channel_url, offset=offset, limit=limit
+            )
+            if catalog_page is not None:
+                data = catalog_page
+                from_catalog = True
+                indexing = bool(catalog_page.get("indexing"))
+            else:
+                from_catalog = False
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(
-                status_code=400, detail=f"Could not load channel feed: {exc}"
-            ) from exc
-        from_catalog = False
-        indexing = False
+            # Fall back to catalog or live flat extract below.
+            data = None
+            live_error = exc
+        else:
+            live_error = None
+        if data is None:
+            try:
+                data = downloader.fetch_channel_feed(
+                    channel_url, offset=offset, limit=limit
+                )
+                from_catalog = False
+            except Exception as exc:  # noqa: BLE001
+                err = live_error or exc
+                raise HTTPException(
+                    status_code=400, detail=f"Could not load channel feed: {err}"
+                ) from err
+    else:
+        data = channel_catalog.catalog_feed_page(
+            session, channel_url, offset=offset, limit=limit
+        )
+        from_catalog = bool(data and data.get("from_catalog"))
+        indexing = bool(data and data.get("indexing"))
+
+        if data is None:
+            try:
+                data = downloader.fetch_channel_feed(
+                    channel_url, offset=offset, limit=limit
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(
+                    status_code=400, detail=f"Could not load channel feed: {exc}"
+                ) from exc
+            from_catalog = False
+            indexing = False
+        elif offset == 0:
+            # Catalog hit — refresh newest uploads in the background.
+            try:
+                channel_catalog.schedule_feed_head_sync(
+                    channel_url, channel_name=channel_name
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     lib_map = library.youtube_library_map(session, channel=channel_name)
     yt_ids = [str(e["id"]) for e in (data.get("entries") or []) if e.get("id")]

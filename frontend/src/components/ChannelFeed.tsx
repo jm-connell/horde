@@ -40,9 +40,11 @@ export default function ChannelFeed({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [fromCatalog, setFromCatalog] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liveRefreshGen = useRef(0);
 
   const {
     defaultPreset,
@@ -59,6 +61,36 @@ export default function ChannelFeed({
     resolveVideoId,
   } = useChannelDownloadQueue(channel);
 
+  const softLiveRefresh = useCallback(async () => {
+    if (!channelUrl && !channel) return;
+    const gen = ++liveRefreshGen.current;
+    try {
+      const page = await api.getChannelFeed({
+        channel,
+        url: channelUrl ?? undefined,
+        offset: 0,
+        limit: PAGE_SIZE,
+        live: true,
+      });
+      if (gen !== liveRefreshGen.current) return;
+      setEntries((prev) => {
+        if (prev.length <= PAGE_SIZE) return page.entries;
+        const rest = prev.slice(PAGE_SIZE);
+        const headIds = new Set(
+          page.entries.map((e) => e.id).filter(Boolean) as string[]
+        );
+        const filteredRest = rest.filter(
+          (e) => !e.id || !headIds.has(e.id)
+        );
+        return [...page.entries, ...filteredRest];
+      });
+      setHasMore((prevHasMore) => page.has_more || prevHasMore);
+      setFromCatalog(Boolean(page.from_catalog));
+    } catch {
+      /* keep catalog paint */
+    }
+  }, [channel, channelUrl]);
+
   const loadPage = useCallback(
     async (offset: number, append: boolean) => {
       if (!channelUrl && !channel) return;
@@ -71,11 +103,18 @@ export default function ChannelFeed({
           url: channelUrl ?? undefined,
           offset,
           limit: PAGE_SIZE,
+          live: false,
         });
         setEntries((prev) =>
           append ? [...prev, ...page.entries] : page.entries
         );
         setHasMore(page.has_more);
+        const usedCatalog = Boolean(page.from_catalog);
+        if (!append) setFromCatalog(usedCatalog);
+        // Catalog painted — pull newest uploads / metadata without blocking UI.
+        if (!append && usedCatalog) {
+          void softLiveRefresh();
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load feed");
         if (!append) setEntries([]);
@@ -84,13 +123,15 @@ export default function ChannelFeed({
         setLoadingMore(false);
       }
     },
-    [channel, channelUrl]
+    [channel, channelUrl, softLiveRefresh]
   );
 
   useEffect(() => {
     setEntries([]);
     setSearchEntries(null);
     setHasMore(false);
+    setFromCatalog(false);
+    liveRefreshGen.current += 1;
     if (!channelUrl) {
       setLoading(false);
       return;
@@ -232,6 +273,7 @@ export default function ChannelFeed({
                   videoId={videoId ?? undefined}
                   downloading={pendingUrls.has(entry.url)}
                   onDownload={() => queueDownload(entry)}
+                  skipRemotePreview={fromCatalog}
                 />
               );
             })}

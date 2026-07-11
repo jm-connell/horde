@@ -344,6 +344,135 @@ def _trim_beyond_cap(session: Session, catalog: ChannelCatalog) -> None:
     session.commit()
 
 
+def sync_feed_head(
+    channel_url: str,
+    *,
+    channel_name: Optional[str] = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Fetch the newest uploads from YouTube and merge into the local catalog.
+
+    Used to keep the feed snappy (serve catalog first) while catching new uploads
+    and refreshing metadata in the background.
+    """
+    url = _normalize_channel_url(channel_url)
+    data = _fetch_flat_page(url, offset=0, limit=limit)
+    entries = [e for e in (data.get("entries") or []) if e.get("id") and e.get("url")]
+    pc = data.get("playlist_count")
+    live_name = data.get("channel") or channel_name
+
+    with Session(engine) as session:
+        catalog = get_catalog_by_url(session, url)
+        if catalog is None:
+            if not _enabled():
+                return data
+            catalog = ChannelCatalog(
+                channel_url=url,
+                channel_name=live_name,
+                status=ChannelCatalogStatus.ready,
+                max_videos=_max_videos(),
+                updated_at=utcnow(),
+            )
+            session.add(catalog)
+            session.commit()
+            session.refresh(catalog)
+        else:
+            if live_name and not catalog.channel_name:
+                catalog.channel_name = live_name
+            if isinstance(pc, int) and pc > 0:
+                catalog.channel_total = pc
+
+        existing = session.exec(
+            select(ChannelCatalogVideo)
+            .where(ChannelCatalogVideo.catalog_id == catalog.id)
+            .order_by(ChannelCatalogVideo.position.asc())
+        ).all()
+        by_yt: dict[str, ChannelCatalogVideo] = {v.yt_id: v for v in existing}
+
+        live_ids: list[str] = []
+        for pos, raw in enumerate(entries):
+            yt_id = str(raw["id"])
+            live_ids.append(yt_id)
+            row = by_yt.get(yt_id)
+            published = raw.get("published_at")
+            if published is not None and not isinstance(published, str):
+                published = parse_upload_date(published)
+            if row is None:
+                row = ChannelCatalogVideo(
+                    catalog_id=catalog.id,  # type: ignore[arg-type]
+                    yt_id=yt_id,
+                    url=str(raw["url"]),
+                )
+                by_yt[yt_id] = row
+            row.url = str(raw["url"])
+            row.title = raw.get("title") or row.title
+            if raw.get("duration") is not None:
+                row.duration = raw.get("duration")
+            if raw.get("view_count") is not None:
+                row.view_count = raw.get("view_count")
+            if published:
+                row.published_at = published
+            if raw.get("thumbnail_url"):
+                row.thumbnail_url = raw.get("thumbnail_url")
+            row.position = pos
+            row.indexed_at = utcnow()
+            session.add(row)
+
+        live_set = set(live_ids)
+        next_pos = len(live_ids)
+        for row in existing:
+            if row.yt_id in live_set:
+                continue
+            row.position = next_pos
+            next_pos += 1
+            session.add(row)
+
+        session.commit()
+        _trim_beyond_cap(session, catalog)
+        count = session.exec(
+            select(func.count(ChannelCatalogVideo.id)).where(
+                ChannelCatalogVideo.catalog_id == catalog.id
+            )
+        ).one()
+        catalog.indexed_count = int(count or 0)
+        if isinstance(pc, int) and pc > 0:
+            catalog.channel_total = pc
+        catalog.updated_at = utcnow()
+        # Keep ready if we already were; don't clobber an in-progress full index.
+        if catalog.status == ChannelCatalogStatus.idle:
+            catalog.status = ChannelCatalogStatus.ready
+        session.add(catalog)
+        session.commit()
+
+    return data
+
+
+_head_sync_lock = threading.Lock()
+_head_sync_inflight: set[str] = set()
+
+
+def schedule_feed_head_sync(
+    channel_url: str, *, channel_name: Optional[str] = None
+) -> None:
+    """Non-blocking newest-page sync; coalesces duplicate requests per channel."""
+    url = _normalize_channel_url(channel_url)
+    with _head_sync_lock:
+        if url in _head_sync_inflight:
+            return
+        _head_sync_inflight.add(url)
+
+    def _run() -> None:
+        try:
+            sync_feed_head(url, channel_name=channel_name, limit=50)
+        except Exception:  # noqa: BLE001
+            logger.debug("feed head sync failed for %s", url, exc_info=True)
+        finally:
+            with _head_sync_lock:
+                _head_sync_inflight.discard(url)
+
+    threading.Thread(target=_run, daemon=True, name="catalog-feed-head").start()
+
+
 def _fetch_description(url: str) -> Optional[str]:
     opts = apply_cookie_opts(
         {

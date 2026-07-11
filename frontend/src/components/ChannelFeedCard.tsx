@@ -190,6 +190,7 @@ export default function ChannelFeedCard({
   videoId,
   onDownload,
   downloading,
+  skipRemotePreview = false,
 }: {
   entry: ChannelFeedEntry;
   channelName: string;
@@ -198,6 +199,8 @@ export default function ChannelFeedCard({
   videoId?: number;
   onDownload: () => void;
   downloading?: boolean;
+  /** Skip yt-dlp max-res probes (catalog feeds already feel fast without them). */
+  skipRemotePreview?: boolean;
 }) {
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
@@ -230,6 +233,7 @@ export default function ChannelFeedCard({
       setMaxRes(cachedRes);
       return;
     }
+    if (skipRemotePreview) return;
 
     // Only fetch preview for max-res badge when not already known.
     const el = cardRef.current;
@@ -257,7 +261,12 @@ export default function ChannelFeedCard({
       cancelled = true;
       observer.disconnect();
     };
-  }, [entry.url, entry.library_height_px, entry.max_height]);
+  }, [
+    entry.url,
+    entry.library_height_px,
+    entry.max_height,
+    skipRemotePreview,
+  ]);
 
   if (layout === "list") {
     return (

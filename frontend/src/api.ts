@@ -60,6 +60,8 @@ export interface ChannelFeedQuery {
   url?: string;
   offset?: number;
   limit?: number;
+  /** When true, fetch/merge from YouTube (slower). Default prefers local catalog. */
+  live?: boolean;
 }
 
 export const api = {
