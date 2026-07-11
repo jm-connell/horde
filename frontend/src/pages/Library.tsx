@@ -1305,6 +1305,14 @@ export default function Library() {
                   </button>
                   {bulkNoteOpen && (
                     <div className="absolute bottom-10 left-0 z-50 w-72 rounded-lg bg-ink-800 p-3 shadow-xl ring-1 ring-ink-600">
+                      <div className="mb-1 flex items-baseline justify-between gap-2">
+                        <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                          Note
+                        </span>
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-accent/80">
+                          Helps AI Features
+                        </span>
+                      </div>
                       <textarea
                         value={bulkNote}
                         onChange={(e) => setBulkNote(e.target.value)}

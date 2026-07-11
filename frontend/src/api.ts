@@ -177,6 +177,23 @@ export const api = {
     });
   },
 
+  generateThumbnailCandidates(
+    id: number,
+    count = 8
+  ): Promise<{
+    candidates: { index: number; at_seconds: number; url: string }[];
+  }> {
+    return request(`/api/videos/${id}/thumbnail/candidates?count=${count}`, {
+      method: "POST",
+    });
+  },
+
+  selectThumbnailCandidate(id: number, index: number): Promise<Video> {
+    return request<Video>(`/api/videos/${id}/thumbnail/candidates/${index}`, {
+      method: "POST",
+    });
+  },
+
   listChannels(params: ChannelQuery = {}): Promise<ChannelStat[]> {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
@@ -363,8 +380,49 @@ export const api = {
     return request<Video[]>("/api/review");
   },
 
+  listImport(): Promise<Video[]> {
+    return request<Video[]>("/api/review");
+  },
+
   skipReview(id: number): Promise<Video> {
     return request<Video>(`/api/review/${id}/skip`, { method: "POST" });
+  },
+
+  skipImport(id: number): Promise<Video> {
+    return request<Video>(`/api/review/${id}/skip`, { method: "POST" });
+  },
+
+  uploadImportVideo(
+    file: File,
+    onProgress?: (pct: number) => void
+  ): Promise<Video> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/review/upload");
+      xhr.responseType = "json";
+      xhr.upload.onprogress = (e) => {
+        if (!onProgress || !e.lengthComputable) return;
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(xhr.response as Video);
+          return;
+        }
+        let detail = xhr.statusText || "Upload failed";
+        const body = xhr.response;
+        if (body && typeof body === "object" && "detail" in body) {
+          const d = (body as { detail: unknown }).detail;
+          detail = typeof d === "string" ? d : detail;
+        }
+        reject(new Error(detail));
+      };
+      xhr.onerror = () => reject(new Error("Network error during upload"));
+      xhr.onabort = () => reject(new Error("Upload aborted"));
+      const form = new FormData();
+      form.append("file", file);
+      xhr.send(form);
+    });
   },
 
   listPresets(): Promise<string[]> {

@@ -307,7 +307,12 @@ export default function DownloadJobCard({
 
           {(showNote || note) && !cancelled && (
             <div className="mt-3">
-              <label className={labelClass}>Note</label>
+              <div className="mb-1 flex items-baseline justify-between gap-2">
+                <label className={labelClass + " mb-0"}>Note</label>
+                <span className="text-[10px] font-medium uppercase tracking-wide text-accent/80">
+                  Helps AI Features
+                </span>
+              </div>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}

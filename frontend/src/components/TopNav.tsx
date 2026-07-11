@@ -3,6 +3,10 @@ import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useDownloads } from "../context/DownloadContext";
 import { useSettings } from "../hooks/useSettings";
+import {
+  IMPORT_QUEUE_EVENT,
+  notifyImportQueueChanged,
+} from "../utils/importQueue";
 import LiquidNav from "./LiquidNav";
 
 const NAV_LINKS = [
@@ -10,7 +14,7 @@ const NAV_LINKS = [
   { to: "/playlists", label: "Playlists", end: false },
   { to: "/history", label: "History", end: false },
   { to: "/download", label: "Download", end: false },
-  { to: "/review", label: "Review", end: false },
+  { to: "/import", label: "Import", end: false },
   { to: "/settings", label: "Settings", end: false },
 ];
 
@@ -20,7 +24,7 @@ function isLinkActive(pathname: string, to: string, end: boolean): boolean {
 }
 
 export default function TopNav() {
-  const [reviewCount, setReviewCount] = useState(0);
+  const [importCount, setImportCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [useHamburger, setUseHamburger] = useState(false);
   const { activeCount } = useDownloads();
@@ -39,16 +43,42 @@ export default function TopNav() {
     let active = true;
     const poll = () =>
       api
-        .listReview()
-        .then((items) => active && setReviewCount(items.length))
+        .listImport()
+        .then((items) => {
+          if (!active) return;
+          setImportCount(items.length);
+        })
         .catch(() => undefined);
     poll();
     const id = setInterval(poll, 30000);
+    const onQueue = (e: Event) => {
+      const count = (e as CustomEvent<{ count?: number }>).detail?.count;
+      if (typeof count === "number") {
+        setImportCount(count);
+        return;
+      }
+      poll();
+    };
+    window.addEventListener(IMPORT_QUEUE_EVENT, onQueue);
     return () => {
       active = false;
       clearInterval(id);
+      window.removeEventListener(IMPORT_QUEUE_EVENT, onQueue);
     };
   }, []);
+
+  // Refresh badge when navigating (e.g. after scanner ingested files).
+  useEffect(() => {
+    if (location.pathname === "/import" || location.pathname === "/review") {
+      api
+        .listImport()
+        .then((items) => {
+          setImportCount(items.length);
+          notifyImportQueueChanged(items.length);
+        })
+        .catch(() => undefined);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -75,7 +105,7 @@ export default function TopNav() {
       ro.disconnect();
       window.removeEventListener("resize", check);
     };
-  }, [settings.uiScale, reviewCount, showDownloadBadge, activeCount]);
+  }, [settings.uiScale, importCount, showDownloadBadge, activeCount]);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `ui-interactive relative z-10 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap ${
@@ -102,15 +132,15 @@ export default function TopNav() {
       </span>
     ) : null;
 
-  const reviewBadge = badge(reviewCount);
+  const importBadge = badge(importCount);
   const downloadBadge = badge(showDownloadBadge ? activeCount : 0);
 
   const mobileBadgeCount =
-    reviewCount + (showDownloadBadge ? activeCount : 0);
+    importCount + (showDownloadBadge ? activeCount : 0);
 
   const linkBadge = (label: string) =>
-    label === "Review"
-      ? reviewBadge
+    label === "Import"
+      ? importBadge
       : label === "Download"
         ? downloadBadge
         : null;

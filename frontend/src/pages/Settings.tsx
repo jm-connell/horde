@@ -350,7 +350,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "system",
     keywords:
-      "health yt-dlp ollama disk review downloads gpu system status",
+      "health yt-dlp ollama disk import review downloads gpu system status",
   },
   {
     tab: "system",
@@ -2943,7 +2943,7 @@ export default function Settings() {
                 />
                 <SettingRow
                   title="AI duplicate confirmation"
-                  description="Score heuristic duplicate groups in Review."
+                  description="Score heuristic duplicate groups in Import."
                   hidden={!!q && !match("duplicate", "confirmation")}
                   control={
                     <Toggle
@@ -3062,7 +3062,7 @@ export default function Settings() {
                     </dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-gray-400">Needs review</dt>
+                    <dt className="text-gray-400">Pending import</dt>
                     <dd className="text-gray-200">
                       {health.review_pending_count}
                     </dd>

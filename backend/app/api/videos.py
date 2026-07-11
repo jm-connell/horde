@@ -31,6 +31,11 @@ from ..schemas import (
     WatchProgressUpdate,
 )
 from ..services import downloader, feed_meta_cache, library
+from ..services.paths import (
+    is_manual_import,
+    manual_import_rel_path,
+    rename_video_file,
+)
 
 router = APIRouter(prefix="/api", tags=["videos"])
 
@@ -399,6 +404,8 @@ def update_video(
         raise HTTPException(status_code=404, detail="Video not found")
 
     data = payload.model_dump(exclude_unset=True)
+    manual = is_manual_import(video)
+    path_fields_changed = "title" in data or "channel" in data
 
     tags_edited = False
     user_tag = data.pop("user_tag", None)
@@ -422,6 +429,21 @@ def update_video(
     # Auto-clear the review flag once the required fields are present.
     if video.needs_review and video.title and video.channel:
         video.needs_review = False
+
+    if manual and path_fields_changed and video.title:
+        ext = Path(video.file_path).suffix or ".mp4"
+        target = manual_import_rel_path(video.channel, video.title, ext)
+        if target.replace("\\", "/") != video.file_path.replace("\\", "/"):
+            try:
+                rename_video_file(session, video, target)
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except OSError as exc:
+                raise HTTPException(
+                    status_code=500, detail=f"Could not rename file: {exc}"
+                ) from exc
 
     session.add(video)
     session.commit()
@@ -680,6 +702,84 @@ async def upload_thumbnail(
         raise HTTPException(status_code=404, detail="Video not found")
     dest = THUMBNAILS_DIR / f"{video_id}.jpg"
     dest.write_bytes(await file.read())
+    video.thumbnail_path = str(dest)
+    session.add(video)
+    session.commit()
+    session.refresh(video)
+    return _to_read(video, session)
+
+
+@router.post("/videos/{video_id}/thumbnail/candidates")
+def generate_thumbnail_candidates(
+    video_id: int,
+    count: int = Query(8, ge=1, le=16),
+    session: Session = Depends(get_session),
+):
+    """Extract several frames from the video for the user to pick as thumbnail."""
+    from ..services.metadata import generate_thumbnail_candidates as _gen
+
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    media = _resolve_media(video)
+    THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
+    candidates = _gen(
+        media,
+        THUMBNAILS_DIR,
+        video_id,
+        count=count,
+        duration=video.duration_sec,
+    )
+    if not candidates:
+        raise HTTPException(status_code=400, detail="Could not generate thumbnails")
+    return {
+        "candidates": [
+            {
+                "index": c["index"],
+                "at_seconds": c["at_seconds"],
+                "url": f"/api/videos/{video_id}/thumbnail/candidates/{c['index']}",
+            }
+            for c in candidates
+        ]
+    }
+
+
+@router.get("/videos/{video_id}/thumbnail/candidates/{index}")
+def get_thumbnail_candidate(
+    video_id: int,
+    index: int,
+    session: Session = Depends(get_session),
+):
+    from ..services.metadata import candidate_thumb_path
+
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    path = candidate_thumb_path(THUMBNAILS_DIR, video_id, index)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@router.post("/videos/{video_id}/thumbnail/candidates/{index}", response_model=VideoRead)
+def select_thumbnail_candidate(
+    video_id: int,
+    index: int,
+    session: Session = Depends(get_session),
+):
+    """Promote a generated candidate frame to the video's thumbnail."""
+    import shutil
+
+    from ..services.metadata import candidate_thumb_path
+
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    src = candidate_thumb_path(THUMBNAILS_DIR, video_id, index)
+    if not src.exists():
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    dest = THUMBNAILS_DIR / f"{video_id}.jpg"
+    shutil.copy2(src, dest)
     video.thumbnail_path = str(dest)
     session.add(video)
     session.commit()

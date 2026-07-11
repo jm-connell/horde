@@ -88,30 +88,38 @@ def _is_stable(path: Path) -> bool:
     return first > 0 and first == second
 
 
-def _ingest_file(session: Session, path: Path) -> bool:
-    """Insert a newly discovered file as a review-needed video. Returns True if added."""
+def ingest_media_file(
+    session: Session,
+    path: Path,
+    *,
+    require_stable: bool = True,
+) -> Video | None:
+    """Insert a newly discovered file as a review-needed video.
+
+    Returns the Video row if added, otherwise None.
+    """
     try:
         rel_path = to_rel_path(path)
     except ValueError:
-        return False
+        return None
 
     if _is_active(rel_path):
-        return False
+        return None
 
     existing = find_video_by_path(session, rel_path)
     if existing is not None:
-        return False
+        return None
 
-    if not _is_stable(path):
-        return False
+    if require_stable and not _is_stable(path):
+        return None
 
     if not probe_is_playable(path):
-        return False
+        return None
 
     try:
         file_size = path.stat().st_size
     except OSError:
-        return False
+        return None
 
     dims = probe_dimensions(path)
     video = Video(
@@ -131,7 +139,7 @@ def _ingest_file(session: Session, path: Path) -> bool:
         session.commit()
     except IntegrityError:
         session.rollback()
-        return False
+        return None
     session.refresh(video)
 
     thumb_path = THUMBNAILS_DIR / f"{video.id}.jpg"
@@ -140,7 +148,12 @@ def _ingest_file(session: Session, path: Path) -> bool:
         session.add(video)
         session.commit()
 
-    return True
+    return video
+
+
+def _ingest_file(session: Session, path: Path) -> bool:
+    """Insert a newly discovered file as a review-needed video. Returns True if added."""
+    return ingest_media_file(session, path, require_stable=True) is not None
 
 
 def scan_once() -> int:

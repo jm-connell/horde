@@ -1,17 +1,24 @@
 import re
+from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from ..config import DOWNLOADS_DIR, VIDEO_EXTENSIONS
 from ..database import get_session
 from ..models import Video
 from ..schemas import VideoRead
 from ..services import library
+from ..services.metadata import probe_is_playable
+from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
+from ..services.scanner import ingest_media_file, mark_active, unmark_active
 from .videos import _to_read
 
 router = APIRouter(prefix="/api/review", tags=["review"])
+
+_UPLOAD_CHUNK = 1024 * 1024
 
 
 class DuplicateGroupRead(BaseModel):
@@ -27,6 +34,76 @@ class DuplicateGroupRead(BaseModel):
 def review_queue(session: Session = Depends(get_session)):
     videos = library.query_videos(session, needs_review=True, sort="added_at", order="desc")
     return [_to_read(v, session) for v in videos]
+
+
+@router.post("/upload", response_model=VideoRead)
+async def upload_import(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+):
+    """Stream a video into DOWNLOADS_DIR/imports and add it to the review queue."""
+    name = Path(file.filename or "upload.bin").name
+    ext = Path(name).suffix.lower()
+    if ext not in VIDEO_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported type. Use {', '.join(sorted(VIDEO_EXTENSIONS))}.",
+        )
+
+    stem = safe_filename(Path(name).stem)
+    desired = f"imports/{stem}{ext}"
+    rel_path = unique_rel_path(desired)
+    root = DOWNLOADS_DIR.resolve()
+    dest = (root / rel_path).resolve()
+    try:
+        dest.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid path") from exc
+
+    if find_video_by_path(session, rel_path) is not None:
+        raise HTTPException(status_code=409, detail="File already in library")
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_name(dest.name + ".part")
+    mark_active(rel_path)
+    try:
+        with part.open("wb") as out:
+            while True:
+                chunk = await file.read(_UPLOAD_CHUNK)
+                if not chunk:
+                    break
+                out.write(chunk)
+        if part.stat().st_size == 0:
+            part.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail="Empty file")
+        part.replace(dest)
+        if not probe_is_playable(dest):
+            dest.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail="File is not a playable video")
+        # File is complete; allow ingest (active flag would otherwise block it).
+        unmark_active(rel_path)
+        video = ingest_media_file(session, dest, require_stable=False)
+        if video is None:
+            # Another process may have claimed it, or DB unique conflict.
+            if find_video_by_path(session, rel_path) is not None:
+                raise HTTPException(status_code=409, detail="File already in library")
+            dest.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail="Could not import file")
+        return _to_read(video, session)
+    except HTTPException:
+        part.unlink(missing_ok=True)
+        raise
+    except Exception:
+        part.unlink(missing_ok=True)
+        if dest.exists() and find_video_by_path(session, rel_path) is None:
+            dest.unlink(missing_ok=True)
+        raise
+    finally:
+        unmark_active(rel_path)
+        try:
+            await file.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @router.post("/{video_id}/skip", response_model=VideoRead)

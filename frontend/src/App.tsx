@@ -1,9 +1,9 @@
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import Library from "./pages/Library";
 import History from "./pages/History";
 import Download from "./pages/Download";
-import Review from "./pages/Review";
+import Import from "./pages/Import";
 import Watch from "./pages/Watch";
 import Preview from "./pages/Preview";
 import Settings from "./pages/Settings";
@@ -40,7 +40,8 @@ function AppRoutes() {
         <Route path="/download" element={<Download />} />
         <Route path="/playlists" element={<Playlists />} />
         <Route path="/playlists/:id" element={<PlaylistDetail />} />
-        <Route path="/review" element={<Review />} />
+        <Route path="/import" element={<Import />} />
+        <Route path="/review" element={<Navigate to="/import" replace />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/watch/:id" element={<Watch />} />
         <Route path="/preview" element={<Preview />} />

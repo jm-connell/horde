@@ -102,7 +102,12 @@ export default function ChannelDownloadEditModal({
             </select>
           </div>
           <div>
-            <label className={labelClass}>Note</label>
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <label className={labelClass + " mb-0"}>Note</label>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-accent/80">
+                Helps AI Features
+              </span>
+            </div>
             <textarea
               value={item.notes}
               onChange={(e) => onSave({ notes: e.target.value })}
