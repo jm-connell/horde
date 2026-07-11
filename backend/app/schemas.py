@@ -175,6 +175,54 @@ class ChannelFeedPage(BaseModel):
     channel_url: Optional[str] = None
     entries: list[ChannelFeedEntry] = []
     has_more: bool = False
+    indexing: bool = False
+    from_catalog: bool = False
+    catalog_indexed: int = 0
+    catalog_total: Optional[int] = None
+    catalog_complete: bool = False
+    catalog_status: Optional[str] = None
+
+
+class ChannelCatalogStatusItem(BaseModel):
+    id: Optional[int] = None
+    channel_url: str
+    channel_name: Optional[str] = None
+    status: str
+    indexed_count: int = 0
+    channel_total: Optional[int] = None
+    complete: bool = False
+    max_videos: int = 1000
+    phase: Optional[str] = None
+    last_error: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ChannelCatalogStatusResponse(BaseModel):
+    enabled: bool = True
+    running: bool = False
+    current_channel: Optional[str] = None
+    current_channel_url: Optional[str] = None
+    current_phase: Optional[str] = None
+    done: int = 0
+    total: int = 0
+    catalog_id: Optional[int] = None
+    queue_depth: int = 0
+    catalogs: list[ChannelCatalogStatusItem] = []
+
+
+class ChannelCatalogIndexRequest(BaseModel):
+    channel: Optional[str] = None
+    url: Optional[str] = None
+    force: bool = True
+
+
+class ChannelCatalogIndexResult(BaseModel):
+    queued: int = 0
+    skipped: int = 0
+    catalog_id: Optional[int] = None
+    detail: str = ""
 
 
 class TagStat(BaseModel):

@@ -25,6 +25,7 @@ from .api import (
 from .services.scanner import cleanup_orphans, start_scanner
 from .services import downloader, app_settings as app_settings_svc
 from .services.ai import start_ai_worker, stop_ai_worker
+from .services.channel_catalog import start_catalog_worker, stop_catalog_worker
 
 # Static frontend build copied next to the backend in the Docker image.
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -45,10 +46,12 @@ async def lifespan(app: FastAPI):
     settings = app_settings_svc.load()
     start_sync_worker(interval_hours=settings.get("metadata_sync_interval_hours", 24))
     start_ai_worker()
+    start_catalog_worker()
 
     try:
         yield
     finally:
+        stop_catalog_worker()
         stop_ai_worker()
         observer.stop()
         observer.join(timeout=5)

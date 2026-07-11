@@ -79,6 +79,41 @@ export interface ChannelFeedPage {
   channel_url: string | null;
   entries: ChannelFeedEntry[];
   has_more: boolean;
+  indexing?: boolean;
+  from_catalog?: boolean;
+  catalog_indexed?: number;
+  catalog_total?: number | null;
+  catalog_complete?: boolean;
+  catalog_status?: string | null;
+}
+
+export interface ChannelCatalogStatusItem {
+  id: number | null;
+  channel_url: string;
+  channel_name: string | null;
+  status: string;
+  indexed_count: number;
+  channel_total: number | null;
+  complete: boolean;
+  max_videos: number;
+  phase: string | null;
+  last_error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ChannelCatalogStatus {
+  enabled: boolean;
+  running: boolean;
+  current_channel: string | null;
+  current_channel_url: string | null;
+  current_phase: string | null;
+  done: number;
+  total: number;
+  catalog_id: number | null;
+  queue_depth: number;
+  catalogs: ChannelCatalogStatusItem[];
 }
 
 export type JobStatus =
@@ -193,6 +228,9 @@ export interface AiSettings {
 
 export interface AppSettings {
   progress_expiry_days: number;
+  metadata_sync_interval_hours: number;
+  channel_catalog_enabled: boolean;
+  channel_catalog_max_videos: number;
   ui: Record<string, unknown>;
   ai: AiSettings;
 }

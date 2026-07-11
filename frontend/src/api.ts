@@ -3,6 +3,7 @@ import type {
   AiSettings,
   AiStatus,
   AppSettings,
+  ChannelCatalogStatus,
   ChannelFeedPage,
   ChannelStat,
   DownloadJob,
@@ -230,6 +231,47 @@ export const api = {
     return request<ChannelFeedPage>(
       `/api/channels/feed${query ? `?${query}` : ""}`
     );
+  },
+
+  searchChannelCatalog(params: {
+    q: string;
+    channel?: string;
+    url?: string;
+    limit?: number;
+  }): Promise<ChannelFeedPage> {
+    const qs = new URLSearchParams();
+    qs.set("q", params.q);
+    if (params.channel) qs.set("channel", params.channel);
+    if (params.url) qs.set("url", params.url);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    return request<ChannelFeedPage>(
+      `/api/channels/catalog/search?${qs.toString()}`
+    );
+  },
+
+  getChannelCatalogStatus(): Promise<ChannelCatalogStatus> {
+    return request<ChannelCatalogStatus>("/api/channels/catalog/status");
+  },
+
+  indexChannelCatalog(params: {
+    channel?: string;
+    url?: string;
+    force?: boolean;
+  } = {}): Promise<{
+    queued: number;
+    skipped: number;
+    catalog_id: number | null;
+    detail: string;
+  }> {
+    return request("/api/channels/catalog/index", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: params.channel ?? null,
+        url: params.url ?? null,
+        force: params.force ?? true,
+      }),
+    });
   },
 
   renameChannel(oldName: string, newName: string): Promise<{ updated: number }> {

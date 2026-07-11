@@ -33,11 +33,16 @@ export default function ChannelFeed({
 }) {
   const [settings] = useSettings();
   const [entries, setEntries] = useState<ChannelFeedEntry[]>([]);
+  const [searchEntries, setSearchEntries] = useState<ChannelFeedEntry[] | null>(
+    null
+  );
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     defaultPreset,
@@ -84,6 +89,7 @@ export default function ChannelFeed({
 
   useEffect(() => {
     setEntries([]);
+    setSearchEntries(null);
     setHasMore(false);
     if (!channelUrl) {
       setLoading(false);
@@ -92,12 +98,44 @@ export default function ChannelFeed({
     void loadPage(0, false);
   }, [channel, channelUrl, loadPage]);
 
+  useEffect(() => {
+    const q = feedSearch.trim();
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!q || !channelUrl) {
+      setSearchEntries(null);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    searchTimer.current = setTimeout(() => {
+      api
+        .searchChannelCatalog({
+          q,
+          channel,
+          url: channelUrl,
+          limit: 80,
+        })
+        .then((page) => {
+          setSearchEntries(page.entries);
+        })
+        .catch(() => {
+          setSearchEntries(null);
+        })
+        .finally(() => setSearchLoading(false));
+    }, 250);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [feedSearch, channel, channelUrl]);
+
   const filteredEntries = useMemo(() => {
     const q = feedSearch.trim().toLowerCase();
-    let list = entries;
-    if (q) {
-      list = list.filter((e) => (e.title ?? "").toLowerCase().includes(q));
-    }
+    let list =
+      q && searchEntries != null
+        ? searchEntries
+        : q
+          ? entries.filter((e) => (e.title ?? "").toLowerCase().includes(q))
+          : entries;
     if (feedSort === "popular") {
       list = [...list].sort((a, b) => {
         const av = a.view_count ?? -1;
@@ -108,7 +146,7 @@ export default function ChannelFeed({
       list = [...list].reverse();
     }
     return list;
-  }, [entries, feedSearch, feedSort, feedOrder]);
+  }, [entries, searchEntries, feedSearch, feedSort, feedOrder]);
 
   const canLoadMore =
     hasMore && !feedSearch.trim() && !loading && !loadingMore;
@@ -150,6 +188,12 @@ export default function ChannelFeed({
       {error && (
         <p className="mb-4 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
           {error}
+        </p>
+      )}
+
+      {(searchLoading) && (
+        <p className="mb-3 text-xs text-gray-500">
+          Searching indexed catalog…
         </p>
       )}
 

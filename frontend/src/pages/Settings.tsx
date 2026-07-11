@@ -25,6 +25,7 @@ import type {
   AiSettings,
   AiStatus,
   AppSettings,
+  ChannelCatalogStatus,
   HealthStats,
   StorageStats,
   SystemStats,
@@ -46,6 +47,13 @@ const INPUT =
   "ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
 const PROCESS_BTN =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50";
+
+const CATALOG_INDEX_TIP =
+  "When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube.";
+const CATALOG_MAX_TIP =
+  "Maximum uploads to keep per channel. Values above 1000 can take a long time and may slow other YouTube work while indexing.";
+const METADATA_INTERVAL_TIP =
+  "How often Horde refreshes library video metadata and re-checks channel catalogs for new uploads.";
 
 const UI_SCALE_OPTIONS: { value: UiScale; label: string }[] = [
   { value: "80", label: "80%" },
@@ -280,7 +288,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "library",
     keywords:
-      "library metadata resync thumbnails captions view counts",
+      "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval",
   },
   {
     tab: "library",
@@ -346,6 +354,11 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "system",
     keywords: "storage disk space library",
+  },
+  {
+    tab: "system",
+    keywords:
+      "background tasks channel catalog index queue ai process metadata sync",
   },
   {
     tab: "system",
@@ -665,6 +678,122 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
   );
 }
 
+function AiQueueStatusDl({
+  aiStatus,
+  systemStats,
+  compact = false,
+}: {
+  aiStatus: AiStatus;
+  systemStats: SystemStats | null;
+  compact?: boolean;
+}) {
+  return (
+    <dl className="space-y-1.5 text-sm">
+      {!compact && (
+        <>
+          <div className="flex justify-between gap-3">
+            <dt className="text-gray-400">Status</dt>
+            <dd className="text-right text-gray-200">
+              {!aiStatus.enabled
+                ? "Disabled"
+                : aiStatus.ready
+                  ? "Ready"
+                  : aiStatus.reachable
+                    ? "Connected (models loading)"
+                    : "Offline"}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-gray-400">URL</dt>
+            <dd className="truncate text-right font-mono text-xs text-gray-300">
+              {aiStatus.base_url || "—"}
+            </dd>
+          </div>
+        </>
+      )}
+      <div className="flex justify-between gap-3">
+        <dt className="text-gray-400">Indexed</dt>
+        <dd className="text-right text-gray-200">
+          {aiStatus.indexed_videos} / {aiStatus.total_videos}
+          {aiStatus.queue_depth > 0
+            ? ` · ${aiStatus.queue_depth} queued`
+            : ""}
+        </dd>
+      </div>
+      {aiStatus.current_job && <CurrentAiJob job={aiStatus.current_job} />}
+      {systemStats?.gpu &&
+        (systemStats.gpu.util_percent != null ||
+          systemStats.gpu.temp_c != null) && (
+          <div className="flex justify-between gap-3">
+            <dt className="text-gray-400">GPU</dt>
+            <dd className="text-right text-gray-200">
+              {[
+                systemStats.gpu.util_percent != null
+                  ? `${Math.round(systemStats.gpu.util_percent)}%`
+                  : null,
+                systemStats.gpu.temp_c != null
+                  ? `${Math.round(systemStats.gpu.temp_c)}°C`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </dd>
+          </div>
+        )}
+      {aiStatus.queue_breakdown && aiStatus.queue_depth > 0 && (
+        <div className="flex justify-between gap-3">
+          <dt className="text-gray-400">Queue</dt>
+          <dd className="text-right text-xs text-gray-300">
+            {[
+              aiStatus.queue_breakdown.embed_video
+                ? plural(
+                    aiStatus.queue_breakdown.embed_video,
+                    "search index",
+                    "search indexes"
+                  )
+                : null,
+              aiStatus.queue_breakdown.embed_catalog_video
+                ? plural(
+                    aiStatus.queue_breakdown.embed_catalog_video,
+                    "catalog index",
+                    "catalog indexes"
+                  )
+                : null,
+              aiStatus.queue_breakdown.enrich_tags
+                ? plural(
+                    aiStatus.queue_breakdown.enrich_tags,
+                    "tag",
+                    "tags"
+                  )
+                : null,
+              aiStatus.queue_breakdown.refresh_categories
+                ? plural(
+                    aiStatus.queue_breakdown.refresh_categories,
+                    "category",
+                    "categories"
+                  )
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || `${aiStatus.queue_depth} jobs`}
+          </dd>
+        </div>
+      )}
+      {aiStatus.pulling.length > 0 && (
+        <div className="flex justify-between gap-3">
+          <dt className="text-gray-400">Pulling</dt>
+          <dd className="text-right text-amber-300">
+            {aiStatus.pulling.join(", ")}
+          </dd>
+        </div>
+      )}
+      {aiStatus.last_error && (
+        <p className="text-xs text-red-400">{aiStatus.last_error}</p>
+      )}
+    </dl>
+  );
+}
+
 export default function Settings() {
   const [settings, update] = useSettings();
   const { showToast } = useToast();
@@ -679,6 +808,11 @@ export default function Settings() {
   const [embedCustom, setEmbedCustom] = useState(false);
   const [chatCustom, setChatCustom] = useState(false);
   const [expiryInput, setExpiryInput] = useState<string>("");
+  const [catalogMaxInput, setCatalogMaxInput] = useState<string>("1000");
+  const [syncIntervalInput, setSyncIntervalInput] = useState<string>("24");
+  const [catalogStatus, setCatalogStatus] =
+    useState<ChannelCatalogStatus | null>(null);
+  const [catalogIndexing, setCatalogIndexing] = useState(false);
   const [metadataSyncing, setMetadataSyncing] = useState(false);
   const [metadataSyncFields, setMetadataSyncFields] = useState<string[]>([
     "all",
@@ -730,6 +864,8 @@ export default function Settings() {
       .then((s) => {
         setAppSettings(s);
         setExpiryInput(String(s.progress_expiry_days));
+        setCatalogMaxInput(String(s.channel_catalog_max_videos ?? 1000));
+        setSyncIntervalInput(String(s.metadata_sync_interval_hours ?? 24));
         if (s.ai) {
           const merged = { ...DEFAULT_AI, ...s.ai };
           setAiDraft(merged);
@@ -754,8 +890,37 @@ export default function Settings() {
   }, []);
 
   useEffect(() => {
-    if (tab !== "ai") return;
+    if (tab !== "ai" && tab !== "system") return;
     const id = setInterval(refreshAiStatus, 5000);
+    return () => clearInterval(id);
+  }, [tab]);
+
+  const refreshCatalogStatus = () =>
+    api
+      .getChannelCatalogStatus()
+      .then(setCatalogStatus)
+      .catch(() => setCatalogStatus(null));
+
+  useEffect(() => {
+    if (tab !== "system") return;
+    refreshCatalogStatus();
+    const id = setInterval(refreshCatalogStatus, 5000);
+    return () => clearInterval(id);
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "system") return;
+    const pollMeta = () => {
+      api
+        .getMetadataSyncStatus()
+        .then((status) => {
+          setMetadataSyncStatus(status);
+          if (status.running) setMetadataSyncing(true);
+        })
+        .catch(() => undefined);
+    };
+    pollMeta();
+    const id = setInterval(pollMeta, 5000);
     return () => clearInterval(id);
   }, [tab]);
 
@@ -829,6 +994,25 @@ export default function Settings() {
     if (updated) {
       setAppSettings(updated);
       update({ progressExpiryDays: updated.progress_expiry_days });
+    }
+  };
+
+  const saveCatalogSettings = async (
+    patch: Partial<
+      Pick<
+        AppSettings,
+        | "channel_catalog_enabled"
+        | "channel_catalog_max_videos"
+        | "metadata_sync_interval_hours"
+      >
+    >
+  ) => {
+    const updated = await api.updateAppSettings(patch).catch(() => null);
+    if (updated) {
+      setAppSettings(updated);
+      setCatalogMaxInput(String(updated.channel_catalog_max_videos ?? 1000));
+      setSyncIntervalInput(String(updated.metadata_sync_interval_hours ?? 24));
+      refreshCatalogStatus();
     }
   };
 
@@ -1985,17 +2169,121 @@ export default function Settings() {
             <Section
               first
               title="Library metadata"
-              description="Pull fresh thumbnails, captions, view counts, and titles from each video's source URL. Choose what to sync."
+              description="Pull fresh thumbnails, captions, view counts, and titles from each video's source URL. Choose what to sync. Channel catalogs refresh on the same interval."
               hidden={
                 !match(
                   "library metadata",
                   "resync",
                   "thumbnails",
                   "captions",
-                  "view counts"
+                  "view counts",
+                  "channel catalog",
+                  "index",
+                  "refresh interval"
                 )
               }
             >
+              <div className="mb-4 space-y-4">
+                <SettingRow
+                  title="Index channel libraries"
+                  description="Background-index uploads when you download from a channel or open its feed, so feed search works beyond the loaded page."
+                  control={
+                    <div className="flex items-center gap-2">
+                      <HelpTip text={CATALOG_INDEX_TIP} />
+                      <Toggle
+                        checked={appSettings?.channel_catalog_enabled ?? true}
+                        onChange={() =>
+                          void saveCatalogSettings({
+                            channel_catalog_enabled: !(
+                              appSettings?.channel_catalog_enabled ?? true
+                            ),
+                          })
+                        }
+                      />
+                    </div>
+                  }
+                />
+                <div>
+                  <label className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+                    Max videos per channel
+                    <HelpTip text={CATALOG_MAX_TIP} />
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      min={100}
+                      max={5000}
+                      step={100}
+                      value={catalogMaxInput}
+                      onChange={(e) => setCatalogMaxInput(e.target.value)}
+                      onBlur={() => {
+                        const n = parseInt(catalogMaxInput, 10);
+                        if (isNaN(n)) {
+                          setCatalogMaxInput(
+                            String(appSettings?.channel_catalog_max_videos ?? 1000)
+                          );
+                          return;
+                        }
+                        const clamped = Math.max(100, Math.min(5000, n));
+                        setCatalogMaxInput(String(clamped));
+                        if (
+                          clamped !==
+                          (appSettings?.channel_catalog_max_videos ?? 1000)
+                        ) {
+                          void saveCatalogSettings({
+                            channel_catalog_max_videos: clamped,
+                          });
+                        }
+                      }}
+                      className={`${INPUT} !w-32`}
+                    />
+                    <span className="text-xs text-gray-500">100–5000</span>
+                  </div>
+                  {parseInt(catalogMaxInput, 10) > 1000 && (
+                    <p className="mt-1.5 text-xs text-amber-400/90">
+                      Large indexes can take a long time and may slow other
+                      YouTube work while running.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+                    Metadata / catalog refresh interval (hours)
+                    <HelpTip text={METADATA_INTERVAL_TIP} />
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={168}
+                      value={syncIntervalInput}
+                      onChange={(e) => setSyncIntervalInput(e.target.value)}
+                      onBlur={() => {
+                        const n = parseInt(syncIntervalInput, 10);
+                        if (isNaN(n)) {
+                          setSyncIntervalInput(
+                            String(
+                              appSettings?.metadata_sync_interval_hours ?? 24
+                            )
+                          );
+                          return;
+                        }
+                        const clamped = Math.max(1, Math.min(168, n));
+                        setSyncIntervalInput(String(clamped));
+                        if (
+                          clamped !==
+                          (appSettings?.metadata_sync_interval_hours ?? 24)
+                        ) {
+                          void saveCatalogSettings({
+                            metadata_sync_interval_hours: clamped,
+                          });
+                        }
+                      }}
+                      className={`${INPUT} !w-32`}
+                    />
+                  </div>
+                </div>
+              </div>
               <div className="mb-3 flex flex-wrap gap-2">
                 {(
                   [
@@ -2544,104 +2832,10 @@ export default function Settings() {
                     )}
                   </div>
                   {aiStatus && (
-                    <dl className="space-y-1.5 text-sm">
-                      <div className="flex justify-between gap-3">
-                        <dt className="text-gray-400">Status</dt>
-                        <dd className="text-right text-gray-200">
-                          {!aiStatus.enabled
-                            ? "Disabled"
-                            : aiStatus.ready
-                              ? "Ready"
-                              : aiStatus.reachable
-                                ? "Connected (models loading)"
-                                : "Offline"}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <dt className="text-gray-400">URL</dt>
-                        <dd className="truncate text-right font-mono text-xs text-gray-300">
-                          {aiStatus.base_url || "—"}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <dt className="text-gray-400">Indexed</dt>
-                        <dd className="text-right text-gray-200">
-                          {aiStatus.indexed_videos} / {aiStatus.total_videos}
-                          {aiStatus.queue_depth > 0
-                            ? ` · ${aiStatus.queue_depth} queued`
-                            : ""}
-                        </dd>
-                      </div>
-                      {aiStatus.current_job && (
-                        <CurrentAiJob job={aiStatus.current_job} />
-                      )}
-                      {systemStats?.gpu &&
-                        (systemStats.gpu.util_percent != null ||
-                          systemStats.gpu.temp_c != null) && (
-                        <div className="flex justify-between gap-3">
-                          <dt className="text-gray-400">GPU</dt>
-                          <dd className="text-right text-gray-200">
-                            {[
-                              systemStats.gpu.util_percent != null
-                                ? `${Math.round(systemStats.gpu.util_percent)}%`
-                                : null,
-                              systemStats.gpu.temp_c != null
-                                ? `${Math.round(systemStats.gpu.temp_c)}°C`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </dd>
-                        </div>
-                      )}
-                      {aiStatus.queue_breakdown &&
-                        aiStatus.queue_depth > 0 && (
-                          <div className="flex justify-between gap-3">
-                            <dt className="text-gray-400">Queue</dt>
-                            <dd className="text-right text-xs text-gray-300">
-                              {[
-                                aiStatus.queue_breakdown.embed_video
-                                  ? plural(
-                                      aiStatus.queue_breakdown.embed_video,
-                                      "search index",
-                                      "search indexes"
-                                    )
-                                  : null,
-                                aiStatus.queue_breakdown.enrich_tags
-                                  ? plural(
-                                      aiStatus.queue_breakdown.enrich_tags,
-                                      "tag",
-                                      "tags"
-                                    )
-                                  : null,
-                                aiStatus.queue_breakdown.refresh_categories
-                                  ? plural(
-                                      aiStatus.queue_breakdown
-                                        .refresh_categories,
-                                      "category",
-                                      "categories"
-                                    )
-                                  : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ") || `${aiStatus.queue_depth} jobs`}
-                            </dd>
-                          </div>
-                        )}
-                      {aiStatus.pulling.length > 0 && (
-                        <div className="flex justify-between gap-3">
-                          <dt className="text-gray-400">Pulling</dt>
-                          <dd className="text-right text-amber-300">
-                            {aiStatus.pulling.join(", ")}
-                          </dd>
-                        </div>
-                      )}
-                      {aiStatus.last_error && (
-                        <p className="text-xs text-red-400">
-                          {aiStatus.last_error}
-                        </p>
-                      )}
-                    </dl>
+                    <AiQueueStatusDl
+                      aiStatus={aiStatus}
+                      systemStats={systemStats}
+                    />
                   )}
                 </div>
               </div>
@@ -2963,6 +3157,186 @@ export default function Settings() {
           <>
             <Section
               first
+              title="Background tasks"
+              description="Live progress for channel catalog indexing, AI jobs, and metadata sync."
+              hidden={
+                !match(
+                  "background tasks",
+                  "channel catalog",
+                  "index",
+                  "queue",
+                  "ai process",
+                  "metadata sync"
+                )
+              }
+            >
+              <div className="space-y-4">
+                {(appSettings?.channel_catalog_enabled ?? true) && (
+                  <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                        Channel catalog
+                      </p>
+                      <button
+                        type="button"
+                        disabled={catalogIndexing}
+                        onClick={async () => {
+                          if (catalogIndexing) return;
+                          setCatalogIndexing(true);
+                          try {
+                            const result = await api.indexChannelCatalog({
+                              force: true,
+                            });
+                            showToast(
+                              result.detail || "Channel indexing queued"
+                            );
+                            refreshCatalogStatus();
+                          } catch (err) {
+                            showToast(
+                              err instanceof Error && err.message
+                                ? err.message
+                                : "Could not start channel indexing"
+                            );
+                          } finally {
+                            setCatalogIndexing(false);
+                          }
+                        }}
+                        className={PANEL_BTN + " !px-2.5 !py-1 !text-xs"}
+                      >
+                        {catalogIndexing
+                          ? "Queuing…"
+                          : "Index all channels"}
+                      </button>
+                    </div>
+                    {catalogStatus ? (
+                      <dl className="space-y-1.5 text-sm">
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-gray-400">Queue</dt>
+                          <dd className="text-gray-200">
+                            {catalogStatus.queue_depth} pending
+                            {catalogStatus.running ? " · running" : ""}
+                          </dd>
+                        </div>
+                        {(catalogStatus.current_channel ||
+                          catalogStatus.current_channel_url) && (
+                          <div className="flex justify-between gap-3">
+                            <dt className="text-gray-400">Current</dt>
+                            <dd className="truncate text-right text-gray-200">
+                              {catalogStatus.current_channel ||
+                                catalogStatus.current_channel_url}
+                            </dd>
+                          </div>
+                        )}
+                        {catalogStatus.current_phase && (
+                          <div className="flex justify-between gap-3">
+                            <dt className="text-gray-400">Phase</dt>
+                            <dd className="text-gray-200">
+                              {catalogStatus.current_phase}
+                              {catalogStatus.total > 0
+                                ? ` · ${catalogStatus.done}/${catalogStatus.total}`
+                                : ""}
+                            </dd>
+                          </div>
+                        )}
+                        {catalogStatus.catalogs
+                          .filter((c) => c.last_error)
+                          .slice(0, 2)
+                          .map((c) => (
+                            <p
+                              key={c.id ?? c.channel_url}
+                              className="text-xs text-red-400"
+                            >
+                              {c.channel_name || c.channel_url}: {c.last_error}
+                            </p>
+                          ))}
+                        {!catalogStatus.running &&
+                          catalogStatus.queue_depth === 0 && (
+                            <p className="text-xs text-gray-500">
+                              Idle
+                              {catalogStatus.catalogs.filter(
+                                (c) => c.status === "ready"
+                              ).length
+                                ? ` · ${
+                                    catalogStatus.catalogs.filter(
+                                      (c) => c.status === "ready"
+                                    ).length
+                                  } channel(s) indexed`
+                                : ""}
+                            </p>
+                          )}
+                      </dl>
+                    ) : (
+                      <p className="text-sm text-gray-500">Loading…</p>
+                    )}
+                  </div>
+                )}
+
+                {aiStatus &&
+                  (aiStatus.queue_depth > 0 ||
+                    aiStatus.current_job ||
+                    aiStatus.pulling.length > 0) && (
+                    <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                          AI
+                        </p>
+                        {aiStatus.paused ? (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await api.resumeAi().catch(() => undefined);
+                              await saveAi({ paused: false });
+                              showToast("AI queue resumed");
+                            }}
+                            className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-2.5 py-1 text-xs text-accent hover:bg-accent/25"
+                          >
+                            Resume
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await api.pauseAi().catch(() => undefined);
+                              await saveAi({ paused: true });
+                              showToast("AI queue paused");
+                            }}
+                            className={PANEL_BTN + " !px-2.5 !py-1 !text-xs"}
+                          >
+                            Pause
+                          </button>
+                        )}
+                      </div>
+                      <AiQueueStatusDl
+                        aiStatus={aiStatus}
+                        systemStats={systemStats}
+                        compact
+                      />
+                    </div>
+                  )}
+
+                {metadataSyncStatus?.running && (
+                  <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-3">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Metadata sync
+                    </p>
+                    <p className="text-sm text-gray-300">
+                      {metadataSyncStatus.done + metadataSyncStatus.failed}/
+                      {metadataSyncStatus.total}
+                      {metadataSyncStatus.current_title
+                        ? ` — ${metadataSyncStatus.current_title}`
+                        : ""}
+                    </p>
+                    {metadataSyncStatus.last_error && (
+                      <p className="mt-1 text-xs text-red-400">
+                        {metadataSyncStatus.last_error}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Section>
+
+            <Section
               title="Storage"
               hidden={!match("storage", "disk", "space", "library")}
             >

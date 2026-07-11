@@ -27,9 +27,23 @@ DEFAULTS: dict[str, Any] = {
     "progress_expiry_days": 14,
     "continue_watching_days": 7,
     "metadata_sync_interval_hours": 24,
+    "channel_catalog_enabled": True,
+    "channel_catalog_max_videos": 1000,
     "ui": {},
     "ai": dict(AI_DEFAULTS),
 }
+
+CHANNEL_CATALOG_MAX_MIN = 100
+CHANNEL_CATALOG_MAX_MAX = 5000
+CHANNEL_CATALOG_DESC_LIMIT = 200
+
+
+def clamp_catalog_max_videos(value: Any) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        n = int(DEFAULTS["channel_catalog_max_videos"])
+    return max(CHANNEL_CATALOG_MAX_MIN, min(CHANNEL_CATALOG_MAX_MAX, n))
 
 
 def _path() -> Path:

@@ -4,6 +4,7 @@ import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import ChannelFeed from "../components/ChannelFeed";
 import Collapse from "../components/Collapse";
+import HelpTip from "../components/HelpTip";
 import LoadingIndicator from "../components/LoadingIndicator";
 import PlaybackQueue from "../components/PlaybackQueue";
 import RecommendedHome from "../components/RecommendedHome";
@@ -28,6 +29,52 @@ import {
 } from "../utils/miniPlayerLayout";
 
 const TAG_MIN_COUNT = 3;
+
+const FEED_SEARCH_TIP =
+  "Horde indexes this channel’s library in the background so you can search beyond what’s loaded on the page.";
+
+const FEED_INDEX_TIP =
+  "Horde indexes this channel’s uploads (titles, and descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Indexing runs in the background and respects your max-videos setting.";
+
+type CatalogProgress = {
+  indexed: number;
+  /** Full YouTube library size when known. */
+  total: number | null;
+  /** Per-channel index cap from settings. */
+  maxVideos: number;
+  complete: boolean;
+  status: string | null;
+  indexing: boolean;
+};
+
+/** Denominator for UI: real library size if under the cap, else the cap. */
+function catalogDenominator(p: CatalogProgress): number {
+  if (p.total != null && p.total > 0) {
+    return Math.min(p.total, p.maxVideos);
+  }
+  return Math.max(1, p.maxVideos);
+}
+
+function formatCatalogProgress(p: CatalogProgress): string {
+  const { indexed, total, complete, indexing } = p;
+  const denom = catalogDenominator(p);
+  const capped =
+    total != null && total > p.maxVideos;
+
+  if (indexing) {
+    return `Indexing… ${indexed}/${denom}`;
+  }
+  if (complete && indexed > 0) {
+    if (!capped && (total == null || indexed >= total || indexed >= denom)) {
+      return `Fully indexed (${indexed})`;
+    }
+    return `${indexed}/${denom} indexed`;
+  }
+  if (indexed > 0) {
+    return `${indexed}/${denom} indexed`;
+  }
+  return "Not indexed";
+}
 const TAG_PAGE_SIZE = 20;
 const CHANNEL_SIDEBAR_LIMIT = 30;
 const FEED_LAYOUT_KEY = "horde.channelFeed.layout";
@@ -621,6 +668,130 @@ export default function Library() {
   }, [activeChannel, channels, activeChannelUrl]);
 
   const onFeedTab = Boolean(activeChannel) && channelTab === "feed";
+  const [indexingChannel, setIndexingChannel] = useState(false);
+  const [catalogProgress, setCatalogProgress] = useState<CatalogProgress | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (!onFeedTab || !activeChannelUrl) {
+      setCatalogProgress(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      api
+        .getChannelCatalogStatus()
+        .then((status) => {
+          if (cancelled) return;
+          const norm = (u: string) =>
+            u
+              .replace(/\/+$/, "")
+              .replace(
+                /\/(videos|shorts|streams|playlists|featured|about)$/i,
+                ""
+              )
+              .toLowerCase();
+          const target = norm(activeChannelUrl);
+          const hit =
+            status.catalogs.find((c) => norm(c.channel_url) === target) ?? null;
+          const isCurrentJob =
+            status.running &&
+            status.current_channel_url != null &&
+            norm(status.current_channel_url) === target;
+          const maxVideos = hit?.max_videos || 1000;
+          if (!hit) {
+            setCatalogProgress({
+              indexed: isCurrentJob ? status.done : 0,
+              total: null,
+              maxVideos,
+              complete: false,
+              status: null,
+              indexing: isCurrentJob,
+            });
+            return;
+          }
+          const indexing =
+            hit.status === "queued" ||
+            hit.status === "indexing" ||
+            isCurrentJob;
+          // While the flat list is still growing, prefer live done count.
+          const indexed =
+            isCurrentJob &&
+            status.current_phase === "flat" &&
+            status.done > 0
+              ? status.done
+              : hit.indexed_count;
+          setCatalogProgress({
+            indexed,
+            total: hit.channel_total,
+            maxVideos,
+            complete: hit.complete && !indexing,
+            status: hit.status,
+            indexing,
+          });
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const id = setInterval(load, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [onFeedTab, activeChannelUrl]);
+
+  const triggerChannelIndex = async () => {
+    if (!activeChannel || indexingChannel) return;
+    if (!activeChannelUrl) {
+      showToast("No YouTube URL known for this channel yet");
+      return;
+    }
+    setIndexingChannel(true);
+    try {
+      const result = await api.indexChannelCatalog({
+        channel: activeChannel,
+        url: activeChannelUrl,
+        force: true,
+      });
+      showToast(result.detail || "Channel indexing queued");
+      // Refresh progress immediately so the status line updates.
+      api
+        .getChannelCatalogStatus()
+        .then((status) => {
+          if (!activeChannelUrl) return;
+          const norm = (u: string) =>
+            u
+              .replace(/\/+$/, "")
+              .replace(
+                /\/(videos|shorts|streams|playlists|featured|about)$/i,
+                ""
+              )
+              .toLowerCase();
+          const target = norm(activeChannelUrl);
+          const hit = status.catalogs.find(
+            (c) => norm(c.channel_url) === target
+          );
+          setCatalogProgress({
+            indexed: hit?.indexed_count ?? 0,
+            total: hit?.channel_total ?? null,
+            maxVideos: hit?.max_videos || 1000,
+            complete: false,
+            status: hit?.status ?? "queued",
+            indexing: true,
+          });
+        })
+        .catch(() => undefined);
+    } catch (err) {
+      showToast(
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not start channel indexing"
+      );
+    } finally {
+      setIndexingChannel(false);
+    }
+  };
 
   const showContinueRow =
     settings.showContinueWatching &&
@@ -991,12 +1162,24 @@ export default function Library() {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {onFeedTab ? (
               <>
-                <input
-                  value={feedSearch}
-                  onChange={(e) => setFeedSearch(e.target.value)}
-                  placeholder="Search"
-                  className="ui-panel ui-interactive block w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:w-64"
-                />
+                <div className="flex w-full items-center gap-1.5 md:w-auto">
+                  <input
+                    value={feedSearch}
+                    onChange={(e) => setFeedSearch(e.target.value)}
+                    placeholder="Search"
+                    className="ui-panel ui-interactive block w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:w-64"
+                  />
+                  <HelpTip text={FEED_SEARCH_TIP} placement="bottom" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void triggerChannelIndex()}
+                  disabled={indexingChannel || !activeChannelUrl}
+                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Index this channel’s uploads for search"
+                >
+                  {indexingChannel ? "Queuing…" : "Index channel"}
+                </button>
                 <select
                   value={feedSort}
                   onChange={(e) =>
@@ -1159,6 +1342,12 @@ export default function Library() {
             >
               Show more ({hiddenTagCount})
             </button>
+          )}
+          {onFeedTab && catalogProgress && (
+            <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
+              {formatCatalogProgress(catalogProgress)}
+              <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
+            </span>
           )}
         </div>
         )}

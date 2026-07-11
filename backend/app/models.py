@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -132,6 +133,70 @@ class AiJobKind(str, Enum):
     enrich_tags = "enrich_tags"
     score_duplicates = "score_duplicates"
     refresh_categories = "refresh_categories"
+    embed_catalog_video = "embed_catalog_video"
+
+
+class ChannelCatalogStatus(str, Enum):
+    idle = "idle"
+    queued = "queued"
+    indexing = "indexing"
+    ready = "ready"
+    error = "error"
+
+
+class ChannelCatalog(SQLModel, table=True):
+    __tablename__ = "channel_catalogs"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    channel_url: str = Field(index=True, unique=True)
+    channel_name: Optional[str] = Field(default=None, index=True)
+    status: ChannelCatalogStatus = Field(
+        default=ChannelCatalogStatus.idle, index=True
+    )
+    indexed_count: int = 0
+    # Best-known total uploads on the YouTube channel (from yt-dlp playlist_count).
+    channel_total: Optional[int] = None
+    # True when indexing reached the end of the channel (not stopped by max cap).
+    complete: bool = Field(default=False)
+    max_videos: int = 1000
+    phase: Optional[str] = None  # flat | descriptions | embed
+    last_error: Optional[str] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class ChannelCatalogVideo(SQLModel, table=True):
+    __tablename__ = "channel_catalog_videos"
+    __table_args__ = (UniqueConstraint("catalog_id", "yt_id"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    catalog_id: int = Field(foreign_key="channel_catalogs.id", index=True)
+    yt_id: str = Field(index=True)
+    url: str
+    title: Optional[str] = None
+    duration: Optional[float] = None
+    view_count: Optional[int] = None
+    published_at: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    description: Optional[str] = None
+    # 0 = newest upload in the indexed window.
+    position: int = Field(default=0, index=True)
+    indexed_at: datetime = Field(default_factory=utcnow)
+
+
+class ChannelCatalogEmbedding(SQLModel, table=True):
+    __tablename__ = "channel_catalog_embeddings"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    catalog_video_id: int = Field(
+        foreign_key="channel_catalog_videos.id", index=True, unique=True
+    )
+    model: str = Field(default="nomic-embed-text")
+    dim: int = 0
+    vector: bytes = Field(default=b"")
+    content_hash: str = Field(default="")
+    updated_at: datetime = Field(default_factory=utcnow)
 
 
 class VideoEmbedding(SQLModel, table=True):
@@ -181,6 +246,9 @@ class AiJob(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     kind: AiJobKind = Field(index=True)
     video_id: Optional[int] = Field(default=None, foreign_key="videos.id", index=True)
+    catalog_video_id: Optional[int] = Field(
+        default=None, foreign_key="channel_catalog_videos.id", index=True
+    )
     status: AiJobStatus = Field(default=AiJobStatus.queued, index=True)
     attempts: int = 0
     run_after: Optional[datetime] = Field(default=None, index=True)

@@ -25,14 +25,20 @@ _wake = threading.Event()
 
 
 def _active_job_exists(
-    session: Session, kind: AiJobKind, video_id: Optional[int]
+    session: Session,
+    kind: AiJobKind,
+    video_id: Optional[int],
+    catalog_video_id: Optional[int] = None,
 ) -> bool:
     statement = select(AiJob).where(
         AiJob.kind == kind,
         AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running]),  # type: ignore[attr-defined]
     )
-    if video_id is None:
+    if catalog_video_id is not None:
+        statement = statement.where(AiJob.catalog_video_id == catalog_video_id)
+    elif video_id is None:
         statement = statement.where(AiJob.video_id.is_(None))  # type: ignore[attr-defined]
+        statement = statement.where(AiJob.catalog_video_id.is_(None))  # type: ignore[attr-defined]
     else:
         statement = statement.where(AiJob.video_id == video_id)
     return session.exec(statement).first() is not None
@@ -42,14 +48,18 @@ def enqueue_job(
     kind: AiJobKind,
     video_id: Optional[int] = None,
     *,
+    catalog_video_id: Optional[int] = None,
     force: bool = False,
 ) -> Optional[int]:
     with Session(engine) as session:
-        if not force and _active_job_exists(session, kind, video_id):
+        if not force and _active_job_exists(
+            session, kind, video_id, catalog_video_id=catalog_video_id
+        ):
             return None
         job = AiJob(
             kind=kind,
             video_id=video_id,
+            catalog_video_id=catalog_video_id,
             status=AiJobStatus.queued,
             run_after=utcnow(),
             created_at=utcnow(),
@@ -271,6 +281,7 @@ def queue_breakdown() -> dict[str, int]:
         "enrich_tags": 0,
         "refresh_categories": 0,
         "score_duplicates": 0,
+        "embed_catalog_video": 0,
         "running": 0,
     }
     with Session(engine) as session:
@@ -299,13 +310,19 @@ def current_job_info() -> Optional[dict]:
             return None
         kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
         ai = app_settings.ai_settings()
-        if kind == AiJobKind.embed_video.value or kind == "embed_video":
+        if kind in (
+            AiJobKind.embed_video.value,
+            "embed_video",
+            AiJobKind.embed_catalog_video.value,
+            "embed_catalog_video",
+        ):
             model = str(ai.get("embed_model") or "")
         else:
             model = str(ai.get("chat_model") or "")
         info: dict = {
             "kind": kind,
             "video_id": job.video_id,
+            "catalog_video_id": job.catalog_video_id,
             "title": None,
             "channel": None,
             "has_thumbnail": False,
@@ -317,6 +334,15 @@ def current_job_info() -> Optional[dict]:
                 info["title"] = video.title
                 info["channel"] = video.channel
                 info["has_thumbnail"] = bool(video.thumbnail_path)
+        elif job.catalog_video_id:
+            from ...models import ChannelCatalog, ChannelCatalogVideo
+
+            cv = session.get(ChannelCatalogVideo, job.catalog_video_id)
+            if cv is not None:
+                info["title"] = cv.title
+                catalog = session.get(ChannelCatalog, cv.catalog_id)
+                if catalog is not None:
+                    info["channel"] = catalog.channel_name
         return info
 
 
@@ -328,6 +354,8 @@ def current_job_label() -> Optional[str]:
         return f"{info['kind']}: {info['title']}"
     if info.get("video_id"):
         return f"{info['kind']} (video {info['video_id']})"
+    if info.get("catalog_video_id"):
+        return f"{info['kind']} (catalog {info['catalog_video_id']})"
     return str(info["kind"])
 
 
@@ -361,10 +389,13 @@ def _process_one() -> bool:
         job_id = job.id
         kind = job.kind
         video_id = job.video_id
+        catalog_video_id = job.catalog_video_id
 
     try:
         with Session(engine) as session:
-            tasks.dispatch(session, kind, video_id)
+            tasks.dispatch(
+                session, kind, video_id, catalog_video_id=catalog_video_id
+            )
         with Session(engine) as session:
             job = session.get(AiJob, job_id)
             if job is not None:

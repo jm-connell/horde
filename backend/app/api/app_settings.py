@@ -43,12 +43,22 @@ class AiSettingsUpdate(BaseModel):
 
 class AppSettingsRead(BaseModel):
     progress_expiry_days: int
+    metadata_sync_interval_hours: int = 24
+    channel_catalog_enabled: bool = True
+    channel_catalog_max_videos: int = 1000
     ui: dict[str, Any] = Field(default_factory=dict)
     ai: AiSettingsRead = Field(default_factory=AiSettingsRead)
 
 
 class AppSettingsUpdate(BaseModel):
     progress_expiry_days: Optional[int] = Field(default=None, ge=1, le=365)
+    metadata_sync_interval_hours: Optional[int] = Field(default=None, ge=1, le=168)
+    channel_catalog_enabled: Optional[bool] = None
+    channel_catalog_max_videos: Optional[int] = Field(
+        default=None,
+        ge=app_settings.CHANNEL_CATALOG_MAX_MIN,
+        le=app_settings.CHANNEL_CATALOG_MAX_MAX,
+    )
     ui: Optional[dict[str, Any]] = None
     ai: Optional[AiSettingsUpdate] = None
 
@@ -61,15 +71,28 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     return AiSettingsRead(**{k: v for k, v in merged.items() if k in allowed})
 
 
-@router.get("", response_model=AppSettingsRead)
-def get_settings():
-    data = app_settings.load()
+def _settings_read(data: dict[str, Any]) -> AppSettingsRead:
     ui = data.get("ui") if isinstance(data.get("ui"), dict) else {}
+    try:
+        interval = int(data.get("metadata_sync_interval_hours") or 24)
+    except (TypeError, ValueError):
+        interval = 24
+    interval = max(1, min(168, interval))
     return AppSettingsRead(
         progress_expiry_days=data["progress_expiry_days"],
+        metadata_sync_interval_hours=interval,
+        channel_catalog_enabled=bool(data.get("channel_catalog_enabled", True)),
+        channel_catalog_max_videos=app_settings.clamp_catalog_max_videos(
+            data.get("channel_catalog_max_videos")
+        ),
         ui=ui,
         ai=_ai_read(data),
     )
+
+
+@router.get("", response_model=AppSettingsRead)
+def get_settings():
+    return _settings_read(app_settings.load())
 
 
 @router.patch("", response_model=AppSettingsRead)
@@ -77,6 +100,14 @@ def update_settings(payload: AppSettingsUpdate):
     updates: dict = {}
     if payload.progress_expiry_days is not None:
         updates["progress_expiry_days"] = payload.progress_expiry_days
+    if payload.metadata_sync_interval_hours is not None:
+        updates["metadata_sync_interval_hours"] = payload.metadata_sync_interval_hours
+    if payload.channel_catalog_enabled is not None:
+        updates["channel_catalog_enabled"] = payload.channel_catalog_enabled
+    if payload.channel_catalog_max_videos is not None:
+        updates["channel_catalog_max_videos"] = app_settings.clamp_catalog_max_videos(
+            payload.channel_catalog_max_videos
+        )
     if payload.ui is not None:
         updates["ui"] = payload.ui
     if payload.ai is not None:
@@ -85,9 +116,4 @@ def update_settings(payload: AppSettingsUpdate):
         if "base_url" in ai_updates:
             invalidate_resolved_url()
     data = app_settings.save(updates) if updates else app_settings.load()
-    ui = data.get("ui") if isinstance(data.get("ui"), dict) else {}
-    return AppSettingsRead(
-        progress_expiry_days=data["progress_expiry_days"],
-        ui=ui,
-        ai=_ai_read(data),
-    )
+    return _settings_read(data)

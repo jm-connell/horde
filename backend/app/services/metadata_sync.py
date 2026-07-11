@@ -298,6 +298,23 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
                 except Exception:  # noqa: BLE001
                     pass
 
+        try:
+            from . import channel_catalog
+
+            channel_catalog.refresh_stale_catalogs()
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Re-read interval so Settings changes apply without restart.
+        try:
+            from . import app_settings as settings_svc
+
+            interval_hours = int(
+                settings_svc.load().get("metadata_sync_interval_hours")
+                or interval_hours
+            )
+        except Exception:  # noqa: BLE001
+            pass
         threading.Event().wait(3600)
 
 

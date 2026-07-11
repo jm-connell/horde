@@ -866,12 +866,27 @@ def _complete_download(
         _remove_review_duplicates(session, info.get("id"), keep_id=video.id)
 
         video_id = video.id
+        catalog_channel_url = video.channel_url
+        catalog_channel_name = video.channel
 
     # Queue metadata embed + tag enrich (subtitles re-embed after finalize).
     try:
         from .ai import enqueue_for_video
 
         enqueue_for_video(video_id, include_tags=True, force=False)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Index channel library in the background on first download from a channel.
+    try:
+        if catalog_channel_url:
+            from . import channel_catalog
+
+            channel_catalog.enqueue_channel(
+                catalog_channel_url,
+                channel_name=catalog_channel_name,
+                force=False,
+            )
     except Exception:  # noqa: BLE001
         pass
 
@@ -1380,6 +1395,17 @@ def _entry_thumbnail_url(entry: dict[str, Any], vid: Optional[str]) -> Optional[
     return _best_thumbnail_url(entry, vid)
 
 
+def _playlist_count(info: dict[str, Any]) -> Optional[int]:
+    raw = info.get("playlist_count") or info.get("n_entries")
+    if raw is None:
+        return None
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
 def _channel_videos_url(channel_url: str) -> str:
     url = channel_url.strip().rstrip("/")
     if url.endswith("/videos"):
@@ -1460,6 +1486,7 @@ def fetch_channel_feed(
         "channel_url": info.get("uploader_url") or info.get("channel_url") or channel_url,
         "entries": entries,
         "has_more": len(entries) == limit,
+        "playlist_count": _playlist_count(info),
     }
     with _feed_cache_lock:
         _feed_cache[cache_key] = (now, result)

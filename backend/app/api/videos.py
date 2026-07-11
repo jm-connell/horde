@@ -15,6 +15,9 @@ from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
     BulkVideoNotes,
+    ChannelCatalogIndexRequest,
+    ChannelCatalogIndexResult,
+    ChannelCatalogStatusResponse,
     ChannelFeedEntry,
     ChannelFeedPage,
     ChannelRename,
@@ -30,7 +33,8 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import downloader, feed_meta_cache, library
+from ..services import channel_catalog, downloader, feed_meta_cache, library
+from ..services import app_settings as app_settings_svc
 from ..services.paths import (
     is_manual_import,
     manual_import_rel_path,
@@ -203,6 +207,103 @@ def search_channels(
     )
 
 
+@router.get("/channels/catalog/status", response_model=ChannelCatalogStatusResponse)
+def channel_catalog_status():
+    return ChannelCatalogStatusResponse(**channel_catalog.get_runtime_status())
+
+
+@router.post("/channels/catalog/index", response_model=ChannelCatalogIndexResult)
+def channel_catalog_index(
+    payload: ChannelCatalogIndexRequest,
+    session: Session = Depends(get_session),
+):
+    """Manually queue catalog indexing for one channel (or all library channels)."""
+    if not app_settings_svc.load().get("channel_catalog_enabled", True):
+        raise HTTPException(
+            status_code=400, detail="Channel catalog indexing is disabled"
+        )
+
+    channel_url = (payload.url or "").strip() or None
+    channel_name = (payload.channel or "").strip() or None
+
+    # No channel specified → index every library channel with a URL.
+    if not channel_url and not channel_name:
+        result = channel_catalog.enqueue_all_library_channels(force=payload.force)
+        return ChannelCatalogIndexResult(**result)
+
+    if not channel_url and channel_name:
+        channel_url = library.resolve_channel_url(session, channel_name)
+    if not channel_url:
+        raise HTTPException(
+            status_code=400,
+            detail="No YouTube channel URL known for this channel",
+        )
+
+    catalog_id = channel_catalog.enqueue_channel(
+        channel_url,
+        channel_name=channel_name,
+        force=payload.force,
+    )
+    if catalog_id is None:
+        return ChannelCatalogIndexResult(
+            queued=0,
+            skipped=1,
+            detail="Could not queue channel (disabled or unsupported URL)",
+        )
+    return ChannelCatalogIndexResult(
+        queued=1,
+        catalog_id=catalog_id,
+        detail=f"Queued indexing for {channel_name or channel_url}",
+    )
+
+
+@router.get("/channels/catalog/search", response_model=ChannelFeedPage)
+def channel_catalog_search(
+    q: str = Query(..., min_length=1),
+    channel: Optional[str] = None,
+    url: Optional[str] = None,
+    limit: int = Query(60, ge=1, le=200),
+    session: Session = Depends(get_session),
+):
+    channel_url = (url or "").strip() or None
+    channel_name = (channel or "").strip() or None
+    if not channel_url and channel_name:
+        channel_url = library.resolve_channel_url(session, channel_name)
+    if not channel_url:
+        return ChannelFeedPage(channel=channel_name, channel_url=None, entries=[], has_more=False)
+    raw_entries = channel_catalog.search_catalog(
+        session, channel_url, q, limit=limit
+    )
+    lib_map = library.youtube_library_map(session, channel=channel_name)
+    entries: list[ChannelFeedEntry] = []
+    for raw in raw_entries:
+        yt_id = raw.get("id")
+        lib = lib_map.get(yt_id) if yt_id else None
+        video_id = lib[0] if lib else None
+        library_height = lib[1] if lib else None
+        entries.append(
+            ChannelFeedEntry(
+                id=yt_id,
+                url=raw["url"],
+                title=raw.get("title"),
+                duration=raw.get("duration"),
+                thumbnail_url=raw.get("thumbnail_url"),
+                view_count=raw.get("view_count"),
+                published_at=raw.get("published_at"),
+                in_library=video_id is not None,
+                video_id=video_id,
+                library_height_px=library_height,
+            )
+        )
+    return ChannelFeedPage(
+        channel=channel_name,
+        channel_url=channel_url,
+        entries=entries,
+        has_more=False,
+        from_catalog=True,
+    )
+
+
 @router.get("/channels/feed", response_model=ChannelFeedPage)
 def channel_feed(
     channel: Optional[str] = None,
@@ -217,12 +318,30 @@ def channel_feed(
         channel_url = library.resolve_channel_url(session, channel_name)
     if not channel_url:
         return ChannelFeedPage(channel=channel_name, channel_url=None, entries=[], has_more=False)
+
+    # Kick off / refresh catalog in the background without blocking the response.
     try:
-        data = downloader.fetch_channel_feed(channel_url, offset=offset, limit=limit)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=400, detail=f"Could not load channel feed: {exc}"
-        ) from exc
+        channel_catalog.maybe_enqueue_for_feed(
+            channel_url, channel_name=channel_name
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    data = channel_catalog.catalog_feed_page(
+        session, channel_url, offset=offset, limit=limit
+    )
+    from_catalog = bool(data and data.get("from_catalog"))
+    indexing = bool(data and data.get("indexing"))
+
+    if data is None:
+        try:
+            data = downloader.fetch_channel_feed(channel_url, offset=offset, limit=limit)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=400, detail=f"Could not load channel feed: {exc}"
+            ) from exc
+        from_catalog = False
+        indexing = False
 
     lib_map = library.youtube_library_map(session, channel=channel_name)
     yt_ids = [str(e["id"]) for e in (data.get("entries") or []) if e.get("id")]
@@ -286,51 +405,80 @@ def channel_feed(
                 max_height=int(max_height) if max_height else None,
             )
         )
-    if to_cache:
+    if to_cache and not from_catalog:
         feed_meta_cache.upsert_many(to_cache)
 
     # Background-fill missing view counts / dates for a few entries (non-blocking).
-    missing = [
-        e
-        for e in entries
-        if e.id and (e.view_count is None or not e.published_at)
-    ][:8]
-    if missing:
+    if not from_catalog:
+        missing = [
+            e
+            for e in entries
+            if e.id and (e.view_count is None or not e.published_at)
+        ][:8]
+        if missing:
 
-        def _enrich(ids_urls: list[tuple[str, str]]) -> None:
-            updates: list[dict] = []
-            for yt_id, entry_url in ids_urls:
-                try:
-                    preview = downloader.extract_preview(entry_url)
-                except Exception:  # noqa: BLE001
-                    continue
-                if preview.get("is_playlist"):
-                    continue
-                row: dict = {"id": yt_id}
-                if preview.get("view_count") is not None:
-                    row["view_count"] = preview["view_count"]
-                if preview.get("thumbnail_url"):
-                    row["thumbnail_url"] = preview["thumbnail_url"]
-                # Best-effort published date from a second light extract is expensive;
-                # view_count alone already improves the next feed load.
-                if len(row) > 1:
-                    updates.append(row)
-            if updates:
-                feed_meta_cache.upsert_many(updates)
+            def _enrich(ids_urls: list[tuple[str, str]]) -> None:
+                updates: list[dict] = []
+                for yt_id, entry_url in ids_urls:
+                    try:
+                        preview = downloader.extract_preview(entry_url)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    if preview.get("is_playlist"):
+                        continue
+                    row: dict = {"id": yt_id}
+                    if preview.get("view_count") is not None:
+                        row["view_count"] = preview["view_count"]
+                    if preview.get("thumbnail_url"):
+                        row["thumbnail_url"] = preview["thumbnail_url"]
+                    if len(row) > 1:
+                        updates.append(row)
+                if updates:
+                    feed_meta_cache.upsert_many(updates)
 
-        import threading
+            import threading
 
-        threading.Thread(
-            target=_enrich,
-            args=([(e.id, e.url) for e in missing if e.id],),
-            daemon=True,
-        ).start()
+            threading.Thread(
+                target=_enrich,
+                args=([(e.id, e.url) for e in missing if e.id],),
+                daemon=True,
+            ).start()
+
+    progress = channel_catalog.catalog_progress(session, channel_url)
+    # Prefer live page flags when serving from catalog mid-index.
+    if from_catalog:
+        indexing = indexing or bool(progress.get("indexing"))
+    else:
+        indexing = bool(progress.get("indexing"))
 
     return ChannelFeedPage(
         channel=channel_name or data.get("channel"),
         channel_url=data.get("channel_url") or channel_url,
         entries=entries,
         has_more=bool(data.get("has_more")),
+        indexing=indexing,
+        from_catalog=from_catalog,
+        catalog_indexed=int(
+            data.get("catalog_indexed")
+            if data.get("catalog_indexed") is not None
+            else progress.get("catalog_indexed")
+            or 0
+        ),
+        catalog_total=(
+            data.get("catalog_total")
+            if data.get("catalog_total") is not None
+            else progress.get("catalog_total")
+        ),
+        catalog_complete=bool(
+            data.get("catalog_complete")
+            if data.get("catalog_complete") is not None
+            else progress.get("catalog_complete")
+        ),
+        catalog_status=(
+            data.get("catalog_status")
+            if data.get("catalog_status") is not None
+            else progress.get("catalog_status")
+        ),
     )
 
 

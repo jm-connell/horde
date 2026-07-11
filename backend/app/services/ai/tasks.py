@@ -9,8 +9,8 @@ from typing import Any, Optional
 
 from sqlmodel import Session, select
 
-from ...models import AiCategory, AiJobKind, Video, VideoAiMeta, utcnow
-from .. import app_settings, library
+from ...models import AiCategory, AiJobKind, ChannelCatalogEmbedding, ChannelCatalogVideo, Video, VideoAiMeta, utcnow
+from .. import app_settings, channel_catalog, library
 from . import embeddings, text as ai_text
 from .provider import get_provider
 
@@ -39,6 +39,42 @@ def run_embed_video(session: Session, video_id: Optional[int]) -> None:
     if video_id is None:
         raise RuntimeError("embed_video requires video_id")
     embeddings.embed_video(session, video_id)
+
+
+def run_embed_catalog_video(
+    session: Session, catalog_video_id: Optional[int]
+) -> None:
+    if catalog_video_id is None:
+        raise RuntimeError("embed_catalog_video requires catalog_video_id")
+    video = session.get(ChannelCatalogVideo, catalog_video_id)
+    if video is None:
+        return
+    provider = get_provider()
+    if provider is None:
+        raise RuntimeError("Ollama not available")
+    ai = app_settings.ai_settings()
+    model = str(ai.get("embed_model") or "nomic-embed-text")
+    digest = channel_catalog.catalog_content_hash(video)
+    existing = session.exec(
+        select(ChannelCatalogEmbedding).where(
+            ChannelCatalogEmbedding.catalog_video_id == catalog_video_id
+        )
+    ).first()
+    if existing is not None and existing.content_hash == digest:
+        return
+    doc = channel_catalog.catalog_document(video)
+    if not doc.strip():
+        return
+    vec = provider.embed(doc, model)
+    if existing is None:
+        existing = ChannelCatalogEmbedding(catalog_video_id=catalog_video_id)
+    existing.model = model
+    existing.dim = len(vec)
+    existing.vector = embeddings.pack_vector(vec)
+    existing.content_hash = digest
+    existing.updated_at = utcnow()
+    session.add(existing)
+    session.commit()
 
 
 def _tag_norm_key(tag: str) -> str:
@@ -214,9 +250,17 @@ def run_score_duplicates(session: Session, _video_id: Optional[int] = None) -> N
     return
 
 
-def dispatch(session: Session, kind: AiJobKind, video_id: Optional[int]) -> None:
+def dispatch(
+    session: Session,
+    kind: AiJobKind,
+    video_id: Optional[int],
+    *,
+    catalog_video_id: Optional[int] = None,
+) -> None:
     if kind == AiJobKind.embed_video:
         run_embed_video(session, video_id)
+    elif kind == AiJobKind.embed_catalog_video:
+        run_embed_catalog_video(session, catalog_video_id)
     elif kind == AiJobKind.enrich_tags:
         run_enrich_tags(session, video_id)
     elif kind == AiJobKind.refresh_categories:
