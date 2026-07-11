@@ -37,6 +37,15 @@ export interface PreviewSession {
   channelParam?: string | null;
 }
 
+export type MiniPlayerRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  right: number;
+  bottom: number;
+};
+
 interface PlaybackValue {
   current: Video | null;
   preview: PreviewSession | null;
@@ -47,6 +56,8 @@ interface PlaybackValue {
   playPreview: (session: PreviewSession) => void;
   /** Latest preview playback position (seconds). */
   getPreviewPosition: () => number;
+  /** Latest library playback position (seconds). */
+  getCurrentPosition: () => number;
   addToQueue: (video: Video) => void;
   playNext: (video: Video) => void;
   removeFromQueue: (id: number) => void;
@@ -56,6 +67,8 @@ interface PlaybackValue {
   registerDock: (el: HTMLElement | null) => void;
   /** True when the floating mini-player is showing (browsing away from Watch/Preview). */
   miniPlayerActive: boolean;
+  /** Live bounds of the floating mini-player (null when not mini). */
+  miniPlayerRect: MiniPlayerRect | null;
 }
 
 const Ctx = createContext<PlaybackValue | null>(null);
@@ -140,6 +153,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [miniPos, setMiniPosState] = useState<MiniPos | null>(null);
   const miniPosLiveRef = useRef<MiniPos | null>(null);
   const previewPosRef = useRef(0);
+  const libraryPosRef = useRef(0);
+  const recentWatchedRef = useRef<number[]>([]);
+  const [miniPlayerRect, setMiniPlayerRect] = useState<MiniPlayerRect | null>(
+    null
+  );
 
   useEffect(() => {
     try {
@@ -277,6 +295,41 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     }
   }, [dock, current, preview, activeSession, isMobile, mode, miniWidth, miniPos]);
 
+  const miniPlayerActive = Boolean(
+    activeSession && !dock && !( !isMobile && mode === "windowed")
+  );
+
+  // Publish mini-player bounds so floating UI (download panel / queue) can avoid it.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !miniPlayerActive) {
+      setMiniPlayerRect(null);
+      return;
+    }
+
+    const publish = () => {
+      const r = host.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      setMiniPlayerRect({
+        left: r.left,
+        top: r.top,
+        width: r.width,
+        height: r.height,
+        right: r.right,
+        bottom: r.bottom,
+      });
+    };
+
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(host);
+    window.addEventListener("resize", publish);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", publish);
+    };
+  }, [miniPlayerActive, miniWidth, miniPos, current?.id, preview?.url]);
+
   // Hide page scroll while windowed fullscreen is active.
   useEffect(() => {
     if (!isMobile && mode === "windowed" && activeSession) {
@@ -296,9 +349,18 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const playVideo = useCallback(
     (video: Video, opts?: { queue?: Video[] }) => {
+      setCurrent((prev) => {
+        if (prev?.id != null && prev.id !== video.id) {
+          recentWatchedRef.current = [
+            prev.id,
+            ...recentWatchedRef.current.filter((id) => id !== prev.id),
+          ].slice(0, 12);
+        }
+        return video;
+      });
       setPreview(null);
       previewPosRef.current = 0;
-      setCurrent(video);
+      libraryPosRef.current = video.last_position_sec || 0;
       if (opts?.queue) {
         setQueue(opts.queue.filter((v) => v.id !== video.id));
       } else {
@@ -311,10 +373,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const playPreview = useCallback((session: PreviewSession) => {
     setCurrent(null);
     previewPosRef.current = 0;
+    libraryPosRef.current = 0;
     setPreview(session);
   }, []);
 
   const getPreviewPosition = useCallback(() => previewPosRef.current, []);
+  const getCurrentPosition = useCallback(() => libraryPosRef.current, []);
 
   const addToQueue = useCallback((video: Video) => {
     setQueue((q) => (q.some((v) => v.id === video.id) ? q : [...q, video]));
@@ -352,6 +416,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setCurrent(null);
     setPreview(null);
     previewPosRef.current = 0;
+    libraryPosRef.current = 0;
     setDock(null);
     setMiniPos(null);
   }, [setMiniPos]);
@@ -385,6 +450,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     (video: Video) => {
       clearUpNext();
       setPreview(null);
+      libraryPosRef.current = 0;
       setCurrent(video);
       setQueue((q) => q.filter((v) => v.id !== video.id));
       navigate(`/watch/${video.id}`);
@@ -429,18 +495,26 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
     if (preview) return;
-    if (current) api.saveProgress(current.id, 0).catch(() => undefined);
+    if (current) {
+      api.saveProgress(current.id, 0).catch(() => undefined);
+      recentWatchedRef.current = [
+        current.id,
+        ...recentWatchedRef.current.filter((id) => id !== current.id),
+      ].slice(0, 12);
+    }
     if (queueRef.current.length > 0) {
       advance();
       return;
     }
     if (!current || !settings.autoplayRelated) return;
     const endedId = current.id;
+    const exclude = new Set(recentWatchedRef.current);
+    exclude.add(endedId);
     api
-      .getRelatedVideos(endedId, 1)
+      .getRelatedVideos(endedId, 12)
       .then((rows) => {
         if (queueRef.current.length > 0) return;
-        const next = rows[0];
+        const next = rows.find((v) => !exclude.has(v.id));
         if (next) startUpNextCountdown(next);
       })
       .catch(() => undefined);
@@ -453,10 +527,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   ]);
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
-
-  const miniPlayerActive = Boolean(
-    activeSession && !dock && !( !isMobile && mode === "windowed")
-  );
 
   const libraryChapters = parseChapters(current?.description ?? null);
   const sponsorSegments = useSponsorBlock(
@@ -485,6 +555,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     playVideo,
     playPreview,
     getPreviewPosition,
+    getCurrentPosition,
     addToQueue,
     playNext,
     removeFromQueue,
@@ -493,12 +564,18 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     close,
     registerDock,
     miniPlayerActive,
+    miniPlayerRect,
   };
+
+  const streamSrc =
+    current != null
+      ? `${streamUrl(current.id)}?s=${current.file_size ?? 0}&h=${current.height_px ?? 0}`
+      : "";
 
   const playerPortal =
     current != null ? (
       <VideoPlayer
-        src={streamUrl(current.id)}
+        src={streamSrc}
         videoId={current.id}
         mimeType={mimeFromPath(current.file_path)}
         poster={thumbnailUrl(current)}
@@ -522,9 +599,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         volume={settings.volume}
         onVolumeChange={(v) => updateSettings({ volume: v })}
         initialPosition={current.last_position_sec}
-        onProgress={(sec) =>
-          saveProgress(current.id, sec, current.duration_sec)
-        }
+        onProgress={(sec) => {
+          libraryPosRef.current = sec;
+          saveProgress(current.id, sec, current.duration_sec);
+        }}
         chapters={libraryChapters}
         sponsorSegments={sponsorSegments}
         sponsorShowNotice={settings.sponsorBlockShowNotice}
@@ -542,6 +620,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           host.style.left = `${clamped.left}px`;
           host.style.top = `${clamped.top}px`;
           miniPosLiveRef.current = clamped;
+          setMiniPlayerRect({
+            left: clamped.left,
+            top: clamped.top,
+            width,
+            height,
+            right: clamped.left + width,
+            bottom: clamped.top + height,
+          });
         }}
         onMiniMoveEnd={() => {
           if (miniPosLiveRef.current) {
@@ -601,6 +687,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           host.style.left = `${clamped.left}px`;
           host.style.top = `${clamped.top}px`;
           miniPosLiveRef.current = clamped;
+          setMiniPlayerRect({
+            left: clamped.left,
+            top: clamped.top,
+            width,
+            height,
+            right: clamped.left + width,
+            bottom: clamped.top + height,
+          });
         }}
         onMiniMoveEnd={() => {
           if (miniPosLiveRef.current) {

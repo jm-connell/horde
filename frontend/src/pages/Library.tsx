@@ -22,6 +22,10 @@ import {
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
 import type { ChannelStat, Playlist, TagStat, Video } from "../types";
+import {
+  queueDockAlignClass,
+  queueDockStyle,
+} from "../utils/miniPlayerLayout";
 
 const TAG_MIN_COUNT = 3;
 const TAG_PAGE_SIZE = 20;
@@ -368,17 +372,21 @@ export default function Library() {
   const { showToast } = useToast();
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
   const { onJobCompleted } = useDownloads();
-  const { queue, miniPlayerActive } = usePlayback();
+  const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
   const [narrowViewport, setNarrowViewport] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 1100
   );
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
+  const [sidebarOverlayVisible, setSidebarOverlayVisible] = useState(false);
 
   useEffect(() => {
     const onResize = () => {
       const narrow = window.innerWidth < 1100;
       setNarrowViewport(narrow);
-      if (!narrow) setSidebarOverlayOpen(false);
+      if (!narrow) {
+        setSidebarOverlayOpen(false);
+        setSidebarOverlayVisible(false);
+      }
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -393,7 +401,11 @@ export default function Library() {
 
   const openSidebar = () => {
     if (narrowViewport) {
-      setSidebarOverlayOpen(true);
+      setSidebarOverlayVisible(true);
+      // Next frame so the enter transition runs from the closed state.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setSidebarOverlayOpen(true));
+      });
     } else {
       update({ sidebarCollapsed: false });
     }
@@ -403,6 +415,31 @@ export default function Library() {
     setSidebarOverlayOpen(false);
     update({ sidebarCollapsed: true });
   };
+
+  // Unmount overlay after exit transition completes.
+  useEffect(() => {
+    if (sidebarOverlayOpen) {
+      setSidebarOverlayVisible(true);
+      return;
+    }
+    if (!sidebarOverlayVisible) return;
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      setSidebarOverlayVisible(false);
+      return;
+    }
+    const t = window.setTimeout(() => setSidebarOverlayVisible(false), 320);
+    return () => window.clearTimeout(t);
+  }, [sidebarOverlayOpen, sidebarOverlayVisible]);
+
+  useEffect(() => {
+    if (!narrowViewport) {
+      setSidebarOverlayOpen(false);
+      setSidebarOverlayVisible(false);
+    }
+  }, [narrowViewport]);
 
   useEffect(() => {
     return onJobCompleted(() => setRefreshKey((k) => k + 1));
@@ -777,16 +814,22 @@ export default function Library() {
         </div>
       )}
       {/* Narrow: fixed overlay channel panel — close lives on the sticky rail */}
-      {narrowViewport && sidebarOverlayOpen && (
+      {narrowViewport && sidebarOverlayVisible && (
         <div className="fixed inset-0 z-50 lg:block">
           <button
             type="button"
             aria-label="Close channels"
-            className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm"
+            className={`absolute inset-0 bg-ink-950/60 backdrop-blur-sm transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              sidebarOverlayOpen ? "opacity-100" : "opacity-0"
+            }`}
             onClick={closeSidebar}
           />
-          <div className="absolute left-0 top-0 flex h-full max-w-[85vw] flex-col p-3 pt-20 pl-[3.25rem]">
-            <div className="ui-panel flex max-h-full w-56 flex-col overflow-hidden rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
+          <div
+            className={`absolute left-0 top-0 flex h-full max-w-[85vw] flex-col p-3 pt-20 pl-[3.25rem] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              sidebarOverlayOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
+            <div className="ui-panel ui-panel-legible flex max-h-full w-56 flex-col overflow-hidden rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
               <div className="mb-2 flex shrink-0 items-center px-2 pt-1">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Channels
@@ -823,7 +866,7 @@ export default function Library() {
               ‹
             </button>
           ) : !narrowViewport && !settings.sidebarCollapsed ? (
-            <div className="ui-panel h-fit w-56 rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
+            <div className="ui-panel ui-panel-legible h-fit w-56 rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
               <div className="mb-2 flex items-center justify-between px-2 pt-1">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Channels
@@ -1319,14 +1362,12 @@ export default function Library() {
 
       {showQueuePanel && queueDockedBottom && (
         <div
-          className={`pointer-events-none fixed bottom-0 z-30 w-[26rem] p-3 ${
-            miniPlayerActive ? "left-0" : "right-0"
-          }`}
+          style={queueDockStyle(miniPlayerActive ? miniPlayerRect : null)}
         >
           <div
-            className={`pointer-events-auto w-96 ${
-              miniPlayerActive ? "mr-auto" : "ml-auto"
-            }`}
+            className={`pointer-events-auto w-96 ${queueDockAlignClass(
+              miniPlayerActive ? miniPlayerRect : null
+            )}`}
           >
             <PlaybackQueue
               collapsible

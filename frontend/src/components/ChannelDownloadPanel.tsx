@@ -5,6 +5,7 @@ import {
   PRESET_ORDER,
   presetOptionLabel,
 } from "../presets";
+import { avoidMiniPlayerStyle } from "../utils/miniPlayerLayout";
 import type { ChannelStat } from "../types";
 import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
 import { youtubeThumbnailUrl } from "../utils";
@@ -39,34 +40,33 @@ export default function ChannelDownloadPanel({
   /** When true, lift panel above the bottom-docked playback queue. */
   queueDockedBottom?: boolean;
 }) {
-  const { queue, miniPlayerActive } = usePlayback();
+  const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
   const queueVisible = queue.length > 0;
-  const liftAboveQueue = queueVisible && queueDockedBottom && !miniPlayerActive;
-  // Mini owns bottom-right; lift panel above it (and above queue when both).
-  const liftAboveMini = miniPlayerActive;
+  const liftAboveQueue =
+    queueVisible && queueDockedBottom && !miniPlayerActive;
+
+  const positionStyle = avoidMiniPlayerStyle(
+    miniPlayerActive ? miniPlayerRect : null,
+    {
+      queueBottomLiftPx: liftAboveQueue
+        ? Math.min(
+            typeof window !== "undefined" ? window.innerHeight * 0.34 : 272,
+            272
+          )
+        : undefined,
+    }
+  );
 
   const editingItem = pending.find((p) => p.tempId === editingId) ?? null;
   const presetOptions =
     allPresets.length > 0 ? allPresets : [...PRESET_ORDER];
-
-  let positionClass = "bottom-4 right-4";
-  if (liftAboveMini) {
-    positionClass =
-      queueVisible && queueDockedBottom
-        ? "bottom-[min(48vh,20rem)] right-4 left-auto"
-        : "bottom-[min(42vh,16rem)] right-4 left-auto";
-  } else if (liftAboveQueue) {
-    positionClass = "bottom-[min(34vh,17rem)] right-4 left-auto";
-  }
 
   const panelShell =
     "ui-panel ui-panel-legible pointer-events-auto rounded-xl border border-ink-700 bg-ink-900 p-3 shadow-2xl ring-1 ring-ink-700";
 
   if (pending.length === 0) {
     return (
-      <div
-        className={`pointer-events-none fixed z-50 w-[22rem] max-w-[calc(100vw-2rem)] ${positionClass}`}
-      >
+      <div style={positionStyle}>
         <div className={`${panelShell} p-4`}>
           <label className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution
@@ -93,9 +93,7 @@ export default function ChannelDownloadPanel({
 
   return (
     <>
-      <div
-        className={`pointer-events-none fixed z-50 flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2 ${positionClass}`}
-      >
+      <div style={positionStyle} className="flex flex-col gap-2">
         <div className={panelShell}>
           <label className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution

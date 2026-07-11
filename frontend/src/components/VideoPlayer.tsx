@@ -1032,13 +1032,29 @@ export default function VideoPlayer({
 
   const progressPct = duration > 0 ? (current / duration) * 100 : 0;
 
+  // Shrink-wrap the player to the real video aspect so overlays (up-next) stay inside.
+  const fullStyle =
+    !isMini &&
+    !isNativeFullscreen &&
+    mode !== "windowed" &&
+    videoAspect != null
+      ? {
+          aspectRatio: `${videoAspect}` as const,
+          maxHeight: isMobile ? "70vh" : "85vh",
+          width: "100%",
+          marginInline: "auto",
+        }
+      : undefined;
+
   const wrapperClass = isMini
     ? `relative w-full bg-black${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
     : isNativeFullscreen
       ? "relative flex h-full w-full items-center justify-center bg-black"
       : mode === "windowed"
         ? "relative flex h-full w-full items-center justify-center bg-black"
-        : "relative h-full w-full bg-black";
+        : fullStyle
+          ? "relative mx-auto w-full bg-black"
+          : "relative h-full w-full bg-black";
 
   const innerClass =
     !isMini && (mode === "windowed" || isNativeFullscreen)
@@ -1056,16 +1072,18 @@ export default function VideoPlayer({
     ? "h-full w-full bg-black object-contain"
     : isNativeFullscreen || mode === "windowed"
       ? "h-full w-full object-contain"
-      : isMobile
-        ? "max-h-[70vh] w-full bg-black object-contain"
-        : "mx-auto max-h-[85vh] w-full bg-black object-contain";
+      : fullStyle
+        ? "h-full w-full bg-black object-contain"
+        : isMobile
+          ? "max-h-[70vh] w-full bg-black object-contain"
+          : "mx-auto max-h-[85vh] w-full bg-black object-contain";
   const subtitleClass = `sub-${subtitleSize}`;
 
   return (
     <div
       ref={playerRootRef}
       className={wrapperClass}
-      style={miniStyle}
+      style={miniStyle ?? fullStyle}
       onPointerDown={isMini && onMiniMove ? onMiniMovePointerDown : undefined}
     >
       <div
@@ -1614,10 +1632,22 @@ export default function VideoPlayer({
         )}
 
         {upNext && !isMini && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/65 p-4">
-            <div className="w-full max-w-sm overflow-hidden rounded-xl border border-ink-700 bg-ink-900/95 shadow-2xl ring-1 ring-ink-600">
+          <div className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden bg-black/65 p-2 sm:p-4">
+            <div
+              className={`flex max-h-full w-full max-w-sm flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900/95 shadow-2xl ring-1 ring-ink-600 ${
+                videoAspect != null && videoAspect >= 1.7
+                  ? "sm:max-h-[min(100%,18rem)]"
+                  : "max-h-full"
+              }`}
+            >
               {upNext.poster && (
-                <div className="aspect-video w-full overflow-hidden bg-ink-800">
+                <div
+                  className={`w-full shrink-0 overflow-hidden bg-ink-800 ${
+                    videoAspect != null && videoAspect >= 1.7
+                      ? "max-h-[4.5rem] sm:max-h-[6rem]"
+                      : "aspect-video max-h-[40%]"
+                  }`}
+                >
                   <img
                     src={upNext.poster}
                     alt=""
@@ -1625,7 +1655,7 @@ export default function VideoPlayer({
                   />
                 </div>
               )}
-              <div className="p-4">
+              <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-accent">
                   Playing next
                   {upNext.seconds > 0 ? ` in ${upNext.seconds}s` : ""}
@@ -1638,7 +1668,7 @@ export default function VideoPlayer({
                     {upNext.channel}
                   </p>
                 )}
-                <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-4 sm:gap-3">
                   <button
                     type="button"
                     onClick={onPlayUpNext}
@@ -1655,7 +1685,7 @@ export default function VideoPlayer({
                   </button>
                 </div>
                 {onAutoplayRelatedChange && (
-                  <label className="mt-4 flex items-center justify-between gap-3 border-t border-ink-700 pt-3">
+                  <label className="mt-3 flex items-center justify-between gap-3 border-t border-ink-700 pt-3 sm:mt-4">
                     <span className="text-xs text-gray-400">Autoplay related</span>
                     <button
                       type="button"

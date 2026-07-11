@@ -70,6 +70,7 @@ export default function Watch() {
     playVideo,
     registerDock,
     queue,
+    getCurrentPosition,
   } = usePlayback();
 
   const dockRef = useRef<HTMLDivElement>(null);
@@ -177,14 +178,32 @@ export default function Watch() {
     return onJobCompleted((completedId, event) => {
       if (!redownloadPending.current || completedId !== videoId) return;
       redownloadPending.current = false;
-      api.getVideo(videoId).then(setVideo).catch(() => undefined);
-      if (event?.quality_warning) {
-        showToast(event.quality_warning);
-      } else {
-        showToast("Redownload complete.");
-      }
+
+      void (async () => {
+        try {
+          const sec = getCurrentPosition();
+          if (sec >= 5) {
+            await api.saveProgress(videoId, sec).catch(() => undefined);
+          }
+          const updated = await api.getVideo(videoId);
+          const resumeAt = sec > 1 ? sec : updated.last_position_sec;
+          const merged = { ...updated, last_position_sec: resumeAt };
+          setVideo(merged);
+          playVideo(merged);
+          if (event?.quality_warning) {
+            showToast(event.quality_warning);
+          } else {
+            showToast("Redownload complete — switching to new quality");
+          }
+        } catch {
+          api.getVideo(videoId).then(setVideo).catch(() => undefined);
+          showToast(
+            event?.quality_warning || "Redownload complete."
+          );
+        }
+      })();
     });
-  }, [onJobCompleted, videoId, showToast]);
+  }, [onJobCompleted, videoId, showToast, getCurrentPosition, playVideo]);
 
   const onRedownload = async () => {
     setRedownloading(true);
