@@ -133,6 +133,21 @@ export interface DownloadPreview {
   preset_sizes: Record<string, number>;
 }
 
+export interface StreamPreviewMeta {
+  id: string | null;
+  title: string | null;
+  channel: string | null;
+  channel_url: string | null;
+  thumbnail_url: string | null;
+  description: string | null;
+  duration: number | null;
+  view_count: number | null;
+  source_url: string | null;
+  preview_height: number | null;
+  library_video_id: number | null;
+  available_presets: string[];
+}
+
 export interface DownloadOverrides {
   title_override?: string;
   channel_override?: string;

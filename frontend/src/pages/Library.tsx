@@ -445,6 +445,9 @@ export default function Library() {
   useEffect(() => {
     setActiveTag(searchParams.get("tag"));
     setActiveChannel(searchParams.get("channel"));
+    if (searchParams.get("tab") === "feed" && searchParams.get("channel")) {
+      setChannelTab("feed");
+    }
   }, [searchParams]);
 
   useEffect(() => {

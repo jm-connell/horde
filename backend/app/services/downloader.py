@@ -16,7 +16,7 @@ from ..models import DownloadJob, JobStatus, Video, VideoStatus
 from . import library, scanner
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .paths import find_video_by_path, to_rel_path
-from .ytdlp_common import apply_cookie_opts, youtube_extractor_args
+from .ytdlp_common import apply_cookie_opts, extract_info_gated, youtube_extractor_args
 
 # Live progress snapshots keyed by job id, consumed by the SSE endpoint.
 progress_store: dict[int, dict[str, Any]] = {}
@@ -1231,8 +1231,6 @@ def _estimate_preset_sizes(
 
 
 def extract_preview(url: str) -> dict[str, Any]:
-    import yt_dlp
-
     opts = apply_cookie_opts(
         {
             "quiet": True,
@@ -1242,8 +1240,7 @@ def extract_preview(url: str) -> dict[str, Any]:
             "extractor_args": youtube_extractor_args(),
         }
     )
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = _as_info(ydl.extract_info(url, download=False))
+    info = _as_info(extract_info_gated(url, opts, cache_key=f"preview:{url}"))
 
     if info.get("_type") == "playlist" or info.get("entries") is not None:
         entries = [e for e in (info.get("entries") or []) if e]
@@ -1652,3 +1649,163 @@ def search_youtube_channels(query: str, *, limit: int = 8) -> list[dict[str, Any
         if len(results) >= limit:
             break
     return results
+
+
+# --- In-app stream preview (progressive/muxed proxy) ---
+
+_PREVIEW_CACHE_TTL_SEC = 240
+_PREVIEW_MAX_HEIGHT = 720
+_preview_stream_cache: dict[str, dict[str, Any]] = {}
+_preview_stream_lock = threading.Lock()
+_preview_extract_sem = threading.Semaphore(2)
+
+
+def _pick_progressive_format(info: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Best muxed progressive format at or below preview height cap."""
+    formats = info.get("formats") or []
+    candidates: list[tuple[int, dict[str, Any]]] = []
+    for fmt in formats:
+        if not isinstance(fmt, dict):
+            continue
+        if not fmt.get("url"):
+            continue
+        vcodec = str(fmt.get("vcodec") or "none")
+        acodec = str(fmt.get("acodec") or "none")
+        if vcodec == "none" or acodec == "none":
+            continue
+        height = int(fmt.get("height") or 0)
+        if height > _PREVIEW_MAX_HEIGHT:
+            continue
+        ext = str(fmt.get("ext") or "")
+        # Prefer mp4, then higher height, then higher tbr.
+        score = height * 10
+        if ext == "mp4":
+            score += 100_000
+        elif ext in ("webm", "mkv"):
+            score += 50_000
+        tbr = fmt.get("tbr") or 0
+        try:
+            score += int(float(tbr))
+        except (TypeError, ValueError):
+            pass
+        candidates.append((score, fmt))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def _extract_preview_info(url: str) -> dict[str, Any]:
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
+    # Share cache with download-preview when possible (same URL, full extract).
+    info = _as_info(extract_info_gated(url, opts, cache_key=f"stream:{url}"))
+    if info.get("_type") == "playlist" or (
+        info.get("entries") is not None and not info.get("formats")
+    ):
+        raise ValueError("Playlists cannot be preview-streamed")
+    return info
+
+
+def extract_stream_preview_meta(url: str) -> dict[str, Any]:
+    """Metadata for the in-app preview page (includes description for chapters)."""
+    info = _extract_preview_info(url)
+    fmt = _pick_progressive_format(info)
+    preview_height = int(fmt["height"]) if fmt and fmt.get("height") else None
+    view_count = info.get("view_count")
+    if view_count is not None:
+        try:
+            view_count = int(view_count)
+        except (TypeError, ValueError):
+            view_count = None
+    duration = info.get("duration")
+    if duration is not None:
+        try:
+            duration = float(duration)
+        except (TypeError, ValueError):
+            duration = None
+    source = (
+        info.get("webpage_url")
+        or info.get("original_url")
+        or url
+    )
+    return {
+        "id": info.get("id"),
+        "title": info.get("title"),
+        "channel": info.get("uploader") or info.get("channel"),
+        "channel_url": info.get("uploader_url") or info.get("channel_url"),
+        "thumbnail_url": _best_thumbnail_url(info, info.get("id")),
+        "description": info.get("description"),
+        "duration": duration,
+        "view_count": view_count,
+        "source_url": source,
+        "preview_height": preview_height,
+        "available_presets": _available_presets(info),
+    }
+
+
+def resolve_preview_stream(url: str) -> dict[str, Any]:
+    """Resolve a short-lived progressive media URL for proxy streaming.
+
+    Returns dict with direct_url, http_headers, height, content_type, expires_at.
+    """
+    now = time.time()
+    with _preview_stream_lock:
+        cached = _preview_stream_cache.get(url)
+        if cached and cached.get("expires_at", 0) > now + 15:
+            return dict(cached)
+
+    with _preview_extract_sem:
+        # Re-check cache after waiting for the semaphore.
+        with _preview_stream_lock:
+            cached = _preview_stream_cache.get(url)
+            if cached and cached.get("expires_at", 0) > now + 15:
+                return dict(cached)
+
+        info = _extract_preview_info(url)
+        fmt = _pick_progressive_format(info)
+        if fmt is None:
+            raise RuntimeError(
+                "No progressive preview format available for this video"
+            )
+        direct = fmt.get("url")
+        if not direct:
+            raise RuntimeError("Preview format has no URL")
+
+        headers = dict(fmt.get("http_headers") or {})
+        # yt-dlp sometimes puts cookies on the format / info.
+        cookie = fmt.get("cookies") or info.get("cookies")
+        if cookie and "Cookie" not in headers:
+            headers["Cookie"] = cookie
+
+        ext = str(fmt.get("ext") or "mp4")
+        content_type = {
+            "mp4": "video/mp4",
+            "webm": "video/webm",
+            "mkv": "video/x-matroska",
+        }.get(ext, "video/mp4")
+
+        entry = {
+            "direct_url": str(direct),
+            "http_headers": headers,
+            "height": int(fmt["height"]) if fmt.get("height") else None,
+            "content_type": content_type,
+            "expires_at": now + _PREVIEW_CACHE_TTL_SEC,
+        }
+        with _preview_stream_lock:
+            _preview_stream_cache[url] = entry
+            # Bound cache size.
+            if len(_preview_stream_cache) > 64:
+                oldest = sorted(
+                    _preview_stream_cache.items(),
+                    key=lambda item: item[1].get("expires_at", 0),
+                )[:16]
+                for key, _ in oldest:
+                    _preview_stream_cache.pop(key, None)
+        return dict(entry)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, thumbnailUrl } from "../api";
 import AddToPlaylist from "../components/AddToPlaylist";
 import ChaptersList from "../components/ChaptersList";
@@ -24,6 +24,10 @@ import {
   parseChapters,
   stripChapterLines,
 } from "../utils";
+import {
+  clearWatchResume,
+  peekWatchResume,
+} from "../utils/watchHandoff";
 
 const RELATED_PAGE = 8;
 const RELATED_MAX = 48;
@@ -40,6 +44,7 @@ const PRESET_LABELS: Record<string, string> = {
 export default function Watch() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const videoId = Number(id);
   const [video, setVideo] = useState<Video | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,13 +76,26 @@ export default function Watch() {
 
   useEffect(() => {
     if (!videoId) return;
+    const fromHandoff = peekWatchResume(videoId);
+    const navResume = (location.state as { resumeAt?: number } | null)?.resumeAt;
+    const resumeAt =
+      fromHandoff ??
+      (typeof navResume === "number" && navResume > 1 ? navResume : null);
+
     api
       .getVideo(videoId)
       .then((v) => {
-        setVideo(v);
-        playVideo(v);
+        const merged =
+          resumeAt != null && resumeAt > 1
+            ? { ...v, last_position_sec: resumeAt }
+            : v;
+        clearWatchResume(videoId);
+        setVideo(merged);
+        playVideo(merged);
       })
       .catch(() => setError("Video not found"));
+    // location.state is read once for the preview handoff; do not re-fetch on state churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
   }, [videoId, playVideo]);
 
   useEffect(() => {

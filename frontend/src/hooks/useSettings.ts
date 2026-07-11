@@ -695,6 +695,56 @@ const EVENT = "horde:settings-changed";
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Module-level: one GET /api/settings for the whole app, not per useSettings mount. */
+let serverHydratePromise: Promise<void> | null = null;
+let serverHydrated = false;
+
+function ensureServerHydration(): Promise<void> {
+  if (serverHydrated) return Promise.resolve();
+  if (serverHydratePromise) return serverHydratePromise;
+
+  serverHydratePromise = api
+    .getAppSettings()
+    .then((remote) => {
+      const local = loadSettings();
+      const ui = remote.ui && typeof remote.ui === "object" ? remote.ui : {};
+      const hasServerUi = Object.keys(ui).length > 0;
+
+      if (hasServerUi) {
+        const patch = serverUiToSettingsPatch(ui);
+        const next = normalizeSettings({
+          ...local,
+          ...patch,
+          progressExpiryDays: remote.progress_expiry_days,
+        });
+        persistLocal(next);
+      } else {
+        // Migrate local → server
+        const uiPayload = settingsToServerUi(local);
+        if (Object.keys(uiPayload).length > 0) {
+          api
+            .updateAppSettings({
+              ui: uiPayload,
+              progress_expiry_days: remote.progress_expiry_days,
+            })
+            .catch(() => undefined);
+        }
+        if (remote.progress_expiry_days !== local.progressExpiryDays) {
+          persistLocal({
+            ...local,
+            progressExpiryDays: remote.progress_expiry_days,
+          });
+        }
+      }
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      serverHydrated = true;
+    });
+
+  return serverHydratePromise;
+}
+
 function scheduleServerSync(settings: Settings): void {
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
@@ -706,7 +756,6 @@ function scheduleServerSync(settings: Settings): void {
 
 export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   const [settings, setSettings] = useState<Settings>(loadSettings);
-  const hydrated = useRef(false);
 
   useEffect(() => {
     const sync = () => setSettings(loadSettings());
@@ -718,48 +767,12 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
     };
   }, []);
 
-  // Hydrate from server once
+  // Shared hydrate — only one network call no matter how many subscribers.
   useEffect(() => {
     let cancelled = false;
-    api
-      .getAppSettings()
-      .then((remote) => {
-        if (cancelled) return;
-        const local = loadSettings();
-        const ui = remote.ui && typeof remote.ui === "object" ? remote.ui : {};
-        const hasServerUi = Object.keys(ui).length > 0;
-
-        if (hasServerUi) {
-          const patch = serverUiToSettingsPatch(ui);
-          const next = normalizeSettings({
-            ...local,
-            ...patch,
-            progressExpiryDays: remote.progress_expiry_days,
-          });
-          persistLocal(next);
-        } else {
-          // Migrate local → server
-          const uiPayload = settingsToServerUi(local);
-          if (Object.keys(uiPayload).length > 0) {
-            api
-              .updateAppSettings({
-                ui: uiPayload,
-                progress_expiry_days: remote.progress_expiry_days,
-              })
-              .catch(() => undefined);
-          }
-          if (remote.progress_expiry_days !== local.progressExpiryDays) {
-            persistLocal({
-              ...local,
-              progressExpiryDays: remote.progress_expiry_days,
-            });
-          }
-        }
-        hydrated.current = true;
-      })
-      .catch(() => {
-        hydrated.current = true;
-      });
+    void ensureServerHydration().then(() => {
+      if (!cancelled) setSettings(loadSettings());
+    });
     return () => {
       cancelled = true;
     };

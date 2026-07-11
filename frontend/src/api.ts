@@ -15,6 +15,7 @@ import type {
   PlaylistPreviewData,
   RecommendationsResponse,
   StorageStats,
+  StreamPreviewMeta,
   SystemStats,
   TagStat,
   Video,
@@ -376,6 +377,12 @@ export const api = {
     );
   },
 
+  getPreviewMeta(url: string): Promise<StreamPreviewMeta> {
+    return request<StreamPreviewMeta>(
+      `/api/preview/meta?url=${encodeURIComponent(url)}`
+    );
+  },
+
   createDownload(
     url: string,
     quality_preset: string,
@@ -546,6 +553,10 @@ export function absoluteUrl(path: string): string {
 
 export function streamUrl(id: number): string {
   return `/api/videos/${id}/stream`;
+}
+
+export function previewStreamUrl(url: string): string {
+  return `/api/preview/stream?url=${encodeURIComponent(url)}`;
 }
 
 export function downloadFileUrl(id: number): string {

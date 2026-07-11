@@ -11,7 +11,17 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import DOWNLOADS_DIR, YTDLP_POT_BASE_URL, ensure_dirs
 from .database import engine, init_db
-from .api import ai, app_settings, backgrounds, downloads, playlists, review, system, videos
+from .api import (
+    ai,
+    app_settings,
+    backgrounds,
+    downloads,
+    playlists,
+    preview,
+    review,
+    system,
+    videos,
+)
 from .services.scanner import cleanup_orphans, start_scanner
 from .services import downloader, app_settings as app_settings_svc
 from .services.ai import start_ai_worker, stop_ai_worker
@@ -57,6 +67,7 @@ app.add_middleware(
 
 app.include_router(videos.router)
 app.include_router(downloads.router)
+app.include_router(preview.router)
 app.include_router(review.router)
 app.include_router(playlists.router)
 app.include_router(app_settings.router)

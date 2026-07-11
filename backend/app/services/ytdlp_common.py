@@ -1,6 +1,7 @@
 """Shared yt-dlp option helpers."""
 
 import threading
+import time
 from typing import Any, Optional
 
 from ..config import (
@@ -45,6 +46,16 @@ def pot_provider_configured() -> bool:
 _plugins_loaded = False
 _plugins_lock = threading.Lock()
 
+# Serialize metadata extracts the same way downloads stay at low concurrency —
+# bursty feed-card / preview extracts trip YouTube bot checks quickly.
+_extract_sem = threading.Semaphore(1)
+_extract_gate_lock = threading.Lock()
+_last_extract_at = 0.0
+_EXTRACT_MIN_INTERVAL_SEC = 1.25
+_info_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_INFO_CACHE_TTL_SEC = 180.0
+_INFO_CACHE_MAX = 48
+
 
 def ensure_plugins_loaded() -> None:
     """Load yt-dlp plugins once before concurrent download workers start."""
@@ -59,3 +70,52 @@ def ensure_plugins_loaded() -> None:
         with yt_dlp.YoutubeDL({"quiet": True}):
             pass
         _plugins_loaded = True
+
+
+def extract_info_gated(
+    url: str,
+    opts: dict[str, Any],
+    *,
+    cache_key: Optional[str] = None,
+) -> dict[str, Any]:
+    """Run yt-dlp extract_info with global spacing + short result cache.
+
+    Feed cards, download previews, and stream previews all share this gate so
+    scrolling a channel feed cannot open dozens of parallel YouTube sessions.
+    """
+    global _last_extract_at
+
+    key = cache_key or url
+    now = time.time()
+    cached = _info_cache.get(key)
+    if cached and cached[0] > now:
+        return dict(cached[1])
+
+    ensure_plugins_loaded()
+    import yt_dlp
+
+    with _extract_sem:
+        cached = _info_cache.get(key)
+        now = time.time()
+        if cached and cached[0] > now:
+            return dict(cached[1])
+
+        with _extract_gate_lock:
+            wait = _EXTRACT_MIN_INTERVAL_SEC - (now - _last_extract_at)
+        if wait > 0:
+            time.sleep(wait)
+
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        if not isinstance(info, dict):
+            info = {}
+
+        with _extract_gate_lock:
+            _last_extract_at = time.time()
+            _info_cache[key] = (_last_extract_at + _INFO_CACHE_TTL_SEC, info)
+            if len(_info_cache) > _INFO_CACHE_MAX:
+                oldest = sorted(_info_cache.items(), key=lambda item: item[1][0])
+                for drop_key, _ in oldest[: len(_info_cache) - _INFO_CACHE_MAX]:
+                    _info_cache.pop(drop_key, None)
+
+        return dict(info)

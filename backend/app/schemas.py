@@ -84,6 +84,21 @@ class DownloadPreview(BaseModel):
     preset_sizes: dict[str, int] = {}
 
 
+class StreamPreviewMeta(BaseModel):
+    id: Optional[str] = None
+    title: Optional[str] = None
+    channel: Optional[str] = None
+    channel_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    description: Optional[str] = None
+    duration: Optional[float] = None
+    view_count: Optional[int] = None
+    source_url: Optional[str] = None
+    preview_height: Optional[int] = None
+    library_video_id: Optional[int] = None
+    available_presets: list[str] = []
+
+
 class DownloadJobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

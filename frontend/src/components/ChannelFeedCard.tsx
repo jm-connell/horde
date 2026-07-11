@@ -10,8 +10,16 @@ import {
   formatViewCount,
   youtubeThumbnailUrl,
 } from "../utils";
+import { enqueueYtPreview } from "../utils/ytPreviewQueue";
 
 const maxResCache = new Map<string, string>();
+
+function previewHref(entry: ChannelFeedEntry, channelName: string): string {
+  const qs = new URLSearchParams();
+  qs.set("url", entry.url);
+  if (channelName) qs.set("channel", channelName);
+  return `/preview?${qs.toString()}`;
+}
 
 function FeedMetaRow({
   channelName,
@@ -131,11 +139,13 @@ function FeedThumbnail({
   duration,
   className,
   showDuration = true,
+  previewTo,
 }: {
   thumbSrc: string | null;
   duration: string;
   className: string;
   showDuration?: boolean;
+  previewTo?: string | null;
 }) {
   return (
     <div className={`relative overflow-hidden bg-ink-800 ${className}`}>
@@ -151,8 +161,20 @@ function FeedThumbnail({
           <span className="text-4xl">▶</span>
         </div>
       )}
+      {previewTo && (
+        <Link
+          to={previewTo}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/55 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+          aria-label="Preview video"
+        >
+          <span className="rounded-lg bg-black/70 px-3 py-1.5 text-sm font-semibold tracking-wide text-gray-100 ring-1 ring-white/20">
+            Preview
+          </span>
+        </Link>
+      )}
       {showDuration && duration && (
-        <span className="absolute bottom-2 right-2 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
+        <span className="pointer-events-none absolute bottom-2 right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
           {duration}
         </span>
       )}
@@ -191,6 +213,8 @@ export default function ChannelFeedCard({
   });
   const viewCount = entry.view_count;
   const dateLabel = entry.published_at ? formatDate(entry.published_at) : "";
+  const canPreview = !inLibrary && !!entry.url;
+  const previewTo = canPreview ? previewHref(entry, channelName) : null;
 
   useEffect(() => {
     if (entry.library_height_px) {
@@ -215,8 +239,7 @@ export default function ChannelFeedCard({
       ([hit]) => {
         if (!hit?.isIntersecting) return;
         observer.disconnect();
-        api
-          .previewDownload(entry.url)
+        enqueueYtPreview(() => api.previewDownload(entry.url))
           .then((preview) => {
             if (cancelled || preview.is_playlist) return;
             const label = maxPresetLabel(preview.available_presets);
@@ -246,6 +269,7 @@ export default function ChannelFeedCard({
           thumbSrc={thumbSrc}
           duration={duration}
           showDuration={false}
+          previewTo={previewTo}
           className="h-[4.5rem] w-32 shrink-0 rounded-lg"
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
@@ -286,6 +310,7 @@ export default function ChannelFeedCard({
       <FeedThumbnail
         thumbSrc={thumbSrc}
         duration={duration}
+        previewTo={previewTo}
         className="aspect-video w-full"
       />
       <div className="flex flex-col gap-1 p-3">

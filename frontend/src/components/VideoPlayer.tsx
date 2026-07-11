@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { absoluteUrl, streamUrl } from "../api";
+import LoadingIndicator from "./LoadingIndicator";
 import { useAirPlay } from "../hooks/useAirPlay";
 import { useChromecast } from "../hooks/useChromecast";
 import type { SubtitleSize } from "../hooks/useSettings";
@@ -167,9 +168,27 @@ export default function VideoPlayer({
   const skipNoticeTimer = useRef<number | null>(null);
   const prevTimeRef = useRef(0);
   const isSeekingRef = useRef(false);
+  const pendingSeekRef = useRef(initialPosition);
+  const [buffering, setBuffering] = useState(true);
   const suppressedSegmentsRef = useRef(new Set<string>());
   const [ccNotice, setCcNotice] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    pendingSeekRef.current = initialPosition;
+    const el = videoRef.current;
+    if (!el || initialPosition <= 1) return;
+    // Same-src handoff (preview → library): metadata already loaded, seek now.
+    if (el.readyState >= 1 && Number.isFinite(el.duration) && initialPosition < el.duration) {
+      if (Math.abs(el.currentTime - initialPosition) > 1.25) {
+        el.currentTime = initialPosition;
+      }
+      pendingSeekRef.current = 0;
+      if (!chromecast.casting) {
+        el.play().catch(() => undefined);
+      }
+    }
+  }, [initialPosition, src, chromecast.casting]);
 
   // Subtitle drag
   const subtitleDragRef = useRef<{ startY: number; startOffset: number } | null>(null);
@@ -189,6 +208,7 @@ export default function VideoPlayer({
     setSkipNotice(null);
     setCcNotice(null);
     setMediaError(null);
+    setBuffering(true);
   }, [src]);
 
   const undoSkip = useCallback(() => {
@@ -1018,12 +1038,12 @@ export default function VideoPlayer({
       ? "relative flex h-full w-full items-center justify-center bg-black"
       : mode === "windowed"
         ? "relative flex h-full w-full items-center justify-center bg-black"
-        : "relative w-full bg-black";
+        : "relative h-full w-full bg-black";
 
   const innerClass =
     !isMini && (mode === "windowed" || isNativeFullscreen)
       ? "relative h-full w-full"
-      : "relative";
+      : "relative h-full w-full";
 
   const miniStyle =
     isMini && videoAspect
@@ -1125,25 +1145,33 @@ export default function VideoPlayer({
           }}
           onSeeked={() => {
             isSeekingRef.current = false;
+            setBuffering(false);
           }}
           onSeeking={() => {
             isSeekingRef.current = true;
           }}
+          onWaiting={() => setBuffering(true)}
+          onStalled={() => setBuffering(true)}
+          onPlaying={() => setBuffering(false)}
+          onCanPlay={() => setBuffering(false)}
           onLoadedMetadata={(e) => {
             const el = e.currentTarget;
             setDuration(el.duration);
             if (el.videoWidth > 0 && el.videoHeight > 0) {
               setVideoAspect(el.videoWidth / el.videoHeight);
             }
-            if (
-              initialPosition > 5 &&
-              initialPosition < el.duration
-            ) {
-              el.currentTime = initialPosition;
+            const seekTarget = pendingSeekRef.current;
+            if (seekTarget > 1 && seekTarget < el.duration) {
+              el.currentTime = seekTarget;
+            }
+            pendingSeekRef.current = 0;
+            if (!chromecast.casting) {
+              el.play().catch(() => undefined);
             }
           }}
           onEnded={onEnded}
           onError={() => {
+            setBuffering(false);
             setMediaError("This video could not be played. The file may be incomplete or corrupt.");
           }}
           onPointerDown={isMini ? undefined : onVideoPointerDown}
@@ -1162,6 +1190,12 @@ export default function VideoPlayer({
             />
           ))}
         </video>
+
+        {buffering && !mediaError && !chromecast.casting && (
+          <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-black/35">
+            <LoadingIndicator label="Buffering" className="py-0" />
+          </div>
+        )}
 
         {mediaError && !isMini && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/80 px-4">

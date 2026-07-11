@@ -8,20 +8,45 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { api, streamUrl, subtitleUrl, thumbnailUrl } from "../api";
+import {
+  api,
+  previewStreamUrl,
+  streamUrl,
+  subtitleUrl,
+  thumbnailUrl,
+} from "../api";
 import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSponsorBlock } from "../hooks/useSponsorBlock";
-import { dedupeSubtitleTracks, parseChapters } from "../utils";
+import {
+  dedupeSubtitleTracks,
+  parseChapters,
+  type Chapter,
+} from "../utils";
 import type { Video } from "../types";
+
+export interface PreviewSession {
+  url: string;
+  title: string;
+  channel: string | null;
+  poster: string | null;
+  chapters: Chapter[];
+  sourceUrl?: string | null;
+  /** Channel query for expand / back navigation. */
+  channelParam?: string | null;
+}
 
 interface PlaybackValue {
   current: Video | null;
+  preview: PreviewSession | null;
   queue: Video[];
   mode: ViewMode;
   setMode: (mode: ViewMode) => void;
   playVideo: (video: Video, opts?: { queue?: Video[] }) => void;
+  playPreview: (session: PreviewSession) => void;
+  /** Latest preview playback position (seconds). */
+  getPreviewPosition: () => number;
   addToQueue: (video: Video) => void;
   playNext: (video: Video) => void;
   removeFromQueue: (id: number) => void;
@@ -29,7 +54,7 @@ interface PlaybackValue {
   clearQueue: () => void;
   close: () => void;
   registerDock: (el: HTMLElement | null) => void;
-  /** True when the floating mini-player is showing (browsing away from Watch). */
+  /** True when the floating mini-player is showing (browsing away from Watch/Preview). */
   miniPlayerActive: boolean;
 }
 
@@ -91,11 +116,20 @@ function loadQueue(): Video[] {
   }
 }
 
+function previewExpandPath(session: PreviewSession): string {
+  const qs = new URLSearchParams();
+  qs.set("url", session.url);
+  const channel = session.channelParam || session.channel;
+  if (channel) qs.set("channel", channel);
+  return `/preview?${qs.toString()}`;
+}
+
 export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const [settings, updateSettings] = useSettings();
   const isMobile = useIsMobile();
   const [current, setCurrent] = useState<Video | null>(null);
+  const [preview, setPreview] = useState<PreviewSession | null>(null);
   const [queue, setQueue] = useState<Video[]>(loadQueue);
   const [dock, setDock] = useState<HTMLElement | null>(null);
   const [mode, setModeState] = useState<ViewMode>(
@@ -105,6 +139,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Session-only; always starts bottom-right when a miniplayer opens after close.
   const [miniPos, setMiniPosState] = useState<MiniPos | null>(null);
   const miniPosLiveRef = useRef<MiniPos | null>(null);
+  const previewPosRef = useRef(0);
 
   useEffect(() => {
     try {
@@ -146,16 +181,18 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     hostRef.current = document.createElement("div");
   }
 
+  const activeSession = Boolean(current || preview);
+
   // Persist watch position at most once every 5s while playing.
   // Skip saving near the end (>=90%) — treat as finished (restart next time).
   const progressTimer = useRef<number | null>(null);
   const saveProgress = useCallback(
     (id: number, sec: number, durationSec?: number | null) => {
       if (
-        durationSec
-        && durationSec > 0
-        && sec > 0
-        && sec >= durationSec * 0.9
+        durationSec &&
+        durationSec > 0 &&
+        sec > 0 &&
+        sec >= durationSec * 0.9
       ) {
         if (progressTimer.current !== null) return;
         progressTimer.current = window.setTimeout(() => {
@@ -188,7 +225,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // re-targeting) keeps the <video> element alive so playback never restarts.
   useEffect(() => {
     const host = hostRef.current!;
-    if (!isMobile && mode === "windowed" && current) {
+    if (!isMobile && mode === "windowed" && activeSession) {
       document.body.appendChild(host);
       host.className = "fixed inset-0 z-50";
       host.style.width = "";
@@ -197,16 +234,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.style.top = "";
       host.style.right = "";
       host.style.bottom = "";
-    } else if (dock) {
+    } else if (dock && activeSession) {
       dock.appendChild(host);
-      host.className = "w-full";
+      host.className = "h-full w-full";
       host.style.width = "";
       host.style.maxWidth = "";
       host.style.left = "";
       host.style.top = "";
       host.style.right = "";
       host.style.bottom = "";
-    } else if (current) {
+      host.style.height = "";
+    } else if (activeSession) {
       document.body.appendChild(host);
       const defaultWidth = isMobile
         ? DEFAULT_MINI_WIDTH_MOBILE
@@ -237,17 +275,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.style.right = "";
       host.style.bottom = "";
     }
-  }, [dock, current, isMobile, mode, miniWidth, miniPos]);
+  }, [dock, current, preview, activeSession, isMobile, mode, miniWidth, miniPos]);
 
   // Hide page scroll while windowed fullscreen is active.
   useEffect(() => {
-    if (!isMobile && mode === "windowed" && current) {
+    if (!isMobile && mode === "windowed" && activeSession) {
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = "";
       };
     }
-  }, [isMobile, mode, current]);
+  }, [isMobile, mode, activeSession]);
 
   useEffect(() => {
     const host = hostRef.current!;
@@ -258,6 +296,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const playVideo = useCallback(
     (video: Video, opts?: { queue?: Video[] }) => {
+      setPreview(null);
+      previewPosRef.current = 0;
       setCurrent(video);
       if (opts?.queue) {
         setQueue(opts.queue.filter((v) => v.id !== video.id));
@@ -267,6 +307,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     },
     []
   );
+
+  const playPreview = useCallback((session: PreviewSession) => {
+    setCurrent(null);
+    previewPosRef.current = 0;
+    setPreview(session);
+  }, []);
+
+  const getPreviewPosition = useCallback(() => previewPosRef.current, []);
 
   const addToQueue = useCallback((video: Video) => {
     setQueue((q) => (q.some((v) => v.id === video.id) ? q : [...q, video]));
@@ -282,7 +330,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const reorderQueue = useCallback((from: number, to: number) => {
     setQueue((q) => {
-      if (from === to || from < 0 || to < 0 || from >= q.length || to >= q.length) {
+      if (
+        from === to ||
+        from < 0 ||
+        to < 0 ||
+        from >= q.length ||
+        to >= q.length
+      ) {
         return q;
       }
       const next = [...q];
@@ -296,6 +350,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const close = useCallback(() => {
     setCurrent(null);
+    setPreview(null);
+    previewPosRef.current = 0;
     setDock(null);
     setMiniPos(null);
   }, [setMiniPos]);
@@ -318,7 +374,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     clearUpNext();
-  }, [current?.id, clearUpNext]);
+  }, [current?.id, preview?.url, clearUpNext]);
 
   // Turning autoplay off mid-countdown cancels the overlay.
   useEffect(() => {
@@ -328,6 +384,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const playSuggested = useCallback(
     (video: Video) => {
       clearUpNext();
+      setPreview(null);
       setCurrent(video);
       setQueue((q) => q.filter((v) => v.id !== video.id));
       navigate(`/watch/${video.id}`);
@@ -361,6 +418,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setQueue((q) => {
       if (q.length === 0) return q;
       const [next, ...rest] = q;
+      setPreview(null);
       setCurrent(next);
       navigate(`/watch/${next.id}`);
       return rest;
@@ -370,6 +428,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Reset saved progress when a video finishes so it leaves Continue watching.
   // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
+    if (preview) return;
     if (current) api.saveProgress(current.id, 0).catch(() => undefined);
     if (queueRef.current.length > 0) {
       advance();
@@ -385,19 +444,25 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         if (next) startUpNextCountdown(next);
       })
       .catch(() => undefined);
-  }, [current, advance, startUpNextCountdown, settings.autoplayRelated]);
+  }, [
+    current,
+    preview,
+    advance,
+    startUpNextCountdown,
+    settings.autoplayRelated,
+  ]);
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
 
   const miniPlayerActive = Boolean(
-    current && !dock && !( !isMobile && mode === "windowed")
+    activeSession && !dock && !( !isMobile && mode === "windowed")
   );
 
-  const chapters = parseChapters(current?.description ?? null);
+  const libraryChapters = parseChapters(current?.description ?? null);
   const sponsorSegments = useSponsorBlock(
     current?.source_url ?? null,
     current?.file_path ?? "",
-    settings.sponsorBlockEnabled
+    settings.sponsorBlockEnabled && !preview
   );
 
   const refreshCurrentVideo = useCallback(() => {
@@ -406,17 +471,20 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [current]);
 
   useEffect(() => {
-    if (!current?.subtitles_pending) return;
+    if (!current?.subtitles_pending || preview) return;
     const timer = window.setInterval(refreshCurrentVideo, 3000);
     return () => window.clearInterval(timer);
-  }, [current?.id, current?.subtitles_pending, refreshCurrentVideo]);
+  }, [current?.id, current?.subtitles_pending, preview, refreshCurrentVideo]);
 
   const value: PlaybackValue = {
     current,
+    preview,
     queue,
     mode,
     setMode,
     playVideo,
+    playPreview,
+    getPreviewPosition,
     addToQueue,
     playNext,
     removeFromQueue,
@@ -427,84 +495,125 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     miniPlayerActive,
   };
 
+  const playerPortal =
+    current != null ? (
+      <VideoPlayer
+        src={streamUrl(current.id)}
+        videoId={current.id}
+        mimeType={mimeFromPath(current.file_path)}
+        poster={thumbnailUrl(current)}
+        mode={effectiveMode}
+        onModeChange={setMode}
+        variant={dock ? "full" : "mini"}
+        title={current.title}
+        tracks={dedupeSubtitleTracks(current.subtitles).map((t) => ({
+          lang: t.lang,
+          src: subtitleUrl(current.id, t.lang),
+        }))}
+        onEnded={handleEnded}
+        onExpand={() => navigate(`/watch/${current.id}`)}
+        onClose={close}
+        subtitleSize={settings.subtitleSize}
+        subtitleOffset={settings.subtitleOffset}
+        onSubtitleOffsetChange={(offset) =>
+          updateSettings({ subtitleOffset: offset })
+        }
+        defaultRate={settings.defaultPlaybackRate}
+        volume={settings.volume}
+        onVolumeChange={(v) => updateSettings({ volume: v })}
+        initialPosition={current.last_position_sec}
+        onProgress={(sec) =>
+          saveProgress(current.id, sec, current.duration_sec)
+        }
+        chapters={libraryChapters}
+        sponsorSegments={sponsorSegments}
+        sponsorShowNotice={settings.sponsorBlockShowNotice}
+        subtitlesPending={current.subtitles_pending}
+        onSubtitlesRefresh={refreshCurrentVideo}
+        miniWidth={miniWidth}
+        onMiniResize={setMiniWidth}
+        onMiniMove={(left, top) => {
+          const host = hostRef.current;
+          if (!host) return;
+          const width =
+            host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
+          const height = host.offsetHeight || width * (9 / 16);
+          const clamped = clampMiniPos(left, top, width, height);
+          host.style.left = `${clamped.left}px`;
+          host.style.top = `${clamped.top}px`;
+          miniPosLiveRef.current = clamped;
+        }}
+        onMiniMoveEnd={() => {
+          if (miniPosLiveRef.current) {
+            setMiniPos(miniPosLiveRef.current);
+          }
+        }}
+        upNext={
+          upNext
+            ? {
+                title: upNext.title,
+                channel: upNext.channel,
+                poster: thumbnailUrl(upNext),
+                seconds: upNextSeconds ?? 0,
+              }
+            : null
+        }
+        onCancelUpNext={clearUpNext}
+        onPlayUpNext={upNext ? () => playSuggested(upNext) : undefined}
+        autoplayRelated={settings.autoplayRelated}
+        onAutoplayRelatedChange={(enabled) =>
+          updateSettings({ autoplayRelated: enabled })
+        }
+      />
+    ) : preview != null ? (
+      <VideoPlayer
+        src={previewStreamUrl(preview.url)}
+        mimeType="video/mp4"
+        poster={preview.poster}
+        mode={effectiveMode}
+        onModeChange={setMode}
+        variant={dock ? "full" : "mini"}
+        title={preview.title}
+        onEnded={handleEnded}
+        onExpand={() => navigate(previewExpandPath(preview))}
+        onClose={close}
+        subtitleSize={settings.subtitleSize}
+        subtitleOffset={settings.subtitleOffset}
+        onSubtitleOffsetChange={(offset) =>
+          updateSettings({ subtitleOffset: offset })
+        }
+        defaultRate={settings.defaultPlaybackRate}
+        volume={settings.volume}
+        onVolumeChange={(v) => updateSettings({ volume: v })}
+        onProgress={(sec) => {
+          previewPosRef.current = sec;
+        }}
+        chapters={preview.chapters}
+        miniWidth={miniWidth}
+        onMiniResize={setMiniWidth}
+        onMiniMove={(left, top) => {
+          const host = hostRef.current;
+          if (!host) return;
+          const width =
+            host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
+          const height = host.offsetHeight || width * (9 / 16);
+          const clamped = clampMiniPos(left, top, width, height);
+          host.style.left = `${clamped.left}px`;
+          host.style.top = `${clamped.top}px`;
+          miniPosLiveRef.current = clamped;
+        }}
+        onMiniMoveEnd={() => {
+          if (miniPosLiveRef.current) {
+            setMiniPos(miniPosLiveRef.current);
+          }
+        }}
+      />
+    ) : null;
+
   return (
     <Ctx.Provider value={value}>
       {children}
-      {current &&
-        createPortal(
-          <VideoPlayer
-            src={streamUrl(current.id)}
-            videoId={current.id}
-            mimeType={mimeFromPath(current.file_path)}
-            poster={thumbnailUrl(current)}
-            mode={effectiveMode}
-            onModeChange={setMode}
-            variant={dock ? "full" : "mini"}
-            title={current.title}
-            tracks={dedupeSubtitleTracks(current.subtitles).map((t) => ({
-              lang: t.lang,
-              src: subtitleUrl(current.id, t.lang),
-            }))}
-            onEnded={handleEnded}
-            onExpand={() => navigate(`/watch/${current.id}`)}
-            onClose={close}
-            subtitleSize={settings.subtitleSize}
-            subtitleOffset={settings.subtitleOffset}
-            onSubtitleOffsetChange={(offset) =>
-              updateSettings({ subtitleOffset: offset })
-            }
-            defaultRate={settings.defaultPlaybackRate}
-            volume={settings.volume}
-            onVolumeChange={(v) => updateSettings({ volume: v })}
-            initialPosition={current.last_position_sec}
-            onProgress={(sec) =>
-              saveProgress(current.id, sec, current.duration_sec)
-            }
-            chapters={chapters}
-            sponsorSegments={sponsorSegments}
-            sponsorShowNotice={settings.sponsorBlockShowNotice}
-            subtitlesPending={current.subtitles_pending}
-            onSubtitlesRefresh={refreshCurrentVideo}
-            miniWidth={miniWidth}
-            onMiniResize={setMiniWidth}
-            onMiniMove={(left, top) => {
-              const host = hostRef.current;
-              if (!host) return;
-              const width = host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
-              const height =
-                host.offsetHeight || width * (9 / 16);
-              const clamped = clampMiniPos(left, top, width, height);
-              // Apply immediately so fast drags don't lag behind React state.
-              host.style.left = `${clamped.left}px`;
-              host.style.top = `${clamped.top}px`;
-              miniPosLiveRef.current = clamped;
-            }}
-            onMiniMoveEnd={() => {
-              if (miniPosLiveRef.current) {
-                setMiniPos(miniPosLiveRef.current);
-              }
-            }}
-            upNext={
-              upNext
-                ? {
-                    title: upNext.title,
-                    channel: upNext.channel,
-                    poster: thumbnailUrl(upNext),
-                    seconds: upNextSeconds ?? 0,
-                  }
-                : null
-            }
-            onCancelUpNext={clearUpNext}
-            onPlayUpNext={
-              upNext ? () => playSuggested(upNext) : undefined
-            }
-            autoplayRelated={settings.autoplayRelated}
-            onAutoplayRelatedChange={(enabled) =>
-              updateSettings({ autoplayRelated: enabled })
-            }
-          />,
-          hostRef.current
-        )}
+      {playerPortal && createPortal(playerPortal, hostRef.current)}
     </Ctx.Provider>
   );
 }

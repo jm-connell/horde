@@ -5,6 +5,7 @@ import History from "./pages/History";
 import Download from "./pages/Download";
 import Review from "./pages/Review";
 import Watch from "./pages/Watch";
+import Preview from "./pages/Preview";
 import Settings from "./pages/Settings";
 import Playlists from "./pages/Playlists";
 import PlaylistDetail from "./pages/PlaylistDetail";
@@ -42,6 +43,7 @@ function AppRoutes() {
         <Route path="/review" element={<Review />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/watch/:id" element={<Watch />} />
+        <Route path="/preview" element={<Preview />} />
       </Routes>
     </main>
   );
