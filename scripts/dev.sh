@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start Horde backend + frontend for local development.
-# Usage: ./scripts/dev.sh
+# Usage: ./start.sh   (or ./scripts/dev.sh)
 
 set -euo pipefail
 
@@ -13,10 +13,41 @@ BACKEND_PID=""
 FRONTEND_PID=""
 
 cleanup() {
-  if [[ -n "$FRONTEND_PID" ]]; then kill "$FRONTEND_PID" 2>/dev/null || true; fi
-  if [[ -n "$BACKEND_PID" ]]; then kill "$BACKEND_PID" 2>/dev/null || true; fi
+  if [[ -n "${FRONTEND_PID}" ]]; then kill "${FRONTEND_PID}" 2>/dev/null || true; fi
+  if [[ -n "${BACKEND_PID}" ]]; then kill "${BACKEND_PID}" 2>/dev/null || true; fi
 }
 trap cleanup EXIT INT TERM
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required command: $1" >&2
+    echo "On Fedora: sudo dnf install $2" >&2
+    exit 1
+  fi
+}
+
+require_cmd python3 "python3"
+require_cmd curl "curl"
+require_cmd npm "nodejs npm"
+
+VENV="$ROOT/.venv"
+if [[ ! -x "$VENV/bin/python" ]]; then
+  echo "Creating Python venv at $VENV ..."
+  python3 -m venv "$VENV"
+fi
+# shellcheck source=/dev/null
+source "$VENV/bin/activate"
+
+if [[ ! -f "$VENV/.horde-reqs-stamp" ]] || [[ "$ROOT/backend/requirements.txt" -nt "$VENV/.horde-reqs-stamp" ]]; then
+  echo "Installing backend dependencies ..."
+  pip install -r "$ROOT/backend/requirements.txt"
+  touch "$VENV/.horde-reqs-stamp"
+fi
+
+if [[ ! -d "$ROOT/frontend/node_modules" ]]; then
+  echo "Installing frontend dependencies ..."
+  (cd "$ROOT/frontend" && npm install)
+fi
 
 wait_for_backend() {
   local url="http://127.0.0.1:8080/api/health"
@@ -33,7 +64,7 @@ wait_for_backend() {
 echo "Starting backend on http://127.0.0.1:8080 ..."
 (
   cd "$ROOT/backend"
-  uvicorn app.main:app --reload --port 8080
+  python -m uvicorn app.main:app --reload --port 8080
 ) &
 BACKEND_PID=$!
 
