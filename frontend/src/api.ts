@@ -20,6 +20,7 @@ import type {
   TagStat,
   Video,
   VideoUpdate,
+  SpriteMeta,
 } from "./types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -192,6 +193,14 @@ export const api = {
     return request<Video>(`/api/videos/${id}/thumbnail/candidates/${index}`, {
       method: "POST",
     });
+  },
+
+  getSpriteMeta(id: number): Promise<SpriteMeta> {
+    return request<SpriteMeta>(`/api/videos/${id}/sprites/meta`);
+  },
+
+  ensureSprites(id: number): Promise<{ status: "ready" | "generating" }> {
+    return request(`/api/videos/${id}/sprites/generate`, { method: "POST" });
   },
 
   listChannels(params: ChannelQuery = {}): Promise<ChannelStat[]> {
@@ -603,6 +612,14 @@ export const api = {
 
 export function thumbnailUrl(video: Video): string | null {
   return video.has_thumbnail ? `/api/thumbnails/${video.id}` : null;
+}
+
+export function spritesMetaUrl(id: number): string {
+  return `/api/videos/${id}/sprites/meta`;
+}
+
+export function spritesImageUrl(id: number): string {
+  return `/api/videos/${id}/sprites`;
 }
 
 export function absoluteUrl(path: string): string {

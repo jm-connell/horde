@@ -14,6 +14,13 @@ export type Theme =
   | "sunset"
   | "forest"
   | "slate"
+  | "sleek"
+  | "minimal-teal"
+  | "vibrant-indigo"
+  | "earthy"
+  | "frozen"
+  | "neon-pop"
+  | "mocha"
   | "custom";
 
 export interface CustomColors {
@@ -324,6 +331,13 @@ const VALID_THEMES = new Set<string>([
   "sunset",
   "forest",
   "slate",
+  "sleek",
+  "minimal-teal",
+  "vibrant-indigo",
+  "earthy",
+  "frozen",
+  "neon-pop",
+  "mocha",
   "custom",
 ]);
 

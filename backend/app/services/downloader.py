@@ -758,6 +758,12 @@ def _finalize_in_background(
             enqueue_for_video(video_id, include_tags=False, force=False)
         except Exception:  # noqa: BLE001
             pass
+        try:
+            from .sprites import enqueue_sprite_generation
+
+            enqueue_sprite_generation(video_id)
+        except Exception:  # noqa: BLE001
+            pass
 
     threading.Thread(target=run, daemon=True).start()
 

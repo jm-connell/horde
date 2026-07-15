@@ -1,5 +1,14 @@
 export type VideoStatus = "downloading" | "ready" | "error";
 
+export interface SpriteMeta {
+  interval_sec: number;
+  tile_width: number;
+  tile_height: number;
+  columns: number;
+  count: number;
+  duration_sec: number;
+}
+
 export interface SubtitleTrack {
   lang: string;
   auto: boolean;
@@ -17,6 +26,7 @@ export interface Video {
   notes: string | null;
   source_url: string | null;
   has_thumbnail: boolean;
+  has_sprites?: boolean;
   subtitles: SubtitleTrack[];
   file_path: string;
   duration_sec: number | null;

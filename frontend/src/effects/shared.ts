@@ -58,8 +58,17 @@ export function parseHexColor(hex: string): Rgb | null {
   ];
 }
 
+const LIGHT_THEMES = new Set([
+  "light",
+  "minimal-teal",
+  "earthy",
+  "frozen",
+  "mocha",
+]);
+
 export function isLightTheme(): boolean {
-  return document.documentElement.getAttribute("data-theme") === "light";
+  const theme = document.documentElement.getAttribute("data-theme");
+  return theme !== null && LIGHT_THEMES.has(theme);
 }
 
 export function rgba(rgb: Rgb, a: number): string {

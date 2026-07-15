@@ -23,6 +23,7 @@ class VideoRead(BaseModel):
     notes: Optional[str]
     source_url: Optional[str]
     has_thumbnail: bool
+    has_sprites: bool = False
     subtitles: list[SubtitleTrack]
     file_path: str
     duration_sec: Optional[float]

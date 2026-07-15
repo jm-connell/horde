@@ -175,6 +175,97 @@ html::-webkit-scrollbar-thumb:hover {
   --accent-deep: 59 130 246;
 }
 
+/* ─── Sleek Tech Dark (beta) ─── */
+[data-theme="sleek"] {
+  color-scheme: dark;
+  --ink-950: 15 15 18;
+  --ink-900: 26 26 34;
+  --ink-800: 34 34 44;
+  --ink-700: 46 46 60;
+  --ink-600: 64 64 82;
+  --accent: 0 212 255;
+  --accent-soft: 123 97 255;
+  --accent-deep: 0 170 204;
+}
+
+/* ─── Minimal Neutrals + Teal (beta) ─── */
+[data-theme="minimal-teal"] {
+  color-scheme: light;
+  --ink-950: 250 250 250;
+  --ink-900: 255 255 255;
+  --ink-800: 241 245 249;
+  --ink-700: 226 232 240;
+  --ink-600: 148 163 184;
+  --accent: 20 184 166;
+  --accent-soft: 45 212 191;
+  --accent-deep: 100 116 139;
+}
+
+/* ─── Vibrant Indigo (beta) ─── */
+[data-theme="vibrant-indigo"] {
+  color-scheme: dark;
+  --ink-950: 10 10 10;
+  --ink-900: 22 22 28;
+  --ink-800: 34 34 44;
+  --ink-700: 51 65 85;
+  --ink-600: 71 85 105;
+  --accent: 99 102 241;
+  --accent-soft: 165 180 252;
+  --accent-deep: 244 114 182;
+}
+
+/* ─── Earthy Modern (beta) ─── */
+[data-theme="earthy"] {
+  color-scheme: light;
+  --ink-950: 248 245 240;
+  --ink-900: 255 252 248;
+  --ink-800: 240 234 226;
+  --ink-700: 220 210 198;
+  --ink-600: 168 162 158;
+  --accent: 133 77 14;
+  --accent-soft: 234 88 12;
+  --accent-deep: 79 70 229;
+}
+
+/* ─── Frozen Blue Minimal (beta) ─── */
+[data-theme="frozen"] {
+  color-scheme: light;
+  --ink-950: 240 249 255;
+  --ink-900: 224 242 254;
+  --ink-800: 214 235 248;
+  --ink-700: 186 220 240;
+  --ink-600: 100 116 139;
+  --accent: 14 165 233;
+  --accent-soft: 56 189 248;
+  --accent-deep: 30 64 175;
+}
+
+/* ─── Neon Gradient Pop (beta) ─── */
+[data-theme="neon-pop"] {
+  color-scheme: dark;
+  --ink-950: 17 24 39;
+  --ink-900: 31 41 55;
+  --ink-800: 45 55 72;
+  --ink-700: 55 65 81;
+  --ink-600: 100 116 139;
+  --accent: 34 211 238;
+  --accent-soft: 192 38 211;
+  --accent-deep: 250 204 21;
+}
+
+/* ─── Soft Mocha & Sage (beta) ─── */
+[data-theme="mocha"] {
+  color-scheme: light;
+  --ink-950: 245 240 232;
+  --ink-900: 250 246 240;
+  --ink-800: 237 231 222;
+  --ink-700: 214 208 198;
+  --ink-600: 168 162 158;
+  --accent: 167 139 250;
+  --accent-soft: 74 222 128;
+  --accent-deep: 124 58 237;
+}
+
 html,
 body,
 #root {
@@ -213,31 +304,106 @@ body {
   color: #f1f5f9;
 }
 
-/* Light theme: remap Tailwind gray text utilities */
+[data-theme="sleek"] body {
+  color: #f0f0f5;
+}
+
+[data-theme="minimal-teal"] body {
+  color: #0f172a;
+}
+
+[data-theme="vibrant-indigo"] body {
+  color: #e2e8f0;
+}
+
+[data-theme="earthy"] body {
+  color: #1c1917;
+}
+
+[data-theme="frozen"] body {
+  color: #1e2937;
+}
+
+[data-theme="neon-pop"] body {
+  color: #f3e8ff;
+}
+
+[data-theme="mocha"] body {
+  color: #374151;
+}
+
+/* Light themes: remap Tailwind gray text utilities */
 [data-theme="light"] .text-gray-100,
-[data-theme="light"] .text-gray-200 {
+[data-theme="light"] .text-gray-200,
+[data-theme="minimal-teal"] .text-gray-100,
+[data-theme="minimal-teal"] .text-gray-200,
+[data-theme="earthy"] .text-gray-100,
+[data-theme="earthy"] .text-gray-200,
+[data-theme="frozen"] .text-gray-100,
+[data-theme="frozen"] .text-gray-200,
+[data-theme="mocha"] .text-gray-100,
+[data-theme="mocha"] .text-gray-200 {
   color: #0f0f0f;
 }
 
-[data-theme="light"] .text-gray-300 {
+[data-theme="light"] .text-gray-300,
+[data-theme="minimal-teal"] .text-gray-300,
+[data-theme="earthy"] .text-gray-300,
+[data-theme="frozen"] .text-gray-300,
+[data-theme="mocha"] .text-gray-300 {
   color: #1a1a1a;
 }
 
 [data-theme="light"] .text-gray-400,
-[data-theme="light"] .text-gray-500 {
+[data-theme="light"] .text-gray-500,
+[data-theme="minimal-teal"] .text-gray-400,
+[data-theme="minimal-teal"] .text-gray-500,
+[data-theme="earthy"] .text-gray-400,
+[data-theme="earthy"] .text-gray-500,
+[data-theme="frozen"] .text-gray-400,
+[data-theme="frozen"] .text-gray-500,
+[data-theme="mocha"] .text-gray-400,
+[data-theme="mocha"] .text-gray-500 {
   color: #606060;
 }
 
-[data-theme="light"] .placeholder-gray-500::placeholder {
+[data-theme="light"] .placeholder-gray-500::placeholder,
+[data-theme="minimal-teal"] .placeholder-gray-500::placeholder,
+[data-theme="earthy"] .placeholder-gray-500::placeholder,
+[data-theme="frozen"] .placeholder-gray-500::placeholder,
+[data-theme="mocha"] .placeholder-gray-500::placeholder {
   color: #909090;
 }
 
-/* Neon Cyber: subtle glow on accent controls */
-[data-theme="cyber"] input[type="range"].accent-scrubber::-webkit-slider-thumb {
+/* Theme-specific body text for light betas (override generic remap where needed) */
+[data-theme="minimal-teal"] .text-gray-100,
+[data-theme="minimal-teal"] .text-gray-200 {
+  color: #0f172a;
+}
+
+[data-theme="earthy"] .text-gray-100,
+[data-theme="earthy"] .text-gray-200 {
+  color: #1c1917;
+}
+
+[data-theme="frozen"] .text-gray-100,
+[data-theme="frozen"] .text-gray-200 {
+  color: #1e2937;
+}
+
+[data-theme="mocha"] .text-gray-100,
+[data-theme="mocha"] .text-gray-200 {
+  color: #374151;
+}
+
+/* Neon Cyber / Neon Pop: subtle glow on accent controls */
+[data-theme="cyber"] input[type="range"].accent-scrubber::-webkit-slider-thumb,
+[data-theme="neon-pop"] input[type="range"].accent-scrubber::-webkit-slider-thumb {
   box-shadow: 0 0 10px rgb(var(--accent) / 0.8);
 }
 
-[data-theme="cyber"] .bg-accent {
+[data-theme="cyber"] .bg-accent,
+[data-theme="neon-pop"] .bg-accent {
   box-shadow: 0 0 14px rgb(var(--accent) / 0.35);
 }
 

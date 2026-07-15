@@ -140,6 +140,21 @@ const THEMES: { value: Theme; label: string; preview: string }[] = [
   { value: "sunset", label: "Warm Sunset", preview: "#ff6b35" },
   { value: "forest", label: "Forest Deep", preview: "#22c55e" },
   { value: "slate", label: "Slate Minimal", preview: "#60a5fa" },
+  { value: "sleek", label: "Sleek Tech Dark (beta)", preview: "#00d4ff" },
+  {
+    value: "minimal-teal",
+    label: "Minimal Neutrals + Teal (beta)",
+    preview: "#14b8a6",
+  },
+  {
+    value: "vibrant-indigo",
+    label: "Vibrant Indigo (beta)",
+    preview: "#6366f1",
+  },
+  { value: "earthy", label: "Earthy Modern (beta)", preview: "#854d0e" },
+  { value: "frozen", label: "Frozen Blue Minimal (beta)", preview: "#0ea5e9" },
+  { value: "neon-pop", label: "Neon Gradient Pop (beta)", preview: "#22d3ee" },
+  { value: "mocha", label: "Soft Mocha & Sage (beta)", preview: "#a78bfa" },
   { value: "custom", label: "Custom", preview: "#22d3ee" },
 ];
 
@@ -1154,7 +1169,7 @@ export default function Settings() {
                     label: t.label,
                   }))}
                   onChange={(value) => update({ theme: value })}
-                  className="w-[15rem] min-w-[14rem]"
+                  className="w-[20rem] min-w-[16rem]"
                 />
                 <Collapse open={settings.theme === "custom"}>
                   <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
