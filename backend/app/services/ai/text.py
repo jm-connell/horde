@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Literal, Optional
 
 from ...config import DOWNLOADS_DIR
 from ...models import Video
@@ -140,6 +140,200 @@ def content_hash(video: Video, *, use_subtitles: bool = True) -> str:
 
 def subtitle_excerpt(video: Video, *, max_chars: int = 1500) -> str:
     return load_subtitle_text(video, max_chars=max_chars)
+
+
+def has_subtitle_text(video: Video) -> bool:
+    return bool(load_subtitle_text(video, max_chars=64).strip())
+
+
+_SUMMARY_DESC_CHARS = 1500
+SummaryLength = Literal["short", "medium", "long"]
+
+# Caps for stored text; prompts aim lower so models stay in range.
+_SUMMARY_LENGTH_SPEC: dict[str, dict[str, Any]] = {
+    "short": {
+        "label": "SHORT",
+        "sub_chars": 10_000,
+        "max_chars": 1800,
+        "word_range": "100–160",
+        "num_predict": 1400,
+        "length_rule": (
+            "1–2 short paragraphs separated by a blank line. "
+            "Stay within roughly 100–160 words; do not pad toward medium/long."
+        ),
+        "detail_rule": (
+            "Include specific names, games, products, places, or numbers from "
+            "the captions when they matter — avoid vague filler."
+        ),
+    },
+    "medium": {
+        "label": "MEDIUM",
+        "sub_chars": 16_000,
+        "max_chars": 2800,
+        "word_range": "200–280",
+        "num_predict": 2200,
+        "length_rule": (
+            "2–4 paragraphs separated by blank lines, covering setup, main beats, "
+            "and concrete details. Aim for about 200–280 words — longer than a "
+            "short blurb, shorter than long."
+        ),
+        "detail_rule": (
+            "Name concrete details from the captions: people, titles, gear, "
+            "locations, scores, and notable moments — not just high-level themes."
+        ),
+    },
+    "long": {
+        "label": "LONG",
+        "sub_chars": 24_000,
+        "max_chars": 3500,
+        "word_range": "300–400",
+        "num_predict": 3200,
+        "length_rule": (
+            "3–5 paragraphs separated by blank lines, walking through the arc "
+            "with specific beats. Target about 350 words (roughly 300–400). "
+            "A ~100–200 word blurb is too short for LONG."
+        ),
+        "detail_rule": (
+            "Be specific with grounded detail from the captions: named subjects, "
+            "what was demoed or argued, gear/settings mentioned, notable beats in order, "
+            "and distinctive quotes when useful. Prefer concrete over generic."
+        ),
+    },
+}
+
+# Back-compat alias used by tasks for a hard ceiling when length is unknown.
+SUMMARY_MAX_CHARS = int(_SUMMARY_LENGTH_SPEC["long"]["max_chars"])
+
+
+def normalize_summary_length(raw: Any) -> SummaryLength:
+    value = str(raw or "").strip().lower()
+    if value in _SUMMARY_LENGTH_SPEC:
+        return value  # type: ignore[return-value]
+    return "short"
+
+
+def summary_max_chars(length: SummaryLength | str | None = None) -> int:
+    spec = _SUMMARY_LENGTH_SPEC[normalize_summary_length(length)]
+    return int(spec["max_chars"])
+
+
+def summary_num_predict(length: SummaryLength | str | None = None) -> int:
+    spec = _SUMMARY_LENGTH_SPEC[normalize_summary_length(length)]
+    return int(spec["num_predict"])
+
+
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'])")
+
+
+def format_summary_paragraphs(
+    text: str,
+    *,
+    length: SummaryLength | str | None = None,
+) -> str:
+    """Normalize blank-line paragraphs; split long single blocks for medium/long."""
+    raw = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not raw:
+        return ""
+
+    # Collapse runs of spaces/tabs but keep newlines.
+    raw = re.sub(r"[ \t]+", " ", raw)
+    raw = re.sub(r" *\n *", "\n", raw)
+
+    parts = [p.strip() for p in re.split(r"\n\s*\n+", raw) if p.strip()]
+    if not parts:
+        parts = [raw]
+
+    # Single newlines inside a "paragraph" → spaces (models often soft-wrap).
+    parts = [re.sub(r"\n+", " ", p).strip() for p in parts]
+
+    length_key = normalize_summary_length(length)
+    target_paras = {"short": 2, "medium": 3, "long": 4}[length_key]
+
+    if len(parts) == 1 and length_key != "short":
+        sentences = [
+            s.strip()
+            for s in _SENTENCE_SPLIT.split(parts[0])
+            if s and s.strip()
+        ]
+        if len(sentences) >= 2:
+            # Chunk sentences into ~target_paras groups.
+            n = max(2, min(target_paras, len(sentences)))
+            chunk = max(1, (len(sentences) + n - 1) // n)
+            parts = []
+            for i in range(0, len(sentences), chunk):
+                chunk_text = " ".join(sentences[i : i + chunk]).strip()
+                if chunk_text:
+                    parts.append(chunk_text)
+            # Avoid a tiny leftover paragraph — merge into previous.
+            if len(parts) > 1 and len(parts[-1].split()) < 25:
+                parts[-2] = f"{parts[-2]} {parts[-1]}".strip()
+                parts.pop()
+
+    return "\n\n".join(parts)
+
+
+def summary_system_prompt(length: SummaryLength | str | None = None) -> str:
+    length_key = normalize_summary_length(length)
+    spec = _SUMMARY_LENGTH_SPEC[length_key]
+    return (
+        f"You write video summaries for a personal library. "
+        f"This request is {spec['label']}. "
+        f"Target word count for the summary field: {spec['word_range']} words. "
+        "Hit that range — do not write a short blurb when medium/long is requested. "
+        "Start immediately with what happens or what the video is about — "
+        "like a blurb, not a meta description. "
+        "Prefer specifics and concrete details from the source over vague "
+        "generalities. "
+        'Reply with JSON only: {"summary": "..."} — put paragraph breaks as '
+        "escaped newlines (\\n\\n) inside the summary string."
+    )
+
+
+def summary_prompt(
+    video: Video,
+    *,
+    length: SummaryLength | str | None = None,
+) -> str:
+    length_key = normalize_summary_length(length)
+    spec = _SUMMARY_LENGTH_SPEC[length_key]
+    desc = re.sub(r"\s+", " ", (video.description or "").strip())[:_SUMMARY_DESC_CHARS]
+    sub = load_subtitle_text(video, max_chars=int(spec["sub_chars"]))
+    channel = (video.channel or "").strip()
+    return (
+        f"Length setting: {spec['label']}\n"
+        f"Target word count: {spec['word_range']} words "
+        "(count the words in the summary text; stay in this range).\n\n"
+        "Write a spoiler-light summary before watching.\n"
+        "Rules:\n"
+        '- Return JSON: {"summary": "..."}.\n'
+        "- Put paragraph breaks inside the summary string as \\n\\n "
+        "(escaped newlines), not as raw line breaks outside JSON.\n"
+        f"- Word count: write about {spec['word_range']} words. "
+        f"{spec['length_rule']}\n"
+        f"- Detail: {spec['detail_rule']}\n"
+        "- Open with the substance: e.g. \"Aceu plays Apex Legends…\" or "
+        "\"A tour of a home network rack…\" — not framing like "
+        "\"In this archived video…\", \"In the video…\", "
+        "\"The creator [name] does…\", or \"This video is about…\".\n"
+        + (
+            f"- Prefer using the channel name ({channel}) as a natural subject "
+            "when it fits; do not introduce them as \"the creator\".\n"
+            if channel
+            else ""
+        )
+        + "- Cover the main topics and tone; stay spoiler-light.\n"
+        "- Recognize sponsor/ad reads (phrases like \"thanks to today's sponsor\", "
+        "\"brought to you by\", \"this video is sponsored by\") and skip them — "
+        "do not summarize the ad pitch as part of the video; focus on the actual content.\n"
+        "- Do not invent details absent from the captions/metadata.\n"
+        "- Do not use bullet lists or headings.\n\n"
+        f"Title: {video.title or ''}\n"
+        f"Channel: {channel or '(none)'}\n"
+        f"Description: {desc or '(none)'}\n"
+        f"Captions:\n{sub or '(none)'}\n\n"
+        f"Reminder: {spec['label']} summary, target word count "
+        f"{spec['word_range']} words.\n"
+    )
 
 
 def tag_enrich_prompt(video: Video, existing_tags: list[str]) -> str:

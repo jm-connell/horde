@@ -47,6 +47,9 @@ export interface Video {
   source_title: string | null;
   title_is_custom: boolean;
   subtitles_pending: boolean;
+  ai_summary?: string | null;
+  /** Length setting used when the summary was generated. */
+  ai_summary_length?: "short" | "medium" | "long" | null;
 }
 
 export interface VideoUpdate {
@@ -223,6 +226,7 @@ export interface StorageStats {
 
 export type AiSchedule = "on_download" | "on_request" | "timer" | "set_time";
 export type AiWorkloadProfile = "light" | "normal" | "heavy";
+export type AiSummaryLength = "short" | "medium" | "long";
 export type AiGpuSource = "override" | "ollama" | "local" | "unknown";
 
 export interface AiSettings {
@@ -237,6 +241,8 @@ export interface AiSettings {
   auto_pull_models: boolean;
   use_subtitles: boolean;
   enrich_tags: boolean;
+  ai_summaries: boolean;
+  summary_length: AiSummaryLength;
   ai_duplicates: boolean;
   category_min_score: number;
   workload_profile: AiWorkloadProfile;

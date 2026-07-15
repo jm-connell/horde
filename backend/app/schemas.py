@@ -44,6 +44,8 @@ class VideoRead(BaseModel):
     source_title: Optional[str]
     title_is_custom: bool
     subtitles_pending: bool = False
+    ai_summary: Optional[str] = None
+    ai_summary_length: Optional[str] = None
 
 
 class VideoUpdate(BaseModel):

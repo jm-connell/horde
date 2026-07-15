@@ -222,6 +222,8 @@ class VideoAiMeta(SQLModel, table=True):
     embed_status: str = Field(default="pending", index=True)
     content_hash: str = Field(default="")
     summary: Optional[str] = None
+    # short | medium | long — length setting used when summary was generated.
+    summary_length: Optional[str] = None
     # JSON list of tags added by AI (subset of Video.tags).
     ai_tags: str = Field(default="[]")
     # JSON list of tags added manually by the user.

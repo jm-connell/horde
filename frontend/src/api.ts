@@ -25,7 +25,15 @@ import type {
 } from "./types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(url, init);
+  let resp: Response;
+  try {
+    resp = await fetch(url, init);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw err;
+    }
+    throw err;
+  }
   if (!resp.ok) {
     let detail = resp.statusText;
     try {
@@ -34,7 +42,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     } catch {
       // non-JSON error body; keep status text
     }
-    throw new Error(detail);
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
@@ -455,6 +463,17 @@ export const api = {
 
   refreshVideoTags(id: number): Promise<Video> {
     return request<Video>(`/api/videos/${id}/ai/refresh-tags`, { method: "POST" });
+  },
+
+  summarizeVideo(
+    id: number,
+    opts?: { force?: boolean; signal?: AbortSignal }
+  ): Promise<Video> {
+    const qs = opts?.force ? "?force=true" : "";
+    return request<Video>(`/api/videos/${id}/ai/summarize${qs}`, {
+      method: "POST",
+      signal: opts?.signal,
+    });
   },
 
   listDuplicateGroups(): Promise<DuplicateGroup[]> {

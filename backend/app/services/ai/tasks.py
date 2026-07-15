@@ -1,4 +1,4 @@
-"""AI job runners: embed, enrich tags, score duplicates, refresh categories."""
+"""AI job runners: embed, enrich tags, summarize, score duplicates, refresh categories."""
 
 from __future__ import annotations
 
@@ -33,6 +33,63 @@ def _parse_json_object(raw: str) -> dict[str, Any]:
             return data if isinstance(data, dict) else {}
         except json.JSONDecodeError:
             return {}
+
+
+def _unescape_json_string(fragment: str) -> str:
+    try:
+        return json.loads(f'"{fragment}"')
+    except json.JSONDecodeError:
+        return (
+            fragment.replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
+            .replace('\\"', '"')
+            .replace("\\\\", "\\")
+        )
+
+
+def _extract_summary_text(raw: str) -> str:
+    """Pull summary text from model output, including truncated/broken JSON."""
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+
+    data = _parse_json_object(raw)
+    summary = data.get("summary")
+    if isinstance(summary, str) and summary.strip():
+        return summary.strip()
+    # Alternate shapes some models use
+    paras = data.get("paragraphs")
+    if isinstance(paras, list):
+        joined = "\n\n".join(
+            str(p).strip() for p in paras if isinstance(p, str) and p.strip()
+        )
+        if joined:
+            return joined
+
+    # Closed "summary": "..." value
+    match = re.search(r'"summary"\s*:\s*"((?:[^"\\]|\\.)*)"', raw, re.DOTALL)
+    if match:
+        text = _unescape_json_string(match.group(1)).strip()
+        if text:
+            return text
+
+    # Truncated mid-string: {"summary": "partial text...
+    match = re.search(r'"summary"\s*:\s*"(.*)\Z', raw, re.DOTALL)
+    if match:
+        frag = match.group(1)
+        # Drop a trailing incomplete escape or closing junk
+        frag = re.sub(r'\\(["\\/bfnrtu]?)\Z', "", frag)
+        frag = re.sub(r'"\s*\}?\s*\Z', "", frag)
+        text = _unescape_json_string(frag).strip()
+        if text:
+            return text
+
+    # Prose reply (no JSON wrapper)
+    if not raw.lstrip().startswith("{"):
+        return raw
+
+    return ""
 
 
 def run_embed_video(session: Session, video_id: Optional[int]) -> None:
@@ -175,6 +232,85 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     meta.updated_at = utcnow()
     session.add(meta)
     session.commit()
+
+
+class SummarizeError(Exception):
+    """User-facing summarize failure with an HTTP-ish status hint."""
+
+    def __init__(self, message: str, *, status_code: int = 400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def run_summarize(session: Session, video_id: int, *, force: bool = False) -> str:
+    ai = app_settings.ai_settings()
+    if not ai.get("enabled", True):
+        raise SummarizeError("AI is disabled", status_code=400)
+    if ai.get("paused"):
+        raise SummarizeError("AI is paused", status_code=409)
+    if not ai.get("ai_summaries", False):
+        raise SummarizeError("AI video summaries are disabled", status_code=400)
+
+    video = session.get(Video, video_id)
+    if video is None:
+        raise SummarizeError("Video not found", status_code=404)
+    if video.needs_review:
+        raise SummarizeError("Video is still in review", status_code=400)
+    if not ai_text.has_subtitle_text(video):
+        raise SummarizeError(
+            "Summaries require downloaded subtitles for this video",
+            status_code=400,
+        )
+
+    meta = session.get(VideoAiMeta, video_id)
+    if (
+        not force
+        and meta is not None
+        and meta.summary
+        and str(meta.summary).strip()
+    ):
+        return str(meta.summary).strip()
+
+    provider = get_provider()
+    if provider is None:
+        raise SummarizeError("Ollama not available", status_code=503)
+    chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    if not provider.has_model(chat_model):
+        raise SummarizeError("Chat model not available", status_code=503)
+
+    length = ai_text.normalize_summary_length(ai.get("summary_length"))
+    max_chars = ai_text.summary_max_chars(length)
+    raw = provider.chat(
+        ai_text.summary_prompt(video, length=length),
+        chat_model,
+        system=ai_text.summary_system_prompt(length),
+        num_predict=ai_text.summary_num_predict(length),
+    )
+    summary = _extract_summary_text(raw)
+    if not summary:
+        logger.warning(
+            "summarize empty for video_id=%s length=%s raw_len=%s raw_prefix=%r",
+            video_id,
+            length,
+            len(raw or ""),
+            (raw or "")[:240],
+        )
+        raise SummarizeError("Model returned an empty summary", status_code=502)
+    cleaned = ai_text.format_summary_paragraphs(summary, length=length)
+    if len(cleaned) > max_chars:
+        cleaned = cleaned[:max_chars].rsplit(" ", 1)[0].strip()
+        cleaned = ai_text.format_summary_paragraphs(cleaned, length=length)
+    if not cleaned:
+        raise SummarizeError("Model returned an empty summary", status_code=502)
+
+    if meta is None:
+        meta = VideoAiMeta(video_id=video_id)
+    meta.summary = cleaned
+    meta.summary_length = length
+    meta.updated_at = utcnow()
+    session.add(meta)
+    session.commit()
+    return cleaned
 
 
 def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video]:

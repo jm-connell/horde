@@ -61,6 +61,12 @@ export default function Watch() {
   const [presets, setPresets] = useState<string[]>(["best"]);
   const [redownloading, setRedownloading] = useState(false);
   const [settings, updateSettings] = useSettings();
+  const [aiSummariesEnabled, setAiSummariesEnabled] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryExpanded, setSummaryExpanded] = useState(true);
+  const [summaryRevealed, setSummaryRevealed] = useState(false);
+  const summarizeAbortRef = useRef<AbortController | null>(null);
   const { showToast } = useToast();
   const { onJobCompleted, refreshJobs } = useDownloads();
   const redownloadPending = useRef(false);
@@ -93,11 +99,28 @@ export default function Watch() {
         clearWatchResume(videoId);
         setVideo(merged);
         playVideo(merged);
+        setSummaryError(null);
+        setSummaryRevealed(false);
       })
       .catch(() => setError("Video not found"));
     // location.state is read once for the preview handoff; do not re-fetch on state churn.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
   }, [videoId, playVideo]);
+
+  useEffect(() => {
+    api
+      .getAppSettings()
+      .then((s) => {
+        setAiSummariesEnabled(!!s.ai.enabled && !!s.ai.ai_summaries);
+      })
+      .catch(() => setAiSummariesEnabled(false));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      summarizeAbortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!video) return;
@@ -272,6 +295,50 @@ export default function Watch() {
     }
   };
 
+  const runSummarize = useCallback(
+    async (force: boolean) => {
+      if (!video) return;
+      // Cached summary: reveal without calling Ollama unless regenerating.
+      if (
+        !force &&
+        video.ai_summary &&
+        video.ai_summary.trim()
+      ) {
+        setSummaryRevealed(true);
+        setSummaryExpanded(true);
+        setSummaryError(null);
+        return;
+      }
+      setSummarizing(true);
+      setSummaryRevealed(true);
+      setSummaryError(null);
+      setSummaryExpanded(true);
+      const ac = new AbortController();
+      summarizeAbortRef.current = ac;
+      try {
+        const updated = await api.summarizeVideo(video.id, {
+          force,
+          signal: ac.signal,
+        });
+        setVideo(updated);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+        const msg =
+          err instanceof Error ? err.message : "Could not generate summary";
+        setSummaryError(msg);
+        showToast(msg);
+      } finally {
+        if (summarizeAbortRef.current === ac) {
+          summarizeAbortRef.current = null;
+        }
+        setSummarizing(false);
+      }
+    },
+    [video, showToast]
+  );
+
   if (error) {
     return <p className="py-20 text-center text-gray-500">{error}</p>;
   }
@@ -290,6 +357,13 @@ export default function Watch() {
   const showDescriptionPanel =
     settings.showDescription &&
     !!(descriptionBody || video.notes || video.tags?.length || video.ai_tags?.length);
+  const canAiSummarize =
+    aiSummariesEnabled && (video.subtitles?.length ?? 0) > 0;
+  const hasAiSummary = !!(video.ai_summary && video.ai_summary.trim());
+  const showSummarySection =
+    canAiSummarize && (summaryRevealed || summarizing);
+  const showGenerateSummaryBtn =
+    canAiSummarize && !summaryRevealed && !summarizing;
   const queueVisible = queue.length > 0;
   const metaSideBySide =
     chapters.length > 0 && showDescriptionPanel && !queueVisible;
@@ -415,28 +489,40 @@ export default function Watch() {
               </div>
             </div>
           )}
-        <div className="mt-5">
-          <h1 className="text-xl font-bold text-gray-100">{video.title}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-400">
-            {video.channel && (
-              <Link
-                to={`/?channel=${encodeURIComponent(video.channel)}`}
-                className="font-medium text-accent hover:underline"
-              >
-                {video.channel}
-              </Link>
-            )}
-            {video.published_at && <span>{formatDate(video.published_at)}</span>}
-            <span>{formatSize(video.file_size)}</span>
-            {resolution && (
-              <span className="text-xs text-gray-500">{resolution}</span>
-            )}
-            {video.frame_rate && video.frame_rate > 60 && (
-              <span className="text-xs text-gray-500">
-                {Math.round(video.frame_rate)}fps
-              </span>
-            )}
+        <div className="mt-5 flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-bold text-gray-100">{video.title}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-400">
+              {video.channel && (
+                <Link
+                  to={`/?channel=${encodeURIComponent(video.channel)}`}
+                  className="font-medium text-accent hover:underline"
+                >
+                  {video.channel}
+                </Link>
+              )}
+              {video.published_at && <span>{formatDate(video.published_at)}</span>}
+              <span>{formatSize(video.file_size)}</span>
+              {resolution && (
+                <span className="text-xs text-gray-500">{resolution}</span>
+              )}
+              {video.frame_rate && video.frame_rate > 60 && (
+                <span className="text-xs text-gray-500">
+                  {Math.round(video.frame_rate)}fps
+                </span>
+              )}
+            </div>
           </div>
+          {showGenerateSummaryBtn && (
+            <button
+              type="button"
+              onClick={() => void runSummarize(false)}
+              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs font-medium text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
+            >
+              Generate summary
+            </button>
+          )}
+        </div>
 
           <div
             className={
@@ -446,6 +532,99 @@ export default function Watch() {
             }
           >
             <div className="min-w-0 space-y-4">
+              {showSummarySection && (
+                <div>
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setSummaryExpanded((v) => !v)}
+                      className="ui-panel-toggle ui-interactive flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
+                    >
+                      <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
+                        <span>AI summary</span>
+                        <span>{summaryExpanded ? "▲" : "▼"}</span>
+                      </span>
+                    </button>
+                    {summarizing ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          summarizeAbortRef.current?.abort();
+                          summarizeAbortRef.current = null;
+                          setSummarizing(false);
+                          setSummaryError(null);
+                          if (!hasAiSummary) {
+                            setSummaryRevealed(false);
+                          }
+                          showToast("Summary cancelled");
+                        }}
+                        className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      hasAiSummary && (
+                        <button
+                          type="button"
+                          onClick={() => void runSummarize(true)}
+                          className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
+                        >
+                          Regenerate
+                        </button>
+                      )
+                    )}
+                  </div>
+                  <Collapse open={summaryExpanded}>
+                    <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
+                      <div className="px-4 py-3">
+                        {summaryError && (
+                          <p className="mb-2 text-xs text-amber-400/90">
+                            {summaryError}
+                          </p>
+                        )}
+                        {hasAiSummary ? (
+                          <div className="space-y-3 text-sm text-gray-300">
+                            {(video.ai_summary || "")
+                              .trim()
+                              .split(/\n\s*\n+/)
+                              .map((p) => p.replace(/\n+/g, " ").trim())
+                              .filter(Boolean)
+                              .map((para, i, paras) => {
+                                const isLast = i === paras.length - 1;
+                                const showLen =
+                                  isLast &&
+                                  !!video.ai_summary_length &&
+                                  ["short", "medium", "long"].includes(
+                                    video.ai_summary_length
+                                  );
+                                return (
+                                  <p key={i} className="overflow-hidden">
+                                    {showLen && (
+                                      <span
+                                        className="float-right ml-3 text-[10px] font-medium uppercase tracking-wider text-gray-500/70"
+                                        aria-label={`Summary length: ${video.ai_summary_length}`}
+                                      >
+                                        {video.ai_summary_length}
+                                      </span>
+                                    )}
+                                    {para}
+                                  </p>
+                                );
+                              })}
+                          </div>
+                        ) : (
+                          summarizing && (
+                            <p className="text-xs text-gray-500">
+                              Generating summary…
+                            </p>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </Collapse>
+                </div>
+              )}
+
               {(showDescriptionPanel || chapters.length > 0) && (
                 <div>
                   <button
@@ -752,7 +931,6 @@ export default function Watch() {
               {relatedLoading && <LoadingIndicator />}
             </div>
           )}
-        </div>
           </div>
         </div>
 

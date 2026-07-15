@@ -21,6 +21,8 @@ class AiSettingsRead(BaseModel):
     auto_pull_models: bool = True
     use_subtitles: bool = True
     enrich_tags: bool = True
+    ai_summaries: bool = False
+    summary_length: Literal["short", "medium", "long"] = "short"
     ai_duplicates: bool = True
     category_min_score: float = 0.55
     workload_profile: Literal["light", "normal", "heavy"] = "normal"
@@ -40,6 +42,8 @@ class AiSettingsUpdate(BaseModel):
     auto_pull_models: Optional[bool] = None
     use_subtitles: Optional[bool] = None
     enrich_tags: Optional[bool] = None
+    ai_summaries: Optional[bool] = None
+    summary_length: Optional[Literal["short", "medium", "long"]] = None
     ai_duplicates: Optional[bool] = None
     category_min_score: Optional[float] = Field(default=None, ge=0.20, le=0.90)
     workload_profile: Optional[Literal["light", "normal", "heavy"]] = None
@@ -78,6 +82,10 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     if "category_min_score" in filtered:
         filtered["category_min_score"] = app_settings.clamp_category_min_score(
             filtered["category_min_score"]
+        )
+    if "summary_length" in filtered:
+        filtered["summary_length"] = app_settings.normalize_summary_length(
+            filtered["summary_length"]
         )
     if "vram_gb" in filtered:
         filtered["vram_gb"] = app_settings.clamp_vram_gb(filtered["vram_gb"])
@@ -128,6 +136,10 @@ def update_settings(payload: AppSettingsUpdate):
         if "vram_gb" in ai_updates:
             # Allow clearing the override with null; Field ge=0.5 rejects 0.
             ai_updates["vram_gb"] = app_settings.clamp_vram_gb(ai_updates["vram_gb"])
+        if "summary_length" in ai_updates:
+            ai_updates["summary_length"] = app_settings.normalize_summary_length(
+                ai_updates["summary_length"]
+            )
         # Applying a workload profile resolves models + match score for Ollama GPU.
         if "workload_profile" in ai_updates:
             from ..services.ai import workload as ai_workload

@@ -77,6 +77,8 @@ def _as_utc(dt: Optional[datetime]) -> Optional[datetime]:
 def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
     ai_tags: list[str] = []
     user_tags: list[str] = []
+    ai_summary: Optional[str] = None
+    ai_summary_length: Optional[str] = None
     if session is not None and video.id is not None:
         meta = session.get(VideoAiMeta, video.id)
         if meta is not None:
@@ -84,6 +86,11 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
                 ai_tags = library.parse_tags(meta.ai_tags)
             if getattr(meta, "user_tags", None):
                 user_tags = library.parse_tags(meta.user_tags)
+            if meta.summary:
+                ai_summary = meta.summary
+            raw_len = getattr(meta, "summary_length", None)
+            if raw_len and str(raw_len).strip().lower() in ("short", "medium", "long"):
+                ai_summary_length = str(raw_len).strip().lower()
     return VideoRead(
         id=video.id,
         title=video.title,
@@ -120,6 +127,8 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
         source_title=video.source_title,
         title_is_custom=video.title_is_custom,
         subtitles_pending=video.subtitles_pending,
+        ai_summary=ai_summary,
+        ai_summary_length=ai_summary_length,
     )
 
 
@@ -903,6 +912,32 @@ def refresh_video_tags(video_id: int, session: Session = Depends(get_session)):
         raise
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _to_read(video, session)
+
+
+@router.post("/videos/{video_id}/ai/summarize", response_model=VideoRead)
+def summarize_video(
+    video_id: int,
+    force: bool = Query(False),
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    try:
+        from ..services.ai.tasks import SummarizeError, run_summarize
+
+        run_summarize(session, video_id, force=force)
+    except SummarizeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    session.expire_all()
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
     return _to_read(video, session)
 
 

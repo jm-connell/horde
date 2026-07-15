@@ -32,6 +32,7 @@ import type {
   AiSchedule,
   AiSettings,
   AiStatus,
+  AiSummaryLength,
   AiWorkloadProfile,
   AppSettings,
   ChannelCatalogStatus,
@@ -232,10 +233,20 @@ const VRAM_OVERRIDE_TIP =
   "GB (e.g. 12 for an RTX 4070) so workload and model picks match Ollama. Leave blank to " +
   "autodetect: same-host uses nvidia-smi; remote tries Ollama’s /api/info when available.";
 
+const SUMMARY_LENGTH_TIP =
+  "How long on-demand Watch summaries should be. Short ≈100–160 words, " +
+  "medium ≈200–280, long ≈300–400 (around 350). Medium and long also pull more caption context.";
+
 const WORKLOAD_OPTIONS: { value: AiWorkloadProfile; label: string }[] = [
   { value: "light", label: "Light" },
   { value: "normal", label: "Normal" },
   { value: "heavy", label: "Heavy" },
+];
+
+const SUMMARY_LENGTH_OPTIONS: { value: AiSummaryLength; label: string }[] = [
+  { value: "short", label: "Short" },
+  { value: "medium", label: "Medium" },
+  { value: "long", label: "Long" },
 ];
 
 const DEFAULT_AI: AiSettings = {
@@ -250,6 +261,8 @@ const DEFAULT_AI: AiSettings = {
   auto_pull_models: true,
   use_subtitles: true,
   enrich_tags: true,
+  ai_summaries: false,
+  summary_length: "short",
   ai_duplicates: true,
   category_min_score: 0.55,
   workload_profile: "normal",
@@ -393,7 +406,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   },
   {
     tab: "ai",
-    keywords: "features subtitles enrich tags duplicate confirmation llm category match strictness score",
+    keywords: "features subtitles enrich tags duplicate confirmation llm category match strictness score summary summarize captions short medium long length",
   },
   // System
   {
@@ -731,13 +744,43 @@ function AiQueueStatusDl({
   aiStatus,
   systemStats,
   compact = false,
+  onPause,
+  onResume,
 }: {
   aiStatus: AiStatus;
   systemStats: SystemStats | null;
   compact?: boolean;
+  onPause?: () => void | Promise<void>;
+  onResume?: () => void | Promise<void>;
 }) {
+  const showPauseControls =
+    typeof onPause === "function" && typeof onResume === "function";
   return (
     <dl className="space-y-1.5 text-sm">
+      {showPauseControls && (
+        <div className="flex justify-between gap-3">
+          <dt className="text-gray-400">GPU jobs</dt>
+          <dd className="text-right">
+            {aiStatus.paused ? (
+              <button
+                type="button"
+                onClick={() => void onResume()}
+                className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-2.5 py-1 text-xs text-accent hover:bg-accent/25"
+              >
+                Resume
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void onPause()}
+                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
+              >
+                Pause
+              </button>
+            )}
+          </dd>
+        </div>
+      )}
       {!compact && (
         <>
           <div className="flex justify-between gap-3">
@@ -745,11 +788,13 @@ function AiQueueStatusDl({
             <dd className="text-right text-gray-200">
               {!aiStatus.enabled
                 ? "Disabled"
-                : aiStatus.ready
-                  ? "Ready"
-                  : aiStatus.reachable
-                    ? "Connected (models loading)"
-                    : "Offline"}
+                : aiStatus.paused
+                  ? "Paused"
+                  : aiStatus.ready
+                    ? "Ready"
+                    : aiStatus.reachable
+                      ? "Connected (models loading)"
+                      : "Offline"}
             </dd>
           </div>
           <div className="flex justify-between gap-3">
@@ -3346,7 +3391,7 @@ export default function Settings() {
                         }}
                         className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm text-accent hover:bg-accent/25"
                       >
-                        Resume queue
+                        Resume AI
                       </button>
                     ) : (
                       <button
@@ -3358,7 +3403,7 @@ export default function Settings() {
                         }}
                         className={PANEL_BTN}
                       >
-                        Pause queue
+                        Pause AI
                       </button>
                     )}
                     {aiStatus && (aiStatus.ready || aiStatus.reachable) && (
@@ -3372,6 +3417,16 @@ export default function Settings() {
                     <AiQueueStatusDl
                       aiStatus={aiStatus}
                       systemStats={systemStats}
+                      onPause={async () => {
+                        await api.pauseAi().catch(() => undefined);
+                        await saveAi({ paused: true });
+                        showToast("AI queue paused");
+                      }}
+                      onResume={async () => {
+                        await api.resumeAi().catch(() => undefined);
+                        await saveAi({ paused: false });
+                        showToast("AI queue resumed");
+                      }}
                     />
                   )}
                 </div>
@@ -3524,13 +3579,45 @@ export default function Settings() {
               }
             >
               <div className="max-w-md space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-gray-500">
+                    {aiStatus?.paused
+                      ? "Queue is paused — jobs won’t run until you resume."
+                      : "Pause stops embeds, tags, categories, and summaries."}
+                  </p>
+                  {aiStatus?.paused || aiDraft.paused ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await api.resumeAi().catch(() => undefined);
+                        await saveAi({ paused: false });
+                        showToast("AI queue resumed");
+                      }}
+                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-accent/40 bg-accent/15 px-2.5 py-1 text-xs text-accent hover:bg-accent/25"
+                    >
+                      Resume AI
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await api.pauseAi().catch(() => undefined);
+                        await saveAi({ paused: true });
+                        showToast("AI queue paused");
+                      }}
+                      className={PANEL_BTN + " !px-2.5 !py-1 !text-xs"}
+                    >
+                      Pause AI
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {AI_PROCESS_PRIMARY.map((opt) => (
                     <button
                       key={opt.action}
                       type="button"
                       title={opt.title}
-                      disabled={!!aiProcessingAction}
+                      disabled={!!aiProcessingAction || !!aiStatus?.paused}
                       onClick={() => runAiProcess(opt.action)}
                       className={PROCESS_BTN}
                     >
@@ -3546,7 +3633,7 @@ export default function Settings() {
                       key={opt.action}
                       type="button"
                       title={opt.title}
-                      disabled={!!aiProcessingAction}
+                      disabled={!!aiProcessingAction || !!aiStatus?.paused}
                       onClick={() => runAiProcess(opt.action)}
                       className={PROCESS_BTN}
                     >
@@ -3655,7 +3742,14 @@ export default function Settings() {
                   "enrich tags",
                   "duplicate",
                   "category",
-                  "strictness"
+                  "strictness",
+                  "summary",
+                  "summarize",
+                  "captions",
+                  "short",
+                  "medium",
+                  "long",
+                  "length"
                 )
               }
             >
@@ -3673,6 +3767,66 @@ export default function Settings() {
                     />
                   }
                 />
+                <SettingRow
+                  title="AI video summaries"
+                  description="On-demand Watch page summaries from captions. Recommend at least 6GB VRAM on the Ollama GPU."
+                  hidden={
+                    !!q &&
+                    !match("summary", "summarize", "captions", "watch")
+                  }
+                  control={
+                    <Toggle
+                      checked={aiDraft.ai_summaries}
+                      onChange={() =>
+                        saveAi({ ai_summaries: !aiDraft.ai_summaries })
+                      }
+                    />
+                  }
+                />
+                {aiDraft.ai_summaries && (
+                  <SettingRow
+                    title="Summary length"
+                    description="Short ≈100–160 words, medium ≈200–280, long ≈300–400. Regenerate after changing."
+                    hidden={
+                      !!q &&
+                      !match(
+                        "summary",
+                        "summarize",
+                        "length",
+                        "short",
+                        "medium",
+                        "long"
+                      )
+                    }
+                    control={
+                      <div className="flex items-center gap-2">
+                        <HelpTip text={SUMMARY_LENGTH_TIP} />
+                        <div className="ui-panel flex rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+                          {SUMMARY_LENGTH_OPTIONS.map((opt) => {
+                            const selected =
+                              aiDraft.summary_length === opt.value;
+                            return (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() =>
+                                  void saveAi({ summary_length: opt.value })
+                                }
+                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                  selected
+                                    ? "bg-accent/15 text-accent"
+                                    : "text-gray-400 hover:text-gray-200"
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    }
+                  />
+                )}
                 <SettingRow
                   title="Category match strictness"
                   description="Minimum similarity for videos under a category chip. Higher = fewer, tighter matches; lower = fuller, noisier shelves."
@@ -3867,42 +4021,28 @@ export default function Settings() {
                 {aiStatus &&
                   (aiStatus.queue_depth > 0 ||
                     aiStatus.current_job ||
-                    aiStatus.pulling.length > 0) && (
+                    aiStatus.pulling.length > 0 ||
+                    aiStatus.paused) && (
                     <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
                           AI
                         </p>
-                        {aiStatus.paused ? (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await api.resumeAi().catch(() => undefined);
-                              await saveAi({ paused: false });
-                              showToast("AI queue resumed");
-                            }}
-                            className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-2.5 py-1 text-xs text-accent hover:bg-accent/25"
-                          >
-                            Resume
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await api.pauseAi().catch(() => undefined);
-                              await saveAi({ paused: true });
-                              showToast("AI queue paused");
-                            }}
-                            className={PANEL_BTN + " !px-2.5 !py-1 !text-xs"}
-                          >
-                            Pause
-                          </button>
-                        )}
                       </div>
                       <AiQueueStatusDl
                         aiStatus={aiStatus}
                         systemStats={systemStats}
                         compact
+                        onPause={async () => {
+                          await api.pauseAi().catch(() => undefined);
+                          await saveAi({ paused: true });
+                          showToast("AI queue paused");
+                        }}
+                        onResume={async () => {
+                          await api.resumeAi().catch(() => undefined);
+                          await saveAi({ paused: false });
+                          showToast("AI queue resumed");
+                        }}
                       />
                     </div>
                   )}

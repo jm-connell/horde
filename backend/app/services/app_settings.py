@@ -19,6 +19,8 @@ AI_DEFAULTS: dict[str, Any] = {
     "auto_pull_models": True,
     "use_subtitles": True,
     "enrich_tags": True,
+    "ai_summaries": False,
+    "summary_length": "short",  # short | medium | long
     "ai_duplicates": True,
     "category_min_score": 0.55,
     "workload_profile": "normal",  # light | normal | heavy
@@ -32,6 +34,7 @@ _CATEGORY_MIN_SCORE_LO = 0.20
 _CATEGORY_MIN_SCORE_HI = 0.90
 _VRAM_GB_LO = 0.5
 _VRAM_GB_HI = 256.0
+_SUMMARY_LENGTHS = frozenset({"short", "medium", "long"})
 
 
 def clamp_category_min_score(value: Any) -> float:
@@ -40,6 +43,13 @@ def clamp_category_min_score(value: Any) -> float:
     except (TypeError, ValueError):
         score = float(AI_DEFAULTS["category_min_score"])
     return max(_CATEGORY_MIN_SCORE_LO, min(_CATEGORY_MIN_SCORE_HI, score))
+
+
+def normalize_summary_length(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in _SUMMARY_LENGTHS:
+        return raw
+    return str(AI_DEFAULTS["summary_length"])
 
 
 def clamp_vram_gb(value: Any) -> float | None:
@@ -89,6 +99,7 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     merged["category_min_score"] = clamp_category_min_score(
         merged.get("category_min_score")
     )
+    merged["summary_length"] = normalize_summary_length(merged.get("summary_length"))
     merged["vram_gb"] = clamp_vram_gb(merged.get("vram_gb"))
     return merged
 

@@ -67,7 +67,14 @@ class EmbedProvider(Protocol):
 
 
 class LlmProvider(Protocol):
-    def chat(self, prompt: str, model: str, *, system: Optional[str] = None) -> str: ...
+    def chat(
+        self,
+        prompt: str,
+        model: str,
+        *,
+        system: Optional[str] = None,
+        num_predict: Optional[int] = None,
+    ) -> str: ...
 
 
 class OllamaProvider:
@@ -154,19 +161,27 @@ class OllamaProvider:
             raise
 
     def chat(
-        self, prompt: str, model: str, *, system: Optional[str] = None
+        self,
+        prompt: str,
+        model: str,
+        *,
+        system: Optional[str] = None,
+        num_predict: Optional[int] = None,
     ) -> str:
         global _last_error
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
+        options: dict[str, Any] = {"temperature": 0.2}
+        if num_predict is not None and num_predict > 0:
+            options["num_predict"] = int(num_predict)
         payload = {
             "model": model,
             "messages": messages,
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0.2},
+            "options": options,
         }
         try:
             with self._client() as client:
