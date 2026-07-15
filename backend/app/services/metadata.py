@@ -146,7 +146,13 @@ def probe_frame_rate(path: Path) -> Optional[float]:
         return None
 
 
-def grab_frame(video_path: Path, output_path: Path, at_seconds: float = 5.0) -> bool:
+def grab_frame(
+    video_path: Path,
+    output_path: Path,
+    at_seconds: float = 5.0,
+    *,
+    scale_width: int = 640,
+) -> bool:
     """Extract a single frame as a JPEG thumbnail. Returns True on success."""
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,7 +167,7 @@ def grab_frame(video_path: Path, output_path: Path, at_seconds: float = 5.0) -> 
                 "-frames:v",
                 "1",
                 "-vf",
-                "scale=640:-1",
+                f"scale={scale_width}:-1",
                 str(output_path),
             ],
             capture_output=True,
@@ -232,3 +238,216 @@ def generate_thumbnail_candidates(
         if grab_frame(video_path, dest, at_seconds=at):
             results.append({"index": i, "at_seconds": at})
     return results
+
+
+SPRITE_TILE_WIDTH = 160
+SPRITE_COLUMNS = 10
+
+
+def sprite_image_path(sprites_dir: Path, video_id: int) -> Path:
+    return sprites_dir / f"{video_id}.jpg"
+
+
+def sprite_meta_path(sprites_dir: Path, video_id: int) -> Path:
+    return sprites_dir / f"{video_id}.json"
+
+
+def sprite_interval_sec(duration: float) -> int:
+    """Seconds between tiles; denser on short videos, capped for long ones."""
+    return max(5, min(20, round(duration / 100) or 5))
+
+
+def sprites_exist(sprites_dir: Path, video_id: int) -> bool:
+    return (
+        sprite_image_path(sprites_dir, video_id).is_file()
+        and sprite_meta_path(sprites_dir, video_id).is_file()
+    )
+
+
+def load_sprite_meta(sprites_dir: Path, video_id: int) -> Optional[dict]:
+    path = sprite_meta_path(sprites_dir, video_id)
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
+
+def delete_sprite_files(sprites_dir: Path, video_id: int) -> None:
+    sprite_image_path(sprites_dir, video_id).unlink(missing_ok=True)
+    sprite_meta_path(sprites_dir, video_id).unlink(missing_ok=True)
+
+
+def _write_sprite_meta(
+    meta_path: Path,
+    *,
+    interval_sec: int,
+    tile_width: int,
+    tile_height: int,
+    columns: int,
+    count: int,
+    duration_sec: float,
+) -> dict:
+    meta = {
+        "interval_sec": interval_sec,
+        "tile_width": tile_width,
+        "tile_height": tile_height,
+        "columns": columns,
+        "count": count,
+        "duration_sec": duration_sec,
+    }
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    return meta
+
+
+def _sprite_via_ffmpeg_tile(
+    video_path: Path,
+    image_path: Path,
+    *,
+    interval: int,
+    columns: int,
+    rows: int,
+) -> bool:
+    try:
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-vf",
+                f"fps=1/{interval},scale={SPRITE_TILE_WIDTH}:-1,tile={columns}x{rows}",
+                "-frames:v",
+                "1",
+                "-q:v",
+                "3",
+                str(image_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        return result.returncode == 0 and image_path.is_file()
+    except (subprocess.SubprocessError, OSError):
+        return False
+
+
+def _sprite_via_frame_montage(
+    video_path: Path,
+    image_path: Path,
+    sprites_dir: Path,
+    video_id: int,
+    *,
+    interval: int,
+    count: int,
+    columns: int,
+    rows: int,
+) -> bool:
+    """Fallback: grab individual frames and stitch with Pillow."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return False
+
+    tmp_dir = sprites_dir / f".{video_id}_sprite_tmp"
+    try:
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        frames: list[Path] = []
+        for i in range(count):
+            at = i * interval + interval / 2
+            dest = tmp_dir / f"{i:04d}.jpg"
+            if not grab_frame(
+                video_path, dest, at_seconds=at, scale_width=SPRITE_TILE_WIDTH
+            ):
+                continue
+            frames.append(dest)
+        if not frames:
+            return False
+
+        with Image.open(frames[0]) as first:
+            tile_w, tile_h = first.size
+        sheet = Image.new("RGB", (columns * tile_w, rows * tile_h), (0, 0, 0))
+        for i, frame_path in enumerate(frames):
+            col = i % columns
+            row = i // columns
+            with Image.open(frame_path) as im:
+                if im.size != (tile_w, tile_h):
+                    im = im.resize((tile_w, tile_h))
+                sheet.paste(im, (col * tile_w, row * tile_h))
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        sheet.save(image_path, format="JPEG", quality=85)
+        return image_path.is_file()
+    except (OSError, ValueError):
+        return False
+    finally:
+        if tmp_dir.exists():
+            for p in tmp_dir.glob("*"):
+                p.unlink(missing_ok=True)
+            tmp_dir.rmdir()
+
+
+def generate_sprite_sheet(
+    video_path: Path,
+    sprites_dir: Path,
+    video_id: int,
+    *,
+    duration: float | None = None,
+) -> Optional[str]:
+    """Build a seek-preview sprite sheet + JSON sidecar. Returns image path or None."""
+    dur = duration if duration is not None else probe_duration(video_path)
+    if not dur or dur <= 0:
+        return None
+
+    interval = sprite_interval_sec(dur)
+    count = max(1, int(dur // interval))
+    columns = SPRITE_COLUMNS
+    rows = max(1, (count + columns - 1) // columns)
+
+    sprites_dir.mkdir(parents=True, exist_ok=True)
+    image_path = sprite_image_path(sprites_dir, video_id)
+    meta_path = sprite_meta_path(sprites_dir, video_id)
+
+    ok = _sprite_via_ffmpeg_tile(
+        video_path, image_path, interval=interval, columns=columns, rows=rows
+    )
+    if not ok:
+        image_path.unlink(missing_ok=True)
+        ok = _sprite_via_frame_montage(
+            video_path,
+            image_path,
+            sprites_dir,
+            video_id,
+            interval=interval,
+            count=count,
+            columns=columns,
+            rows=rows,
+        )
+    if not ok or not image_path.is_file():
+        delete_sprite_files(sprites_dir, video_id)
+        return None
+
+    tile_width = SPRITE_TILE_WIDTH
+    tile_height = SPRITE_TILE_WIDTH
+    try:
+        from PIL import Image
+
+        with Image.open(image_path) as im:
+            sheet_w, sheet_h = im.size
+            if columns > 0 and rows > 0:
+                tile_width = max(1, sheet_w // columns)
+                tile_height = max(1, sheet_h // rows)
+    except (OSError, ImportError, ValueError):
+        pass
+
+    _write_sprite_meta(
+        meta_path,
+        interval_sec=interval,
+        tile_width=tile_width,
+        tile_height=tile_height,
+        columns=columns,
+        count=count,
+        duration_sec=float(dur),
+    )
+    return str(image_path)

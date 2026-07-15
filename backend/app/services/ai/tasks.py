@@ -177,6 +177,125 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     session.commit()
 
 
+def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video]:
+    """Mix recent watches, recent adds, and channel-stratified fill."""
+    from collections import defaultdict
+    from sqlalchemy import nullslast
+
+    used: set[int] = set()
+    out: list[Video] = []
+    watch_cap = 35
+    add_cap = 35
+
+    def _take(videos: list[Video], cap: int) -> None:
+        for video in videos:
+            if len(out) >= limit or cap <= 0:
+                return
+            if video.id is None or video.id in used:
+                continue
+            if not (video.title or "").strip():
+                continue
+            used.add(video.id)
+            out.append(video)
+            cap -= 1
+
+    watched = session.exec(
+        select(Video)
+        .where(
+            Video.needs_review == False,  # noqa: E712
+            Video.last_watched_at.is_not(None),  # type: ignore[attr-defined]
+        )
+        .order_by(Video.last_watched_at.desc())  # type: ignore[union-attr]
+        .limit(watch_cap * 2)
+    ).all()
+    _take(list(watched), watch_cap)
+
+    recent = session.exec(
+        select(Video)
+        .where(Video.needs_review == False)  # noqa: E712
+        .order_by(nullslast(Video.added_at.desc()))
+        .limit(add_cap * 2)
+    ).all()
+    _take(list(recent), add_cap)
+
+    if len(out) >= limit:
+        return out
+
+    rest = session.exec(
+        select(Video)
+        .where(Video.needs_review == False)  # noqa: E712
+        .order_by(nullslast(Video.added_at.desc()))
+    ).all()
+    by_channel: dict[str, list[Video]] = defaultdict(list)
+    for video in rest:
+        if video.id is None or video.id in used:
+            continue
+        if not (video.title or "").strip():
+            continue
+        key = (video.channel or "").strip() or "(unknown)"
+        by_channel[key].append(video)
+
+    channels = sorted(
+        by_channel.keys(),
+        key=lambda c: (-len(by_channel[c]), c.lower()),
+    )
+    # Round-robin one video per channel until filled.
+    while len(out) < limit:
+        progressed = False
+        for channel in channels:
+            bucket = by_channel[channel]
+            while bucket:
+                video = bucket.pop(0)
+                if video.id is None or video.id in used:
+                    continue
+                used.add(video.id)
+                out.append(video)
+                progressed = True
+                break
+            if len(out) >= limit:
+                break
+        if not progressed:
+            break
+
+    return out
+
+
+def _parse_category_items(raw_items: list[Any]) -> list[tuple[str, str]]:
+    """Normalize LLM category list to (name, blurb) pairs."""
+    cleaned: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    seen_norms: set[str] = set()
+    for item in raw_items:
+        name = ""
+        blurb = ""
+        if isinstance(item, str):
+            name = item
+        elif isinstance(item, dict):
+            raw_name = item.get("name")
+            if isinstance(raw_name, str):
+                name = raw_name
+            raw_blurb = item.get("blurb")
+            if isinstance(raw_blurb, str):
+                blurb = raw_blurb
+        else:
+            continue
+        label = " ".join(name.strip().split())
+        if not label or len(label) > 40:
+            continue
+        key = label.lower()
+        if key in seen or _is_near_duplicate(label, seen_norms):
+            continue
+        about = " ".join(blurb.strip().split())
+        if len(about) > 120:
+            about = about[:120].rstrip()
+        seen.add(key)
+        seen_norms.add(_tag_norm_key(label))
+        cleaned.append((label, about))
+        if len(cleaned) >= 15:
+            break
+    return cleaned
+
+
 def run_refresh_categories(session: Session, _video_id: Optional[int] = None) -> None:
     provider = get_provider()
     if provider is None:
@@ -187,56 +306,86 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     if not provider.has_model(chat_model) or not provider.has_model(embed_model):
         raise RuntimeError("Required models not available")
 
-    from sqlalchemy import nullslast
+    from . import workload as ai_workload
 
-    videos = session.exec(
-        select(Video)
-        .where(Video.needs_review == False)  # noqa: E712
-        .order_by(nullslast(Video.last_watched_at.desc()), Video.added_at.desc())
-        .limit(60)
-    ).all()
-    titles = [v.title for v in videos if v.title]
-    if len(titles) < 3:
+    runtime = ai_workload.resolve_runtime(ai.get("workload_profile"))
+    videos = _category_sample_videos(session, limit=runtime.invent_sample_size)
+    titled = [v for v in videos if (v.title or "").strip()]
+    if len(titled) < 3:
         return
+
+    use_subs = bool(ai.get("use_subtitles", True))
+    # Sample order is watches → adds → stratified. Reverse before budgeting so
+    # trim-from-end drops binge-prone watches first and keeps channel diversity.
+    prompt_videos = list(reversed(titled))
+    entries = [
+        ai_text.category_sample_entry(
+            v,
+            use_subtitles=use_subs,
+            desc_chars=runtime.invent_desc_chars,
+            sub_chars=runtime.invent_sub_chars,
+        )
+        for v in prompt_videos
+    ]
+    entries = ai_text.bound_category_entries(
+        entries, budget=runtime.invent_budget_chars
+    )
 
     raw = provider.chat(
-        ai_text.category_prompt(titles),
+        ai_text.category_prompt(entries),
         chat_model,
-        system="You invent short browse categories. Reply with JSON only.",
+        system=ai_text.category_system_prompt(),
     )
     data = _parse_json_object(raw)
-    names = data.get("categories") if isinstance(data.get("categories"), list) else []
-    cleaned: list[str] = []
-    seen: set[str] = set()
-    for name in names:
-        if not isinstance(name, str):
-            continue
-        label = " ".join(name.strip().split())
-        if not label or len(label) > 24:
-            continue
-        key = label.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        cleaned.append(label)
-        if len(cleaned) >= 15:
-            break
-    if not cleaned:
+    raw_cats = data.get("categories") if isinstance(data.get("categories"), list) else []
+    cleaned = _parse_category_items(raw_cats)
+    # Need a few solid chips before wiping the existing table.
+    if len(cleaned) < 3:
         return
 
-    # Replace category table.
+    # Precompute invent-sample centroids for example picking.
+    sample_centroids: list[tuple[Video, list[float]]] = []
+    for video in titled:
+        if video.id is None:
+            continue
+        cent = embeddings.video_centroid(session, video.id)
+        if cent:
+            sample_centroids.append((video, cent))
+
     existing = session.exec(select(AiCategory)).all()
     for row in existing:
         session.delete(row)
     session.flush()
 
-    for name in cleaned:
-        vec = provider.embed(name, embed_model)
+    example_min = 0.28
+    for name, blurb in cleaned:
+        provisional = ai_text.category_embed_text(name, blurb)
+        q = provider.embed(provisional, embed_model)
+        ranked: list[tuple[float, Video, list[float]]] = []
+        for video, cent in sample_centroids:
+            score = embeddings.cosine(q, cent)
+            if score >= example_min:
+                ranked.append((score, video, cent))
+        ranked.sort(key=lambda t: t[0], reverse=True)
+        examples = ranked[:5]
+        example_titles = [
+            (v.title or "").strip() for _, v, _ in examples if (v.title or "").strip()
+        ]
+        doc = ai_text.category_embed_text(
+            name, blurb, example_titles=example_titles
+        )
+        text_vec = provider.embed(doc, embed_model)
+        cent = embeddings.mean_vectors([c for _, _, c in examples])
+        if cent is None:
+            store_vec = embeddings.l2_normalize(text_vec)
+        else:
+            store_vec = embeddings.blend_vectors(text_vec, cent, weight_a=0.5)
         session.add(
             AiCategory(
                 name=name,
-                embedding=embeddings.pack_vector(vec),
-                dim=len(vec),
+                blurb=blurb or None,
+                embedding=embeddings.pack_vector(store_vec),
+                dim=len(store_vec),
                 model=embed_model,
                 updated_at=utcnow(),
             )

@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { ViewMode } from "../components/VideoPlayer";
+import {
+  applyUiFont,
+  newCustomFontId,
+  normalizeCustomFonts,
+  normalizeUiFont,
+  parseCustomFontInput,
+  type SavedCustomFont,
+  type UiFont,
+} from "../fonts";
+
+export type { SavedCustomFont, UiFont };
 
 export type SubtitleSize = "small" | "medium" | "large";
 export type Theme =
@@ -14,6 +25,9 @@ export type Theme =
   | "sunset"
   | "forest"
   | "slate"
+  | "earthy"
+  | "frozen"
+  | "mocha"
   | "custom";
 
 export interface CustomColors {
@@ -52,7 +66,8 @@ export type BackgroundEffect =
   | "grain"
   | "modern-grid"
   | "flowing-gradient"
-  | "lightspeed";
+  | "lightspeed"
+  | "galaxy";
 
 export type FlowingGradientPreset =
   | "theme"
@@ -64,7 +79,8 @@ export type FlowingGradientPreset =
 export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator = "none" | "liquid" | "underline" | "fade";
 export type LoadingStyle = "dots" | "spinner" | "bar";
-export type UiScale = "80" | "90" | "100" | "110" | "125" | "150" | "175";
+/** App text size (rem root). Replaces the old multi-step UI scale. */
+export type FontSize = "small" | "medium" | "large" | "xl";
 
 export interface CustomThemePreset {
   id: string;
@@ -82,6 +98,15 @@ export interface CustomThemePreset {
   customBackgroundBlur: number;
   customBackgroundTint: string;
   customBackgroundTintOpacity: number;
+  pauseBackgroundWhileWatching: boolean;
+  navIndicator: NavIndicator;
+  hoverMotion: HoverMotion;
+  translucentPanels: boolean;
+  translucentPanelStrength: number;
+  translucentPanelLegibility: boolean;
+  loadingStyle: LoadingStyle;
+  fontSize: FontSize;
+  uiFont: string;
 }
 
 export interface Settings {
@@ -109,8 +134,12 @@ export interface Settings {
   /** Raise opacity / tint on panels marked .ui-panel-legible. */
   translucentPanelLegibility: boolean;
   loadingStyle: LoadingStyle;
-  /** Rem-based UI scale applied to documentElement font-size. */
-  uiScale: UiScale;
+  /** Rem-based text size applied to documentElement font-size. */
+  fontSize: FontSize;
+  /** App typeface (builtin id, saved custom id, or "custom" while adding). */
+  uiFont: UiFont;
+  /** Permanently saved custom fonts (URL or uploaded file). */
+  customFonts: SavedCustomFont[];
   showDescription: boolean;
   subtitleSize: SubtitleSize;
   subtitleOffset: number;
@@ -166,7 +195,9 @@ const DEFAULTS: Settings = {
   translucentPanelStrength: 0.65,
   translucentPanelLegibility: true,
   loadingStyle: "dots",
-  uiScale: "100",
+  fontSize: "medium",
+  uiFont: "default",
+  customFonts: [],
   showDescription: true,
   subtitleSize: "medium",
   subtitleOffset: 12,
@@ -217,7 +248,9 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "translucentPanelStrength",
   "translucentPanelLegibility",
   "loadingStyle",
-  "uiScale",
+  "fontSize",
+  "uiFont",
+  "customFonts",
   "showDescription",
   "subtitleSize",
   "subtitleOffset",
@@ -311,6 +344,10 @@ function applyCustomColors(colors: CustomColors): void {
 const LEGACY_THEMES: Record<string, Theme> = {
   macos: "slate",
   warm: "sunset",
+  sleek: "default",
+  "minimal-teal": "light",
+  "vibrant-indigo": "indigo",
+  "neon-pop": "cyber",
 };
 
 const VALID_THEMES = new Set<string>([
@@ -324,6 +361,9 @@ const VALID_THEMES = new Set<string>([
   "sunset",
   "forest",
   "slate",
+  "earthy",
+  "frozen",
+  "mocha",
   "custom",
 ]);
 
@@ -344,6 +384,7 @@ const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "modern-grid",
   "flowing-gradient",
   "lightspeed",
+  "galaxy",
 ]);
 
 const VALID_FLOWING_PRESETS = new Set<string>([
@@ -492,21 +533,33 @@ export function serverUiToSettingsPatch(
   return patch as Partial<Settings>;
 }
 
-const VALID_UI_SCALES = new Set<string>([
-  "80",
-  "90",
-  "100",
-  "110",
-  "125",
-  "150",
-  "175",
-]);
+const VALID_FONT_SIZES = new Set<string>(["small", "medium", "large", "xl"]);
 
-function normalizeUiScale(value: unknown): UiScale {
-  if (typeof value === "string" && VALID_UI_SCALES.has(value)) {
-    return value as UiScale;
+const FONT_SIZE_SCALE: Record<FontSize, number> = {
+  small: 0.9,
+  medium: 1,
+  large: 1.125,
+  xl: 1.25,
+};
+
+function normalizeFontSize(
+  value: unknown,
+  legacyUiScale?: unknown
+): FontSize {
+  if (typeof value === "string" && VALID_FONT_SIZES.has(value)) {
+    return value as FontSize;
   }
-  return DEFAULTS.uiScale;
+  // Migrate old uiScale percentages → small / medium / large
+  const n =
+    typeof legacyUiScale === "string" || typeof legacyUiScale === "number"
+      ? Number(legacyUiScale)
+      : NaN;
+  if (Number.isFinite(n)) {
+    if (n <= 90) return "small";
+    if (n >= 125) return "large";
+    return "medium";
+  }
+  return DEFAULTS.fontSize;
 }
 
 function normalizeFlowingPreset(value: unknown): FlowingGradientPreset {
@@ -565,6 +618,39 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
       customBackgroundTintOpacity: normalizeTintOpacity(
         r.customBackgroundTintOpacity
       ),
+      pauseBackgroundWhileWatching: normalizeBool(
+        r.pauseBackgroundWhileWatching,
+        DEFAULTS.pauseBackgroundWhileWatching
+      ),
+      navIndicator: normalizeNavIndicator(r.navIndicator),
+      hoverMotion: normalizeHoverMotion(r.hoverMotion),
+      translucentPanels: normalizeBool(
+        r.translucentPanels,
+        DEFAULTS.translucentPanels
+      ),
+      translucentPanelStrength: normalizeTranslucentStrength(
+        r.translucentPanelStrength
+      ),
+      translucentPanelLegibility: normalizeBool(
+        r.translucentPanelLegibility,
+        DEFAULTS.translucentPanelLegibility
+      ),
+      loadingStyle:
+        r.loadingStyle === "dots" ||
+        r.loadingStyle === "spinner" ||
+        r.loadingStyle === "bar"
+          ? r.loadingStyle
+          : DEFAULTS.loadingStyle,
+      fontSize: normalizeFontSize(r.fontSize),
+      uiFont:
+        typeof r.uiFont === "string" &&
+        r.uiFont &&
+        r.uiFont !== "custom" &&
+        /^[a-zA-Z0-9_-]+$/.test(r.uiFont)
+          ? r.uiFont === "inter"
+            ? "default"
+            : r.uiFont
+          : DEFAULTS.uiFont,
     });
   }
   return out.slice(0, 40);
@@ -622,7 +708,51 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
       parsed.translucentPanelLegibility,
       DEFAULTS.translucentPanelLegibility
     ),
-    uiScale: normalizeUiScale(parsed.uiScale),
+    fontSize: normalizeFontSize(
+      parsed.fontSize,
+      (parsed as { uiScale?: unknown }).uiScale
+    ),
+    ...normalizeFontSettings(parsed),
+  };
+}
+
+/** Migrate legacy single custom font fields into customFonts list. */
+function normalizeFontSettings(
+  parsed: Partial<Settings> & {
+    customFontUrl?: unknown;
+    customFontHasFile?: unknown;
+  }
+): Pick<Settings, "uiFont" | "customFonts"> {
+  let customFonts = normalizeCustomFonts(parsed.customFonts);
+  let uiFont = parsed.uiFont;
+
+  const legacyUrl =
+    typeof parsed.customFontUrl === "string" ? parsed.customFontUrl.trim() : "";
+  const legacyHasFile = parsed.customFontHasFile === true;
+
+  if (customFonts.length === 0 && (legacyUrl || legacyHasFile)) {
+    // Legacy browser-only file uploads cannot be recovered server-side;
+    // URL customs still migrate into the permanent list.
+    if (legacyUrl) {
+      const id = newCustomFontId();
+      const parsed = parseCustomFontInput(legacyUrl);
+      customFonts = [
+        {
+          id,
+          name: (parsed.family || "Custom font").slice(0, 64),
+          source: "url",
+          url: legacyUrl,
+        },
+      ];
+      if (uiFont === "custom") uiFont = id;
+    } else if (legacyHasFile && uiFont === "custom") {
+      uiFont = "default";
+    }
+  }
+
+  return {
+    customFonts,
+    uiFont: normalizeUiFont(uiFont, customFonts),
   };
 }
 
@@ -653,8 +783,8 @@ export function applyMotionPrefs(settings: Settings): void {
   root.style.setProperty("--ui-panel-card-alpha", cardFill);
   root.style.setProperty("--ui-panel-blur", `${blur}px`);
 
-  const scalePct = Number(settings.uiScale) || 100;
-  root.style.fontSize = `${(16 * scalePct) / 100}px`;
+  const scale = FONT_SIZE_SCALE[settings.fontSize] ?? 1;
+  root.style.fontSize = `${16 * scale}px`;
 }
 
 export function loadSettings(): Settings {
@@ -782,15 +912,22 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
     applyTheme(settings.theme, settings.customColors);
   }, [settings.theme, settings.customColors]);
 
-  const prevUiScale = useRef(settings.uiScale);
+  useEffect(() => {
+    void applyUiFont({
+      uiFont: settings.uiFont,
+      customFonts: settings.customFonts,
+    });
+  }, [settings.uiFont, settings.customFonts]);
+
+  const prevFontSize = useRef(settings.fontSize);
 
   useEffect(() => {
-    const scaleChanged = prevUiScale.current !== settings.uiScale;
-    const pinEl = scaleChanged
-      ? document.querySelector<HTMLElement>("[data-ui-scale-control]")
+    const sizeChanged = prevFontSize.current !== settings.fontSize;
+    const pinEl = sizeChanged
+      ? document.querySelector<HTMLElement>("[data-font-size-control]")
       : null;
     const oldTop = pinEl?.getBoundingClientRect().top ?? null;
-    prevUiScale.current = settings.uiScale;
+    prevFontSize.current = settings.fontSize;
 
     applyMotionPrefs(settings);
 
@@ -798,7 +935,7 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const el = document.querySelector<HTMLElement>(
-            "[data-ui-scale-control]"
+            "[data-font-size-control]"
           );
           if (!el) return;
           const newTop = el.getBoundingClientRect().top;
@@ -812,7 +949,7 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
     settings.translucentPanels,
     settings.translucentPanelStrength,
     settings.translucentPanelLegibility,
-    settings.uiScale,
+    settings.fontSize,
   ]);
 
   useEffect(() => {

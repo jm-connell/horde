@@ -21,6 +21,7 @@ import type {
   TagStat,
   Video,
   VideoUpdate,
+  SpriteMeta,
 } from "./types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -197,6 +198,14 @@ export const api = {
     });
   },
 
+  getSpriteMeta(id: number): Promise<SpriteMeta> {
+    return request<SpriteMeta>(`/api/videos/${id}/sprites/meta`);
+  },
+
+  ensureSprites(id: number): Promise<{ status: "ready" | "generating" }> {
+    return request(`/api/videos/${id}/sprites/generate`, { method: "POST" });
+  },
+
   listChannels(params: ChannelQuery = {}): Promise<ChannelStat[]> {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
@@ -328,12 +337,26 @@ export const api = {
     });
   },
 
+  applyAiWorkload(profile?: "light" | "normal" | "heavy"): Promise<{
+    ok: boolean;
+    embed_model_changed?: boolean;
+    detail?: string;
+    runtime?: Record<string, unknown>;
+  }> {
+    return request("/api/ai/apply-workload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile: profile || null }),
+    });
+  },
+
   processAiLibrary(
     action:
       | "all"
       | "all_recent"
       | "all_full"
       | "embeds"
+      | "reindex_embeds"
       | "missing_tags"
       | "full_tags"
       | "categories" = "all"
@@ -389,6 +412,24 @@ export const api = {
     return request<{ colors: string[] }>(
       `/api/backgrounds/${encodeURIComponent(id)}/palette`,
       { method: "POST" }
+    );
+  },
+
+  uploadFont(
+    file: File
+  ): Promise<{ id: string; url: string; mime: string; filename?: string }> {
+    const form = new FormData();
+    form.append("file", file);
+    return request("/api/fonts", {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  deleteFont(id: string): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>(
+      `/api/fonts/${encodeURIComponent(id)}`,
+      { method: "DELETE" }
     );
   },
 
@@ -647,6 +688,14 @@ export const api = {
 
 export function thumbnailUrl(video: Video): string | null {
   return video.has_thumbnail ? `/api/thumbnails/${video.id}` : null;
+}
+
+export function spritesMetaUrl(id: number): string {
+  return `/api/videos/${id}/sprites/meta`;
+}
+
+export function spritesImageUrl(id: number): string {
+  return `/api/videos/${id}/sprites`;
 }
 
 export function absoluteUrl(path: string): string {

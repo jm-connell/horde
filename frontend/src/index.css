@@ -97,17 +97,17 @@ html::-webkit-scrollbar-thumb:hover {
   --accent-deep: 94 153 175;
 }
 
-/* ─── Light & Clean ─── */
+/* ─── Minimal Neutrals + Teal (light) ─── */
 [data-theme="light"] {
   color-scheme: light;
-  --ink-950: 249 249 249;
+  --ink-950: 250 250 250;
   --ink-900: 255 255 255;
-  --ink-800: 245 245 245;
-  --ink-700: 229 229 229;
-  --ink-600: 200 200 200;
-  --accent: 204 0 0;
-  --accent-soft: 239 68 68;
-  --accent-deep: 153 0 0;
+  --ink-800: 241 245 249;
+  --ink-700: 226 232 240;
+  --ink-600: 148 163 184;
+  --accent: 20 184 166;
+  --accent-soft: 45 212 191;
+  --accent-deep: 100 116 139;
 }
 
 /* ─── Midnight Indigo ─── */
@@ -175,6 +175,45 @@ html::-webkit-scrollbar-thumb:hover {
   --accent-deep: 59 130 246;
 }
 
+/* ─── Earthy Modern (light) ─── */
+[data-theme="earthy"] {
+  color-scheme: light;
+  --ink-950: 248 245 240;
+  --ink-900: 255 252 248;
+  --ink-800: 240 234 226;
+  --ink-700: 220 210 198;
+  --ink-600: 168 162 158;
+  --accent: 133 77 14;
+  --accent-soft: 234 88 12;
+  --accent-deep: 79 70 229;
+}
+
+/* ─── Frozen Blue Minimal (light) ─── */
+[data-theme="frozen"] {
+  color-scheme: light;
+  --ink-950: 240 249 255;
+  --ink-900: 224 242 254;
+  --ink-800: 214 235 248;
+  --ink-700: 186 220 240;
+  --ink-600: 100 116 139;
+  --accent: 14 165 233;
+  --accent-soft: 56 189 248;
+  --accent-deep: 30 64 175;
+}
+
+/* ─── Soft Mocha & Sage (light) ─── */
+[data-theme="mocha"] {
+  color-scheme: light;
+  --ink-950: 245 240 232;
+  --ink-900: 250 246 240;
+  --ink-800: 237 231 222;
+  --ink-700: 214 208 198;
+  --ink-600: 168 162 158;
+  --accent: 167 139 250;
+  --accent-soft: 74 222 128;
+  --accent-deep: 124 58 237;
+}
+
 html,
 body,
 #root {
@@ -190,7 +229,7 @@ body {
 }
 
 [data-theme="light"] body {
-  color: #0f0f0f;
+  color: #0f172a;
 }
 
 [data-theme="indigo"] body {
@@ -213,23 +252,102 @@ body {
   color: #f1f5f9;
 }
 
-/* Light theme: remap Tailwind gray text utilities */
+[data-theme="earthy"] body {
+  color: #1c1917;
+}
+
+[data-theme="frozen"] body {
+  color: #1e2937;
+}
+
+[data-theme="mocha"] body {
+  color: #374151;
+}
+
+/* Light themes: remap Tailwind gray text (base + hover) for legibility */
 [data-theme="light"] .text-gray-100,
-[data-theme="light"] .text-gray-200 {
+[data-theme="light"] .text-gray-200,
+[data-theme="light"] .hover\:text-gray-100:hover,
+[data-theme="light"] .hover\:text-gray-200:hover,
+[data-theme="earthy"] .text-gray-100,
+[data-theme="earthy"] .text-gray-200,
+[data-theme="earthy"] .hover\:text-gray-100:hover,
+[data-theme="earthy"] .hover\:text-gray-200:hover,
+[data-theme="frozen"] .text-gray-100,
+[data-theme="frozen"] .text-gray-200,
+[data-theme="frozen"] .hover\:text-gray-100:hover,
+[data-theme="frozen"] .hover\:text-gray-200:hover,
+[data-theme="mocha"] .text-gray-100,
+[data-theme="mocha"] .text-gray-200,
+[data-theme="mocha"] .hover\:text-gray-100:hover,
+[data-theme="mocha"] .hover\:text-gray-200:hover {
   color: #0f0f0f;
 }
 
-[data-theme="light"] .text-gray-300 {
+[data-theme="light"] .text-gray-300,
+[data-theme="light"] .hover\:text-gray-300:hover,
+[data-theme="earthy"] .text-gray-300,
+[data-theme="earthy"] .hover\:text-gray-300:hover,
+[data-theme="frozen"] .text-gray-300,
+[data-theme="frozen"] .hover\:text-gray-300:hover,
+[data-theme="mocha"] .text-gray-300,
+[data-theme="mocha"] .hover\:text-gray-300:hover {
   color: #1a1a1a;
 }
 
 [data-theme="light"] .text-gray-400,
-[data-theme="light"] .text-gray-500 {
+[data-theme="light"] .text-gray-500,
+[data-theme="light"] .hover\:text-gray-400:hover,
+[data-theme="light"] .hover\:text-gray-500:hover,
+[data-theme="earthy"] .text-gray-400,
+[data-theme="earthy"] .text-gray-500,
+[data-theme="earthy"] .hover\:text-gray-400:hover,
+[data-theme="earthy"] .hover\:text-gray-500:hover,
+[data-theme="frozen"] .text-gray-400,
+[data-theme="frozen"] .text-gray-500,
+[data-theme="frozen"] .hover\:text-gray-400:hover,
+[data-theme="frozen"] .hover\:text-gray-500:hover,
+[data-theme="mocha"] .text-gray-400,
+[data-theme="mocha"] .text-gray-500,
+[data-theme="mocha"] .hover\:text-gray-400:hover,
+[data-theme="mocha"] .hover\:text-gray-500:hover {
   color: #606060;
 }
 
-[data-theme="light"] .placeholder-gray-500::placeholder {
+[data-theme="light"] .placeholder-gray-500::placeholder,
+[data-theme="earthy"] .placeholder-gray-500::placeholder,
+[data-theme="frozen"] .placeholder-gray-500::placeholder,
+[data-theme="mocha"] .placeholder-gray-500::placeholder {
   color: #909090;
+}
+
+/* Theme-specific primary text colors */
+[data-theme="light"] .text-gray-100,
+[data-theme="light"] .text-gray-200,
+[data-theme="light"] .hover\:text-gray-100:hover,
+[data-theme="light"] .hover\:text-gray-200:hover {
+  color: #0f172a;
+}
+
+[data-theme="earthy"] .text-gray-100,
+[data-theme="earthy"] .text-gray-200,
+[data-theme="earthy"] .hover\:text-gray-100:hover,
+[data-theme="earthy"] .hover\:text-gray-200:hover {
+  color: #1c1917;
+}
+
+[data-theme="frozen"] .text-gray-100,
+[data-theme="frozen"] .text-gray-200,
+[data-theme="frozen"] .hover\:text-gray-100:hover,
+[data-theme="frozen"] .hover\:text-gray-200:hover {
+  color: #1e2937;
+}
+
+[data-theme="mocha"] .text-gray-100,
+[data-theme="mocha"] .text-gray-200,
+[data-theme="mocha"] .hover\:text-gray-100:hover,
+[data-theme="mocha"] .hover\:text-gray-200:hover {
+  color: #374151;
 }
 
 /* Neon Cyber: subtle glow on accent controls */
@@ -245,7 +363,9 @@ body {
 input[type="range"].accent-scrubber {
   -webkit-appearance: none;
   appearance: none;
+  display: block;
   height: 4px;
+  margin: 0;
   border-radius: 9999px;
   background: rgb(var(--ink-600));
   cursor: pointer;

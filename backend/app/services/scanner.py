@@ -148,6 +148,14 @@ def ingest_media_file(
         session.add(video)
         session.commit()
 
+    if video.id is not None:
+        try:
+            from .sprites import enqueue_sprite_generation
+
+            enqueue_sprite_generation(video.id)
+        except Exception:  # noqa: BLE001
+            pass
+
     return video
 
 

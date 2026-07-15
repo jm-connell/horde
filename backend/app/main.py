@@ -16,6 +16,7 @@ from .api import (
     app_settings,
     backgrounds,
     downloads,
+    fonts,
     playlists,
     preview,
     review,
@@ -77,6 +78,7 @@ app.include_router(app_settings.router)
 app.include_router(ai.router)
 app.include_router(system.router)
 app.include_router(backgrounds.router)
+app.include_router(fonts.router)
 
 
 def _yt_dlp_version() -> str:

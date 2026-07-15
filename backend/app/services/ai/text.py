@@ -164,16 +164,112 @@ def tag_enrich_prompt(video: Video, existing_tags: list[str]) -> str:
     )
 
 
-def category_prompt(sample_titles: list[str]) -> str:
-    joined = "\n".join(f"- {t}" for t in sample_titles[:40])
+def _first_sentence_or_chars(text: str, *, max_chars: int = 120) -> str:
+    text = re.sub(r"\s+", " ", text or "").strip()
+    if not text:
+        return ""
+    # Prefer a sentence break within the budget.
+    window = text[: max_chars + 1]
+    for sep in (". ", "! ", "? "):
+        idx = window.find(sep)
+        if idx >= 12:
+            return text[: idx + 1].strip()
+    return text[:max_chars].strip()
+
+
+_CATEGORY_DESC_CHARS = 300
+_CATEGORY_SUB_CHARS = 120
+_CATEGORY_SAMPLE_BUDGET = 28_000
+
+
+def category_sample_entry(
+    video: Video,
+    *,
+    use_subtitles: bool = True,
+    desc_chars: int = _CATEGORY_DESC_CHARS,
+    sub_chars: int = _CATEGORY_SUB_CHARS,
+) -> str:
+    """Compact metadata block for category invent prompts."""
+    lines = [f"Title: {(video.title or '').strip() or '(untitled)'}"]
+    channel = (video.channel or "").strip()
+    if channel:
+        lines.append(f"Channel: {channel}")
+    tags = library.parse_tags(video.tags)[:8]
+    if tags:
+        lines.append("Tags: " + ", ".join(tags))
+    desc = re.sub(r"\s+", " ", (video.description or "").strip())
+    if desc:
+        lines.append("Description: " + desc[: max(0, desc_chars)])
+    if use_subtitles and sub_chars > 0:
+        sub = load_subtitle_text(video, max_chars=max(sub_chars * 4, sub_chars))
+        excerpt = _first_sentence_or_chars(sub, max_chars=sub_chars)
+        if excerpt:
+            lines.append("Subtitle: " + excerpt)
+    return "\n".join(lines)
+
+
+def bound_category_entries(
+    entries: list[str], *, budget: int = _CATEGORY_SAMPLE_BUDGET
+) -> list[str]:
+    """Keep entries from the start until the joined sample body hits ``budget``."""
+    kept: list[str] = []
+    used = 0
+    sep_len = 2  # "\n\n" between entries
+    for entry in entries:
+        add = len(entry) + (sep_len if kept else 0)
+        if kept and used + add > budget:
+            break
+        if not kept and len(entry) > budget:
+            kept.append(entry[:budget])
+            break
+        kept.append(entry)
+        used += add
+    return kept
+
+
+def category_system_prompt() -> str:
     return (
-        "Given these video titles from a personal archive, propose 8-15 very short "
-        "general browse categories like YouTube chips (e.g. Gaming, Cooking, Travel, "
-        "Music, Tech, Science, DIY, Comedy). Return JSON: "
-        "{\"categories\": [\"Gaming\", \"Cooking\", ...]}. "
-        "Categories must be 1-2 words, broad, and relevant to the sample.\n\n"
-        f"Titles:\n{joined}\n"
+        "You invent distinctive browse category chips for a personal video archive. "
+        "Cover the sample's main themes. Prefer specific, concrete topics over "
+        "universal mega-buckets when the sample supports it. Avoid near-duplicate "
+        "names. Reply with JSON only."
     )
+
+
+def category_prompt(entries: list[str]) -> str:
+    """Build the invent prompt from preformatted sample video entries."""
+    body = "\n\n".join(entries)
+    return (
+        "Given these videos from a personal archive, propose 8-15 browse categories "
+        "specific to this library.\n"
+        "Rules:\n"
+        "- Prefer concrete topics (e.g. Homelab Networking, Mechanical Keyboards) "
+        "over mega-buckets (Tech, Gaming) when the sample supports it.\n"
+        "- Names should be about 2-4 words.\n"
+        "- Avoid near-duplicates (Tech vs Technology, same topic reworded).\n"
+        "- Each category needs a short one-line blurb describing what belongs in it.\n"
+        "Return JSON:\n"
+        '{"categories": [{"name": "Homelab Networking", '
+        '"blurb": "Routers, VLANs, self-hosted infra"}, ...]}\n\n'
+        f"Videos:\n{body}\n"
+    )
+
+
+def category_embed_text(
+    name: str, blurb: str = "", *, example_titles: Optional[list[str]] = None
+) -> str:
+    """Text embedded for category↔video matching."""
+    label = (name or "").strip()
+    about = (blurb or "").strip()
+    lines = [f"Category: {label}"]
+    if about:
+        lines.append(f"About: {about}")
+    titles = [t.strip() for t in (example_titles or []) if t and str(t).strip()]
+    if titles:
+        lines.append("Examples: " + " | ".join(titles[:5]))
+    if len(lines) == 1 and not about:
+        return label
+    return "\n".join(lines)
 
 
 def duplicate_prompt(a: Video, b: Video) -> str:

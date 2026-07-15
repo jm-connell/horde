@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFil
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlmodel import Session, func, select
 
-from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
+from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
 from ..database import get_session
 from ..models import DownloadJob, JobStatus, Video, VideoAiMeta, utcnow
 from ..schemas import (
@@ -35,11 +35,18 @@ from ..schemas import (
 )
 from ..services import channel_catalog, downloader, feed_meta_cache, library
 from ..services import app_settings as app_settings_svc
+from ..services.metadata import (
+    delete_sprite_files,
+    load_sprite_meta,
+    sprite_image_path,
+    sprites_exist,
+)
 from ..services.paths import (
     is_manual_import,
     manual_import_rel_path,
     rename_video_file,
 )
+from ..services.sprites import enqueue_sprite_generation
 
 router = APIRouter(prefix="/api", tags=["videos"])
 
@@ -89,6 +96,7 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
         notes=video.notes,
         source_url=video.source_url,
         has_thumbnail=bool(video.thumbnail_path and Path(video.thumbnail_path).exists()),
+        has_sprites=bool(video.id is not None and sprites_exist(SPRITES_DIR, video.id)),
         subtitles=[
             {"lang": t.get("lang"), "auto": t.get("auto", False)}
             for t in library.parse_subtitles(video.subtitles)
@@ -484,6 +492,8 @@ def channel_feed(
                         row["view_count"] = preview["view_count"]
                     if preview.get("thumbnail_url"):
                         row["thumbnail_url"] = preview["thumbnail_url"]
+                    if preview.get("published_at"):
+                        row["published_at"] = preview["published_at"]
                     if len(row) > 1:
                         updates.append(row)
                 if updates:
@@ -718,6 +728,8 @@ def delete_video(
         _delete_media_files(video)
     if video.thumbnail_path:
         Path(video.thumbnail_path).unlink(missing_ok=True)
+    if video.id is not None:
+        delete_sprite_files(SPRITES_DIR, video.id)
     session.delete(video)
     session.commit()
     return Response(status_code=204)
@@ -755,8 +767,8 @@ def redownload_video(
     if not source_url:
         raise HTTPException(status_code=400, detail="No source URL for this video")
 
-    _delete_media_files(video)
-
+    # Keep existing media until the replacement download completes so playback
+    # stays available if the job fails. Old files are removed in _complete_download.
     job = DownloadJob(
         url=source_url,
         quality_preset=payload.quality_preset,
@@ -801,6 +813,8 @@ def bulk_delete_videos(
             _delete_media_files(video)
         if video.thumbnail_path:
             Path(video.thumbnail_path).unlink(missing_ok=True)
+        if video.id is not None:
+            delete_sprite_files(SPRITES_DIR, video.id)
         session.delete(video)
     session.commit()
     return Response(status_code=204)
@@ -997,6 +1011,37 @@ def get_thumbnail(video_id: int, session: Session = Depends(get_session)):
     if not path.exists():
         raise HTTPException(status_code=404, detail="No thumbnail")
     return FileResponse(path, media_type="image/jpeg")
+
+
+@router.get("/videos/{video_id}/sprites/meta")
+def get_sprite_meta(video_id: int, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    meta = load_sprite_meta(SPRITES_DIR, video_id)
+    if meta is None or not sprites_exist(SPRITES_DIR, video_id):
+        raise HTTPException(status_code=404, detail="Sprites not ready")
+    return meta
+
+
+@router.get("/videos/{video_id}/sprites")
+def get_sprite_sheet(video_id: int, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    path = sprite_image_path(SPRITES_DIR, video_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Sprites not ready")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@router.post("/videos/{video_id}/sprites/generate")
+def generate_sprites(video_id: int, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    status = enqueue_sprite_generation(video_id)
+    return {"status": status}
 
 
 @router.get("/videos/{video_id}/subtitles/{lang}")

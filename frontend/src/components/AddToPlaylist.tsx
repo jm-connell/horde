@@ -56,7 +56,9 @@ export default function AddToPlaylist({ videoId }: { videoId: number }) {
         + Playlist
       </button>
       {status && !open && (
-        <span className="ml-2 text-xs text-accent">{status}</span>
+        <span className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap text-xs text-accent">
+          {status}
+        </span>
       )}
       <FlipMenuPanel open={open} flip={flip} align="left" className="w-64 p-2">
         <div className="max-h-48 overflow-y-auto">

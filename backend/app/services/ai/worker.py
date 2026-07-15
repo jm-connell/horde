@@ -93,21 +93,70 @@ def enqueue_for_video(
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)
 
 
-def enqueue_missing_embeds(*, limit: int = 2000) -> dict:
+def _runtime_limits() -> tuple[int, int]:
+    from . import workload as ai_workload
+
+    ai = app_settings.ai_settings()
+    runtime = ai_workload.resolve_runtime(ai.get("workload_profile"))
+    return runtime.enqueue_embed_limit, runtime.enqueue_tag_limit
+
+
+def enqueue_missing_embeds(*, limit: Optional[int] = None) -> dict:
+    """Queue embeds for videos needing index; loops until drained or cap iterations."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
-    with Session(engine) as session:
-        need = embeddings.videos_needing_embed(session, limit=limit)
-    for video_id in need:
-        if enqueue_job(AiJobKind.embed_video, video_id, force=False) is not None:
-            breakdown["embed"] += 1
+    batch_limit, _ = _runtime_limits()
+    if limit is not None:
+        batch_limit = limit
+    # Multiple passes so large libraries don't stop after one batch.
+    for _ in range(50):
+        with Session(engine) as session:
+            need = embeddings.videos_needing_embed(session, limit=batch_limit)
+        if not need:
+            break
+        added = 0
+        for video_id in need:
+            if enqueue_job(AiJobKind.embed_video, video_id, force=False) is not None:
+                breakdown["embed"] += 1
+                added += 1
+        if added == 0 or len(need) < batch_limit:
+            break
     return _result(breakdown, empty="No missing embeds")
 
 
-def enqueue_missing_tags(*, limit: int = 2000) -> dict:
+def enqueue_reindex_embeds(*, limit: Optional[int] = None) -> dict:
+    """Queue embeds for missing, stale, or wrong-model indexes (e.g. after model change)."""
+    breakdown = {"embed": 0, "tags": 0, "categories": 0}
+    batch_limit, _ = _runtime_limits()
+    if limit is not None:
+        batch_limit = limit
+    for _ in range(50):
+        with Session(engine) as session:
+            need = embeddings.videos_needing_embed(session, limit=batch_limit)
+        if not need:
+            break
+        added = 0
+        for video_id in need:
+            if enqueue_job(AiJobKind.embed_video, video_id, force=True) is not None:
+                breakdown["embed"] += 1
+                added += 1
+        if added == 0 or len(need) < batch_limit:
+            break
+    if breakdown["embed"] > 0:
+        app_settings.save({"ai": {"pending_category_refresh": True}})
+    return _result(
+        breakdown,
+        empty="Search indexes already match the current embed model",
+    )
+
+
+def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
     if not ai.get("enrich_tags", True):
         return _result(breakdown, empty="Tag enrichment is disabled")
+    _, tag_limit = _runtime_limits()
+    if limit is not None:
+        tag_limit = limit
     pending: list[int] = []
     with Session(engine) as session:
         videos = session.exec(
@@ -120,7 +169,7 @@ def enqueue_missing_tags(*, limit: int = 2000) -> dict:
             if meta is not None and (meta.tags_locked or meta.tags_enriched_at):
                 continue
             pending.append(video.id)
-            if len(pending) >= limit:
+            if len(pending) >= tag_limit:
                 break
     for video_id in pending:
         if enqueue_job(AiJobKind.enrich_tags, video_id, force=False) is not None:
@@ -128,12 +177,15 @@ def enqueue_missing_tags(*, limit: int = 2000) -> dict:
     return _result(breakdown, empty="No videos missing AI tags")
 
 
-def enqueue_full_tag_refresh(*, limit: int = 2000) -> dict:
+def enqueue_full_tag_refresh(*, limit: Optional[int] = None) -> dict:
     """Re-queue tag enrich for unlocked videos (clears tags_enriched_at)."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
     if not ai.get("enrich_tags", True):
         return _result(breakdown, empty="Tag enrichment is disabled")
+    _, tag_limit = _runtime_limits()
+    if limit is not None:
+        tag_limit = limit
     ids: list[int] = []
     with Session(engine) as session:
         videos = session.exec(
@@ -151,7 +203,7 @@ def enqueue_full_tag_refresh(*, limit: int = 2000) -> dict:
             meta.updated_at = utcnow()
             session.add(meta)
             ids.append(video.id)
-            if len(ids) >= limit:
+            if len(ids) >= tag_limit:
                 break
         session.commit()
     for video_id in ids:
@@ -421,6 +473,20 @@ def _process_one() -> bool:
     return True
 
 
+def _maybe_pending_category_refresh() -> None:
+    """After a reindex drains, refresh category shelves once."""
+    ai = app_settings.ai_settings()
+    if not ai.get("pending_category_refresh"):
+        return
+    if queue_depth() > 0:
+        return
+    breakdown = queue_breakdown()
+    if breakdown.get("embed_video", 0) > 0:
+        return
+    app_settings.save({"ai": {"pending_category_refresh": False}})
+    enqueue_refresh_categories(force=True)
+
+
 def _worker_loop() -> None:
     while not _stop.is_set():
         try:
@@ -430,6 +496,10 @@ def _worker_loop() -> None:
             worked = False
         if worked:
             continue
+        try:
+            _maybe_pending_category_refresh()
+        except Exception:  # noqa: BLE001
+            logger.exception("Pending category refresh failed")
         _wake.wait(timeout=2.0)
         _wake.clear()
 

@@ -29,6 +29,7 @@ _VIDEO_COLUMNS = [
     ("title_is_custom", "BOOLEAN DEFAULT 0"),
     ("description_is_custom", "BOOLEAN DEFAULT 0"),
     ("subtitles_pending", "BOOLEAN DEFAULT 0"),
+    ("sprite_path", "VARCHAR"),
 ]
 
 _DOWNLOAD_JOB_COLUMNS = [
@@ -58,6 +59,10 @@ _CHANNEL_CATALOG_COLUMNS = [
     ("complete", "BOOLEAN DEFAULT 0"),
 ]
 
+_AI_CATEGORY_COLUMNS = [
+    ("blurb", "VARCHAR"),
+]
+
 
 def _migrate_table(table: str, columns: list[tuple[str, str]]) -> None:
     inspector = inspect(engine)
@@ -78,6 +83,7 @@ def _migrate_columns() -> None:
     _migrate_table("video_ai_meta", _VIDEO_AI_META_COLUMNS)
     _migrate_table("ai_jobs", _AI_JOB_COLUMNS)
     _migrate_table("channel_catalogs", _CHANNEL_CATALOG_COLUMNS)
+    _migrate_table("ai_categories", _AI_CATEGORY_COLUMNS)
 
 
 def verify_schema() -> None:
@@ -89,6 +95,7 @@ def verify_schema() -> None:
         ("video_ai_meta", _VIDEO_AI_META_COLUMNS),
         ("ai_jobs", _AI_JOB_COLUMNS),
         ("channel_catalogs", _CHANNEL_CATALOG_COLUMNS),
+        ("ai_categories", _AI_CATEGORY_COLUMNS),
     ):
         if table not in inspector.get_table_names():
             continue

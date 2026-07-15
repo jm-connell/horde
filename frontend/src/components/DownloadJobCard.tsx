@@ -64,6 +64,9 @@ export default function DownloadJobCard({
   const failed = status === "error";
   const cancelled = status === "cancelled";
   const videoId = live?.video_id ?? job.video_id;
+  const videoGone = Boolean(job.video_missing || job.superseded);
+  const isReplacing =
+    active && Boolean(job.replace_video_id) && !completed && !failed && !cancelled;
 
   const resolveTitle = () => job.title_override ?? live?.title ?? job.title ?? "";
   const resolveChannel = () => job.channel_override ?? live?.channel ?? job.channel ?? "";
@@ -202,10 +205,14 @@ export default function DownloadJobCard({
     <div
       className={`ui-panel relative overflow-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700 ${
         active ? "border-l-4 border-l-accent pl-[calc(1.25rem-2px)]" : ""
-      }`}
+      }${videoGone ? " opacity-60" : ""}`}
     >
       <div className="flex gap-4">
-        <div className="hidden h-20 w-36 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block">
+        <div
+          className={`hidden h-20 w-36 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block${
+            videoGone ? " grayscale" : ""
+          }`}
+        >
           {thumbSrc ? (
             <img
               src={thumbSrc}
@@ -238,9 +245,32 @@ export default function DownloadJobCard({
         <div className="min-w-0 flex-1">
           <div className="mb-3 flex items-start justify-between gap-3 overflow-hidden text-sm">
             <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
-              {completed && <span className="shrink-0 text-accent">✓</span>}
+              {completed && !videoGone && (
+                <span className="shrink-0 text-accent">✓</span>
+              )}
               {failed && <span className="shrink-0 text-red-400">✗</span>}
-              <span className="min-w-0 truncate">{title || "Working…"}</span>
+              <span
+                className={`min-w-0 truncate${
+                  videoGone ? " text-gray-500 line-through" : ""
+                }`}
+              >
+                {title || "Working…"}
+              </span>
+              {job.superseded && (
+                <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                  Replaced
+                </span>
+              )}
+              {job.video_missing && !job.superseded && (
+                <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                  Removed
+                </span>
+              )}
+              {isReplacing && (
+                <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+                  Replacing
+                </span>
+              )}
             </span>
             <div className="flex shrink-0 items-center gap-2">
               {!completed && (
@@ -324,13 +354,20 @@ export default function DownloadJobCard({
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            {completed && videoId && (
+            {completed && videoId && !videoGone && (
               <Link
                 to={`/watch/${videoId}`}
                 className="inline-block rounded-lg bg-accent/15 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/25"
               >
                 Watch now →
               </Link>
+            )}
+            {completed && videoGone && (
+              <span className="text-xs text-gray-500">
+                {job.video_missing
+                  ? "Video no longer in library"
+                  : "Superseded by a newer download"}
+              </span>
             )}
             {failed && (
               <button
@@ -367,15 +404,17 @@ export default function DownloadJobCard({
               </button>
             )}
             {saved && <span className="text-xs text-accent">Saved</span>}
-            {(sizeLabel || completed || (active && job.quality_preset)) && (
+            {(sizeLabel || completed || job.quality_preset) && (
               <span className="ml-auto flex items-center gap-2 text-xs text-gray-500">
                 {sizeLabel && <span>{sizeLabel}</span>}
-                {active && job.quality_preset && (
+                {job.quality_preset && (
                   <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400">
                     {job.quality_preset}
                   </span>
                 )}
-                {completed && <span className="text-gray-400">Done</span>}
+                {completed && !videoGone && (
+                  <span className="text-gray-400">Done</span>
+                )}
               </span>
             )}
           </div>

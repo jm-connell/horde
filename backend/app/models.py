@@ -38,6 +38,8 @@ class Video(SQLModel, table=True):
     notes: Optional[str] = None
     source_url: Optional[str] = None
     thumbnail_path: Optional[str] = None
+    # Seek-preview sprite sheet path (absolute), sibling JSON sidecar beside it.
+    sprite_path: Optional[str] = None
     # JSON list of subtitle tracks: [{"lang": str, "path": str, "auto": bool}].
     subtitles: str = Field(default="[]")
 
@@ -234,6 +236,7 @@ class AiCategory(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
+    blurb: Optional[str] = None
     embedding: bytes = Field(default=b"")
     dim: int = 0
     model: str = Field(default="nomic-embed-text")

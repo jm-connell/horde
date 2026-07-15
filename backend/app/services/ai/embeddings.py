@@ -41,6 +41,46 @@ def cosine(a: list[float], b: list[float]) -> float:
     return dot / ((na ** 0.5) * (nb ** 0.5))
 
 
+def l2_normalize(vec: list[float]) -> list[float]:
+    if not vec:
+        return []
+    norm = sum(x * x for x in vec) ** 0.5
+    if norm <= 0:
+        return list(vec)
+    return [x / norm for x in vec]
+
+
+def blend_vectors(
+    a: list[float], b: list[float], *, weight_a: float = 0.5
+) -> list[float]:
+    """Weighted average then L2-normalize. ``a`` weight is ``weight_a``, ``b`` is 1-weight_a."""
+    if not a:
+        return l2_normalize(b)
+    if not b or len(a) != len(b):
+        return l2_normalize(a)
+    w_b = 1.0 - weight_a
+    mixed = [weight_a * x + w_b * y for x, y in zip(a, b)]
+    return l2_normalize(mixed)
+
+
+def mean_vectors(vectors: list[list[float]]) -> Optional[list[float]]:
+    usable = [v for v in vectors if v]
+    if not usable:
+        return None
+    dim = len(usable[0])
+    acc = [0.0] * dim
+    n = 0
+    for v in usable:
+        if len(v) != dim:
+            continue
+        for i, x in enumerate(v):
+            acc[i] += x
+        n += 1
+    if n <= 0:
+        return None
+    return [x / float(n) for x in acc]
+
+
 def _get_or_create_meta(session: Session, video_id: int) -> VideoAiMeta:
     meta = session.get(VideoAiMeta, video_id)
     if meta is None:
@@ -59,6 +99,18 @@ def delete_embeddings(session: Session, video_id: int) -> None:
     session.commit()
 
 
+def _embeddings_match_model(
+    session: Session, video_id: int, model: str
+) -> bool:
+    """True when the video has at least one embedding row, all using ``model``."""
+    rows = session.exec(
+        select(VideoEmbedding).where(VideoEmbedding.video_id == video_id)
+    ).all()
+    if not rows:
+        return False
+    return all(str(row.model or "") == model for row in rows)
+
+
 def embed_video(session: Session, video_id: int) -> bool:
     """Compute and store embeddings for a video. Returns True on success."""
     video = session.get(Video, video_id)
@@ -74,12 +126,12 @@ def embed_video(session: Session, video_id: int) -> bool:
     use_subs = bool(ai.get("use_subtitles", True))
     digest = ai_text.content_hash(video, use_subtitles=use_subs)
     meta = _get_or_create_meta(session, video_id)
-    if meta.content_hash == digest and meta.embed_status == "ready":
-        existing = session.exec(
-            select(VideoEmbedding).where(VideoEmbedding.video_id == video_id)
-        ).first()
-        if existing is not None:
-            return True
+    if (
+        meta.content_hash == digest
+        and meta.embed_status == "ready"
+        and _embeddings_match_model(session, video_id, model)
+    ):
+        return True
 
     docs = ai_text.documents_for_video(video, use_subtitles=use_subs)
     # Remove old rows for this video.
@@ -188,23 +240,32 @@ def similar_video_ids(
 
 
 def indexed_count(session: Session) -> tuple[int, int]:
-    """Return (indexed_ready, total_library_videos)."""
-    total = len(
-        session.exec(
-            select(Video.id).where(Video.needs_review == False)  # noqa: E712
-        ).all()
-    )
-    ready = len(
-        session.exec(
-            select(VideoAiMeta.video_id).where(VideoAiMeta.embed_status == "ready")
-        ).all()
-    )
+    """Return (indexed_ready, total_library_videos).
+
+    Ready means embed_status is ready and stored vectors use the current embed model.
+    """
+    ai = app_settings.ai_settings()
+    model = str(ai.get("embed_model") or "nomic-embed-text")
+    videos = session.exec(
+        select(Video).where(Video.needs_review == False)  # noqa: E712
+    ).all()
+    total = len(videos)
+    ready = 0
+    for video in videos:
+        if video.id is None:
+            continue
+        meta = session.get(VideoAiMeta, video.id)
+        if meta is None or meta.embed_status != "ready":
+            continue
+        if _embeddings_match_model(session, video.id, model):
+            ready += 1
     return ready, total
 
 
 def videos_needing_embed(session: Session, *, limit: int = 500) -> list[int]:
     ai = app_settings.ai_settings()
     use_subs = bool(ai.get("use_subtitles", True))
+    model = str(ai.get("embed_model") or "nomic-embed-text")
     videos = session.exec(
         select(Video).where(Video.needs_review == False)  # noqa: E712
     ).all()
@@ -214,7 +275,12 @@ def videos_needing_embed(session: Session, *, limit: int = 500) -> list[int]:
             continue
         meta = session.get(VideoAiMeta, video.id)
         digest = ai_text.content_hash(video, use_subtitles=use_subs)
-        if meta is None or meta.embed_status != "ready" or meta.content_hash != digest:
+        stale_content = (
+            meta is None
+            or meta.embed_status != "ready"
+            or meta.content_hash != digest
+        )
+        if stale_content or not _embeddings_match_model(session, video.id, model):
             need.append(video.id)
             if len(need) >= limit:
                 break
