@@ -1,17 +1,33 @@
-"""GPU-aware workload profiles: VRAM picks models; profile picks intensity."""
+"""GPU-aware workload profiles: VRAM picks models; profile picks intensity.
+
+AI sizing targets the Ollama machine (override → Ollama /api/info → same-host
+nvidia-smi), not necessarily the Horde process host.
+"""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import Any, Literal, Optional
+from urllib.parse import urlparse
 
 WorkloadProfile = Literal["light", "normal", "heavy"]
 VramTier = Literal["critical", "small", "medium", "large", "unknown"]
+GpuSource = Literal["override", "ollama", "local", "unknown"]
 
 GB = 1024**3
 CRITICAL_VRAM = 3 * GB
 SMALL_VRAM = 8 * GB
 MEDIUM_VRAM = 16 * GB
+
+_SAME_HOST_NAMES = frozenset(
+    {
+        "127.0.0.1",
+        "localhost",
+        "::1",
+        "host.docker.internal",
+        "ollama",
+    }
+)
 
 
 @dataclass
@@ -42,6 +58,7 @@ class RuntimeConfig:
     warning: Optional[str]
     gpu_name: Optional[str]
     vram_total_bytes: Optional[int]
+    gpu_source: GpuSource = "unknown"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -97,7 +114,7 @@ def probe_nvidia_gpu() -> Optional[dict[str, Any]]:
 
 
 def detect_gpu() -> GpuInfo:
-    """Best-effort NVIDIA GPU info."""
+    """Best-effort NVIDIA GPU info on the Horde host (system stats)."""
     raw = probe_nvidia_gpu()
     if not raw:
         return GpuInfo()
@@ -108,6 +125,145 @@ def detect_gpu() -> GpuInfo:
         util_percent=raw.get("util_percent"),
         temp_c=raw.get("temp_c"),
     )
+
+
+def is_same_host_ollama(url: Optional[str]) -> bool:
+    """True when Ollama is expected to share this machine's GPU."""
+    if not url or not str(url).strip():
+        return True
+    try:
+        parsed = urlparse(str(url).strip())
+    except Exception:  # noqa: BLE001
+        return False
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        return False
+    return host in _SAME_HOST_NAMES
+
+
+def gpu_from_vram_gb(gb: float, *, name: Optional[str] = None) -> GpuInfo:
+    bytes_total = int(float(gb) * GB)
+    return GpuInfo(
+        name=name or f"Ollama GPU (~{gb:g} GB VRAM)",
+        vram_total_bytes=bytes_total,
+    )
+
+
+def probe_ollama_gpu(base_url: str) -> Optional[GpuInfo]:
+    """Best-effort GPU info from Ollama GET /api/info (not yet on all versions)."""
+    import httpx
+
+    url = base_url.rstrip("/")
+    try:
+        with httpx.Client(base_url=url, timeout=httpx.Timeout(1.5, connect=0.5)) as client:
+            resp = client.get("/api/info")
+            if not resp.is_success:
+                return None
+            data = resp.json()
+    except Exception:  # noqa: BLE001
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    compute = data.get("compute") if isinstance(data.get("compute"), dict) else {}
+    gpus = compute.get("supported_gpus") if isinstance(compute, dict) else None
+    if not isinstance(gpus, list) or not gpus:
+        # Alternate shapes some drafts used
+        gpus = data.get("supported_gpus") or data.get("gpus")
+    if not isinstance(gpus, list) or not gpus:
+        return None
+
+    best: Optional[dict[str, Any]] = None
+    best_total = -1
+    for row in gpus:
+        if not isinstance(row, dict):
+            continue
+        total = row.get("total_memory")
+        if total is None:
+            total = row.get("total_vram") or row.get("memory_total")
+        try:
+            total_i = int(total)
+        except (TypeError, ValueError):
+            continue
+        if total_i > best_total:
+            best_total = total_i
+            best = row
+
+    if not best or best_total <= 0:
+        return None
+
+    name = best.get("name") or best.get("description") or best.get("gpu_id")
+    free = best.get("free_memory")
+    try:
+        used = best_total - int(free) if free is not None else None
+    except (TypeError, ValueError):
+        used = None
+
+    return GpuInfo(
+        name=str(name) if name else "Ollama GPU",
+        vram_total_bytes=best_total,
+        vram_used_bytes=used if used is not None and used >= 0 else None,
+    )
+
+
+def detect_gpu_for_ai(
+    *,
+    base_url: Optional[str] = None,
+    vram_gb: Optional[float] = None,
+) -> tuple[GpuInfo, GpuSource, Optional[str]]:
+    """GPU used for AI model/workload sizing (Ollama machine, not Horde host).
+
+    Order: Settings override → Ollama /api/info → same-host nvidia-smi → unknown.
+    """
+    from .. import app_settings
+
+    ai = app_settings.ai_settings()
+    if vram_gb is None:
+        raw = ai.get("vram_gb")
+        if raw is not None and raw != "":
+            try:
+                vram_gb = float(raw)
+            except (TypeError, ValueError):
+                vram_gb = None
+
+    if vram_gb is not None and vram_gb > 0:
+        return gpu_from_vram_gb(vram_gb), "override", None
+
+    url = (base_url or "").strip() or None
+    if not url:
+        try:
+            from .provider import resolve_base_url
+
+            url = resolve_base_url()
+        except Exception:  # noqa: BLE001
+            url = None
+    if not url:
+        from ...config import OLLAMA_BASE_URL
+
+        url = (
+            (ai.get("base_url") or "").strip()
+            or (OLLAMA_BASE_URL or "").strip()
+            or None
+        )
+
+    if url:
+        ollama_gpu = probe_ollama_gpu(url)
+        if ollama_gpu and ollama_gpu.vram_total_bytes:
+            return ollama_gpu, "ollama", None
+
+    if is_same_host_ollama(url):
+        local = detect_gpu()
+        if local.vram_total_bytes:
+            return local, "local", None
+        return GpuInfo(), "unknown", None
+
+    warning = (
+        "Ollama is on another machine and its GPU VRAM could not be detected. "
+        "Set Settings → AI → Ollama VRAM (GB) so models match the Ollama GPU, "
+        "or leave blank for conservative defaults."
+    )
+    return GpuInfo(), "unknown", warning
 
 
 def vram_tier(gpu: GpuInfo) -> VramTier:
@@ -250,8 +406,16 @@ def normalize_profile(raw: Any) -> WorkloadProfile:
 def resolve_runtime(
     profile: WorkloadProfile | str | None = None,
     gpu: Optional[GpuInfo] = None,
+    *,
+    gpu_source: Optional[GpuSource] = None,
+    detect_warning: Optional[str] = None,
 ) -> RuntimeConfig:
-    gpu = gpu if gpu is not None else detect_gpu()
+    if gpu is not None:
+        source: GpuSource = gpu_source or "unknown"
+        warning = detect_warning
+    else:
+        gpu, source, warning = detect_gpu_for_ai()
+
     tier = vram_tier(gpu)
     recommended = recommended_profile_for_tier(tier)
     requested = normalize_profile(profile)
@@ -267,8 +431,7 @@ def resolve_runtime(
     else:
         effective = requested
 
-    warning: Optional[str] = None
-    if effective == "heavy" and tier in ("small", "medium", "unknown"):
+    if warning is None and effective == "heavy" and tier in ("small", "medium", "unknown"):
         warning = (
             "Heavy workload fits this GPU’s models but will take longer — "
             "larger invent samples and deeper indexing, not a bigger model."
@@ -295,6 +458,7 @@ def resolve_runtime(
         warning=warning,
         gpu_name=gpu.name,
         vram_total_bytes=gpu.vram_total_bytes,
+        gpu_source=source,
     )
 
 

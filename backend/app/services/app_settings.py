@@ -22,12 +22,16 @@ AI_DEFAULTS: dict[str, Any] = {
     "ai_duplicates": True,
     "category_min_score": 0.55,
     "workload_profile": "normal",  # light | normal | heavy
+    # Optional GiB override for the Ollama machine's GPU (null = autodetect).
+    "vram_gb": None,
     "pending_category_refresh": False,
     "paused": False,
 }
 
 _CATEGORY_MIN_SCORE_LO = 0.20
 _CATEGORY_MIN_SCORE_HI = 0.90
+_VRAM_GB_LO = 0.5
+_VRAM_GB_HI = 256.0
 
 
 def clamp_category_min_score(value: Any) -> float:
@@ -36,6 +40,19 @@ def clamp_category_min_score(value: Any) -> float:
     except (TypeError, ValueError):
         score = float(AI_DEFAULTS["category_min_score"])
     return max(_CATEGORY_MIN_SCORE_LO, min(_CATEGORY_MIN_SCORE_HI, score))
+
+
+def clamp_vram_gb(value: Any) -> float | None:
+    """None/empty clears the override; otherwise clamp to a sane GiB range."""
+    if value is None or value == "":
+        return None
+    try:
+        gb = float(value)
+    except (TypeError, ValueError):
+        return None
+    if gb <= 0:
+        return None
+    return max(_VRAM_GB_LO, min(_VRAM_GB_HI, gb))
 
 DEFAULTS: dict[str, Any] = {
     "progress_expiry_days": 14,
@@ -72,6 +89,7 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     merged["category_min_score"] = clamp_category_min_score(
         merged.get("category_min_score")
     )
+    merged["vram_gb"] = clamp_vram_gb(merged.get("vram_gb"))
     return merged
 
 

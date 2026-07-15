@@ -147,8 +147,10 @@ when Settings → AI → Auto-pull is enabled.
 
 **Ollama on another machine (e.g. NAS runs Horde, PC has the GPU):** leave the
 `ai` profile off and set `OLLAMA_BASE_URL=http://<pc-ip>:11434` in `.env`, or
-enter that URL under Settings → AI. Use Settings → **Process library now** for
-backlogs after enabling AI for the first time.
+enter that URL under Settings → AI. Set **Ollama VRAM (GB)** there to the GPU
+PC’s VRAM so workload/model autodetection matches Ollama (not the Horde host).
+Use Settings → **Process library now** for backlogs after enabling AI for the
+first time.
 
 Schedule modes (Settings → AI):
 

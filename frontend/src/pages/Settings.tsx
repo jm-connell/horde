@@ -224,7 +224,13 @@ const WORKLOAD_TIP =
   "Light keeps invent samples and indexing queues small for faster, quieter runs. " +
   "Normal is the balanced default. Heavy uses larger invent samples, deeper subtitle " +
   "context, and bigger index batches — more GPU time, better coverage on large libraries. " +
-  "Models are chosen automatically from your GPU VRAM; the profile only changes how hard Horde works.";
+  "Models are chosen from the Ollama machine’s VRAM (not the Horde host); the profile " +
+  "only changes how hard Horde works.";
+
+const VRAM_OVERRIDE_TIP =
+  "When Ollama runs on another PC, Horde cannot always read that GPU. Enter its VRAM in " +
+  "GB (e.g. 12 for an RTX 4070) so workload and model picks match Ollama. Leave blank to " +
+  "autodetect: same-host uses nvidia-smi; remote tries Ollama’s /api/info when available.";
 
 const WORKLOAD_OPTIONS: { value: AiWorkloadProfile; label: string }[] = [
   { value: "light", label: "Light" },
@@ -247,6 +253,7 @@ const DEFAULT_AI: AiSettings = {
   ai_duplicates: true,
   category_min_score: 0.55,
   workload_profile: "normal",
+  vram_gb: null,
   paused: false,
 };
 
@@ -372,7 +379,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "ai",
     keywords:
-      "ollama connection enable ai base url queue indexed features gpu vram workload light normal heavy",
+      "ollama connection enable ai base url queue indexed features gpu vram workload light normal heavy override",
   },
   {
     tab: "ai",
@@ -624,7 +631,7 @@ function SystemStatsSnippet({ stats }: { stats: SystemStats | null }) {
         : null;
     if (g.name || lines.length || vram) {
       cards.push({
-        label: "GPU",
+        label: "Horde host GPU",
         value: (
           <>
             {g.name && (
@@ -763,11 +770,33 @@ function AiQueueStatusDl({
         </dd>
       </div>
       {aiStatus.current_job && <CurrentAiJob job={aiStatus.current_job} />}
+      {(aiStatus.gpu_name || aiStatus.vram_total_bytes != null) && (
+        <div className="flex justify-between gap-3">
+          <dt className="text-gray-400">Ollama GPU</dt>
+          <dd className="text-right text-gray-200">
+            {[
+              aiStatus.gpu_name,
+              aiStatus.vram_total_bytes != null
+                ? formatSize(aiStatus.vram_total_bytes)
+                : null,
+              aiStatus.gpu_source === "override"
+                ? "override"
+                : aiStatus.gpu_source === "ollama"
+                  ? "from Ollama"
+                  : aiStatus.gpu_source === "local"
+                    ? "local"
+                    : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </dd>
+        </div>
+      )}
       {systemStats?.gpu &&
         (systemStats.gpu.util_percent != null ||
           systemStats.gpu.temp_c != null) && (
           <div className="flex justify-between gap-3">
-            <dt className="text-gray-400">GPU</dt>
+            <dt className="text-gray-400">Horde host GPU</dt>
             <dd className="text-right text-gray-200">
               {[
                 systemStats.gpu.util_percent != null
@@ -3127,9 +3156,10 @@ export default function Settings() {
                   />
                 </div>
                 <p className="max-w-2xl text-xs text-gray-500">
-                  Point to your local Ollama instance for embeddings and small
-                  LLM tasks. Leave the URL blank to attempt auto-discover, but
-                  don&apos;t count on it.
+                  Point to your Ollama instance for embeddings and small LLM
+                  tasks. Leave the URL blank to attempt auto-discover. Workload
+                  and model picks use that machine&apos;s GPU — not the Horde
+                  host (see Resources for host CPU/RAM/GPU).
                 </p>
                 <div
                   className={
@@ -3171,8 +3201,8 @@ export default function Settings() {
                       <HelpTip
                         text={
                           aiStatus.gpu_name
-                            ? `Best starting workload for ${aiStatus.gpu_name}. Applies models and invent intensity that fit this GPU’s VRAM.`
-                            : "Best starting workload for this machine. Applies models and invent intensity that fit detected GPU VRAM."
+                            ? `Best starting workload for ${aiStatus.gpu_name}. Applies models and invent intensity that fit the Ollama GPU’s VRAM.`
+                            : "Best starting workload for the Ollama machine. Applies models and invent intensity that fit detected (or overridden) GPU VRAM."
                         }
                       >
                         <button
@@ -3186,6 +3216,52 @@ export default function Settings() {
                         </button>
                       </HelpTip>
                     )}
+                  </div>
+                  <div
+                    className={
+                      !!q && !match("vram", "gpu", "ollama")
+                        ? "hidden"
+                        : "flex max-w-md flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3"
+                    }
+                  >
+                    <span className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-gray-200 sm:w-40">
+                      Ollama VRAM (GB)
+                      <HelpTip text={VRAM_OVERRIDE_TIP} />
+                    </span>
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={256}
+                      step={0.5}
+                      inputMode="decimal"
+                      value={aiDraft.vram_gb ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        setAiDraft((d) => ({
+                          ...d,
+                          vram_gb: raw === "" ? null : Number(raw),
+                        }));
+                      }}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        if (raw === "") {
+                          void saveAi({ vram_gb: null });
+                          return;
+                        }
+                        const n = Number(raw);
+                        if (!Number.isFinite(n) || n <= 0) {
+                          setAiDraft((d) => ({
+                            ...d,
+                            vram_gb: appSettings?.ai.vram_gb ?? null,
+                          }));
+                          return;
+                        }
+                        void saveAi({ vram_gb: n });
+                      }}
+                      placeholder="Auto"
+                      aria-label="Ollama VRAM in GB"
+                      className={`${INPUT} min-w-0 flex-1`}
+                    />
                   </div>
                   {reindexPrompt && (
                     <div className="ui-panel rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
@@ -3216,16 +3292,21 @@ export default function Settings() {
                       {aiStatus.lock_reason}
                     </p>
                   )}
-                  {aiStatus?.workload_warning &&
-                    aiDraft.workload_profile === "heavy" && (
-                      <p className="text-xs text-amber-400/90">
-                        {aiStatus.workload_warning}
-                      </p>
-                    )}
+                  {aiStatus?.workload_warning && (
+                    <p className="text-xs text-amber-400/90">
+                      {aiStatus.workload_warning}
+                    </p>
+                  )}
+                  {aiStatus?.gpu_source === "override" && (
+                    <p className="text-xs text-gray-500">
+                      Using your Ollama VRAM override for model sizing.
+                      Re-apply a workload after changing it.
+                    </p>
+                  )}
                   {aiStatus && aiStatus.models_match_profile === false && (
                     <p className="text-xs text-gray-500">
                       Models customized in Advanced — re-apply a workload to
-                      reset them for this GPU.
+                      reset them for the Ollama GPU.
                     </p>
                   )}
                 </div>
@@ -3313,7 +3394,8 @@ export default function Settings() {
             >
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="min-w-0 text-xs text-gray-500">
-                  Optional overrides. Workload already picks models for your GPU.
+                  Optional overrides. Workload already picks models for the
+                  Ollama GPU.
                 </p>
                 <button
                   type="button"
@@ -3881,6 +3963,10 @@ export default function Settings() {
                 )
               }
             >
+              <p className="mb-3 max-w-2xl text-xs text-gray-500">
+                Horde host CPU, RAM, and GPU. AI workload sizing uses the
+                Ollama machine instead (see AI → Ollama VRAM).
+              </p>
               <SystemStatsSnippet stats={systemStats} />
             </Section>
 

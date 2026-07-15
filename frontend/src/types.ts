@@ -223,6 +223,7 @@ export interface StorageStats {
 
 export type AiSchedule = "on_download" | "on_request" | "timer" | "set_time";
 export type AiWorkloadProfile = "light" | "normal" | "heavy";
+export type AiGpuSource = "override" | "ollama" | "local" | "unknown";
 
 export interface AiSettings {
   enabled: boolean;
@@ -239,6 +240,8 @@ export interface AiSettings {
   ai_duplicates: boolean;
   category_min_score: number;
   workload_profile: AiWorkloadProfile;
+  /** Optional GiB override for the Ollama machine GPU; null = autodetect. */
+  vram_gb: number | null;
   paused: boolean;
 }
 
@@ -278,6 +281,7 @@ export interface AiStatus {
   vram_tier?: string;
   gpu_name?: string | null;
   vram_total_bytes?: number | null;
+  gpu_source?: AiGpuSource;
   invent_sample_size?: number;
   invent_budget_chars?: number;
   models_match_profile?: boolean;

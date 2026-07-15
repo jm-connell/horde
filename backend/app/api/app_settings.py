@@ -24,6 +24,7 @@ class AiSettingsRead(BaseModel):
     ai_duplicates: bool = True
     category_min_score: float = 0.55
     workload_profile: Literal["light", "normal", "heavy"] = "normal"
+    vram_gb: Optional[float] = None
     paused: bool = False
 
 
@@ -42,6 +43,7 @@ class AiSettingsUpdate(BaseModel):
     ai_duplicates: Optional[bool] = None
     category_min_score: Optional[float] = Field(default=None, ge=0.20, le=0.90)
     workload_profile: Optional[Literal["light", "normal", "heavy"]] = None
+    vram_gb: Optional[float] = Field(default=None, ge=0.5, le=256)
     paused: Optional[bool] = None
 
 
@@ -77,6 +79,8 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
         filtered["category_min_score"] = app_settings.clamp_category_min_score(
             filtered["category_min_score"]
         )
+    if "vram_gb" in filtered:
+        filtered["vram_gb"] = app_settings.clamp_vram_gb(filtered["vram_gb"])
     return AiSettingsRead(**filtered)
 
 
@@ -121,7 +125,10 @@ def update_settings(payload: AppSettingsUpdate):
         updates["ui"] = payload.ui
     if payload.ai is not None:
         ai_updates = payload.ai.model_dump(exclude_unset=True)
-        # Applying a workload profile resolves models + match score for this GPU.
+        if "vram_gb" in ai_updates:
+            # Allow clearing the override with null; Field ge=0.5 rejects 0.
+            ai_updates["vram_gb"] = app_settings.clamp_vram_gb(ai_updates["vram_gb"])
+        # Applying a workload profile resolves models + match score for Ollama GPU.
         if "workload_profile" in ai_updates:
             from ..services.ai import workload as ai_workload
 

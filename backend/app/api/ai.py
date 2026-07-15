@@ -52,6 +52,7 @@ class AiStatusRead(BaseModel):
     vram_tier: str = "unknown"
     gpu_name: Optional[str] = None
     vram_total_bytes: Optional[int] = None
+    gpu_source: str = "unknown"
     invent_sample_size: int = 100
     invent_budget_chars: int = 28000
     models_match_profile: bool = True
@@ -115,6 +116,7 @@ def ai_status(session: Session = Depends(get_session)):
         vram_tier=runtime.vram_tier,
         gpu_name=runtime.gpu_name,
         vram_total_bytes=runtime.vram_total_bytes,
+        gpu_source=runtime.gpu_source,
         invent_sample_size=runtime.invent_sample_size,
         invent_budget_chars=runtime.invent_budget_chars,
         models_match_profile=models_match,
@@ -123,7 +125,7 @@ def ai_status(session: Session = Depends(get_session)):
 
 @router.post("/apply-workload")
 def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()):
-    """Apply a workload profile: resolve models for this GPU, save, optional pull."""
+    """Apply a workload profile: resolve models for the Ollama GPU, save, optional pull."""
     from ..services import app_settings
     from ..services.ai import workload as ai_workload
     from ..services.ai.provider import ensure_models, get_provider
