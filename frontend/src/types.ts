@@ -325,6 +325,7 @@ export interface SystemStats {
   ram_percent: number | null;
   gpu: {
     name?: string | null;
+    vendor?: "nvidia" | "amd" | "intel" | "unknown" | null;
     util_percent: number | null;
     temp_c: number | null;
     vram_used_bytes: number | null;

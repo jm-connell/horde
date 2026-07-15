@@ -230,8 +230,9 @@ const WORKLOAD_TIP =
 
 const VRAM_OVERRIDE_TIP =
   "When Ollama runs on another PC, Horde cannot always read that GPU. Enter its VRAM in " +
-  "GB (e.g. 12 for an RTX 4070) so workload and model picks match Ollama. Leave blank to " +
-  "autodetect: same-host uses nvidia-smi; remote tries Ollama’s /api/info when available.";
+  "GB (e.g. 12 for an RTX 4070 or RX 7800 XT) so workload and model picks match Ollama. " +
+  "Leave blank to autodetect: same-host probes NVIDIA, AMD (ROCm/sysfs), or Intel DRM; " +
+  "remote tries Ollama’s /api/info when available.";
 
 const SUMMARY_LENGTH_TIP =
   "How long on-demand Watch summaries should be. Short ≈100–160 words, " +
@@ -425,7 +426,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   },
   {
     tab: "system",
-    keywords: "resources cpu ram memory gpu vram temperature nvidia",
+    keywords: "resources cpu ram memory gpu vram temperature nvidia amd intel rocm",
   },
 ];
 
@@ -641,10 +642,20 @@ function SystemStatsSnippet({ stats }: { stats: SystemStats | null }) {
     const vram =
       g.vram_used_bytes != null && g.vram_total_bytes != null
         ? `${formatSize(g.vram_used_bytes)} / ${formatSize(g.vram_total_bytes)}`
-        : null;
+        : g.vram_total_bytes != null
+          ? formatSize(g.vram_total_bytes)
+          : null;
+    const vendorLabel =
+      g.vendor === "nvidia"
+        ? "NVIDIA"
+        : g.vendor === "amd"
+          ? "AMD"
+          : g.vendor === "intel"
+            ? "Intel"
+            : null;
     if (g.name || lines.length || vram) {
       cards.push({
-        label: "Horde host GPU",
+        label: vendorLabel ? `Horde host GPU (${vendorLabel})` : "Horde host GPU",
         value: (
           <>
             {g.name && (
@@ -3110,7 +3121,7 @@ export default function Settings() {
           >
             <div className="space-y-4">
               <SettingRow
-                title="Show download count in navigation"
+                title="Show active download count in navigation"
                 description="Badge on the Download tab while jobs are queued or in progress."
                 hidden={!!q && !match("download count", "navigation", "badge")}
                 control={
@@ -3202,9 +3213,7 @@ export default function Settings() {
                 </div>
                 <p className="max-w-2xl text-xs text-gray-500">
                   Point to your Ollama instance for embeddings and small LLM
-                  tasks. Leave the URL blank to attempt auto-discover. Workload
-                  and model picks use that machine&apos;s GPU — not the Horde
-                  host (see Resources for host CPU/RAM/GPU).
+                  tasks. Leave the URL blank to attempt auto-discover (but don't count on it). AI processing is done on the Ollama machine, if separate from Horde host.
                 </p>
                 <div
                   className={
@@ -4099,6 +4108,9 @@ export default function Settings() {
                   "vram",
                   "temperature",
                   "nvidia",
+                  "amd",
+                  "intel",
+                  "rocm",
                   "system"
                 )
               }

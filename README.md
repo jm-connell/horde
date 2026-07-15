@@ -145,6 +145,13 @@ docker compose --profile ai up -d
 Horde auto-discovers `http://ollama:11434`. Models are pulled on first connect
 when Settings → AI → Auto-pull is enabled.
 
+**GPU vendors:** Ollama does the inference; Horde only probes the host for
+workload sizing and Settings stats. Same-host detection supports NVIDIA
+(`nvidia-smi`), AMD (`rocm-smi` or DRM sysfs), and Intel (DRM sysfs). For the
+compose sidecar, uncomment the matching NVIDIA / AMD / Intel device block in
+`docker-compose.yml`. Remote Ollama still works on any GPU Ollama supports —
+set **Ollama VRAM (GB)** if autodetection cannot see that machine’s VRAM.
+
 **Ollama on another machine (e.g. NAS runs Horde, PC has the GPU):** leave the
 `ai` profile off and set `OLLAMA_BASE_URL=http://<pc-ip>:11434` in `.env`, or
 enter that URL under Settings → AI. Set **Ollama VRAM (GB)** there to the GPU
