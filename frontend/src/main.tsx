@@ -7,12 +7,18 @@ import {
   applyTheme,
   loadSettings,
 } from "./hooks/useSettings";
+import { applyUiFont } from "./fonts";
 import "./index.css";
 
 // Apply saved theme / motion before first paint to avoid flash.
 const bootSettings = loadSettings();
 applyTheme(bootSettings.theme, bootSettings.customColors);
 applyMotionPrefs(bootSettings);
+void applyUiFont({
+  uiFont: bootSettings.uiFont,
+  customFontUrl: bootSettings.customFontUrl,
+  customFontHasFile: bootSettings.customFontHasFile,
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

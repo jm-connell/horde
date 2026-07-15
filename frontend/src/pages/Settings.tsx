@@ -12,8 +12,14 @@ import {
   type NavIndicator,
   type SubtitleSize,
   type Theme,
-  type UiScale,
+  type FontSize,
+  type UiFont,
 } from "../hooks/useSettings";
+import {
+  clearCustomFontFile,
+  FONT_OPTIONS,
+  saveCustomFontFile,
+} from "../fonts";
 import {
   BACKGROUND_EFFECT_OPTIONS,
   FLOWING_PRESET_OPTIONS,
@@ -47,14 +53,10 @@ const INPUT =
 const PROCESS_BTN =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50";
 
-const UI_SCALE_OPTIONS: { value: UiScale; label: string }[] = [
-  { value: "80", label: "80%" },
-  { value: "90", label: "90%" },
-  { value: "100", label: "100%" },
-  { value: "110", label: "110%" },
-  { value: "125", label: "125%" },
-  { value: "150", label: "150%" },
-  { value: "175", label: "175%" },
+const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
+  { value: "small", label: "Small" },
+  { value: "medium", label: "Medium" },
+  { value: "large", label: "Large" },
 ];
 
 const AI_PROCESS_PRIMARY: {
@@ -134,27 +136,15 @@ const THEMES: { value: Theme; label: string; preview: string }[] = [
   { value: "oled", label: "OLED (true black)", preview: "#22d3ee" },
   { value: "terminal", label: "Terminal (green)", preview: "#4ade80" },
   { value: "nord", label: "Nord", preview: "#88c0d0" },
-  { value: "light", label: "Light & Clean", preview: "#cc0000" },
+  { value: "light", label: "Minimal Neutrals + Teal (light)", preview: "#14b8a6" },
   { value: "indigo", label: "Midnight Indigo", preview: "#6366f1" },
   { value: "cyber", label: "Neon Cyber", preview: "#00f5ff" },
   { value: "sunset", label: "Warm Sunset", preview: "#ff6b35" },
   { value: "forest", label: "Forest Deep", preview: "#22c55e" },
   { value: "slate", label: "Slate Minimal", preview: "#60a5fa" },
-  { value: "sleek", label: "Sleek Tech Dark (beta)", preview: "#00d4ff" },
-  {
-    value: "minimal-teal",
-    label: "Minimal Neutrals + Teal (beta)",
-    preview: "#14b8a6",
-  },
-  {
-    value: "vibrant-indigo",
-    label: "Vibrant Indigo (beta)",
-    preview: "#6366f1",
-  },
-  { value: "earthy", label: "Earthy Modern (beta)", preview: "#854d0e" },
-  { value: "frozen", label: "Frozen Blue Minimal (beta)", preview: "#0ea5e9" },
-  { value: "neon-pop", label: "Neon Gradient Pop (beta)", preview: "#22d3ee" },
-  { value: "mocha", label: "Soft Mocha & Sage (beta)", preview: "#a78bfa" },
+  { value: "earthy", label: "Earthy Modern (light)", preview: "#854d0e" },
+  { value: "frozen", label: "Frozen Blue Minimal (light)", preview: "#0ea5e9" },
+  { value: "mocha", label: "Soft Mocha & Sage (light)", preview: "#a78bfa" },
   { value: "custom", label: "Custom", preview: "#22d3ee" },
 ];
 
@@ -284,12 +274,17 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "appearance",
     keywords:
-      "background animation atmospheric effects intensity speed size color pause while watching custom image upload blur tint palette flowing rgb wave cool warm mono",
+      "font typeface typography google fonts jetbrains roboto ubuntu space grotesk ibm plex inconsolata custom font upload font size small medium large text size",
   },
   {
     tab: "appearance",
     keywords:
-      "interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency legibility loading animation dots spinner bar ui scale scale text spacing font text size bigger smaller font size zoom rem",
+      "interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency legibility loading animation dots spinner bar",
+  },
+  {
+    tab: "appearance",
+    keywords:
+      "background animation atmospheric effects intensity speed size color pause while watching custom image upload blur tint palette flowing rgb wave cool warm mono",
   },
   // Library
   {
@@ -1131,164 +1126,339 @@ export default function Settings() {
                   "color palette",
                   "chrome",
                   "custom",
-                  "background animation",
-                  "atmospheric",
-                  "effects",
-                  "custom image",
-                  "upload",
-                  "flowing",
-                  "rgb",
-                  "wave"
+                  "font",
+                  "typeface",
+                  "typography",
+                  "google fonts",
+                  "font size",
+                  "text size"
                 )
-                  ? "grid grid-cols-1 gap-6 sm:grid-cols-2"
+                  ? undefined
                   : q
                     ? "hidden"
-                    : "grid grid-cols-1 gap-6 sm:grid-cols-2"
+                    : undefined
               }
             >
               <div
                 className={
-                  match("theme", "color palette", "chrome", "custom")
-                    ? undefined
+                  match(
+                    "theme",
+                    "color palette",
+                    "chrome",
+                    "custom",
+                    "font",
+                    "typeface",
+                    "typography",
+                    "google fonts"
+                  )
+                    ? "grid grid-cols-1 gap-6 sm:grid-cols-2"
                     : q
                       ? "hidden"
-                      : undefined
+                      : "grid grid-cols-1 gap-6 sm:grid-cols-2"
                 }
               >
-                <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  Theme
-                </h2>
-                <p className="mb-3 text-xs text-gray-500">
-                  Choose a color palette
-                </p>
-                <ThemedSelect
-                  aria-label="Theme"
-                  value={settings.theme}
-                  options={THEMES.map((t) => ({
-                    value: t.value,
-                    label: t.label,
-                  }))}
-                  onChange={(value) => update({ theme: value })}
-                  className="w-[20rem] min-w-[16rem]"
-                />
-                <Collapse open={settings.theme === "custom"}>
-                  <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
-                    <p className="text-xs text-gray-500">
-                      Pick your own accent and background. Surface colors are
-                      derived automatically.
-                    </p>
-                    <label className="flex items-center justify-between gap-4">
-                      <span className="text-sm text-gray-300">Accent</span>
-                      <input
-                        type="color"
-                        value={settings.customColors.accent}
-                        onChange={(e) =>
-                          update({
-                            customColors: {
-                              ...settings.customColors,
-                              accent: e.target.value,
-                            },
-                          })
-                        }
-                        className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
-                      />
-                    </label>
-                    <label className="flex items-center justify-between gap-4">
-                      <span className="text-sm text-gray-300">Background</span>
-                      <input
-                        type="color"
-                        value={settings.customColors.background}
-                        onChange={(e) =>
-                          update({
-                            customColors: {
-                              ...settings.customColors,
-                              background: e.target.value,
-                            },
-                          })
-                        }
-                        className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
-                      />
-                    </label>
-                    <div className="flex items-center gap-2 pt-1">
-                      <span
-                        className="h-6 flex-1 rounded-md ring-1 ring-ink-700"
-                        style={{
-                          backgroundColor: settings.customColors.background,
-                        }}
-                      />
-                      <span
-                        className="h-6 w-16 rounded-md ring-1 ring-ink-700"
-                        style={{
-                          backgroundColor: settings.customColors.accent,
-                        }}
-                      />
+                <div
+                  className={
+                    match("theme", "color palette", "chrome", "custom")
+                      ? undefined
+                      : q
+                        ? "hidden"
+                        : undefined
+                  }
+                >
+                  <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    Theme
+                  </h2>
+                  <p className="mb-3 text-xs text-gray-500">
+                    Choose a color palette
+                  </p>
+                  <ThemedSelect
+                    aria-label="Theme"
+                    value={settings.theme}
+                    options={THEMES.map((t) => ({
+                      value: t.value,
+                      label: t.label,
+                    }))}
+                    onChange={(value) => update({ theme: value })}
+                    className="w-full min-w-[12rem] max-w-[18rem]"
+                  />
+                  <Collapse open={settings.theme === "custom"}>
+                    <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
+                      <p className="text-xs text-gray-500">
+                        Pick your own accent and background. Surface colors are
+                        derived automatically.
+                      </p>
+                      <label className="flex items-center justify-between gap-4">
+                        <span className="text-sm text-gray-300">Accent</span>
+                        <input
+                          type="color"
+                          value={settings.customColors.accent}
+                          onChange={(e) =>
+                            update({
+                              customColors: {
+                                ...settings.customColors,
+                                accent: e.target.value,
+                              },
+                            })
+                          }
+                          className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between gap-4">
+                        <span className="text-sm text-gray-300">Background</span>
+                        <input
+                          type="color"
+                          value={settings.customColors.background}
+                          onChange={(e) =>
+                            update({
+                              customColors: {
+                                ...settings.customColors,
+                                background: e.target.value,
+                              },
+                            })
+                          }
+                          className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                        />
+                      </label>
+                      <div className="flex items-center gap-2 pt-1">
+                        <span
+                          className="h-6 flex-1 rounded-md ring-1 ring-ink-700"
+                          style={{
+                            backgroundColor: settings.customColors.background,
+                          }}
+                        />
+                        <span
+                          className="h-6 w-16 rounded-md ring-1 ring-ink-700"
+                          style={{
+                            backgroundColor: settings.customColors.accent,
+                          }}
+                        />
+                      </div>
                     </div>
+                  </Collapse>
+                  <div className="mt-4 space-y-2">
+                    <button
+                      type="button"
+                      onClick={saveCurrentAsTheme}
+                      className={PANEL_BTN}
+                    >
+                      Save current as theme…
+                    </button>
+                    {settings.customThemes.length > 0 && (
+                      <ul className="space-y-2">
+                        {settings.customThemes.map((preset) => (
+                          <li
+                            key={preset.id}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2"
+                          >
+                            <span className="truncate text-sm text-gray-200">
+                              {preset.name}
+                            </span>
+                            <span className="flex shrink-0 gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => applyCustomTheme(preset)}
+                                className={PANEL_BTN}
+                              >
+                                Apply
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteCustomTheme(preset.id)}
+                                className={PANEL_BTN}
+                              >
+                                Delete
+                              </button>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                </Collapse>
-                <div className="mt-4 space-y-2">
-                  <button
-                    type="button"
-                    onClick={saveCurrentAsTheme}
-                    className={PANEL_BTN}
+                </div>
+
+                <div
+                  className={
+                    match(
+                      "font",
+                      "typeface",
+                      "typography",
+                      "google fonts",
+                      "jetbrains",
+                      "roboto",
+                      "ubuntu",
+                      "font size",
+                      "text size"
+                    )
+                      ? undefined
+                      : q
+                        ? "hidden"
+                        : undefined
+                  }
+                >
+                  <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    Font
+                  </h2>
+                  <p className="mb-3 text-xs text-gray-500">
+                    App typeface. Inter (default) keeps the current stack.
+                  </p>
+                  <ThemedSelect
+                    aria-label="Font"
+                    value={settings.uiFont}
+                    options={FONT_OPTIONS.map((f) => ({
+                      value: f.value,
+                      label: f.label,
+                    }))}
+                    onChange={(value: UiFont) => update({ uiFont: value })}
+                    className="w-full min-w-[12rem] max-w-[18rem]"
+                  />
+                  <p className="mt-2 text-sm text-gray-400">
+                    The quick brown fox jumps over the lazy dog 0123456789
+                  </p>
+                  <Collapse open={settings.uiFont === "custom"}>
+                    <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
+                      <label className="block space-y-1.5">
+                        <span className="text-sm text-gray-300">
+                          Google Fonts URL or family name
+                        </span>
+                        <input
+                          type="text"
+                          value={settings.customFontUrl}
+                          onChange={(e) =>
+                            update({
+                              uiFont: "custom",
+                              customFontUrl: e.target.value,
+                            })
+                          }
+                          placeholder="e.g. Nunito or fonts.googleapis.com/css2?family=…"
+                          className={INPUT}
+                        />
+                      </label>
+                      <div className="space-y-1.5">
+                        <span className="block text-sm text-gray-300">
+                          Or upload a font file
+                        </span>
+                        <input
+                          type="file"
+                          accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
+                          className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-800 file:px-3 file:py-1.5 file:text-sm file:text-gray-200"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            e.target.value = "";
+                            if (!file) return;
+                            void (async () => {
+                              try {
+                                await saveCustomFontFile(file);
+                                update({
+                                  uiFont: "custom",
+                                  customFontHasFile: true,
+                                });
+                                showToast(`Loaded font “${file.name}”`);
+                              } catch {
+                                showToast("Font upload failed");
+                              }
+                            })();
+                          }}
+                        />
+                        {settings.customFontHasFile && (
+                          <button
+                            type="button"
+                            className={PANEL_BTN}
+                            onClick={() => {
+                              void (async () => {
+                                await clearCustomFontFile();
+                                update({ customFontHasFile: false });
+                                showToast("Uploaded font cleared");
+                              })();
+                            }}
+                          >
+                            Clear uploaded font
+                          </button>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          Uploaded fonts stay in this browser. A file takes
+                          priority over the URL when both are set.
+                        </p>
+                      </div>
+                    </div>
+                  </Collapse>
+
+                <div
+                  className={
+                    match(
+                      "font size",
+                      "text size",
+                      "small",
+                      "medium",
+                      "large"
+                    )
+                      ? undefined
+                      : q
+                        ? "hidden"
+                        : undefined
+                  }
+                >
+                  <h2 className="mb-1 mt-6 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    Font size
+                  </h2>
+                  <p className="mb-3 text-xs text-gray-500">
+                    Scales text across the app without extreme zoom steps.
+                  </p>
+                  <div
+                    data-font-size-control
+                    className="flex flex-wrap gap-2"
                   >
-                    Save current as theme…
-                  </button>
-                  {settings.customThemes.length > 0 && (
-                    <ul className="space-y-2">
-                      {settings.customThemes.map((preset) => (
-                        <li
-                          key={preset.id}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2"
-                        >
-                          <span className="truncate text-sm text-gray-200">
-                            {preset.name}
-                          </span>
-                          <span className="flex shrink-0 gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => applyCustomTheme(preset)}
-                              className={PANEL_BTN}
-                            >
-                              Apply
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteCustomTheme(preset.id)}
-                              className={PANEL_BTN}
-                            >
-                              Delete
-                            </button>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                    {FONT_SIZE_OPTIONS.map((opt) => (
+                      <Chip
+                        key={opt.value}
+                        active={settings.fontSize === opt.value}
+                        onPointerDown={() => update({ fontSize: opt.value })}
+                        className="!py-1.5"
+                      >
+                        {opt.label}
+                      </Chip>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-sm text-gray-400">
+                    The quick brown fox jumps over the lazy dog
+                  </p>
+                </div>
                 </div>
               </div>
+            </div>
 
-              <div
-                className={
-                  match(
-                    "background animation",
-                    "atmospheric",
-                    "effects",
-                    "custom image",
-                    "upload",
-                    "flowing",
-                    "rgb",
-                    "wave"
-                  )
-                    ? undefined
-                    : q
-                      ? "hidden"
-                      : undefined
-                }
-              >
-                <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  Background animation
-                </h2>
-                <p className="mb-3 text-xs text-gray-500">
-                  Optional atmospheric effects behind the UI.
+            <Section
+              title="Background"
+              description="Atmospheric effects and custom images behind the UI."
+              hidden={
+                !!q &&
+                !match(
+                  "background",
+                  "animation",
+                  "atmospheric",
+                  "effects",
+                  "intensity",
+                  "speed",
+                  "size",
+                  "color",
+                  "pause while watching",
+                  "custom image",
+                  "upload",
+                  "blur",
+                  "tint",
+                  "palette",
+                  "flowing",
+                  "rgb",
+                  "wave",
+                  "cool",
+                  "warm",
+                  "mono"
+                )
+              }
+            >
+              <div className="mb-4">
+                <p className="mb-2 text-sm font-medium text-gray-200">
+                  Animation
                 </p>
                 <ThemedSelect
                   aria-label="Background animation"
@@ -1310,40 +1480,8 @@ export default function Settings() {
                   }
                 </p>
               </div>
-            </div>
 
-            <Section
-              title="Background Settings"
-              description={
-                settings.backgroundEffect === "custom-image"
-                  ? "Upload an image or short loop, then tune blur and tint."
-                  : "Intensity, motion, and color for the selected effect."
-              }
-              hidden={
-                settings.backgroundEffect === "none" ||
-                (!!q &&
-                  !match(
-                    "background",
-                    "intensity",
-                    "speed",
-                    "size",
-                    "color",
-                    "pause while watching",
-                    "custom image",
-                    "upload",
-                    "blur",
-                    "tint",
-                    "palette",
-                    "flowing",
-                    "rgb",
-                    "wave",
-                    "cool",
-                    "warm",
-                    "mono"
-                  ))
-              }
-            >
-              {settings.backgroundEffect === "custom-image" ? (
+              {settings.backgroundEffect === "none" ? null : settings.backgroundEffect === "custom-image" ? (
                 <div className="space-y-4">
                   <label className="block">
                     <span className="mb-1 block text-xs text-gray-500">
@@ -1691,11 +1829,13 @@ export default function Settings() {
             </Section>
 
             <Section
-              title="Interface motion"
-              description="Hover and navigation transitions. Button press and page fade are always on. Automatically reduced when the system prefers reduced motion."
+              title="UI"
+              description="Motion, panels, and loading chrome. Reduced automatically when the system prefers less motion."
               hidden={
+                !!q &&
                 !match(
                   "interface motion",
+                  "ui",
                   "navigation indicator",
                   "nav",
                   "liquid",
@@ -1709,289 +1849,230 @@ export default function Settings() {
                   "panel transparency",
                   "legibility",
                   "loading animation",
-                  "ui scale",
-                  "font",
-                  "text size",
-                  "bigger",
-                  "smaller",
-                  "font size",
-                  "zoom"
+                  "dots",
+                  "spinner",
+                  "bar"
                 )
               }
             >
               <div className="space-y-5">
-                <div
-                  className={
-                    match(
-                      "navigation indicator",
-                      "nav",
-                      "liquid",
-                      "jelly",
-                      "underline",
-                      "fade"
-                    )
-                      ? undefined
-                      : q
-                        ? "hidden"
-                        : undefined
-                  }
-                >
-                  <p className="mb-2 text-sm font-medium text-gray-200">
-                    Navigation indicator style
-                  </p>
-                  <p className="mb-3 text-xs text-gray-500">
-                    How the active nav item and settings tabs are highlighted.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {NAV_INDICATOR_OPTIONS.map((opt) => (
-                      <Chip
-                        key={opt.value}
-                        active={settings.navIndicator === opt.value}
-                        onClick={() => update({ navIndicator: opt.value })}
-                      >
-                        {opt.label}
-                      </Chip>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-gray-500">
-                    {
-                      NAV_INDICATOR_OPTIONS.find(
-                        (o) => o.value === settings.navIndicator
-                      )?.description
-                    }
-                  </p>
-                  <LiquidNav
-                    className="ui-panel mt-3 inline-flex w-fit gap-1 rounded-xl bg-ink-950 p-1 ring-1 ring-ink-700"
-                    pillClassName="bg-ink-800"
-                    dependency={navPreview}
-                  >
-                    {(
-                      [
-                        { id: "home", label: "Home" },
-                        { id: "library", label: "Library" },
-                        { id: "settings", label: "Settings" },
-                      ] as const
-                    ).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        data-liquid-active={
-                          navPreview === item.id ? "true" : undefined
-                        }
-                        onClick={() => setNavPreview(item.id)}
-                        className={`ui-interactive relative z-10 shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                          navPreview === item.id
-                            ? settings.navIndicator !== "none"
-                              ? "text-gray-100"
-                              : "bg-ink-800 text-gray-100"
-                            : "text-gray-400 hover:text-gray-200"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </LiquidNav>
-                </div>
-
-                <div
-                  className={
-                    match("hover motion", "cards", "controls", "glow", "lift")
-                      ? undefined
-                      : q
-                        ? "hidden"
-                        : undefined
-                  }
-                >
-                  <p className="mb-2 text-sm font-medium text-gray-200">
-                    Hover motion
-                  </p>
-                  <p className="mb-3 text-xs text-gray-500">
-                    How cards and controls react when you hover them.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {HOVER_MOTION_OPTIONS.map((opt) => (
-                      <Chip
-                        key={opt.value}
-                        active={settings.hoverMotion === opt.value}
-                        onClick={() => update({ hoverMotion: opt.value })}
-                      >
-                        {opt.label}
-                      </Chip>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-gray-500">
-                    {
-                      HOVER_MOTION_OPTIONS.find(
-                        (o) => o.value === settings.hoverMotion
-                      )?.description
-                    }
-                  </p>
-                  <div className="ui-card ui-interactive mt-3 inline-flex cursor-default items-center justify-center rounded-lg border border-ink-700 bg-ink-950 px-6 py-4 text-sm text-gray-300">
-                    Hover me
-                  </div>
-                </div>
-
-                <hr className="border-0 border-t border-ink-700" />
-
-                <SettingRow
-                  title="Translucent panels"
-                  description="Let background animations show through nav, cards, and settings panels."
-                  hidden={
-                    !!q &&
-                    !match(
-                      "translucent panels",
-                      "panel transparency",
-                      "legibility"
-                    )
-                  }
-                  control={
-                    <Toggle
-                      checked={settings.translucentPanels}
-                      onChange={() =>
-                        update({
-                          translucentPanels: !settings.translucentPanels,
-                        })
+                    <div
+                      className={
+                        match(
+                          "navigation indicator",
+                          "nav",
+                          "liquid",
+                          "jelly",
+                          "underline",
+                          "fade"
+                        )
+                          ? undefined
+                          : q
+                            ? "hidden"
+                            : undefined
                       }
-                    />
-                  }
-                />
-                <Collapse open={settings.translucentPanels}>
-                  <div
-                    className={
-                      match(
-                        "translucent panels",
-                        "panel transparency",
-                        "legibility"
-                      )
-                        ? "mt-1 space-y-4"
-                        : q
-                          ? "hidden"
-                          : "mt-1 space-y-4"
-                    }
-                  >
-                    <label className="block">
-                      <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
-                        <span>Panel transparency</span>
-                        <span className="tabular-nums text-gray-500">
-                          {Math.round(settings.translucentPanelStrength * 100)}%
-                        </span>
-                      </span>
-                      <input
-                        type="range"
-                        min={0.15}
-                        max={1}
-                        step={0.05}
-                        value={settings.translucentPanelStrength}
-                        onChange={(e) =>
-                          update({
-                            translucentPanelStrength: Number(e.target.value),
-                          })
-                        }
-                        className="accent-scrubber w-full"
-                      />
-                      <p className="mt-2 text-xs text-gray-500">
-                        Higher values make panels more see-through so effects
-                        stay visible. Turn intensity up on the background
-                        animation if needed.
+                    >
+                      <p className="mb-2 text-sm font-medium text-gray-200">
+                        Navigation indicator
                       </p>
-                    </label>
-                    <SettingRow
-                      title="Improve legibility on certain translucent panels"
-                      description="Raise opacity and add a theme tint on panels that need readable text over effects."
-                      control={
-                        <Toggle
-                          checked={settings.translucentPanelLegibility}
-                          onChange={() =>
-                            update({
-                              translucentPanelLegibility:
-                                !settings.translucentPanelLegibility,
-                            })
-                          }
-                        />
+                      <div className="flex flex-wrap gap-2">
+                        {NAV_INDICATOR_OPTIONS.map((opt) => (
+                          <Chip
+                            key={opt.value}
+                            active={settings.navIndicator === opt.value}
+                            onClick={() => update({ navIndicator: opt.value })}
+                          >
+                            {opt.label}
+                          </Chip>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500">
+                        {
+                          NAV_INDICATOR_OPTIONS.find(
+                            (o) => o.value === settings.navIndicator
+                          )?.description
+                        }
+                      </p>
+                      <LiquidNav
+                        className="ui-panel mt-3 inline-flex w-fit gap-1 rounded-xl bg-ink-950 p-1 ring-1 ring-ink-700"
+                        pillClassName="bg-ink-800"
+                        dependency={navPreview}
+                      >
+                        {(
+                          [
+                            { id: "home", label: "Home" },
+                            { id: "library", label: "Library" },
+                            { id: "settings", label: "Settings" },
+                          ] as const
+                        ).map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            data-liquid-active={
+                              navPreview === item.id ? "true" : undefined
+                            }
+                            onClick={() => setNavPreview(item.id)}
+                            className={`ui-interactive relative z-10 shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                              navPreview === item.id
+                                ? settings.navIndicator !== "none"
+                                  ? "text-gray-100"
+                                  : "bg-ink-800 text-gray-100"
+                                : "text-gray-400 hover:text-gray-200"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </LiquidNav>
+                    </div>
+
+                    <div
+                      className={
+                        match(
+                          "hover motion",
+                          "cards",
+                          "controls",
+                          "glow",
+                          "lift"
+                        )
+                          ? undefined
+                          : q
+                            ? "hidden"
+                            : undefined
                       }
-                    />
-                  </div>
-                </Collapse>
+                    >
+                      <p className="mb-2 text-sm font-medium text-gray-200">
+                        Hover motion
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {HOVER_MOTION_OPTIONS.map((opt) => (
+                          <Chip
+                            key={opt.value}
+                            active={settings.hoverMotion === opt.value}
+                            onClick={() => update({ hoverMotion: opt.value })}
+                          >
+                            {opt.label}
+                          </Chip>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500">
+                        {
+                          HOVER_MOTION_OPTIONS.find(
+                            (o) => o.value === settings.hoverMotion
+                          )?.description
+                        }
+                      </p>
+                    </div>
 
-                <div
-                  className={
-                    match("loading animation", "dots", "spinner", "bar")
-                      ? undefined
-                      : q
-                        ? "hidden"
-                        : undefined
-                  }
-                >
-                  <span className="mb-2 block text-sm font-medium text-gray-200">
-                    Loading animation
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {(
-                      [
-                        { value: "dots", label: "Dots" },
-                        { value: "spinner", label: "Spinner" },
-                        { value: "bar", label: "Bar" },
-                      ] as const
-                    ).map((opt) => (
-                      <Chip
-                        key={opt.value}
-                        active={settings.loadingStyle === opt.value}
-                        onClick={() => update({ loadingStyle: opt.value })}
-                        className="!py-1.5"
-                      >
-                        {opt.label}
-                      </Chip>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Style used for page and list loading states.
-                  </p>
-                </div>
+                    <div
+                      className={
+                        match(
+                          "translucent panels",
+                          "panel transparency",
+                          "legibility"
+                        )
+                          ? undefined
+                          : q
+                            ? "hidden"
+                            : undefined
+                      }
+                    >
+                      <SettingRow
+                        title="Translucent panels"
+                        description="Let background effects show through cards and chrome."
+                        control={
+                          <Toggle
+                            checked={settings.translucentPanels}
+                            onChange={() =>
+                              update({
+                                translucentPanels: !settings.translucentPanels,
+                              })
+                            }
+                          />
+                        }
+                      />
+                      <Collapse open={settings.translucentPanels}>
+                        <div className="mt-3 space-y-3">
+                          <label className="block">
+                            <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
+                              <span>Transparency</span>
+                              <span className="tabular-nums text-gray-500">
+                                {Math.round(
+                                  settings.translucentPanelStrength * 100
+                                )}
+                                %
+                              </span>
+                            </span>
+                            <input
+                              type="range"
+                              min={0.15}
+                              max={1}
+                              step={0.05}
+                              value={settings.translucentPanelStrength}
+                              onChange={(e) =>
+                                update({
+                                  translucentPanelStrength: Number(
+                                    e.target.value
+                                  ),
+                                })
+                              }
+                              className="accent-scrubber w-full"
+                            />
+                          </label>
+                          <SettingRow
+                            title="Improve legibility"
+                            description="Raise opacity on panels that need readable text."
+                            control={
+                              <Toggle
+                                checked={settings.translucentPanelLegibility}
+                                onChange={() =>
+                                  update({
+                                    translucentPanelLegibility:
+                                      !settings.translucentPanelLegibility,
+                                  })
+                                }
+                              />
+                            }
+                          />
+                        </div>
+                      </Collapse>
+                    </div>
 
-                <div
-                  className={
-                    match(
-                      "ui scale",
-                      "scale",
-                      "text",
-                      "spacing",
-                      "font",
-                      "text size",
-                      "bigger",
-                      "smaller",
-                      "font size",
-                      "zoom"
-                    )
-                      ? undefined
-                      : q
-                        ? "hidden"
-                        : undefined
-                  }
-                >
-                  <span className="mb-2 block text-sm font-medium text-gray-200">
-                    UI scale
-                  </span>
-                  <div
-                    data-ui-scale-control
-                    className="flex flex-wrap gap-2"
-                  >
-                    {UI_SCALE_OPTIONS.map((opt) => (
-                      <Chip
-                        key={opt.value}
-                        active={settings.uiScale === opt.value}
-                        onPointerDown={() => update({ uiScale: opt.value })}
-                        className="!py-1.5"
-                      >
-                        {opt.label}
-                      </Chip>
-                    ))}
+                    <div
+                      className={
+                        match("loading animation", "dots", "spinner", "bar")
+                          ? undefined
+                          : q
+                            ? "hidden"
+                            : undefined
+                      }
+                    >
+                      <span className="mb-2 block text-sm font-medium text-gray-200">
+                        Loading animation
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {(
+                          [
+                            { value: "dots", label: "Dots" },
+                            { value: "spinner", label: "Spinner" },
+                            { value: "bar", label: "Bar" },
+                          ] as const
+                        ).map((opt) => (
+                          <Chip
+                            key={opt.value}
+                            active={settings.loadingStyle === opt.value}
+                            onClick={() => update({ loadingStyle: opt.value })}
+                            className="!py-1.5"
+                          >
+                            {opt.label}
+                          </Chip>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Scales text and spacing across the app (rem-based).
-                  </p>
-                </div>
-              </div>
             </Section>
+
+
           </>
         )}
 

@@ -105,7 +105,7 @@ export default function TopNav() {
       ro.disconnect();
       window.removeEventListener("resize", check);
     };
-  }, [settings.uiScale, importCount, showDownloadBadge, activeCount]);
+  }, [settings.fontSize, importCount, showDownloadBadge, activeCount]);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `ui-interactive relative z-10 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap ${
