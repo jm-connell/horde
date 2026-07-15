@@ -1268,6 +1268,13 @@ def extract_preview(url: str) -> dict[str, Any]:
             view_count = int(view_count)
         except (TypeError, ValueError):
             view_count = None
+    from .feed_meta_cache import parse_upload_date
+
+    published_at = parse_upload_date(
+        info.get("upload_date")
+        or info.get("release_timestamp")
+        or info.get("timestamp")
+    )
     return {
         "is_playlist": False,
         "id": info.get("id"),
@@ -1277,6 +1284,7 @@ def extract_preview(url: str) -> dict[str, Any]:
         "thumbnail_url": _best_thumbnail_url(info),
         "entry_count": None,
         "view_count": view_count,
+        "published_at": published_at,
         "available_presets": available,
         "preset_sizes": _estimate_preset_sizes(info, available),
     }

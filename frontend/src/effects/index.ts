@@ -8,6 +8,7 @@ import {
   createFlowingGradientEffect,
   type FlowingGradientPreset,
 } from "./flowingGradient";
+import { createGalaxyEffect } from "./galaxy";
 import { createGrainEffect } from "./grain";
 import { createLightspeedEffect } from "./lightspeed";
 import { createMatrixEffect } from "./matrix";
@@ -70,6 +71,11 @@ export const BACKGROUND_EFFECT_OPTIONS: {
     label: "Lightspeed",
     description: "Subtle tunnel of light streaks",
   },
+  {
+    value: "galaxy",
+    label: "Galaxy",
+    description: "Slow-rotating starfield with soft nebula clouds",
+  },
 ];
 
 type EffectFactory = (canvas: HTMLCanvasElement) => EffectController;
@@ -88,6 +94,7 @@ const FACTORIES: Partial<Record<BackgroundEffect, EffectFactory>> = {
   grain: createGrainEffect,
   "modern-grid": createModernGridEffect,
   lightspeed: createLightspeedEffect,
+  galaxy: createGalaxyEffect,
 };
 
 let flowingPresetGetter: (() => FlowingGradientPreset) | null = null;

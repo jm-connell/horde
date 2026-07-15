@@ -311,6 +311,8 @@ export default function Library() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const lastSelectedIndex = useRef<number | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const headerRowRef = useRef<HTMLDivElement>(null);
+  const [headerTagsFit, setHeaderTagsFit] = useState(true);
   const [queueDockedBottom, setQueueDockedBottom] = useState(true);
 
   // Bulk action popover state
@@ -601,6 +603,64 @@ export default function Library() {
   const showHomeTabs = isHome && aiReady;
   const onRecommendedTab = showHomeTabs && homeTab === "recommended";
 
+  // Hide the mid-width Tags control when it would wrap the header onto two lines.
+  useLayoutEffect(() => {
+    const row = headerRowRef.current;
+    if (!row || !isHome || onRecommendedTab) {
+      setHeaderTagsFit(true);
+      return;
+    }
+
+    const measure = () => {
+      const tagsBtn = row.querySelector(
+        "[data-header-tags]"
+      ) as HTMLElement | null;
+      const filters = row.querySelector(
+        "[data-header-filters]"
+      ) as HTMLElement | null;
+      if (!filters) {
+        setHeaderTagsFit(true);
+        return;
+      }
+
+      if (tagsBtn) {
+        const kids = Array.from(row.children) as HTMLElement[];
+        const visible = kids.filter(
+          (el) => el.offsetParent !== null && el.offsetHeight > 0
+        );
+        const top = visible[0]?.offsetTop ?? 0;
+        setHeaderTagsFit(!visible.some((el) => el.offsetTop > top + 1));
+        return;
+      }
+
+      // Tags currently hidden — restore when a Tags-sized slot fits on one line.
+      const TAGS_SLOT = 88;
+      const gap = 12;
+      let used = 0;
+      for (const child of Array.from(row.children) as HTMLElement[]) {
+        if (child.offsetParent === null || child.offsetHeight === 0) continue;
+        used += child.offsetWidth + gap;
+      }
+      setHeaderTagsFit(used + TAGS_SLOT <= row.clientWidth + 1);
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    return () => ro.disconnect();
+  }, [
+    isHome,
+    onRecommendedTab,
+    showHomeTabs,
+    showTags,
+    search,
+    sort,
+    order,
+    selectMode,
+    tags,
+    headerTagsFit,
+  ]);
+
   const activeChannelUrl = useMemo(() => {
     if (!activeChannel) return null;
     return (
@@ -813,9 +873,9 @@ export default function Library() {
           </div>
         </div>
       )}
-      {/* Narrow: fixed overlay channel panel — close lives on the sticky rail */}
+      {/* Narrow: fixed overlay channel panel — toggle stays on the sticky rail */}
       {narrowViewport && sidebarOverlayVisible && (
-        <div className="fixed inset-0 z-50 lg:block">
+        <div className="fixed inset-0 z-50 hidden md:block">
           <button
             type="button"
             aria-label="Close channels"
@@ -825,7 +885,7 @@ export default function Library() {
             onClick={closeSidebar}
           />
           <div
-            className={`absolute left-0 top-0 flex h-full max-w-[85vw] flex-col p-3 pt-20 pl-[3.25rem] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            className={`absolute top-0 flex h-full max-w-[85vw] flex-col p-3 pt-20 left-3 pl-12 md:left-6 md:pl-[3.25rem] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
               sidebarOverlayOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
@@ -852,32 +912,24 @@ export default function Library() {
       )}
 
       <aside
-        className={`relative hidden shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
+        className={`relative hidden shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
           narrowViewport || settings.sidebarCollapsed ? "w-10" : "w-56"
         }${narrowViewport && sidebarOverlayOpen ? " z-[60]" : ""}`}
       >
         <div className="sticky top-20">
-          {narrowViewport && sidebarOverlayOpen ? (
-            <button
-              onClick={closeSidebar}
-              title="Collapse sidebar"
-              className="ui-panel ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
-            >
-              ‹
-            </button>
-          ) : !narrowViewport && !settings.sidebarCollapsed ? (
-            <div className="ui-panel ui-panel-legible h-fit w-56 rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
-              <div className="mb-2 flex items-center justify-between px-2 pt-1">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Channels
-                </h2>
+          {!narrowViewport && !settings.sidebarCollapsed ? (
+            <div className="ui-panel h-fit w-56 rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
+              <div className="mb-2 flex items-center gap-1 px-2 pt-1">
                 <button
                   onClick={closeSidebar}
                   title="Collapse sidebar"
-                  className="ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
+                  className="ui-interactive flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
                 >
                   ‹
                 </button>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Channels
+                </h2>
               </div>
               <ChannelSidebarList
                 channels={channels}
@@ -891,18 +943,29 @@ export default function Library() {
             </div>
           ) : (
             <button
-              onClick={openSidebar}
-              title="Expand channels"
+              onClick={
+                narrowViewport && sidebarOverlayOpen
+                  ? closeSidebar
+                  : openSidebar
+              }
+              title={
+                narrowViewport && sidebarOverlayOpen
+                  ? "Collapse sidebar"
+                  : "Expand channels"
+              }
               className="ui-panel ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
             >
-              ›
+              {narrowViewport && sidebarOverlayOpen ? "‹" : "›"}
             </button>
           )}
         </div>
       </aside>
 
       <div ref={mainContentRef} className="min-w-0 flex-1">
-        <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div
+          ref={headerRowRef}
+          className="mb-5 flex flex-wrap items-center gap-3"
+        >
           {activeChannel && renaming === activeChannel ? (
             <input
               autoFocus
@@ -916,23 +979,42 @@ export default function Library() {
               className="rounded-lg border border-accent bg-ink-950 px-3 py-1 text-2xl font-bold text-gray-100 outline-none"
             />
           ) : (
-            <h1
-              className={`group ${isHome ? "hidden md:flex" : "flex"} items-center gap-2 text-2xl font-bold text-gray-100`}
-            >
-              {headline}
-              {activeChannel && (
-                <button
-                  onClick={() => {
-                    setRenameValue(activeChannel);
-                    setRenaming(activeChannel);
-                  }}
-                  title="Rename channel"
-                  className="text-base text-gray-500 opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
-                >
-                  ✎
-                </button>
-              )}
-            </h1>
+            <>
+              <h1
+                className={`group ${
+                  isHome ? "hidden lg:flex" : "flex"
+                } items-center gap-2 text-2xl font-bold text-gray-100`}
+              >
+                {headline}
+                {activeChannel && (
+                  <button
+                    onClick={() => {
+                      setRenameValue(activeChannel);
+                      setRenaming(activeChannel);
+                    }}
+                    title="Rename channel"
+                    className="text-base text-gray-500 opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+                  >
+                    ✎
+                  </button>
+                )}
+              </h1>
+              {isHome &&
+                !onRecommendedTab &&
+                headerTagsFit &&
+                tags.some(
+                  (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
+                ) && (
+                  <button
+                    type="button"
+                    data-header-tags
+                    onClick={() => setShowTags((s) => !s)}
+                    className="ui-panel ui-interactive hidden rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent sm:inline-flex lg:hidden"
+                  >
+                    {showTags ? "Hide tags" : "Tags"}
+                  </button>
+                )}
+            </>
           )}
 
           {showHomeTabs && (
@@ -988,7 +1070,10 @@ export default function Library() {
             </div>
           )}
 
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div
+            data-header-filters
+            className="ml-auto flex flex-nowrap items-center gap-2"
+          >
             {onFeedTab ? (
               <>
                 <input
@@ -1091,13 +1176,14 @@ export default function Library() {
                 >
                   {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
                 </button>
-                {!onRecommendedTab &&
+                {!isHome &&
+                  !onRecommendedTab &&
                   tags.some(
                     (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
                   ) && (
                     <button
                       onClick={() => setShowTags((s) => !s)}
-                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent md:hidden"
+                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent lg:hidden"
                     >
                       {showTags ? "Hide tags" : "Tags"}
                     </button>
@@ -1134,7 +1220,7 @@ export default function Library() {
           {tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
             <button
               onClick={() => setShowTags((s) => !s)}
-              className="ui-panel ui-interactive hidden rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-gray-300 hover:border-accent hover:text-accent md:inline-block"
+              className="ui-panel ui-interactive hidden rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-gray-300 hover:border-accent hover:text-accent lg:inline-block"
             >
               {showTags ? "Hide tags" : "Show tags"}
             </button>

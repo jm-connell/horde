@@ -11,6 +11,7 @@ export type BuiltinFontId =
   | "inconsolata"
   | "oxanium"
   | "source-sans-3"
+  | "electrolize"
   | "custom";
 
 /** Builtin id, saved custom id, or the "Add custom…" sentinel. */
@@ -91,6 +92,12 @@ export const FONT_OPTIONS: FontPreset[] = [
     label: "Source Sans 3",
     stack: '"Source Sans 3", system-ui, sans-serif',
     googleFamily: "Source+Sans+3:wght@400;500;600;700",
+  },
+  {
+    value: "electrolize",
+    label: "Electrolize",
+    stack: '"Electrolize", system-ui, sans-serif',
+    googleFamily: "Electrolize",
   },
   {
     value: "custom",

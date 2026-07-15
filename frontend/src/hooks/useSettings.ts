@@ -66,7 +66,8 @@ export type BackgroundEffect =
   | "grain"
   | "modern-grid"
   | "flowing-gradient"
-  | "lightspeed";
+  | "lightspeed"
+  | "galaxy";
 
 export type FlowingGradientPreset =
   | "theme"
@@ -383,6 +384,7 @@ const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "modern-grid",
   "flowing-gradient",
   "lightspeed",
+  "galaxy",
 ]);
 
 const VALID_FLOWING_PRESETS = new Set<string>([

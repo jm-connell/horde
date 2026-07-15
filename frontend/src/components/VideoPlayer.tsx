@@ -731,6 +731,8 @@ export default function VideoPlayer({
         e.key === "f" ||
         e.key === "ArrowRight" ||
         e.key === "ArrowLeft" ||
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
         e.key === ">" ||
         e.key === "." ||
         e.key === "<" ||
@@ -754,6 +756,26 @@ export default function VideoPlayer({
         seekTo(videoRef.current.currentTime + 5);
       } else if (e.key === "ArrowLeft" && videoRef.current) {
         seekTo(videoRef.current.currentTime - 5);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const next = Math.min(1, Math.round((volume + 0.05) * 100) / 100);
+        setVolume(next);
+        setMuted(next === 0);
+        if (videoRef.current) {
+          videoRef.current.volume = next;
+          videoRef.current.muted = next === 0;
+        }
+        onVolumeChange?.(next);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = Math.max(0, Math.round((volume - 0.05) * 100) / 100);
+        setVolume(next);
+        setMuted(next === 0);
+        if (videoRef.current) {
+          videoRef.current.volume = next;
+          videoRef.current.muted = next === 0;
+        }
+        onVolumeChange?.(next);
       } else if (e.key === ">" || e.key === ".") {
         stepRate(1);
       } else if (e.key === "<" || e.key === ",") {
@@ -779,6 +801,8 @@ export default function VideoPlayer({
     chapters,
     cycleCaptions,
     seekTo,
+    volume,
+    onVolumeChange,
   ]);
 
   const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1158,17 +1182,17 @@ export default function VideoPlayer({
       : null;
 
   const wrapperClass = isMini
-    ? `relative w-full bg-black${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
+    ? `relative w-full overflow-hidden bg-black leading-none${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
     : isNativeFullscreen
-      ? "relative flex h-full w-full items-center justify-center bg-black"
+      ? "relative flex h-full w-full items-center justify-center overflow-hidden bg-black leading-none"
       : mode === "windowed"
-        ? "relative flex h-full w-full items-center justify-center bg-black"
-        : "relative h-full w-full bg-black";
+        ? "relative flex h-full w-full items-center justify-center overflow-hidden bg-black leading-none"
+        : "relative w-full overflow-hidden bg-black leading-none";
 
   const innerClass =
     !isMini && (mode === "windowed" || isNativeFullscreen)
-      ? "relative h-full w-full"
-      : "relative h-full w-full";
+      ? "relative h-full w-full leading-none"
+      : "relative w-full leading-none";
 
   const miniStyle =
     isMini && videoAspect
@@ -1178,17 +1202,17 @@ export default function VideoPlayer({
         : undefined;
 
   const videoClass = isMini
-    ? "h-full w-full bg-black object-contain"
+    ? "block h-full w-full bg-black object-contain"
     : isNativeFullscreen || mode === "windowed"
-      ? "h-full w-full object-contain"
+      ? "block h-full w-full object-contain"
       : isMobile
-        ? "max-h-[70vh] w-full bg-black object-contain"
-        : "mx-auto max-h-[85vh] w-full bg-black object-contain";
+        ? "mx-auto block max-h-[70vh] w-full bg-black object-contain"
+        : "mx-auto block max-h-[85vh] w-full bg-black object-contain";
   const subtitleClass = `sub-${subtitleSize}`;
 
   // Ultrawide (e.g. 2:1) letterboxes inside a 16:9 dock — compact the up-next
   // card so it stays within the visible video picture.
-  const compactUpNext = videoAspect != null && videoAspect >= 1.7;
+  const compactUpNext = videoAspect != null && videoAspect >= 2.0;
 
   return (
     <div
@@ -1369,6 +1393,19 @@ export default function VideoPlayer({
               <span className="min-w-0 flex-1 truncate text-sm text-gray-200">
                 {title}
               </span>
+              {!isMobile &&
+                typeof document !== "undefined" &&
+                document.pictureInPictureEnabled && (
+                  <button
+                    data-mini-no-drag
+                    onClick={requestPiP}
+                    className="flex min-h-[48px] shrink-0 items-center justify-center rounded px-2 text-xs font-medium hover:text-accent"
+                    title="Picture in picture"
+                    aria-label="Picture in picture"
+                  >
+                    PiP
+                  </button>
+                )}
               <button
                 onClick={onExpand}
                 className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center text-lg hover:text-accent"
@@ -1389,7 +1426,7 @@ export default function VideoPlayer({
           </>
         ) : (
           <div
-            className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent px-4 pb-3 pt-10 transition-opacity duration-300 ${
+            className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent px-4 pb-2 pt-10 transition-opacity duration-300 ${
               controlsVisible
                 ? "pointer-events-auto opacity-100"
                 : "pointer-events-none opacity-0"
@@ -1539,8 +1576,42 @@ export default function VideoPlayer({
 
               {!isMobile && (
                 <div className="flex items-center gap-2">
-                  <button onClick={toggleMute} className="hover:text-accent">
-                    {muted || volume === 0 ? "🔇" : "🔊"}
+                  <button
+                    onClick={toggleMute}
+                    className="flex items-center justify-center hover:text-accent"
+                    title={muted || volume === 0 ? "Unmute" : "Mute"}
+                    aria-label={muted || volume === 0 ? "Unmute" : "Mute"}
+                  >
+                    {muted || volume === 0 ? (
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <path d="M11 5 6 9H2v6h4l5 4V5z" />
+                        <path d="m22 9-6 6M16 9l6 6" />
+                      </svg>
+                    ) : (
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <path d="M11 5 6 9H2v6h4l5 4V5z" />
+                        <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                        <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+                      </svg>
+                    )}
                   </button>
                   <input
                     type="range"
@@ -1552,7 +1623,7 @@ export default function VideoPlayer({
                     onPointerDown={onControlsInteractionStart}
                     onPointerUp={onControlsInteractionEnd}
                     onPointerCancel={onControlsInteractionEnd}
-                    className="accent-scrubber w-20"
+                    className="accent-scrubber w-20 sm:w-28 xl:w-36"
                   />
                 </div>
               )}

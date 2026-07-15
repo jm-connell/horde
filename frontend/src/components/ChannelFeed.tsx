@@ -54,6 +54,8 @@ export default function ChannelFeed({
     resolveVideoId,
   } = useChannelDownloadQueue(channel);
 
+  const [panelDismissed, setPanelDismissed] = useState(false);
+
   const loadPage = useCallback(
     async (offset: number, append: boolean) => {
       if (!channelUrl && !channel) return;
@@ -199,19 +201,22 @@ export default function ChannelFeed({
         </>
       )}
 
-      <ChannelDownloadPanel
-        defaultPreset={defaultPreset}
-        onDefaultPresetChange={setDefaultPreset}
-        allPresets={allPresets}
-        pending={pending}
-        channels={channels}
-        editingId={editingId}
-        onSetEditingId={setEditingId}
-        onUpdatePending={updatePending}
-        onCancel={cancelPending}
-        onSubmitNow={submitNow}
-        queueDockedBottom={queueDockedBottom}
-      />
+      {!panelDismissed && (
+        <ChannelDownloadPanel
+          defaultPreset={defaultPreset}
+          onDefaultPresetChange={setDefaultPreset}
+          allPresets={allPresets}
+          pending={pending}
+          channels={channels}
+          editingId={editingId}
+          onSetEditingId={setEditingId}
+          onUpdatePending={updatePending}
+          onCancel={cancelPending}
+          onSubmitNow={submitNow}
+          queueDockedBottom={queueDockedBottom}
+          onDismiss={() => setPanelDismissed(true)}
+        />
+      )}
     </>
   );
 }

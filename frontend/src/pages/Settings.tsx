@@ -277,7 +277,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "appearance",
     keywords:
-      "font typeface typography google fonts jetbrains roboto ubuntu space grotesk ibm plex inconsolata oxanium source sans custom font upload font size small medium large xl text size",
+      "font typeface typography google fonts jetbrains roboto ubuntu space grotesk ibm plex inconsolata oxanium source sans electrolize custom font upload font size small medium large xl text size",
   },
   {
     tab: "appearance",
@@ -1381,9 +1381,10 @@ export default function Settings() {
                       "jetbrains",
                       "roboto",
                       "ubuntu",
-                      "oxanium",
-                      "source sans"
-                    )
+                        "oxanium",
+                        "source sans",
+                        "electrolize"
+                      )
                       ? undefined
                       : q
                         ? "hidden"
@@ -2026,112 +2027,118 @@ export default function Settings() {
               }
             >
               <div className="space-y-5">
-                    <div
-                      className={
-                        match(
-                          "navigation indicator",
-                          "nav",
-                          "liquid",
-                          "jelly",
-                          "underline",
-                          "fade"
-                        )
-                          ? undefined
-                          : q
-                            ? "hidden"
-                            : undefined
-                      }
-                    >
-                      <p className="mb-2 text-sm font-medium text-gray-200">
-                        Navigation indicator
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {NAV_INDICATOR_OPTIONS.map((opt) => (
-                          <Chip
-                            key={opt.value}
-                            active={settings.navIndicator === opt.value}
-                            onClick={() => update({ navIndicator: opt.value })}
-                          >
-                            {opt.label}
-                          </Chip>
-                        ))}
-                      </div>
-                      <p className="mt-2 text-xs text-gray-500">
-                        {
-                          NAV_INDICATOR_OPTIONS.find(
-                            (o) => o.value === settings.navIndicator
-                          )?.description
-                        }
-                      </p>
-                      <LiquidNav
-                        className="ui-panel mt-3 inline-flex w-fit gap-1 rounded-xl bg-ink-950 p-1 ring-1 ring-ink-700"
-                        pillClassName="bg-ink-800"
-                        dependency={navPreview}
+                    <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+                      <div
+                        className={`min-w-0 flex-1 ${
+                          match(
+                            "navigation indicator",
+                            "nav",
+                            "liquid",
+                            "jelly",
+                            "underline",
+                            "fade"
+                          )
+                            ? ""
+                            : q
+                              ? "hidden"
+                              : ""
+                        }`}
                       >
-                        {(
-                          [
-                            { id: "home", label: "Home" },
-                            { id: "library", label: "Library" },
-                            { id: "settings", label: "Settings" },
-                          ] as const
-                        ).map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            data-liquid-active={
-                              navPreview === item.id ? "true" : undefined
-                            }
-                            onClick={() => setNavPreview(item.id)}
-                            className={`ui-interactive relative z-10 shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                              navPreview === item.id
-                                ? settings.navIndicator !== "none"
-                                  ? "text-gray-100"
-                                  : "bg-ink-800 text-gray-100"
-                                : "text-gray-400 hover:text-gray-200"
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </LiquidNav>
-                    </div>
-
-                    <div
-                      className={
-                        match(
-                          "hover motion",
-                          "cards",
-                          "controls",
-                          "glow",
-                          "lift"
-                        )
-                          ? undefined
-                          : q
-                            ? "hidden"
-                            : undefined
-                      }
-                    >
-                      <p className="mb-2 text-sm font-medium text-gray-200">
-                        Hover motion
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {HOVER_MOTION_OPTIONS.map((opt) => (
-                          <Chip
-                            key={opt.value}
-                            active={settings.hoverMotion === opt.value}
-                            onClick={() => update({ hoverMotion: opt.value })}
-                          >
-                            {opt.label}
-                          </Chip>
-                        ))}
+                        <p className="mb-2 text-sm font-medium text-gray-200">
+                          Navigation indicator
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {NAV_INDICATOR_OPTIONS.map((opt) => (
+                            <Chip
+                              key={opt.value}
+                              active={settings.navIndicator === opt.value}
+                              onClick={() =>
+                                update({ navIndicator: opt.value })
+                              }
+                            >
+                              {opt.label}
+                            </Chip>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500">
+                          {
+                            NAV_INDICATOR_OPTIONS.find(
+                              (o) => o.value === settings.navIndicator
+                            )?.description
+                          }
+                        </p>
+                        <LiquidNav
+                          className="ui-panel mt-3 inline-flex w-fit gap-1 rounded-xl bg-ink-950 p-1 ring-1 ring-ink-700"
+                          pillClassName="bg-ink-800"
+                          dependency={navPreview}
+                        >
+                          {(
+                            [
+                              { id: "home", label: "Home" },
+                              { id: "library", label: "Library" },
+                              { id: "settings", label: "Settings" },
+                            ] as const
+                          ).map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              data-liquid-active={
+                                navPreview === item.id ? "true" : undefined
+                              }
+                              onClick={() => setNavPreview(item.id)}
+                              className={`ui-interactive relative z-10 shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                                navPreview === item.id
+                                  ? settings.navIndicator !== "none"
+                                    ? "text-gray-100"
+                                    : "bg-ink-800 text-gray-100"
+                                  : "text-gray-400 hover:text-gray-200"
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </LiquidNav>
                       </div>
-                      <p className="mt-2 text-xs text-gray-500">
-                        {
-                          HOVER_MOTION_OPTIONS.find(
-                            (o) => o.value === settings.hoverMotion
-                          )?.description
-                        }
-                      </p>
+
+                      <div
+                        className={`min-w-0 flex-1 ${
+                          match(
+                            "hover motion",
+                            "cards",
+                            "controls",
+                            "glow",
+                            "lift"
+                          )
+                            ? ""
+                            : q
+                              ? "hidden"
+                              : ""
+                        }`}
+                      >
+                        <p className="mb-2 text-sm font-medium text-gray-200">
+                          Hover motion
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {HOVER_MOTION_OPTIONS.map((opt) => (
+                            <Chip
+                              key={opt.value}
+                              active={settings.hoverMotion === opt.value}
+                              onClick={() =>
+                                update({ hoverMotion: opt.value })
+                              }
+                            >
+                              {opt.label}
+                            </Chip>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500">
+                          {
+                            HOVER_MOTION_OPTIONS.find(
+                              (o) => o.value === settings.hoverMotion
+                            )?.description
+                          }
+                        </p>
+                      </div>
                     </div>
 
                     <div

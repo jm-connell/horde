@@ -390,7 +390,7 @@ export default function Preview() {
               <span>{formatDuration(meta.duration)}</span>
             )}
             {meta.view_count != null && (
-              <span>{formatViewCount(meta.view_count)} views</span>
+              <span>{formatViewCount(meta.view_count)}</span>
             )}
           </div>
         </div>

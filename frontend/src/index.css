@@ -363,7 +363,9 @@ body {
 input[type="range"].accent-scrubber {
   -webkit-appearance: none;
   appearance: none;
+  display: block;
   height: 4px;
+  margin: 0;
   border-radius: 9999px;
   background: rgb(var(--ink-600));
   cursor: pointer;

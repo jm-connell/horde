@@ -7,7 +7,7 @@ from fastapi.responses import Response, StreamingResponse
 from sqlmodel import Session, select
 
 from ..database import get_session
-from ..models import DownloadJob, JobStatus
+from ..models import DownloadJob, JobStatus, Video
 from ..schemas import (
     DownloadCreate,
     DownloadJobRead,
@@ -22,6 +22,62 @@ from urllib.parse import urlparse
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 
 QUALITY_PRESETS = list(downloader.QUALITY_FORMATS.keys())
+
+
+def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobRead]:
+    """Attach video_missing / superseded flags for history UI."""
+    if not jobs:
+        return []
+
+    video_ids = {
+        vid
+        for j in jobs
+        for vid in (j.video_id, j.replace_video_id)
+        if vid is not None
+    }
+    existing: set[int] = set()
+    if video_ids:
+        existing = set(
+            session.exec(
+                select(Video.id).where(Video.id.in_(list(video_ids)))  # type: ignore[attr-defined]
+            ).all()
+        )
+
+    # Newest completed job wins per video_id and per URL.
+    latest_by_video: dict[int, int] = {}
+    latest_by_url: dict[str, int] = {}
+    for j in jobs:
+        if j.status != JobStatus.completed:
+            continue
+        if j.video_id is not None:
+            prev = latest_by_video.get(j.video_id)
+            if prev is None or j.id > prev:
+                latest_by_video[j.video_id] = j.id
+        url_key = (j.url or "").strip()
+        if url_key:
+            prev = latest_by_url.get(url_key)
+            if prev is None or j.id > prev:
+                latest_by_url[url_key] = j.id
+
+    out: list[DownloadJobRead] = []
+    for j in jobs:
+        video_missing = bool(j.video_id is not None and j.video_id not in existing)
+        superseded = False
+        if j.status == JobStatus.completed:
+            if j.video_id is not None and latest_by_video.get(j.video_id) != j.id:
+                superseded = True
+            url_key = (j.url or "").strip()
+            if url_key and latest_by_url.get(url_key) != j.id:
+                superseded = True
+        out.append(
+            DownloadJobRead.model_validate(j).model_copy(
+                update={
+                    "video_missing": video_missing,
+                    "superseded": superseded,
+                }
+            )
+        )
+    return out
 
 
 @router.get("/presets", response_model=list[str])
@@ -112,7 +168,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
     session.refresh(job)
 
     downloader.enqueue_download(job.id)
-    return job
+    return _enrich_jobs(session, [job])[0]
 
 
 @router.patch("/{job_id}", response_model=DownloadJobRead)
@@ -132,7 +188,7 @@ def update_job(
                 session.add(job)
                 session.commit()
                 session.refresh(job)
-            return job
+            return _enrich_jobs(session, [job])[0]
         raise HTTPException(
             status_code=409, detail="Job already finished; edit the video instead"
         )
@@ -146,7 +202,7 @@ def update_job(
     session.add(job)
     session.commit()
     session.refresh(job)
-    return job
+    return _enrich_jobs(session, [job])[0]
 
 
 @router.post("/{job_id}/cancel", response_model=DownloadJobRead)
@@ -168,7 +224,7 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
             if job and job.status != JobStatus.downloading:
                 break
     session.refresh(job)
-    return job
+    return _enrich_jobs(session, [job])[0]
 
 
 @router.post("/dismiss-finished", status_code=204)
@@ -204,7 +260,7 @@ def dismiss_job(job_id: int, session: Session = Depends(get_session)):
 @router.get("", response_model=list[DownloadJobRead])
 def list_jobs(session: Session = Depends(get_session)):
     statement = select(DownloadJob).order_by(DownloadJob.created_at.desc()).limit(50)
-    return list(session.exec(statement).all())
+    return _enrich_jobs(session, list(session.exec(statement).all()))
 
 
 @router.get("/{job_id}", response_model=DownloadJobRead)
@@ -212,7 +268,7 @@ def get_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(DownloadJob, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    return _enrich_jobs(session, [job])[0]
 
 
 @router.get("/{job_id}/events")

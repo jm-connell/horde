@@ -23,6 +23,7 @@ export default function ChannelDownloadPanel({
   onCancel,
   onSubmitNow,
   queueDockedBottom = false,
+  onDismiss,
 }: {
   defaultPreset: string;
   onDefaultPresetChange: (preset: string) => void;
@@ -39,6 +40,7 @@ export default function ChannelDownloadPanel({
   onSubmitNow: (tempId: number) => void;
   /** When true, lift panel above the bottom-docked playback queue. */
   queueDockedBottom?: boolean;
+  onDismiss?: () => void;
 }) {
   const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
   const queueVisible = queue.length > 0;
@@ -64,10 +66,23 @@ export default function ChannelDownloadPanel({
   const panelShell =
     "ui-panel ui-panel-legible pointer-events-auto rounded-xl border border-ink-700 bg-ink-900 p-3 shadow-2xl ring-1 ring-ink-700";
 
+  const dismissBtn = onDismiss ? (
+    <button
+      type="button"
+      onClick={onDismiss}
+      title="Hide download panel"
+      aria-label="Hide download panel"
+      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-sm text-gray-500 hover:bg-ink-800 hover:text-gray-300"
+    >
+      ×
+    </button>
+  ) : null;
+
   if (pending.length === 0) {
     return (
       <div style={positionStyle}>
-        <div className={`${panelShell} p-4`}>
+        <div className={`${panelShell} relative p-4 pr-8`}>
+          {dismissBtn}
           <label className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution
           </label>
@@ -94,7 +109,8 @@ export default function ChannelDownloadPanel({
   return (
     <>
       <div style={positionStyle} className="flex flex-col gap-2">
-        <div className={panelShell}>
+        <div className={`${panelShell} relative pr-8`}>
+          {dismissBtn}
           <label className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution
           </label>

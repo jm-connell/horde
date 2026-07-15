@@ -113,8 +113,11 @@ export interface DownloadJob {
   paused: boolean;
   error: string | null;
   video_id: number | null;
+  replace_video_id?: number | null;
   file_size: number | null;
   created_at: string;
+  video_missing?: boolean;
+  superseded?: boolean;
 }
 
 export interface ProgressEvent {

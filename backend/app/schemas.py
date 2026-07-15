@@ -81,6 +81,7 @@ class DownloadPreview(BaseModel):
     thumbnail_url: Optional[str] = None
     entry_count: Optional[int]
     view_count: Optional[int] = None
+    published_at: Optional[str] = None
     available_presets: list[str] = []
     preset_sizes: dict[str, int] = {}
 
@@ -117,8 +118,11 @@ class DownloadJobRead(BaseModel):
     paused: bool
     error: Optional[str]
     video_id: Optional[int]
+    replace_video_id: Optional[int] = None
     file_size: Optional[int]
     created_at: datetime
+    video_missing: bool = False
+    superseded: bool = False
 
 
 class DownloadJobUpdate(BaseModel):

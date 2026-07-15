@@ -319,8 +319,8 @@ def channel_feed(
                     row["view_count"] = preview["view_count"]
                 if preview.get("thumbnail_url"):
                     row["thumbnail_url"] = preview["thumbnail_url"]
-                # Best-effort published date from a second light extract is expensive;
-                # view_count alone already improves the next feed load.
+                if preview.get("published_at"):
+                    row["published_at"] = preview["published_at"]
                 if len(row) > 1:
                     updates.append(row)
             if updates:
@@ -564,8 +564,8 @@ def redownload_video(
     if not source_url:
         raise HTTPException(status_code=400, detail="No source URL for this video")
 
-    _delete_media_files(video)
-
+    # Keep existing media until the replacement download completes so playback
+    # stays available if the job fails. Old files are removed in _complete_download.
     job = DownloadJob(
         url=source_url,
         quality_preset=payload.quality_preset,
