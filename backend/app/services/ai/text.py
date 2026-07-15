@@ -179,7 +179,7 @@ def _first_sentence_or_chars(text: str, *, max_chars: int = 120) -> str:
 
 _CATEGORY_DESC_CHARS = 300
 _CATEGORY_SUB_CHARS = 120
-_CATEGORY_SAMPLE_BUDGET = 14_000
+_CATEGORY_SAMPLE_BUDGET = 28_000
 
 
 def category_sample_entry(video: Video, *, use_subtitles: bool = True) -> str:
@@ -249,13 +249,21 @@ def category_prompt(entries: list[str]) -> str:
     )
 
 
-def category_embed_text(name: str, blurb: str = "") -> str:
+def category_embed_text(
+    name: str, blurb: str = "", *, example_titles: Optional[list[str]] = None
+) -> str:
     """Text embedded for category↔video matching."""
     label = (name or "").strip()
     about = (blurb or "").strip()
+    lines = [f"Category: {label}"]
     if about:
-        return f"Category: {label}\nAbout: {about}"
-    return label
+        lines.append(f"About: {about}")
+    titles = [t.strip() for t in (example_titles or []) if t and str(t).strip()]
+    if titles:
+        lines.append("Examples: " + " | ".join(titles[:5]))
+    if len(lines) == 1 and not about:
+        return label
+    return "\n".join(lines)
 
 
 def duplicate_prompt(a: Video, b: Video) -> str:

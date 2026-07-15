@@ -14,6 +14,8 @@ from .provider import get_provider
 
 # Stronger threshold so category shelves don't pad with unrelated videos.
 CATEGORY_MIN_SCORE = 0.55
+CATEGORY_SCORE_FLOOR = 0.35
+CATEGORY_RELATIVE_DELTA = 0.08
 FOR_YOU_MIN_SCORE = 0.28
 
 
@@ -33,9 +35,9 @@ class RecommendationSection:
 
 
 @dataclass
-class CategoryBrowseResult:
-    category_videos: list[Video]
-    more_videos: list[Video]
+class CategoryBrowsePage:
+    videos: list[Video]
+    has_more: bool
     categories: list[str] = field(default_factory=list)
 
 
@@ -45,63 +47,78 @@ class ForYouPage:
     has_more: bool
 
 
+def _filter_category_hits(
+    hits: list[tuple[int, float]], min_score: float
+) -> list[tuple[int, float]]:
+    """Keep hits at/above min_score or within delta of the top score (floor applied)."""
+    if not hits:
+        return []
+    top = hits[0][1]
+    relative = top - CATEGORY_RELATIVE_DELTA
+    kept: list[tuple[int, float]] = []
+    for vid, score in hits:
+        if score < CATEGORY_SCORE_FLOOR:
+            continue
+        if score >= min_score or score >= relative:
+            kept.append((vid, score))
+    return kept
+
+
 def list_categories(session: Session, *, nonempty_only: bool = True) -> list[str]:
     rows = session.exec(select(AiCategory).order_by(AiCategory.name)).all()
     if not nonempty_only:
         return [r.name for r in rows]
+    min_score = _category_min_score()
     names: list[str] = []
     for row in rows:
         vec = embeddings.unpack_vector(row.embedding, row.dim)
         if not vec:
             continue
-        hits = embeddings.similar_video_ids(
-            session, vec, limit=1, min_score=_category_min_score()
+        raw = embeddings.similar_video_ids(
+            session, vec, limit=8, min_score=CATEGORY_SCORE_FLOOR
         )
-        if hits:
+        if _filter_category_hits(raw, min_score):
             names.append(row.name)
     return names
 
 
 def videos_for_category(
-    session: Session, category: str, *, limit: int = 48
-) -> CategoryBrowseResult:
-    """Return strong category matches, plus separate For You filler (not mixed)."""
+    session: Session,
+    category: str,
+    *,
+    limit: int = 24,
+    offset: int = 0,
+) -> CategoryBrowsePage:
+    """Return a page of category matches (no For You filler)."""
     categories = list_categories(session)
     row = session.exec(
         select(AiCategory).where(AiCategory.name == category)
     ).first()
     if row is None:
-        return CategoryBrowseResult([], [], categories)
+        return CategoryBrowsePage([], False, categories)
 
     vec = embeddings.unpack_vector(row.embedding, row.dim)
     if not vec:
-        return CategoryBrowseResult([], [], categories)
+        return CategoryBrowsePage([], False, categories)
 
-    hits = embeddings.similar_video_ids(
-        session, vec, limit=limit, min_score=_category_min_score()
+    min_score = _category_min_score()
+    # Over-fetch then apply relative filter and paginate.
+    pool = max(offset + limit + 1, 64)
+    raw = embeddings.similar_video_ids(
+        session, vec, limit=max(pool * 4, 500), min_score=CATEGORY_SCORE_FLOOR
     )
-    category_videos: list[Video] = []
-    used: set[int] = set()
-    for vid, _score in hits:
+    hits = _filter_category_hits(raw, min_score)
+    slice_hits = hits[offset : offset + limit + 1]
+    has_more = len(slice_hits) > limit
+
+    videos: list[Video] = []
+    for vid, _score in slice_hits[:limit]:
         video = session.get(Video, vid)
         if video is None or video.needs_review or video.id is None:
             continue
-        category_videos.append(video)
-        used.add(video.id)
+        videos.append(video)
 
-    more: list[Video] = []
-    for section in homepage_recommendations(session, limit=24):
-        for video in section.videos:
-            if video.id is None or video.id in used:
-                continue
-            more.append(video)
-            used.add(video.id)
-            if len(more) >= 24:
-                break
-        if len(more) >= 24:
-            break
-
-    return CategoryBrowseResult(category_videos, more, categories)
+    return CategoryBrowsePage(videos, has_more, categories)
 
 
 def _ranked_for_you_ids(session: Session, *, pool: int = 2000) -> list[int]:

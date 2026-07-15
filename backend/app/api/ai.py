@@ -150,30 +150,23 @@ def ai_recommendations(
         raise HTTPException(status_code=503, detail="AI not ready")
 
     if category:
-        result = recommend.videos_for_category(session, category)
+        result = recommend.videos_for_category(
+            session, category, limit=limit, offset=offset
+        )
         sections: list[dict[str, Any]] = []
-        if result.category_videos:
+        if result.videos:
             sections.append(
                 {
                     "title": "",
                     "kind": "category",
                     "seed_video_id": None,
-                    "videos": [_to_read(v, session) for v in result.category_videos],
-                }
-            )
-        if result.more_videos:
-            sections.append(
-                {
-                    "title": "End of category — other recommendations",
-                    "kind": "more",
-                    "seed_video_id": None,
-                    "videos": [_to_read(v, session) for v in result.more_videos],
+                    "videos": [_to_read(v, session) for v in result.videos],
                 }
             )
         return {
             "categories": result.categories,
             "sections": sections,
-            "has_more": False,
+            "has_more": result.has_more,
         }
 
     page = recommend.homepage_recommendations_page(

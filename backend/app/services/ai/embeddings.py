@@ -41,6 +41,46 @@ def cosine(a: list[float], b: list[float]) -> float:
     return dot / ((na ** 0.5) * (nb ** 0.5))
 
 
+def l2_normalize(vec: list[float]) -> list[float]:
+    if not vec:
+        return []
+    norm = sum(x * x for x in vec) ** 0.5
+    if norm <= 0:
+        return list(vec)
+    return [x / norm for x in vec]
+
+
+def blend_vectors(
+    a: list[float], b: list[float], *, weight_a: float = 0.5
+) -> list[float]:
+    """Weighted average then L2-normalize. ``a`` weight is ``weight_a``, ``b`` is 1-weight_a."""
+    if not a:
+        return l2_normalize(b)
+    if not b or len(a) != len(b):
+        return l2_normalize(a)
+    w_b = 1.0 - weight_a
+    mixed = [weight_a * x + w_b * y for x, y in zip(a, b)]
+    return l2_normalize(mixed)
+
+
+def mean_vectors(vectors: list[list[float]]) -> Optional[list[float]]:
+    usable = [v for v in vectors if v]
+    if not usable:
+        return None
+    dim = len(usable[0])
+    acc = [0.0] * dim
+    n = 0
+    for v in usable:
+        if len(v) != dim:
+            continue
+        for i, x in enumerate(v):
+            acc[i] += x
+        n += 1
+    if n <= 0:
+        return None
+    return [x / float(n) for x in acc]
+
+
 def _get_or_create_meta(session: Session, video_id: int) -> VideoAiMeta:
     meta = session.get(VideoAiMeta, video_id)
     if meta is None:

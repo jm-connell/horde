@@ -3,7 +3,7 @@ import { api } from "../api";
 import { useToast } from "../context/ToastContext";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
-import type { RecommendationSection, Video } from "../types";
+import type { Video } from "../types";
 
 const PAGE_SIZE = 24;
 
@@ -14,10 +14,9 @@ export default function RecommendedHome({
 }) {
   const { showToast } = useToast();
   const [categories, setCategories] = useState<string[]>([]);
-  const [sections, setSections] = useState<RecommendationSection[]>([]);
-  const [forYouVideos, setForYouVideos] = useState<Video[]>([]);
-  const [forYouOffset, setForYouOffset] = useState(0);
-  const [forYouHasMore, setForYouHasMore] = useState(false);
+  const [feedVideos, setFeedVideos] = useState<Video[]>([]);
+  const [feedOffset, setFeedOffset] = useState(0);
+  const [feedHasMore, setFeedHasMore] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -64,8 +63,9 @@ export default function RecommendedHome({
     let active = true;
     setLoading(true);
     setError(null);
-    setForYouVideos([]);
-    setForYouOffset(0);
+    setFeedVideos([]);
+    setFeedOffset(0);
+    setFeedHasMore(false);
     api
       .getRecommendations(activeCategory || undefined, {
         limit: PAGE_SIZE,
@@ -74,18 +74,17 @@ export default function RecommendedHome({
       .then((data) => {
         if (!active) return;
         setCategories(data.categories);
-        setSections(data.sections);
-        if (!activeCategory) {
-          const vids = data.sections.flatMap((s) => s.videos);
-          setForYouVideos(vids);
-          setForYouOffset(vids.length);
-          setForYouHasMore(Boolean(data.has_more ?? vids.length >= PAGE_SIZE));
-        }
+        const vids = data.sections.flatMap((s) => s.videos);
+        setFeedVideos(vids);
+        setFeedOffset(vids.length);
+        setFeedHasMore(Boolean(data.has_more));
       })
       .catch(() => {
         if (!active) return;
-        setError("Could not load recommendations. Index more videos in Settings → AI.");
-        setSections([]);
+        setError(
+          "Could not load recommendations. Index more videos in Settings → AI."
+        );
+        setFeedVideos([]);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -95,41 +94,41 @@ export default function RecommendedHome({
     };
   }, [activeCategory, reloadKey]);
 
-  const loadMoreForYou = useCallback(async () => {
-    if (activeCategory || loadingMore || !forYouHasMore) return;
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !feedHasMore) return;
     setLoadingMore(true);
     try {
-      const data = await api.getRecommendations(undefined, {
+      const data = await api.getRecommendations(activeCategory || undefined, {
         limit: PAGE_SIZE,
-        offset: forYouOffset,
+        offset: feedOffset,
       });
       const vids = data.sections.flatMap((s) => s.videos);
-      setForYouVideos((prev) => {
+      setFeedVideos((prev) => {
         const seen = new Set(prev.map((v) => v.id));
         return [...prev, ...vids.filter((v) => !seen.has(v.id))];
       });
-      setForYouOffset((o) => o + vids.length);
-      setForYouHasMore(Boolean(data.has_more && vids.length > 0));
+      setFeedOffset((o) => o + vids.length);
+      setFeedHasMore(Boolean(data.has_more && vids.length > 0));
     } catch {
-      setForYouHasMore(false);
+      setFeedHasMore(false);
     } finally {
       setLoadingMore(false);
     }
-  }, [activeCategory, loadingMore, forYouHasMore, forYouOffset]);
+  }, [activeCategory, loadingMore, feedHasMore, feedOffset]);
 
   useEffect(() => {
-    if (activeCategory || !forYouHasMore) return;
+    if (!feedHasMore) return;
     const el = sentinelRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) loadMoreForYou();
+        if (entries.some((e) => e.isIntersecting)) void loadMore();
       },
       { rootMargin: "240px" }
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [activeCategory, forYouHasMore, loadMoreForYou]);
+  }, [feedHasMore, loadMore]);
 
   const selectCategory = (name: string | null) => {
     setActiveCategory(name);
@@ -245,58 +244,25 @@ export default function RecommendedHome({
         <div className="py-16 text-center text-gray-500">
           <p className="text-sm">{error}</p>
         </div>
-      ) : showForYou ? (
-        forYouVideos.length === 0 ? (
-          <div className="py-16 text-center text-gray-500">
-            <p className="text-lg">No recommendations yet.</p>
-            <p className="mt-1 text-sm">
-              Watch a few videos or process your library under Settings → AI.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className={gridClass}>
-              {forYouVideos.map((v) => (
-                <VideoCard key={v.id} video={v} />
-              ))}
-            </div>
-            <div ref={sentinelRef} className="h-4" />
-            {loadingMore && <LoadingIndicator />}
-          </>
-        )
-      ) : sections.length === 0 ||
-        sections.every((s) => s.videos.length === 0) ? (
+      ) : feedVideos.length === 0 ? (
         <div className="py-16 text-center text-gray-500">
           <p className="text-lg">No recommendations yet.</p>
           <p className="mt-1 text-sm">
-            Watch a few videos or process your library under Settings → AI.
+            {showForYou
+              ? "Watch a few videos or process your library under Settings → AI."
+              : "No strong matches for this category. Try refreshing categories or lowering match strictness."}
           </p>
         </div>
       ) : (
-        sections.map((section, idx) => {
-          if (section.videos.length === 0) return null;
-          const showDivider =
-            section.kind === "more" ||
-            (section.title && section.title.startsWith("End of category"));
-          return (
-            <section key={`${section.kind}-${section.title}-${idx}`}>
-              {showDivider && (
-                <div className="mb-4 flex items-center gap-3">
-                  <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
-                  <span className="shrink-0 text-xs text-gray-500">
-                    {section.title || "End of category — other recommendations"}
-                  </span>
-                  <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
-                </div>
-              )}
-              <div className={gridClass}>
-                {section.videos.map((v) => (
-                  <VideoCard key={v.id} video={v} />
-                ))}
-              </div>
-            </section>
-          );
-        })
+        <>
+          <div className={gridClass}>
+            {feedVideos.map((v) => (
+              <VideoCard key={v.id} video={v} />
+            ))}
+          </div>
+          <div ref={sentinelRef} className="h-4" />
+          {loadingMore && <LoadingIndicator />}
+        </>
       )}
     </div>
   );

@@ -473,7 +473,7 @@ function Section({
   first = false,
   hidden = false,
 }: {
-  title: string;
+  title?: string;
   description?: string;
   children: React.ReactNode;
   first?: boolean;
@@ -482,13 +482,17 @@ function Section({
   if (hidden) return null;
   return (
     <div className={first ? undefined : "border-t border-ink-700 pt-6"}>
-      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
-        {title}
-      </h2>
+      {title ? (
+        <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          {title}
+        </h2>
+      ) : null}
       {description && (
-        <p className="mb-3 text-xs text-gray-500">{description}</p>
+        <p className={`mb-3 text-xs text-gray-500 ${title ? "" : "mt-0"}`}>
+          {description}
+        </p>
       )}
-      <div className={description ? undefined : "mt-3"}>{children}</div>
+      <div className={title || description ? undefined : "mt-0"}>{children}</div>
     </div>
   );
 }
@@ -2744,8 +2748,6 @@ export default function Settings() {
           <>
             <Section
               first
-              title="Ollama connection"
-              description="Horde uses a local Ollama instance for embeddings and small LLM tasks. Leave the URL blank to auto-discover (compose sidecar or host.docker.internal)."
               hidden={
                 !match(
                   "ollama",
@@ -2775,23 +2777,35 @@ export default function Settings() {
                     onChange={() => saveAi({ enabled: !aiDraft.enabled })}
                   />
                 </div>
-                <div className="max-w-md space-y-4">
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-gray-500">
-                      Ollama base URL
-                    </span>
-                    <input
-                      value={aiDraft.base_url}
-                      onChange={(e) =>
-                        setAiDraft((d) => ({ ...d, base_url: e.target.value }))
-                      }
-                      onBlur={(e) =>
-                        saveAi({ base_url: e.target.value.trim() })
-                      }
-                      placeholder="http://ollama:11434 or http://192.168.x.x:11434"
-                      className={INPUT}
-                    />
-                  </label>
+                <div
+                  className={
+                    !!q && !match("ollama", "connection", "base url")
+                      ? "hidden"
+                      : "flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"
+                  }
+                >
+                  <span className="shrink-0 text-sm font-medium text-gray-200 sm:w-40">
+                    Ollama connection
+                  </span>
+                  <input
+                    value={aiDraft.base_url}
+                    onChange={(e) =>
+                      setAiDraft((d) => ({ ...d, base_url: e.target.value }))
+                    }
+                    onBlur={(e) =>
+                      saveAi({ base_url: e.target.value.trim() })
+                    }
+                    placeholder="http://ollama:11434 or http://192.168.x.x:11434"
+                    aria-label="Ollama base URL"
+                    className={`${INPUT} min-w-0 flex-1`}
+                  />
+                </div>
+                <p className="max-w-2xl text-xs text-gray-500">
+                  Point to your local Ollama instance for embeddings and small
+                  LLM tasks. Leave the URL blank to attempt auto-discover, but
+                  don&apos;t count on it.
+                </p>
+                <div className="max-w-2xl space-y-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"

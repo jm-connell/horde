@@ -141,13 +141,15 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     session.commit()
 
 
-def _category_sample_videos(session: Session, *, limit: int = 50) -> list[Video]:
+def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video]:
     """Mix recent watches, recent adds, and channel-stratified fill."""
     from collections import defaultdict
     from sqlalchemy import nullslast
 
     used: set[int] = set()
     out: list[Video] = []
+    watch_cap = 35
+    add_cap = 35
 
     def _take(videos: list[Video], cap: int) -> None:
         for video in videos:
@@ -168,17 +170,17 @@ def _category_sample_videos(session: Session, *, limit: int = 50) -> list[Video]
             Video.last_watched_at.is_not(None),  # type: ignore[attr-defined]
         )
         .order_by(Video.last_watched_at.desc())  # type: ignore[union-attr]
-        .limit(40)
+        .limit(watch_cap * 2)
     ).all()
-    _take(list(watched), 20)
+    _take(list(watched), watch_cap)
 
     recent = session.exec(
         select(Video)
         .where(Video.needs_review == False)  # noqa: E712
         .order_by(nullslast(Video.added_at.desc()))
-        .limit(40)
+        .limit(add_cap * 2)
     ).all()
-    _take(list(recent), 20)
+    _take(list(recent), add_cap)
 
     if len(out) >= limit:
         return out
@@ -268,7 +270,7 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     if not provider.has_model(chat_model) or not provider.has_model(embed_model):
         raise RuntimeError("Required models not available")
 
-    videos = _category_sample_videos(session, limit=50)
+    videos = _category_sample_videos(session, limit=100)
     titled = [v for v in videos if (v.title or "").strip()]
     if len(titled) < 3:
         return
@@ -295,19 +297,48 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     if len(cleaned) < 3:
         return
 
+    # Precompute invent-sample centroids for example picking.
+    sample_centroids: list[tuple[Video, list[float]]] = []
+    for video in titled:
+        if video.id is None:
+            continue
+        cent = embeddings.video_centroid(session, video.id)
+        if cent:
+            sample_centroids.append((video, cent))
+
     existing = session.exec(select(AiCategory)).all()
     for row in existing:
         session.delete(row)
     session.flush()
 
+    example_min = 0.28
     for name, blurb in cleaned:
-        text = ai_text.category_embed_text(name, blurb)
-        vec = provider.embed(text, embed_model)
+        provisional = ai_text.category_embed_text(name, blurb)
+        q = provider.embed(provisional, embed_model)
+        ranked: list[tuple[float, Video, list[float]]] = []
+        for video, cent in sample_centroids:
+            score = embeddings.cosine(q, cent)
+            if score >= example_min:
+                ranked.append((score, video, cent))
+        ranked.sort(key=lambda t: t[0], reverse=True)
+        examples = ranked[:5]
+        example_titles = [
+            (v.title or "").strip() for _, v, _ in examples if (v.title or "").strip()
+        ]
+        doc = ai_text.category_embed_text(
+            name, blurb, example_titles=example_titles
+        )
+        text_vec = provider.embed(doc, embed_model)
+        cent = embeddings.mean_vectors([c for _, _, c in examples])
+        if cent is None:
+            store_vec = embeddings.l2_normalize(text_vec)
+        else:
+            store_vec = embeddings.blend_vectors(text_vec, cent, weight_a=0.5)
         session.add(
             AiCategory(
                 name=name,
-                embedding=embeddings.pack_vector(vec),
-                dim=len(vec),
+                embedding=embeddings.pack_vector(store_vec),
+                dim=len(store_vec),
                 model=embed_model,
                 updated_at=utcnow(),
             )
