@@ -8,13 +8,20 @@ from typing import Optional
 from sqlmodel import Session, select
 
 from ...models import AiCategory, Video
-from .. import library
+from .. import app_settings, library
 from . import embeddings
 from .provider import get_provider
 
 # Stronger threshold so category shelves don't pad with unrelated videos.
 CATEGORY_MIN_SCORE = 0.55
 FOR_YOU_MIN_SCORE = 0.28
+
+
+def _category_min_score() -> float:
+    ai = app_settings.ai_settings()
+    return app_settings.clamp_category_min_score(
+        ai.get("category_min_score", CATEGORY_MIN_SCORE)
+    )
 
 
 @dataclass
@@ -48,7 +55,7 @@ def list_categories(session: Session, *, nonempty_only: bool = True) -> list[str
         if not vec:
             continue
         hits = embeddings.similar_video_ids(
-            session, vec, limit=1, min_score=CATEGORY_MIN_SCORE
+            session, vec, limit=1, min_score=_category_min_score()
         )
         if hits:
             names.append(row.name)
@@ -71,7 +78,7 @@ def videos_for_category(
         return CategoryBrowseResult([], [], categories)
 
     hits = embeddings.similar_video_ids(
-        session, vec, limit=limit, min_score=CATEGORY_MIN_SCORE
+        session, vec, limit=limit, min_score=_category_min_score()
     )
     category_videos: list[Video] = []
     used: set[int] = set()

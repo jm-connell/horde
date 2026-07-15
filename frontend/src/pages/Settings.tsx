@@ -90,7 +90,7 @@ const AI_PROCESS_SECONDARY: {
     action: "embeds",
     label: "Index missing videos for search",
     title:
-      "Build search indexes for videos that are not indexed yet (used for semantic search and related videos).",
+      "Build search indexes for videos that are not indexed yet, or whose indexes use a different embed model (used for semantic search, related videos, and category shelves).",
   },
   {
     action: "missing_tags",
@@ -106,14 +106,14 @@ const AI_PROCESS_SECONDARY: {
     action: "categories",
     label: "Refresh categories",
     title:
-      "Rebuild recommendation category groupings from current tags and search indexes.",
+      "Ask the chat model to invent browse categories from sample titles, then match videos via search indexes. Refresh after re-indexing if you changed the embed model.",
   },
 ];
 
 const EMBED_MODEL_TIP =
-  "Search index model — used for semantic search and related videos. Much lighter on VRAM than chat (typically ~0.5–1GB). nomic-embed-text is a solid default; mxbai-embed-large is higher quality but heavier; all-minilm is the lightest.";
+  "Search index model — used for semantic search, related videos, and filling category shelves. Much lighter on VRAM than chat (typically ~0.5–1GB). nomic-embed-text is a solid default; mxbai-embed-large is higher quality for category matching but heavier; all-minilm is the lightest. Changing this requires re-indexing the library.";
 const CHAT_MODEL_TIP =
-  "Chat model — used for tag enrichment, categories, and duplicate scoring. Needs more VRAM than search indexes: 1B ≈ 1–2GB, 3B-class ≈ 3–6GB. Prefer smaller models on 6GB GPUs.";
+  "Chat model — invents recommendation category chips, enriches tags, and scores duplicates. Needs more VRAM than search indexes: 1B ≈ 1–2GB, 3B-class ≈ 3–6GB. Prefer smaller models on 6GB GPUs; qwen2.5:3b or a larger custom model can invent more specific categories.";
 
 function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`;
@@ -219,6 +219,7 @@ const DEFAULT_AI: AiSettings = {
   use_subtitles: true,
   enrich_tags: true,
   ai_duplicates: true,
+  category_min_score: 0.55,
   paused: false,
 };
 
@@ -358,7 +359,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   },
   {
     tab: "ai",
-    keywords: "features subtitles enrich tags duplicate confirmation llm",
+    keywords: "features subtitles enrich tags duplicate confirmation llm category match strictness score",
   },
   // System
   {
@@ -923,6 +924,7 @@ export default function Settings() {
       | "all_recent"
       | "all_full"
       | "embeds"
+      | "reindex_embeds"
       | "missing_tags"
       | "full_tags"
       | "categories"
@@ -942,6 +944,36 @@ export default function Settings() {
     } finally {
       setAiProcessingAction(null);
     }
+  };
+
+  const saveModels = async () => {
+    const embed = aiDraft.embed_model.trim();
+    const chat = aiDraft.chat_model.trim();
+    const prevEmbed = (
+      appSettings?.ai.embed_model || DEFAULT_AI.embed_model
+    ).trim();
+    const embedChanged = embed !== prevEmbed;
+    await saveAi({
+      embed_model: embed,
+      chat_model: chat,
+    });
+    if (embedChanged) {
+      const rebuild = confirm(
+        "Embedding model changed. Rebuild search indexes so semantic search, related videos, and category shelves use the new model? " +
+          "After indexing finishes, refresh categories from Process library."
+      );
+      if (rebuild) {
+        await runAiProcess("reindex_embeds");
+        return;
+      }
+      showToast(
+        "Models saved — re-index later so category shelves use the new embed model"
+      );
+      refreshAiStatus();
+      return;
+    }
+    showToast("Models saved");
+    refreshAiStatus();
   };
 
   const uploadCustomBackground = async (file: File | null) => {
@@ -2844,6 +2876,14 @@ export default function Settings() {
                             : ""}
                         </dd>
                       </div>
+                      {aiStatus.indexed_videos < aiStatus.total_videos && (
+                        <p className="text-xs text-amber-400/90">
+                          Some videos are not indexed yet — run “Index missing”
+                          or “Run all” so category shelves and search stay accurate.
+                          After changing the embed model, save models and rebuild
+                          indexes, then refresh categories.
+                        </p>
+                      )}
                       {aiStatus.current_job && (
                         <CurrentAiJob job={aiStatus.current_job} />
                       )}
@@ -3010,14 +3050,7 @@ export default function Settings() {
                 </label>
                 <button
                   type="button"
-                  onClick={async () => {
-                    await saveAi({
-                      embed_model: aiDraft.embed_model.trim(),
-                      chat_model: aiDraft.chat_model.trim(),
-                    });
-                    showToast("Models saved");
-                    refreshAiStatus();
-                  }}
+                  onClick={() => void saveModels()}
                   className={PANEL_BTN}
                 >
                   Save models
@@ -3182,14 +3215,16 @@ export default function Settings() {
                   "features",
                   "subtitles",
                   "enrich tags",
-                  "duplicate"
+                  "duplicate",
+                  "category",
+                  "strictness"
                 )
               }
             >
               <div className="space-y-3">
                 <SettingRow
                   title="Use subtitles in search indexes"
-                  description="Include caption text to improve semantic search and related-video quality."
+                  description="Include caption text to improve semantic search, related videos, and category matching."
                   hidden={!!q && !match("subtitles", "embeddings", "search indexes")}
                   control={
                     <Toggle
@@ -3197,6 +3232,48 @@ export default function Settings() {
                       onChange={() =>
                         saveAi({ use_subtitles: !aiDraft.use_subtitles })
                       }
+                    />
+                  }
+                />
+                <SettingRow
+                  title="Category match strictness"
+                  description="Minimum similarity for videos under a category chip. Higher = fewer, tighter matches; lower = fuller, noisier shelves."
+                  hidden={
+                    !!q &&
+                    !match(
+                      "category",
+                      "categories",
+                      "strictness",
+                      "match",
+                      "score"
+                    )
+                  }
+                  control={
+                    <input
+                      type="number"
+                      min={0.2}
+                      max={0.9}
+                      step={0.05}
+                      aria-label="Category match strictness"
+                      value={aiDraft.category_min_score}
+                      onChange={(e) => {
+                        const n = parseFloat(e.target.value);
+                        if (Number.isNaN(n)) return;
+                        setAiDraft((d) => ({
+                          ...d,
+                          category_min_score: n,
+                        }));
+                      }}
+                      onBlur={(e) => {
+                        const n = parseFloat(e.target.value);
+                        const clamped = Math.min(
+                          0.9,
+                          Math.max(0.2, Number.isNaN(n) ? 0.55 : n)
+                        );
+                        const rounded = Math.round(clamped * 100) / 100;
+                        void saveAi({ category_min_score: rounded });
+                      }}
+                      className="ui-panel w-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
                     />
                   }
                 />

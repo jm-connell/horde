@@ -603,13 +603,18 @@ export default function Library() {
   const showHomeTabs = isHome && aiReady;
   const onRecommendedTab = showHomeTabs && homeTab === "recommended";
 
-  // Hide the mid-width Tags control when it would wrap the header onto two lines.
+  // Hide the mid-width Tags control before it crowds the search / home tabs.
   useLayoutEffect(() => {
     const row = headerRowRef.current;
     if (!row || !isHome || onRecommendedTab) {
       setHeaderTagsFit(true);
       return;
     }
+
+    const TAGS_SLOT = 88;
+    const GAP = 12;
+    // Keep search usable; drop Tags once it would crush the field.
+    const SEARCH_COMFORT = 140;
 
     const measure = () => {
       const tagsBtn = row.querySelector(
@@ -618,30 +623,53 @@ export default function Library() {
       const filters = row.querySelector(
         "[data-header-filters]"
       ) as HTMLElement | null;
+      const searchEl = row.querySelector(
+        "[data-header-search]"
+      ) as HTMLElement | null;
       if (!filters) {
         setHeaderTagsFit(true);
         return;
       }
 
+      const searchShown =
+        searchEl != null &&
+        searchEl.offsetParent !== null &&
+        getComputedStyle(searchEl).display !== "none";
+
       if (tagsBtn) {
-        const kids = Array.from(row.children) as HTMLElement[];
-        const visible = kids.filter(
-          (el) => el.offsetParent !== null && el.offsetHeight > 0
-        );
-        const top = visible[0]?.offsetTop ?? 0;
-        setHeaderTagsFit(!visible.some((el) => el.offsetTop > top + 1));
+        const searchTooNarrow =
+          searchShown && searchEl.offsetWidth < SEARCH_COMFORT;
+        const overflow = row.scrollWidth > row.clientWidth + 1;
+        setHeaderTagsFit(!searchTooNarrow && !overflow);
         return;
       }
 
-      // Tags currently hidden — restore when a Tags-sized slot fits on one line.
-      const TAGS_SLOT = 88;
-      const gap = 12;
-      let used = 0;
+      // Tags hidden — restore when a Tags-sized slot fits without crushing search.
+      let leftUsed = 0;
       for (const child of Array.from(row.children) as HTMLElement[]) {
+        if (child === filters) continue;
         if (child.offsetParent === null || child.offsetHeight === 0) continue;
-        used += child.offsetWidth + gap;
+        leftUsed += child.offsetWidth + GAP;
       }
-      setHeaderTagsFit(used + TAGS_SLOT <= row.clientWidth + 1);
+
+      let filterFixed = 0;
+      let filterGaps = 0;
+      for (const child of Array.from(filters.children) as HTMLElement[]) {
+        if (child.hasAttribute("data-header-search")) continue;
+        if (child.offsetParent === null || child.offsetHeight === 0) continue;
+        filterFixed += child.offsetWidth;
+        filterGaps += GAP;
+      }
+
+      const reserved =
+        leftUsed + TAGS_SLOT + GAP + filterFixed + filterGaps;
+      if (!searchShown) {
+        setHeaderTagsFit(reserved <= row.clientWidth + 1);
+        return;
+      }
+
+      const availableForSearch = row.clientWidth - reserved;
+      setHeaderTagsFit(availableForSearch >= SEARCH_COMFORT);
     };
 
     measure();
@@ -964,7 +992,9 @@ export default function Library() {
       <div ref={mainContentRef} className="min-w-0 flex-1">
         <div
           ref={headerRowRef}
-          className="mb-5 flex flex-wrap items-center gap-3"
+          className={`mb-5 flex min-w-0 items-center gap-2 sm:gap-3 ${
+            isHome ? "max-md:flex-wrap md:flex-nowrap" : "flex-wrap"
+          }`}
         >
           {activeChannel && renaming === activeChannel ? (
             <input
@@ -983,7 +1013,7 @@ export default function Library() {
               <h1
                 className={`group ${
                   isHome ? "hidden lg:flex" : "flex"
-                } items-center gap-2 text-2xl font-bold text-gray-100`}
+                } shrink-0 items-center gap-2 text-2xl font-bold text-gray-100`}
               >
                 {headline}
                 {activeChannel && (
@@ -1009,7 +1039,7 @@ export default function Library() {
                     type="button"
                     data-header-tags
                     onClick={() => setShowTags((s) => !s)}
-                    className="ui-panel ui-interactive hidden rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent sm:inline-flex lg:hidden"
+                    className="ui-panel ui-interactive hidden shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent sm:inline-flex lg:hidden"
                   >
                     {showTags ? "Hide tags" : "Tags"}
                   </button>
@@ -1022,7 +1052,7 @@ export default function Library() {
               <button
                 type="button"
                 onClick={() => setHomeTab("library")}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
                   homeTab === "library"
                     ? "bg-accent/15 text-accent"
                     : "text-gray-400 hover:text-gray-200"
@@ -1033,7 +1063,7 @@ export default function Library() {
               <button
                 type="button"
                 onClick={() => setHomeTab("recommended")}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
                   homeTab === "recommended"
                     ? "bg-accent/15 text-accent"
                     : "text-gray-400 hover:text-gray-200"
@@ -1044,11 +1074,11 @@ export default function Library() {
             </div>
           )}
           {activeChannel && !activeTag && (
-            <div className="ui-panel flex gap-1 rounded-lg border border-ink-700 bg-ink-900 p-1">
+            <div className="ui-panel flex shrink-0 gap-1 rounded-lg border border-ink-700 bg-ink-900 p-1">
               <button
                 type="button"
                 onClick={() => setChannelTab("library")}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
                   channelTab === "library"
                     ? "bg-accent/15 text-accent"
                     : "text-gray-400 hover:text-gray-200"
@@ -1059,7 +1089,7 @@ export default function Library() {
               <button
                 type="button"
                 onClick={() => setChannelTab("feed")}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
                   channelTab === "feed"
                     ? "bg-accent/15 text-accent"
                     : "text-gray-400 hover:text-gray-200"
@@ -1072,22 +1102,23 @@ export default function Library() {
 
           <div
             data-header-filters
-            className="ml-auto flex flex-nowrap items-center gap-2"
+            className="ml-auto flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-1.5 sm:gap-2"
           >
             {onFeedTab ? (
               <>
                 <input
+                  data-header-search
                   value={feedSearch}
                   onChange={(e) => setFeedSearch(e.target.value)}
                   placeholder="Search"
-                  className="ui-panel ui-interactive block w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:w-64"
+                  className="ui-panel ui-interactive min-w-0 max-w-64 flex-1 basis-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:px-4 md:basis-40"
                 />
                 <select
                   value={feedSort}
                   onChange={(e) =>
                     setFeedSort(e.target.value as "recent" | "popular")
                   }
-                  className="min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  className="min-w-[6.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-2 py-2 text-sm text-gray-100 outline-none focus:border-accent sm:px-3"
                 >
                   <option value="recent">Recent</option>
                   <option value="popular">Popular</option>
@@ -1097,7 +1128,7 @@ export default function Library() {
                   onClick={() =>
                     setFeedOrder((o) => (o === "desc" ? "asc" : "desc"))
                   }
-                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-2 text-sm text-gray-100 hover:border-accent sm:px-3"
                   title="Toggle sort direction"
                 >
                   {feedOrder === "desc" ? "↓" : "↑"}
@@ -1151,15 +1182,16 @@ export default function Library() {
             ) : (
               <>
                 <input
+                  data-header-search
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search"
-                  className="ui-panel ui-interactive hidden w-full rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent md:block md:w-64"
+                  className="ui-panel ui-interactive hidden min-w-0 max-w-64 flex-1 basis-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:px-4 md:block md:basis-40"
                 />
                 <select
                   value={sort}
                   onChange={(e) => handleSortChange(e.target.value)}
-                  className="min-w-[12.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  className="w-[min(12.5rem,100%)] min-w-[9.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-2 py-2 text-sm text-gray-100 outline-none focus:border-accent sm:min-w-[12.5rem] sm:px-3"
                 >
                   {LIBRARY_SORT_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -1169,7 +1201,7 @@ export default function Library() {
                 </select>
                 <button
                   onClick={toggleOrder}
-                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent"
+                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-2 text-sm text-gray-100 hover:border-accent sm:px-3"
                   title={
                     sort === "random" ? "Shuffle again" : "Toggle sort direction"
                   }
@@ -1193,7 +1225,7 @@ export default function Library() {
                     onClick={() =>
                       selectMode ? exitSelectMode() : setSelectMode(true)
                     }
-                    className={`ui-panel ui-interactive shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    className={`ui-panel ui-interactive shrink-0 rounded-lg border px-2.5 py-2 text-sm transition-colors sm:px-3 ${
                       selectMode
                         ? "border-accent bg-accent/10 text-accent"
                         : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"

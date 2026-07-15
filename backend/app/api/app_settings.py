@@ -22,6 +22,7 @@ class AiSettingsRead(BaseModel):
     use_subtitles: bool = True
     enrich_tags: bool = True
     ai_duplicates: bool = True
+    category_min_score: float = 0.55
     paused: bool = False
 
 
@@ -38,6 +39,7 @@ class AiSettingsUpdate(BaseModel):
     use_subtitles: Optional[bool] = None
     enrich_tags: Optional[bool] = None
     ai_duplicates: Optional[bool] = None
+    category_min_score: Optional[float] = Field(default=None, ge=0.20, le=0.90)
     paused: Optional[bool] = None
 
 
@@ -58,7 +60,12 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     merged = {**app_settings.AI_DEFAULTS, **raw}
     # Drop internal-only keys (e.g. last_daily_run) before validating.
     allowed = set(AiSettingsRead.model_fields)
-    return AiSettingsRead(**{k: v for k, v in merged.items() if k in allowed})
+    filtered = {k: v for k, v in merged.items() if k in allowed}
+    if "category_min_score" in filtered:
+        filtered["category_min_score"] = app_settings.clamp_category_min_score(
+            filtered["category_min_score"]
+        )
+    return AiSettingsRead(**filtered)
 
 
 @router.get("", response_model=AppSettingsRead)

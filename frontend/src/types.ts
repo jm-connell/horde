@@ -201,6 +201,7 @@ export interface AiSettings {
   use_subtitles: boolean;
   enrich_tags: boolean;
   ai_duplicates: boolean;
+  category_min_score: number;
   paused: boolean;
 }
 

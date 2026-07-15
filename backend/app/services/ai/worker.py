@@ -93,6 +93,20 @@ def enqueue_missing_embeds(*, limit: int = 2000) -> dict:
     return _result(breakdown, empty="No missing embeds")
 
 
+def enqueue_reindex_embeds(*, limit: int = 5000) -> dict:
+    """Queue embeds for missing, stale, or wrong-model indexes (e.g. after model change)."""
+    breakdown = {"embed": 0, "tags": 0, "categories": 0}
+    with Session(engine) as session:
+        need = embeddings.videos_needing_embed(session, limit=limit)
+    for video_id in need:
+        if enqueue_job(AiJobKind.embed_video, video_id, force=True) is not None:
+            breakdown["embed"] += 1
+    return _result(
+        breakdown,
+        empty="Search indexes already match the current embed model",
+    )
+
+
 def enqueue_missing_tags(*, limit: int = 2000) -> dict:
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()

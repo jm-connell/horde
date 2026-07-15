@@ -59,6 +59,18 @@ def delete_embeddings(session: Session, video_id: int) -> None:
     session.commit()
 
 
+def _embeddings_match_model(
+    session: Session, video_id: int, model: str
+) -> bool:
+    """True when the video has at least one embedding row, all using ``model``."""
+    rows = session.exec(
+        select(VideoEmbedding).where(VideoEmbedding.video_id == video_id)
+    ).all()
+    if not rows:
+        return False
+    return all(str(row.model or "") == model for row in rows)
+
+
 def embed_video(session: Session, video_id: int) -> bool:
     """Compute and store embeddings for a video. Returns True on success."""
     video = session.get(Video, video_id)
@@ -74,12 +86,12 @@ def embed_video(session: Session, video_id: int) -> bool:
     use_subs = bool(ai.get("use_subtitles", True))
     digest = ai_text.content_hash(video, use_subtitles=use_subs)
     meta = _get_or_create_meta(session, video_id)
-    if meta.content_hash == digest and meta.embed_status == "ready":
-        existing = session.exec(
-            select(VideoEmbedding).where(VideoEmbedding.video_id == video_id)
-        ).first()
-        if existing is not None:
-            return True
+    if (
+        meta.content_hash == digest
+        and meta.embed_status == "ready"
+        and _embeddings_match_model(session, video_id, model)
+    ):
+        return True
 
     docs = ai_text.documents_for_video(video, use_subtitles=use_subs)
     # Remove old rows for this video.
@@ -205,6 +217,7 @@ def indexed_count(session: Session) -> tuple[int, int]:
 def videos_needing_embed(session: Session, *, limit: int = 500) -> list[int]:
     ai = app_settings.ai_settings()
     use_subs = bool(ai.get("use_subtitles", True))
+    model = str(ai.get("embed_model") or "nomic-embed-text")
     videos = session.exec(
         select(Video).where(Video.needs_review == False)  # noqa: E712
     ).all()
@@ -214,7 +227,12 @@ def videos_needing_embed(session: Session, *, limit: int = 500) -> list[int]:
             continue
         meta = session.get(VideoAiMeta, video.id)
         digest = ai_text.content_hash(video, use_subtitles=use_subs)
-        if meta is None or meta.embed_status != "ready" or meta.content_hash != digest:
+        stale_content = (
+            meta is None
+            or meta.embed_status != "ready"
+            or meta.content_hash != digest
+        )
+        if stale_content or not _embeddings_match_model(session, video.id, model):
             need.append(video.id)
             if len(need) >= limit:
                 break

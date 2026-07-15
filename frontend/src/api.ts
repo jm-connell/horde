@@ -299,6 +299,7 @@ export const api = {
       | "all_recent"
       | "all_full"
       | "embeds"
+      | "reindex_embeds"
       | "missing_tags"
       | "full_tags"
       | "categories" = "all"

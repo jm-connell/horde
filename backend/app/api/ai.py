@@ -56,6 +56,7 @@ class AiProcessRequest(BaseModel):
         "all_recent",
         "all_full",
         "embeds",
+        "reindex_embeds",
         "missing_tags",
         "full_tags",
         "categories",
@@ -97,6 +98,8 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
     try:
         if action == "embeds":
             result = worker.enqueue_missing_embeds()
+        elif action == "reindex_embeds":
+            result = worker.enqueue_reindex_embeds()
         elif action == "missing_tags":
             result = worker.enqueue_missing_tags()
         elif action == "full_tags":

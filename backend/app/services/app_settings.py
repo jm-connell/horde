@@ -20,8 +20,20 @@ AI_DEFAULTS: dict[str, Any] = {
     "use_subtitles": True,
     "enrich_tags": True,
     "ai_duplicates": True,
+    "category_min_score": 0.55,
     "paused": False,
 }
+
+_CATEGORY_MIN_SCORE_LO = 0.20
+_CATEGORY_MIN_SCORE_HI = 0.90
+
+
+def clamp_category_min_score(value: Any) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        score = float(AI_DEFAULTS["category_min_score"])
+    return max(_CATEGORY_MIN_SCORE_LO, min(_CATEGORY_MIN_SCORE_HI, score))
 
 DEFAULTS: dict[str, Any] = {
     "progress_expiry_days": 14,
@@ -41,6 +53,9 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     merged = dict(AI_DEFAULTS)
     if isinstance(raw, dict):
         merged.update({k: v for k, v in raw.items() if k in AI_DEFAULTS})
+    merged["category_min_score"] = clamp_category_min_score(
+        merged.get("category_min_score")
+    )
     return merged
 
 
