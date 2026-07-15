@@ -106,7 +106,9 @@ const AI_PROCESS_SECONDARY: {
     action: "categories",
     label: "Refresh categories",
     title:
-      "Ask the chat model to invent browse categories from sample titles, then match videos via search indexes. Refresh after re-indexing if you changed the embed model.",
+      "Ask the chat model to invent specific browse categories from a diverse sample " +
+      "(title, channel, tags, description, subtitle excerpt), then match videos via " +
+      "search indexes. Refresh after re-indexing if you changed the embed model.",
   },
 ];
 
