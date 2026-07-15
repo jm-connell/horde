@@ -77,6 +77,30 @@ class LlmProvider(Protocol):
     ) -> str: ...
 
 
+def _normalize_model_ref(model: str) -> tuple[str, str]:
+    """Return (base, tag). Untagged names are treated as ``:latest`` (Ollama default)."""
+    raw = (model or "").strip().lower()
+    if not raw:
+        return "", ""
+    if ":" in raw:
+        base, tag = raw.split(":", 1)
+        return base.strip(), (tag.strip() or "latest")
+    return raw, "latest"
+
+
+def models_equivalent(requested: str, installed: str) -> bool:
+    """True when ``requested`` refers to the same Ollama model as ``installed``.
+
+    Tags must match (``qwen2.5:3b`` ≠ ``qwen2.5:7b``). Untagged names match
+    ``:latest`` only, matching how Ollama resolves pulls/runs.
+    """
+    want_base, want_tag = _normalize_model_ref(requested)
+    have_base, have_tag = _normalize_model_ref(installed)
+    if not want_base or not have_base:
+        return False
+    return want_base == have_base and want_tag == have_tag
+
+
 class OllamaProvider:
     def __init__(self, base_url: str, timeout: float | httpx.Timeout = 120.0):
         self.base_url = base_url.rstrip("/")
@@ -110,17 +134,16 @@ class OllamaProvider:
         return names
 
     def has_model(self, model: str) -> bool:
-        want = model.strip().lower().split(":")[0]
+        want = (model or "").strip()
         if not want:
             return False
         for name in self.list_models():
-            base = name.lower().split(":")[0]
-            if base == want:
+            if models_equivalent(want, name):
                 return True
         return False
 
     def pull_model(self, model: str) -> None:
-        global _last_error
+        global _last_error, _model_cache
         with _pull_lock:
             if model in _pulling:
                 return
@@ -142,6 +165,8 @@ class OllamaProvider:
         finally:
             with _pull_lock:
                 _pulling.discard(model)
+            # Presence cache may still say "missing" until refresh.
+            _model_cache.clear()
 
     def embed(self, text: str, model: str) -> list[float]:
         global _last_error
@@ -269,8 +294,10 @@ def get_provider() -> Optional[OllamaProvider]:
 def ensure_models(provider: OllamaProvider) -> tuple[bool, bool]:
     """Ensure embed/chat models exist; kick off pulls if configured.
 
-    Returns (embed_present, chat_present).
+    Returns (embed_present, chat_present). Model tags must match exactly
+    (``qwen2.5:3b`` is not satisfied by ``qwen2.5:7b``).
     """
+    global _model_cache
     ai = app_settings.ai_settings()
     embed_model = str(ai.get("embed_model") or "nomic-embed-text")
     chat_model = str(ai.get("chat_model") or "llama3.2:3b")
@@ -291,8 +318,27 @@ def ensure_models(provider: OllamaProvider) -> tuple[bool, bool]:
                 except Exception:  # noqa: BLE001
                     pass
 
+            # Drop stale "present" cache so status shows the pull promptly.
+            _model_cache.clear()
             threading.Thread(target=_pull, daemon=True).start()
     return embed_ok, chat_ok
+
+
+def require_chat_model(provider: OllamaProvider, chat_model: str) -> Optional[str]:
+    """Return an error message if chat model is missing; start auto-pull when enabled."""
+    if provider.has_model(chat_model):
+        return None
+    ai = app_settings.ai_settings()
+    if ai.get("auto_pull_models", True):
+        ensure_models(provider)
+        return (
+            f"Chat model '{chat_model}' is not installed on Ollama; "
+            "download started. Try again in a minute."
+        )
+    return (
+        f"Chat model '{chat_model}' is not installed on Ollama. "
+        "Enable auto-pull or install it manually."
+    )
 
 
 def pulling_models() -> list[str]:

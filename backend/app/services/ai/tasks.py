@@ -181,14 +181,18 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     provider = get_provider()
     if provider is None:
         raise RuntimeError("Ollama not available")
-    if not provider.has_model(str(ai.get("chat_model") or "llama3.2:3b")):
-        raise RuntimeError("Chat model not available")
+    chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    from .provider import require_chat_model
+
+    missing = require_chat_model(provider, chat_model)
+    if missing:
+        raise RuntimeError(missing)
 
     existing = library.parse_tags(video.tags)
     prompt = ai_text.tag_enrich_prompt(video, existing)
     raw = provider.chat(
         prompt,
-        str(ai.get("chat_model") or "llama3.2:3b"),
+        chat_model,
         system=(
             "You are a tagging assistant. Reply with JSON only. "
             "Return as many useful non-duplicate tags as needed (typically 3-12), "
@@ -275,8 +279,11 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
     if provider is None:
         raise SummarizeError("Ollama not available", status_code=503)
     chat_model = str(ai.get("chat_model") or "llama3.2:3b")
-    if not provider.has_model(chat_model):
-        raise SummarizeError("Chat model not available", status_code=503)
+    from .provider import require_chat_model
+
+    missing = require_chat_model(provider, chat_model)
+    if missing:
+        raise SummarizeError(missing, status_code=503)
 
     length = ai_text.normalize_summary_length(ai.get("summary_length"))
     max_chars = ai_text.summary_max_chars(length)
@@ -439,8 +446,12 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     ai = app_settings.ai_settings()
     chat_model = str(ai.get("chat_model") or "llama3.2:3b")
     embed_model = str(ai.get("embed_model") or "nomic-embed-text")
+    from .provider import ensure_models
+
     if not provider.has_model(chat_model) or not provider.has_model(embed_model):
-        raise RuntimeError("Required models not available")
+        if ai.get("auto_pull_models", True):
+            ensure_models(provider)
+        raise RuntimeError("Required models not available (pull may be in progress)")
 
     from . import workload as ai_workload
 
