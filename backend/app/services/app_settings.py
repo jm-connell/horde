@@ -21,6 +21,8 @@ AI_DEFAULTS: dict[str, Any] = {
     "enrich_tags": True,
     "ai_duplicates": True,
     "category_min_score": 0.55,
+    "workload_profile": "normal",  # light | normal | heavy
+    "pending_category_refresh": False,
     "paused": False,
 }
 

@@ -121,56 +121,21 @@ def _cpu_ram() -> dict[str, Any]:
     return out
 
 
-def _nvidia_gpu() -> Optional[dict[str, Any]]:
-    try:
-        result = subprocess.run(
-            [
-                "nvidia-smi",
-                "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,name",
-                "--format=csv,noheader,nounits",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=2.5,
-            check=False,
-        )
-        if result.returncode != 0 or not result.stdout.strip():
-            return None
-        line = result.stdout.strip().splitlines()[0]
-        parts = [p.strip() for p in line.split(",")]
-        if len(parts) < 4:
-            return None
+def nvidia_gpu() -> Optional[dict[str, Any]]:
+    """Return NVIDIA GPU stats dict, or None if unavailable."""
+    from ..services.ai.workload import probe_nvidia_gpu
 
-        def _num(raw: str) -> Optional[float]:
-            try:
-                return float(raw)
-            except ValueError:
-                return None
+    return probe_nvidia_gpu()
 
-        util = _num(parts[0])
-        temp = _num(parts[1])
-        mem_used_mib = _num(parts[2])
-        mem_total_mib = _num(parts[3])
-        name = parts[4] if len(parts) > 4 else None
-        return {
-            "name": name,
-            "util_percent": util,
-            "temp_c": temp,
-            "vram_used_bytes": int(mem_used_mib * 1024 * 1024)
-            if mem_used_mib is not None
-            else None,
-            "vram_total_bytes": int(mem_total_mib * 1024 * 1024)
-            if mem_total_mib is not None
-            else None,
-        }
-    except Exception:  # noqa: BLE001
-        return None
+
+# Back-compat alias
+_nvidia_gpu = nvidia_gpu
 
 
 @router.get("/stats")
 def system_stats():
     cpu_ram = _cpu_ram()
-    gpu = _nvidia_gpu()
+    gpu = nvidia_gpu()
     disk = None
     try:
         from ..config import DOWNLOADS_DIR

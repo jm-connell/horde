@@ -49,6 +49,10 @@ _VIDEO_AI_META_COLUMNS = [
     ("user_tags", "VARCHAR DEFAULT '[]'"),
 ]
 
+_AI_CATEGORY_COLUMNS = [
+    ("blurb", "VARCHAR"),
+]
+
 
 def _migrate_table(table: str, columns: list[tuple[str, str]]) -> None:
     inspector = inspect(engine)
@@ -67,6 +71,7 @@ def _migrate_columns() -> None:
     _migrate_table("videos", _VIDEO_COLUMNS)
     _migrate_table("download_jobs", _DOWNLOAD_JOB_COLUMNS)
     _migrate_table("video_ai_meta", _VIDEO_AI_META_COLUMNS)
+    _migrate_table("ai_categories", _AI_CATEGORY_COLUMNS)
 
 
 def verify_schema() -> None:
@@ -76,6 +81,7 @@ def verify_schema() -> None:
         ("videos", _VIDEO_COLUMNS),
         ("download_jobs", _DOWNLOAD_JOB_COLUMNS),
         ("video_ai_meta", _VIDEO_AI_META_COLUMNS),
+        ("ai_categories", _AI_CATEGORY_COLUMNS),
     ):
         if table not in inspector.get_table_names():
             continue

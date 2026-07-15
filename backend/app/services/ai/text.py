@@ -182,7 +182,13 @@ _CATEGORY_SUB_CHARS = 120
 _CATEGORY_SAMPLE_BUDGET = 28_000
 
 
-def category_sample_entry(video: Video, *, use_subtitles: bool = True) -> str:
+def category_sample_entry(
+    video: Video,
+    *,
+    use_subtitles: bool = True,
+    desc_chars: int = _CATEGORY_DESC_CHARS,
+    sub_chars: int = _CATEGORY_SUB_CHARS,
+) -> str:
     """Compact metadata block for category invent prompts."""
     lines = [f"Title: {(video.title or '').strip() or '(untitled)'}"]
     channel = (video.channel or "").strip()
@@ -193,10 +199,10 @@ def category_sample_entry(video: Video, *, use_subtitles: bool = True) -> str:
         lines.append("Tags: " + ", ".join(tags))
     desc = re.sub(r"\s+", " ", (video.description or "").strip())
     if desc:
-        lines.append("Description: " + desc[:_CATEGORY_DESC_CHARS])
-    if use_subtitles:
-        sub = load_subtitle_text(video, max_chars=_CATEGORY_SUB_CHARS * 4)
-        excerpt = _first_sentence_or_chars(sub, max_chars=_CATEGORY_SUB_CHARS)
+        lines.append("Description: " + desc[: max(0, desc_chars)])
+    if use_subtitles and sub_chars > 0:
+        sub = load_subtitle_text(video, max_chars=max(sub_chars * 4, sub_chars))
+        excerpt = _first_sentence_or_chars(sub, max_chars=sub_chars)
         if excerpt:
             lines.append("Subtitle: " + excerpt)
     return "\n".join(lines)

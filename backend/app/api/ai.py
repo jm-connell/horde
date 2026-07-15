@@ -44,10 +44,25 @@ class AiStatusRead(BaseModel):
     queue_depth: int = 0
     queue_breakdown: dict[str, int] = Field(default_factory=dict)
     current_job: Optional[AiCurrentJob] = None
+    workload_profile: str = "normal"
+    recommended_profile: str = "normal"
+    profile_locked: bool = False
+    lock_reason: Optional[str] = None
+    workload_warning: Optional[str] = None
+    vram_tier: str = "unknown"
+    gpu_name: Optional[str] = None
+    vram_total_bytes: Optional[int] = None
+    invent_sample_size: int = 100
+    invent_budget_chars: int = 28000
+    models_match_profile: bool = True
 
 
 class AiTestRequest(BaseModel):
     base_url: Optional[str] = None
+
+
+class AiApplyWorkloadRequest(BaseModel):
+    profile: Optional[Literal["light", "normal", "heavy"]] = None
 
 
 class AiProcessRequest(BaseModel):
@@ -71,6 +86,9 @@ class AiProcessResult(BaseModel):
 
 @router.get("/status", response_model=AiStatusRead)
 def ai_status(session: Session = Depends(get_session)):
+    from ..services import app_settings
+    from ..services.ai import workload as ai_workload
+
     indexed, total = embeddings.indexed_count(session)
     status = build_status(
         indexed_videos=indexed,
@@ -79,11 +97,66 @@ def ai_status(session: Session = Depends(get_session)):
     )
     breakdown = worker.queue_breakdown()
     current = worker.current_job_info()
+    ai = app_settings.ai_settings()
+    runtime = ai_workload.resolve_runtime(ai.get("workload_profile"))
+    models_match = (
+        str(ai.get("embed_model") or "") == runtime.embed_model
+        and str(ai.get("chat_model") or "") == runtime.chat_model
+    )
     return AiStatusRead(
         **status.__dict__,
         queue_breakdown=breakdown,
         current_job=AiCurrentJob(**current) if current else None,
+        workload_profile=runtime.profile,
+        recommended_profile=runtime.recommended_profile,
+        profile_locked=runtime.profile_locked,
+        lock_reason=runtime.lock_reason,
+        workload_warning=runtime.warning,
+        vram_tier=runtime.vram_tier,
+        gpu_name=runtime.gpu_name,
+        vram_total_bytes=runtime.vram_total_bytes,
+        invent_sample_size=runtime.invent_sample_size,
+        invent_budget_chars=runtime.invent_budget_chars,
+        models_match_profile=models_match,
     )
+
+
+@router.post("/apply-workload")
+def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()):
+    """Apply a workload profile: resolve models for this GPU, save, optional pull."""
+    from ..services import app_settings
+    from ..services.ai import workload as ai_workload
+    from ..services.ai.provider import ensure_models, get_provider
+
+    ai = app_settings.ai_settings()
+    profile = payload.profile or ai.get("workload_profile") or "normal"
+    runtime = ai_workload.resolve_runtime(profile)
+    prev_embed = str(ai.get("embed_model") or "")
+    patch = ai_workload.settings_patch_for_runtime(runtime)
+    app_settings.save({"ai": patch})
+    invalidate_resolved_url()
+
+    pulled = False
+    if bool(ai.get("auto_pull_models", True)):
+        provider = get_provider()
+        if provider is not None:
+            try:
+                ensure_models(provider)
+                pulled = True
+            except Exception:  # noqa: BLE001
+                pass
+
+    embed_changed = prev_embed != runtime.embed_model
+    return {
+        "ok": True,
+        "runtime": runtime.to_dict(),
+        "embed_model_changed": embed_changed,
+        "pulled": pulled,
+        "detail": (
+            f"Applied {runtime.profile} workload"
+            + (f" ({runtime.gpu_name})" if runtime.gpu_name else "")
+        ),
+    }
 
 
 @router.post("/test")

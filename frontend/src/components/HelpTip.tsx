@@ -1,7 +1,13 @@
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 /** Hover/focus popover tip — more reliable than native title on Windows. */
-export default function HelpTip({ text }: { text: string }) {
+export default function HelpTip({
+  text,
+  children,
+}: {
+  text: string;
+  children?: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const tipId = useId();
 
@@ -11,16 +17,27 @@ export default function HelpTip({ text }: { text: string }) {
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <button
-        type="button"
-        className="cursor-help text-gray-600 hover:text-gray-400"
-        aria-label="More info"
-        aria-describedby={open ? tipId : undefined}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-      >
-        (?)
-      </button>
+      {children ? (
+        <span
+          className="inline-flex"
+          aria-describedby={open ? tipId : undefined}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+        >
+          {children}
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="cursor-help text-gray-600 hover:text-gray-400"
+          aria-label="More info"
+          aria-describedby={open ? tipId : undefined}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+        >
+          (?)
+        </button>
+      )}
       {open && (
         <span
           id={tipId}

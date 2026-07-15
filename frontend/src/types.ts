@@ -187,6 +187,7 @@ export interface StorageStats {
 }
 
 export type AiSchedule = "on_download" | "on_request" | "timer" | "set_time";
+export type AiWorkloadProfile = "light" | "normal" | "heavy";
 
 export interface AiSettings {
   enabled: boolean;
@@ -202,6 +203,7 @@ export interface AiSettings {
   enrich_tags: boolean;
   ai_duplicates: boolean;
   category_min_score: number;
+  workload_profile: AiWorkloadProfile;
   paused: boolean;
 }
 
@@ -230,6 +232,17 @@ export interface AiStatus {
   queue_depth: number;
   queue_breakdown: Record<string, number>;
   current_job: AiCurrentJob | string | null;
+  workload_profile?: AiWorkloadProfile;
+  recommended_profile?: AiWorkloadProfile;
+  profile_locked?: boolean;
+  lock_reason?: string | null;
+  workload_warning?: string | null;
+  vram_tier?: string;
+  gpu_name?: string | null;
+  vram_total_bytes?: number | null;
+  invent_sample_size?: number;
+  invent_budget_chars?: number;
+  models_match_profile?: boolean;
 }
 
 export interface RecommendationSection {

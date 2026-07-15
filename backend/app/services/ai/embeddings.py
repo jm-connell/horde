@@ -240,17 +240,25 @@ def similar_video_ids(
 
 
 def indexed_count(session: Session) -> tuple[int, int]:
-    """Return (indexed_ready, total_library_videos)."""
-    total = len(
-        session.exec(
-            select(Video.id).where(Video.needs_review == False)  # noqa: E712
-        ).all()
-    )
-    ready = len(
-        session.exec(
-            select(VideoAiMeta.video_id).where(VideoAiMeta.embed_status == "ready")
-        ).all()
-    )
+    """Return (indexed_ready, total_library_videos).
+
+    Ready means embed_status is ready and stored vectors use the current embed model.
+    """
+    ai = app_settings.ai_settings()
+    model = str(ai.get("embed_model") or "nomic-embed-text")
+    videos = session.exec(
+        select(Video).where(Video.needs_review == False)  # noqa: E712
+    ).all()
+    total = len(videos)
+    ready = 0
+    for video in videos:
+        if video.id is None:
+            continue
+        meta = session.get(VideoAiMeta, video.id)
+        if meta is None or meta.embed_status != "ready":
+            continue
+        if _embeddings_match_model(session, video.id, model):
+            ready += 1
     return ready, total
 
 

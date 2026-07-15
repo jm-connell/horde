@@ -270,7 +270,10 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     if not provider.has_model(chat_model) or not provider.has_model(embed_model):
         raise RuntimeError("Required models not available")
 
-    videos = _category_sample_videos(session, limit=100)
+    from . import workload as ai_workload
+
+    runtime = ai_workload.resolve_runtime(ai.get("workload_profile"))
+    videos = _category_sample_videos(session, limit=runtime.invent_sample_size)
     titled = [v for v in videos if (v.title or "").strip()]
     if len(titled) < 3:
         return
@@ -280,10 +283,17 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     # trim-from-end drops binge-prone watches first and keeps channel diversity.
     prompt_videos = list(reversed(titled))
     entries = [
-        ai_text.category_sample_entry(v, use_subtitles=use_subs)
+        ai_text.category_sample_entry(
+            v,
+            use_subtitles=use_subs,
+            desc_chars=runtime.invent_desc_chars,
+            sub_chars=runtime.invent_sub_chars,
+        )
         for v in prompt_videos
     ]
-    entries = ai_text.bound_category_entries(entries)
+    entries = ai_text.bound_category_entries(
+        entries, budget=runtime.invent_budget_chars
+    )
 
     raw = provider.chat(
         ai_text.category_prompt(entries),
@@ -337,6 +347,7 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
         session.add(
             AiCategory(
                 name=name,
+                blurb=blurb or None,
                 embedding=embeddings.pack_vector(store_vec),
                 dim=len(store_vec),
                 model=embed_model,

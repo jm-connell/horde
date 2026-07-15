@@ -171,6 +171,7 @@ class AiCategory(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
+    blurb: Optional[str] = None
     embedding: bytes = Field(default=b"")
     dim: int = 0
     model: str = Field(default="nomic-embed-text")

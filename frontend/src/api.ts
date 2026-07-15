@@ -293,6 +293,19 @@ export const api = {
     });
   },
 
+  applyAiWorkload(profile?: "light" | "normal" | "heavy"): Promise<{
+    ok: boolean;
+    embed_model_changed?: boolean;
+    detail?: string;
+    runtime?: Record<string, unknown>;
+  }> {
+    return request("/api/ai/apply-workload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile: profile || null }),
+    });
+  },
+
   processAiLibrary(
     action:
       | "all"

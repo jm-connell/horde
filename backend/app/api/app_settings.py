@@ -23,6 +23,7 @@ class AiSettingsRead(BaseModel):
     enrich_tags: bool = True
     ai_duplicates: bool = True
     category_min_score: float = 0.55
+    workload_profile: Literal["light", "normal", "heavy"] = "normal"
     paused: bool = False
 
 
@@ -40,6 +41,7 @@ class AiSettingsUpdate(BaseModel):
     enrich_tags: Optional[bool] = None
     ai_duplicates: Optional[bool] = None
     category_min_score: Optional[float] = Field(default=None, ge=0.20, le=0.90)
+    workload_profile: Optional[Literal["light", "normal", "heavy"]] = None
     paused: Optional[bool] = None
 
 
@@ -88,6 +90,12 @@ def update_settings(payload: AppSettingsUpdate):
         updates["ui"] = payload.ui
     if payload.ai is not None:
         ai_updates = payload.ai.model_dump(exclude_unset=True)
+        # Applying a workload profile resolves models + match score for this GPU.
+        if "workload_profile" in ai_updates:
+            from ..services.ai import workload as ai_workload
+
+            runtime = ai_workload.resolve_runtime(ai_updates["workload_profile"])
+            ai_updates.update(ai_workload.settings_patch_for_runtime(runtime))
         updates["ai"] = ai_updates
         if "base_url" in ai_updates:
             invalidate_resolved_url()

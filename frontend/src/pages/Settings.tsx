@@ -32,6 +32,7 @@ import type {
   AiSchedule,
   AiSettings,
   AiStatus,
+  AiWorkloadProfile,
   AppSettings,
   HealthStats,
   StorageStats,
@@ -201,11 +202,26 @@ const EMBED_MODEL_OPTIONS = [
 ];
 
 const CHAT_MODEL_OPTIONS = [
-  { value: "llama3.2:3b", label: "llama3.2:3b (default)" },
+  { value: "llama3.2:3b", label: "llama3.2:3b" },
   { value: "llama3.2:1b", label: "llama3.2:1b" },
   { value: "qwen2.5:3b", label: "qwen2.5:3b" },
+  { value: "qwen2.5:7b", label: "qwen2.5:7b" },
+  { value: "qwen2.5:14b", label: "qwen2.5:14b" },
+  { value: "llama3.1:8b", label: "llama3.1:8b" },
   { value: "phi3:mini", label: "phi3:mini" },
   { value: "__custom__", label: "Custom…" },
+];
+
+const WORKLOAD_TIP =
+  "Light keeps invent samples and indexing queues small for faster, quieter runs. " +
+  "Normal is the balanced default. Heavy uses larger invent samples, deeper subtitle " +
+  "context, and bigger index batches — more GPU time, better coverage on large libraries. " +
+  "Models are chosen automatically from your GPU VRAM; the profile only changes how hard Horde works.";
+
+const WORKLOAD_OPTIONS: { value: AiWorkloadProfile; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "normal", label: "Normal" },
+  { value: "heavy", label: "Heavy" },
 ];
 
 const DEFAULT_AI: AiSettings = {
@@ -222,6 +238,7 @@ const DEFAULT_AI: AiSettings = {
   enrich_tags: true,
   ai_duplicates: true,
   category_min_score: 0.55,
+  workload_profile: "normal",
   paused: false,
 };
 
@@ -347,7 +364,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "ai",
     keywords:
-      "ollama connection enable ai base url queue indexed features gpu vram",
+      "ollama connection enable ai base url queue indexed features gpu vram workload light normal heavy",
   },
   {
     tab: "ai",
@@ -703,6 +720,8 @@ export default function Settings() {
   const [aiTesting, setAiTesting] = useState(false);
   const [embedCustom, setEmbedCustom] = useState(false);
   const [chatCustom, setChatCustom] = useState(false);
+  const [advancedModelsOpen, setAdvancedModelsOpen] = useState(false);
+  const [reindexPrompt, setReindexPrompt] = useState<string | null>(null);
   const [expiryInput, setExpiryInput] = useState<string>("");
   const [metadataSyncing, setMetadataSyncing] = useState(false);
   const [metadataSyncFields, setMetadataSyncFields] = useState<string[]>([
@@ -952,6 +971,32 @@ export default function Settings() {
     }
   };
 
+  const applyWorkload = async (profile: AiWorkloadProfile) => {
+    try {
+      const result = await api.applyAiWorkload(profile);
+      const updated = await api.getAppSettings().catch(() => null);
+      if (updated?.ai) {
+        setAppSettings(updated);
+        setAiDraft({ ...DEFAULT_AI, ...updated.ai });
+      }
+      showToast(result.detail || `Applied ${profile} workload`);
+      refreshAiStatus();
+      if (result.embed_model_changed) {
+        setReindexPrompt(
+          "Embedding model changed with this workload. Rebuild search indexes so semantic search and categories use the new model? Categories refresh automatically when indexing finishes."
+        );
+      } else {
+        setReindexPrompt(null);
+      }
+    } catch (err) {
+      showToast(
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not apply workload"
+      );
+    }
+  };
+
   const saveModels = async () => {
     const embed = aiDraft.embed_model.trim();
     const chat = aiDraft.chat_model.trim();
@@ -964,20 +1009,13 @@ export default function Settings() {
       chat_model: chat,
     });
     if (embedChanged) {
-      const rebuild = confirm(
-        "Embedding model changed. Rebuild search indexes so semantic search, related videos, and category shelves use the new model? " +
-          "After indexing finishes, refresh categories from Process library."
-      );
-      if (rebuild) {
-        await runAiProcess("reindex_embeds");
-        return;
-      }
-      showToast(
-        "Models saved — re-index later so category shelves use the new embed model"
+      setReindexPrompt(
+        "Embedding model changed. Rebuild search indexes so semantic search, related videos, and category shelves use the new model? Categories refresh automatically when indexing finishes."
       );
       refreshAiStatus();
       return;
     }
+    setReindexPrompt(null);
     showToast("Models saved");
     refreshAiStatus();
   };
@@ -2805,6 +2843,104 @@ export default function Settings() {
                   LLM tasks. Leave the URL blank to attempt auto-discover, but
                   don&apos;t count on it.
                 </p>
+                <div
+                  className={
+                    !!q && !match("workload", "light", "normal", "heavy", "gpu")
+                      ? "hidden"
+                      : "max-w-2xl space-y-2"
+                  }
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-gray-200">
+                      Workload
+                      <HelpTip text={WORKLOAD_TIP} />
+                    </span>
+                    <div className="ui-panel flex rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+                      {WORKLOAD_OPTIONS.map((opt) => {
+                        const locked =
+                          Boolean(aiStatus?.profile_locked) &&
+                          opt.value !== "light";
+                        const selected =
+                          aiDraft.workload_profile === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            disabled={locked}
+                            onClick={() => void applyWorkload(opt.value)}
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                              selected
+                                ? "bg-accent/15 text-accent"
+                                : "text-gray-400 hover:text-gray-200"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {aiStatus?.recommended_profile && (
+                      <HelpTip
+                        text={
+                          aiStatus.gpu_name
+                            ? `Best starting workload for ${aiStatus.gpu_name}. Applies models and invent intensity that fit this GPU’s VRAM.`
+                            : "Best starting workload for this machine. Applies models and invent intensity that fit detected GPU VRAM."
+                        }
+                      >
+                        <button
+                          type="button"
+                          className="text-xs text-accent hover:underline"
+                          onClick={() =>
+                            void applyWorkload(aiStatus.recommended_profile!)
+                          }
+                        >
+                          Use recommended ({aiStatus.recommended_profile})
+                        </button>
+                      </HelpTip>
+                    )}
+                  </div>
+                  {reindexPrompt && (
+                    <div className="ui-panel rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+                      <p>{reindexPrompt}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className={PANEL_BTN}
+                          onClick={() => {
+                            setReindexPrompt(null);
+                            void runAiProcess("reindex_embeds");
+                          }}
+                        >
+                          Rebuild indexes
+                        </button>
+                        <button
+                          type="button"
+                          className={PANEL_BTN}
+                          onClick={() => setReindexPrompt(null)}
+                        >
+                          Not now
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {aiStatus?.profile_locked && aiStatus.lock_reason && (
+                    <p className="text-xs text-amber-400/90">
+                      {aiStatus.lock_reason}
+                    </p>
+                  )}
+                  {aiStatus?.workload_warning &&
+                    aiDraft.workload_profile === "heavy" && (
+                      <p className="text-xs text-amber-400/90">
+                        {aiStatus.workload_warning}
+                      </p>
+                    )}
+                  {aiStatus && aiStatus.models_match_profile === false && (
+                    <p className="text-xs text-gray-500">
+                      Models customized in Advanced — re-apply a workload to
+                      reset them for this GPU.
+                    </p>
+                  )}
+                </div>
                 <div className="max-w-2xl space-y-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -2903,22 +3039,29 @@ export default function Settings() {
                       {aiStatus.current_job && (
                         <CurrentAiJob job={aiStatus.current_job} />
                       )}
-                      {systemStats?.gpu &&
-                        (systemStats.gpu.util_percent != null ||
-                          systemStats.gpu.temp_c != null) && (
+                      {systemStats?.gpu && (
                         <div className="flex justify-between gap-3">
                           <dt className="text-gray-400">GPU</dt>
                           <dd className="text-right text-gray-200">
-                            {[
-                              systemStats.gpu.util_percent != null
-                                ? `${Math.round(systemStats.gpu.util_percent)}%`
-                                : null,
-                              systemStats.gpu.temp_c != null
-                                ? `${Math.round(systemStats.gpu.temp_c)}°C`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
+                            <span className="block">
+                              {systemStats.gpu.name || "NVIDIA GPU"}
+                            </span>
+                            <span className="block text-xs text-gray-500">
+                              {[
+                                systemStats.gpu.util_percent != null
+                                  ? `${Math.round(systemStats.gpu.util_percent)}%`
+                                  : null,
+                                systemStats.gpu.temp_c != null
+                                  ? `${Math.round(systemStats.gpu.temp_c)}°C`
+                                  : null,
+                                systemStats.gpu.vram_used_bytes != null &&
+                                systemStats.gpu.vram_total_bytes != null
+                                  ? `${formatSize(systemStats.gpu.vram_used_bytes)} / ${formatSize(systemStats.gpu.vram_total_bytes)}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
                           </dd>
                         </div>
                       )}
@@ -2976,8 +3119,7 @@ export default function Settings() {
             </Section>
 
             <Section
-              title="Models"
-              description="Models are pulled automatically on first connect when auto-pull is enabled."
+              title="Advanced"
               hidden={
                 !match(
                   "models",
@@ -2985,105 +3127,124 @@ export default function Settings() {
                   "chat model",
                   "vram",
                   "auto-pull",
-                  "gpu"
+                  "gpu",
+                  "advanced"
                 )
               }
             >
-              <div className="max-w-md space-y-3">
-                <label className="block">
-                  <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
-                    Embedding model
-                    <HelpTip text={EMBED_MODEL_TIP} />
-                  </span>
-                  <ThemedSelect
-                    aria-label="Embedding model"
-                    value={embedCustom ? "__custom__" : aiDraft.embed_model}
-                    options={EMBED_MODEL_OPTIONS}
-                    onChange={(value) => {
-                      if (value === "__custom__") {
-                        setEmbedCustom(true);
-                        return;
-                      }
-                      setEmbedCustom(false);
-                      setAiDraft((d) => ({
-                        ...d,
-                        embed_model: value,
-                      }));
-                    }}
-                    className="w-full max-w-md"
-                    buttonClassName="w-full"
-                  />
-                  {embedCustom && (
-                    <input
-                      value={aiDraft.embed_model}
-                      onChange={(e) =>
-                        setAiDraft((d) => ({
-                          ...d,
-                          embed_model: e.target.value,
-                        }))
-                      }
-                      placeholder="Ollama model name"
-                      className={`${INPUT} mt-2`}
-                    />
-                  )}
-                </label>
-                <label className="block">
-                  <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
-                    Chat model (tags, categories, duplicates)
-                    <HelpTip text={CHAT_MODEL_TIP} />
-                  </span>
-                  <ThemedSelect
-                    aria-label="Chat model"
-                    value={chatCustom ? "__custom__" : aiDraft.chat_model}
-                    options={CHAT_MODEL_OPTIONS}
-                    onChange={(value) => {
-                      if (value === "__custom__") {
-                        setChatCustom(true);
-                        return;
-                      }
-                      setChatCustom(false);
-                      setAiDraft((d) => ({
-                        ...d,
-                        chat_model: value,
-                      }));
-                    }}
-                    className="w-full max-w-md"
-                    buttonClassName="w-full"
-                  />
-                  {chatCustom && (
-                    <input
-                      value={aiDraft.chat_model}
-                      onChange={(e) =>
-                        setAiDraft((d) => ({
-                          ...d,
-                          chat_model: e.target.value,
-                        }))
-                      }
-                      placeholder="Ollama model name"
-                      className={`${INPUT} mt-2`}
-                    />
-                  )}
-                </label>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="min-w-0 text-xs text-gray-500">
+                  Optional overrides. Workload already picks models for your GPU.
+                </p>
                 <button
                   type="button"
-                  onClick={() => void saveModels()}
-                  className={PANEL_BTN}
+                  onClick={() => setAdvancedModelsOpen((o) => !o)}
+                  className={`${PANEL_BTN} shrink-0`}
                 >
-                  Save models
+                  {advancedModelsOpen
+                    ? "Hide model overrides"
+                    : "Show model overrides"}
                 </button>
-                <SettingRow
-                  title="Auto-pull missing models"
-                  description="Ask Ollama to download configured models when they are missing."
-                  control={
-                    <Toggle
-                      checked={aiDraft.auto_pull_models}
-                      onChange={() =>
-                        saveAi({ auto_pull_models: !aiDraft.auto_pull_models })
-                      }
-                    />
-                  }
-                />
               </div>
+              <Collapse open={advancedModelsOpen || Boolean(q)}>
+                <div className="max-w-md space-y-3 pb-1">
+                  <label className="block">
+                    <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+                      Embedding model
+                      <HelpTip text={EMBED_MODEL_TIP} />
+                    </span>
+                    <ThemedSelect
+                      aria-label="Embedding model"
+                      value={embedCustom ? "__custom__" : aiDraft.embed_model}
+                      options={EMBED_MODEL_OPTIONS}
+                      onChange={(value) => {
+                        if (value === "__custom__") {
+                          setEmbedCustom(true);
+                          return;
+                        }
+                        setEmbedCustom(false);
+                        setAiDraft((d) => ({
+                          ...d,
+                          embed_model: value,
+                        }));
+                      }}
+                      className="w-full max-w-md"
+                      buttonClassName="w-full"
+                    />
+                    {embedCustom && (
+                      <input
+                        value={aiDraft.embed_model}
+                        onChange={(e) =>
+                          setAiDraft((d) => ({
+                            ...d,
+                            embed_model: e.target.value,
+                          }))
+                        }
+                        placeholder="Ollama model name"
+                        className={`${INPUT} mt-2`}
+                      />
+                    )}
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+                      Chat model (tags, categories, duplicates)
+                      <HelpTip text={CHAT_MODEL_TIP} />
+                    </span>
+                    <ThemedSelect
+                      aria-label="Chat model"
+                      value={chatCustom ? "__custom__" : aiDraft.chat_model}
+                      options={CHAT_MODEL_OPTIONS}
+                      onChange={(value) => {
+                        if (value === "__custom__") {
+                          setChatCustom(true);
+                          return;
+                        }
+                        setChatCustom(false);
+                        setAiDraft((d) => ({
+                          ...d,
+                          chat_model: value,
+                        }));
+                      }}
+                      className="w-full max-w-md"
+                      buttonClassName="w-full"
+                    />
+                    {chatCustom && (
+                      <input
+                        value={aiDraft.chat_model}
+                        onChange={(e) =>
+                          setAiDraft((d) => ({
+                            ...d,
+                            chat_model: e.target.value,
+                          }))
+                        }
+                        placeholder="Ollama model name"
+                        className={`${INPUT} mt-2`}
+                      />
+                    )}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void saveModels()}
+                    className={PANEL_BTN}
+                  >
+                    Save models
+                  </button>
+                  <SettingRow
+                    title="Auto-pull missing models"
+                    description="Ask Ollama to download configured models when they are missing."
+                    control={
+                      <Toggle
+                        checked={aiDraft.auto_pull_models}
+                        onChange={() =>
+                          saveAi({
+                            auto_pull_models: !aiDraft.auto_pull_models,
+                          })
+                        }
+                      />
+                    }
+                  />
+                </div>
+              </Collapse>
             </Section>
 
             <Section
