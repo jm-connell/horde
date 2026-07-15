@@ -3,11 +3,15 @@ import { api } from "../api";
 import type { ViewMode } from "../components/VideoPlayer";
 import {
   applyUiFont,
+  newCustomFontId,
+  normalizeCustomFonts,
   normalizeUiFont,
+  parseCustomFontInput,
+  type SavedCustomFont,
   type UiFont,
 } from "../fonts";
 
-export type { UiFont };
+export type { SavedCustomFont, UiFont };
 
 export type SubtitleSize = "small" | "medium" | "large";
 export type Theme =
@@ -75,7 +79,7 @@ export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator = "none" | "liquid" | "underline" | "fade";
 export type LoadingStyle = "dots" | "spinner" | "bar";
 /** App text size (rem root). Replaces the old multi-step UI scale. */
-export type FontSize = "small" | "medium" | "large";
+export type FontSize = "small" | "medium" | "large" | "xl";
 
 export interface CustomThemePreset {
   id: string;
@@ -93,6 +97,15 @@ export interface CustomThemePreset {
   customBackgroundBlur: number;
   customBackgroundTint: string;
   customBackgroundTintOpacity: number;
+  pauseBackgroundWhileWatching: boolean;
+  navIndicator: NavIndicator;
+  hoverMotion: HoverMotion;
+  translucentPanels: boolean;
+  translucentPanelStrength: number;
+  translucentPanelLegibility: boolean;
+  loadingStyle: LoadingStyle;
+  fontSize: FontSize;
+  uiFont: string;
 }
 
 export interface Settings {
@@ -122,12 +135,10 @@ export interface Settings {
   loadingStyle: LoadingStyle;
   /** Rem-based text size applied to documentElement font-size. */
   fontSize: FontSize;
-  /** App typeface (Default keeps existing Inter/system stack). */
+  /** App typeface (builtin id, saved custom id, or "custom" while adding). */
   uiFont: UiFont;
-  /** Google Fonts CSS URL, specimen link, or family name when uiFont is custom. */
-  customFontUrl: string;
-  /** True when a local font file is stored in IndexedDB for custom. */
-  customFontHasFile: boolean;
+  /** Permanently saved custom fonts (URL or uploaded file). */
+  customFonts: SavedCustomFont[];
   showDescription: boolean;
   subtitleSize: SubtitleSize;
   subtitleOffset: number;
@@ -185,8 +196,7 @@ const DEFAULTS: Settings = {
   loadingStyle: "dots",
   fontSize: "medium",
   uiFont: "default",
-  customFontUrl: "",
-  customFontHasFile: false,
+  customFonts: [],
   showDescription: true,
   subtitleSize: "medium",
   subtitleOffset: 12,
@@ -239,8 +249,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "loadingStyle",
   "fontSize",
   "uiFont",
-  "customFontUrl",
-  "customFontHasFile",
+  "customFonts",
   "showDescription",
   "subtitleSize",
   "subtitleOffset",
@@ -522,12 +531,13 @@ export function serverUiToSettingsPatch(
   return patch as Partial<Settings>;
 }
 
-const VALID_FONT_SIZES = new Set<string>(["small", "medium", "large"]);
+const VALID_FONT_SIZES = new Set<string>(["small", "medium", "large", "xl"]);
 
 const FONT_SIZE_SCALE: Record<FontSize, number> = {
   small: 0.9,
   medium: 1,
   large: 1.125,
+  xl: 1.25,
 };
 
 function normalizeFontSize(
@@ -606,6 +616,39 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
       customBackgroundTintOpacity: normalizeTintOpacity(
         r.customBackgroundTintOpacity
       ),
+      pauseBackgroundWhileWatching: normalizeBool(
+        r.pauseBackgroundWhileWatching,
+        DEFAULTS.pauseBackgroundWhileWatching
+      ),
+      navIndicator: normalizeNavIndicator(r.navIndicator),
+      hoverMotion: normalizeHoverMotion(r.hoverMotion),
+      translucentPanels: normalizeBool(
+        r.translucentPanels,
+        DEFAULTS.translucentPanels
+      ),
+      translucentPanelStrength: normalizeTranslucentStrength(
+        r.translucentPanelStrength
+      ),
+      translucentPanelLegibility: normalizeBool(
+        r.translucentPanelLegibility,
+        DEFAULTS.translucentPanelLegibility
+      ),
+      loadingStyle:
+        r.loadingStyle === "dots" ||
+        r.loadingStyle === "spinner" ||
+        r.loadingStyle === "bar"
+          ? r.loadingStyle
+          : DEFAULTS.loadingStyle,
+      fontSize: normalizeFontSize(r.fontSize),
+      uiFont:
+        typeof r.uiFont === "string" &&
+        r.uiFont &&
+        r.uiFont !== "custom" &&
+        /^[a-zA-Z0-9_-]+$/.test(r.uiFont)
+          ? r.uiFont === "inter"
+            ? "default"
+            : r.uiFont
+          : DEFAULTS.uiFont,
     });
   }
   return out.slice(0, 40);
@@ -667,13 +710,47 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
       parsed.fontSize,
       (parsed as { uiScale?: unknown }).uiScale
     ),
-    uiFont: normalizeUiFont(parsed.uiFont),
-    customFontUrl:
-      typeof parsed.customFontUrl === "string" ? parsed.customFontUrl : "",
-    customFontHasFile: normalizeBool(
-      parsed.customFontHasFile,
-      DEFAULTS.customFontHasFile
-    ),
+    ...normalizeFontSettings(parsed),
+  };
+}
+
+/** Migrate legacy single custom font fields into customFonts list. */
+function normalizeFontSettings(
+  parsed: Partial<Settings> & {
+    customFontUrl?: unknown;
+    customFontHasFile?: unknown;
+  }
+): Pick<Settings, "uiFont" | "customFonts"> {
+  let customFonts = normalizeCustomFonts(parsed.customFonts);
+  let uiFont = parsed.uiFont;
+
+  const legacyUrl =
+    typeof parsed.customFontUrl === "string" ? parsed.customFontUrl.trim() : "";
+  const legacyHasFile = parsed.customFontHasFile === true;
+
+  if (customFonts.length === 0 && (legacyUrl || legacyHasFile)) {
+    // Legacy browser-only file uploads cannot be recovered server-side;
+    // URL customs still migrate into the permanent list.
+    if (legacyUrl) {
+      const id = newCustomFontId();
+      const parsed = parseCustomFontInput(legacyUrl);
+      customFonts = [
+        {
+          id,
+          name: (parsed.family || "Custom font").slice(0, 64),
+          source: "url",
+          url: legacyUrl,
+        },
+      ];
+      if (uiFont === "custom") uiFont = id;
+    } else if (legacyHasFile && uiFont === "custom") {
+      uiFont = "default";
+    }
+  }
+
+  return {
+    customFonts,
+    uiFont: normalizeUiFont(uiFont, customFonts),
   };
 }
 
@@ -836,10 +913,9 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   useEffect(() => {
     void applyUiFont({
       uiFont: settings.uiFont,
-      customFontUrl: settings.customFontUrl,
-      customFontHasFile: settings.customFontHasFile,
+      customFonts: settings.customFonts,
     });
-  }, [settings.uiFont, settings.customFontUrl, settings.customFontHasFile]);
+  }, [settings.uiFont, settings.customFonts]);
 
   const prevFontSize = useRef(settings.fontSize);
 

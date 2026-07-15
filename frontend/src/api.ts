@@ -357,6 +357,24 @@ export const api = {
     );
   },
 
+  uploadFont(
+    file: File
+  ): Promise<{ id: string; url: string; mime: string; filename?: string }> {
+    const form = new FormData();
+    form.append("file", file);
+    return request("/api/fonts", {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  deleteFont(id: string): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>(
+      `/api/fonts/${encodeURIComponent(id)}`,
+      { method: "DELETE" }
+    );
+  },
+
   pauseAi(): Promise<{ paused: boolean }> {
     return request<{ paused: boolean }>("/api/ai/pause", { method: "POST" });
   },

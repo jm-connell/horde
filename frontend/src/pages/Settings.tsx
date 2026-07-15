@@ -3,6 +3,7 @@ import { api } from "../api";
 import { useToast } from "../context/ToastContext";
 import {
   useSettings,
+  loadSettings,
   type BackgroundEffect,
   type ChannelSort,
   type CustomThemePreset,
@@ -16,9 +17,10 @@ import {
   type UiFont,
 } from "../hooks/useSettings";
 import {
-  clearCustomFontFile,
-  FONT_OPTIONS,
-  saveCustomFontFile,
+  fontSelectOptions,
+  labelFromFilename,
+  newCustomFontId,
+  parseCustomFontInput,
 } from "../fonts";
 import {
   BACKGROUND_EFFECT_OPTIONS,
@@ -57,6 +59,7 @@ const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "small", label: "Small" },
   { value: "medium", label: "Medium" },
   { value: "large", label: "Large" },
+  { value: "xl", label: "XL" },
 ];
 
 const AI_PROCESS_PRIMARY: {
@@ -274,12 +277,17 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "appearance",
     keywords:
-      "font typeface typography google fonts jetbrains roboto ubuntu space grotesk ibm plex inconsolata custom font upload font size small medium large text size",
+      "font typeface typography google fonts jetbrains roboto ubuntu space grotesk ibm plex inconsolata oxanium source sans custom font upload font size small medium large xl text size",
   },
   {
     tab: "appearance",
     keywords:
       "interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency legibility loading animation dots spinner bar",
+  },
+  {
+    tab: "appearance",
+    keywords:
+      "saved themes save theme save current preset snapshot appearance",
   },
   {
     tab: "appearance",
@@ -712,6 +720,8 @@ export default function Settings() {
   const [bgUploading, setBgUploading] = useState(false);
   const [paletteColors, setPaletteColors] = useState<string[]>([]);
   const [paletteLoading, setPaletteLoading] = useState(false);
+  const [customFontDraft, setCustomFontDraft] = useState("");
+  const [themeNameDraft, setThemeNameDraft] = useState("");
   const [bgLibrary, setBgLibrary] = useState<
     {
       id: string;
@@ -983,30 +993,76 @@ export default function Settings() {
   };
 
   const saveCurrentAsTheme = () => {
-    const name = window.prompt("Theme name");
-    if (!name?.trim()) return;
+    const name = themeNameDraft.trim();
+    if (!name) {
+      showToast("Enter a theme name");
+      return;
+    }
+    const current = loadSettings();
     const preset: CustomThemePreset = {
       id:
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : String(Date.now()),
-      name: name.trim(),
-      customColors: { ...settings.customColors },
-      backgroundEffect: settings.backgroundEffect,
-      backgroundOpacity: settings.backgroundOpacity,
-      backgroundEffectSpeed: settings.backgroundEffectSpeed,
-      backgroundEffectSize: settings.backgroundEffectSize,
-      backgroundEffectColorMode: settings.backgroundEffectColorMode,
-      backgroundEffectColor: settings.backgroundEffectColor,
-      flowingGradientPreset: settings.flowingGradientPreset,
-      customBackgroundId: settings.customBackgroundId,
-      customBackgroundMime: settings.customBackgroundMime,
-      customBackgroundBlur: settings.customBackgroundBlur,
-      customBackgroundTint: settings.customBackgroundTint,
-      customBackgroundTintOpacity: settings.customBackgroundTintOpacity,
+      name: name.slice(0, 64),
+      customColors: { ...current.customColors },
+      backgroundEffect: current.backgroundEffect,
+      backgroundOpacity: current.backgroundOpacity,
+      backgroundEffectSpeed: current.backgroundEffectSpeed,
+      backgroundEffectSize: current.backgroundEffectSize,
+      backgroundEffectColorMode: current.backgroundEffectColorMode,
+      backgroundEffectColor: current.backgroundEffectColor,
+      flowingGradientPreset: current.flowingGradientPreset,
+      customBackgroundId: current.customBackgroundId,
+      customBackgroundMime: current.customBackgroundMime,
+      customBackgroundBlur: current.customBackgroundBlur,
+      customBackgroundTint: current.customBackgroundTint,
+      customBackgroundTintOpacity: current.customBackgroundTintOpacity,
+      pauseBackgroundWhileWatching: current.pauseBackgroundWhileWatching,
+      navIndicator: current.navIndicator,
+      hoverMotion: current.hoverMotion,
+      translucentPanels: current.translucentPanels,
+      translucentPanelStrength: current.translucentPanelStrength,
+      translucentPanelLegibility: current.translucentPanelLegibility,
+      loadingStyle: current.loadingStyle,
+      fontSize: current.fontSize,
+      uiFont: current.uiFont === "custom" ? "default" : current.uiFont,
     };
-    update({ customThemes: [...settings.customThemes, preset] });
+    update({ customThemes: [...current.customThemes, preset] });
+    setThemeNameDraft("");
     showToast(`Saved theme “${preset.name}”`);
+  };
+
+  const addCustomFontFromUrl = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const parsed = parseCustomFontInput(trimmed);
+    if (!parsed.family || !parsed.cssUrl) {
+      showToast("Could not parse that font");
+      return;
+    }
+    const current = loadSettings();
+    const existing = current.customFonts.find(
+      (f) =>
+        f.source === "url" &&
+        (f.url === trimmed || f.name.toLowerCase() === parsed.family!.toLowerCase())
+    );
+    if (existing) {
+      update({ uiFont: existing.id });
+      setCustomFontDraft("");
+      showToast(`“${existing.name}” is already saved`);
+      return;
+    }
+    const id = newCustomFontId();
+    update({
+      customFonts: [
+        ...current.customFonts,
+        { id, name: parsed.family, source: "url", url: trimmed },
+      ],
+      uiFont: id,
+    });
+    setCustomFontDraft("");
+    showToast(`Saved “${parsed.family}”`);
   };
 
   const applyCustomTheme = (preset: CustomThemePreset) => {
@@ -1025,7 +1081,17 @@ export default function Settings() {
       customBackgroundBlur: preset.customBackgroundBlur,
       customBackgroundTint: preset.customBackgroundTint,
       customBackgroundTintOpacity: preset.customBackgroundTintOpacity,
+      pauseBackgroundWhileWatching: preset.pauseBackgroundWhileWatching,
+      navIndicator: preset.navIndicator,
+      hoverMotion: preset.hoverMotion,
+      translucentPanels: preset.translucentPanels,
+      translucentPanelStrength: preset.translucentPanelStrength,
+      translucentPanelLegibility: preset.translucentPanelLegibility,
+      loadingStyle: preset.loadingStyle,
+      fontSize: preset.fontSize,
+      uiFont: preset.uiFont,
     });
+    showToast(`Applied “${preset.name}”`);
   };
 
   const deleteCustomTheme = (id: string) => {
@@ -1126,12 +1192,11 @@ export default function Settings() {
                   "color palette",
                   "chrome",
                   "custom",
-                  "font",
-                  "typeface",
-                  "typography",
-                  "google fonts",
-                  "font size",
-                  "text size"
+                  "saved themes",
+                  "save theme",
+                  "save current",
+                  "preset",
+                  "snapshot"
                 )
                   ? undefined
                   : q
@@ -1139,38 +1204,17 @@ export default function Settings() {
                     : undefined
               }
             >
-              <div
-                className={
-                  match(
-                    "theme",
-                    "color palette",
-                    "chrome",
-                    "custom",
-                    "font",
-                    "typeface",
-                    "typography",
-                    "google fonts"
-                  )
-                    ? "grid grid-cols-1 gap-6 sm:grid-cols-2"
-                    : q
-                      ? "hidden"
-                      : "grid grid-cols-1 gap-6 sm:grid-cols-2"
-                }
-              >
-                <div
-                  className={
-                    match("theme", "color palette", "chrome", "custom")
-                      ? undefined
-                      : q
-                        ? "hidden"
-                        : undefined
-                  }
-                >
-                  <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    Theme
-                  </h2>
-                  <p className="mb-3 text-xs text-gray-500">
-                    Choose a color palette
+              <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Theme
+              </h2>
+              <p className="mb-3 text-xs text-gray-500">
+                Choose a color palette. Snapshot the current Appearance choices
+                — colors, background, font, and UI — then reapply later.
+              </p>
+              <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-sm font-medium text-gray-200">
+                    Palette
                   </p>
                   <ThemedSelect
                     aria-label="Theme"
@@ -1182,101 +1226,151 @@ export default function Settings() {
                     onChange={(value) => update({ theme: value })}
                     className="w-full min-w-[12rem] max-w-[18rem]"
                   />
-                  <Collapse open={settings.theme === "custom"}>
-                    <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
-                      <p className="text-xs text-gray-500">
-                        Pick your own accent and background. Surface colors are
-                        derived automatically.
-                      </p>
-                      <label className="flex items-center justify-between gap-4">
-                        <span className="text-sm text-gray-300">Accent</span>
-                        <input
-                          type="color"
-                          value={settings.customColors.accent}
-                          onChange={(e) =>
-                            update({
-                              customColors: {
-                                ...settings.customColors,
-                                accent: e.target.value,
-                              },
-                            })
-                          }
-                          className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
-                        />
-                      </label>
-                      <label className="flex items-center justify-between gap-4">
-                        <span className="text-sm text-gray-300">Background</span>
-                        <input
-                          type="color"
-                          value={settings.customColors.background}
-                          onChange={(e) =>
-                            update({
-                              customColors: {
-                                ...settings.customColors,
-                                background: e.target.value,
-                              },
-                            })
-                          }
-                          className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
-                        />
-                      </label>
-                      <div className="flex items-center gap-2 pt-1">
-                        <span
-                          className="h-6 flex-1 rounded-md ring-1 ring-ink-700"
-                          style={{
-                            backgroundColor: settings.customColors.background,
-                          }}
-                        />
-                        <span
-                          className="h-6 w-16 rounded-md ring-1 ring-ink-700"
-                          style={{
-                            backgroundColor: settings.customColors.accent,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </Collapse>
-                  <div className="mt-4 space-y-2">
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-medium text-gray-200">
+                    Save theme
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={themeNameDraft}
+                      onChange={(e) => setThemeNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          saveCurrentAsTheme();
+                        }
+                      }}
+                      placeholder="Theme name"
+                      maxLength={64}
+                      aria-label="Theme name"
+                      className={`${INPUT} min-w-0 flex-1`}
+                    />
                     <button
                       type="button"
                       onClick={saveCurrentAsTheme}
                       className={PANEL_BTN}
                     >
-                      Save current as theme…
+                      Save
                     </button>
-                    {settings.customThemes.length > 0 && (
-                      <ul className="space-y-2">
-                        {settings.customThemes.map((preset) => (
-                          <li
-                            key={preset.id}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2"
-                          >
-                            <span className="truncate text-sm text-gray-200">
-                              {preset.name}
-                            </span>
-                            <span className="flex shrink-0 gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => applyCustomTheme(preset)}
-                                className={PANEL_BTN}
-                              >
-                                Apply
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => deleteCustomTheme(preset.id)}
-                                className={PANEL_BTN}
-                              >
-                                Delete
-                              </button>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
                   </div>
                 </div>
+              </div>
+              {settings.customThemes.length > 0 && (
+                <ul className="mt-4 space-y-2">
+                  {settings.customThemes.map((preset) => (
+                    <li
+                      key={preset.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2"
+                    >
+                      <span className="truncate text-sm text-gray-200">
+                        {preset.name}
+                      </span>
+                      <span className="flex shrink-0 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => applyCustomTheme(preset)}
+                          className={PANEL_BTN}
+                        >
+                          Apply
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteCustomTheme(preset.id)}
+                          className={PANEL_BTN}
+                        >
+                          Delete
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Collapse open={settings.theme === "custom"}>
+                <div className="mt-4 max-w-xl space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
+                  <p className="text-xs text-gray-500">
+                    Pick your own accent and background. Surface colors are
+                    derived automatically.
+                  </p>
+                  <label className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-gray-300">Accent</span>
+                    <input
+                      type="color"
+                      value={settings.customColors.accent}
+                      onChange={(e) =>
+                        update({
+                          customColors: {
+                            ...settings.customColors,
+                            accent: e.target.value,
+                          },
+                        })
+                      }
+                      className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-gray-300">Background</span>
+                    <input
+                      type="color"
+                      value={settings.customColors.background}
+                      onChange={(e) =>
+                        update({
+                          customColors: {
+                            ...settings.customColors,
+                            background: e.target.value,
+                          },
+                        })
+                      }
+                      className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                    />
+                  </label>
+                  <div className="flex items-center gap-2 pt-1">
+                    <span
+                      className="h-6 flex-1 rounded-md ring-1 ring-ink-700"
+                      style={{
+                        backgroundColor: settings.customColors.background,
+                      }}
+                    />
+                    <span
+                      className="h-6 w-16 rounded-md ring-1 ring-ink-700"
+                      style={{
+                        backgroundColor: settings.customColors.accent,
+                      }}
+                    />
+                  </div>
+                </div>
+              </Collapse>
+            </div>
 
+            <div
+              className={
+                match(
+                  "font",
+                  "typeface",
+                  "typography",
+                  "google fonts",
+                  "jetbrains",
+                  "roboto",
+                  "ubuntu",
+                  "oxanium",
+                  "source sans",
+                  "font size",
+                  "text size"
+                )
+                  ? "border-t border-ink-700 pt-6"
+                  : q
+                    ? "hidden"
+                    : "border-t border-ink-700 pt-6"
+              }
+            >
+              <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Font
+              </h2>
+              <p className="mb-3 text-xs text-gray-500">
+                App typeface and size. Inter (default) keeps the current stack.
+              </p>
+              <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2">
                 <div
                   className={
                     match(
@@ -1287,8 +1381,8 @@ export default function Settings() {
                       "jetbrains",
                       "roboto",
                       "ubuntu",
-                      "font size",
-                      "text size"
+                      "oxanium",
+                      "source sans"
                     )
                       ? undefined
                       : q
@@ -1296,93 +1390,20 @@ export default function Settings() {
                         : undefined
                   }
                 >
-                  <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                    Font
-                  </h2>
-                  <p className="mb-3 text-xs text-gray-500">
-                    App typeface. Inter (default) keeps the current stack.
+                  <p className="mb-2 text-sm font-medium text-gray-200">
+                    Typeface
                   </p>
                   <ThemedSelect
                     aria-label="Font"
                     value={settings.uiFont}
-                    options={FONT_OPTIONS.map((f) => ({
-                      value: f.value,
-                      label: f.label,
-                    }))}
+                    options={fontSelectOptions(settings.customFonts)}
                     onChange={(value: UiFont) => update({ uiFont: value })}
                     className="w-full min-w-[12rem] max-w-[18rem]"
                   />
                   <p className="mt-2 text-sm text-gray-400">
                     The quick brown fox jumps over the lazy dog 0123456789
                   </p>
-                  <Collapse open={settings.uiFont === "custom"}>
-                    <div className="mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
-                      <label className="block space-y-1.5">
-                        <span className="text-sm text-gray-300">
-                          Google Fonts URL or family name
-                        </span>
-                        <input
-                          type="text"
-                          value={settings.customFontUrl}
-                          onChange={(e) =>
-                            update({
-                              uiFont: "custom",
-                              customFontUrl: e.target.value,
-                            })
-                          }
-                          placeholder="e.g. Nunito or fonts.googleapis.com/css2?family=…"
-                          className={INPUT}
-                        />
-                      </label>
-                      <div className="space-y-1.5">
-                        <span className="block text-sm text-gray-300">
-                          Or upload a font file
-                        </span>
-                        <input
-                          type="file"
-                          accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
-                          className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-800 file:px-3 file:py-1.5 file:text-sm file:text-gray-200"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0] ?? null;
-                            e.target.value = "";
-                            if (!file) return;
-                            void (async () => {
-                              try {
-                                await saveCustomFontFile(file);
-                                update({
-                                  uiFont: "custom",
-                                  customFontHasFile: true,
-                                });
-                                showToast(`Loaded font “${file.name}”`);
-                              } catch {
-                                showToast("Font upload failed");
-                              }
-                            })();
-                          }}
-                        />
-                        {settings.customFontHasFile && (
-                          <button
-                            type="button"
-                            className={PANEL_BTN}
-                            onClick={() => {
-                              void (async () => {
-                                await clearCustomFontFile();
-                                update({ customFontHasFile: false });
-                                showToast("Uploaded font cleared");
-                              })();
-                            }}
-                          >
-                            Clear uploaded font
-                          </button>
-                        )}
-                        <p className="text-xs text-gray-500">
-                          Uploaded fonts stay in this browser. A file takes
-                          priority over the URL when both are set.
-                        </p>
-                      </div>
-                    </div>
-                  </Collapse>
-
+                </div>
                 <div
                   className={
                     match(
@@ -1390,7 +1411,8 @@ export default function Settings() {
                       "text size",
                       "small",
                       "medium",
-                      "large"
+                      "large",
+                      "xl"
                     )
                       ? undefined
                       : q
@@ -1398,16 +1420,13 @@ export default function Settings() {
                         : undefined
                   }
                 >
-                  <h2 className="mb-1 mt-6 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                  <p className="mb-2 text-sm font-medium text-gray-200">
                     Font size
-                  </h2>
+                  </p>
                   <p className="mb-3 text-xs text-gray-500">
                     Scales text across the app without extreme zoom steps.
                   </p>
-                  <div
-                    data-font-size-control
-                    className="flex flex-wrap gap-2"
-                  >
+                  <div data-font-size-control className="flex flex-wrap gap-2">
                     {FONT_SIZE_OPTIONS.map((opt) => (
                       <Chip
                         key={opt.value}
@@ -1419,12 +1438,106 @@ export default function Settings() {
                       </Chip>
                     ))}
                   </div>
-                  <p className="mt-3 text-sm text-gray-400">
-                    The quick brown fox jumps over the lazy dog
-                  </p>
-                </div>
                 </div>
               </div>
+
+              {settings.uiFont === "custom" && (
+                <div className="mt-4 w-full max-w-2xl space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
+                  <label className="block space-y-1.5">
+                    <span className="text-sm text-gray-300">
+                      Google Fonts URL or family name
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        type="text"
+                        value={customFontDraft}
+                        onChange={(e) => setCustomFontDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCustomFontFromUrl(customFontDraft);
+                          }
+                        }}
+                        placeholder="e.g. Nunito or fonts.googleapis.com/css2?family=…"
+                        className={`${INPUT} flex-1`}
+                      />
+                      <button
+                        type="button"
+                        className={PANEL_BTN}
+                        onClick={() => addCustomFontFromUrl(customFontDraft)}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </label>
+                  <div className="space-y-1.5">
+                    <span className="block text-sm text-gray-300">
+                      Or upload a font file
+                    </span>
+                    <input
+                      type="file"
+                      accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
+                      className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-800 file:px-3 file:py-1.5 file:text-sm file:text-gray-200"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        e.target.value = "";
+                        if (!file) return;
+                        void (async () => {
+                          try {
+                            const result = await api.uploadFont(file);
+                            const name = labelFromFilename(
+                              result.filename || file.name
+                            );
+                            const current = loadSettings();
+                            update({
+                              customFonts: [
+                                ...current.customFonts,
+                                {
+                                  id: result.id,
+                                  name,
+                                  source: "file",
+                                },
+                              ],
+                              uiFont: result.id,
+                            });
+                            showToast(`Saved “${name}”`);
+                          } catch {
+                            showToast("Font upload failed");
+                          }
+                        })();
+                      }}
+                    />
+                    <p className="text-xs text-gray-500">
+                      Saved fonts are added to the dropdown permanently and
+                      stored with your Horde data.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settings.customFonts.some((f) => f.id === settings.uiFont) && (
+                <button
+                  type="button"
+                  className={`${PANEL_BTN} mt-4`}
+                  onClick={() => {
+                    const id = settings.uiFont;
+                    const entry = settings.customFonts.find((f) => f.id === id);
+                    const next = loadSettings().customFonts.filter(
+                      (f) => f.id !== id
+                    );
+                    if (entry?.source === "file") {
+                      void api.deleteFont(id).catch(() => undefined);
+                    }
+                    update({
+                      customFonts: next,
+                      uiFont: "default",
+                    });
+                    showToast("Removed custom font");
+                  }}
+                >
+                  Remove from dropdown
+                </button>
+              )}
             </div>
 
             <Section
@@ -1456,33 +1569,58 @@ export default function Settings() {
                 )
               }
             >
-              <div className="mb-4">
-                <p className="mb-2 text-sm font-medium text-gray-200">
-                  Animation
-                </p>
-                <ThemedSelect
-                  aria-label="Background animation"
-                  value={settings.backgroundEffect}
-                  options={BACKGROUND_EFFECT_OPTIONS.map((o) => ({
-                    value: o.value,
-                    label: o.label,
-                  }))}
-                  onChange={(value) =>
-                    update({ backgroundEffect: value as BackgroundEffect })
-                  }
-                  className="w-[12rem] min-w-[11rem]"
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  {
-                    BACKGROUND_EFFECT_OPTIONS.find(
-                      (o) => o.value === settings.backgroundEffect
-                    )?.description
-                  }
-                </p>
-              </div>
-
-              {settings.backgroundEffect === "none" ? null : settings.backgroundEffect === "custom-image" ? (
+              {settings.backgroundEffect === "none" ? (
+                <div>
+                  <p className="mb-2 text-sm font-medium text-gray-200">
+                    Animation
+                  </p>
+                  <ThemedSelect
+                    aria-label="Background animation"
+                    value={settings.backgroundEffect}
+                    options={BACKGROUND_EFFECT_OPTIONS.map((o) => ({
+                      value: o.value,
+                      label: o.label,
+                    }))}
+                    onChange={(value) =>
+                      update({ backgroundEffect: value as BackgroundEffect })
+                    }
+                    className="w-[12rem] min-w-[11rem]"
+                  />
+                  <p className="mt-2 text-xs text-gray-500">
+                    {
+                      BACKGROUND_EFFECT_OPTIONS.find(
+                        (o) => o.value === settings.backgroundEffect
+                      )?.description
+                    }
+                  </p>
+                </div>
+              ) : settings.backgroundEffect === "custom-image" ? (
                 <div className="space-y-4">
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-gray-200">
+                      Animation
+                    </p>
+                    <ThemedSelect
+                      aria-label="Background animation"
+                      value={settings.backgroundEffect}
+                      options={BACKGROUND_EFFECT_OPTIONS.map((o) => ({
+                        value: o.value,
+                        label: o.label,
+                      }))}
+                      onChange={(value) =>
+                        update({ backgroundEffect: value as BackgroundEffect })
+                      }
+                      className="w-[12rem] min-w-[11rem]"
+                    />
+                    <p className="mt-2 text-xs text-gray-500">
+                      {
+                        BACKGROUND_EFFECT_OPTIONS.find(
+                          (o) => o.value === settings.backgroundEffect
+                        )?.description
+                      }
+                    </p>
+                  </div>
+
                   <label className="block">
                     <span className="mb-1 block text-xs text-gray-500">
                       Image or GIF / WebM
@@ -1680,6 +1818,77 @@ export default function Settings() {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2">
+                    <div>
+                      <p className="mb-2 text-sm font-medium text-gray-200">
+                        Animation
+                      </p>
+                      <ThemedSelect
+                        aria-label="Background animation"
+                        value={settings.backgroundEffect}
+                        options={BACKGROUND_EFFECT_OPTIONS.map((o) => ({
+                          value: o.value,
+                          label: o.label,
+                        }))}
+                        onChange={(value) =>
+                          update({
+                            backgroundEffect: value as BackgroundEffect,
+                          })
+                        }
+                        className="w-[12rem] min-w-[11rem]"
+                      />
+                      <p className="mt-2 text-xs text-gray-500">
+                        {
+                          BACKGROUND_EFFECT_OPTIONS.find(
+                            (o) => o.value === settings.backgroundEffect
+                          )?.description
+                        }
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-sm font-medium text-gray-200">
+                        Color
+                      </p>
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {(
+                          [
+                            { value: "accent", label: "Match theme accent" },
+                            { value: "custom", label: "Custom" },
+                          ] as const
+                        ).map((opt) => (
+                          <Chip
+                            key={opt.value}
+                            active={
+                              settings.backgroundEffectColorMode === opt.value
+                            }
+                            onClick={() =>
+                              update({ backgroundEffectColorMode: opt.value })
+                            }
+                          >
+                            {opt.label}
+                          </Chip>
+                        ))}
+                      </div>
+                      {settings.backgroundEffectColorMode === "custom" && (
+                        <label className="flex items-center justify-between gap-4 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2">
+                          <span className="text-sm text-gray-300">
+                            Effect color
+                          </span>
+                          <input
+                            type="color"
+                            value={settings.backgroundEffectColor}
+                            onChange={(e) =>
+                              update({
+                                backgroundEffectColor: e.target.value,
+                              })
+                            }
+                            className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
                   <label className="block">
                     <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                       <span>Intensity</span>
@@ -1743,45 +1952,6 @@ export default function Settings() {
                       className="accent-scrubber w-full"
                     />
                   </label>
-
-                  <div>
-                    <p className="mb-2 text-sm text-gray-300">Color</p>
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {(
-                        [
-                          { value: "accent", label: "Match theme accent" },
-                          { value: "custom", label: "Custom" },
-                        ] as const
-                      ).map((opt) => (
-                        <Chip
-                          key={opt.value}
-                          active={
-                            settings.backgroundEffectColorMode === opt.value
-                          }
-                          onClick={() =>
-                            update({ backgroundEffectColorMode: opt.value })
-                          }
-                        >
-                          {opt.label}
-                        </Chip>
-                      ))}
-                    </div>
-                    {settings.backgroundEffectColorMode === "custom" && (
-                      <label className="flex items-center justify-between gap-4 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2">
-                        <span className="text-sm text-gray-300">
-                          Effect color
-                        </span>
-                        <input
-                          type="color"
-                          value={settings.backgroundEffectColor}
-                          onChange={(e) =>
-                            update({ backgroundEffectColor: e.target.value })
-                          }
-                          className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
-                        />
-                      </label>
-                    )}
-                  </div>
 
                   {settings.backgroundEffect === "flowing-gradient" && (
                     <div>
@@ -2071,7 +2241,6 @@ export default function Settings() {
                     </div>
                   </div>
             </Section>
-
 
           </>
         )}

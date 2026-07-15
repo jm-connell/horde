@@ -16,8 +16,7 @@ applyTheme(bootSettings.theme, bootSettings.customColors);
 applyMotionPrefs(bootSettings);
 void applyUiFont({
   uiFont: bootSettings.uiFont,
-  customFontUrl: bootSettings.customFontUrl,
-  customFontHasFile: bootSettings.customFontHasFile,
+  customFonts: bootSettings.customFonts,
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

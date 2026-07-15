@@ -1,6 +1,6 @@
-/** UI font presets + custom (Google Fonts URL or local file). */
+/** UI font presets + permanently saved custom fonts (URL or server file). */
 
-export type UiFont =
+export type BuiltinFontId =
   | "default"
   | "jetbrains-mono"
   | "roboto"
@@ -9,15 +9,26 @@ export type UiFont =
   | "space-grotesk"
   | "ibm-plex-sans"
   | "inconsolata"
+  | "oxanium"
+  | "source-sans-3"
   | "custom";
 
+/** Builtin id, saved custom id, or the "Add custom…" sentinel. */
+export type UiFont = string;
+
 export interface FontPreset {
-  value: UiFont;
+  value: BuiltinFontId;
   label: string;
-  /** CSS font-family stack (unused for custom). */
   stack: string;
-  /** Google Fonts css2 family param, or null for default (no CDN load). */
   googleFamily: string | null;
+}
+
+export interface SavedCustomFont {
+  id: string;
+  name: string;
+  source: "url" | "file";
+  /** Google Fonts CSS URL / specimen / family name when source is url. */
+  url?: string;
 }
 
 export const FONT_OPTIONS: FontPreset[] = [
@@ -70,37 +81,90 @@ export const FONT_OPTIONS: FontPreset[] = [
     googleFamily: "Inconsolata:wght@400;500;600;700",
   },
   {
+    value: "oxanium",
+    label: "Oxanium",
+    stack: '"Oxanium", system-ui, sans-serif',
+    googleFamily: "Oxanium:wght@400;500;600;700",
+  },
+  {
+    value: "source-sans-3",
+    label: "Source Sans 3",
+    stack: '"Source Sans 3", system-ui, sans-serif',
+    googleFamily: "Source+Sans+3:wght@400;500;600;700",
+  },
+  {
     value: "custom",
-    label: "Custom…",
+    label: "Add custom…",
     stack: "system-ui, sans-serif",
     googleFamily: null,
   },
 ];
 
-const VALID_UI_FONTS = new Set<string>(FONT_OPTIONS.map((f) => f.value));
-
+const BUILTIN_IDS = new Set<string>(FONT_OPTIONS.map((f) => f.value));
 const DEFAULT_STACK = FONT_OPTIONS[0].stack;
 const LINK_ID = "horde-ui-font";
 const PRECONNECT_GOOGLE_ID = "horde-ui-font-preconnect-google";
 const PRECONNECT_GSTATIC_ID = "horde-ui-font-preconnect-gstatic";
-const CUSTOM_FACE_FAMILY = "HordeCustomFont";
-const IDB_NAME = "horde-fonts";
-const IDB_STORE = "files";
-const IDB_KEY = "custom";
 
 export interface UiFontSettings {
   uiFont: UiFont;
-  customFontUrl: string;
-  customFontHasFile: boolean;
+  customFonts: SavedCustomFont[];
 }
 
-export function normalizeUiFont(value: unknown): UiFont {
-  // Inter was removed as a separate preset; map to Default.
-  if (value === "inter") return "default";
-  if (typeof value === "string" && VALID_UI_FONTS.has(value)) {
-    return value as UiFont;
+export function newCustomFontId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `cf_${crypto.randomUUID().slice(0, 8)}`;
   }
+  return `cf_${Date.now().toString(36)}`;
+}
+
+export function normalizeCustomFonts(value: unknown): SavedCustomFont[] {
+  if (!Array.isArray(value)) return [];
+  const out: SavedCustomFont[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Partial<SavedCustomFont>;
+    if (typeof r.id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(r.id)) continue;
+    if (BUILTIN_IDS.has(r.id)) continue;
+    if (typeof r.name !== "string" || !r.name.trim()) continue;
+    if (r.source !== "url" && r.source !== "file") continue;
+    out.push({
+      id: r.id,
+      name: r.name.trim().slice(0, 64),
+      source: r.source,
+      url: typeof r.url === "string" ? r.url : undefined,
+    });
+  }
+  return out.slice(0, 40);
+}
+
+export function normalizeUiFont(
+  value: unknown,
+  customFonts: SavedCustomFont[] = []
+): UiFont {
+  if (value === "inter") return "default";
+  if (typeof value !== "string" || !value) return "default";
+  if (BUILTIN_IDS.has(value)) return value;
+  if (customFonts.some((f) => f.id === value)) return value;
   return "default";
+}
+
+/** Builtin presets + saved customs + Add custom… */
+export function fontSelectOptions(
+  customFonts: SavedCustomFont[]
+): { value: string; label: string }[] {
+  const builtins = FONT_OPTIONS.filter((f) => f.value !== "custom").map(
+    (f) => ({ value: f.value, label: f.label })
+  );
+  const saved = customFonts.map((f) => ({
+    value: f.id,
+    label: f.name,
+  }));
+  return [
+    ...builtins,
+    ...saved,
+    { value: "custom", label: "Add custom…" },
+  ];
 }
 
 function googleCssUrl(familyParam: string): string {
@@ -115,7 +179,6 @@ export function parseCustomFontInput(raw: string): {
   const input = raw.trim();
   if (!input) return { cssUrl: null, family: null };
 
-  // Full css2 stylesheet URL
   if (/fonts\.googleapis\.com\/css2?/i.test(input)) {
     try {
       const url = new URL(input);
@@ -130,7 +193,6 @@ export function parseCustomFontInput(raw: string): {
     return { cssUrl: input, family: null };
   }
 
-  // Specimen page: https://fonts.google.com/specimen/Space+Grotesk
   const specimen = input.match(
     /fonts\.google\.com\/specimen\/([^/?#]+)/i
   );
@@ -140,11 +202,14 @@ export function parseCustomFontInput(raw: string): {
     return { cssUrl: googleCssUrl(param), family: name };
   }
 
-  // Bare family name
   const name = input.replace(/["']/g, "").trim();
   if (!name) return { cssUrl: null, family: null };
   const param = `${name.replace(/ /g, "+")}:wght@400;500;600;700`;
   return { cssUrl: googleCssUrl(param), family: name };
+}
+
+function faceFamilyForId(id: string): string {
+  return `HordeFont_${id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 }
 
 function ensurePreconnects(): void {
@@ -189,130 +254,90 @@ function setFontStack(stack: string): void {
   document.documentElement.style.setProperty("--font-sans", stack);
 }
 
-let customFace: FontFace | null = null;
+const loadedFaces = new Map<string, FontFace>();
 
-async function clearCustomFace(): Promise<void> {
-  if (customFace) {
-    try {
-      document.fonts.delete(customFace);
-    } catch {
-      /* ignore */
-    }
-    customFace = null;
-  }
-}
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB open failed"));
-  });
-}
-
-interface StoredFont {
-  buffer: ArrayBuffer;
-  mime: string;
-  filename: string;
-}
-
-export async function saveCustomFontFile(file: File): Promise<void> {
-  const buffer = await file.arrayBuffer();
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, "readwrite");
-    tx.objectStore(IDB_STORE).put(
-      { buffer, mime: file.type || "font/woff2", filename: file.name } satisfies StoredFont,
-      IDB_KEY
-    );
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("Font save failed"));
-  });
-  db.close();
-}
-
-export async function clearCustomFontFile(): Promise<void> {
+async function unloadFace(id: string): Promise<void> {
+  const face = loadedFaces.get(id);
+  if (!face) return;
   try {
-    const db = await openDb();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      tx.objectStore(IDB_STORE).delete(IDB_KEY);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error ?? new Error("Font delete failed"));
-    });
-    db.close();
+    document.fonts.delete(face);
   } catch {
     /* ignore */
   }
-  await clearCustomFace();
+  loadedFaces.delete(id);
 }
 
-async function loadCustomFontFile(): Promise<StoredFont | null> {
-  try {
-    const db = await openDb();
-    const stored = await new Promise<StoredFont | null>((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, "readonly");
-      const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
-      req.onsuccess = () => resolve((req.result as StoredFont) ?? null);
-      req.onerror = () => reject(req.error ?? new Error("Font read failed"));
-    });
-    db.close();
-    return stored;
-  } catch {
-    return null;
+async function unloadAllFaces(): Promise<void> {
+  for (const id of [...loadedFaces.keys()]) {
+    await unloadFace(id);
   }
 }
 
-async function registerCustomFontFile(): Promise<boolean> {
-  await clearCustomFace();
-  const stored = await loadCustomFontFile();
-  if (!stored?.buffer) return false;
-  const face = new FontFace(CUSTOM_FACE_FAMILY, stored.buffer);
-  await face.load();
+async function registerServerFont(id: string): Promise<string | null> {
+  if (loadedFaces.has(id)) {
+    return faceFamilyForId(id);
+  }
+  const family = faceFamilyForId(id);
+  const face = new FontFace(
+    family,
+    `url(/api/fonts/${encodeURIComponent(id)})`
+  );
+  try {
+    await face.load();
+  } catch {
+    return null;
+  }
   document.fonts.add(face);
-  customFace = face;
-  return true;
+  loadedFaces.set(id, face);
+  return family;
 }
 
 export async function applyUiFont(settings: UiFontSettings): Promise<void> {
-  const preset = FONT_OPTIONS.find((f) => f.value === settings.uiFont);
+  const { uiFont, customFonts } = settings;
 
-  if (!preset || preset.value === "default") {
+  if (!uiFont || uiFont === "default" || uiFont === "custom") {
     setStylesheetHref(null);
-    await clearCustomFace();
+    await unloadAllFaces();
     setFontStack(DEFAULT_STACK);
     return;
   }
 
-  if (preset.value !== "custom") {
-    await clearCustomFace();
-    if (preset.googleFamily) {
-      setStylesheetHref(googleCssUrl(preset.googleFamily));
+  const builtin = FONT_OPTIONS.find((f) => f.value === uiFont);
+  if (builtin) {
+    await unloadAllFaces();
+    if (builtin.googleFamily) {
+      setStylesheetHref(googleCssUrl(builtin.googleFamily));
     } else {
       setStylesheetHref(null);
     }
-    setFontStack(preset.stack);
+    setFontStack(builtin.stack);
     return;
   }
 
-  // Custom: prefer uploaded file, else Google Fonts URL / family name
-  if (settings.customFontHasFile) {
-    const ok = await registerCustomFontFile();
-    if (ok) {
-      setStylesheetHref(null);
-      setFontStack(`"${CUSTOM_FACE_FAMILY}", system-ui, sans-serif`);
-      return;
-    }
+  const saved = customFonts.find((f) => f.id === uiFont);
+  if (!saved) {
+    setStylesheetHref(null);
+    await unloadAllFaces();
+    setFontStack(DEFAULT_STACK);
+    return;
   }
 
-  await clearCustomFace();
-  const parsed = parseCustomFontInput(settings.customFontUrl);
+  if (saved.source === "file") {
+    setStylesheetHref(null);
+    const family = await registerServerFont(saved.id);
+    if (family) {
+      for (const id of [...loadedFaces.keys()]) {
+        if (id !== saved.id) await unloadFace(id);
+      }
+      setFontStack(`"${family}", system-ui, sans-serif`);
+      return;
+    }
+    setFontStack(DEFAULT_STACK);
+    return;
+  }
+
+  await unloadAllFaces();
+  const parsed = parseCustomFontInput(saved.url ?? "");
   if (parsed.cssUrl && parsed.family) {
     setStylesheetHref(parsed.cssUrl);
     setFontStack(`"${parsed.family}", system-ui, sans-serif`);
@@ -321,4 +346,10 @@ export async function applyUiFont(settings: UiFontSettings): Promise<void> {
 
   setStylesheetHref(null);
   setFontStack(DEFAULT_STACK);
+}
+
+/** Label for a file-based font (strip extension). */
+export function labelFromFilename(filename: string): string {
+  const base = filename.replace(/\.[^.]+$/, "").trim();
+  return (base || filename).slice(0, 64);
 }
