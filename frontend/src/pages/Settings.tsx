@@ -55,8 +55,6 @@ const PANEL_BTN =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50";
 const INPUT =
   "ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
-const PROCESS_BTN =
-  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50";
 
 const CATALOG_INDEX_TIP =
   "When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube.";
@@ -72,53 +70,68 @@ const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "xl", label: "XL" },
 ];
 
-const AI_PROCESS_PRIMARY: {
-  action: "all_recent" | "all_full";
+type AiProcessAction =
+  | "all_recent"
+  | "all_full"
+  | "embeds"
+  | "reindex_embeds"
+  | "missing_tags"
+  | "full_tags"
+  | "categories";
+
+const AI_PROCESS_CATCH_UP: {
+  action: AiProcessAction;
   label: string;
-  title: string;
+  description: string;
 }[] = [
   {
     action: "all_recent",
-    label: "Run all (recent)",
-    title:
+    label: "Process recent",
+    description:
       "Queue missing search indexes and AI tags for videos watched or added in the last 30 days, then refresh categories.",
   },
   {
     action: "all_full",
-    label: "Run all (full library)",
-    title:
+    label: "Process full library",
+    description:
       "Queue missing search indexes and AI tags across the whole library, then refresh categories.",
   },
 ];
 
-const AI_PROCESS_SECONDARY: {
-  action: "embeds" | "missing_tags" | "full_tags" | "categories";
+const AI_PROCESS_JOBS: {
+  action: AiProcessAction;
   label: string;
-  title: string;
+  description: string;
 }[] = [
   {
     action: "embeds",
-    label: "Index missing videos for search",
-    title:
-      "Build search indexes for videos that are not indexed yet, or whose indexes use a different embed model (used for semantic search, related videos, and category shelves).",
+    label: "Index missing videos",
+    description:
+      "Build search indexes for videos that are missing, stale, or indexed with a different embed model.",
+  },
+  {
+    action: "reindex_embeds",
+    label: "Rebuild search indexes",
+    description:
+      "Force re-queue indexing for those videos (even if already queued) and refresh categories when done. Prefer this after changing the embed model.",
   },
   {
     action: "missing_tags",
-    label: "Enrich missing AI tags",
-    title: "Ask the chat model to suggest tags only for videos missing AI tags.",
+    label: "Enrich missing tags",
+    description:
+      "Ask the chat model to suggest tags only for videos that do not have AI tags yet.",
   },
   {
     action: "full_tags",
-    label: "Full tag refresh",
-    title: "Re-run AI tag enrichment for every video in the library.",
+    label: "Re-tag entire library",
+    description:
+      "Re-run AI tag enrichment for every unlocked video. Heavier than enriching missing tags only.",
   },
   {
     action: "categories",
     label: "Refresh categories",
-    title:
-      "Ask the chat model to invent specific browse categories from a diverse sample " +
-      "(title, channel, tags, description, subtitle excerpt), then match videos via " +
-      "search indexes. Refresh after re-indexing if you changed the embed model.",
+    description:
+      "Invent browse categories from a diverse sample, then rematch shelves via search indexes. Run after re-indexing if you changed the embed model.",
   },
 ];
 
@@ -403,7 +416,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "ai",
     keywords:
-      "when to run schedule process run all recent full embeds tags categories timer",
+      "when to run schedule process run all recent full embeds index rebuild reindex tags categories timer",
   },
   {
     tab: "ai",
@@ -514,6 +527,37 @@ function SettingRow({
       </span>
       {control}
     </label>
+  );
+}
+
+function ProcessActionRow({
+  label,
+  description,
+  busy,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  busy: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-gray-200">{label}</p>
+        <p className="mt-0.5 text-xs text-gray-500">{description}</p>
+      </div>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        className={`${PANEL_BTN} shrink-0`}
+      >
+        {busy ? "Queuing…" : "Queue"}
+      </button>
+    </div>
   );
 }
 
@@ -1213,16 +1257,7 @@ export default function Settings() {
     });
   };
 
-  const runAiProcess = async (
-    action:
-      | "all_recent"
-      | "all_full"
-      | "embeds"
-      | "reindex_embeds"
-      | "missing_tags"
-      | "full_tags"
-      | "categories"
-  ) => {
+  const runAiProcess = async (action: AiProcessAction) => {
     if (aiProcessingAction) return;
     setAiProcessingAction(action);
     try {
@@ -3582,12 +3617,15 @@ export default function Settings() {
                   "recent",
                   "full",
                   "embeds",
+                  "index",
+                  "rebuild",
+                  "reindex",
                   "tags",
                   "categories"
                 )
               }
             >
-              <div className="max-w-md space-y-3">
+              <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-gray-500">
                     {aiStatus?.paused
@@ -3620,37 +3658,41 @@ export default function Settings() {
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {AI_PROCESS_PRIMARY.map((opt) => (
-                    <button
-                      key={opt.action}
-                      type="button"
-                      title={opt.title}
-                      disabled={!!aiProcessingAction || !!aiStatus?.paused}
-                      onClick={() => runAiProcess(opt.action)}
-                      className={PROCESS_BTN}
-                    >
-                      {aiProcessingAction === opt.action
-                        ? "Queuing…"
-                        : opt.label}
-                    </button>
-                  ))}
+
+                <div>
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Catch up
+                  </p>
+                  <div className="divide-y divide-ink-800">
+                    {AI_PROCESS_CATCH_UP.map((opt) => (
+                      <ProcessActionRow
+                        key={opt.action}
+                        label={opt.label}
+                        description={opt.description}
+                        busy={aiProcessingAction === opt.action}
+                        disabled={!!aiProcessingAction || !!aiStatus?.paused}
+                        onClick={() => runAiProcess(opt.action)}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {AI_PROCESS_SECONDARY.map((opt) => (
-                    <button
-                      key={opt.action}
-                      type="button"
-                      title={opt.title}
-                      disabled={!!aiProcessingAction || !!aiStatus?.paused}
-                      onClick={() => runAiProcess(opt.action)}
-                      className={PROCESS_BTN}
-                    >
-                      {aiProcessingAction === opt.action
-                        ? "Queuing…"
-                        : opt.label}
-                    </button>
-                  ))}
+
+                <div className="border-t border-ink-800 pt-3">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Individual jobs
+                  </p>
+                  <div className="divide-y divide-ink-800">
+                    {AI_PROCESS_JOBS.map((opt) => (
+                      <ProcessActionRow
+                        key={opt.action}
+                        label={opt.label}
+                        description={opt.description}
+                        busy={aiProcessingAction === opt.action}
+                        disabled={!!aiProcessingAction || !!aiStatus?.paused}
+                        onClick={() => runAiProcess(opt.action)}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             </Section>
