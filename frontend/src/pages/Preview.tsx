@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import ChaptersList from "../components/ChaptersList";
 import Collapse from "../components/Collapse";
+import HelpTip from "../components/HelpTip";
 import LinkifiedText from "../components/LinkifiedText";
 import LoadingIndicator from "../components/LoadingIndicator";
 import {
@@ -401,14 +402,15 @@ export default function Preview() {
               Preview
               {previewRes ? ` · ${previewRes}` : ""}
             </span>
-            <button
-              type="button"
-              className="flex h-4 w-4 items-center justify-center rounded-full border border-amber-500/50 text-[10px] font-bold text-amber-300/90 hover:bg-amber-500/20"
-              title={PREVIEW_QUALITY_TIP}
-              aria-label="Why is preview quality limited?"
-            >
-              ?
-            </button>
+            <HelpTip text={PREVIEW_QUALITY_TIP}>
+              <button
+                type="button"
+                className="flex h-4 w-4 items-center justify-center rounded-full border border-amber-500/50 text-[10px] font-bold text-amber-300/90 hover:bg-amber-500/20"
+                aria-label="Why is preview quality limited?"
+              >
+                ?
+              </button>
+            </HelpTip>
           </div>
           {meta.library_video_id != null && !downloadActive && (
             <Link

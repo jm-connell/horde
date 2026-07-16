@@ -563,7 +563,8 @@ export default function Watch() {
                         Cancel
                       </button>
                     ) : (
-                      hasAiSummary && (
+                      summaryExpanded &&
+                      (hasAiSummary || !!summaryError) && (
                         <button
                           type="button"
                           onClick={() => void runSummarize(true)}
@@ -598,16 +599,21 @@ export default function Watch() {
                                     video.ai_summary_length
                                   );
                                 return (
-                                  <p key={i} className="overflow-hidden">
+                                  <p
+                                    key={i}
+                                    className={
+                                      showLen ? "relative pr-12" : undefined
+                                    }
+                                  >
+                                    {para}
                                     {showLen && (
                                       <span
-                                        className="float-right ml-3 text-[10px] font-medium uppercase tracking-wider text-gray-500/70"
+                                        className="absolute bottom-0 right-0 text-[10px] font-medium uppercase tracking-wider text-gray-500/70"
                                         aria-label={`Summary length: ${video.ai_summary_length}`}
                                       >
                                         {video.ai_summary_length}
                                       </span>
                                     )}
-                                    {para}
                                   </p>
                                 );
                               })}

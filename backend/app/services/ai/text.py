@@ -173,9 +173,9 @@ _SUMMARY_LENGTH_SPEC: dict[str, dict[str, Any]] = {
         "word_range": "200–280",
         "num_predict": 2200,
         "length_rule": (
-            "2–4 paragraphs separated by blank lines, covering setup, main beats, "
+            "2–3 paragraphs separated by blank lines, covering setup, main beats, "
             "and concrete details. Aim for about 200–280 words — longer than a "
-            "short blurb, shorter than long."
+            "short blurb, shorter than long. Do not start a new paragraph every sentence."
         ),
         "detail_rule": (
             "Name concrete details from the captions: people, titles, gear, "
@@ -189,9 +189,10 @@ _SUMMARY_LENGTH_SPEC: dict[str, dict[str, Any]] = {
         "word_range": "300–400",
         "num_predict": 3200,
         "length_rule": (
-            "3–5 paragraphs separated by blank lines, walking through the arc "
+            "2–3 paragraphs separated by blank lines, walking through the arc "
             "with specific beats. Target about 350 words (roughly 300–400). "
-            "A ~100–200 word blurb is too short for LONG."
+            "A ~100–200 word blurb is too short for LONG. "
+            "Do not start a new paragraph every sentence."
         ),
         "detail_rule": (
             "Be specific with grounded detail from the captions: named subjects, "
@@ -247,7 +248,9 @@ def format_summary_paragraphs(
     parts = [re.sub(r"\n+", " ", p).strip() for p in parts]
 
     length_key = normalize_summary_length(length)
-    target_paras = {"short": 2, "medium": 3, "long": 4}[length_key]
+    # Cap at 2–3 paragraphs for readable blurbs (short stays 1–2).
+    target_paras = {"short": 2, "medium": 2, "long": 3}[length_key]
+    max_paras = {"short": 2, "medium": 3, "long": 3}[length_key]
 
     if len(parts) == 1 and length_key != "short":
         sentences = [
@@ -268,6 +271,11 @@ def format_summary_paragraphs(
             if len(parts) > 1 and len(parts[-1].split()) < 25:
                 parts[-2] = f"{parts[-2]} {parts[-1]}".strip()
                 parts.pop()
+
+    # Models often emit one sentence per paragraph — fold extras into the last.
+    while len(parts) > max_paras:
+        parts[-2] = f"{parts[-2]} {parts[-1]}".strip()
+        parts.pop()
 
     return "\n\n".join(parts)
 
@@ -311,10 +319,10 @@ def summary_prompt(
         f"- Word count: write about {spec['word_range']} words. "
         f"{spec['length_rule']}\n"
         f"- Detail: {spec['detail_rule']}\n"
-        "- Open with the substance: e.g. \"Aceu plays Apex Legends…\" or "
-        "\"A tour of a home network rack…\" — not framing like "
-        "\"In this archived video…\", \"In the video…\", "
-        "\"The creator [name] does…\", or \"This video is about…\".\n"
+        "- Open with the substance of this video (topic, action, or subject) — "
+        "not framing like \"In this archived video…\", \"In the video…\", "
+        "\"The creator [name] does…\", or \"This video is about…\". "
+        "Do not invent example topics from these instructions.\n"
         + (
             f"- Prefer using the channel name ({channel}) as a natural subject "
             "when it fits; do not introduce them as \"the creator\".\n"

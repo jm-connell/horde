@@ -21,7 +21,7 @@ class AiSettingsRead(BaseModel):
     auto_pull_models: bool = True
     use_subtitles: bool = True
     enrich_tags: bool = True
-    ai_summaries: bool = False
+    ai_summaries: bool = True
     summary_length: Literal["short", "medium", "long"] = "short"
     ai_duplicates: bool = True
     category_min_score: float = 0.55

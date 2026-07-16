@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { absoluteUrl, api, spritesImageUrl, streamUrl } from "../api";
 import LoadingIndicator from "./LoadingIndicator";
 import { useAirPlay } from "../hooks/useAirPlay";
@@ -1516,7 +1517,13 @@ export default function VideoPlayer({
             {/* SponsorBlock skip notice */}
             {skipNotice && (
               <div className="absolute right-4 top-4 flex items-center gap-2 rounded-lg bg-black/80 px-3 py-1.5 text-xs text-accent">
-                <span>{skipNotice}</span>
+                <Link
+                  to="/settings?tab=playback"
+                  className="underline decoration-accent/50 underline-offset-2 hover:text-accent/90"
+                  title="Open SponsorBlock settings"
+                >
+                  {skipNotice}
+                </Link>
                 {skippedSegment && (
                   <button
                     type="button"

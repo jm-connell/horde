@@ -19,7 +19,7 @@ AI_DEFAULTS: dict[str, Any] = {
     "auto_pull_models": True,
     "use_subtitles": True,
     "enrich_tags": True,
-    "ai_summaries": False,
+    "ai_summaries": True,
     "summary_length": "short",  # short | medium | long
     "ai_duplicates": True,
     "category_min_score": 0.55,

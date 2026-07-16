@@ -74,6 +74,7 @@ class LlmProvider(Protocol):
         *,
         system: Optional[str] = None,
         num_predict: Optional[int] = None,
+        timeout: Optional[float] = None,
     ) -> str: ...
 
 
@@ -192,6 +193,7 @@ class OllamaProvider:
         *,
         system: Optional[str] = None,
         num_predict: Optional[int] = None,
+        timeout: Optional[float] = None,
     ) -> str:
         global _last_error
         messages: list[dict[str, str]] = []
@@ -208,8 +210,9 @@ class OllamaProvider:
             "format": "json",
             "options": options,
         }
+        req_timeout = timeout if timeout is not None else self.timeout
         try:
-            with self._client() as client:
+            with httpx.Client(base_url=self.base_url, timeout=req_timeout) as client:
                 resp = client.post("/api/chat", json=payload)
                 resp.raise_for_status()
                 data = resp.json()

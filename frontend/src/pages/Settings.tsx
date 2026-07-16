@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useToast } from "../context/ToastContext";
 import {
@@ -275,7 +276,7 @@ const DEFAULT_AI: AiSettings = {
   auto_pull_models: true,
   use_subtitles: true,
   enrich_tags: true,
-  ai_summaries: false,
+  ai_summaries: true,
   summary_length: "short",
   ai_duplicates: true,
   category_min_score: 0.55,
@@ -824,7 +825,9 @@ function AiQueueStatusDl({
               >
                 Resume
               </button>
-            ) : (
+            ) : aiStatus.current_job ||
+              aiStatus.queue_depth > 0 ||
+              aiStatus.pulling.length > 0 ? (
               <button
                 type="button"
                 onClick={() => void onPause()}
@@ -832,6 +835,8 @@ function AiQueueStatusDl({
               >
                 Pause
               </button>
+            ) : (
+              <span className="text-xs text-gray-500">Inactive</span>
             )}
           </dd>
         </div>
@@ -968,7 +973,14 @@ function AiQueueStatusDl({
 export default function Settings() {
   const [settings, update] = useSettings();
   const { showToast } = useToast();
-  const [tab, setTab] = useState<SettingsTab>(loadTab);
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<SettingsTab>(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("tab");
+    if (fromUrl && TABS.some((t) => t.id === fromUrl)) {
+      return fromUrl as SettingsTab;
+    }
+    return loadTab();
+  });
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [health, setHealth] = useState<HealthStats | null>(null);
@@ -1140,6 +1152,14 @@ export default function Settings() {
       /* ignore */
     }
   };
+
+  // Deep link: /settings?tab=playback (e.g. SponsorBlock skip notice).
+  useEffect(() => {
+    const fromUrl = searchParams.get("tab");
+    if (fromUrl && TABS.some((t) => t.id === fromUrl)) {
+      selectTab(fromUrl as SettingsTab);
+    }
+  }, [searchParams]);
 
   // Cross-tab search: jump to the first tab that matches when the current one doesn't.
   useEffect(() => {
@@ -3419,37 +3439,26 @@ export default function Settings() {
                             ? `Connected${result.base_url ? ` at ${result.base_url}` : ""}`
                             : result.detail || "Unreachable"
                         );
+                        if (result.ok) {
+                          const featurePatch: Partial<AiSettings> = {};
+                          if (!aiDraft.use_subtitles)
+                            featurePatch.use_subtitles = true;
+                          if (!aiDraft.enrich_tags)
+                            featurePatch.enrich_tags = true;
+                          if (!aiDraft.ai_summaries)
+                            featurePatch.ai_summaries = true;
+                          if (!aiDraft.ai_duplicates)
+                            featurePatch.ai_duplicates = true;
+                          if (Object.keys(featurePatch).length > 0) {
+                            await saveAi(featurePatch);
+                          }
+                        }
                         refreshAiStatus();
                       }}
                       className={PANEL_BTN}
                     >
                       {aiTesting ? "Testing…" : "Test connection"}
                     </button>
-                    {aiStatus?.paused ? (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await api.resumeAi().catch(() => undefined);
-                          await saveAi({ paused: false });
-                          showToast("AI queue resumed");
-                        }}
-                        className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm text-accent hover:bg-accent/25"
-                      >
-                        Resume AI
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await api.pauseAi().catch(() => undefined);
-                          await saveAi({ paused: true });
-                          showToast("AI queue paused");
-                        }}
-                        className={PANEL_BTN}
-                      >
-                        Pause AI
-                      </button>
-                    )}
                     {aiStatus && (aiStatus.ready || aiStatus.reachable) && (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -3505,6 +3514,22 @@ export default function Settings() {
                     ? "Hide model overrides"
                     : "Show model overrides"}
                 </button>
+              </div>
+              <div className="mb-3 max-w-md">
+                <SettingRow
+                  title="Auto-pull missing models"
+                  description="Ask Ollama to download configured models when they are missing."
+                  control={
+                    <Toggle
+                      checked={aiDraft.auto_pull_models}
+                      onChange={() =>
+                        saveAi({
+                          auto_pull_models: !aiDraft.auto_pull_models,
+                        })
+                      }
+                    />
+                  }
+                />
               </div>
               <Collapse open={advancedModelsOpen || Boolean(q)}>
                 <div className="max-w-md space-y-3 pb-1">
@@ -3589,20 +3614,6 @@ export default function Settings() {
                   >
                     Save models
                   </button>
-                  <SettingRow
-                    title="Auto-pull missing models"
-                    description="Ask Ollama to download configured models when they are missing."
-                    control={
-                      <Toggle
-                        checked={aiDraft.auto_pull_models}
-                        onChange={() =>
-                          saveAi({
-                            auto_pull_models: !aiDraft.auto_pull_models,
-                          })
-                        }
-                      />
-                    }
-                  />
                 </div>
               </Collapse>
             </Section>
@@ -3626,38 +3637,12 @@ export default function Settings() {
               }
             >
               <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-gray-500">
-                    {aiStatus?.paused
-                      ? "Queue is paused — jobs won’t run until you resume."
-                      : "Pause stops embeds, tags, categories, and summaries."}
+                {aiStatus?.paused && (
+                  <p className="text-xs text-amber-400/90">
+                    Queue is paused — jobs won’t run until you resume under GPU
+                    jobs.
                   </p>
-                  {aiStatus?.paused || aiDraft.paused ? (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await api.resumeAi().catch(() => undefined);
-                        await saveAi({ paused: false });
-                        showToast("AI queue resumed");
-                      }}
-                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-accent/40 bg-accent/15 px-2.5 py-1 text-xs text-accent hover:bg-accent/25"
-                    >
-                      Resume AI
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await api.pauseAi().catch(() => undefined);
-                        await saveAi({ paused: true });
-                        showToast("AI queue paused");
-                      }}
-                      className={PANEL_BTN + " !px-2.5 !py-1 !text-xs"}
-                    >
-                      Pause AI
-                    </button>
-                  )}
-                </div>
+                )}
 
                 <div>
                   <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">

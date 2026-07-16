@@ -252,7 +252,7 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
         raise SummarizeError("AI is disabled", status_code=400)
     if ai.get("paused"):
         raise SummarizeError("AI is paused", status_code=409)
-    if not ai.get("ai_summaries", False):
+    if not ai.get("ai_summaries", True):
         raise SummarizeError("AI video summaries are disabled", status_code=400)
 
     video = session.get(Video, video_id)
@@ -287,21 +287,34 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
 
     length = ai_text.normalize_summary_length(ai.get("summary_length"))
     max_chars = ai_text.summary_max_chars(length)
-    raw = provider.chat(
-        ai_text.summary_prompt(video, length=length),
-        chat_model,
-        system=ai_text.summary_system_prompt(length),
-        num_predict=ai_text.summary_num_predict(length),
-    )
-    summary = _extract_summary_text(raw)
-    if not summary:
+    prompt = ai_text.summary_prompt(video, length=length)
+    system = ai_text.summary_system_prompt(length)
+    num_predict = ai_text.summary_num_predict(length)
+    # Longer videos / higher num_predict need more than the default 120s chat timeout.
+    _SUMMARIZE_TIMEOUT = 300.0
+
+    raw = ""
+    summary = ""
+    for attempt in range(2):
+        raw = provider.chat(
+            prompt,
+            chat_model,
+            system=system,
+            num_predict=num_predict,
+            timeout=_SUMMARIZE_TIMEOUT,
+        )
+        summary = _extract_summary_text(raw)
+        if summary:
+            break
         logger.warning(
-            "summarize empty for video_id=%s length=%s raw_len=%s raw_prefix=%r",
+            "summarize empty for video_id=%s length=%s attempt=%s raw_len=%s raw_prefix=%r",
             video_id,
             length,
+            attempt + 1,
             len(raw or ""),
             (raw or "")[:240],
         )
+    if not summary:
         raise SummarizeError("Model returned an empty summary", status_code=502)
     cleaned = ai_text.format_summary_paragraphs(summary, length=length)
     if len(cleaned) > max_chars:
