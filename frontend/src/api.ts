@@ -22,6 +22,7 @@ import type {
   Video,
   VideoUpdate,
   SpriteMeta,
+  VideoAiChatMessage,
 } from "./types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -474,6 +475,75 @@ export const api = {
       method: "POST",
       signal: opts?.signal,
     });
+  },
+
+  getVideoAiChat(id: number): Promise<{ messages: VideoAiChatMessage[] }> {
+    return request<{ messages: VideoAiChatMessage[] }>(
+      `/api/videos/${id}/ai/chat`
+    );
+  },
+
+  clearVideoAiChat(id: number): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>(`/api/videos/${id}/ai/chat`, {
+      method: "DELETE",
+    });
+  },
+
+  /**
+   * Stream a chat turn via SSE. Calls ``onEvent`` for each parsed payload.
+   * Resolves when the stream ends (done or error event also delivered).
+   */
+  async streamVideoAiChat(
+    id: number,
+    message: string,
+    opts: {
+      signal?: AbortSignal;
+      onEvent: (event: Record<string, unknown>) => void;
+    }
+  ): Promise<void> {
+    const resp = await fetch(`/api/videos/${id}/ai/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ message }),
+      signal: opts.signal,
+    });
+    if (!resp.ok) {
+      let detail = resp.statusText;
+      try {
+        const body = await resp.json();
+        detail = body.detail ?? detail;
+      } catch {
+        // non-JSON
+      }
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    if (!resp.body) {
+      throw new Error("No response body");
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) >= 0) {
+        const raw = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        for (const line of raw.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (!payload) continue;
+          try {
+            opts.onEvent(JSON.parse(payload) as Record<string, unknown>);
+          } catch {
+            // ignore malformed chunk
+          }
+        }
+      }
+    }
   },
 
   listDuplicateGroups(): Promise<DuplicateGroup[]> {

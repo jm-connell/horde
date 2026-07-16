@@ -20,6 +20,7 @@ AI_DEFAULTS: dict[str, Any] = {
     "use_subtitles": True,
     "enrich_tags": True,
     "ai_summaries": True,
+    "ai_chat": True,
     "summary_length": "short",  # short | medium | long
     "ai_duplicates": True,
     "category_min_score": 0.55,

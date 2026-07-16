@@ -7,6 +7,7 @@ import Collapse from "../components/Collapse";
 import LinkifiedText from "../components/LinkifiedText";
 import PlaybackQueue from "../components/PlaybackQueue";
 import VideoActionsMenu from "../components/VideoActionsMenu";
+import VideoAiChat from "../components/VideoAiChat";
 import VideoCard from "../components/VideoCard";
 import VideoEditForm from "../components/VideoEditForm";
 import { useDownloads } from "../context/DownloadContext";
@@ -62,10 +63,13 @@ export default function Watch() {
   const [redownloading, setRedownloading] = useState(false);
   const [settings, updateSettings] = useSettings();
   const [aiSummariesEnabled, setAiSummariesEnabled] = useState(false);
+  const [aiChatEnabled, setAiChatEnabled] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summaryExpanded, setSummaryExpanded] = useState(true);
   const [summaryRevealed, setSummaryRevealed] = useState(false);
+  const [chatRevealed, setChatRevealed] = useState(false);
+  const [chatExpanded, setChatExpanded] = useState(true);
   const summarizeAbortRef = useRef<AbortController | null>(null);
   const { showToast } = useToast();
   const { onJobCompleted, refreshJobs } = useDownloads();
@@ -101,6 +105,8 @@ export default function Watch() {
         playVideo(merged);
         setSummaryError(null);
         setSummaryRevealed(false);
+        setChatRevealed(false);
+        setChatExpanded(true);
       })
       .catch(() => setError("Video not found"));
     // location.state is read once for the preview handoff; do not re-fetch on state churn.
@@ -112,8 +118,12 @@ export default function Watch() {
       .getAppSettings()
       .then((s) => {
         setAiSummariesEnabled(!!s.ai.enabled && !!s.ai.ai_summaries);
+        setAiChatEnabled(!!s.ai.enabled && !!s.ai.ai_chat);
       })
-      .catch(() => setAiSummariesEnabled(false));
+      .catch(() => {
+        setAiSummariesEnabled(false);
+        setAiChatEnabled(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -364,6 +374,15 @@ export default function Watch() {
     canAiSummarize && (summaryRevealed || summarizing);
   const showGenerateSummaryBtn =
     canAiSummarize && !summaryRevealed && !summarizing;
+  const canAiChat =
+    aiChatEnabled &&
+    !!(
+      (video.title || "").trim() ||
+      (video.description || "").trim() ||
+      (video.subtitles?.length ?? 0) > 0
+    );
+  const showAskAiBtn = canAiChat && !chatRevealed;
+  const showChatSection = canAiChat && chatRevealed;
   const queueVisible = queue.length > 0;
   const metaSideBySide =
     chapters.length > 0 && showDescriptionPanel && !queueVisible;
@@ -513,14 +532,30 @@ export default function Watch() {
               )}
             </div>
           </div>
-          {showGenerateSummaryBtn && (
-            <button
-              type="button"
-              onClick={() => void runSummarize(false)}
-              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs font-medium text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
-            >
-              Generate summary
-            </button>
+          {(showGenerateSummaryBtn || showAskAiBtn) && (
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {showGenerateSummaryBtn && (
+                <button
+                  type="button"
+                  onClick={() => void runSummarize(false)}
+                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs font-medium text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
+                >
+                  Generate summary
+                </button>
+              )}
+              {showAskAiBtn && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChatRevealed(true);
+                    setChatExpanded(true);
+                  }}
+                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs font-medium text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
+                >
+                  Ask AI
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -629,6 +664,19 @@ export default function Watch() {
                     </div>
                   </Collapse>
                 </div>
+              )}
+
+              {showChatSection && (
+                <VideoAiChat
+                  videoId={video.id}
+                  summary={video.ai_summary}
+                  hasSubtitles={(video.subtitles?.length ?? 0) > 0}
+                  open={chatRevealed}
+                  expanded={chatExpanded}
+                  onExpandedChange={setChatExpanded}
+                  onClose={() => setChatRevealed(false)}
+                  showToast={showToast}
+                />
               )}
 
               {(showDescriptionPanel || chapters.length > 0) && (

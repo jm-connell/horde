@@ -277,6 +277,7 @@ const DEFAULT_AI: AiSettings = {
   use_subtitles: true,
   enrich_tags: true,
   ai_summaries: true,
+  ai_chat: true,
   summary_length: "short",
   ai_duplicates: true,
   category_min_score: 0.55,
@@ -3447,6 +3448,8 @@ export default function Settings() {
                             featurePatch.enrich_tags = true;
                           if (!aiDraft.ai_summaries)
                             featurePatch.ai_summaries = true;
+                          if (!aiDraft.ai_chat)
+                            featurePatch.ai_chat = true;
                           if (!aiDraft.ai_duplicates)
                             featurePatch.ai_duplicates = true;
                           if (Object.keys(featurePatch).length > 0) {
@@ -3816,6 +3819,20 @@ export default function Settings() {
                       onChange={() =>
                         saveAi({ ai_summaries: !aiDraft.ai_summaries })
                       }
+                    />
+                  }
+                />
+                <SettingRow
+                  title="AI video chat"
+                  description="Ask questions about a video on the Watch page using metadata, description, and captions. Larger GPUs auto-upgrade to bigger chat models."
+                  hidden={
+                    !!q &&
+                    !match("chat", "ask", "conversation", "watch", "captions")
+                  }
+                  control={
+                    <Toggle
+                      checked={aiDraft.ai_chat}
+                      onChange={() => saveAi({ ai_chat: !aiDraft.ai_chat })}
                     />
                   }
                 />

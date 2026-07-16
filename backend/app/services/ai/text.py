@@ -491,6 +491,54 @@ def duplicate_prompt(a: Video, b: Video) -> str:
     )
 
 
+_CHAT_CONTEXT_CHARS = 20_000
+_CHAT_FALLBACK_SUB_CHARS = 20_000
+
+
+def chat_system_prompt() -> str:
+    return (
+        "You are a helpful assistant for a personal video library. "
+        "Answer questions about the current video using only the provided "
+        "metadata, description, notes, and caption excerpts. "
+        "Be concise and specific. If the context does not contain the answer, "
+        "say you do not know rather than inventing details. "
+        "Do not output JSON unless the user asks for it."
+    )
+
+
+def format_chat_context(
+    *,
+    metadata: str,
+    caption_chunks: list[str],
+    summary: Optional[str] = None,
+    max_chars: int = _CHAT_CONTEXT_CHARS,
+) -> str:
+    """Assemble the video context block injected into the chat system prompt."""
+    parts: list[str] = ["Video context:"]
+    meta = (metadata or "").strip()
+    if meta:
+        parts.append(meta)
+    summary_text = (summary or "").strip()
+    if summary_text:
+        parts.append("Existing summary:\n" + summary_text[:2000])
+    captions = [c.strip() for c in caption_chunks if c and c.strip()]
+    if captions:
+        parts.append("Caption excerpts:")
+        parts.extend(captions)
+    text = "\n\n".join(parts).strip()
+    if len(text) > max_chars:
+        text = text[:max_chars].rsplit(" ", 1)[0].strip()
+    return text
+
+
+def chat_fallback_captions(video: Video) -> list[str]:
+    """Plain subtitle text when embeddings are unavailable."""
+    sub = load_subtitle_text(video, max_chars=_CHAT_FALLBACK_SUB_CHARS)
+    if not sub.strip():
+        return []
+    return [sub]
+
+
 def resolve_subtitle_path(rel: Optional[str]) -> Optional[Path]:
     if not rel:
         return None

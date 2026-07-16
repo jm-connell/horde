@@ -242,6 +242,7 @@ export interface AiSettings {
   use_subtitles: boolean;
   enrich_tags: boolean;
   ai_summaries: boolean;
+  ai_chat: boolean;
   summary_length: AiSummaryLength;
   ai_duplicates: boolean;
   category_min_score: number;
@@ -249,6 +250,13 @@ export interface AiSettings {
   /** Optional GiB override for the Ollama machine GPU; null = autodetect. */
   vram_gb: number | null;
   paused: boolean;
+}
+
+export interface VideoAiChatMessage {
+  id: number | null;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string | null;
 }
 
 export interface AppSettings {

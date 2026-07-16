@@ -730,3 +730,63 @@ def settings_patch_for_runtime(runtime: RuntimeConfig) -> dict[str, Any]:
         "chat_model": runtime.chat_model,
         "category_min_score": runtime.category_min_score,
     }
+
+
+# Stock defaults that may be auto-upgraded when a larger GPU is detected.
+_STOCK_CHAT_DEFAULTS = frozenset({"llama3.2:1b", "llama3.2:3b"})
+_STOCK_EMBED_DEFAULTS = frozenset({"nomic-embed-text", "all-minilm"})
+
+_CHAT_TIER_RANK: dict[str, int] = {
+    "llama3.2:1b": 0,
+    "llama3.2:3b": 1,
+    "qwen2.5:3b": 1,
+    "qwen2.5:7b": 2,
+    "qwen2.5:14b": 3,
+}
+
+
+def _model_rank(model: str) -> int:
+    key = (model or "").strip().lower()
+    return _CHAT_TIER_RANK.get(key, -1)
+
+
+def ensure_quality_chat_model() -> str:
+    """Return the chat model to use, upgrading stock defaults for larger GPUs.
+
+    If ``auto_pull_models`` is on and ``chat_model`` is still a stock default
+    while the detected VRAM tier recommends a larger model, persist the tier
+    models (chat + embed when embed is also stock) and kick off pulls.
+    Custom user choices are left alone.
+    """
+    from .. import app_settings
+    from .provider import ensure_models, get_provider, models_equivalent
+
+    ai = app_settings.ai_settings()
+    current = str(ai.get("chat_model") or "llama3.2:3b").strip()
+    auto_pull = bool(ai.get("auto_pull_models", True))
+
+    runtime = resolve_runtime(ai.get("workload_profile") or "normal")
+    recommended = (runtime.chat_model or "").strip()
+    if (
+        auto_pull
+        and current.lower() in _STOCK_CHAT_DEFAULTS
+        and recommended
+        and not models_equivalent(current, recommended)
+        and _model_rank(recommended) > _model_rank(current)
+    ):
+        patch: dict[str, Any] = {"chat_model": recommended}
+        current_embed = str(ai.get("embed_model") or "").strip()
+        if current_embed.lower() in _STOCK_EMBED_DEFAULTS and runtime.embed_model:
+            patch["embed_model"] = runtime.embed_model
+        app_settings.save({"ai": patch})
+        current = recommended
+
+    provider = get_provider()
+    if provider is not None and auto_pull:
+        try:
+            ensure_models(provider)
+        except Exception:  # noqa: BLE001
+            pass
+
+    return current
+
