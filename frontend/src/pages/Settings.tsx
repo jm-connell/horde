@@ -249,7 +249,7 @@ const VRAM_OVERRIDE_TIP =
   "remote tries Ollama’s /api/info when available.";
 
 const SUMMARY_LENGTH_TIP =
-  "How long on-demand Watch summaries should be. Short ≈100–160 words, " +
+  "How long on-demand Watch summaries should be. Short ≈75–120 words, " +
   "medium ≈200–280, long ≈300–400 (around 350). Medium and long also pull more caption context.";
 
 const WORKLOAD_OPTIONS: { value: AiWorkloadProfile; label: string }[] = [
@@ -3839,7 +3839,7 @@ export default function Settings() {
                 {aiDraft.ai_summaries && (
                   <SettingRow
                     title="Summary length"
-                    description="Short ≈100–160 words, medium ≈200–280, long ≈300–400. Regenerate after changing."
+                    description="Short ≈75–120 words, medium ≈200–280, long ≈300–400. Regenerate after changing."
                     hidden={
                       !!q &&
                       !match(

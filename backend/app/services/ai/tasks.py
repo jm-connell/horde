@@ -48,6 +48,27 @@ def _unescape_json_string(fragment: str) -> str:
         )
 
 
+# Keys small chat models sometimes use instead of "summary" (e.g. qwen echoes "system").
+_SUMMARY_ALT_KEYS = (
+    "summary",
+    "text",
+    "content",
+    "response",
+    "message",
+    "answer",
+    "body",
+    "system",
+)
+
+
+def _longest_string_value(data: dict[str, Any]) -> str:
+    best = ""
+    for value in data.values():
+        if isinstance(value, str) and len(value.strip()) > len(best):
+            best = value.strip()
+    return best
+
+
 def _extract_summary_text(raw: str) -> str:
     """Pull summary text from model output, including truncated/broken JSON."""
     raw = (raw or "").strip()
@@ -55,9 +76,10 @@ def _extract_summary_text(raw: str) -> str:
         return ""
 
     data = _parse_json_object(raw)
-    summary = data.get("summary")
-    if isinstance(summary, str) and summary.strip():
-        return summary.strip()
+    for key in _SUMMARY_ALT_KEYS:
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     # Alternate shapes some models use
     paras = data.get("paragraphs")
     if isinstance(paras, list):
@@ -66,24 +88,39 @@ def _extract_summary_text(raw: str) -> str:
         )
         if joined:
             return joined
+    # Any other single / longest string field in a parsed object
+    if data:
+        fallback = _longest_string_value(data)
+        if fallback:
+            return fallback
 
-    # Closed "summary": "..." value
-    match = re.search(r'"summary"\s*:\s*"((?:[^"\\]|\\.)*)"', raw, re.DOTALL)
-    if match:
-        text = _unescape_json_string(match.group(1)).strip()
-        if text:
-            return text
+    # Closed string value under a known key (including wrong-key responses)
+    for key in _SUMMARY_ALT_KEYS:
+        match = re.search(
+            rf'"{re.escape(key)}"\s*:\s*"((?:[^"\\]|\\.)*)"',
+            raw,
+            re.DOTALL,
+        )
+        if match:
+            text = _unescape_json_string(match.group(1)).strip()
+            if text:
+                return text
 
-    # Truncated mid-string: {"summary": "partial text...
-    match = re.search(r'"summary"\s*:\s*"(.*)\Z', raw, re.DOTALL)
-    if match:
-        frag = match.group(1)
-        # Drop a trailing incomplete escape or closing junk
-        frag = re.sub(r'\\(["\\/bfnrtu]?)\Z', "", frag)
-        frag = re.sub(r'"\s*\}?\s*\Z', "", frag)
-        text = _unescape_json_string(frag).strip()
-        if text:
-            return text
+    # Truncated mid-string: {"summary"|"system"|...: "partial text...
+    for key in _SUMMARY_ALT_KEYS:
+        match = re.search(
+            rf'"{re.escape(key)}"\s*:\s*"(.*)\Z',
+            raw,
+            re.DOTALL,
+        )
+        if match:
+            frag = match.group(1)
+            # Drop a trailing incomplete escape or closing junk
+            frag = re.sub(r'\\(["\\/bfnrtu]?)\Z', "", frag)
+            frag = re.sub(r'"\s*\}?\s*\Z', "", frag)
+            text = _unescape_json_string(frag).strip()
+            if text:
+                return text
 
     # Prose reply (no JSON wrapper)
     if not raw.lstrip().startswith("{"):
@@ -287,6 +324,7 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
 
     length = ai_text.normalize_summary_length(ai.get("summary_length"))
     max_chars = ai_text.summary_max_chars(length)
+    min_words, max_words = ai_text.summary_word_bounds(length)
     prompt = ai_text.summary_prompt(video, length=length)
     system = ai_text.summary_system_prompt(length)
     num_predict = ai_text.summary_num_predict(length)
@@ -316,7 +354,46 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
         )
     if not summary:
         raise SummarizeError("Model returned an empty summary", status_code=502)
+
+    # Small models often ignore word-count targets; append continuations until
+    # we hit min_words (rewrite-in-place fails too often on 3B models).
+    words = ai_text.count_words(summary)
+    for _cont_i in range(2):
+        if words >= min_words:
+            break
+        need = max(80, min_words - words)
+        continue_prompt = ai_text.summary_continue_prompt(
+            video, summary, length=length, need_words=need
+        )
+        cont_raw = provider.chat(
+            continue_prompt,
+            chat_model,
+            system=system,
+            num_predict=num_predict,
+            timeout=_SUMMARIZE_TIMEOUT,
+            temperature=0.5,
+        )
+        continuation = _extract_summary_text(cont_raw)
+        cont_words = ai_text.count_words(continuation)
+        if cont_words < 40:
+            logger.info(
+                "summarize continue too short video_id=%s length=%s "
+                "before=%s cont=%s raw_prefix=%r",
+                video_id,
+                length,
+                words,
+                cont_words,
+                (cont_raw or "")[:200],
+            )
+            break
+        summary = f"{summary.rstrip()}\n\n{continuation.strip()}"
+        words = ai_text.count_words(summary)
+
     cleaned = ai_text.format_summary_paragraphs(summary, length=length)
+    # Soft trim when the model overshoots the length setting.
+    if ai_text.count_words(cleaned) > max_words:
+        cleaned = ai_text.trim_to_max_words(cleaned, max_words)
+        cleaned = ai_text.format_summary_paragraphs(cleaned, length=length)
     if len(cleaned) > max_chars:
         cleaned = cleaned[:max_chars].rsplit(" ", 1)[0].strip()
         cleaned = ai_text.format_summary_paragraphs(cleaned, length=length)

@@ -154,12 +154,14 @@ _SUMMARY_LENGTH_SPEC: dict[str, dict[str, Any]] = {
     "short": {
         "label": "SHORT",
         "sub_chars": 10_000,
-        "max_chars": 1800,
-        "word_range": "100–160",
-        "num_predict": 1400,
+        "max_chars": 1400,
+        "word_range": "75–120",
+        "min_words": 70,
+        "max_words": 125,
+        "num_predict": 1100,
         "length_rule": (
             "1–2 short paragraphs separated by a blank line. "
-            "Stay within roughly 100–160 words; do not pad toward medium/long."
+            "Stay within roughly 75–120 words; do not pad toward medium/long."
         ),
         "detail_rule": (
             "Include specific names, games, products, places, or numbers from "
@@ -171,6 +173,8 @@ _SUMMARY_LENGTH_SPEC: dict[str, dict[str, Any]] = {
         "sub_chars": 16_000,
         "max_chars": 2800,
         "word_range": "200–280",
+        "min_words": 180,
+        "max_words": 300,
         "num_predict": 2200,
         "length_rule": (
             "2–3 paragraphs separated by blank lines, covering setup, main beats, "
@@ -187,6 +191,8 @@ _SUMMARY_LENGTH_SPEC: dict[str, dict[str, Any]] = {
         "sub_chars": 24_000,
         "max_chars": 3500,
         "word_range": "300–400",
+        "min_words": 280,
+        "max_words": 420,
         "num_predict": 3200,
         "length_rule": (
             "2–3 paragraphs separated by blank lines, walking through the arc "
@@ -221,6 +227,71 @@ def summary_max_chars(length: SummaryLength | str | None = None) -> int:
 def summary_num_predict(length: SummaryLength | str | None = None) -> int:
     spec = _SUMMARY_LENGTH_SPEC[normalize_summary_length(length)]
     return int(spec["num_predict"])
+
+
+def summary_word_bounds(
+    length: SummaryLength | str | None = None,
+) -> tuple[int, int]:
+    spec = _SUMMARY_LENGTH_SPEC[normalize_summary_length(length)]
+    return int(spec["min_words"]), int(spec["max_words"])
+
+
+def count_words(text: str) -> int:
+    return len((text or "").split())
+
+
+def trim_to_max_words(text: str, max_words: int) -> str:
+    """Trim at a sentence boundary when over max_words; else hard word cut."""
+    words = (text or "").split()
+    if max_words <= 0 or len(words) <= max_words:
+        return (text or "").strip()
+    truncated = " ".join(words[:max_words]).strip()
+    # Prefer ending on a sentence if we still have most of the budget.
+    sentences = [
+        s.strip()
+        for s in re.split(r"(?<=[.!?])\s+", truncated)
+        if s and s.strip()
+    ]
+    if len(sentences) >= 2:
+        kept: list[str] = []
+        total = 0
+        for sentence in sentences:
+            n = len(sentence.split())
+            if total + n > max_words and kept:
+                break
+            kept.append(sentence)
+            total += n
+        if kept:
+            return " ".join(kept).strip()
+    return truncated
+
+
+def summary_continue_prompt(
+    video: Video,
+    draft: str,
+    *,
+    length: SummaryLength | str | None = None,
+    need_words: int,
+) -> str:
+    """Ask for a continuation only — more reliable than a full rewrite on small models."""
+    length_key = normalize_summary_length(length)
+    spec = _SUMMARY_LENGTH_SPEC[length_key]
+    words = count_words(draft)
+    need = max(60, int(need_words))
+    sub = load_subtitle_text(video, max_chars=int(spec["sub_chars"]))
+    return (
+        f"Length setting: {spec['label']}\n"
+        f"The draft below is only {words} words; we need about {need} more words.\n"
+        "Write ONLY the continuation (new sentences). Do not repeat the draft. "
+        "Add concrete caption details not yet covered (names, gear, places, beats). "
+        "Do not invent facts. Keep it spoiler-light.\n"
+        'Return JSON only: {"summary": "<continuation text>"}.\n\n'
+        f"Title: {video.title or ''}\n"
+        f"Channel: {(video.channel or '').strip() or '(none)'}\n"
+        f"Draft so far ({words} words):\n{draft.strip()}\n\n"
+        f"Captions:\n{sub or '(none)'}\n\n"
+        f"Reminder: output ~{need} new words of continuation for {spec['label']}.\n"
+    )
 
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'])")
