@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useToast } from "../context/ToastContext";
 import {
@@ -56,8 +57,6 @@ const PANEL_BTN =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50";
 const INPUT =
   "ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
-const PROCESS_BTN =
-  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50";
 
 const CATALOG_INDEX_TIP =
   "When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube.";
@@ -73,53 +72,68 @@ const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "xl", label: "XL" },
 ];
 
-const AI_PROCESS_PRIMARY: {
-  action: "all_recent" | "all_full";
+type AiProcessAction =
+  | "all_recent"
+  | "all_full"
+  | "embeds"
+  | "reindex_embeds"
+  | "missing_tags"
+  | "full_tags"
+  | "categories";
+
+const AI_PROCESS_CATCH_UP: {
+  action: AiProcessAction;
   label: string;
-  title: string;
+  description: string;
 }[] = [
   {
     action: "all_recent",
-    label: "Run all (recent)",
-    title:
+    label: "Process recent",
+    description:
       "Queue missing search indexes and AI tags for videos watched or added in the last 30 days, then refresh categories.",
   },
   {
     action: "all_full",
-    label: "Run all (full library)",
-    title:
+    label: "Process full library",
+    description:
       "Queue missing search indexes and AI tags across the whole library, then refresh categories.",
   },
 ];
 
-const AI_PROCESS_SECONDARY: {
-  action: "embeds" | "missing_tags" | "full_tags" | "categories";
+const AI_PROCESS_JOBS: {
+  action: AiProcessAction;
   label: string;
-  title: string;
+  description: string;
 }[] = [
   {
     action: "embeds",
-    label: "Index missing videos for search",
-    title:
-      "Build search indexes for videos that are not indexed yet, or whose indexes use a different embed model (used for semantic search, related videos, and category shelves).",
+    label: "Index missing videos",
+    description:
+      "Build search indexes for videos that are missing, stale, or indexed with a different embed model.",
+  },
+  {
+    action: "reindex_embeds",
+    label: "Rebuild search indexes",
+    description:
+      "Force re-queue indexing for those videos (even if already queued) and refresh categories when done. Prefer this after changing the embed model.",
   },
   {
     action: "missing_tags",
-    label: "Enrich missing AI tags",
-    title: "Ask the chat model to suggest tags only for videos missing AI tags.",
+    label: "Enrich missing tags",
+    description:
+      "Ask the chat model to suggest tags only for videos that do not have AI tags yet.",
   },
   {
     action: "full_tags",
-    label: "Full tag refresh",
-    title: "Re-run AI tag enrichment for every video in the library.",
+    label: "Re-tag entire library",
+    description:
+      "Re-run AI tag enrichment for every unlocked video. Heavier than enriching missing tags only.",
   },
   {
     action: "categories",
     label: "Refresh categories",
-    title:
-      "Ask the chat model to invent specific browse categories from a diverse sample " +
-      "(title, channel, tags, description, subtitle excerpt), then match videos via " +
-      "search indexes. Refresh after re-indexing if you changed the embed model.",
+    description:
+      "Invent browse categories from a diverse sample, then rematch shelves via search indexes. Run after re-indexing if you changed the embed model.",
   },
 ];
 
@@ -231,8 +245,9 @@ const WORKLOAD_TIP =
 
 const VRAM_OVERRIDE_TIP =
   "When Ollama runs on another PC, Horde cannot always read that GPU. Enter its VRAM in " +
-  "GB (e.g. 12 for an RTX 4070) so workload and model picks match Ollama. Leave blank to " +
-  "autodetect: same-host uses nvidia-smi; remote tries Ollama’s /api/info when available.";
+  "GB (e.g. 12 for an RTX 4070 or RX 7800 XT) so workload and model picks match Ollama. " +
+  "Leave blank to autodetect: same-host probes NVIDIA, AMD (ROCm/sysfs), or Intel DRM; " +
+  "remote tries Ollama’s /api/info when available.";
 
 const SUMMARY_LENGTH_TIP =
   "How long on-demand Watch summaries should be. Short ≈100–160 words, " +
@@ -262,7 +277,8 @@ const DEFAULT_AI: AiSettings = {
   auto_pull_models: true,
   use_subtitles: true,
   enrich_tags: true,
-  ai_summaries: false,
+  ai_summaries: true,
+  ai_chat: true,
   summary_length: "short",
   ai_duplicates: true,
   category_min_score: 0.55,
@@ -404,7 +420,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "ai",
     keywords:
-      "when to run schedule process run all recent full embeds tags categories timer",
+      "when to run schedule process run all recent full embeds index rebuild reindex tags categories timer",
   },
   {
     tab: "ai",
@@ -431,7 +447,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   },
   {
     tab: "system",
-    keywords: "resources cpu ram memory gpu vram temperature nvidia",
+    keywords: "resources cpu ram memory gpu vram temperature nvidia amd intel rocm",
   },
 ];
 
@@ -535,6 +551,37 @@ function SettingRow({
       </span>
       {control}
     </label>
+  );
+}
+
+function ProcessActionRow({
+  label,
+  description,
+  busy,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  busy: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-gray-200">{label}</p>
+        <p className="mt-0.5 text-xs text-gray-500">{description}</p>
+      </div>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        className={`${PANEL_BTN} shrink-0`}
+      >
+        {busy ? "Queuing…" : "Queue"}
+      </button>
+    </div>
   );
 }
 
@@ -663,10 +710,20 @@ function SystemStatsSnippet({ stats }: { stats: SystemStats | null }) {
     const vram =
       g.vram_used_bytes != null && g.vram_total_bytes != null
         ? `${formatSize(g.vram_used_bytes)} / ${formatSize(g.vram_total_bytes)}`
-        : null;
+        : g.vram_total_bytes != null
+          ? formatSize(g.vram_total_bytes)
+          : null;
+    const vendorLabel =
+      g.vendor === "nvidia"
+        ? "NVIDIA"
+        : g.vendor === "amd"
+          ? "AMD"
+          : g.vendor === "intel"
+            ? "Intel"
+            : null;
     if (g.name || lines.length || vram) {
       cards.push({
-        label: "Horde host GPU",
+        label: vendorLabel ? `Horde host GPU (${vendorLabel})` : "Horde host GPU",
         value: (
           <>
             {g.name && (
@@ -791,7 +848,9 @@ function AiQueueStatusDl({
               >
                 Resume
               </button>
-            ) : (
+            ) : aiStatus.current_job ||
+              aiStatus.queue_depth > 0 ||
+              aiStatus.pulling.length > 0 ? (
               <button
                 type="button"
                 onClick={() => void onPause()}
@@ -799,6 +858,8 @@ function AiQueueStatusDl({
               >
                 Pause
               </button>
+            ) : (
+              <span className="text-xs text-gray-500">Inactive</span>
             )}
           </dd>
         </div>
@@ -935,7 +996,14 @@ function AiQueueStatusDl({
 export default function Settings() {
   const [settings, update] = useSettings();
   const { showToast } = useToast();
-  const [tab, setTab] = useState<SettingsTab>(loadTab);
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<SettingsTab>(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("tab");
+    if (fromUrl && TABS.some((t) => t.id === fromUrl)) {
+      return fromUrl as SettingsTab;
+    }
+    return loadTab();
+  });
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [health, setHealth] = useState<HealthStats | null>(null);
@@ -1142,6 +1210,14 @@ export default function Settings() {
     }
   };
 
+  // Deep link: /settings?tab=playback (e.g. SponsorBlock skip notice).
+  useEffect(() => {
+    const fromUrl = searchParams.get("tab");
+    if (fromUrl && TABS.some((t) => t.id === fromUrl)) {
+      selectTab(fromUrl as SettingsTab);
+    }
+  }, [searchParams]);
+
   // Cross-tab search: jump to the first tab that matches when the current one doesn't.
   useEffect(() => {
     if (!q) return;
@@ -1258,16 +1334,7 @@ export default function Settings() {
     });
   };
 
-  const runAiProcess = async (
-    action:
-      | "all_recent"
-      | "all_full"
-      | "embeds"
-      | "reindex_embeds"
-      | "missing_tags"
-      | "full_tags"
-      | "categories"
-  ) => {
+  const runAiProcess = async (action: AiProcessAction) => {
     if (aiProcessingAction) return;
     setAiProcessingAction(action);
     try {
@@ -3166,7 +3233,7 @@ export default function Settings() {
           >
             <div className="space-y-4">
               <SettingRow
-                title="Show download count in navigation"
+                title="Show active download count in navigation"
                 description="Badge on the Download tab while jobs are queued or in progress."
                 hidden={!!q && !match("download count", "navigation", "badge")}
                 control={
@@ -3258,9 +3325,7 @@ export default function Settings() {
                 </div>
                 <p className="max-w-2xl text-xs text-gray-500">
                   Point to your Ollama instance for embeddings and small LLM
-                  tasks. Leave the URL blank to attempt auto-discover. Workload
-                  and model picks use that machine&apos;s GPU — not the Horde
-                  host (see Resources for host CPU/RAM/GPU).
+                  tasks. Leave the URL blank to attempt auto-discover (but don't count on it). AI processing is done on the Ollama machine, if separate from Horde host.
                 </p>
                 <div
                   className={
@@ -3431,37 +3496,28 @@ export default function Settings() {
                             ? `Connected${result.base_url ? ` at ${result.base_url}` : ""}`
                             : result.detail || "Unreachable"
                         );
+                        if (result.ok) {
+                          const featurePatch: Partial<AiSettings> = {};
+                          if (!aiDraft.use_subtitles)
+                            featurePatch.use_subtitles = true;
+                          if (!aiDraft.enrich_tags)
+                            featurePatch.enrich_tags = true;
+                          if (!aiDraft.ai_summaries)
+                            featurePatch.ai_summaries = true;
+                          if (!aiDraft.ai_chat)
+                            featurePatch.ai_chat = true;
+                          if (!aiDraft.ai_duplicates)
+                            featurePatch.ai_duplicates = true;
+                          if (Object.keys(featurePatch).length > 0) {
+                            await saveAi(featurePatch);
+                          }
+                        }
                         refreshAiStatus();
                       }}
                       className={PANEL_BTN}
                     >
                       {aiTesting ? "Testing…" : "Test connection"}
                     </button>
-                    {aiStatus?.paused ? (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await api.resumeAi().catch(() => undefined);
-                          await saveAi({ paused: false });
-                          showToast("AI queue resumed");
-                        }}
-                        className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-sm text-accent hover:bg-accent/25"
-                      >
-                        Resume AI
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await api.pauseAi().catch(() => undefined);
-                          await saveAi({ paused: true });
-                          showToast("AI queue paused");
-                        }}
-                        className={PANEL_BTN}
-                      >
-                        Pause AI
-                      </button>
-                    )}
                     {aiStatus && (aiStatus.ready || aiStatus.reachable) && (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -3517,6 +3573,22 @@ export default function Settings() {
                     ? "Hide model overrides"
                     : "Show model overrides"}
                 </button>
+              </div>
+              <div className="mb-3 max-w-md">
+                <SettingRow
+                  title="Auto-pull missing models"
+                  description="Ask Ollama to download configured models when they are missing."
+                  control={
+                    <Toggle
+                      checked={aiDraft.auto_pull_models}
+                      onChange={() =>
+                        saveAi({
+                          auto_pull_models: !aiDraft.auto_pull_models,
+                        })
+                      }
+                    />
+                  }
+                />
               </div>
               <Collapse open={advancedModelsOpen || Boolean(q)}>
                 <div className="max-w-md space-y-3 pb-1">
@@ -3601,20 +3673,6 @@ export default function Settings() {
                   >
                     Save models
                   </button>
-                  <SettingRow
-                    title="Auto-pull missing models"
-                    description="Ask Ollama to download configured models when they are missing."
-                    control={
-                      <Toggle
-                        checked={aiDraft.auto_pull_models}
-                        onChange={() =>
-                          saveAi({
-                            auto_pull_models: !aiDraft.auto_pull_models,
-                          })
-                        }
-                      />
-                    }
-                  />
                 </div>
               </Collapse>
             </Section>
@@ -3629,75 +3687,56 @@ export default function Settings() {
                   "recent",
                   "full",
                   "embeds",
+                  "index",
+                  "rebuild",
+                  "reindex",
                   "tags",
                   "categories"
                 )
               }
             >
-              <div className="max-w-md space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-gray-500">
-                    {aiStatus?.paused
-                      ? "Queue is paused — jobs won’t run until you resume."
-                      : "Pause stops embeds, tags, categories, and summaries."}
+              <div className="space-y-4">
+                {aiStatus?.paused && (
+                  <p className="text-xs text-amber-400/90">
+                    Queue is paused — jobs won’t run until you resume under GPU
+                    jobs.
                   </p>
-                  {aiStatus?.paused || aiDraft.paused ? (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await api.resumeAi().catch(() => undefined);
-                        await saveAi({ paused: false });
-                        showToast("AI queue resumed");
-                      }}
-                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-accent/40 bg-accent/15 px-2.5 py-1 text-xs text-accent hover:bg-accent/25"
-                    >
-                      Resume AI
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await api.pauseAi().catch(() => undefined);
-                        await saveAi({ paused: true });
-                        showToast("AI queue paused");
-                      }}
-                      className={PANEL_BTN + " !px-2.5 !py-1 !text-xs"}
-                    >
-                      Pause AI
-                    </button>
-                  )}
+                )}
+
+                <div>
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Catch up
+                  </p>
+                  <div className="divide-y divide-ink-800">
+                    {AI_PROCESS_CATCH_UP.map((opt) => (
+                      <ProcessActionRow
+                        key={opt.action}
+                        label={opt.label}
+                        description={opt.description}
+                        busy={aiProcessingAction === opt.action}
+                        disabled={!!aiProcessingAction || !!aiStatus?.paused}
+                        onClick={() => runAiProcess(opt.action)}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {AI_PROCESS_PRIMARY.map((opt) => (
-                    <button
-                      key={opt.action}
-                      type="button"
-                      title={opt.title}
-                      disabled={!!aiProcessingAction || !!aiStatus?.paused}
-                      onClick={() => runAiProcess(opt.action)}
-                      className={PROCESS_BTN}
-                    >
-                      {aiProcessingAction === opt.action
-                        ? "Queuing…"
-                        : opt.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {AI_PROCESS_SECONDARY.map((opt) => (
-                    <button
-                      key={opt.action}
-                      type="button"
-                      title={opt.title}
-                      disabled={!!aiProcessingAction || !!aiStatus?.paused}
-                      onClick={() => runAiProcess(opt.action)}
-                      className={PROCESS_BTN}
-                    >
-                      {aiProcessingAction === opt.action
-                        ? "Queuing…"
-                        : opt.label}
-                    </button>
-                  ))}
+
+                <div className="border-t border-ink-800 pt-3">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Individual jobs
+                  </p>
+                  <div className="divide-y divide-ink-800">
+                    {AI_PROCESS_JOBS.map((opt) => (
+                      <ProcessActionRow
+                        key={opt.action}
+                        label={opt.label}
+                        description={opt.description}
+                        busy={aiProcessingAction === opt.action}
+                        disabled={!!aiProcessingAction || !!aiStatus?.paused}
+                        onClick={() => runAiProcess(opt.action)}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             </Section>
@@ -3836,6 +3875,20 @@ export default function Settings() {
                       onChange={() =>
                         saveAi({ ai_summaries: !aiDraft.ai_summaries })
                       }
+                    />
+                  }
+                />
+                <SettingRow
+                  title="AI video chat"
+                  description="Ask questions about a video on the Watch page using metadata, description, and captions. Larger GPUs auto-upgrade to bigger chat models."
+                  hidden={
+                    !!q &&
+                    !match("chat", "ask", "conversation", "watch", "captions")
+                  }
+                  control={
+                    <Toggle
+                      checked={aiDraft.ai_chat}
+                      onChange={() => saveAi({ ai_chat: !aiDraft.ai_chat })}
                     />
                   }
                 />
@@ -4246,6 +4299,9 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                   "vram",
                   "temperature",
                   "nvidia",
+                  "amd",
+                  "intel",
+                  "rocm",
                   "system"
                 )
               }

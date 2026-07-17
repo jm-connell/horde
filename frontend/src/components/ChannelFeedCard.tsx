@@ -283,9 +283,18 @@ export default function ChannelFeedCard({
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-28">
-            <h3 className="line-clamp-2 text-sm font-semibold text-gray-100 group-hover:text-accent">
-              {entry.title || "Untitled"}
-            </h3>
+            {previewTo ? (
+              <Link
+                to={previewTo}
+                className="line-clamp-2 text-sm font-semibold text-gray-100 hover:text-accent group-hover:text-accent"
+              >
+                {entry.title || "Untitled"}
+              </Link>
+            ) : (
+              <h3 className="line-clamp-2 text-sm font-semibold text-gray-100 group-hover:text-accent">
+                {entry.title || "Untitled"}
+              </h3>
+            )}
             <span className="truncate text-xs text-gray-400">{channelName}</span>
             <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
               {duration && <span>{duration}</span>}
@@ -323,9 +332,18 @@ export default function ChannelFeedCard({
         className="aspect-video w-full"
       />
       <div className="flex flex-col gap-1 p-3">
-        <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 group-hover:text-accent">
-          {entry.title || "Untitled"}
-        </h3>
+        {previewTo ? (
+          <Link
+            to={previewTo}
+            className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 hover:text-accent group-hover:text-accent"
+          >
+            {entry.title || "Untitled"}
+          </Link>
+        ) : (
+          <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 group-hover:text-accent">
+            {entry.title || "Untitled"}
+          </h3>
+        )}
         <FeedMetaRow
           channelName={channelName}
           entry={entry}

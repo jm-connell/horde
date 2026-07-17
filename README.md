@@ -2,7 +2,7 @@
 
 This entire project was vibecoded in a relatively short amount of time. I've used Plex for a long time, but I really don't like how it handles "Other" videos that aren't Movies and TV. There are lots of YouTube and other videos that I want to archive and "horde" (hoard) but still be able to find and watch them in an organized way. I looked a bit at TubeArchivist and it looks decent, but I wanted to make something exactly the way I envisioned it, and since I had a lot of credit left for the month on my Cursor subscription I figured I'd let it rip. Horde gives a clean frontend to browse and search your videos on your server, and it also has a GUI for yt-dlp to download videos directly from any supported website (though I haven't tested much outside of YouTube).
 
-I don't take credit for creating this, it was all Opus 4.8 and Composer 2.5. I built it specifically for my use case, TrueNAS with Dockge. There may or may not be updates in the future, depending on how much I end up using this day to day. I would like to integrate some (small) local AI models to help with video search, organization, and recommendations. Try it out, and if you want to change anything then I welcome you to download the repo, boot it up with your AI-enabled IDE of choice, and get vibecoding. A demo may or may not be coming soon. If you have any questions the best way to handle it is to open this repo in Cursor and use the Ask mode (that's what I do). Hope you enjoy. Everything that follows is the AI-generated readme.
+I don't take credit for creating this, it was all Opus 4.8, Composer 2.5, and recently, Grok 4.5. I built it specifically for my use case, TrueNAS with Dockge. There may or may not be updates in the future, depending on how much I end up using this day to day. I would like to integrate some (small) local AI models to help with video search, organization, and recommendations. Try it out, and if you want to change anything then I welcome you to download the repo, boot it up with your AI-enabled IDE of choice, and get vibecoding. A demo may or may not be coming soon. If you have any questions the best way to handle it is to open this repo in Cursor and use the Ask mode (that's what I do). Hope you enjoy. Everything that follows is the AI-generated readme.
 
 --
 
@@ -154,6 +154,13 @@ docker compose --profile ai up -d
 
 Horde auto-discovers `http://ollama:11434`. Models are pulled on first connect
 when Settings → AI → Auto-pull is enabled.
+
+**GPU vendors:** Ollama does the inference; Horde only probes the host for
+workload sizing and Settings stats. Same-host detection supports NVIDIA
+(`nvidia-smi`), AMD (`rocm-smi` or DRM sysfs), and Intel (DRM sysfs). For the
+compose sidecar, uncomment the matching NVIDIA / AMD / Intel device block in
+`docker-compose.yml`. Remote Ollama still works on any GPU Ollama supports —
+set **Ollama VRAM (GB)** if autodetection cannot see that machine’s VRAM.
 
 **Ollama on another machine (e.g. NAS runs Horde, PC has the GPU):** leave the
 `ai` profile off and set `OLLAMA_BASE_URL=http://<pc-ip>:11434` in `.env`, or

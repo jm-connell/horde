@@ -181,14 +181,18 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     provider = get_provider()
     if provider is None:
         raise RuntimeError("Ollama not available")
-    if not provider.has_model(str(ai.get("chat_model") or "llama3.2:3b")):
-        raise RuntimeError("Chat model not available")
+    chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    from .provider import require_chat_model
+
+    missing = require_chat_model(provider, chat_model)
+    if missing:
+        raise RuntimeError(missing)
 
     existing = library.parse_tags(video.tags)
     prompt = ai_text.tag_enrich_prompt(video, existing)
     raw = provider.chat(
         prompt,
-        str(ai.get("chat_model") or "llama3.2:3b"),
+        chat_model,
         system=(
             "You are a tagging assistant. Reply with JSON only. "
             "Return as many useful non-duplicate tags as needed (typically 3-12), "
@@ -248,7 +252,7 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
         raise SummarizeError("AI is disabled", status_code=400)
     if ai.get("paused"):
         raise SummarizeError("AI is paused", status_code=409)
-    if not ai.get("ai_summaries", False):
+    if not ai.get("ai_summaries", True):
         raise SummarizeError("AI video summaries are disabled", status_code=400)
 
     video = session.get(Video, video_id)
@@ -275,26 +279,42 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
     if provider is None:
         raise SummarizeError("Ollama not available", status_code=503)
     chat_model = str(ai.get("chat_model") or "llama3.2:3b")
-    if not provider.has_model(chat_model):
-        raise SummarizeError("Chat model not available", status_code=503)
+    from .provider import require_chat_model
+
+    missing = require_chat_model(provider, chat_model)
+    if missing:
+        raise SummarizeError(missing, status_code=503)
 
     length = ai_text.normalize_summary_length(ai.get("summary_length"))
     max_chars = ai_text.summary_max_chars(length)
-    raw = provider.chat(
-        ai_text.summary_prompt(video, length=length),
-        chat_model,
-        system=ai_text.summary_system_prompt(length),
-        num_predict=ai_text.summary_num_predict(length),
-    )
-    summary = _extract_summary_text(raw)
-    if not summary:
+    prompt = ai_text.summary_prompt(video, length=length)
+    system = ai_text.summary_system_prompt(length)
+    num_predict = ai_text.summary_num_predict(length)
+    # Longer videos / higher num_predict need more than the default 120s chat timeout.
+    _SUMMARIZE_TIMEOUT = 300.0
+
+    raw = ""
+    summary = ""
+    for attempt in range(2):
+        raw = provider.chat(
+            prompt,
+            chat_model,
+            system=system,
+            num_predict=num_predict,
+            timeout=_SUMMARIZE_TIMEOUT,
+        )
+        summary = _extract_summary_text(raw)
+        if summary:
+            break
         logger.warning(
-            "summarize empty for video_id=%s length=%s raw_len=%s raw_prefix=%r",
+            "summarize empty for video_id=%s length=%s attempt=%s raw_len=%s raw_prefix=%r",
             video_id,
             length,
+            attempt + 1,
             len(raw or ""),
             (raw or "")[:240],
         )
+    if not summary:
         raise SummarizeError("Model returned an empty summary", status_code=502)
     cleaned = ai_text.format_summary_paragraphs(summary, length=length)
     if len(cleaned) > max_chars:
@@ -439,8 +459,12 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     ai = app_settings.ai_settings()
     chat_model = str(ai.get("chat_model") or "llama3.2:3b")
     embed_model = str(ai.get("embed_model") or "nomic-embed-text")
+    from .provider import ensure_models
+
     if not provider.has_model(chat_model) or not provider.has_model(embed_model):
-        raise RuntimeError("Required models not available")
+        if ai.get("auto_pull_models", True):
+            ensure_models(provider)
+        raise RuntimeError("Required models not available (pull may be in progress)")
 
     from . import workload as ai_workload
 

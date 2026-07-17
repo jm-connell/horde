@@ -6,6 +6,7 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
+from pydantic import BaseModel, Field
 from sqlmodel import Session, func, select
 
 from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
@@ -939,6 +940,50 @@ def summarize_video(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     return _to_read(video, session)
+
+
+class VideoAiChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=4000)
+
+
+@router.get("/videos/{video_id}/ai/chat")
+def get_video_ai_chat(video_id: int, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    from ..services.ai import chat as ai_chat
+
+    return {"messages": ai_chat.list_messages(session, video_id)}
+
+
+@router.delete("/videos/{video_id}/ai/chat")
+def delete_video_ai_chat(video_id: int, session: Session = Depends(get_session)):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    from ..services.ai import chat as ai_chat
+
+    ai_chat.clear_messages(session, video_id)
+    return {"ok": True}
+
+
+@router.post("/videos/{video_id}/ai/chat")
+def post_video_ai_chat(
+    video_id: int,
+    payload: VideoAiChatRequest,
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    from ..services.ai import chat as ai_chat
+
+    # Own session: request-scoped session closes before SSE finishes.
+    return StreamingResponse(
+        ai_chat.stream_chat_events(video_id, payload.message),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/videos/{video_id}/thumbnail", response_model=VideoRead)

@@ -233,6 +233,25 @@ class VideoAiMeta(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class VideoAiChat(SQLModel, table=True):
+    """One chat thread per video."""
+
+    __tablename__ = "video_ai_chat"
+
+    video_id: int = Field(primary_key=True, foreign_key="videos.id")
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class VideoAiChatMessage(SQLModel, table=True):
+    __tablename__ = "video_ai_chat_messages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    video_id: int = Field(foreign_key="videos.id", index=True)
+    role: str = Field(default="user", index=True)  # user | assistant
+    content: str = Field(default="")
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class AiCategory(SQLModel, table=True):
     __tablename__ = "ai_categories"
 

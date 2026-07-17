@@ -21,7 +21,8 @@ class AiSettingsRead(BaseModel):
     auto_pull_models: bool = True
     use_subtitles: bool = True
     enrich_tags: bool = True
-    ai_summaries: bool = False
+    ai_summaries: bool = True
+    ai_chat: bool = True
     summary_length: Literal["short", "medium", "long"] = "short"
     ai_duplicates: bool = True
     category_min_score: float = 0.55
@@ -43,6 +44,7 @@ class AiSettingsUpdate(BaseModel):
     use_subtitles: Optional[bool] = None
     enrich_tags: Optional[bool] = None
     ai_summaries: Optional[bool] = None
+    ai_chat: Optional[bool] = None
     summary_length: Optional[Literal["short", "medium", "long"]] = None
     ai_duplicates: Optional[bool] = None
     category_min_score: Optional[float] = Field(default=None, ge=0.20, le=0.90)

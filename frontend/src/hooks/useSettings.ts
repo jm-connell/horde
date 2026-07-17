@@ -215,7 +215,7 @@ const DEFAULTS: Settings = {
   showProgressOnAllVideos: false,
   showCardDates: true,
   progressExpiryDays: 14,
-  sponsorBlockEnabled: false,
+  sponsorBlockEnabled: true,
   sponsorBlockShowNotice: true,
   sidebarCollapsed: false,
   chaptersExpanded: true,

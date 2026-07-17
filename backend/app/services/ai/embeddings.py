@@ -239,6 +239,87 @@ def similar_video_ids(
     return ranked[:limit]
 
 
+def retrieve_video_chunks(
+    session: Session,
+    video_id: int,
+    question: str,
+    *,
+    top_k: int = 6,
+    min_score: float = 0.12,
+) -> list[str]:
+    """Return top caption/metadata chunk texts for ``question`` on one video.
+
+    Vectors store no text — chunk bodies are re-derived via ``documents_for_video``.
+    """
+    video = session.get(Video, video_id)
+    if video is None:
+        return []
+    query_vec = embed_query(question)
+    if not query_vec:
+        return []
+
+    rows = session.exec(
+        select(VideoEmbedding).where(VideoEmbedding.video_id == video_id)
+    ).all()
+    if not rows:
+        return []
+
+    scored: list[tuple[float, int]] = []
+    for row in rows:
+        vec = unpack_vector(row.vector, row.dim)
+        score = cosine(query_vec, vec)
+        if score < min_score:
+            continue
+        scored.append((score, int(row.chunk_index)))
+    if not scored:
+        return []
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    wanted = {idx for _, idx in scored[: max(1, top_k)]}
+
+    ai = app_settings.ai_settings()
+    use_subs = bool(ai.get("use_subtitles", True))
+    docs = {
+        idx: text
+        for idx, text in ai_text.documents_for_video(video, use_subtitles=use_subs)
+        if text and text.strip()
+    }
+    # Prefer caption chunks over the metadata doc when both match; keep order
+    # by descending score.
+    out: list[str] = []
+    for _, idx in scored:
+        if idx not in wanted:
+            continue
+        text = docs.get(idx)
+        if text and text not in out:
+            out.append(text)
+        if len(out) >= top_k:
+            break
+    return out
+
+
+def build_chat_context(session: Session, video: Video, question: str) -> str:
+    """Metadata + RAG caption chunks (or subtitle fallback) for video chat."""
+    meta = ai_text.metadata_document(video)
+    summary: Optional[str] = None
+    if video.id is not None:
+        ai_meta = session.get(VideoAiMeta, video.id)
+        if ai_meta is not None and ai_meta.summary:
+            summary = str(ai_meta.summary).strip() or None
+
+    chunks: list[str] = []
+    if video.id is not None:
+        chunks = retrieve_video_chunks(session, video.id, question)
+    if not chunks:
+        chunks = ai_text.chat_fallback_captions(video)
+
+    return ai_text.format_chat_context(
+        metadata=meta,
+        caption_chunks=chunks,
+        summary=summary,
+    )
+
+
 def indexed_count(session: Session) -> tuple[int, int]:
     """Return (indexed_ready, total_library_videos).
 

@@ -121,21 +121,22 @@ def _cpu_ram() -> dict[str, Any]:
     return out
 
 
-def nvidia_gpu() -> Optional[dict[str, Any]]:
-    """Return NVIDIA GPU stats dict, or None if unavailable."""
-    from ..services.ai.workload import probe_nvidia_gpu
+def host_gpu() -> Optional[dict[str, Any]]:
+    """Return local GPU stats (NVIDIA / AMD / Intel), or None if unavailable."""
+    from ..services.ai.workload import probe_local_gpu
 
-    return probe_nvidia_gpu()
+    return probe_local_gpu()
 
 
-# Back-compat alias
-_nvidia_gpu = nvidia_gpu
+# Back-compat aliases
+nvidia_gpu = host_gpu
+_nvidia_gpu = host_gpu
 
 
 @router.get("/stats")
 def system_stats():
     cpu_ram = _cpu_ram()
-    gpu = nvidia_gpu()
+    gpu = host_gpu()
     disk = None
     try:
         from ..config import DOWNLOADS_DIR

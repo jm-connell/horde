@@ -14,7 +14,9 @@ services:
     profiles: ["ai"]
     volumes:
       - ${OLLAMA_DATA_PATH:-./ollama}:/root/.ollama
-    # Uncomment for NVIDIA GPU passthrough when Ollama runs on this host:
+    # GPU passthrough when Ollama runs on this host (pick one):
+    #
+    # NVIDIA:
     # deploy:
     #   resources:
     #     reservations:
@@ -22,6 +24,21 @@ services:
     #         - driver: nvidia
     #           count: 1
     #           capabilities: [gpu]
+    #
+    # AMD (ROCm image + devices; use ollama/ollama:rocm if needed):
+    # devices:
+    #   - /dev/kfd
+    #   - /dev/dri
+    # group_add:
+    #   - video
+    #   - render
+    #
+    # Intel (iGPU / Arc via /dev/dri):
+    # devices:
+    #   - /dev/dri
+    # group_add:
+    #   - video
+    #   - render
     restart: unless-stopped
 
   horde:

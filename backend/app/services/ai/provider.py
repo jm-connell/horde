@@ -7,12 +7,13 @@ search / tags / recommendations.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional, Protocol
+from typing import Any, Iterator, Optional, Protocol
 
 import httpx
 
@@ -73,8 +74,35 @@ class LlmProvider(Protocol):
         model: str,
         *,
         system: Optional[str] = None,
+        messages: Optional[list[dict[str, str]]] = None,
         num_predict: Optional[int] = None,
+        timeout: Optional[float] = None,
+        format: Optional[str] = "json",
     ) -> str: ...
+
+
+def _normalize_model_ref(model: str) -> tuple[str, str]:
+    """Return (base, tag). Untagged names are treated as ``:latest`` (Ollama default)."""
+    raw = (model or "").strip().lower()
+    if not raw:
+        return "", ""
+    if ":" in raw:
+        base, tag = raw.split(":", 1)
+        return base.strip(), (tag.strip() or "latest")
+    return raw, "latest"
+
+
+def models_equivalent(requested: str, installed: str) -> bool:
+    """True when ``requested`` refers to the same Ollama model as ``installed``.
+
+    Tags must match (``qwen2.5:3b`` ≠ ``qwen2.5:7b``). Untagged names match
+    ``:latest`` only, matching how Ollama resolves pulls/runs.
+    """
+    want_base, want_tag = _normalize_model_ref(requested)
+    have_base, have_tag = _normalize_model_ref(installed)
+    if not want_base or not have_base:
+        return False
+    return want_base == have_base and want_tag == have_tag
 
 
 class OllamaProvider:
@@ -110,17 +138,16 @@ class OllamaProvider:
         return names
 
     def has_model(self, model: str) -> bool:
-        want = model.strip().lower().split(":")[0]
+        want = (model or "").strip()
         if not want:
             return False
         for name in self.list_models():
-            base = name.lower().split(":")[0]
-            if base == want:
+            if models_equivalent(want, name):
                 return True
         return False
 
     def pull_model(self, model: str) -> None:
-        global _last_error
+        global _last_error, _model_cache
         with _pull_lock:
             if model in _pulling:
                 return
@@ -142,6 +169,8 @@ class OllamaProvider:
         finally:
             with _pull_lock:
                 _pulling.discard(model)
+            # Presence cache may still say "missing" until refresh.
+            _model_cache.clear()
 
     def embed(self, text: str, model: str) -> list[float]:
         global _last_error
@@ -166,25 +195,30 @@ class OllamaProvider:
         model: str,
         *,
         system: Optional[str] = None,
+        messages: Optional[list[dict[str, str]]] = None,
         num_predict: Optional[int] = None,
+        timeout: Optional[float] = None,
+        format: Optional[str] = "json",
+        temperature: float = 0.2,
     ) -> str:
         global _last_error
-        messages: list[dict[str, str]] = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-        options: dict[str, Any] = {"temperature": 0.2}
+        payload_messages = self._build_messages(
+            prompt, system=system, messages=messages
+        )
+        options: dict[str, Any] = {"temperature": float(temperature)}
         if num_predict is not None and num_predict > 0:
             options["num_predict"] = int(num_predict)
-        payload = {
+        payload: dict[str, Any] = {
             "model": model,
-            "messages": messages,
+            "messages": payload_messages,
             "stream": False,
-            "format": "json",
             "options": options,
         }
+        if format:
+            payload["format"] = format
+        req_timeout = timeout if timeout is not None else self.timeout
         try:
-            with self._client() as client:
+            with httpx.Client(base_url=self.base_url, timeout=req_timeout) as client:
                 resp = client.post("/api/chat", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
@@ -194,6 +228,75 @@ class OllamaProvider:
         except Exception as exc:  # noqa: BLE001
             _last_error = str(exc)
             raise
+
+    def chat_stream(
+        self,
+        prompt: str,
+        model: str,
+        *,
+        system: Optional[str] = None,
+        messages: Optional[list[dict[str, str]]] = None,
+        num_predict: Optional[int] = None,
+        timeout: Optional[float] = None,
+        temperature: float = 0.4,
+    ) -> Iterator[str]:
+        """Yield content deltas from Ollama ``/api/chat`` with streaming."""
+        global _last_error
+        payload_messages = self._build_messages(
+            prompt, system=system, messages=messages
+        )
+        options: dict[str, Any] = {"temperature": float(temperature)}
+        if num_predict is not None and num_predict > 0:
+            options["num_predict"] = int(num_predict)
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": payload_messages,
+            "stream": True,
+            "options": options,
+        }
+        req_timeout = timeout if timeout is not None else self.timeout
+        try:
+            with httpx.Client(base_url=self.base_url, timeout=req_timeout) as client:
+                with client.stream("POST", "/api/chat", json=payload) as resp:
+                    resp.raise_for_status()
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        try:
+                            data = json.loads(line)
+                        except Exception:  # noqa: BLE001
+                            continue
+                        if data.get("error"):
+                            raise RuntimeError(str(data["error"]))
+                        delta = (data.get("message") or {}).get("content") or ""
+                        if delta:
+                            yield str(delta)
+                        if data.get("done"):
+                            break
+            _last_error = None
+        except Exception as exc:  # noqa: BLE001
+            _last_error = str(exc)
+            raise
+
+    @staticmethod
+    def _build_messages(
+        prompt: str,
+        *,
+        system: Optional[str] = None,
+        messages: Optional[list[dict[str, str]]] = None,
+    ) -> list[dict[str, str]]:
+        out: list[dict[str, str]] = []
+        if system:
+            out.append({"role": "system", "content": system})
+        if messages:
+            for row in messages:
+                role = str(row.get("role") or "").strip()
+                content = str(row.get("content") or "")
+                if role in {"user", "assistant", "system"} and content:
+                    out.append({"role": role, "content": content})
+        if prompt and prompt.strip():
+            out.append({"role": "user", "content": prompt.strip()})
+        return out
 
 
 def _settings_url() -> str:
@@ -269,8 +372,10 @@ def get_provider() -> Optional[OllamaProvider]:
 def ensure_models(provider: OllamaProvider) -> tuple[bool, bool]:
     """Ensure embed/chat models exist; kick off pulls if configured.
 
-    Returns (embed_present, chat_present).
+    Returns (embed_present, chat_present). Model tags must match exactly
+    (``qwen2.5:3b`` is not satisfied by ``qwen2.5:7b``).
     """
+    global _model_cache
     ai = app_settings.ai_settings()
     embed_model = str(ai.get("embed_model") or "nomic-embed-text")
     chat_model = str(ai.get("chat_model") or "llama3.2:3b")
@@ -291,8 +396,27 @@ def ensure_models(provider: OllamaProvider) -> tuple[bool, bool]:
                 except Exception:  # noqa: BLE001
                     pass
 
+            # Drop stale "present" cache so status shows the pull promptly.
+            _model_cache.clear()
             threading.Thread(target=_pull, daemon=True).start()
     return embed_ok, chat_ok
+
+
+def require_chat_model(provider: OllamaProvider, chat_model: str) -> Optional[str]:
+    """Return an error message if chat model is missing; start auto-pull when enabled."""
+    if provider.has_model(chat_model):
+        return None
+    ai = app_settings.ai_settings()
+    if ai.get("auto_pull_models", True):
+        ensure_models(provider)
+        return (
+            f"Chat model '{chat_model}' is not installed on Ollama; "
+            "download started. Try again in a minute."
+        )
+    return (
+        f"Chat model '{chat_model}' is not installed on Ollama. "
+        "Enable auto-pull or install it manually."
+    )
 
 
 def pulling_models() -> list[str]:

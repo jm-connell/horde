@@ -5,6 +5,7 @@ import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import ChannelFeed from "../components/ChannelFeed";
 import Collapse from "../components/Collapse";
 import HelpTip from "../components/HelpTip";
+import LiquidNav from "../components/LiquidNav";
 import LoadingIndicator from "../components/LoadingIndicator";
 import PlaybackQueue from "../components/PlaybackQueue";
 import RecommendedHome from "../components/RecommendedHome";
@@ -1219,56 +1220,96 @@ export default function Library() {
           )}
 
           {showHomeTabs && (
-            <div className="ui-panel flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+            <LiquidNav
+              className="ui-panel inline-flex shrink-0 rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
+              pillClassName="bg-ink-800"
+              dependency={homeTab}
+            >
               <button
                 type="button"
+                data-liquid-active={homeTab === "library" ? "true" : undefined}
                 onClick={() => setHomeTab("library")}
-                className={`rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
+                className={`ui-interactive relative z-10 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
                   homeTab === "library"
-                    ? "bg-accent/15 text-accent"
+                    ? settings.navIndicator !== "none"
+                      ? "text-gray-100"
+                      : "bg-ink-800 text-gray-100"
                     : "text-gray-400 hover:text-gray-200"
+                } ${
+                  settings.navIndicator === "none" && homeTab !== "library"
+                    ? "hover:bg-ink-800/60"
+                    : ""
                 }`}
               >
                 Library
               </button>
               <button
                 type="button"
+                data-liquid-active={
+                  homeTab === "recommended" ? "true" : undefined
+                }
                 onClick={() => setHomeTab("recommended")}
-                className={`rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
+                className={`ui-interactive relative z-10 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
                   homeTab === "recommended"
-                    ? "bg-accent/15 text-accent"
+                    ? settings.navIndicator !== "none"
+                      ? "text-gray-100"
+                      : "bg-ink-800 text-gray-100"
                     : "text-gray-400 hover:text-gray-200"
+                } ${
+                  settings.navIndicator === "none" && homeTab !== "recommended"
+                    ? "hover:bg-ink-800/60"
+                    : ""
                 }`}
               >
                 Recommended
               </button>
-            </div>
+            </LiquidNav>
           )}
           {activeChannel && !activeTag && (
-            <div className="ui-panel flex shrink-0 gap-1 rounded-lg border border-ink-700 bg-ink-900 p-1">
+            <LiquidNav
+              className="ui-panel inline-flex shrink-0 rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
+              pillClassName="bg-ink-800"
+              dependency={channelTab}
+            >
               <button
                 type="button"
+                data-liquid-active={
+                  channelTab === "library" ? "true" : undefined
+                }
                 onClick={() => setChannelTab("library")}
-                className={`rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
+                className={`ui-interactive relative z-10 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
                   channelTab === "library"
-                    ? "bg-accent/15 text-accent"
+                    ? settings.navIndicator !== "none"
+                      ? "text-gray-100"
+                      : "bg-ink-800 text-gray-100"
                     : "text-gray-400 hover:text-gray-200"
+                } ${
+                  settings.navIndicator === "none" && channelTab !== "library"
+                    ? "hover:bg-ink-800/60"
+                    : ""
                 }`}
               >
                 Library
               </button>
               <button
                 type="button"
+                data-liquid-active={channelTab === "feed" ? "true" : undefined}
                 onClick={() => setChannelTab("feed")}
-                className={`rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
+                className={`ui-interactive relative z-10 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
                   channelTab === "feed"
-                    ? "bg-accent/15 text-accent"
+                    ? settings.navIndicator !== "none"
+                      ? "text-gray-100"
+                      : "bg-ink-800 text-gray-100"
                     : "text-gray-400 hover:text-gray-200"
+                } ${
+                  settings.navIndicator === "none" && channelTab !== "feed"
+                    ? "hover:bg-ink-800/60"
+                    : ""
                 }`}
               >
                 Channel feed
               </button>
-            </div>
+            </LiquidNav>
           )}
 
           <div
