@@ -19,6 +19,8 @@ AI_DEFAULTS: dict[str, Any] = {
     "auto_pull_models": True,
     "use_subtitles": True,
     "enrich_tags": True,
+    # Re-queue unlocked videos whose tags_enriched_at is older than this.
+    "tag_rescan_days": 90,
     "ai_summaries": True,
     "ai_chat": True,
     "summary_length": "short",  # short | medium | long
@@ -35,6 +37,10 @@ _CATEGORY_MIN_SCORE_LO = 0.20
 _CATEGORY_MIN_SCORE_HI = 0.90
 _VRAM_GB_LO = 0.5
 _VRAM_GB_HI = 256.0
+_TAG_RESCAN_DAYS_LO = 7
+_TAG_RESCAN_DAYS_HI = 365
+TAG_RESCAN_DAYS_MIN = _TAG_RESCAN_DAYS_LO
+TAG_RESCAN_DAYS_MAX = _TAG_RESCAN_DAYS_HI
 _SUMMARY_LENGTHS = frozenset({"short", "medium", "long"})
 
 
@@ -51,6 +57,14 @@ def normalize_summary_length(value: Any) -> str:
     if raw in _SUMMARY_LENGTHS:
         return raw
     return str(AI_DEFAULTS["summary_length"])
+
+
+def clamp_tag_rescan_days(value: Any) -> int:
+    try:
+        days = int(value)
+    except (TypeError, ValueError):
+        days = int(AI_DEFAULTS["tag_rescan_days"])
+    return max(_TAG_RESCAN_DAYS_LO, min(_TAG_RESCAN_DAYS_HI, days))
 
 
 def clamp_vram_gb(value: Any) -> float | None:
@@ -101,6 +115,7 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
         merged.get("category_min_score")
     )
     merged["summary_length"] = normalize_summary_length(merged.get("summary_length"))
+    merged["tag_rescan_days"] = clamp_tag_rescan_days(merged.get("tag_rescan_days"))
     merged["vram_gb"] = clamp_vram_gb(merged.get("vram_gb"))
     return merged
 

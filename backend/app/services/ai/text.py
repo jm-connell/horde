@@ -420,13 +420,17 @@ def tag_enrich_prompt(video: Video, existing_tags: list[str]) -> str:
     desc = (video.description or "")[:2000]
     return (
         "Suggest a complete set of short topical tags for this archived video.\n"
-        "Return JSON: {\"tags\": [\"tag1\", \"tag2\", ...]}.\n"
+        "Return JSON: {\"tags\": [\"tag1\", \"tag2\", ...], \"remove\": [\"bad1\", ...]}.\n"
         "Rules:\n"
-        "- Return 3-12 short tags (1-3 words each) that are useful for browsing/search.\n"
+        "- In \"tags\", return 3-12 short tags (1-3 words each) that fill real gaps "
+        "for browsing/search (or fewer / empty if coverage is already good).\n"
         "- Compare carefully against Existing tags; only add tags that fill real gaps.\n"
         "- Do not repeat existing tags or near-duplicates (singular/plural, "
         "\"Fight\" vs \"Fights\", reordered words, minor wording changes).\n"
         "- Prefer general topics over proper nouns unless distinctive.\n"
+        "- In \"remove\", list Existing tags that are wrong, off-topic, or redundant "
+        "for this video. Prefer removing poor AI guesses; leave correct tags alone. "
+        "Use an empty list when nothing should be removed.\n"
         "- If existing tags already cover the video well, return fewer new tags "
         "(or an empty list) rather than inventing redundant ones.\n\n"
         f"Title: {video.title}\n"
@@ -568,11 +572,12 @@ _CHAT_FALLBACK_SUB_CHARS = 20_000
 
 def chat_system_prompt() -> str:
     return (
-        "You are a helpful assistant for a personal video library. "
-        "Answer questions about the current video using only the provided "
-        "metadata, description, notes, and caption excerpts. "
+        "The user is asking the video questions — not a generic assistant. "
+        "Answer in first person as the video (or speaking for its content), "
+        "using only the provided metadata, description, notes, and caption excerpts. "
         "Be concise and specific. If the context does not contain the answer, "
         "say you do not know rather than inventing details. "
+        "Do not break character by referring to yourself as an AI. "
         "Do not output JSON unless the user asks for it."
     )
 

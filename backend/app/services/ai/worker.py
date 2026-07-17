@@ -157,7 +157,11 @@ def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
     _, tag_limit = _runtime_limits()
     if limit is not None:
         tag_limit = limit
-    pending: list[int] = []
+    rescan_days = app_settings.clamp_tag_rescan_days(ai.get("tag_rescan_days"))
+    now = utcnow()
+    cutoff = now - timedelta(days=rescan_days)
+    # (priority, enriched_at_or_min, video_id) — missing first, then oldest stale.
+    candidates: list[tuple[int, object, int]] = []
     with Session(engine) as session:
         videos = session.exec(
             select(Video).where(Video.needs_review == False)  # noqa: E712
@@ -166,15 +170,19 @@ def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
             if video.id is None:
                 continue
             meta = session.get(VideoAiMeta, video.id)
-            if meta is not None and (meta.tags_locked or meta.tags_enriched_at):
+            if meta is not None and meta.tags_locked:
                 continue
-            pending.append(video.id)
-            if len(pending) >= tag_limit:
-                break
+            enriched_at = meta.tags_enriched_at if meta is not None else None
+            if enriched_at is None:
+                candidates.append((0, now, video.id))
+            elif enriched_at < cutoff:
+                candidates.append((1, enriched_at, video.id))
+    candidates.sort(key=lambda row: (row[0], row[1]))
+    pending = [vid for _, _, vid in candidates[:tag_limit]]
     for video_id in pending:
         if enqueue_job(AiJobKind.enrich_tags, video_id, force=False) is not None:
             breakdown["tags"] += 1
-    return _result(breakdown, empty="No videos missing AI tags")
+    return _result(breakdown, empty="No videos needing AI tag review")
 
 
 def enqueue_full_tag_refresh(*, limit: Optional[int] = None) -> dict:
@@ -266,13 +274,21 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
                     break
 
         if enrich:
+            rescan_days = app_settings.clamp_tag_rescan_days(ai.get("tag_rescan_days"))
+            now = utcnow()
+            tag_cutoff = now - timedelta(days=rescan_days)
+            tag_candidates: list[tuple[int, object, int]] = []
             for vid in recent_ids:
                 meta = session.get(VideoAiMeta, vid)
-                if meta is not None and (meta.tags_locked or meta.tags_enriched_at):
+                if meta is not None and meta.tags_locked:
                     continue
-                need_tags.append(vid)
-                if len(need_tags) >= limit:
-                    break
+                enriched_at = meta.tags_enriched_at if meta is not None else None
+                if enriched_at is None:
+                    tag_candidates.append((0, now, vid))
+                elif enriched_at < tag_cutoff:
+                    tag_candidates.append((1, enriched_at, vid))
+            tag_candidates.sort(key=lambda row: (row[0], row[1]))
+            need_tags = [vid for _, _, vid in tag_candidates[:limit]]
 
     for video_id in need_embed:
         if enqueue_job(AiJobKind.embed_video, video_id, force=False) is not None:

@@ -233,14 +233,35 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
         system=(
             "You are a tagging assistant. Reply with JSON only. "
             "Return as many useful non-duplicate tags as needed (typically 3-12), "
-            "not just one."
+            "not just one. Include a remove list for poor existing tags when needed."
         ),
     )
     data = _parse_json_object(raw)
     suggested = data.get("tags") if isinstance(data.get("tags"), list) else []
-    merged = list(existing)
-    seen = {t.lower() for t in existing}
-    seen_norms = {_tag_norm_key(t) for t in existing}
+    remove_raw = data.get("remove") if isinstance(data.get("remove"), list) else []
+
+    if meta is None:
+        meta = VideoAiMeta(video_id=video_id)
+    user_tags = library.parse_tags(meta.user_tags) if meta.user_tags else []
+    prev_ai = library.parse_tags(meta.ai_tags) if meta.ai_tags else []
+    user_keys = {t.lower() for t in user_tags}
+    ai_keys = {t.lower() for t in prev_ai}
+
+    remove_keys: set[str] = set()
+    for tag in remove_raw:
+        if not isinstance(tag, str):
+            continue
+        cleaned = tag.strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        # Only strip AI-originated tags; never remove user tags.
+        if key in ai_keys and key not in user_keys:
+            remove_keys.add(key)
+
+    merged = [t for t in existing if t.lower() not in remove_keys]
+    seen = {t.lower() for t in merged}
+    seen_norms = {_tag_norm_key(t) for t in merged}
     added_ai: list[str] = []
     for tag in suggested:
         if not isinstance(tag, str):
@@ -260,15 +281,13 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
 
     video.tags = library.dump_tags(merged)
     session.add(video)
-    if meta is None:
-        meta = VideoAiMeta(video_id=video_id)
-    prev_ai = library.parse_tags(meta.ai_tags) if meta.ai_tags else []
-    prev_seen = {t.lower() for t in prev_ai}
+    next_ai = [t for t in prev_ai if t.lower() not in remove_keys]
+    prev_seen = {t.lower() for t in next_ai}
     for tag in added_ai:
         if tag.lower() not in prev_seen:
-            prev_ai.append(tag)
+            next_ai.append(tag)
             prev_seen.add(tag.lower())
-    meta.ai_tags = library.dump_tags(prev_ai)
+    meta.ai_tags = library.dump_tags(next_ai)
     meta.tags_enriched_at = utcnow()
     meta.updated_at = utcnow()
     session.add(meta)

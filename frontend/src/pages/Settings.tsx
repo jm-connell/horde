@@ -277,6 +277,7 @@ const DEFAULT_AI: AiSettings = {
   auto_pull_models: true,
   use_subtitles: true,
   enrich_tags: true,
+  tag_rescan_days: 90,
   ai_summaries: true,
   ai_chat: true,
   summary_length: "short",
@@ -3880,7 +3881,7 @@ export default function Settings() {
                 />
                 <SettingRow
                   title="AI video chat"
-                  description="Ask questions about a video on the Watch page using metadata, description, and captions. Larger GPUs auto-upgrade to bigger chat models."
+                  description="Ask the video questions on the Watch page using its metadata, description, and captions. Larger GPUs auto-upgrade to bigger chat models."
                   hidden={
                     !!q &&
                     !match("chat", "ask", "conversation", "watch", "captions")
@@ -3991,6 +3992,41 @@ export default function Settings() {
                     />
                   }
                 />
+                {aiDraft.enrich_tags && (
+                  <SettingRow
+                    title="Re-check tags after"
+                    description="Unlocked videos whose tags haven’t been reviewed in this many days get another pass during Enrich missing tags / scheduled sweeps."
+                    hidden={!!q && !match("re-check tags", "rescan", "tag days")}
+                    control={
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={7}
+                          max={365}
+                          step={1}
+                          value={aiDraft.tag_rescan_days}
+                          onChange={(e) => {
+                            const n = Number(e.target.value);
+                            if (!Number.isFinite(n)) return;
+                            setAiDraft((d) => ({
+                              ...d,
+                              tag_rescan_days: Math.max(7, Math.min(365, Math.round(n))),
+                            }));
+                          }}
+                          onBlur={() => {
+                            const days = Math.max(
+                              7,
+                              Math.min(365, Math.round(aiDraft.tag_rescan_days || 90))
+                            );
+                            void saveAi({ tag_rescan_days: days });
+                          }}
+                          className="ui-panel w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                        />
+                        <span className="text-xs text-gray-500">days</span>
+                      </div>
+                    }
+                  />
+                )}
                 <SettingRow
                   title="AI duplicate confirmation"
                   description="Score heuristic duplicate groups in Import."

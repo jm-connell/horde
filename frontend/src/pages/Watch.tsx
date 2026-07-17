@@ -7,7 +7,7 @@ import Collapse from "../components/Collapse";
 import LinkifiedText from "../components/LinkifiedText";
 import PlaybackQueue from "../components/PlaybackQueue";
 import VideoActionsMenu from "../components/VideoActionsMenu";
-import VideoAiChat from "../components/VideoAiChat";
+import VideoAiPanel from "../components/VideoAiPanel";
 import VideoCard from "../components/VideoCard";
 import VideoEditForm from "../components/VideoEditForm";
 import { useDownloads } from "../context/DownloadContext";
@@ -64,13 +64,6 @@ export default function Watch() {
   const [settings, updateSettings] = useSettings();
   const [aiSummariesEnabled, setAiSummariesEnabled] = useState(false);
   const [aiChatEnabled, setAiChatEnabled] = useState(false);
-  const [summarizing, setSummarizing] = useState(false);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [summaryExpanded, setSummaryExpanded] = useState(true);
-  const [summaryRevealed, setSummaryRevealed] = useState(false);
-  const [chatRevealed, setChatRevealed] = useState(false);
-  const [chatExpanded, setChatExpanded] = useState(true);
-  const summarizeAbortRef = useRef<AbortController | null>(null);
   const { showToast } = useToast();
   const { onJobCompleted, refreshJobs } = useDownloads();
   const redownloadPending = useRef(false);
@@ -103,10 +96,6 @@ export default function Watch() {
         clearWatchResume(videoId);
         setVideo(merged);
         playVideo(merged);
-        setSummaryError(null);
-        setSummaryRevealed(false);
-        setChatRevealed(false);
-        setChatExpanded(true);
       })
       .catch(() => setError("Video not found"));
     // location.state is read once for the preview handoff; do not re-fetch on state churn.
@@ -124,12 +113,6 @@ export default function Watch() {
         setAiSummariesEnabled(false);
         setAiChatEnabled(false);
       });
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      summarizeAbortRef.current?.abort();
-    };
   }, []);
 
   useEffect(() => {
@@ -305,50 +288,6 @@ export default function Watch() {
     }
   };
 
-  const runSummarize = useCallback(
-    async (force: boolean) => {
-      if (!video) return;
-      // Cached summary: reveal without calling Ollama unless regenerating.
-      if (
-        !force &&
-        video.ai_summary &&
-        video.ai_summary.trim()
-      ) {
-        setSummaryRevealed(true);
-        setSummaryExpanded(true);
-        setSummaryError(null);
-        return;
-      }
-      setSummarizing(true);
-      setSummaryRevealed(true);
-      setSummaryError(null);
-      setSummaryExpanded(true);
-      const ac = new AbortController();
-      summarizeAbortRef.current = ac;
-      try {
-        const updated = await api.summarizeVideo(video.id, {
-          force,
-          signal: ac.signal,
-        });
-        setVideo(updated);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          return;
-        }
-        const msg =
-          err instanceof Error ? err.message : "Could not generate summary";
-        setSummaryError(msg);
-        showToast(msg);
-      } finally {
-        if (summarizeAbortRef.current === ac) {
-          summarizeAbortRef.current = null;
-        }
-        setSummarizing(false);
-      }
-    },
-    [video, showToast]
-  );
-
   if (error) {
     return <p className="py-20 text-center text-gray-500">{error}</p>;
   }
@@ -369,11 +308,6 @@ export default function Watch() {
     !!(descriptionBody || video.notes || video.tags?.length || video.ai_tags?.length);
   const canAiSummarize =
     aiSummariesEnabled && (video.subtitles?.length ?? 0) > 0;
-  const hasAiSummary = !!(video.ai_summary && video.ai_summary.trim());
-  const showSummarySection =
-    canAiSummarize && (summaryRevealed || summarizing);
-  const showGenerateSummaryBtn =
-    canAiSummarize && !summaryRevealed && !summarizing;
   const canAiChat =
     aiChatEnabled &&
     !!(
@@ -381,8 +315,7 @@ export default function Watch() {
       (video.description || "").trim() ||
       (video.subtitles?.length ?? 0) > 0
     );
-  const showAskAiBtn = canAiChat && !chatRevealed;
-  const showChatSection = canAiChat && chatRevealed;
+  const showAiSection = canAiSummarize || canAiChat;
   const queueVisible = queue.length > 0;
   const metaSideBySide =
     chapters.length > 0 && showDescriptionPanel && !queueVisible;
@@ -532,31 +465,6 @@ export default function Watch() {
               )}
             </div>
           </div>
-          {(showGenerateSummaryBtn || showAskAiBtn) && (
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              {showGenerateSummaryBtn && (
-                <button
-                  type="button"
-                  onClick={() => void runSummarize(false)}
-                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs font-medium text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
-                >
-                  Generate summary
-                </button>
-              )}
-              {showAskAiBtn && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setChatRevealed(true);
-                    setChatExpanded(true);
-                  }}
-                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs font-medium text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
-                >
-                  Ask AI
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
           <div
@@ -567,114 +475,12 @@ export default function Watch() {
             }
           >
             <div className="min-w-0 space-y-4">
-              {showSummarySection && (
-                <div>
-                  <div className="flex items-center justify-between gap-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => setSummaryExpanded((v) => !v)}
-                      className="ui-panel-toggle ui-interactive flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
-                    >
-                      <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
-                        <span>AI summary</span>
-                        <span>{summaryExpanded ? "▲" : "▼"}</span>
-                      </span>
-                    </button>
-                    {summarizing ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          summarizeAbortRef.current?.abort();
-                          summarizeAbortRef.current = null;
-                          setSummarizing(false);
-                          setSummaryError(null);
-                          if (!hasAiSummary) {
-                            setSummaryRevealed(false);
-                          }
-                          showToast("Summary cancelled");
-                        }}
-                        className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
-                      >
-                        Cancel
-                      </button>
-                    ) : (
-                      summaryExpanded &&
-                      (hasAiSummary || !!summaryError) && (
-                        <button
-                          type="button"
-                          onClick={() => void runSummarize(true)}
-                          className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
-                        >
-                          Regenerate
-                        </button>
-                      )
-                    )}
-                  </div>
-                  <Collapse open={summaryExpanded}>
-                    <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
-                      <div className="px-4 py-3">
-                        {summaryError && (
-                          <p className="mb-2 text-xs text-amber-400/90">
-                            {summaryError}
-                          </p>
-                        )}
-                        {hasAiSummary ? (
-                          <div className="space-y-3 text-sm text-gray-300">
-                            {(video.ai_summary || "")
-                              .trim()
-                              .split(/\n\s*\n+/)
-                              .map((p) => p.replace(/\n+/g, " ").trim())
-                              .filter(Boolean)
-                              .map((para, i, paras) => {
-                                const isLast = i === paras.length - 1;
-                                const showLen =
-                                  isLast &&
-                                  !!video.ai_summary_length &&
-                                  ["short", "medium", "long"].includes(
-                                    video.ai_summary_length
-                                  );
-                                return (
-                                  <p
-                                    key={i}
-                                    className={
-                                      showLen ? "relative pr-12" : undefined
-                                    }
-                                  >
-                                    {para}
-                                    {showLen && (
-                                      <span
-                                        className="absolute bottom-0 right-0 text-[10px] font-medium uppercase tracking-wider text-gray-500/70"
-                                        aria-label={`Summary length: ${video.ai_summary_length}`}
-                                      >
-                                        {video.ai_summary_length}
-                                      </span>
-                                    )}
-                                  </p>
-                                );
-                              })}
-                          </div>
-                        ) : (
-                          summarizing && (
-                            <p className="text-xs text-gray-500">
-                              Generating summary…
-                            </p>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  </Collapse>
-                </div>
-              )}
-
-              {showChatSection && (
-                <VideoAiChat
-                  videoId={video.id}
-                  summary={video.ai_summary}
-                  hasSubtitles={(video.subtitles?.length ?? 0) > 0}
-                  open={chatRevealed}
-                  expanded={chatExpanded}
-                  onExpandedChange={setChatExpanded}
-                  onClose={() => setChatRevealed(false)}
+              {showAiSection && (
+                <VideoAiPanel
+                  video={video}
+                  canSummarize={canAiSummarize}
+                  canChat={canAiChat}
+                  onVideoUpdate={setVideo}
                   showToast={showToast}
                 />
               )}

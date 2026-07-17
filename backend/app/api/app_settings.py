@@ -21,6 +21,7 @@ class AiSettingsRead(BaseModel):
     auto_pull_models: bool = True
     use_subtitles: bool = True
     enrich_tags: bool = True
+    tag_rescan_days: int = 90
     ai_summaries: bool = True
     ai_chat: bool = True
     summary_length: Literal["short", "medium", "long"] = "short"
@@ -43,6 +44,11 @@ class AiSettingsUpdate(BaseModel):
     auto_pull_models: Optional[bool] = None
     use_subtitles: Optional[bool] = None
     enrich_tags: Optional[bool] = None
+    tag_rescan_days: Optional[int] = Field(
+        default=None,
+        ge=app_settings.TAG_RESCAN_DAYS_MIN,
+        le=app_settings.TAG_RESCAN_DAYS_MAX,
+    )
     ai_summaries: Optional[bool] = None
     ai_chat: Optional[bool] = None
     summary_length: Optional[Literal["short", "medium", "long"]] = None
@@ -88,6 +94,10 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     if "summary_length" in filtered:
         filtered["summary_length"] = app_settings.normalize_summary_length(
             filtered["summary_length"]
+        )
+    if "tag_rescan_days" in filtered:
+        filtered["tag_rescan_days"] = app_settings.clamp_tag_rescan_days(
+            filtered["tag_rescan_days"]
         )
     if "vram_gb" in filtered:
         filtered["vram_gb"] = app_settings.clamp_vram_gb(filtered["vram_gb"])
@@ -141,6 +151,10 @@ def update_settings(payload: AppSettingsUpdate):
         if "summary_length" in ai_updates:
             ai_updates["summary_length"] = app_settings.normalize_summary_length(
                 ai_updates["summary_length"]
+            )
+        if "tag_rescan_days" in ai_updates:
+            ai_updates["tag_rescan_days"] = app_settings.clamp_tag_rescan_days(
+                ai_updates["tag_rescan_days"]
             )
         # Applying a workload profile resolves models + match score for Ollama GPU.
         if "workload_profile" in ai_updates:

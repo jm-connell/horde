@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import Collapse from "./Collapse";
 import type { VideoAiChatMessage } from "../types";
+import TypingDots from "./TypingDots";
 
 interface Props {
   videoId: number;
   /** Cached AI summary shown as a seed bubble before any chat turns. */
   summary?: string | null;
   hasSubtitles: boolean;
-  open: boolean;
-  expanded: boolean;
-  onExpandedChange: (open: boolean) => void;
-  onClose?: () => void;
+  /** When false, the chat body is hidden (panel still mounts for history). */
+  active: boolean;
   showToast: (msg: string) => void;
 }
 
@@ -19,7 +17,6 @@ type DisplayMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  seed?: boolean;
 };
 
 function toDisplay(m: VideoAiChatMessage): DisplayMessage {
@@ -34,10 +31,7 @@ export default function VideoAiChat({
   videoId,
   summary,
   hasSubtitles,
-  open,
-  expanded,
-  onExpandedChange,
-  onClose,
+  active,
   showToast,
 }: Props) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
@@ -73,16 +67,16 @@ export default function VideoAiChat({
   }, [videoId]);
 
   useEffect(() => {
-    if (!open || !expanded) return;
+    if (!active) return;
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, open, expanded, sending]);
+  }, [messages, active, sending]);
 
   useEffect(() => {
-    if (open && expanded) {
+    if (active) {
       inputRef.current?.focus();
     }
-  }, [open, expanded]);
+  }, [active]);
 
   const seedSummary = (summary || "").trim();
   const showSeed =
@@ -203,136 +197,124 @@ export default function VideoAiChat({
     showToast("Reply cancelled");
   }
 
-  if (!open) return null;
+  if (!active) return null;
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3 py-2">
-        <button
-          type="button"
-          onClick={() => onExpandedChange(!expanded)}
-          className="ui-panel-toggle ui-interactive flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
+    <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
+      <div
+        ref={listRef}
+        className="horde-scrollbar max-h-72 space-y-3 overflow-y-auto px-4 py-3"
+      >
+        {loading && (
+          <div className="flex justify-center py-6">
+            <TypingDots label="Loading chat" />
+          </div>
+        )}
+        {!loading && showSeed && (
+          <div className="flex justify-start">
+            <div className="w-fit max-w-[90%] rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-400">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                From summary
+              </p>
+              <p className="whitespace-pre-wrap">{seedSummary}</p>
+            </div>
+          </div>
+        )}
+        {!loading &&
+          !showSeed &&
+          messages.length === 0 &&
+          !sending && (
+            <p className="text-xs text-gray-500">
+              Ask this video anything
+              {!hasSubtitles
+                ? " — captions not downloaded, answers will use title and description only."
+                : "."}
+            </p>
+          )}
+        {messages.map((m) => {
+          const waiting =
+            sending && m.role === "assistant" && !m.content.trim();
+          return (
+            <div
+              key={m.id}
+              className={
+                m.role === "user" ? "flex justify-end" : "flex justify-start"
+              }
+            >
+              <div
+                className={
+                  m.role === "user"
+                    ? "w-fit max-w-[70%] rounded-lg bg-accent/10 px-3 py-2 text-sm text-gray-200"
+                    : "w-fit max-w-[90%] rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
+                }
+              >
+                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                  {m.role === "user" ? "You" : "Video"}
+                </p>
+                {waiting ? (
+                  <TypingDots label="Video is typing" className="py-1" />
+                ) : (
+                  <p className="whitespace-pre-wrap">{m.content}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {error && <p className="text-xs text-amber-400/90">{error}</p>}
+      </div>
+      <div className="border-t border-ink-700 px-3 py-2">
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send();
+          }}
         >
-          <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
-            <span>Ask about this video</span>
-            <span>{expanded ? "▲" : "▼"}</span>
-          </span>
-        </button>
-        <div className="flex shrink-0 items-center gap-2">
+          <textarea
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void send();
+              }
+            }}
+            rows={2}
+            disabled={sending}
+            placeholder="Ask this video…"
+            className="horde-scrollbar min-h-[2.5rem] flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:border-accent focus:outline-none"
+          />
           {sending ? (
             <button
               type="button"
               onClick={cancel}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
+              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-xs font-medium text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
             >
               Cancel
             </button>
           ) : (
-            messages.length > 0 && (
-              <button
-                type="button"
-                onClick={() => void clearThread()}
-                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
-              >
-                Clear
-              </button>
-            )
-          )}
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
-              aria-label="Close chat"
-            >
-              Close
-            </button>
-          )}
-        </div>
-      </div>
-      <Collapse open={expanded}>
-        <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
-          <div
-            ref={listRef}
-            className="horde-scrollbar max-h-72 space-y-3 overflow-y-auto px-4 py-3"
-          >
-            {loading && (
-              <p className="text-xs text-gray-500">Loading chat…</p>
-            )}
-            {!loading && showSeed && (
-              <div className="rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-400">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                  From summary
-                </p>
-                <p className="whitespace-pre-wrap">{seedSummary}</p>
-              </div>
-            )}
-            {!loading &&
-              !showSeed &&
-              messages.length === 0 &&
-              !sending && (
-                <p className="text-xs text-gray-500">
-                  Ask anything about this video
-                  {!hasSubtitles
-                    ? " — captions not downloaded, answers will use title and description only."
-                    : "."}
-                </p>
+            <>
+              {messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void clearThread()}
+                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent"
+                >
+                  Clear
+                </button>
               )}
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={
-                  m.role === "user"
-                    ? "ml-6 rounded-lg bg-accent/10 px-3 py-2 text-sm text-gray-200"
-                    : "mr-6 rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
-                }
-              >
-                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                  {m.role === "user" ? "You" : "AI"}
-                </p>
-                <p className="whitespace-pre-wrap">
-                  {m.content || (sending && m.role === "assistant" ? "…" : "")}
-                </p>
-              </div>
-            ))}
-            {error && (
-              <p className="text-xs text-amber-400/90">{error}</p>
-            )}
-          </div>
-          <div className="border-t border-ink-700 px-3 py-2">
-            <form
-              className="flex items-end gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void send();
-              }}
-            >
-              <textarea
-                ref={inputRef}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void send();
-                  }
-                }}
-                rows={2}
-                disabled={sending}
-                placeholder="Ask about this video…"
-                className="horde-scrollbar min-h-[2.5rem] flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:border-accent focus:outline-none"
-              />
               <button
                 type="submit"
-                disabled={sending || !draft.trim()}
+                disabled={!draft.trim()}
                 className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Send
               </button>
-            </form>
-          </div>
-        </div>
-      </Collapse>
+            </>
+          )}
+        </form>
+      </div>
     </div>
   );
 }

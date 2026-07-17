@@ -241,6 +241,8 @@ export interface AiSettings {
   auto_pull_models: boolean;
   use_subtitles: boolean;
   enrich_tags: boolean;
+  /** Days before unlocked tags can be re-reviewed (7–365). */
+  tag_rescan_days: number;
   ai_summaries: boolean;
   ai_chat: boolean;
   summary_length: AiSummaryLength;

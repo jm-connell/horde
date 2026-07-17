@@ -162,6 +162,10 @@ export interface Settings {
   sidebarCollapsed: boolean;
   chaptersExpanded: boolean;
   descriptionExpanded: boolean;
+  /** Watch-page AI panel open/closed (persists across videos and restarts). */
+  aiExpanded: boolean;
+  /** Last selected AI panel tab when both summary and chat are available. */
+  aiTab: "summary" | "chat";
   showRelatedVideos: boolean;
   /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
   autoplayRelated: boolean;
@@ -220,6 +224,8 @@ const DEFAULTS: Settings = {
   sidebarCollapsed: false,
   chaptersExpanded: true,
   descriptionExpanded: true,
+  aiExpanded: true,
+  aiTab: "summary",
   showRelatedVideos: true,
   autoplayRelated: true,
 };
@@ -270,6 +276,8 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "sidebarCollapsed",
   "chaptersExpanded",
   "descriptionExpanded",
+  "aiExpanded",
+  "aiTab",
   "showRelatedVideos",
   "autoplayRelated",
 ];
