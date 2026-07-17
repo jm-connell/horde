@@ -19,6 +19,7 @@ import type {
   StreamPreviewMeta,
   SystemStats,
   TagStat,
+  UpdateCheck,
   Video,
   VideoUpdate,
   SpriteMeta,
@@ -379,6 +380,11 @@ export const api = {
 
   getSystemStats(): Promise<SystemStats> {
     return request<SystemStats>("/api/system/stats");
+  },
+
+  checkUpdates(refresh = false): Promise<UpdateCheck> {
+    const qs = refresh ? "?refresh=true" : "";
+    return request<UpdateCheck>(`/api/updates${qs}`);
   },
 
   uploadBackground(

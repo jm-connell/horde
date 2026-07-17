@@ -73,19 +73,29 @@ so pulling new code and rebuilding the image is required after changes. Use the
 Dockge, which opens a shell inside the running container where `docker` is not
 available.
 
-1. Push your changes from your dev machine, then on TrueNAS open the shell and
-   go to the Dockge stack folder (the path shown in Dockge for the stack), e.g.
-   `/mnt/tank/dockge/stacks/horde`.
-2. Pull the latest code and rebuild the image:
+Settings → System shows a quiet notice when a newer commit is available on
+GitHub (dismissible until the next newer commit).
+
+1. On TrueNAS open the shell and go to the Dockge stack folder (the path shown
+   in Dockge for the stack), e.g. `/mnt/tank/dockge/stacks/horde`.
+2. Run the update script (use `bash` so you do not need `chmod +x`):
 
 ```bash
 cd /mnt/tank/dockge/stacks/horde   # adjust to your stack path
-git pull
-sudo docker compose build horde
+bash update.sh
 ```
 
-3. Start the stack again—either click **Start** in Dockge, or run
-   `sudo docker compose up -d` from the same folder.
+That pulls the latest code, builds with the current commit SHA (so update
+checks keep working), and recreates the containers.
+
+**Manual / advanced** (same steps as the script):
+
+```bash
+cd /mnt/tank/dockge/stacks/horde
+git pull
+sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde
+sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d
+```
 
 Stopping the container in Dockge before rebuilding is optional; either way,
 the running container must be recreated from the new image for changes to take

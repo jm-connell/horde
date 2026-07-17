@@ -40,6 +40,7 @@ import type {
   HealthStats,
   StorageStats,
   SystemStats,
+  UpdateCheck,
 } from "../types";
 import { formatSize } from "../utils";
 import LiquidNav from "../components/LiquidNav";
@@ -333,6 +334,7 @@ const NAV_INDICATOR_OPTIONS: {
 ];
 
 const TAB_STORAGE_KEY = "horde.settings.tab";
+const UPDATE_DISMISS_KEY = "horde.settings.updateDismissedSha";
 
 /** Search keywords / synonyms → tab. Used for cross-tab search + auto-switch. */
 const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
@@ -437,13 +439,33 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "system",
     keywords:
-      "health yt-dlp ollama disk import review downloads gpu system status",
+      "health yt-dlp ollama disk import review downloads gpu system status horde version",
+  },
+  {
+    tab: "system",
+    keywords: "update version github git pull docker compose rebuild",
   },
   {
     tab: "system",
     keywords: "resources cpu ram memory gpu vram temperature nvidia amd intel rocm",
   },
 ];
+
+function loadDismissedUpdateSha(): string | null {
+  try {
+    return localStorage.getItem(UPDATE_DISMISS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveDismissedUpdateSha(sha: string) {
+  try {
+    localStorage.setItem(UPDATE_DISMISS_KEY, sha);
+  } catch {
+    /* ignore */
+  }
+}
 
 function loadTab(): SettingsTab {
   try {
@@ -985,6 +1007,11 @@ export default function Settings() {
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [health, setHealth] = useState<HealthStats | null>(null);
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheck | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [dismissedUpdateSha, setDismissedUpdateSha] = useState<string | null>(
+    loadDismissedUpdateSha
+  );
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [aiDraft, setAiDraft] = useState<AiSettings>(DEFAULT_AI);
@@ -1038,6 +1065,21 @@ export default function Settings() {
   const q = searchQuery.trim().toLowerCase();
   const match = (...parts: (string | undefined | null)[]) =>
     matchesQuery(q, ...parts);
+
+  const showUpdateNotice = Boolean(
+    updateCheck?.update_available &&
+      updateCheck.latest_sha &&
+      updateCheck.latest_sha !== dismissedUpdateSha &&
+      (!q ||
+        match(
+          "update",
+          "version",
+          "github",
+          "git pull",
+          "docker",
+          "rebuild"
+        ))
+  );
 
   const refreshAiStatus = () =>
     api
@@ -1094,6 +1136,20 @@ export default function Settings() {
     refreshCatalogStatus();
     const id = setInterval(refreshCatalogStatus, 5000);
     return () => clearInterval(id);
+  }, [tab]);
+
+  const refreshUpdates = (refresh = false) => {
+    setUpdateChecking(true);
+    return api
+      .checkUpdates(refresh)
+      .then(setUpdateCheck)
+      .catch(() => setUpdateCheck(null))
+      .finally(() => setUpdateChecking(false));
+  };
+
+  useEffect(() => {
+    if (tab !== "system") return;
+    void refreshUpdates(false);
   }, [tab]);
 
   useEffect(() => {
@@ -3955,6 +4011,97 @@ export default function Settings() {
 
         {tab === "system" && (
           <>
+            {showUpdateNotice && updateCheck && (
+                <div className="mb-6 rounded-lg border border-ink-700 bg-ink-950/60 px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-gray-200">
+                        A newer version is available
+                        {updateCheck.current_short &&
+                        updateCheck.latest_short ? (
+                          <span className="text-gray-500">
+                            {" "}
+                            (
+                            <span className="font-mono">
+                              {updateCheck.current_short}
+                            </span>
+                            {" → "}
+                            <span className="font-mono">
+                              {updateCheck.latest_short}
+                            </span>
+                            )
+                          </span>
+                        ) : null}
+                      </p>
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-400">
+                          How to update
+                        </summary>
+                        <div className="mt-2 space-y-2 text-xs text-gray-400">
+                          <p>
+                            On the TrueNAS shell (not Dockge Bash), go to your
+                            stack folder and run:
+                          </p>
+                          <pre className="overflow-x-auto rounded bg-ink-900/80 p-2 font-mono text-[11px] leading-relaxed text-gray-300">
+                            {`cd /mnt/tank/dockge/stacks/horde   # adjust to your path
+bash update.sh`}
+                          </pre>
+                          <p>
+                            Use <span className="font-mono">bash update.sh</span>{" "}
+                            so you do not need{" "}
+                            <span className="font-mono">chmod +x</span>. Then
+                            hard-refresh the browser (
+                            <kbd className="font-mono">Ctrl+Shift+R</kbd>
+                            ). Library data stays on host volumes.
+                          </p>
+                          {updateCheck.latest_html_url && (
+                            <a
+                              href={updateCheck.latest_html_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block text-accent hover:underline"
+                            >
+                              View latest commit on GitHub
+                            </a>
+                          )}
+                          <details className="mt-1">
+                            <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-400">
+                              Advanced: manual commands
+                            </summary>
+                            <pre className="mt-2 overflow-x-auto rounded bg-ink-900/80 p-2 font-mono text-[11px] leading-relaxed text-gray-300">
+                              {`git pull
+sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde
+sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
+                            </pre>
+                          </details>
+                        </div>
+                      </details>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={updateChecking}
+                        onClick={() => void refreshUpdates(true)}
+                        className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-50"
+                      >
+                        {updateChecking ? "Checking…" : "Check again"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!updateCheck.latest_sha) return;
+                          saveDismissedUpdateSha(updateCheck.latest_sha);
+                          setDismissedUpdateSha(updateCheck.latest_sha);
+                        }}
+                        className="text-xs text-gray-500 hover:text-gray-300"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             <Section
               first
               title="Background tasks"
@@ -4183,6 +4330,22 @@ export default function Settings() {
             >
               {health ? (
                 <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-400">Horde</dt>
+                    <dd className="text-right font-mono text-gray-200">
+                      {health.horde_version ?? "unknown"}
+                      {updateCheck && !updateCheck.error ? (
+                        <span className="ml-2 font-sans text-gray-500">
+                          {updateCheck.update_available
+                            ? "· update available"
+                            : health.horde_version &&
+                                health.horde_version !== "unknown"
+                              ? "· up to date"
+                              : ""}
+                        </span>
+                      ) : null}
+                    </dd>
+                  </div>
                   <div className="flex justify-between">
                     <dt className="text-gray-400">yt-dlp</dt>
                     <dd className="font-mono text-gray-200">

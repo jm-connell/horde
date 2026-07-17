@@ -9,7 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import DOWNLOADS_DIR, YTDLP_POT_BASE_URL, ensure_dirs
+from .config import (
+    DOWNLOADS_DIR,
+    YTDLP_POT_BASE_URL,
+    ensure_dirs,
+    resolve_git_sha,
+    short_git_sha,
+)
 from .database import engine, init_db
 from .api import (
     ai,
@@ -174,8 +180,11 @@ def health():
     except Exception:  # noqa: BLE001
         ollama = {"enabled": False, "ready": False, "reachable": False}
 
+    sha = resolve_git_sha()
     return {
         "status": "ok",
+        "horde_sha": sha,
+        "horde_version": short_git_sha(sha),
         "yt_dlp_version": _yt_dlp_version(),
         "pot_provider": _pot_provider_status(),
         "ollama": ollama,
@@ -184,6 +193,14 @@ def health():
         "review_pending_count": review_count,
         "active_downloads": active_downloads,
     }
+
+
+@app.get("/api/updates")
+def updates(refresh: bool = False):
+    """Compare baked-in git SHA to GitHub main (24h cache). Soft-fails offline."""
+    from .services.updates import check_for_updates
+
+    return check_for_updates(refresh=refresh)
 
 
 if FRONTEND_DIR.exists():
