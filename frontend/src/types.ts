@@ -354,6 +354,8 @@ export interface DuplicateGroup {
 
 export interface HealthStats {
   status: string;
+  horde_sha?: string;
+  horde_version?: string;
   yt_dlp_version: string;
   pot_provider: {
     status: string;
@@ -373,6 +375,18 @@ export interface HealthStats {
   library_video_count: number;
   review_pending_count: number;
   active_downloads: number;
+}
+
+export interface UpdateCheck {
+  repo: string;
+  current_sha: string;
+  current_short: string;
+  latest_sha: string | null;
+  latest_short: string | null;
+  latest_html_url: string | null;
+  update_available: boolean;
+  checked_at: string;
+  error: string | null;
 }
 
 export type PlaylistSource = "user" | "youtube";

@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -47,6 +48,39 @@ YTDLP_COOKIES_FROM_BROWSER: str = os.environ.get(
 
 # Ollama base URL. Empty = auto-discover (compose service, then host.docker.internal).
 OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "").strip()
+
+# Update checks — baked at Docker build time; falls back to local git in dev.
+HORDE_GITHUB_REPO: str = os.environ.get(
+    "HORDE_GITHUB_REPO", "jm-connell/horde"
+).strip() or "jm-connell/horde"
+
+
+def resolve_git_sha() -> str:
+    """Deployed commit SHA: env → local git → unknown."""
+    env = os.environ.get("HORDE_GIT_SHA", "").strip()
+    if env and env.lower() != "unknown":
+        return env
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        sha = (result.stdout or "").strip()
+        if result.returncode == 0 and sha:
+            return sha
+    except Exception:  # noqa: BLE001
+        pass
+    return "unknown"
+
+
+def short_git_sha(sha: Optional[str] = None) -> str:
+    value = (sha if sha is not None else resolve_git_sha()).strip()
+    if not value or value.lower() == "unknown":
+        return "unknown"
+    return value[:7]
 
 
 def ensure_dirs() -> None:

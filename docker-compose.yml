@@ -25,7 +25,10 @@ services:
     restart: unless-stopped
 
   horde:
-    build: .
+    build:
+      context: .
+      args:
+        HORDE_GIT_SHA: ${HORDE_GIT_SHA:-unknown}
     image: horde:latest
     container_name: horde
     depends_on:
@@ -44,6 +47,8 @@ services:
       - YTDLP_COOKIES_FROM_BROWSER=${YTDLP_COOKIES_FROM_BROWSER:-}
       # Empty = auto-discover (ollama compose service, then host.docker.internal).
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      # Baked at build time; override only if needed. Repo for update checks:
+      - HORDE_GITHUB_REPO=${HORDE_GITHUB_REPO:-jm-connell/horde}
     volumes:
       # Media library on your ZFS dataset.
       - ${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}:/downloads
