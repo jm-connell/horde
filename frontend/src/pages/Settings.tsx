@@ -58,6 +58,15 @@ const PANEL_BTN =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50";
 const INPUT =
   "ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
+/** Short values: numbers, filters, times. */
+const INPUT_COMPACT =
+  "ui-panel w-28 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
+/** Shorter host / URL fields beside action buttons. */
+const INPUT_INLINE =
+  "ui-panel w-56 max-w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
+/** Narrower API key field. */
+const INPUT_KEY =
+  "ui-panel w-48 max-w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
 
 const CATALOG_INDEX_TIP =
   "When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube.";
@@ -2896,7 +2905,7 @@ export default function Settings() {
                           });
                         }
                       }}
-                      className={`${INPUT} !w-32`}
+                      className={INPUT_COMPACT}
                     />
                     <span className="text-xs text-gray-500">100–5000</span>
                   </div>
@@ -2940,7 +2949,7 @@ export default function Settings() {
                           });
                         }
                       }}
-                      className={`${INPUT} !w-32`}
+                      className={INPUT_COMPACT}
                     />
                   </div>
                 </div>
@@ -3091,7 +3100,7 @@ export default function Settings() {
                   max={365}
                   value={expiryInput}
                   onChange={(e) => setExpiryInput(e.target.value)}
-                  className="ui-panel w-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  className={INPUT_COMPACT}
                 />
                 <button
                   onClick={saveExpiry}
@@ -3495,173 +3504,27 @@ export default function Settings() {
                 </div>
                 <div
                   className={
-                    !!q && !match("ollama", "connection", "base url")
+                    !!q && !match("ollama", "connection", "base url", "test")
                       ? "hidden"
-                      : "flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"
+                      : "space-y-1.5"
                   }
                 >
-                  <span className="shrink-0 text-sm font-medium text-gray-200 sm:w-40">
+                  <span className="block text-sm font-medium text-gray-200">
                     Ollama connection
                   </span>
-                  <input
-                    value={aiDraft.base_url}
-                    onChange={(e) =>
-                      setAiDraft((d) => ({ ...d, base_url: e.target.value }))
-                    }
-                    onBlur={(e) =>
-                      saveAi({ base_url: e.target.value.trim() })
-                    }
-                    placeholder="http://ollama:11434 or http://192.168.x.x:11434"
-                    aria-label="Ollama base URL"
-                    className={`${INPUT} min-w-0 flex-1`}
-                  />
-                </div>
-                <p className="max-w-2xl text-xs text-gray-500">
-                  Point to your Ollama instance for embeddings and local LLM
-                  fallback. Leave the URL blank to attempt auto-discover (but don't count on it). AI processing is done on the Ollama machine, if separate from Horde host. Not required when OpenRouter Tasks is set to All (unless you override embeddings back to Ollama).
-                </p>
-                <div
-                  className={
-                    !!q && !match("workload", "light", "normal", "heavy", "gpu")
-                      ? "hidden"
-                      : "max-w-2xl space-y-2"
-                  }
-                >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex items-center gap-1.5 text-sm font-medium text-gray-200">
-                      Workload
-                      <HelpTip text={WORKLOAD_TIP} />
-                    </span>
-                    <div className="ui-panel flex rounded-lg border border-ink-700 bg-ink-900 p-0.5">
-                      {WORKLOAD_OPTIONS.map((opt) => {
-                        const locked =
-                          Boolean(aiStatus?.profile_locked) &&
-                          opt.value !== "light";
-                        const selected =
-                          aiDraft.workload_profile === opt.value;
-                        return (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            disabled={locked}
-                            onClick={() => void applyWorkload(opt.value)}
-                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                              selected
-                                ? "bg-accent/15 text-accent"
-                                : "text-gray-400 hover:text-gray-200"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {aiStatus?.recommended_profile && (
-                      <HelpTip
-                        text={
-                          aiStatus.gpu_name
-                            ? `Best starting workload for ${aiStatus.gpu_name}. Applies models and invent intensity that fit the Ollama GPU’s VRAM.`
-                            : "Best starting workload for the Ollama machine. Applies models and invent intensity that fit detected (or overridden) GPU VRAM."
-                        }
-                      >
-                      </HelpTip>
-                    )}
-                  </div>
-                  <div
-                    className={
-                      !!q && !match("vram", "gpu", "ollama")
-                        ? "hidden"
-                        : "flex max-w-md flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3"
-                    }
-                  >
-                    <span className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-gray-200 sm:w-40">
-                      Ollama VRAM (GB)
-                      <HelpTip text={VRAM_OVERRIDE_TIP} />
-                    </span>
                     <input
-                      type="number"
-                      min={0.5}
-                      max={256}
-                      step={0.5}
-                      inputMode="decimal"
-                      value={aiDraft.vram_gb ?? ""}
-                      onChange={(e) => {
-                        const raw = e.target.value.trim();
-                        setAiDraft((d) => ({
-                          ...d,
-                          vram_gb: raw === "" ? null : Number(raw),
-                        }));
-                      }}
-                      onBlur={(e) => {
-                        const raw = e.target.value.trim();
-                        if (raw === "") {
-                          void saveAi({ vram_gb: null });
-                          return;
-                        }
-                        const n = Number(raw);
-                        if (!Number.isFinite(n) || n <= 0) {
-                          setAiDraft((d) => ({
-                            ...d,
-                            vram_gb: appSettings?.ai.vram_gb ?? null,
-                          }));
-                          return;
-                        }
-                        void saveAi({ vram_gb: n });
-                      }}
-                      placeholder="Auto"
-                      aria-label="Ollama VRAM in GB"
-                      className={`${INPUT} min-w-0 flex-1`}
+                      value={aiDraft.base_url}
+                      onChange={(e) =>
+                        setAiDraft((d) => ({ ...d, base_url: e.target.value }))
+                      }
+                      onBlur={(e) =>
+                        saveAi({ base_url: e.target.value.trim() })
+                      }
+                      placeholder="http://192.168.x.x:11434"
+                      aria-label="Ollama base URL"
+                      className={INPUT_INLINE}
                     />
-                  </div>
-                  {reindexPrompt && (
-                    <div className="ui-panel rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
-                      <p>{reindexPrompt}</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className={PANEL_BTN}
-                          onClick={() => {
-                            setReindexPrompt(null);
-                            void runAiProcess("reindex_embeds");
-                          }}
-                        >
-                          Rebuild indexes
-                        </button>
-                        <button
-                          type="button"
-                          className={PANEL_BTN}
-                          onClick={() => setReindexPrompt(null)}
-                        >
-                          Not now
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {aiStatus?.profile_locked && aiStatus.lock_reason && (
-                    <p className="text-xs text-amber-400/90">
-                      {aiStatus.lock_reason}
-                    </p>
-                  )}
-                  {aiStatus?.workload_warning && (
-                    <p className="text-xs text-amber-400/90">
-                      {aiStatus.workload_warning}
-                    </p>
-                  )}
-                  {aiStatus?.gpu_source === "override" && (
-                    <p className="text-xs text-gray-500">
-                      Using your Ollama VRAM override for model sizing.
-                      Re-apply a workload after changing it.
-                    </p>
-                  )}
-                  {aiStatus && aiStatus.models_match_profile === false && (
-                    <p className="text-xs text-gray-500">
-                      Models customized in Advanced — re-apply a workload to
-                      reset them for the Ollama GPU.
-                    </p>
-                  )}
-                </div>
-                <div className="max-w-2xl space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       disabled={aiTesting}
@@ -3709,6 +3572,160 @@ export default function Settings() {
                       </span>
                     )}
                   </div>
+                </div>
+                <p className="max-w-2xl text-xs text-gray-500">
+                  Point to your Ollama instance for embeddings and local LLM
+                  fallback. Leave the URL blank to attempt auto-discover (but don't count on it). AI processing is done on the Ollama machine, if separate from Horde host. Not required when OpenRouter Tasks is set to All (unless you override embeddings back to Ollama).
+                </p>
+                <div
+                  className={
+                    !!q &&
+                    !match("workload", "light", "normal", "heavy", "gpu") &&
+                    !match("vram", "gpu", "ollama")
+                      ? "hidden"
+                      : "space-y-2"
+                  }
+                >
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                    <div
+                      className={
+                        !!q &&
+                        !match("workload", "light", "normal", "heavy", "gpu")
+                          ? "hidden"
+                          : "flex flex-wrap items-center gap-2"
+                      }
+                    >
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-gray-200">
+                        Workload
+                        <HelpTip text={WORKLOAD_TIP} />
+                      </span>
+                      <div className="ui-panel flex rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+                        {WORKLOAD_OPTIONS.map((opt) => {
+                          const locked =
+                            Boolean(aiStatus?.profile_locked) &&
+                            opt.value !== "light";
+                          const selected =
+                            aiDraft.workload_profile === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              disabled={locked}
+                              onClick={() => void applyWorkload(opt.value)}
+                              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                                selected
+                                  ? "bg-accent/15 text-accent"
+                                  : "text-gray-400 hover:text-gray-200"
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {aiStatus?.recommended_profile && (
+                        <HelpTip
+                          text={
+                            aiStatus.gpu_name
+                              ? `Best starting workload for ${aiStatus.gpu_name}. Applies models and invent intensity that fit the Ollama GPU’s VRAM.`
+                              : "Best starting workload for the Ollama machine. Applies models and invent intensity that fit detected (or overridden) GPU VRAM."
+                          }
+                        />
+                      )}
+                    </div>
+                    <div
+                      className={
+                        !!q && !match("vram", "gpu", "ollama")
+                          ? "hidden"
+                          : "flex flex-wrap items-center gap-2"
+                      }
+                    >
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-gray-200">
+                        Ollama VRAM (GB)
+                        <HelpTip text={VRAM_OVERRIDE_TIP} />
+                      </span>
+                      <input
+                        type="number"
+                        min={0.5}
+                        max={256}
+                        step={0.5}
+                        inputMode="decimal"
+                        value={aiDraft.vram_gb ?? ""}
+                        onChange={(e) => {
+                          const raw = e.target.value.trim();
+                          setAiDraft((d) => ({
+                            ...d,
+                            vram_gb: raw === "" ? null : Number(raw),
+                          }));
+                        }}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          if (raw === "") {
+                            void saveAi({ vram_gb: null });
+                            return;
+                          }
+                          const n = Number(raw);
+                          if (!Number.isFinite(n) || n <= 0) {
+                            setAiDraft((d) => ({
+                              ...d,
+                              vram_gb: appSettings?.ai.vram_gb ?? null,
+                            }));
+                            return;
+                          }
+                          void saveAi({ vram_gb: n });
+                        }}
+                        placeholder="Auto"
+                        aria-label="Ollama VRAM in GB"
+                        className={INPUT_COMPACT}
+                      />
+                    </div>
+                  </div>
+                  {reindexPrompt && (
+                    <div className="ui-panel rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+                      <p>{reindexPrompt}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className={PANEL_BTN}
+                          onClick={() => {
+                            setReindexPrompt(null);
+                            void runAiProcess("reindex_embeds");
+                          }}
+                        >
+                          Rebuild indexes
+                        </button>
+                        <button
+                          type="button"
+                          className={PANEL_BTN}
+                          onClick={() => setReindexPrompt(null)}
+                        >
+                          Not now
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {aiStatus?.profile_locked && aiStatus.lock_reason && (
+                    <p className="text-xs text-amber-400/90">
+                      {aiStatus.lock_reason}
+                    </p>
+                  )}
+                  {aiStatus?.workload_warning && (
+                    <p className="text-xs text-amber-400/90">
+                      {aiStatus.workload_warning}
+                    </p>
+                  )}
+                  {aiStatus?.gpu_source === "override" && (
+                    <p className="text-xs text-gray-500">
+                      Using your Ollama VRAM override for model sizing.
+                      Re-apply a workload after changing it.
+                    </p>
+                  )}
+                  {aiStatus && aiStatus.models_match_profile === false && (
+                    <p className="text-xs text-gray-500">
+                      Models customized in Advanced — re-apply a workload to
+                      reset them for the Ollama GPU.
+                    </p>
+                  )}
                 </div>
               </div>
             </Section>
@@ -3967,8 +3984,8 @@ export default function Settings() {
                   Disable OpenRouter to keep those tasks local for privacy.
                 </p>
                 <div className="space-y-4">
-                  <div className="flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                    <span className="shrink-0 text-sm font-medium text-gray-200 sm:w-40">
+                  <div className="space-y-1.5">
+                    <span className="block text-sm font-medium text-gray-200">
                       API key
                     </span>
                     <input
@@ -3989,7 +4006,7 @@ export default function Settings() {
                           : "sk-or-…"
                       }
                       aria-label="OpenRouter API key"
-                      className={`${INPUT} min-w-0 flex-1`}
+                      className={INPUT_KEY}
                     />
                   </div>
                   {aiDraft.openrouter_api_key_set && (
@@ -4061,7 +4078,7 @@ export default function Settings() {
                       </span>
                     )}
                   </div>
-                  <div className="max-w-2xl space-y-2">
+                  <div className="max-w-md space-y-2">
                     <span className="text-sm font-medium text-gray-200">
                       Model
                     </span>
@@ -4097,40 +4114,43 @@ export default function Settings() {
                       }
                       placeholder="Filter models…"
                       aria-label="Filter OpenRouter models"
-                      className={`${INPUT} max-w-md`}
+                      className={`${INPUT_COMPACT} !w-44 max-w-[14rem]`}
                     />
-                    <select
+                    <ThemedSelect
                       value={aiDraft.openrouter_model}
-                      onChange={(e) =>
-                        saveAi({ openrouter_model: e.target.value })
-                      }
                       aria-label="OpenRouter model"
-                      className={`${INPUT} max-w-2xl`}
-                    >
-                      {!openRouterModels.some(
-                        (m) => m.id === aiDraft.openrouter_model
-                      ) && (
-                        <option value={aiDraft.openrouter_model}>
-                          {aiDraft.openrouter_model}
-                        </option>
-                      )}
-                      {openRouterModels
-                        .filter((m) => {
-                          const fq = openRouterModelFilter.trim().toLowerCase();
+                      className="w-full max-w-md"
+                      buttonClassName="w-full"
+                      options={(() => {
+                        const fq = openRouterModelFilter.trim().toLowerCase();
+                        const filtered = openRouterModels.filter((m) => {
                           if (!fq) return true;
                           return (
                             m.id.toLowerCase().includes(fq) ||
                             m.name.toLowerCase().includes(fq)
                           );
-                        })
-                        .map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name && m.name !== m.id
+                        });
+                        const opts = filtered.map((m) => ({
+                          value: m.id,
+                          label:
+                            m.name && m.name !== m.id
                               ? `${m.name} (${m.id})`
-                              : m.id}
-                          </option>
-                        ))}
-                    </select>
+                              : m.id,
+                        }));
+                        if (
+                          !opts.some((o) => o.value === aiDraft.openrouter_model)
+                        ) {
+                          opts.unshift({
+                            value: aiDraft.openrouter_model,
+                            label: aiDraft.openrouter_model,
+                          });
+                        }
+                        return opts;
+                      })()}
+                      onChange={(value) =>
+                        void saveAi({ openrouter_model: value })
+                      }
+                    />
                     <p className="text-xs text-gray-500">
                       Recommendations are pinned above; pick any OpenRouter
                       model from the list. Default is Budget (
@@ -4138,14 +4158,44 @@ export default function Settings() {
                     </p>
                   </div>
                   {aiDraft.openrouter_scope === "all" && (
-                    <div className="max-w-2xl space-y-2">
+                    <div className="max-w-md space-y-2">
                       <span className="text-sm font-medium text-gray-200">
                         Embedding model
                       </span>
-                      <select
+                      <ThemedSelect
                         value={aiDraft.openrouter_embed_model}
-                        onChange={async (e) => {
-                          const next = e.target.value;
+                        aria-label="OpenRouter embedding model"
+                        className="w-full max-w-md"
+                        buttonClassName="w-full"
+                        options={(() => {
+                          const source = openRouterEmbedModels.length
+                            ? openRouterEmbedModels
+                            : [
+                                {
+                                  id: aiDraft.openrouter_embed_model,
+                                  name: aiDraft.openrouter_embed_model,
+                                },
+                              ];
+                          const opts = source.map((m) => ({
+                            value: m.id,
+                            label:
+                              m.name && m.name !== m.id
+                                ? `${m.name} (${m.id})`
+                                : m.id,
+                          }));
+                          if (
+                            !opts.some(
+                              (o) => o.value === aiDraft.openrouter_embed_model
+                            )
+                          ) {
+                            opts.unshift({
+                              value: aiDraft.openrouter_embed_model,
+                              label: aiDraft.openrouter_embed_model,
+                            });
+                          }
+                          return opts;
+                        })()}
+                        onChange={async (next) => {
                           const prev = aiDraft.openrouter_embed_model;
                           await saveAi({ openrouter_embed_model: next });
                           if (next !== prev) {
@@ -4154,27 +4204,7 @@ export default function Settings() {
                             );
                           }
                         }}
-                        aria-label="OpenRouter embedding model"
-                        className={`${INPUT} max-w-2xl`}
-                      >
-                        {!openRouterEmbedModels.some(
-                          (m) => m.id === aiDraft.openrouter_embed_model
-                        ) && (
-                          <option value={aiDraft.openrouter_embed_model}>
-                            {aiDraft.openrouter_embed_model}
-                          </option>
-                        )}
-                        {(openRouterEmbedModels.length
-                          ? openRouterEmbedModels
-                          : [{ id: aiDraft.openrouter_embed_model, name: aiDraft.openrouter_embed_model }]
-                        ).map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name && m.name !== m.id
-                              ? `${m.name} (${m.id})`
-                              : m.id}
-                          </option>
-                        ))}
-                      </select>
+                      />
                       <p className="text-xs text-gray-500">
                         Used for search indexes, related videos, and category
                         shelves when Tasks is All. Changing this requires a
@@ -4359,7 +4389,7 @@ export default function Settings() {
                   onChange={(value) =>
                     saveAi({ schedule: value as AiSchedule })
                   }
-                  className="w-full max-w-md"
+                  className="w-full max-w-sm"
                   buttonClassName="w-full"
                 />
                 <p className="text-xs text-gray-500">
@@ -4390,7 +4420,7 @@ export default function Settings() {
                           timer_hours: Number(e.target.value) || 6,
                         })
                       }
-                      className="ui-panel w-32 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                      className={INPUT_COMPACT}
                     />
                   </label>
                 )}
@@ -4413,7 +4443,7 @@ export default function Settings() {
                           schedule_time: e.target.value || "03:00",
                         })
                       }
-                      className="ui-panel rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                      className={INPUT_COMPACT}
                     />
                   </label>
                 )}
@@ -4567,7 +4597,7 @@ export default function Settings() {
                         const rounded = Math.round(clamped * 100) / 100;
                         void saveAi({ category_min_score: rounded });
                       }}
-                      className="ui-panel w-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                      className={INPUT_COMPACT}
                     />
                   }
                 />
@@ -4612,7 +4642,7 @@ export default function Settings() {
                             );
                             void saveAi({ tag_rescan_days: days });
                           }}
-                          className="ui-panel w-20 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                          className={INPUT_COMPACT}
                         />
                         <span className="text-xs text-gray-500">days</span>
                       </div>

@@ -523,20 +523,40 @@ export default function Watch() {
                       }
                     >
                       {showDescriptionPanel && (
-                        <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
-                          <div className="px-4 py-3">
+                        <div
+                          className={
+                            metaSideBySide
+                              ? descExpanded
+                                ? "ui-panel isolate flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
+                                : "ui-panel isolate flex h-full min-h-0 max-h-48 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
+                              : "ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
+                          }
+                        >
+                          <div
+                            className={
+                              metaSideBySide
+                                ? "flex min-h-0 flex-1 flex-col px-4 py-3"
+                                : "px-4 py-3"
+                            }
+                          >
                             {descriptionBody && (
                               <>
                                 <div
-                                  className={`overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                    descExpanded
-                                      ? "max-h-[80rem]"
-                                      : "max-h-[7.5rem]"
-                                  }`}
+                                  className={
+                                    metaSideBySide
+                                      ? descExpanded
+                                        ? "overflow-hidden"
+                                        : "horde-scrollbar min-h-0 flex-1 overflow-y-auto"
+                                      : `overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                          descExpanded
+                                            ? "max-h-[80rem]"
+                                            : "max-h-[7.5rem]"
+                                        }`
+                                  }
                                 >
                                   <p
                                     className={`text-sm text-gray-300 ${
-                                      descExpanded
+                                      descExpanded || metaSideBySide
                                         ? "whitespace-pre-wrap"
                                         : "line-clamp-5 whitespace-normal"
                                     }`}
@@ -546,7 +566,7 @@ export default function Watch() {
                                 </div>
                                 <button
                                   onClick={() => setDescExpanded((v) => !v)}
-                                  className="mt-2 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
+                                  className="mt-2 shrink-0 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
                                 >
                                   {descExpanded ? "Show less" : "Show more"}
                                 </button>
@@ -716,9 +736,17 @@ export default function Watch() {
                         <ChaptersList
                           chapters={chapters}
                           maxHeightClass={
-                            descExpanded ? "max-h-[28rem]" : "max-h-48"
+                            metaSideBySide
+                              ? descExpanded
+                                ? "max-h-[28rem] lg:max-h-none lg:h-full"
+                                : "max-h-48 lg:h-full"
+                              : descExpanded
+                                ? "max-h-[28rem]"
+                                : "max-h-48"
                           }
-                          className="h-full min-h-0"
+                          className={
+                            metaSideBySide ? "h-full min-h-0" : undefined
+                          }
                         />
                       )}
                     </div>
