@@ -50,6 +50,8 @@ export interface Video {
   ai_summary?: string | null;
   /** Length setting used when the summary was generated. */
   ai_summary_length?: "short" | "medium" | "long" | null;
+  /** OpenRouter cost for the last summary, when known. */
+  ai_summary_cost?: number | null;
 }
 
 export interface VideoUpdate {
@@ -240,6 +242,11 @@ export interface AiSettings {
   openrouter_api_key: string;
   openrouter_api_key_set: boolean;
   openrouter_model: string;
+  openrouter_scope: "specialized" | "all";
+  openrouter_embed_model: string;
+  ollama_prefer_embeddings: boolean;
+  /** When false, hide per-response cost chips in Watch (Settings totals still show). */
+  openrouter_show_costs: boolean;
   schedule: AiSchedule;
   timer_hours: number;
   schedule_time: string;
@@ -263,7 +270,17 @@ export interface VideoAiChatMessage {
   id: number | null;
   role: "user" | "assistant";
   content: string;
+  /** OpenRouter cost for this assistant turn, when known. */
+  cost?: number | null;
   created_at: string | null;
+}
+
+export interface OpenRouterCosts {
+  h24: number;
+  d7: number;
+  d30: number;
+  y1: number;
+  all: number;
 }
 
 export interface AppSettings {
@@ -310,7 +327,11 @@ export interface AiStatus {
   openrouter_reachable?: boolean;
   openrouter_model?: string;
   openrouter_api_key_set?: boolean;
+  openrouter_scope?: "specialized" | "all";
+  openrouter_embed_model?: string;
+  ollama_prefer_embeddings?: boolean;
   llm_backend?: string | null;
+  embed_backend?: string | null;
 }
 
 export interface RecommendationSection {
@@ -397,6 +418,7 @@ export interface HealthStats {
     configured?: boolean;
     api_key_set?: boolean;
     model?: string;
+    scope?: string;
     reachable?: boolean;
   } | null;
   disk: { total_bytes: number; used_bytes: number; free_bytes: number } | null;

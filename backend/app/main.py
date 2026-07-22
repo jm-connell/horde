@@ -188,6 +188,7 @@ def health():
             "configured": openrouter_configured(),
             "api_key_set": key_set,
             "model": str(ai.get("openrouter_model") or ""),
+            "scope": str(ai.get("openrouter_scope") or "specialized"),
             # Avoid remote ping on /health; presence of a key is enough here.
             "reachable": bool(or_enabled and resolve_openrouter_api_key()),
         }

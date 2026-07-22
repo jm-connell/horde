@@ -80,6 +80,7 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
     user_tags: list[str] = []
     ai_summary: Optional[str] = None
     ai_summary_length: Optional[str] = None
+    ai_summary_cost: Optional[float] = None
     if session is not None and video.id is not None:
         meta = session.get(VideoAiMeta, video.id)
         if meta is not None:
@@ -92,6 +93,9 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
             raw_len = getattr(meta, "summary_length", None)
             if raw_len and str(raw_len).strip().lower() in ("short", "medium", "long"):
                 ai_summary_length = str(raw_len).strip().lower()
+            raw_cost = getattr(meta, "summary_cost", None)
+            if isinstance(raw_cost, (int, float)):
+                ai_summary_cost = float(raw_cost)
     return VideoRead(
         id=video.id,
         title=video.title,
@@ -130,6 +134,7 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
         subtitles_pending=video.subtitles_pending,
         ai_summary=ai_summary,
         ai_summary_length=ai_summary_length,
+        ai_summary_cost=ai_summary_cost,
     )
 
 

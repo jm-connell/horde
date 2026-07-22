@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import type { VideoAiChatMessage } from "../types";
+import { formatUsdCost } from "../utils";
+import AiMarkdown from "./AiMarkdown";
 import TypingDots from "./TypingDots";
 
 interface Props {
@@ -10,6 +12,7 @@ interface Props {
   hasSubtitles: boolean;
   /** When false, the chat body is hidden (panel still mounts for history). */
   active: boolean;
+  showCosts?: boolean;
   showToast: (msg: string) => void;
 }
 
@@ -17,6 +20,7 @@ type DisplayMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  cost?: number | null;
 };
 
 function toDisplay(m: VideoAiChatMessage): DisplayMessage {
@@ -24,6 +28,7 @@ function toDisplay(m: VideoAiChatMessage): DisplayMessage {
     id: String(m.id ?? `${m.role}-${m.created_at ?? Math.random()}`),
     role: m.role,
     content: m.content,
+    cost: typeof m.cost === "number" ? m.cost : null,
   };
 }
 
@@ -32,6 +37,7 @@ export default function VideoAiChat({
   summary,
   hasSubtitles,
   active,
+  showCosts = false,
   showToast,
 }: Props) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
@@ -81,6 +87,21 @@ export default function VideoAiChat({
   const seedSummary = (summary || "").trim();
   const showSeed =
     !!seedSummary && messages.length === 0 && !loading && !sending;
+
+  const threadCost = useMemo(() => {
+    let sum = 0;
+    let saw = false;
+    for (const m of messages) {
+      if (m.role !== "assistant") continue;
+      if (typeof m.cost === "number" && m.cost >= 0) {
+        sum += m.cost;
+        saw = true;
+      }
+    }
+    return saw ? sum : null;
+  }, [messages]);
+  const threadCostLabel =
+    showCosts && threadCost != null ? formatUsdCost(threadCost) : "";
 
   async function send() {
     const text = draft.trim();
@@ -132,6 +153,12 @@ export default function VideoAiChat({
             typeof event.message === "object"
           ) {
             const msg = event.message as VideoAiChatMessage;
+            const cost =
+              typeof msg.cost === "number"
+                ? msg.cost
+                : typeof event.cost === "number"
+                  ? event.cost
+                  : null;
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === tempAsstId
@@ -139,6 +166,7 @@ export default function VideoAiChat({
                       id: String(msg.id ?? tempAsstId),
                       role: "assistant",
                       content: msg.content || m.content,
+                      cost,
                     }
                   : m
               )
@@ -201,6 +229,17 @@ export default function VideoAiChat({
 
   return (
     <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
+      {threadCostLabel && (
+        <div className="flex items-center justify-end border-b border-ink-800/80 px-3 py-1">
+          <span
+            className="text-[10px] tabular-nums text-gray-600"
+            title="Running OpenRouter cost for this chat"
+            aria-label={`Chat cost ${threadCostLabel}`}
+          >
+            {threadCostLabel}
+          </span>
+        </div>
+      )}
       <div
         ref={listRef}
         className="horde-scrollbar max-h-72 space-y-3 overflow-y-auto px-4 py-3"
@@ -216,7 +255,10 @@ export default function VideoAiChat({
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                 From summary
               </p>
-              <p className="whitespace-pre-wrap">{seedSummary}</p>
+              <AiMarkdown
+                text={seedSummary}
+                className="space-y-2 text-sm text-gray-400"
+              />
             </div>
           </div>
         )}
@@ -234,6 +276,13 @@ export default function VideoAiChat({
         {messages.map((m) => {
           const waiting =
             sending && m.role === "assistant" && !m.content.trim();
+          const costLabel =
+            showCosts &&
+            m.role === "assistant" &&
+            typeof m.cost === "number" &&
+            m.cost >= 0
+              ? formatUsdCost(m.cost)
+              : "";
           return (
             <div
               key={m.id}
@@ -245,16 +294,34 @@ export default function VideoAiChat({
                 className={
                   m.role === "user"
                     ? "w-fit max-w-[70%] rounded-lg bg-accent/10 px-3 py-2 text-sm text-gray-200"
-                    : "w-fit max-w-[90%] rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
+                    : "relative w-fit max-w-[90%] rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
                 }
               >
-                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                  {m.role === "user" ? "You" : "Video"}
-                </p>
+                <div className="mb-0.5 flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                    {m.role === "user" ? "You" : "Video"}
+                  </p>
+                  {costLabel && (
+                    <span
+                      className="text-[10px] tabular-nums text-gray-600"
+                      title="OpenRouter cost for this reply"
+                      aria-label={`Reply cost ${costLabel}`}
+                    >
+                      {costLabel}
+                    </span>
+                  )}
+                </div>
                 {waiting ? (
                   <TypingDots label="Video is typing" className="py-1" />
                 ) : (
-                  <p className="whitespace-pre-wrap">{m.content}</p>
+                  <AiMarkdown
+                    text={m.content}
+                    className={
+                      m.role === "user"
+                        ? "space-y-2 text-sm text-gray-200"
+                        : "space-y-2 text-sm text-gray-300"
+                    }
+                  />
                 )}
               </div>
             </div>

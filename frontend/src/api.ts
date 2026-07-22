@@ -11,6 +11,7 @@ import type {
   DownloadPreview,
   DownloadQueueStatus,
   DuplicateGroup,
+  OpenRouterCosts,
   Playlist,
   PlaylistDetail,
   PlaylistPreviewData,
@@ -362,8 +363,13 @@ export const api = {
   getOpenRouterModels(): Promise<{
     presets: { id: string; label: string; model: string }[];
     models: { id: string; name: string }[];
+    embedding_models?: { id: string; name: string }[];
   }> {
     return request("/api/ai/openrouter/models");
+  },
+
+  getOpenRouterCosts(): Promise<OpenRouterCosts> {
+    return request<OpenRouterCosts>("/api/ai/openrouter/costs");
   },
 
   applyAiWorkload(profile?: "light" | "normal" | "heavy"): Promise<{

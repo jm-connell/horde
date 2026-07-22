@@ -14,7 +14,12 @@ from ...database import engine
 from ...models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, utcnow
 from .. import app_settings
 from . import embeddings, tasks
-from .provider import get_embed_provider, get_llm_provider, openrouter_configured
+from .provider import (
+    get_embed_provider,
+    get_llm_provider,
+    openrouter_configured,
+    openrouter_owns_embeddings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +97,7 @@ def enqueue_for_video(
     if schedule != "on_download" and not force:
         return
     # Still enqueue when providers are temporarily down; the worker retries later.
-    if ollama_on:
+    if ollama_on or openrouter_owns_embeddings():
         enqueue_job(AiJobKind.embed_video, video_id, force=force)
     if include_tags and ai.get("enrich_tags", True) and (ollama_on or or_on):
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)

@@ -149,11 +149,18 @@ for embeddings (`nomic-embed-text`) and a small chat model (`llama3.2:3b`) used
 for tags, browse categories, and duplicate confirmation. Without Ollama, the
 app works as before (keyword search and heuristic related videos).
 
-**Optional OpenRouter:** under Settings → AI you can enable
-[OpenRouter](https://openrouter.ai) for summaries, chat, tag enrichment,
-and duplicate confirmation — useful when you have no GPU. Embeddings, hybrid
-search, related videos, and category invent still need Ollama. Set
-`OPENROUTER_API_KEY` in `.env` or paste a key in Settings; both stay optional.
+**Optional OpenRouter:** under Settings → AI → OpenRouter you can enable
+[OpenRouter](https://openrouter.ai) without a GPU.
+
+- **Specialized** (default) — summaries, Watch chat, tag enrichment, and
+  duplicate confirmation. Embeddings still use Ollama when available.
+- **All** — those plus embeddings, hybrid search, related videos, and category
+  invent via a cheap cloud embed model. Rebuild search indexes after switching
+  to All or changing the embed model. On the Local AI tab you can override to
+  keep embeddings on Ollama while LLM tasks stay on OpenRouter.
+
+Set `OPENROUTER_API_KEY` in `.env` or paste a key in Settings; both stay optional.
+Caption text used for indexing leaves your machine when OpenRouter All is on.
 
 **Same host (compose sidecar):**
 

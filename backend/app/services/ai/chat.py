@@ -55,6 +55,7 @@ def list_messages(session: Session, video_id: int) -> list[dict[str, Any]]:
             "id": r.id,
             "role": r.role,
             "content": r.content,
+            "cost": r.cost if r.role == "assistant" else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in rows
@@ -214,6 +215,8 @@ def stream_chat(
             num_predict=_NUM_PREDICT,
             timeout=_CHAT_TIMEOUT,
             temperature=0.4,
+            usage_kind="chat",
+            video_id=video_id,
         ):
             if not delta:
                 continue
@@ -235,10 +238,17 @@ def stream_chat(
         )
         return
 
+    turn_cost = getattr(provider, "last_cost", None)
+    if not isinstance(turn_cost, (int, float)):
+        turn_cost = None
+    else:
+        turn_cost = float(turn_cost)
+
     assistant_row = VideoAiChatMessage(
         video_id=video_id,
         role="assistant",
         content=reply,
+        cost=turn_cost,
         created_at=utcnow(),
     )
     session.add(assistant_row)
@@ -256,6 +266,7 @@ def stream_chat(
                 "id": assistant_row.id,
                 "role": "assistant",
                 "content": assistant_row.content,
+                "cost": assistant_row.cost,
                 "created_at": (
                     assistant_row.created_at.isoformat()
                     if assistant_row.created_at
@@ -263,6 +274,7 @@ def stream_chat(
                 ),
             },
             "model": chat_model,
+            "cost": assistant_row.cost,
         }
     )
 

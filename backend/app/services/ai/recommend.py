@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 from ...models import AiCategory, Video
 from .. import app_settings, library
 from . import embeddings
-from .provider import get_provider
+from .provider import get_embed_provider
 
 # Stronger threshold so category shelves don't pad with unrelated videos.
 CATEGORY_MIN_SCORE = 0.55
@@ -172,7 +172,7 @@ def _ranked_for_you_ids(session: Session, *, pool: int = 2000) -> list[int]:
 def homepage_recommendations_page(
     session: Session, *, limit: int = 24, offset: int = 0
 ) -> ForYouPage:
-    if get_provider() is None:
+    if get_embed_provider() is None:
         return ForYouPage([], False)
     ranked_ids = _ranked_for_you_ids(session, pool=max(2000, offset + limit + 100))
     slice_ids = ranked_ids[offset : offset + limit + 1]

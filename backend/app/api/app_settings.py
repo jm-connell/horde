@@ -24,6 +24,10 @@ class AiSettingsRead(BaseModel):
     openrouter_api_key: str = ""
     openrouter_api_key_set: bool = False
     openrouter_model: str = "google/gemini-2.5-flash-lite"
+    openrouter_scope: Literal["specialized", "all"] = "specialized"
+    openrouter_embed_model: str = "openai/text-embedding-3-small"
+    ollama_prefer_embeddings: bool = False
+    openrouter_show_costs: bool = True
     schedule: Literal["on_download", "on_request", "timer", "set_time"] = "on_download"
     timer_hours: float = 6
     schedule_time: str = "03:00"
@@ -50,6 +54,10 @@ class AiSettingsUpdate(BaseModel):
     openrouter_enabled: Optional[bool] = None
     openrouter_api_key: Optional[str] = None
     openrouter_model: Optional[str] = None
+    openrouter_scope: Optional[Literal["specialized", "all"]] = None
+    openrouter_embed_model: Optional[str] = None
+    ollama_prefer_embeddings: Optional[bool] = None
+    openrouter_show_costs: Optional[bool] = None
     schedule: Optional[Literal["on_download", "on_request", "timer", "set_time"]] = None
     timer_hours: Optional[float] = Field(default=None, ge=0.25, le=168)
     schedule_time: Optional[str] = None
@@ -119,6 +127,20 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     filtered["openrouter_model"] = normalize_openrouter_model(
         filtered.get("openrouter_model")
     )
+    filtered["openrouter_scope"] = app_settings.normalize_openrouter_scope(
+        filtered.get("openrouter_scope")
+    )
+    filtered["openrouter_embed_model"] = (
+        app_settings.normalize_openrouter_embed_model(
+            filtered.get("openrouter_embed_model")
+        )
+    )
+    filtered["ollama_prefer_embeddings"] = bool(
+        filtered.get("ollama_prefer_embeddings")
+    )
+    filtered["openrouter_show_costs"] = bool(
+        filtered.get("openrouter_show_costs", True)
+    )
     return AiSettingsRead(**filtered)
 
 
@@ -178,6 +200,18 @@ def update_settings(payload: AppSettingsUpdate):
             ai_updates["openrouter_model"] = normalize_openrouter_model(
                 ai_updates["openrouter_model"]
             )
+        if "openrouter_scope" in ai_updates:
+            ai_updates["openrouter_scope"] = (
+                app_settings.normalize_openrouter_scope(
+                    ai_updates["openrouter_scope"]
+                )
+            )
+        if "openrouter_embed_model" in ai_updates:
+            ai_updates["openrouter_embed_model"] = (
+                app_settings.normalize_openrouter_embed_model(
+                    ai_updates["openrouter_embed_model"]
+                )
+            )
         if "openrouter_api_key" in ai_updates:
             key = ai_updates["openrouter_api_key"]
             if key is None:
@@ -204,6 +238,9 @@ def update_settings(payload: AppSettingsUpdate):
                 "openrouter_enabled",
                 "openrouter_api_key",
                 "openrouter_model",
+                "openrouter_scope",
+                "openrouter_embed_model",
+                "ollama_prefer_embeddings",
             )
         ):
             from ..services.ai import worker as ai_worker

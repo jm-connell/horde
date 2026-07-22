@@ -15,6 +15,13 @@ AI_DEFAULTS: dict[str, Any] = {
     "openrouter_enabled": False,
     "openrouter_api_key": "",
     "openrouter_model": "google/gemini-2.5-flash-lite",
+    # specialized = LLM tasks only; all = also embeddings / invent vectors.
+    "openrouter_scope": "specialized",
+    "openrouter_embed_model": "openai/text-embedding-3-small",
+    # When OpenRouter scope is all, prefer Ollama for embeddings if available.
+    "ollama_prefer_embeddings": False,
+    # Show per-response cost chips in Watch UI (Settings totals always show).
+    "openrouter_show_costs": True,
     # on_download | on_request | timer | set_time
     "schedule": "on_download",
     "timer_hours": 6,
@@ -46,6 +53,19 @@ _TAG_RESCAN_DAYS_HI = 365
 TAG_RESCAN_DAYS_MIN = _TAG_RESCAN_DAYS_LO
 TAG_RESCAN_DAYS_MAX = _TAG_RESCAN_DAYS_HI
 _SUMMARY_LENGTHS = frozenset({"short", "medium", "long"})
+_OPENROUTER_SCOPES = frozenset({"specialized", "all"})
+
+
+def normalize_openrouter_scope(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in _OPENROUTER_SCOPES:
+        return raw
+    return "specialized"
+
+
+def normalize_openrouter_embed_model(value: Any) -> str:
+    raw = str(value or "").strip()
+    return raw or str(AI_DEFAULTS["openrouter_embed_model"])
 
 
 def clamp_category_min_score(value: Any) -> float:
@@ -121,6 +141,15 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     merged["summary_length"] = normalize_summary_length(merged.get("summary_length"))
     merged["tag_rescan_days"] = clamp_tag_rescan_days(merged.get("tag_rescan_days"))
     merged["vram_gb"] = clamp_vram_gb(merged.get("vram_gb"))
+    merged["openrouter_scope"] = normalize_openrouter_scope(
+        merged.get("openrouter_scope")
+    )
+    merged["openrouter_embed_model"] = normalize_openrouter_embed_model(
+        merged.get("openrouter_embed_model")
+    )
+    merged["ollama_prefer_embeddings"] = bool(
+        merged.get("ollama_prefer_embeddings")
+    )
     return merged
 
 

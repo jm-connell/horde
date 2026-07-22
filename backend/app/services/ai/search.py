@@ -9,7 +9,7 @@ from sqlmodel import Session
 from ...models import Video
 from .. import library
 from . import embeddings
-from .provider import get_provider
+from .provider import get_embed_provider
 
 
 def hybrid_search(
@@ -38,7 +38,7 @@ def hybrid_search(
         seed=seed,
     )
 
-    if get_provider() is None or not q.strip():
+    if get_embed_provider() is None or not q.strip():
         return keyword
 
     query_vec = embeddings.embed_query(q)

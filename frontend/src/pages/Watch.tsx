@@ -64,6 +64,7 @@ export default function Watch() {
   const [settings, updateSettings] = useSettings();
   const [aiSummariesEnabled, setAiSummariesEnabled] = useState(false);
   const [aiChatEnabled, setAiChatEnabled] = useState(false);
+  const [showAiCosts, setShowAiCosts] = useState(false);
   const { showToast } = useToast();
   const { onJobCompleted, refreshJobs } = useDownloads();
   const redownloadPending = useRef(false);
@@ -111,10 +112,16 @@ export default function Watch() {
           (!!s.ai.openrouter_enabled && !!s.ai.openrouter_api_key_set);
         setAiSummariesEnabled(llmOn && !!s.ai.ai_summaries);
         setAiChatEnabled(llmOn && !!s.ai.ai_chat);
+        setShowAiCosts(
+          !!s.ai.openrouter_enabled &&
+            !!s.ai.openrouter_api_key_set &&
+            s.ai.openrouter_show_costs !== false
+        );
       })
       .catch(() => {
         setAiSummariesEnabled(false);
         setAiChatEnabled(false);
+        setShowAiCosts(false);
       });
   }, []);
 
@@ -483,6 +490,7 @@ export default function Watch() {
                   video={video}
                   canSummarize={canAiSummarize}
                   canChat={canAiChat}
+                  showCosts={showAiCosts}
                   onVideoUpdate={setVideo}
                   showToast={showToast}
                 />

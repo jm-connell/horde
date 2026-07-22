@@ -224,6 +224,8 @@ class VideoAiMeta(SQLModel, table=True):
     summary: Optional[str] = None
     # short | medium | long — length setting used when summary was generated.
     summary_length: Optional[str] = None
+    # OpenRouter cost for the last generated summary (USD/credits), when known.
+    summary_cost: Optional[float] = None
     # JSON list of tags added by AI (subset of Video.tags).
     ai_tags: str = Field(default="[]")
     # JSON list of tags added manually by the user.
@@ -249,7 +251,24 @@ class VideoAiChatMessage(SQLModel, table=True):
     video_id: int = Field(foreign_key="videos.id", index=True)
     role: str = Field(default="user", index=True)  # user | assistant
     content: str = Field(default="")
+    # OpenRouter usage.cost for this assistant turn (USD/credits), when known.
+    cost: Optional[float] = None
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class OpenRouterUsage(SQLModel, table=True):
+    """Append-only ledger of OpenRouter charges attributed to Horde."""
+
+    __tablename__ = "openrouter_usage"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    kind: str = Field(default="other", index=True)
+    cost: float = Field(default=0.0)
+    model: Optional[str] = None
+    video_id: Optional[int] = Field(default=None, index=True)
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    created_at: datetime = Field(default_factory=utcnow, index=True)
 
 
 class AiCategory(SQLModel, table=True):

@@ -88,6 +88,16 @@ export function formatSize(bytes: number | null): string {
   return `${value.toFixed(value >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+/** Format OpenRouter usage cost in USD (credits ≈ dollars). */
+export function formatUsdCost(cost: number | null | undefined): string {
+  if (cost == null || Number.isNaN(cost) || cost < 0) return "";
+  if (cost === 0) return "$0";
+  if (cost < 0.0001) return "<$0.0001";
+  if (cost < 0.01) return `$${cost.toFixed(4)}`;
+  if (cost < 1) return `$${cost.toFixed(3)}`;
+  return `$${cost.toFixed(2)}`;
+}
+
 interface LangTrack {
   lang: string;
 }

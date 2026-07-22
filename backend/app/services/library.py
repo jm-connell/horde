@@ -350,9 +350,9 @@ def related_videos(
         # 1) Embedding nearest neighbors (soft-boost same channel / tag overlap).
         try:
             from .ai import embeddings as ai_embeddings
-            from .ai.provider import get_provider
+            from .ai.provider import get_embed_provider
 
-            if get_provider() is not None:
+            if get_embed_provider() is not None:
                 centroid = ai_embeddings.video_centroid(session, video_id)
                 if centroid is not None:
                     source_tags = {t.lower() for t in parse_tags(source.tags)}

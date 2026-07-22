@@ -46,6 +46,7 @@ class VideoRead(BaseModel):
     subtitles_pending: bool = False
     ai_summary: Optional[str] = None
     ai_summary_length: Optional[str] = None
+    ai_summary_cost: Optional[float] = None
 
 
 class VideoUpdate(BaseModel):

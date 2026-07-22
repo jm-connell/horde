@@ -315,15 +315,44 @@ def format_summary_paragraphs(
     if not parts:
         parts = [raw]
 
-    # Single newlines inside a "paragraph" → spaces (models often soft-wrap).
-    parts = [re.sub(r"\n+", " ", p).strip() for p in parts]
+    # Single newlines inside a "paragraph" → spaces (models often soft-wrap),
+    # but keep list structure so bullet/numbered lines stay on separate lines.
+    def _normalize_part(p: str) -> str:
+        lines = [ln.rstrip() for ln in p.split("\n")]
+        list_lines = sum(
+            1
+            for ln in lines
+            if re.match(r"^\s*(?:[-*+]|\d+[.)])\s+\S", ln)
+        )
+        if list_lines >= 1 and list_lines >= max(1, len([ln for ln in lines if ln.strip()]) - 1):
+            # Preserve newlines for list-heavy blocks; drop empties inside.
+            kept = [ln.strip() for ln in lines if ln.strip()]
+            return "\n".join(kept)
+        return re.sub(r"\n+", " ", p).strip()
+
+    parts = [_normalize_part(p) for p in parts]
 
     length_key = normalize_summary_length(length)
     # Cap at 2–3 paragraphs for readable blurbs (short stays 1–2).
     target_paras = {"short": 2, "medium": 2, "long": 3}[length_key]
     max_paras = {"short": 2, "medium": 3, "long": 3}[length_key]
 
-    if len(parts) == 1 and length_key != "short":
+    def _is_list_part(p: str) -> bool:
+        lines = [ln for ln in p.split("\n") if ln.strip()]
+        if not lines:
+            return False
+        hits = sum(
+            1
+            for ln in lines
+            if re.match(r"^\s*(?:[-*+]|\d+[.)])\s+\S", ln)
+        )
+        return hits >= 1 and hits >= len(lines) - 1
+
+    if (
+        len(parts) == 1
+        and length_key != "short"
+        and not _is_list_part(parts[0])
+    ):
         sentences = [
             s.strip()
             for s in _SENTENCE_SPLIT.split(parts[0])
@@ -344,7 +373,10 @@ def format_summary_paragraphs(
                 parts.pop()
 
     # Models often emit one sentence per paragraph — fold extras into the last.
+    # Keep list blocks intact (don't merge them into neighboring prose).
     while len(parts) > max_paras:
+        if _is_list_part(parts[-1]) or _is_list_part(parts[-2]):
+            break
         parts[-2] = f"{parts[-2]} {parts[-1]}".strip()
         parts.pop()
 

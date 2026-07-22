@@ -13,6 +13,7 @@ from ..services.ai import embeddings, recommend, worker
 from ..services.ai.provider import (
     build_status,
     invalidate_resolved_url,
+    list_openrouter_embedding_models,
     list_openrouter_models,
     openrouter_preset_list,
     test_connection,
@@ -67,7 +68,11 @@ class AiStatusRead(BaseModel):
     openrouter_reachable: bool = False
     openrouter_model: str = "google/gemini-2.5-flash-lite"
     openrouter_api_key_set: bool = False
+    openrouter_scope: str = "specialized"
+    openrouter_embed_model: str = "openai/text-embedding-3-small"
+    ollama_prefer_embeddings: bool = False
     llm_backend: Optional[str] = None
+    embed_backend: Optional[str] = None
 
 
 class AiTestRequest(BaseModel):
@@ -86,6 +91,7 @@ class OpenRouterModelRow(BaseModel):
 class OpenRouterModelsResponse(BaseModel):
     presets: list[dict[str, str]] = Field(default_factory=list)
     models: list[OpenRouterModelRow] = Field(default_factory=list)
+    embedding_models: list[OpenRouterModelRow] = Field(default_factory=list)
 
 
 class AiApplyWorkloadRequest(BaseModel):
@@ -203,9 +209,40 @@ def ai_openrouter_models():
         models = list_openrouter_models()
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc) or "Could not list models") from exc
+    embed_models: list[dict[str, Any]] = []
+    try:
+        embed_models = list_openrouter_embedding_models()
+    except Exception:  # noqa: BLE001
+        embed_models = []
     return OpenRouterModelsResponse(
         presets=openrouter_preset_list(),
         models=[OpenRouterModelRow(id=m["id"], name=m.get("name") or m["id"]) for m in models],
+        embedding_models=[
+            OpenRouterModelRow(id=m["id"], name=m.get("name") or m["id"])
+            for m in embed_models
+        ],
+    )
+
+
+class OpenRouterCostsRead(BaseModel):
+    h24: float = 0.0
+    d7: float = 0.0
+    d30: float = 0.0
+    y1: float = 0.0
+    all: float = 0.0
+
+
+@router.get("/openrouter/costs", response_model=OpenRouterCostsRead)
+def ai_openrouter_costs():
+    from ..services.ai.cost_ledger import totals
+
+    data = totals()
+    return OpenRouterCostsRead(
+        h24=float(data.get("h24") or 0.0),
+        d7=float(data.get("d7") or 0.0),
+        d30=float(data.get("d30") or 0.0),
+        y1=float(data.get("y1") or 0.0),
+        all=float(data.get("all") or 0.0),
     )
 
 

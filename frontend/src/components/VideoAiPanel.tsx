@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
+import { formatUsdCost } from "../utils";
+import AiMarkdown from "./AiMarkdown";
 import Collapse from "./Collapse";
 import TypingDots from "./TypingDots";
 import VideoAiChat from "./VideoAiChat";
@@ -12,6 +14,7 @@ interface Props {
   video: Video;
   canSummarize: boolean;
   canChat: boolean;
+  showCosts?: boolean;
   onVideoUpdate: (video: Video) => void;
   showToast: (msg: string) => void;
 }
@@ -20,6 +23,7 @@ export default function VideoAiPanel({
   video,
   canSummarize,
   canChat,
+  showCosts = false,
   onVideoUpdate,
   showToast,
 }: Props) {
@@ -56,6 +60,12 @@ export default function VideoAiPanel({
   }, []);
 
   const hasAiSummary = !!(video.ai_summary && video.ai_summary.trim());
+  const summaryCostLabel =
+    showCosts &&
+    typeof video.ai_summary_cost === "number" &&
+    video.ai_summary_cost >= 0
+      ? formatUsdCost(video.ai_summary_cost)
+      : "";
 
   function setTab(next: AiTab) {
     if (next === settings.aiTab) return;
@@ -190,37 +200,42 @@ export default function VideoAiPanel({
                   <p className="mb-2 text-xs text-amber-400/90">{summaryError}</p>
                 )}
                 {hasAiSummary ? (
-                  <div className="space-y-3 text-sm text-gray-300">
-                    {(video.ai_summary || "")
-                      .trim()
-                      .split(/\n\s*\n+/)
-                      .map((p) => p.replace(/\n+/g, " ").trim())
-                      .filter(Boolean)
-                      .map((para, i, paras) => {
-                        const isLast = i === paras.length - 1;
-                        const showLen =
-                          isLast &&
-                          !!video.ai_summary_length &&
+                  <div
+                    className={
+                      summaryCostLabel || video.ai_summary_length
+                        ? "relative pr-24"
+                        : undefined
+                    }
+                  >
+                    <AiMarkdown text={video.ai_summary || ""} />
+                    {(summaryCostLabel ||
+                      (video.ai_summary_length &&
+                        ["short", "medium", "long"].includes(
+                          video.ai_summary_length
+                        ))) && (
+                      <span className="absolute bottom-0 right-0 inline-flex items-center gap-1.5 text-[10px] tracking-wider text-gray-500/70">
+                        {summaryCostLabel && (
+                          <span
+                            className="font-normal normal-case tabular-nums"
+                            title="OpenRouter cost for this summary"
+                            aria-label={`Summary cost ${summaryCostLabel}`}
+                          >
+                            {summaryCostLabel}
+                          </span>
+                        )}
+                        {video.ai_summary_length &&
                           ["short", "medium", "long"].includes(
                             video.ai_summary_length
-                          );
-                        return (
-                          <p
-                            key={i}
-                            className={showLen ? "relative pr-12" : undefined}
-                          >
-                            {para}
-                            {showLen && (
-                              <span
-                                className="absolute bottom-0 right-0 text-[10px] font-medium uppercase tracking-wider text-gray-500/70"
-                                aria-label={`Summary length: ${video.ai_summary_length}`}
-                              >
-                                {video.ai_summary_length}
-                              </span>
-                            )}
-                          </p>
-                        );
-                      })}
+                          ) && (
+                            <span
+                              className="font-medium uppercase"
+                              aria-label={`Summary length: ${video.ai_summary_length}`}
+                            >
+                              {video.ai_summary_length}
+                            </span>
+                          )}
+                      </span>
+                    )}
                   </div>
                 ) : summarizing ? (
                   <div className="flex justify-center py-8">
@@ -251,6 +266,7 @@ export default function VideoAiPanel({
               summary={video.ai_summary}
               hasSubtitles={(video.subtitles?.length ?? 0) > 0}
               active={activeTab === "chat"}
+              showCosts={showCosts}
               showToast={showToast}
             />
           )}

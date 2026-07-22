@@ -856,12 +856,11 @@ def search_catalog(
     semantic_extra: list[ChannelCatalogVideo] = []
     try:
         from .ai import embeddings as emb_mod
-        from .ai.provider import get_provider
+        from .ai.provider import get_embed_provider, resolve_embed_model
 
-        provider = get_provider()
-        ai = app_settings.ai_settings()
-        if provider is not None and ai.get("enabled", True):
-            model = str(ai.get("embed_model") or "nomic-embed-text")
+        provider = get_embed_provider()
+        if provider is not None:
+            model = resolve_embed_model(provider)
             query_vec = provider.embed(q, model)
             emb_rows = session.exec(select(ChannelCatalogEmbedding)).all()
             scored: list[tuple[float, ChannelCatalogVideo]] = []

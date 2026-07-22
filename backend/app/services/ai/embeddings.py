@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 from ...models import Video, VideoAiMeta, VideoEmbedding, utcnow
 from .. import app_settings
 from . import text as ai_text
-from .provider import get_provider
+from .provider import get_embed_provider, resolve_embed_model
 
 
 def pack_vector(vec: list[float]) -> bytes:
@@ -117,12 +117,12 @@ def embed_video(session: Session, video_id: int) -> bool:
     if video is None or video.needs_review:
         return False
 
-    provider = get_provider()
+    provider = get_embed_provider()
     if provider is None:
         return False
 
     ai = app_settings.ai_settings()
-    model = str(ai.get("embed_model") or "nomic-embed-text")
+    model = resolve_embed_model(provider)
     use_subs = bool(ai.get("use_subtitles", True))
     digest = ai_text.content_hash(video, use_subtitles=use_subs)
     meta = _get_or_create_meta(session, video_id)
@@ -143,10 +143,28 @@ def embed_video(session: Session, video_id: int) -> bool:
     session.flush()
 
     try:
-        for chunk_index, doc in docs:
-            if not doc.strip():
-                continue
-            vec = provider.embed(doc, model)
+        usable = [(idx, doc) for idx, doc in docs if doc.strip()]
+        if not usable:
+            meta.embed_status = "ready"
+            meta.content_hash = digest
+            meta.updated_at = utcnow()
+            session.add(meta)
+            session.commit()
+            return True
+        texts = [doc for _, doc in usable]
+        embed_many = getattr(provider, "embed_many", None)
+        if callable(embed_many):
+            vectors = embed_many(
+                texts, model, usage_kind="embed", video_id=video_id
+            )
+        else:
+            vectors = [
+                provider.embed(
+                    doc, model, usage_kind="embed", video_id=video_id
+                )
+                for doc in texts
+            ]
+        for (chunk_index, _doc), vec in zip(usable, vectors):
             row = VideoEmbedding(
                 video_id=video_id,
                 chunk_index=chunk_index,
@@ -174,13 +192,12 @@ def embed_video(session: Session, video_id: int) -> bool:
 
 
 def embed_query(query: str) -> Optional[list[float]]:
-    provider = get_provider()
+    provider = get_embed_provider()
     if provider is None or not query.strip():
         return None
-    ai = app_settings.ai_settings()
-    model = str(ai.get("embed_model") or "nomic-embed-text")
+    model = resolve_embed_model(provider)
     try:
-        return provider.embed(query.strip(), model)
+        return provider.embed(query.strip(), model, usage_kind="embed")
     except Exception:  # noqa: BLE001
         return None
 
@@ -326,7 +343,7 @@ def indexed_count(session: Session) -> tuple[int, int]:
     Ready means embed_status is ready and stored vectors use the current embed model.
     """
     ai = app_settings.ai_settings()
-    model = str(ai.get("embed_model") or "nomic-embed-text")
+    model = resolve_embed_model()
     videos = session.exec(
         select(Video).where(Video.needs_review == False)  # noqa: E712
     ).all()
@@ -346,7 +363,7 @@ def indexed_count(session: Session) -> tuple[int, int]:
 def videos_needing_embed(session: Session, *, limit: int = 500) -> list[int]:
     ai = app_settings.ai_settings()
     use_subs = bool(ai.get("use_subtitles", True))
-    model = str(ai.get("embed_model") or "nomic-embed-text")
+    model = resolve_embed_model()
     videos = session.exec(
         select(Video).where(Video.needs_review == False)  # noqa: E712
     ).all()

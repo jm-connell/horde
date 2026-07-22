@@ -77,6 +77,8 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
             ai_text.duplicate_prompt(a, b),
             chat_model,
             system="You compare archived videos for duplicates. Reply with JSON only.",
+            usage_kind="duplicates",
+            video_id=getattr(a, "id", None),
         )
         data = _parse_json_object(raw)
         verdict = str(data.get("verdict") or "").lower().strip()

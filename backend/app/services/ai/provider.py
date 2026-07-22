@@ -71,7 +71,11 @@ class ProviderStatus:
     openrouter_reachable: bool = False
     openrouter_model: str = OPENROUTER_DEFAULT_MODEL
     openrouter_api_key_set: bool = False
+    openrouter_scope: str = "specialized"
+    openrouter_embed_model: str = "openai/text-embedding-3-small"
+    ollama_prefer_embeddings: bool = False
     llm_backend: Optional[str] = None
+    embed_backend: Optional[str] = None
 
 
 class EmbedProvider(Protocol):
@@ -185,7 +189,7 @@ class OllamaProvider:
             # Presence cache may still say "missing" until refresh.
             _model_cache.clear()
 
-    def embed(self, text: str, model: str) -> list[float]:
+    def embed(self, text: str, model: str, **_kwargs: Any) -> list[float]:
         global _last_error
         payload = {"model": model, "prompt": text}
         try:
@@ -213,6 +217,7 @@ class OllamaProvider:
         timeout: Optional[float] = None,
         format: Optional[str] = "json",
         temperature: float = 0.2,
+        **_kwargs: Any,
     ) -> str:
         global _last_error
         payload_messages = self._build_messages(
@@ -252,6 +257,7 @@ class OllamaProvider:
         num_predict: Optional[int] = None,
         timeout: Optional[float] = None,
         temperature: float = 0.4,
+        **_kwargs: Any,
     ) -> Iterator[str]:
         """Yield content deltas from Ollama ``/api/chat`` with streaming."""
         global _last_error
@@ -321,6 +327,8 @@ class OpenRouterProvider:
         self.api_key = (api_key or "").strip()
         self.base_url = OPENROUTER_BASE_URL
         self.timeout = timeout
+        # Cost from the most recent chat / stream / embed call (USD/credits).
+        self.last_cost: Optional[float] = None
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -380,6 +388,31 @@ class OpenRouterProvider:
             prompt, system=system, messages=messages
         )
 
+    def _record_usage(
+        self,
+        data: Any,
+        *,
+        model: str,
+        usage_kind: Optional[str],
+        video_id: Optional[int],
+    ) -> Optional[float]:
+        from . import cost_ledger
+
+        self.last_cost = None
+        if not isinstance(data, dict):
+            return None
+        if usage_kind:
+            cost = cost_ledger.record_from_response(
+                data,
+                kind=usage_kind,
+                model=model,
+                video_id=video_id,
+            )
+        else:
+            cost = cost_ledger.cost_from_usage_payload(data.get("usage"))
+        self.last_cost = cost
+        return cost
+
     def chat(
         self,
         prompt: str,
@@ -391,8 +424,11 @@ class OpenRouterProvider:
         timeout: Optional[float] = None,
         format: Optional[str] = "json",
         temperature: float = 0.2,
+        usage_kind: Optional[str] = None,
+        video_id: Optional[int] = None,
     ) -> str:
         global _last_error
+        self.last_cost = None
         payload_messages = self._build_messages(
             prompt, system=system, messages=messages
         )
@@ -401,6 +437,7 @@ class OpenRouterProvider:
             "messages": payload_messages,
             "temperature": float(temperature),
             "stream": False,
+            "usage": {"include": True},
         }
         if num_predict is not None and num_predict > 0:
             payload["max_tokens"] = int(num_predict)
@@ -428,6 +465,9 @@ class OpenRouterProvider:
                     if isinstance(p, dict)
                 ]
                 content = "".join(parts)
+            self._record_usage(
+                data, model=model, usage_kind=usage_kind, video_id=video_id
+            )
             _last_error = None
             return str(content)
         except Exception as exc:  # noqa: BLE001
@@ -444,8 +484,11 @@ class OpenRouterProvider:
         num_predict: Optional[int] = None,
         timeout: Optional[float] = None,
         temperature: float = 0.4,
+        usage_kind: Optional[str] = None,
+        video_id: Optional[int] = None,
     ) -> Iterator[str]:
         global _last_error
+        self.last_cost = None
         payload_messages = self._build_messages(
             prompt, system=system, messages=messages
         )
@@ -454,10 +497,14 @@ class OpenRouterProvider:
             "messages": payload_messages,
             "temperature": float(temperature),
             "stream": True,
+            # Ask OpenRouter/OpenAI-compatible APIs for a final usage chunk.
+            "stream_options": {"include_usage": True},
+            "usage": {"include": True},
         }
         if num_predict is not None and num_predict > 0:
             payload["max_tokens"] = int(num_predict)
         req_timeout = timeout if timeout is not None else self.timeout
+        last_usage_payload: Optional[dict[str, Any]] = None
         try:
             with self._client(timeout=req_timeout) as client:
                 with client.stream("POST", "/chat/completions", json=payload) as resp:
@@ -483,6 +530,8 @@ class OpenRouterProvider:
                                 else str(err)
                             )
                             raise RuntimeError(str(detail))
+                        if isinstance(data, dict) and data.get("usage"):
+                            last_usage_payload = data
                         choices = data.get("choices")
                         if not isinstance(choices, list) or not choices:
                             continue
@@ -491,15 +540,109 @@ class OpenRouterProvider:
                         piece = delta.get("content") or ""
                         if piece:
                             yield str(piece)
-                        if choice.get("finish_reason"):
-                            break
+                        # Keep reading after finish_reason so usage chunk can arrive.
+            if last_usage_payload is not None:
+                self._record_usage(
+                    last_usage_payload,
+                    model=model,
+                    usage_kind=usage_kind,
+                    video_id=video_id,
+                )
             _last_error = None
         except Exception as exc:  # noqa: BLE001
             _last_error = str(exc)
             raise
 
+    def embed(self, text: str, model: str, **kwargs: Any) -> list[float]:
+        vecs = self.embed_many([text], model, **kwargs)
+        if not vecs:
+            raise RuntimeError("OpenRouter returned empty embedding")
+        return vecs[0]
 
+    def embed_many(
+        self,
+        texts: list[str],
+        model: str,
+        *,
+        usage_kind: Optional[str] = "embed",
+        video_id: Optional[int] = None,
+    ) -> list[list[float]]:
+        """Batch-embed texts via OpenRouter ``/embeddings``."""
+        global _last_error
+        self.last_cost = None
+        cleaned = [t for t in texts if (t or "").strip()]
+        if not cleaned:
+            return []
+        payload: dict[str, Any] = {
+            "model": model,
+            "input": cleaned if len(cleaned) > 1 else cleaned[0],
+            "encoding_format": "float",
+        }
+        try:
+            with self._client(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
+                resp = client.post("/embeddings", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+            rows = data.get("data") if isinstance(data, dict) else None
+            if not isinstance(rows, list) or not rows:
+                raise RuntimeError("OpenRouter returned no embeddings")
+            ordered = sorted(
+                rows,
+                key=lambda r: int(r.get("index", 0)) if isinstance(r, dict) else 0,
+            )
+            out: list[list[float]] = []
+            for row in ordered:
+                if not isinstance(row, dict):
+                    continue
+                vec = row.get("embedding")
+                if not isinstance(vec, list) or not vec:
+                    raise RuntimeError("OpenRouter returned empty embedding")
+                out.append([float(x) for x in vec])
+            if len(out) != len(cleaned):
+                raise RuntimeError(
+                    f"OpenRouter embed count mismatch ({len(out)} vs {len(cleaned)})"
+                )
+            self._record_usage(
+                data, model=model, usage_kind=usage_kind, video_id=video_id
+            )
+            _last_error = None
+            return out
+        except Exception as exc:  # noqa: BLE001
+            _last_error = str(exc)
+            raise
+
+    def list_embedding_models(self) -> list[dict[str, Any]]:
+        try:
+            with self._client(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+                resp = client.get("/embeddings/models")
+                if resp.is_success:
+                    data = resp.json()
+                    rows = data.get("data") if isinstance(data, dict) else None
+                    if isinstance(rows, list) and rows:
+                        out: list[dict[str, Any]] = []
+                        for row in rows:
+                            if not isinstance(row, dict):
+                                continue
+                            mid = str(row.get("id") or "").strip()
+                            if not mid:
+                                continue
+                            name = str(row.get("name") or mid).strip() or mid
+                            out.append({"id": mid, "name": name})
+                        out.sort(key=lambda r: str(r["id"]).lower())
+                        return out
+        except Exception:  # noqa: BLE001
+            pass
+        models = self.list_models()
+        return [
+            m
+            for m in models
+            if "embed" in m["id"].lower() or "embedding" in m["id"].lower()
+        ]
+
+
+AnyEmbedProvider = Union[OllamaProvider, OpenRouterProvider]
 AnyLlmProvider = Union[OllamaProvider, OpenRouterProvider]
+
 
 
 def mask_openrouter_api_key(key: str) -> str:
@@ -639,8 +782,35 @@ def resolve_base_url(*, force: bool = False) -> Optional[str]:
     return None
 
 
-def get_embed_provider() -> Optional[OllamaProvider]:
-    """Ollama provider for embeddings / local-only AI jobs."""
+def list_openrouter_embedding_models() -> list[dict[str, Any]]:
+    provider = get_openrouter_provider(timeout=30.0)
+    if provider is None:
+        raise RuntimeError("No OpenRouter API key configured")
+    return provider.list_embedding_models()
+
+
+def openrouter_scope() -> str:
+    from .. import app_settings as settings_mod
+
+    return settings_mod.normalize_openrouter_scope(
+        app_settings.ai_settings().get("openrouter_scope")
+    )
+
+
+def openrouter_owns_embeddings() -> bool:
+    """True when OpenRouter should handle embeddings (scope=all, no Ollama override)."""
+    if not openrouter_configured():
+        return False
+    if openrouter_scope() != "all":
+        return False
+    ai = app_settings.ai_settings()
+    if ai.get("ollama_prefer_embeddings") and get_ollama_provider() is not None:
+        return False
+    return True
+
+
+def get_ollama_provider() -> Optional[OllamaProvider]:
+    """Ollama instance when local AI is enabled and reachable."""
     ai = app_settings.ai_settings()
     if not ai.get("enabled", True):
         return None
@@ -652,9 +822,16 @@ def get_embed_provider() -> Optional[OllamaProvider]:
     return OllamaProvider(url)
 
 
+def get_embed_provider() -> Optional[AnyEmbedProvider]:
+    """Provider for embeddings: OpenRouter (scope=all) or Ollama."""
+    if openrouter_owns_embeddings():
+        return get_openrouter_provider()
+    return get_ollama_provider()
+
+
 def get_provider() -> Optional[OllamaProvider]:
-    """Alias for ``get_embed_provider`` (Ollama). Prefer explicit helpers."""
-    return get_embed_provider()
+    """Ollama-only helper (pull/workload). Use ``get_embed_provider`` for vectors."""
+    return get_ollama_provider()
 
 
 def get_llm_provider() -> Optional[AnyLlmProvider]:
@@ -663,7 +840,7 @@ def get_llm_provider() -> Optional[AnyLlmProvider]:
         provider = get_openrouter_provider()
         if provider is not None:
             return provider
-    return get_embed_provider()
+    return get_ollama_provider()
 
 
 def resolve_llm_model(provider: Optional[AnyLlmProvider] = None) -> str:
@@ -673,6 +850,35 @@ def resolve_llm_model(provider: Optional[AnyLlmProvider] = None) -> str:
     if isinstance(active, OpenRouterProvider):
         return normalize_openrouter_model(ai.get("openrouter_model"))
     return str(ai.get("chat_model") or "llama3.2:3b")
+
+
+def resolve_embed_model(provider: Optional[AnyEmbedProvider] = None) -> str:
+    """Embedding model id for the active embed backend."""
+    from .. import app_settings as settings_mod
+
+    ai = app_settings.ai_settings()
+    active = provider if provider is not None else get_embed_provider()
+    if isinstance(active, OpenRouterProvider):
+        return settings_mod.normalize_openrouter_embed_model(
+            ai.get("openrouter_embed_model")
+        )
+    return str(ai.get("embed_model") or "nomic-embed-text")
+
+
+def llm_backend_name() -> Optional[str]:
+    if openrouter_configured():
+        return "openrouter"
+    if app_settings.ai_settings().get("enabled", True):
+        return "ollama"
+    return None
+
+
+def embed_backend_name() -> Optional[str]:
+    if openrouter_owns_embeddings():
+        return "openrouter"
+    if app_settings.ai_settings().get("enabled", True):
+        return "ollama"
+    return None
 
 
 def require_llm_chat_model(
@@ -789,28 +995,33 @@ def _cached_model_presence(
 
 
 def _openrouter_status_fields(ai: dict[str, Any], *, quick: bool = False) -> dict[str, Any]:
+    from .. import app_settings as settings_mod
+
     enabled = bool(ai.get("openrouter_enabled"))
     key_set = openrouter_api_key_set(str(ai.get("openrouter_api_key") or ""))
     model = normalize_openrouter_model(ai.get("openrouter_model"))
+    scope = settings_mod.normalize_openrouter_scope(ai.get("openrouter_scope"))
+    embed_model = settings_mod.normalize_openrouter_embed_model(
+        ai.get("openrouter_embed_model")
+    )
+    prefer = bool(ai.get("ollama_prefer_embeddings"))
     reachable = False
     if enabled and key_set and not quick:
         provider = get_openrouter_provider()
         if provider is not None:
             reachable = provider.ping()
     elif enabled and key_set and quick:
-        # Avoid remote ping on health checks; treat configured as tentatively up.
         reachable = True
-    llm_backend: Optional[str] = None
-    if enabled and key_set:
-        llm_backend = "openrouter"
-    elif bool(ai.get("enabled", True)):
-        llm_backend = "ollama"
     return {
         "openrouter_enabled": enabled,
         "openrouter_reachable": reachable,
         "openrouter_model": model,
         "openrouter_api_key_set": key_set,
-        "llm_backend": llm_backend,
+        "openrouter_scope": scope,
+        "openrouter_embed_model": embed_model,
+        "ollama_prefer_embeddings": prefer,
+        "llm_backend": llm_backend_name(),
+        "embed_backend": embed_backend_name(),
     }
 
 
@@ -834,19 +1045,44 @@ def build_status(
     provider_name = str(ai.get("provider") or "ollama")
     or_fields = _openrouter_status_fields(ai, quick=quick)
 
-    if not enabled:
+    # Effective embed model for status (may be OpenRouter).
+    effective_embed = resolve_embed_model() if (enabled or openrouter_owns_embeddings()) else embed_model
+
+    if not enabled and not openrouter_owns_embeddings():
         return ProviderStatus(
             enabled=False,
             provider=provider_name,
             ready=False,
             reachable=False,
             base_url=_settings_url() or None,
-            embed_model=embed_model,
+            embed_model=effective_embed,
             chat_model=chat_model,
             embed_model_present=False,
             chat_model_present=False,
             pulling=[],
             last_error=None,
+            paused=bool(ai.get("paused")),
+            schedule=str(ai.get("schedule") or "on_download"),
+            indexed_videos=indexed_videos,
+            total_videos=total_videos,
+            queue_depth=queue_depth,
+            **or_fields,
+        )
+
+    if openrouter_owns_embeddings():
+        # Cloud embeds: ready when OpenRouter is configured (skip Ollama model pull).
+        return ProviderStatus(
+            enabled=enabled or bool(ai.get("openrouter_enabled")),
+            provider="openrouter" if openrouter_owns_embeddings() else provider_name,
+            ready=bool(or_fields.get("openrouter_reachable") or or_fields.get("openrouter_api_key_set")),
+            reachable=bool(or_fields.get("openrouter_reachable") or or_fields.get("openrouter_api_key_set")),
+            base_url=_settings_url() or None,
+            embed_model=effective_embed,
+            chat_model=resolve_llm_model() if openrouter_configured() else chat_model,
+            embed_model_present=True,
+            chat_model_present=True,
+            pulling=[],
+            last_error=_last_error,
             paused=bool(ai.get("paused")),
             schedule=str(ai.get("schedule") or "on_download"),
             indexed_videos=indexed_videos,
