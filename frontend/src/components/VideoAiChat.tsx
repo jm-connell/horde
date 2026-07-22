@@ -21,6 +21,7 @@ type DisplayMessage = {
   role: "user" | "assistant";
   content: string;
   cost?: number | null;
+  model?: string | null;
 };
 
 function toDisplay(m: VideoAiChatMessage): DisplayMessage {
@@ -29,6 +30,7 @@ function toDisplay(m: VideoAiChatMessage): DisplayMessage {
     role: m.role,
     content: m.content,
     cost: typeof m.cost === "number" ? m.cost : null,
+    model: typeof m.model === "string" && m.model.trim() ? m.model.trim() : null,
   };
 }
 
@@ -91,17 +93,20 @@ export default function VideoAiChat({
   const threadCost = useMemo(() => {
     let sum = 0;
     let saw = false;
+    let model: string | null = null;
     for (const m of messages) {
       if (m.role !== "assistant") continue;
       if (typeof m.cost === "number" && m.cost >= 0) {
         sum += m.cost;
         saw = true;
       }
+      if (m.model) model = m.model;
     }
-    return saw ? sum : null;
+    return saw ? { sum, model } : null;
   }, [messages]);
   const threadCostLabel =
-    showCosts && threadCost != null ? formatUsdCost(threadCost) : "";
+    showCosts && threadCost != null ? formatUsdCost(threadCost.sum) : "";
+  const threadModel = threadCost?.model ?? null;
 
   async function send() {
     const text = draft.trim();
@@ -159,6 +164,12 @@ export default function VideoAiChat({
                 : typeof event.cost === "number"
                   ? event.cost
                   : null;
+            const model =
+              typeof msg.model === "string" && msg.model.trim()
+                ? msg.model.trim()
+                : typeof event.model === "string" && event.model.trim()
+                  ? String(event.model).trim()
+                  : null;
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === tempAsstId
@@ -167,6 +178,7 @@ export default function VideoAiChat({
                       role: "assistant",
                       content: msg.content || m.content,
                       cost,
+                      model,
                     }
                   : m
               )
@@ -233,8 +245,8 @@ export default function VideoAiChat({
         <div className="flex items-center justify-end border-b border-ink-800/80 px-3 py-1">
           <span
             className="text-[10px] tabular-nums text-gray-600"
-            title="Running OpenRouter cost for this chat"
-            aria-label={`Chat cost ${threadCostLabel}`}
+            title={threadModel || undefined}
+            aria-label={`Chat cost ${threadCostLabel}${threadModel ? ` (${threadModel})` : ""}`}
           >
             {threadCostLabel}
           </span>
@@ -304,8 +316,8 @@ export default function VideoAiChat({
                   {costLabel && (
                     <span
                       className="text-[10px] tabular-nums text-gray-600"
-                      title="OpenRouter cost for this reply"
-                      aria-label={`Reply cost ${costLabel}`}
+                      title={m.model || undefined}
+                      aria-label={`Reply cost ${costLabel}${m.model ? ` (${m.model})` : ""}`}
                     >
                       {costLabel}
                     </span>

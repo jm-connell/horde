@@ -66,6 +66,10 @@ export default function VideoAiPanel({
     video.ai_summary_cost >= 0
       ? formatUsdCost(video.ai_summary_cost)
       : "";
+  const summaryModel =
+    typeof video.ai_summary_model === "string" && video.ai_summary_model.trim()
+      ? video.ai_summary_model.trim()
+      : "";
 
   function setTab(next: AiTab) {
     if (next === settings.aiTab) return;
@@ -217,8 +221,8 @@ export default function VideoAiPanel({
                         {summaryCostLabel && (
                           <span
                             className="font-normal normal-case tabular-nums"
-                            title="OpenRouter cost for this summary"
-                            aria-label={`Summary cost ${summaryCostLabel}`}
+                            title={summaryModel || undefined}
+                            aria-label={`Summary cost ${summaryCostLabel}${summaryModel ? ` (${summaryModel})` : ""}`}
                           >
                             {summaryCostLabel}
                           </span>

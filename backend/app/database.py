@@ -50,10 +50,12 @@ _VIDEO_AI_META_COLUMNS = [
     ("summary", "VARCHAR"),
     ("summary_length", "VARCHAR"),
     ("summary_cost", "FLOAT"),
+    ("summary_model", "VARCHAR"),
 ]
 
 _VIDEO_AI_CHAT_MESSAGE_COLUMNS = [
     ("cost", "FLOAT"),
+    ("model", "VARCHAR"),
 ]
 
 _AI_JOB_COLUMNS = [

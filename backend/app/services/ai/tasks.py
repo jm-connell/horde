@@ -454,6 +454,7 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
     meta.summary = cleaned
     meta.summary_length = length
     meta.summary_cost = round(total_cost, 8) if saw_cost else None
+    meta.summary_model = (chat_model or "").strip() or None
     meta.updated_at = utcnow()
     session.add(meta)
     session.commit()

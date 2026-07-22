@@ -47,6 +47,7 @@ class VideoRead(BaseModel):
     ai_summary: Optional[str] = None
     ai_summary_length: Optional[str] = None
     ai_summary_cost: Optional[float] = None
+    ai_summary_model: Optional[str] = None
 
 
 class VideoUpdate(BaseModel):

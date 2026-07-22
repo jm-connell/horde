@@ -226,6 +226,8 @@ class VideoAiMeta(SQLModel, table=True):
     summary_length: Optional[str] = None
     # OpenRouter cost for the last generated summary (USD/credits), when known.
     summary_cost: Optional[float] = None
+    # Model id used for the last generated summary (when known).
+    summary_model: Optional[str] = None
     # JSON list of tags added by AI (subset of Video.tags).
     ai_tags: str = Field(default="[]")
     # JSON list of tags added manually by the user.
@@ -253,6 +255,8 @@ class VideoAiChatMessage(SQLModel, table=True):
     content: str = Field(default="")
     # OpenRouter usage.cost for this assistant turn (USD/credits), when known.
     cost: Optional[float] = None
+    # Model id used for this assistant turn (when known).
+    model: Optional[str] = None
     created_at: datetime = Field(default_factory=utcnow)
 
 

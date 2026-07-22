@@ -56,6 +56,7 @@ def list_messages(session: Session, video_id: int) -> list[dict[str, Any]]:
             "role": r.role,
             "content": r.content,
             "cost": r.cost if r.role == "assistant" else None,
+            "model": r.model if r.role == "assistant" else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in rows
@@ -249,6 +250,7 @@ def stream_chat(
         role="assistant",
         content=reply,
         cost=turn_cost,
+        model=(chat_model or "").strip() or None,
         created_at=utcnow(),
     )
     session.add(assistant_row)
@@ -267,6 +269,7 @@ def stream_chat(
                 "role": "assistant",
                 "content": assistant_row.content,
                 "cost": assistant_row.cost,
+                "model": assistant_row.model,
                 "created_at": (
                     assistant_row.created_at.isoformat()
                     if assistant_row.created_at

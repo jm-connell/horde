@@ -4234,6 +4234,11 @@ export default function Settings() {
                   <div
                     key={row.key}
                     className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-2"
+                    title={
+                      aiDraft.openrouter_model
+                        ? aiDraft.openrouter_model
+                        : undefined
+                    }
                   >
                     <p className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
                       {row.label}

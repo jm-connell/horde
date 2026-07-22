@@ -52,6 +52,8 @@ export interface Video {
   ai_summary_length?: "short" | "medium" | "long" | null;
   /** OpenRouter cost for the last summary, when known. */
   ai_summary_cost?: number | null;
+  /** Model used for the last summary, when known. */
+  ai_summary_model?: string | null;
 }
 
 export interface VideoUpdate {
@@ -272,6 +274,8 @@ export interface VideoAiChatMessage {
   content: string;
   /** OpenRouter cost for this assistant turn, when known. */
   cost?: number | null;
+  /** Model used for this assistant turn, when known. */
+  model?: string | null;
   created_at: string | null;
 }
 

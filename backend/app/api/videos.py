@@ -81,6 +81,7 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
     ai_summary: Optional[str] = None
     ai_summary_length: Optional[str] = None
     ai_summary_cost: Optional[float] = None
+    ai_summary_model: Optional[str] = None
     if session is not None and video.id is not None:
         meta = session.get(VideoAiMeta, video.id)
         if meta is not None:
@@ -96,6 +97,9 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
             raw_cost = getattr(meta, "summary_cost", None)
             if isinstance(raw_cost, (int, float)):
                 ai_summary_cost = float(raw_cost)
+            raw_model = getattr(meta, "summary_model", None)
+            if raw_model and str(raw_model).strip():
+                ai_summary_model = str(raw_model).strip()
     return VideoRead(
         id=video.id,
         title=video.title,
@@ -135,6 +139,7 @@ def _to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
         ai_summary=ai_summary,
         ai_summary_length=ai_summary_length,
         ai_summary_cost=ai_summary_cost,
+        ai_summary_model=ai_summary_model,
     )
 
 
