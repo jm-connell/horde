@@ -1,8 +1,7 @@
 """LLM / embedding provider abstraction.
 
-Ollama is the only implementation today. Settings store ``provider: "ollama"``
-so a future OpenRouter (or similar) backend can plug in without rewriting
-search / tags / recommendations.
+Ollama handles embeddings (and local LLM fallback). Optional OpenRouter covers
+cloud LLM tasks: summaries, chat, tag enrich, and duplicate confirmation.
 """
 
 from __future__ import annotations
@@ -13,14 +12,21 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Iterator, Optional, Protocol
+from typing import Any, Iterator, Optional, Protocol, Union
 
 import httpx
 
-from ...config import OLLAMA_BASE_URL
+from ...config import OLLAMA_BASE_URL, OPENROUTER_API_KEY
 from .. import app_settings
 
 logger = logging.getLogger(__name__)
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_PRESETS: dict[str, str] = {
+    "budget": "google/gemini-2.5-flash-lite",
+    "best": "google/gemini-2.5-flash",
+}
+OPENROUTER_DEFAULT_MODEL = OPENROUTER_PRESETS["budget"]
 
 # Prefer localhost first outside Docker — Docker DNS names hang on Windows/macOS
 # host networking and were stalling /api/health (and thus dev.bat).
@@ -61,6 +67,11 @@ class ProviderStatus:
     indexed_videos: int = 0
     total_videos: int = 0
     queue_depth: int = 0
+    openrouter_enabled: bool = False
+    openrouter_reachable: bool = False
+    openrouter_model: str = OPENROUTER_DEFAULT_MODEL
+    openrouter_api_key_set: bool = False
+    llm_backend: Optional[str] = None
 
 
 class EmbedProvider(Protocol):
@@ -106,6 +117,8 @@ def models_equivalent(requested: str, installed: str) -> bool:
 
 
 class OllamaProvider:
+    name = "ollama"
+
     def __init__(self, base_url: str, timeout: float | httpx.Timeout = 120.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -299,6 +312,276 @@ class OllamaProvider:
         return out
 
 
+class OpenRouterProvider:
+    """OpenAI-compatible chat client for OpenRouter."""
+
+    name = "openrouter"
+
+    def __init__(self, api_key: str, timeout: float | httpx.Timeout = 120.0):
+        self.api_key = (api_key or "").strip()
+        self.base_url = OPENROUTER_BASE_URL
+        self.timeout = timeout
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/jm-connell/horde",
+            "X-Title": "Horde",
+        }
+
+    def _client(self, timeout: float | httpx.Timeout | None = None) -> httpx.Client:
+        return httpx.Client(
+            base_url=self.base_url,
+            timeout=timeout if timeout is not None else self.timeout,
+            headers=self._headers(),
+        )
+
+    def ping(self) -> bool:
+        try:
+            with self._client(timeout=httpx.Timeout(5.0, connect=3.0)) as client:
+                resp = client.get("/models")
+                return resp.is_success
+        except Exception:  # noqa: BLE001
+            return False
+
+    def list_models(self) -> list[dict[str, Any]]:
+        with self._client(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+            resp = client.get("/models")
+            resp.raise_for_status()
+            data = resp.json()
+        rows = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            return []
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            mid = str(row.get("id") or "").strip()
+            if not mid:
+                continue
+            name = str(row.get("name") or mid).strip() or mid
+            out.append({"id": mid, "name": name})
+        out.sort(key=lambda r: str(r["id"]).lower())
+        return out
+
+    def has_model(self, model: str) -> bool:
+        """Cloud models are not locally installed; treat any non-empty id as ok."""
+        return bool((model or "").strip())
+
+    @staticmethod
+    def _build_messages(
+        prompt: str,
+        *,
+        system: Optional[str] = None,
+        messages: Optional[list[dict[str, str]]] = None,
+    ) -> list[dict[str, str]]:
+        return OllamaProvider._build_messages(
+            prompt, system=system, messages=messages
+        )
+
+    def chat(
+        self,
+        prompt: str,
+        model: str,
+        *,
+        system: Optional[str] = None,
+        messages: Optional[list[dict[str, str]]] = None,
+        num_predict: Optional[int] = None,
+        timeout: Optional[float] = None,
+        format: Optional[str] = "json",
+        temperature: float = 0.2,
+    ) -> str:
+        global _last_error
+        payload_messages = self._build_messages(
+            prompt, system=system, messages=messages
+        )
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": payload_messages,
+            "temperature": float(temperature),
+            "stream": False,
+        }
+        if num_predict is not None and num_predict > 0:
+            payload["max_tokens"] = int(num_predict)
+        if format == "json":
+            payload["response_format"] = {"type": "json_object"}
+        req_timeout = timeout if timeout is not None else self.timeout
+        try:
+            with self._client(timeout=req_timeout) as client:
+                resp = client.post("/chat/completions", json=payload)
+                if resp.status_code >= 400 and format == "json":
+                    # Some models reject response_format; retry without it.
+                    payload.pop("response_format", None)
+                    resp = client.post("/chat/completions", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+            choices = data.get("choices") if isinstance(data, dict) else None
+            if not isinstance(choices, list) or not choices:
+                raise RuntimeError("OpenRouter returned no choices")
+            message = choices[0].get("message") if isinstance(choices[0], dict) else {}
+            content = (message or {}).get("content") or ""
+            if isinstance(content, list):
+                parts = [
+                    str(p.get("text") or "")
+                    for p in content
+                    if isinstance(p, dict)
+                ]
+                content = "".join(parts)
+            _last_error = None
+            return str(content)
+        except Exception as exc:  # noqa: BLE001
+            _last_error = str(exc)
+            raise
+
+    def chat_stream(
+        self,
+        prompt: str,
+        model: str,
+        *,
+        system: Optional[str] = None,
+        messages: Optional[list[dict[str, str]]] = None,
+        num_predict: Optional[int] = None,
+        timeout: Optional[float] = None,
+        temperature: float = 0.4,
+    ) -> Iterator[str]:
+        global _last_error
+        payload_messages = self._build_messages(
+            prompt, system=system, messages=messages
+        )
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": payload_messages,
+            "temperature": float(temperature),
+            "stream": True,
+        }
+        if num_predict is not None and num_predict > 0:
+            payload["max_tokens"] = int(num_predict)
+        req_timeout = timeout if timeout is not None else self.timeout
+        try:
+            with self._client(timeout=req_timeout) as client:
+                with client.stream("POST", "/chat/completions", json=payload) as resp:
+                    resp.raise_for_status()
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        if line.startswith("data:"):
+                            line = line[5:].strip()
+                        if not line or line == "[DONE]":
+                            if line == "[DONE]":
+                                break
+                            continue
+                        try:
+                            data = json.loads(line)
+                        except Exception:  # noqa: BLE001
+                            continue
+                        if data.get("error"):
+                            err = data["error"]
+                            detail = (
+                                err.get("message")
+                                if isinstance(err, dict)
+                                else str(err)
+                            )
+                            raise RuntimeError(str(detail))
+                        choices = data.get("choices")
+                        if not isinstance(choices, list) or not choices:
+                            continue
+                        choice = choices[0] if isinstance(choices[0], dict) else {}
+                        delta = choice.get("delta") or {}
+                        piece = delta.get("content") or ""
+                        if piece:
+                            yield str(piece)
+                        if choice.get("finish_reason"):
+                            break
+            _last_error = None
+        except Exception as exc:  # noqa: BLE001
+            _last_error = str(exc)
+            raise
+
+
+AnyLlmProvider = Union[OllamaProvider, OpenRouterProvider]
+
+
+def mask_openrouter_api_key(key: str) -> str:
+    raw = (key or "").strip()
+    if not raw:
+        return ""
+    if len(raw) <= 4:
+        return "••••"
+    return f"••••{raw[-4:]}"
+
+
+def openrouter_api_key_set(stored_key: Optional[str] = None) -> bool:
+    if OPENROUTER_API_KEY:
+        return True
+    if stored_key is not None:
+        return bool(str(stored_key).strip())
+    ai = app_settings.ai_settings()
+    return bool(str(ai.get("openrouter_api_key") or "").strip())
+
+
+def resolve_openrouter_api_key() -> str:
+    if OPENROUTER_API_KEY:
+        return OPENROUTER_API_KEY
+    ai = app_settings.ai_settings()
+    return str(ai.get("openrouter_api_key") or "").strip()
+
+
+def normalize_openrouter_model(value: Any) -> str:
+    raw = str(value or "").strip()
+    return raw or OPENROUTER_DEFAULT_MODEL
+
+
+def openrouter_configured() -> bool:
+    """True when OpenRouter is enabled and an API key is available."""
+    ai = app_settings.ai_settings()
+    if not ai.get("openrouter_enabled"):
+        return False
+    return bool(resolve_openrouter_api_key())
+
+
+def get_openrouter_provider(
+    *, api_key: Optional[str] = None, timeout: float = 120.0
+) -> Optional[OpenRouterProvider]:
+    key = (api_key if api_key is not None else resolve_openrouter_api_key()).strip()
+    if not key:
+        return None
+    return OpenRouterProvider(key, timeout=timeout)
+
+
+def test_openrouter_connection(api_key: Optional[str] = None) -> dict[str, Any]:
+    """Probe OpenRouter with the given key (or stored/env key)."""
+    key = (api_key or "").strip()
+    if not key or key.startswith("••••") or key.startswith("****"):
+        key = resolve_openrouter_api_key()
+    if not key:
+        return {"ok": False, "detail": "No OpenRouter API key configured"}
+    provider = OpenRouterProvider(key, timeout=10.0)
+    try:
+        models = provider.list_models()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "detail": str(exc)}
+    return {
+        "ok": True,
+        "detail": f"Connected ({len(models)} models)",
+        "model_count": len(models),
+    }
+
+
+def list_openrouter_models() -> list[dict[str, Any]]:
+    provider = get_openrouter_provider(timeout=30.0)
+    if provider is None:
+        raise RuntimeError("No OpenRouter API key configured")
+    return provider.list_models()
+
+
+def openrouter_preset_list() -> list[dict[str, str]]:
+    return [
+        {"id": "budget", "label": "Budget", "model": OPENROUTER_PRESETS["budget"]},
+        {"id": "best", "label": "Best", "model": OPENROUTER_PRESETS["best"]},
+    ]
+
+
 def _settings_url() -> str:
     ai = app_settings.ai_settings()
     configured = (ai.get("base_url") or "").strip()
@@ -356,17 +639,63 @@ def resolve_base_url(*, force: bool = False) -> Optional[str]:
     return None
 
 
-def get_provider() -> Optional[OllamaProvider]:
+def get_embed_provider() -> Optional[OllamaProvider]:
+    """Ollama provider for embeddings / local-only AI jobs."""
     ai = app_settings.ai_settings()
     if not ai.get("enabled", True):
         return None
     if (ai.get("provider") or "ollama") != "ollama":
-        # Future providers (OpenRouter, etc.) plug in here.
         return None
     url = resolve_base_url()
     if not url:
         return None
     return OllamaProvider(url)
+
+
+def get_provider() -> Optional[OllamaProvider]:
+    """Alias for ``get_embed_provider`` (Ollama). Prefer explicit helpers."""
+    return get_embed_provider()
+
+
+def get_llm_provider() -> Optional[AnyLlmProvider]:
+    """OpenRouter when connected; otherwise Ollama chat when local AI is up."""
+    if openrouter_configured():
+        provider = get_openrouter_provider()
+        if provider is not None:
+            return provider
+    return get_embed_provider()
+
+
+def resolve_llm_model(provider: Optional[AnyLlmProvider] = None) -> str:
+    """Chat model id for the active LLM backend."""
+    ai = app_settings.ai_settings()
+    active = provider if provider is not None else get_llm_provider()
+    if isinstance(active, OpenRouterProvider):
+        return normalize_openrouter_model(ai.get("openrouter_model"))
+    return str(ai.get("chat_model") or "llama3.2:3b")
+
+
+def require_llm_chat_model(
+    provider: AnyLlmProvider, chat_model: str
+) -> Optional[str]:
+    """Return an error if the chat model is unavailable (Ollama only)."""
+    if isinstance(provider, OpenRouterProvider):
+        if not (chat_model or "").strip():
+            return "OpenRouter model is not set"
+        return None
+    return require_chat_model(provider, chat_model)
+
+
+def llm_features_allowed() -> tuple[bool, Optional[str]]:
+    """Whether summarize/chat/etc. may run (ignores live reachability)."""
+    ai = app_settings.ai_settings()
+    if ai.get("paused"):
+        return False, "AI is paused"
+    if openrouter_configured():
+        return True, None
+    if not ai.get("enabled", True):
+        return False, "AI is disabled"
+    return True, None
 
 
 def ensure_models(provider: OllamaProvider) -> tuple[bool, bool]:
@@ -459,6 +788,32 @@ def _cached_model_presence(
     return embed_ok, chat_ok
 
 
+def _openrouter_status_fields(ai: dict[str, Any], *, quick: bool = False) -> dict[str, Any]:
+    enabled = bool(ai.get("openrouter_enabled"))
+    key_set = openrouter_api_key_set(str(ai.get("openrouter_api_key") or ""))
+    model = normalize_openrouter_model(ai.get("openrouter_model"))
+    reachable = False
+    if enabled and key_set and not quick:
+        provider = get_openrouter_provider()
+        if provider is not None:
+            reachable = provider.ping()
+    elif enabled and key_set and quick:
+        # Avoid remote ping on health checks; treat configured as tentatively up.
+        reachable = True
+    llm_backend: Optional[str] = None
+    if enabled and key_set:
+        llm_backend = "openrouter"
+    elif bool(ai.get("enabled", True)):
+        llm_backend = "ollama"
+    return {
+        "openrouter_enabled": enabled,
+        "openrouter_reachable": reachable,
+        "openrouter_model": model,
+        "openrouter_api_key_set": key_set,
+        "llm_backend": llm_backend,
+    }
+
+
 def build_status(
     *,
     indexed_videos: int = 0,
@@ -477,6 +832,7 @@ def build_status(
     chat_model = str(ai.get("chat_model") or "llama3.2:3b")
     enabled = bool(ai.get("enabled", True))
     provider_name = str(ai.get("provider") or "ollama")
+    or_fields = _openrouter_status_fields(ai, quick=quick)
 
     if not enabled:
         return ProviderStatus(
@@ -496,6 +852,7 @@ def build_status(
             indexed_videos=indexed_videos,
             total_videos=total_videos,
             queue_depth=queue_depth,
+            **or_fields,
         )
 
     url = resolve_base_url()
@@ -533,6 +890,7 @@ def build_status(
         indexed_videos=indexed_videos,
         total_videos=total_videos,
         queue_depth=queue_depth,
+        **or_fields,
     )
 
 

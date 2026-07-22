@@ -33,6 +33,8 @@ designed to run on TrueNAS via Dockge, but it works with any Docker host.
   title, description, notes, tags, and subtitles), tag filters, and sorting.
 - Optional local AI via Ollama: better search/related videos, auto-tags,
   duplicate confirmation, and homepage recommendations.
+- Optional OpenRouter for cloud LLM summaries, chat, tags, and duplicates
+  (no GPU required; embeddings still use Ollama when available).
 - Settings for the default playback mode and whether descriptions are shown.
 - Custom player with standard, theater, and windowed-fullscreen modes,
   subtitles, plus keyboard shortcuts (`space`/`k` play, `t` theater,
@@ -138,13 +140,20 @@ errors that show up as instant 500s in the UI.
 | `YTDLP_POT_BASE_URL`| `http://bgutil-pot:4416` (Docker)  | bgutil PO-token sidecar (auto, no login)  |
 | `OLLAMA_BASE_URL`   | _(auto-discover)_                  | Ollama API URL; blank tries compose + host |
 | `OLLAMA_DATA_PATH`  | `./ollama`                         | Host path for Ollama model data (profile) |
+| `OPENROUTER_API_KEY`| _(unset)_                          | Optional OpenRouter key (overrides Settings) |
 
-## AI (optional, Ollama)
+## AI (optional, Ollama + OpenRouter)
 
 Horde does not bundle models. It talks to [Ollama](https://ollama.com) over HTTP
 for embeddings (`nomic-embed-text`) and a small chat model (`llama3.2:3b`) used
 for tags, browse categories, and duplicate confirmation. Without Ollama, the
 app works as before (keyword search and heuristic related videos).
+
+**Optional OpenRouter:** under Settings → AI you can enable
+[OpenRouter](https://openrouter.ai) for summaries, chat, tag enrichment,
+and duplicate confirmation — useful when you have no GPU. Embeddings, hybrid
+search, related videos, and category invent still need Ollama. Set
+`OPENROUTER_API_KEY` in `.env` or paste a key in Settings; both stay optional.
 
 **Same host (compose sidecar):**
 

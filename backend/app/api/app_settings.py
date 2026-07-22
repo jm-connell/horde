@@ -4,7 +4,12 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from ..services import app_settings
-from ..services.ai.provider import invalidate_resolved_url
+from ..services.ai.provider import (
+    invalidate_resolved_url,
+    mask_openrouter_api_key,
+    normalize_openrouter_model,
+    openrouter_api_key_set,
+)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -15,6 +20,10 @@ class AiSettingsRead(BaseModel):
     base_url: str = ""
     embed_model: str = "nomic-embed-text"
     chat_model: str = "llama3.2:3b"
+    openrouter_enabled: bool = False
+    openrouter_api_key: str = ""
+    openrouter_api_key_set: bool = False
+    openrouter_model: str = "google/gemini-2.5-flash-lite"
     schedule: Literal["on_download", "on_request", "timer", "set_time"] = "on_download"
     timer_hours: float = 6
     schedule_time: str = "03:00"
@@ -38,6 +47,9 @@ class AiSettingsUpdate(BaseModel):
     base_url: Optional[str] = None
     embed_model: Optional[str] = None
     chat_model: Optional[str] = None
+    openrouter_enabled: Optional[bool] = None
+    openrouter_api_key: Optional[str] = None
+    openrouter_model: Optional[str] = None
     schedule: Optional[Literal["on_download", "on_request", "timer", "set_time"]] = None
     timer_hours: Optional[float] = Field(default=None, ge=0.25, le=168)
     schedule_time: Optional[str] = None
@@ -101,6 +113,12 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
         )
     if "vram_gb" in filtered:
         filtered["vram_gb"] = app_settings.clamp_vram_gb(filtered["vram_gb"])
+    stored_key = str(merged.get("openrouter_api_key") or "")
+    filtered["openrouter_api_key"] = mask_openrouter_api_key(stored_key)
+    filtered["openrouter_api_key_set"] = openrouter_api_key_set(stored_key)
+    filtered["openrouter_model"] = normalize_openrouter_model(
+        filtered.get("openrouter_model")
+    )
     return AiSettingsRead(**filtered)
 
 
@@ -156,6 +174,21 @@ def update_settings(payload: AppSettingsUpdate):
             ai_updates["tag_rescan_days"] = app_settings.clamp_tag_rescan_days(
                 ai_updates["tag_rescan_days"]
             )
+        if "openrouter_model" in ai_updates:
+            ai_updates["openrouter_model"] = normalize_openrouter_model(
+                ai_updates["openrouter_model"]
+            )
+        if "openrouter_api_key" in ai_updates:
+            key = ai_updates["openrouter_api_key"]
+            if key is None:
+                del ai_updates["openrouter_api_key"]
+            else:
+                raw = str(key)
+                # Ignore masked placeholders from the Settings form.
+                if raw.startswith("••••") or raw.startswith("****"):
+                    del ai_updates["openrouter_api_key"]
+                else:
+                    ai_updates["openrouter_api_key"] = raw.strip()
         # Applying a workload profile resolves models + match score for Ollama GPU.
         if "workload_profile" in ai_updates:
             from ..services.ai import workload as ai_workload
@@ -165,5 +198,16 @@ def update_settings(payload: AppSettingsUpdate):
         updates["ai"] = ai_updates
         if "base_url" in ai_updates:
             invalidate_resolved_url()
+        if any(
+            k in ai_updates
+            for k in (
+                "openrouter_enabled",
+                "openrouter_api_key",
+                "openrouter_model",
+            )
+        ):
+            from ..services.ai import worker as ai_worker
+
+            ai_worker.wake_worker()
     data = app_settings.save(updates) if updates else app_settings.load()
     return _settings_read(data)

@@ -156,12 +156,16 @@ def health():
         pass
 
     ollama = None
+    openrouter = None
     try:
         from .services import app_settings as settings_svc
         from .services.ai.provider import (
             last_error,
+            openrouter_api_key_set,
+            openrouter_configured,
             pulling_models,
             resolve_base_url,
+            resolve_openrouter_api_key,
         )
 
         # Keep health cheap for readiness probes (dev.bat Wait-ForBackend).
@@ -177,8 +181,19 @@ def health():
             "pulling": pulling_models(),
             "last_error": last_error(),
         }
+        or_enabled = bool(ai.get("openrouter_enabled"))
+        key_set = openrouter_api_key_set(str(ai.get("openrouter_api_key") or ""))
+        openrouter = {
+            "enabled": or_enabled,
+            "configured": openrouter_configured(),
+            "api_key_set": key_set,
+            "model": str(ai.get("openrouter_model") or ""),
+            # Avoid remote ping on /health; presence of a key is enough here.
+            "reachable": bool(or_enabled and resolve_openrouter_api_key()),
+        }
     except Exception:  # noqa: BLE001
         ollama = {"enabled": False, "ready": False, "reachable": False}
+        openrouter = {"enabled": False, "configured": False, "reachable": False}
 
     sha = resolve_git_sha()
     return {
@@ -188,6 +203,7 @@ def health():
         "yt_dlp_version": _yt_dlp_version(),
         "pot_provider": _pot_provider_status(),
         "ollama": ollama,
+        "openrouter": openrouter,
         "disk": disk,
         "library_video_count": video_count,
         "review_pending_count": review_count,

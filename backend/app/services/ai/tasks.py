@@ -12,7 +12,15 @@ from sqlmodel import Session, select
 from ...models import AiCategory, AiJobKind, ChannelCatalogEmbedding, ChannelCatalogVideo, Video, VideoAiMeta, utcnow
 from .. import app_settings, channel_catalog, library
 from . import embeddings, text as ai_text
-from .provider import get_provider
+from .provider import (
+    OpenRouterProvider,
+    get_embed_provider,
+    get_llm_provider,
+    get_provider,
+    llm_features_allowed,
+    require_llm_chat_model,
+    resolve_llm_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -215,13 +223,14 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     if meta is not None and meta.tags_locked:
         return
 
-    provider = get_provider()
+    provider = get_llm_provider()
     if provider is None:
-        raise RuntimeError("Ollama not available")
-    chat_model = str(ai.get("chat_model") or "llama3.2:3b")
-    from .provider import require_chat_model
-
-    missing = require_chat_model(provider, chat_model)
+        raise RuntimeError("No LLM available (enable OpenRouter or Ollama)")
+    if isinstance(provider, OpenRouterProvider):
+        chat_model = resolve_llm_model(provider)
+    else:
+        chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    missing = require_llm_chat_model(provider, chat_model)
     if missing:
         raise RuntimeError(missing)
 
@@ -304,10 +313,10 @@ class SummarizeError(Exception):
 
 def run_summarize(session: Session, video_id: int, *, force: bool = False) -> str:
     ai = app_settings.ai_settings()
-    if not ai.get("enabled", True):
-        raise SummarizeError("AI is disabled", status_code=400)
-    if ai.get("paused"):
-        raise SummarizeError("AI is paused", status_code=409)
+    allowed, reason = llm_features_allowed()
+    if not allowed:
+        code = 409 if ai.get("paused") else 400
+        raise SummarizeError(reason or "AI is disabled", status_code=code)
     if not ai.get("ai_summaries", True):
         raise SummarizeError("AI video summaries are disabled", status_code=400)
 
@@ -331,13 +340,16 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
     ):
         return str(meta.summary).strip()
 
-    provider = get_provider()
+    provider = get_llm_provider()
     if provider is None:
-        raise SummarizeError("Ollama not available", status_code=503)
-    chat_model = str(ai.get("chat_model") or "llama3.2:3b")
-    from .provider import require_chat_model
-
-    missing = require_chat_model(provider, chat_model)
+        raise SummarizeError(
+            "No LLM available (enable OpenRouter or Ollama)", status_code=503
+        )
+    if isinstance(provider, OpenRouterProvider):
+        chat_model = resolve_llm_model(provider)
+    else:
+        chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    missing = require_llm_chat_model(provider, chat_model)
     if missing:
         raise SummarizeError(missing, status_code=503)
 
@@ -549,18 +561,24 @@ def _parse_category_items(raw_items: list[Any]) -> list[tuple[str, str]]:
 
 
 def run_refresh_categories(session: Session, _video_id: Optional[int] = None) -> None:
-    provider = get_provider()
-    if provider is None:
-        raise RuntimeError("Ollama not available")
+    embed_provider = get_embed_provider()
+    if embed_provider is None:
+        raise RuntimeError("Ollama not available (embeddings required for categories)")
+    llm = get_llm_provider()
+    if llm is None:
+        raise RuntimeError("No LLM available (enable OpenRouter or Ollama)")
     ai = app_settings.ai_settings()
-    chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    chat_model = resolve_llm_model(llm)
     embed_model = str(ai.get("embed_model") or "nomic-embed-text")
     from .provider import ensure_models
 
-    if not provider.has_model(chat_model) or not provider.has_model(embed_model):
+    missing = require_llm_chat_model(llm, chat_model)
+    if missing:
+        raise RuntimeError(missing)
+    if not embed_provider.has_model(embed_model):
         if ai.get("auto_pull_models", True):
-            ensure_models(provider)
-        raise RuntimeError("Required models not available (pull may be in progress)")
+            ensure_models(embed_provider)
+        raise RuntimeError("Embed model not available (pull may be in progress)")
 
     from . import workload as ai_workload
 
@@ -587,7 +605,7 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
         entries, budget=runtime.invent_budget_chars
     )
 
-    raw = provider.chat(
+    raw = llm.chat(
         ai_text.category_prompt(entries),
         chat_model,
         system=ai_text.category_system_prompt(),
@@ -616,7 +634,7 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     example_min = 0.28
     for name, blurb in cleaned:
         provisional = ai_text.category_embed_text(name, blurb)
-        q = provider.embed(provisional, embed_model)
+        q = embed_provider.embed(provisional, embed_model)
         ranked: list[tuple[float, Video, list[float]]] = []
         for video, cent in sample_centroids:
             score = embeddings.cosine(q, cent)
@@ -630,7 +648,7 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
         doc = ai_text.category_embed_text(
             name, blurb, example_titles=example_titles
         )
-        text_vec = provider.embed(doc, embed_model)
+        text_vec = embed_provider.embed(doc, embed_model)
         cent = embeddings.mean_vectors([c for _, _, c in examples])
         if cent is None:
             store_vec = embeddings.l2_normalize(text_vec)

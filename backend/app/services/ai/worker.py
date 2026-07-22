@@ -14,7 +14,7 @@ from ...database import engine
 from ...models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, utcnow
 from .. import app_settings
 from . import embeddings, tasks
-from .provider import get_provider
+from .provider import get_embed_provider, get_llm_provider, openrouter_configured
 
 logger = logging.getLogger(__name__)
 
@@ -81,15 +81,20 @@ def enqueue_for_video(
 ) -> None:
     """Queue embed (+ optional tag enrich) for a video per schedule settings."""
     ai = app_settings.ai_settings()
-    if not ai.get("enabled", True) or ai.get("paused"):
+    if ai.get("paused"):
+        return
+    ollama_on = bool(ai.get("enabled", True))
+    or_on = openrouter_configured()
+    if not ollama_on and not or_on:
         return
     schedule = str(ai.get("schedule") or "on_download")
     # Automatic per-video enqueue only in on_download mode (timer uses sweeps).
     if schedule != "on_download" and not force:
         return
-    # Still enqueue when Ollama is temporarily down; the worker retries later.
-    enqueue_job(AiJobKind.embed_video, video_id, force=force)
-    if include_tags and ai.get("enrich_tags", True):
+    # Still enqueue when providers are temporarily down; the worker retries later.
+    if ollama_on:
+        enqueue_job(AiJobKind.embed_video, video_id, force=force)
+    if include_tags and ai.get("enrich_tags", True) and (ollama_on or or_on):
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)
 
 
@@ -427,26 +432,53 @@ def current_job_label() -> Optional[str]:
     return str(info["kind"])
 
 
-def _next_job(session: Session) -> Optional[AiJob]:
+def _job_runnable(
+    kind: AiJobKind,
+    *,
+    llm_ok: bool,
+    embed_ok: bool,
+) -> bool:
+    if kind in (AiJobKind.embed_video, AiJobKind.embed_catalog_video):
+        return embed_ok
+    if kind == AiJobKind.enrich_tags:
+        return llm_ok
+    if kind == AiJobKind.refresh_categories:
+        return embed_ok and llm_ok
+    if kind == AiJobKind.score_duplicates:
+        return True
+    return False
+
+
+def _next_job(
+    session: Session, *, llm_ok: bool, embed_ok: bool
+) -> Optional[AiJob]:
     now = utcnow()
-    return session.exec(
+    jobs = session.exec(
         select(AiJob)
         .where(AiJob.status == AiJobStatus.queued)
         .where((AiJob.run_after.is_(None)) | (AiJob.run_after <= now))  # type: ignore[attr-defined]
         .order_by(AiJob.created_at.asc())
-        .limit(1)
-    ).first()
+        .limit(32)
+    ).all()
+    for job in jobs:
+        if _job_runnable(job.kind, llm_ok=llm_ok, embed_ok=embed_ok):
+            return job
+    return None
 
 
 def _process_one() -> bool:
     ai = app_settings.ai_settings()
-    if not ai.get("enabled", True) or ai.get("paused"):
+    if ai.get("paused"):
         return False
-    if get_provider() is None:
+    llm = get_llm_provider()
+    embed = get_embed_provider()
+    llm_ok = llm is not None
+    embed_ok = embed is not None
+    if not llm_ok and not embed_ok:
         return False
 
     with Session(engine) as session:
-        job = _next_job(session)
+        job = _next_job(session, llm_ok=llm_ok, embed_ok=embed_ok)
         if job is None:
             return False
         job.status = AiJobStatus.running
@@ -525,7 +557,9 @@ def _maybe_run_daily() -> None:
     from datetime import datetime
 
     ai = app_settings.ai_settings()
-    if not ai.get("enabled", True) or ai.get("paused"):
+    if ai.get("paused"):
+        return
+    if not ai.get("enabled", True) and not openrouter_configured():
         return
     if str(ai.get("schedule") or "") != "set_time":
         return
@@ -549,7 +583,10 @@ def _timer_loop() -> None:
         try:
             ai = app_settings.ai_settings()
             schedule = str(ai.get("schedule") or "")
-            if ai.get("enabled", True) and not ai.get("paused"):
+            if (
+                (ai.get("enabled", True) or openrouter_configured())
+                and not ai.get("paused")
+            ):
                 if schedule == "timer":
                     hours = float(ai.get("timer_hours") or 6)
                     hours = max(0.25, min(hours, 168.0))

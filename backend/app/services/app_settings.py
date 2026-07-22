@@ -11,6 +11,10 @@ AI_DEFAULTS: dict[str, Any] = {
     "base_url": "",
     "embed_model": "nomic-embed-text",
     "chat_model": "llama3.2:3b",
+    # Optional OpenRouter LLM backend (summaries, chat, tags, duplicate LLM).
+    "openrouter_enabled": False,
+    "openrouter_api_key": "",
+    "openrouter_model": "google/gemini-2.5-flash-lite",
     # on_download | on_request | timer | set_time
     "schedule": "on_download",
     "timer_hours": 6,

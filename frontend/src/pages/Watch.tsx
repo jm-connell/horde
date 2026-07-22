@@ -106,8 +106,11 @@ export default function Watch() {
     api
       .getAppSettings()
       .then((s) => {
-        setAiSummariesEnabled(!!s.ai.enabled && !!s.ai.ai_summaries);
-        setAiChatEnabled(!!s.ai.enabled && !!s.ai.ai_chat);
+        const llmOn =
+          !!s.ai.enabled ||
+          (!!s.ai.openrouter_enabled && !!s.ai.openrouter_api_key_set);
+        setAiSummariesEnabled(llmOn && !!s.ai.ai_summaries);
+        setAiChatEnabled(llmOn && !!s.ai.ai_chat);
       })
       .catch(() => {
         setAiSummariesEnabled(false);

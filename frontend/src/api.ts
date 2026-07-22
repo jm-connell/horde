@@ -347,6 +347,25 @@ export const api = {
     });
   },
 
+  testOpenRouterConnection(api_key?: string): Promise<{
+    ok: boolean;
+    detail?: string;
+    model_count?: number;
+  }> {
+    return request("/api/ai/openrouter/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: api_key || null }),
+    });
+  },
+
+  getOpenRouterModels(): Promise<{
+    presets: { id: string; label: string; model: string }[];
+    models: { id: string; name: string }[];
+  }> {
+    return request("/api/ai/openrouter/models");
+  },
+
   applyAiWorkload(profile?: "light" | "normal" | "heavy"): Promise<{
     ok: boolean;
     embed_model_changed?: boolean;

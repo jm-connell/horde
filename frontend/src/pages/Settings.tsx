@@ -140,7 +140,7 @@ const AI_PROCESS_JOBS: {
 const EMBED_MODEL_TIP =
   "Search index model — used for semantic search, related videos, and filling category shelves. Much lighter on VRAM than chat (typically ~0.5–1GB). nomic-embed-text is a solid default; mxbai-embed-large is higher quality for category matching but heavier; all-minilm is the lightest. Changing this requires re-indexing the library.";
 const CHAT_MODEL_TIP =
-  "Chat model — invents recommendation category chips, enriches tags, and scores duplicates. Needs more VRAM than search indexes: 1B ≈ 1–2GB, 3B-class ≈ 3–6GB. Prefer smaller models on 6GB GPUs; qwen2.5:3b or a larger custom model can invent more specific categories.";
+  "Ollama chat model — used when OpenRouter is off. Invents recommendation category chips; also enriches tags and scores duplicates as a local fallback. Needs more VRAM than search indexes: 1B ≈ 1–2GB, 3B-class ≈ 3–6GB.";
 
 function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`;
@@ -271,6 +271,10 @@ const DEFAULT_AI: AiSettings = {
   base_url: "",
   embed_model: "nomic-embed-text",
   chat_model: "llama3.2:3b",
+  openrouter_enabled: false,
+  openrouter_api_key: "",
+  openrouter_api_key_set: false,
+  openrouter_model: "google/gemini-2.5-flash-lite",
   schedule: "on_download",
   timer_hours: 6,
   schedule_time: "03:00",
@@ -287,6 +291,19 @@ const DEFAULT_AI: AiSettings = {
   vram_gb: null,
   paused: false,
 };
+
+const OPENROUTER_PRESETS = [
+  {
+    id: "budget",
+    label: "Budget",
+    model: "google/gemini-2.5-flash-lite",
+  },
+  {
+    id: "best",
+    label: "Best",
+    model: "google/gemini-2.5-flash",
+  },
+] as const;
 
 const HOVER_MOTION_OPTIONS: {
   value: HoverMotion;
@@ -411,7 +428,7 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
   {
     tab: "ai",
     keywords:
-      "ollama connection enable ai base url queue indexed features gpu vram workload light normal heavy override",
+      "ollama connection enable ai base url queue indexed features gpu vram workload light normal heavy override openrouter api key privacy",
   },
   {
     tab: "ai",
@@ -1017,6 +1034,12 @@ export default function Settings() {
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [aiDraft, setAiDraft] = useState<AiSettings>(DEFAULT_AI);
   const [aiTesting, setAiTesting] = useState(false);
+  const [openRouterTesting, setOpenRouterTesting] = useState(false);
+  const [openRouterKeyDraft, setOpenRouterKeyDraft] = useState("");
+  const [openRouterModels, setOpenRouterModels] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [openRouterModelFilter, setOpenRouterModelFilter] = useState("");
   const [embedCustom, setEmbedCustom] = useState(false);
   const [chatCustom, setChatCustom] = useState(false);
   const [advancedModelsOpen, setAdvancedModelsOpen] = useState(false);
@@ -1125,6 +1148,26 @@ export default function Settings() {
     const id = setInterval(refreshAiStatus, 5000);
     return () => clearInterval(id);
   }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "ai") return;
+    if (!aiDraft.openrouter_enabled || !aiDraft.openrouter_api_key_set) {
+      setOpenRouterModels([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .getOpenRouterModels()
+      .then((res) => {
+        if (!cancelled) setOpenRouterModels(res.models || []);
+      })
+      .catch(() => {
+        if (!cancelled) setOpenRouterModels([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, aiDraft.openrouter_enabled, aiDraft.openrouter_api_key_set]);
 
   const refreshCatalogStatus = () =>
     api
@@ -3294,7 +3337,7 @@ export default function Settings() {
                   }
                 >
                   <span className="text-sm font-medium text-gray-200">
-                    Enable Local AI
+                    Enable Local AI (Ollama)
                   </span>
                   <Toggle
                     checked={aiDraft.enabled}
@@ -3325,8 +3368,8 @@ export default function Settings() {
                   />
                 </div>
                 <p className="max-w-2xl text-xs text-gray-500">
-                  Point to your Ollama instance for embeddings and small LLM
-                  tasks. Leave the URL blank to attempt auto-discover (but don't count on it). AI processing is done on the Ollama machine, if separate from Horde host.
+                  Point to your Ollama instance for embeddings and local LLM
+                  fallback. Leave the URL blank to attempt auto-discover (but don't count on it). AI processing is done on the Ollama machine, if separate from Horde host. Not required if you only use OpenRouter for summaries, chat, tags, and duplicates.
                 </p>
                 <div
                   className={
@@ -3543,6 +3586,223 @@ export default function Settings() {
                     />
                   )}
                 </div>
+              </div>
+            </Section>
+
+            <Section
+              title="OpenRouter"
+              hidden={
+                !!q &&
+                !match(
+                  "openrouter",
+                  "api key",
+                  "privacy",
+                  "cloud",
+                  "budget",
+                  "best"
+                )
+              }
+            >
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-200">
+                    Enable OpenRouter
+                  </span>
+                  <Toggle
+                    checked={aiDraft.openrouter_enabled}
+                    onChange={() =>
+                      saveAi({
+                        openrouter_enabled: !aiDraft.openrouter_enabled,
+                      })
+                    }
+                  />
+                </div>
+                <p className="max-w-2xl text-xs text-gray-500">
+                  Optional cloud LLM for{" "}
+                  <span className="text-gray-400">
+                    summaries, chat, tag enrichment, and duplicate
+                    confirmation
+                  </span>
+                  . Embeddings, hybrid search, related videos, and category
+                  invent still need Ollama. Works without a local GPU when
+                  OpenRouter is enabled.
+                </p>
+                {aiDraft.openrouter_enabled && (
+                <>
+                <p className="max-w-2xl text-xs text-amber-500/90">
+                  Titles, descriptions, captions, notes, and prompts
+                  are sent to OpenRouter and the selected third-party model.
+                  Disable OpenRouter to keep those tasks local for privacy.
+                </p>
+                <div className="space-y-4">
+                  <div className="flex max-w-2xl flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <span className="shrink-0 text-sm font-medium text-gray-200 sm:w-40">
+                      API key
+                    </span>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={openRouterKeyDraft}
+                      onChange={(e) => setOpenRouterKeyDraft(e.target.value)}
+                      onBlur={async () => {
+                        const trimmed = openRouterKeyDraft.trim();
+                        if (!trimmed) return;
+                        await saveAi({ openrouter_api_key: trimmed });
+                        setOpenRouterKeyDraft("");
+                        showToast("OpenRouter API key saved");
+                      }}
+                      placeholder={
+                        aiDraft.openrouter_api_key_set
+                          ? `Key saved (${aiDraft.openrouter_api_key || "••••"})`
+                          : "sk-or-…"
+                      }
+                      aria-label="OpenRouter API key"
+                      className={`${INPUT} min-w-0 flex-1`}
+                    />
+                  </div>
+                  {aiDraft.openrouter_api_key_set && (
+                    <button
+                      type="button"
+                      className="text-xs text-gray-500 underline-offset-2 hover:text-gray-300 hover:underline"
+                      onClick={async () => {
+                        await saveAi({ openrouter_api_key: "" });
+                        setOpenRouterKeyDraft("");
+                        showToast("OpenRouter API key cleared");
+                      }}
+                    >
+                      Clear saved key
+                    </button>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={openRouterTesting}
+                      onClick={async () => {
+                        setOpenRouterTesting(true);
+                        const result = await api
+                          .testOpenRouterConnection(
+                            openRouterKeyDraft.trim() || undefined
+                          )
+                          .catch(() => null);
+                        setOpenRouterTesting(false);
+                        if (!result) {
+                          showToast("OpenRouter test failed");
+                          return;
+                        }
+                        showToast(
+                          result.ok
+                            ? result.detail || "Connected"
+                            : result.detail || "Unreachable"
+                        );
+                        if (result.ok && openRouterKeyDraft.trim()) {
+                          await saveAi({
+                            openrouter_api_key: openRouterKeyDraft.trim(),
+                          });
+                          setOpenRouterKeyDraft("");
+                        }
+                        if (result.ok) {
+                          const models = await api
+                            .getOpenRouterModels()
+                            .catch(() => null);
+                          if (models) setOpenRouterModels(models.models || []);
+                        }
+                        refreshAiStatus();
+                      }}
+                      className={PANEL_BTN}
+                    >
+                      {openRouterTesting ? "Testing…" : "Test OpenRouter"}
+                    </button>
+                    {aiStatus?.openrouter_reachable && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                        Connected
+                      </span>
+                    )}
+                    {aiStatus?.llm_backend === "openrouter" && (
+                      <span className="text-xs text-gray-500">
+                        LLM tasks use OpenRouter
+                      </span>
+                    )}
+                  </div>
+                  <div className="max-w-2xl space-y-2">
+                    <span className="text-sm font-medium text-gray-200">
+                      Model
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {OPENROUTER_PRESETS.map((preset) => {
+                        const active =
+                          aiDraft.openrouter_model === preset.model;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() =>
+                              saveAi({ openrouter_model: preset.model })
+                            }
+                            className={
+                              active
+                                ? "rounded-lg border border-accent/60 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
+                                : "rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs font-medium text-gray-300 hover:border-accent/40 hover:text-accent"
+                            }
+                          >
+                            {preset.label}
+                            <span className="ml-1.5 text-[10px] text-gray-500">
+                              {preset.model}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input
+                      value={openRouterModelFilter}
+                      onChange={(e) =>
+                        setOpenRouterModelFilter(e.target.value)
+                      }
+                      placeholder="Filter models…"
+                      aria-label="Filter OpenRouter models"
+                      className={`${INPUT} max-w-md`}
+                    />
+                    <select
+                      value={aiDraft.openrouter_model}
+                      onChange={(e) =>
+                        saveAi({ openrouter_model: e.target.value })
+                      }
+                      aria-label="OpenRouter model"
+                      className={`${INPUT} max-w-2xl`}
+                    >
+                      {!openRouterModels.some(
+                        (m) => m.id === aiDraft.openrouter_model
+                      ) && (
+                        <option value={aiDraft.openrouter_model}>
+                          {aiDraft.openrouter_model}
+                        </option>
+                      )}
+                      {openRouterModels
+                        .filter((m) => {
+                          const fq = openRouterModelFilter.trim().toLowerCase();
+                          if (!fq) return true;
+                          return (
+                            m.id.toLowerCase().includes(fq) ||
+                            m.name.toLowerCase().includes(fq)
+                          );
+                        })
+                        .map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name && m.name !== m.id
+                              ? `${m.name} (${m.id})`
+                              : m.id}
+                          </option>
+                        ))}
+                    </select>
+                    <p className="text-xs text-gray-500">
+                      Recommendations are pinned above; pick any OpenRouter
+                      model from the list. Default is Budget (
+                      {OPENROUTER_PRESETS[0].model}).
+                    </p>
+                  </div>
+                </div>
+                </>
+                )}
               </div>
             </Section>
 
@@ -3865,7 +4125,7 @@ export default function Settings() {
                 />
                 <SettingRow
                   title="AI video summaries"
-                  description="On-demand Watch page summaries from captions. Recommend at least 6GB VRAM on the Ollama GPU."
+                  description="On-demand Watch page summaries from captions. Uses OpenRouter when connected; otherwise Ollama (recommend ≥6GB VRAM)."
                   hidden={
                     !!q &&
                     !match("summary", "summarize", "captions", "watch")
@@ -4418,6 +4678,19 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                             : health.ollama.reachable
                               ? "Connected"
                               : "Offline"}
+                      </dd>
+                    </div>
+                  )}
+                  {health.openrouter && (
+                    <div className="flex justify-between">
+                      <dt className="text-gray-400">OpenRouter</dt>
+                      <dd className="text-gray-200">
+                        {!health.openrouter.enabled
+                          ? "Disabled"
+                          : health.openrouter.configured ||
+                              health.openrouter.reachable
+                            ? "Configured"
+                            : "No API key"}
                       </dd>
                     </div>
                   )}

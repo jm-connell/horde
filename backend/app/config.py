@@ -49,6 +49,9 @@ YTDLP_COOKIES_FROM_BROWSER: str = os.environ.get(
 # Ollama base URL. Empty = auto-discover (compose service, then host.docker.internal).
 OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "").strip()
 
+# Optional OpenRouter API key (overrides Settings → AI when set).
+OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "").strip()
+
 # Update checks — baked at Docker build time; falls back to local git in dev.
 HORDE_GITHUB_REPO: str = os.environ.get(
     "HORDE_GITHUB_REPO", "jm-connell/horde"

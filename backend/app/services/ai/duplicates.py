@@ -11,7 +11,7 @@ from sqlmodel import Session
 from ...models import Video
 from .. import app_settings
 from . import embeddings, text as ai_text
-from .provider import get_provider
+from .provider import get_llm_provider, resolve_llm_model
 
 
 def _parse_json_object(raw: str) -> dict[str, Any]:
@@ -43,11 +43,11 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
     ai = app_settings.ai_settings()
     if not ai.get("ai_duplicates", True):
         return result
-    provider = get_provider()
+    provider = get_llm_provider()
     if provider is None:
         return result
 
-    # Embedding similarity as a fast signal.
+    # Embedding similarity as a fast signal (Ollama indexes only).
     embed_score: Optional[float] = None
     if a.id is not None and b.id is not None:
         va = embeddings.video_centroid(session, a.id)
@@ -56,7 +56,7 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
             embed_score = embeddings.cosine(va, vb)
             result["ai_score"] = round(float(embed_score), 4)
 
-    chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    chat_model = resolve_llm_model(provider)
     # Only ask the LLM on borderline pairs (or when no embeddings).
     borderline = embed_score is None or 0.35 <= embed_score <= 0.92
     if not borderline or not provider.has_model(chat_model):

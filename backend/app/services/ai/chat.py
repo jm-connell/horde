@@ -13,7 +13,13 @@ from ...models import Video, VideoAiChat, VideoAiChatMessage, utcnow
 from .. import app_settings
 from . import embeddings as ai_embeddings
 from . import text as ai_text
-from .provider import get_provider, require_chat_model
+from .provider import (
+    OpenRouterProvider,
+    get_llm_provider,
+    llm_features_allowed,
+    require_llm_chat_model,
+    resolve_llm_model,
+)
 from .workload import ensure_quality_chat_model
 
 logger = logging.getLogger(__name__)
@@ -90,10 +96,9 @@ def _history_for_prompt(
 
 def _validate_chat_request(session: Session, video_id: int, message: str) -> Video:
     ai = app_settings.ai_settings()
-    if not ai.get("enabled", True):
-        raise ChatError("AI is disabled", status_code=400)
-    if ai.get("paused"):
-        raise ChatError("AI is paused", status_code=409)
+    allowed, reason = llm_features_allowed()
+    if not allowed:
+        raise ChatError(reason or "AI is disabled", status_code=409 if ai.get("paused") else 400)
     if not ai.get("ai_chat", True):
         raise ChatError("AI video chat is disabled", status_code=400)
 
@@ -142,13 +147,21 @@ def stream_chat(
         return
 
     user_text = message.strip()
-    chat_model = ensure_quality_chat_model()
-    provider = get_provider()
+    provider = get_llm_provider()
     if provider is None:
-        yield _sse({"type": "error", "detail": "Ollama not available", "status": 503})
+        yield _sse(
+            {
+                "type": "error",
+                "detail": "No LLM available (enable OpenRouter or Ollama)",
+                "status": 503,
+            }
+        )
         return
-
-    missing = require_chat_model(provider, chat_model)
+    if isinstance(provider, OpenRouterProvider):
+        chat_model = resolve_llm_model(provider)
+    else:
+        chat_model = ensure_quality_chat_model()
+    missing = require_llm_chat_model(provider, chat_model)
     if missing:
         yield _sse({"type": "error", "detail": missing, "status": 503})
         return

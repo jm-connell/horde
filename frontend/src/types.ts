@@ -235,6 +235,11 @@ export interface AiSettings {
   base_url: string;
   embed_model: string;
   chat_model: string;
+  openrouter_enabled: boolean;
+  /** Masked key from the API; empty when unset. */
+  openrouter_api_key: string;
+  openrouter_api_key_set: boolean;
+  openrouter_model: string;
   schedule: AiSchedule;
   timer_hours: number;
   schedule_time: string;
@@ -301,6 +306,11 @@ export interface AiStatus {
   invent_sample_size?: number;
   invent_budget_chars?: number;
   models_match_profile?: boolean;
+  openrouter_enabled?: boolean;
+  openrouter_reachable?: boolean;
+  openrouter_model?: string;
+  openrouter_api_key_set?: boolean;
+  llm_backend?: string | null;
 }
 
 export interface RecommendationSection {
@@ -381,6 +391,13 @@ export interface HealthStats {
     base_url?: string | null;
     pulling?: string[];
     last_error?: string | null;
+  } | null;
+  openrouter?: {
+    enabled: boolean;
+    configured?: boolean;
+    api_key_set?: boolean;
+    model?: string;
+    reachable?: boolean;
   } | null;
   disk: { total_bytes: number; used_bytes: number; free_bytes: number } | null;
   library_video_count: number;

@@ -198,10 +198,10 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
     annotate = False
     try:
         from ..services import app_settings
-        from ..services.ai.provider import get_provider
+        from ..services.ai.provider import get_llm_provider
 
         ai = app_settings.ai_settings()
-        annotate = bool(ai.get("ai_duplicates", True)) and get_provider() is not None
+        annotate = bool(ai.get("ai_duplicates", True)) and get_llm_provider() is not None
     except Exception:  # noqa: BLE001
         annotate = False
 

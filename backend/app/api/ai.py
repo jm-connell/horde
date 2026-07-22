@@ -10,7 +10,14 @@ from sqlmodel import Session
 
 from ..database import get_session
 from ..services.ai import embeddings, recommend, worker
-from ..services.ai.provider import build_status, invalidate_resolved_url, test_connection
+from ..services.ai.provider import (
+    build_status,
+    invalidate_resolved_url,
+    list_openrouter_models,
+    openrouter_preset_list,
+    test_connection,
+    test_openrouter_connection,
+)
 from .videos import _to_read
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -56,10 +63,29 @@ class AiStatusRead(BaseModel):
     invent_sample_size: int = 100
     invent_budget_chars: int = 28000
     models_match_profile: bool = True
+    openrouter_enabled: bool = False
+    openrouter_reachable: bool = False
+    openrouter_model: str = "google/gemini-2.5-flash-lite"
+    openrouter_api_key_set: bool = False
+    llm_backend: Optional[str] = None
 
 
 class AiTestRequest(BaseModel):
     base_url: Optional[str] = None
+
+
+class OpenRouterTestRequest(BaseModel):
+    api_key: Optional[str] = None
+
+
+class OpenRouterModelRow(BaseModel):
+    id: str
+    name: str = ""
+
+
+class OpenRouterModelsResponse(BaseModel):
+    presets: list[dict[str, str]] = Field(default_factory=list)
+    models: list[OpenRouterModelRow] = Field(default_factory=list)
 
 
 class AiApplyWorkloadRequest(BaseModel):
@@ -164,6 +190,23 @@ def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()
 @router.post("/test")
 def ai_test(payload: AiTestRequest):
     return test_connection(payload.base_url)
+
+
+@router.post("/openrouter/test")
+def ai_openrouter_test(payload: OpenRouterTestRequest = OpenRouterTestRequest()):
+    return test_openrouter_connection(payload.api_key)
+
+
+@router.get("/openrouter/models", response_model=OpenRouterModelsResponse)
+def ai_openrouter_models():
+    try:
+        models = list_openrouter_models()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc) or "Could not list models") from exc
+    return OpenRouterModelsResponse(
+        presets=openrouter_preset_list(),
+        models=[OpenRouterModelRow(id=m["id"], name=m.get("name") or m["id"]) for m in models],
+    )
 
 
 @router.post("/process", response_model=AiProcessResult)
