@@ -9,6 +9,11 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import type { SpriteMeta } from "../types";
 import { formatDuration, formatTimestamp, type Chapter } from "../utils";
+import type {
+  ShakaNamespace,
+  ShakaPlayer,
+  ShakaVariantTrack,
+} from "shaka-player/dist/shaka-player.dash.js";
 
 export type ViewMode = "standard" | "theater" | "windowed";
 
@@ -50,8 +55,12 @@ function isChapterActive(
   return time >= ch.startSec && (!next || time < next.startSec);
 }
 
+export type StreamType = "file" | "dash";
+
 interface Props {
   src: string;
+  /** Progressive local/remote file (default) or adaptive DASH manifest. */
+  streamType?: StreamType;
   videoId?: number;
   mimeType?: string;
   poster?: string | null;
@@ -94,6 +103,7 @@ interface Props {
 
 export default function VideoPlayer({
   src,
+  streamType = "file",
   videoId,
   mimeType = "video/mp4",
   poster = null,
@@ -131,6 +141,7 @@ export default function VideoPlayer({
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const shakaPlayerRef = useRef<ShakaPlayer | null>(null);
   const chromecast = useChromecast();
   const airplay = useAirPlay(videoRef, src);
   const playerRootRef = useRef<HTMLDivElement>(null);
@@ -218,6 +229,134 @@ export default function VideoPlayer({
     setMediaError(null);
     setBuffering(true);
   }, [src]);
+
+  // Adaptive DASH via Shaka (preview); library playback stays native progressive.
+  useEffect(() => {
+    if (streamType !== "dash") {
+      const existing = shakaPlayerRef.current;
+      shakaPlayerRef.current = null;
+      if (existing) {
+        void existing.destroy().catch(() => undefined);
+      }
+      return;
+    }
+
+    const video = videoRef.current;
+    if (!video || !src) return;
+
+    let cancelled = false;
+    let player: ShakaPlayer | null = null;
+
+    const loadDash = async () => {
+      try {
+        const mod = await import("shaka-player/dist/shaka-player.dash.js");
+        // UMD build exports named members (Player, polyfill), not a default.
+        const shaka = mod as unknown as ShakaNamespace;
+        if (cancelled || !videoRef.current) return;
+
+        if (!shaka.Player.isBrowserSupported()) {
+          setMediaError("Adaptive streaming is not supported in this browser");
+          setBuffering(false);
+          return;
+        }
+
+        // Detach any previous instance before attaching a new one.
+        const prev = shakaPlayerRef.current;
+        shakaPlayerRef.current = null;
+        if (prev) {
+          await prev.destroy().catch(() => undefined);
+        }
+        if (cancelled || !videoRef.current) return;
+
+        shaka.polyfill.installAll();
+        const p = new shaka.Player();
+        await p.attach(videoRef.current);
+        if (cancelled) {
+          await p.destroy().catch(() => undefined);
+          return;
+        }
+
+        p.configure({
+          streaming: {
+            bufferingGoal: 30,
+            rebufferingGoal: 2,
+            bufferBehind: 30,
+            retryParameters: {
+              maxAttempts: 4,
+              baseDelay: 400,
+              backoffFactor: 2,
+              fuzzFactor: 0.5,
+              timeout: 30_000,
+            },
+          },
+          abr: {
+            enabled: true,
+            defaultBandwidthEstimate: 8_000_000,
+          },
+        });
+
+        p.addEventListener("error", ((event: Event) => {
+          const detail = (event as CustomEvent<{ message?: string; code?: number }>)
+            .detail;
+          const msg =
+            detail?.message ||
+            (detail?.code != null
+              ? `Playback error (${detail.code})`
+              : "Adaptive playback failed");
+          setMediaError(msg);
+          setBuffering(false);
+        }) as EventListener);
+
+        await p.load(src);
+        if (cancelled) {
+          await p.destroy().catch(() => undefined);
+          return;
+        }
+
+        player = p;
+        shakaPlayerRef.current = p;
+        setBuffering(false);
+
+        // Prefer the highest available track once variants are known, then
+        // leave ABR on so the player can step down on weak networks.
+        try {
+          const tracks = p.getVariantTracks() ?? [];
+          if (tracks.length > 0) {
+            const best = tracks.reduce((a: ShakaVariantTrack, b: ShakaVariantTrack) =>
+              (b.height ?? 0) > (a.height ?? 0) ? b : a
+            );
+            p.selectVariantTrack(best, /* clearBuffer= */ true);
+            p.configure({ abr: { enabled: true } });
+          }
+        } catch {
+          // ABR continues if explicit selection fails.
+        }
+
+        if (!chromecast.casting) {
+          videoRef.current?.play().catch(() => undefined);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const msg =
+          err instanceof Error ? err.message : "Failed to start adaptive stream";
+        setMediaError(msg);
+        setBuffering(false);
+      }
+    };
+
+    void loadDash();
+
+    return () => {
+      cancelled = true;
+      const active = player ?? shakaPlayerRef.current;
+      shakaPlayerRef.current = null;
+      if (active) {
+        void active.destroy().catch(() => undefined);
+      }
+    };
+    // Intentionally omit chromecast.casting — only checked at load time for autoplay.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, streamType]);
 
   // Lazy-load seek-preview sprites for full library playback.
   useEffect(() => {
@@ -1233,7 +1372,7 @@ export default function VideoPlayer({
       >
         <video
           ref={videoRef}
-          src={src}
+          src={streamType === "dash" ? undefined : src}
           playsInline
           {...{ "x-webkit-airplay": "allow" }}
           controls={false}

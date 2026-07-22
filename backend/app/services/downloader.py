@@ -1,4 +1,5 @@
 import re
+import secrets
 import shutil
 import subprocess
 import threading
@@ -6,6 +7,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+from xml.sax.saxutils import escape as xml_escape
 
 import httpx
 from sqlmodel import Session, select
@@ -1692,11 +1694,15 @@ def search_youtube_channels(query: str, *, limit: int = 8) -> list[dict[str, Any
     return results
 
 
-# --- In-app stream preview (progressive/muxed proxy) ---
+# --- In-app stream preview (progressive + adaptive DASH) ---
 
 _PREVIEW_CACHE_TTL_SEC = 240
+_PREVIEW_MANIFEST_TTL_SEC = 5 * 3600 + 1800  # ~5.5h; CDN URLs last ~6h
 _PREVIEW_MAX_HEIGHT = 720
+_PREVIEW_PROBE_SIZES = (256 * 1024, 1024 * 1024, 4 * 1024 * 1024)
 _preview_stream_cache: dict[str, dict[str, Any]] = {}
+_preview_manifest_by_url: dict[str, dict[str, Any]] = {}
+_preview_manifest_by_token: dict[str, dict[str, Any]] = {}
 _preview_stream_lock = threading.Lock()
 _preview_extract_sem = threading.Semaphore(2)
 
@@ -1736,6 +1742,266 @@ def _pick_progressive_format(info: dict[str, Any]) -> Optional[dict[str, Any]]:
     return candidates[0][1]
 
 
+def _is_mp4_video_codec(vcodec: str) -> bool:
+    v = vcodec.lower()
+    return v.startswith("avc1") or v.startswith("av01") or v.startswith("avc")
+
+
+def _is_mp4_audio_codec(acodec: str) -> bool:
+    a = acodec.lower()
+    return a.startswith("mp4a") or a in ("aac", "mp4a.40.2", "mp4a.40.5")
+
+
+def _pick_adaptive_formats(
+    info: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Select MP4 adaptive video (H.264/AV1) + AAC audio for DASH preview."""
+    formats = info.get("formats") or []
+    video_by_height: dict[int, dict[str, Any]] = {}
+    audio_candidates: list[tuple[int, dict[str, Any]]] = []
+
+    for fmt in formats:
+        if not isinstance(fmt, dict) or not fmt.get("url"):
+            continue
+        ext = str(fmt.get("ext") or "").lower()
+        if ext not in ("mp4", "m4a"):
+            continue
+        # Skip storyboard / image formats.
+        if str(fmt.get("format_note") or "").lower().startswith("storyboard"):
+            continue
+        if fmt.get("protocol") in ("mhtml", "m3u8", "m3u8_native", "http_dash_segments"):
+            continue
+        # SegmentBase DASH needs a single-file URL with sidx, not a fragment list.
+        if fmt.get("fragments"):
+            continue
+
+        vcodec = str(fmt.get("vcodec") or "none")
+        acodec = str(fmt.get("acodec") or "none")
+        height = int(fmt.get("height") or 0)
+
+        # Video-only adaptive (no audio track).
+        if vcodec != "none" and acodec == "none" and height > 0:
+            if not _is_mp4_video_codec(vcodec):
+                continue
+            score = height * 1000
+            # Prefer AV1 over H.264 at the same height for quality/bitrate.
+            if vcodec.lower().startswith("av01"):
+                score += 500
+            tbr = fmt.get("tbr") or fmt.get("vbr") or 0
+            try:
+                score += int(float(tbr))
+            except (TypeError, ValueError):
+                pass
+            prev = video_by_height.get(height)
+            if prev is None or score > int(prev.get("_score") or 0):
+                entry = dict(fmt)
+                entry["_score"] = score
+                video_by_height[height] = entry
+            continue
+
+        # Audio-only adaptive.
+        if vcodec == "none" and acodec != "none":
+            if not _is_mp4_audio_codec(acodec):
+                continue
+            score = 0
+            abr = fmt.get("abr") or fmt.get("tbr") or 0
+            try:
+                score += int(float(abr))
+            except (TypeError, ValueError):
+                pass
+            # Prefer higher sample rate / channels as a tie-break.
+            try:
+                score += int(fmt.get("asr") or 0) // 100
+            except (TypeError, ValueError):
+                pass
+            audio_candidates.append((score, fmt))
+
+    videos = sorted(
+        video_by_height.values(),
+        key=lambda f: int(f.get("height") or 0),
+        reverse=True,
+    )
+    for v in videos:
+        v.pop("_score", None)
+
+    audios: list[dict[str, Any]] = []
+    if audio_candidates:
+        audio_candidates.sort(key=lambda item: item[0], reverse=True)
+        audios.append(audio_candidates[0][1])
+
+    return videos, audios
+
+
+def _format_http_headers(fmt: dict[str, Any], info: dict[str, Any]) -> dict[str, str]:
+    headers = dict(fmt.get("http_headers") or {})
+    cookie = fmt.get("cookies") or info.get("cookies")
+    if cookie and "Cookie" not in headers:
+        headers["Cookie"] = cookie
+    return {str(k): str(v) for k, v in headers.items()}
+
+
+def _walk_mp4_boxes(
+    data: bytes, start: int = 0, end: Optional[int] = None
+) -> list[tuple[int, bytes, int]]:
+    """Return top-level (offset, type, size) boxes in [start, end)."""
+    if end is None:
+        end = len(data)
+    boxes: list[tuple[int, bytes, int]] = []
+    pos = start
+    while pos + 8 <= end:
+        size = int.from_bytes(data[pos : pos + 4], "big")
+        typ = data[pos + 4 : pos + 8]
+        header = 8
+        if size == 1:
+            if pos + 16 > end:
+                break
+            size = int.from_bytes(data[pos + 8 : pos + 16], "big")
+            header = 16
+        elif size == 0:
+            size = end - pos
+        if size < header:
+            break
+        if pos + size > end:
+            # Incomplete box in buffer — still record start for sidx detection.
+            boxes.append((pos, typ, size))
+            break
+        boxes.append((pos, typ, size))
+        pos += size
+    return boxes
+
+
+def _find_sidx_range(data: bytes) -> Optional[tuple[int, int]]:
+    """Locate the first complete top-level sidx box; return (start, end_inclusive)."""
+    for offset, typ, size in _walk_mp4_boxes(data):
+        if typ == b"sidx":
+            end = offset + size - 1
+            if end < len(data):
+                return offset, end
+            return None
+    return None
+
+
+def _probe_mp4_ranges(
+    direct_url: str, headers: dict[str, str]
+) -> tuple[str, str]:
+    """Probe ISO-BMFF to compute initRange and indexRange (sidx).
+
+    Returns (init_range, index_range) as "start-end" strings.
+    """
+    req_headers = dict(headers)
+    last_err: Optional[Exception] = None
+    for nbytes in _PREVIEW_PROBE_SIZES:
+        req_headers["Range"] = f"bytes=0-{nbytes - 1}"
+        try:
+            with httpx.Client(
+                timeout=httpx.Timeout(20.0, read=60.0),
+                follow_redirects=True,
+            ) as client:
+                resp = client.get(direct_url, headers=req_headers)
+            if resp.status_code not in (200, 206):
+                raise RuntimeError(
+                    f"Probe failed with status {resp.status_code}"
+                )
+            data = resp.content
+        except Exception as exc:  # noqa: BLE001
+            last_err = exc
+            continue
+
+        sidx = _find_sidx_range(data)
+        if sidx is None:
+            # Need a larger window, or no sidx present.
+            if len(data) < nbytes:
+                break
+            continue
+
+        sidx_start, sidx_end = sidx
+        if sidx_start <= 0:
+            raise RuntimeError("Invalid sidx offset in MP4 probe")
+        init_range = f"0-{sidx_start - 1}"
+        index_range = f"{sidx_start}-{sidx_end}"
+        return init_range, index_range
+
+    if last_err is not None:
+        raise RuntimeError(f"MP4 range probe failed: {last_err}") from last_err
+    raise RuntimeError("MP4 stream has no sidx index (cannot build DASH)")
+
+
+def _bandwidth_bps(fmt: dict[str, Any]) -> int:
+    for key in ("tbr", "vbr", "abr"):
+        val = fmt.get(key)
+        if val is None:
+            continue
+        try:
+            # yt-dlp tbr is kbps.
+            return max(1, int(float(val) * 1000))
+        except (TypeError, ValueError):
+            continue
+    filesize = fmt.get("filesize") or fmt.get("filesize_approx")
+    duration = fmt.get("duration")  # rarely on format
+    if filesize and duration:
+        try:
+            return max(1, int(int(filesize) * 8 / float(duration)))
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+    return 1_000_000
+
+
+def _codecs_string(fmt: dict[str, Any], *, kind: str) -> str:
+    if kind == "video":
+        return str(fmt.get("vcodec") or "avc1.4D401F")
+    return str(fmt.get("acodec") or "mp4a.40.2")
+
+
+def _build_representation(
+    fmt: dict[str, Any],
+    info: dict[str, Any],
+    *,
+    kind: str,
+) -> dict[str, Any]:
+    direct = str(fmt.get("url") or "")
+    if not direct:
+        raise RuntimeError("Adaptive format has no URL")
+    headers = _format_http_headers(fmt, info)
+    init_range, index_range = _probe_mp4_ranges(direct, headers)
+    itag = str(fmt.get("format_id") or fmt.get("format") or "")
+    if not itag:
+        raise RuntimeError("Adaptive format missing format_id")
+
+    mime = "video/mp4" if kind == "video" else "audio/mp4"
+    rep: dict[str, Any] = {
+        "itag": itag,
+        "kind": kind,
+        "direct_url": direct,
+        "http_headers": headers,
+        "content_type": mime,
+        "mime_type": mime,
+        "codecs": _codecs_string(fmt, kind=kind),
+        "bandwidth": _bandwidth_bps(fmt),
+        "init_range": init_range,
+        "index_range": index_range,
+    }
+    if kind == "video":
+        rep["width"] = int(fmt.get("width") or 0) or None
+        rep["height"] = int(fmt.get("height") or 0) or None
+        fps = fmt.get("fps")
+        try:
+            rep["fps"] = int(float(fps)) if fps is not None else None
+        except (TypeError, ValueError):
+            rep["fps"] = None
+    else:
+        channels = fmt.get("audio_channels") or 2
+        try:
+            rep["audio_channels"] = int(channels)
+        except (TypeError, ValueError):
+            rep["audio_channels"] = 2
+        asr = fmt.get("asr")
+        try:
+            rep["audio_sampling_rate"] = int(asr) if asr else None
+        except (TypeError, ValueError):
+            rep["audio_sampling_rate"] = None
+    return rep
+
+
 def _extract_preview_info(url: str) -> dict[str, Any]:
     opts = apply_cookie_opts(
         {
@@ -1754,11 +2020,21 @@ def _extract_preview_info(url: str) -> dict[str, Any]:
     return info
 
 
+def _max_adaptive_height(info: dict[str, Any]) -> Optional[int]:
+    videos, _ = _pick_adaptive_formats(info)
+    if not videos:
+        return None
+    heights = [int(v.get("height") or 0) for v in videos if v.get("height")]
+    return max(heights) if heights else None
+
+
 def extract_stream_preview_meta(url: str) -> dict[str, Any]:
     """Metadata for the in-app preview page (includes description for chapters)."""
     info = _extract_preview_info(url)
-    fmt = _pick_progressive_format(info)
-    preview_height = int(fmt["height"]) if fmt and fmt.get("height") else None
+    preview_height = _max_adaptive_height(info)
+    if preview_height is None:
+        fmt = _pick_progressive_format(info)
+        preview_height = int(fmt["height"]) if fmt and fmt.get("height") else None
     view_count = info.get("view_count")
     if view_count is not None:
         try:
@@ -1795,6 +2071,7 @@ def resolve_preview_stream(url: str) -> dict[str, Any]:
     """Resolve a short-lived progressive media URL for proxy streaming.
 
     Returns dict with direct_url, http_headers, height, content_type, expires_at.
+    Kept as a fallback for clients that cannot play DASH.
     """
     now = time.time()
     with _preview_stream_lock:
@@ -1819,12 +2096,7 @@ def resolve_preview_stream(url: str) -> dict[str, Any]:
         if not direct:
             raise RuntimeError("Preview format has no URL")
 
-        headers = dict(fmt.get("http_headers") or {})
-        # yt-dlp sometimes puts cookies on the format / info.
-        cookie = fmt.get("cookies") or info.get("cookies")
-        if cookie and "Cookie" not in headers:
-            headers["Cookie"] = cookie
-
+        headers = _format_http_headers(fmt, info)
         ext = str(fmt.get("ext") or "mp4")
         content_type = {
             "mp4": "video/mp4",
@@ -1850,3 +2122,246 @@ def resolve_preview_stream(url: str) -> dict[str, Any]:
                 for key, _ in oldest:
                     _preview_stream_cache.pop(key, None)
         return dict(entry)
+
+
+def _trim_manifest_cache_locked() -> None:
+    if len(_preview_manifest_by_url) <= 48:
+        return
+    oldest = sorted(
+        _preview_manifest_by_url.items(),
+        key=lambda item: item[1].get("expires_at", 0),
+    )[:16]
+    for key, entry in oldest:
+        _preview_manifest_by_url.pop(key, None)
+        token = entry.get("token")
+        if token:
+            _preview_manifest_by_token.pop(str(token), None)
+
+
+def _store_manifest_entry(url: str, entry: dict[str, Any]) -> None:
+    with _preview_stream_lock:
+        old = _preview_manifest_by_url.get(url)
+        if old and old.get("token") and old["token"] != entry.get("token"):
+            _preview_manifest_by_token.pop(str(old["token"]), None)
+        _preview_manifest_by_url[url] = entry
+        _preview_manifest_by_token[str(entry["token"])] = entry
+        _trim_manifest_cache_locked()
+
+
+def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
+    videos, audios = _pick_adaptive_formats(info)
+    if not videos or not audios:
+        raise RuntimeError(
+            "No MP4 adaptive formats available for DASH preview"
+        )
+
+    reps: dict[str, dict[str, Any]] = {}
+    for fmt in videos:
+        rep = _build_representation(fmt, info, kind="video")
+        reps[rep["itag"]] = rep
+    for fmt in audios:
+        rep = _build_representation(fmt, info, kind="audio")
+        reps[rep["itag"]] = rep
+
+    duration = info.get("duration")
+    try:
+        duration_f = float(duration) if duration is not None else None
+    except (TypeError, ValueError):
+        duration_f = None
+
+    heights = [
+        int(r["height"])
+        for r in reps.values()
+        if r.get("kind") == "video" and r.get("height")
+    ]
+    max_height = max(heights) if heights else None
+
+    return {
+        "token": secrets.token_urlsafe(18),
+        "source_url": url,
+        "duration": duration_f,
+        "max_height": max_height,
+        "formats": reps,
+        "expires_at": time.time() + _PREVIEW_MANIFEST_TTL_SEC,
+    }
+
+
+def resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]:
+    """Resolve adaptive formats and return a cached manifest session.
+
+    Returns dict with token, duration, max_height, formats, expires_at.
+    """
+    now = time.time()
+    if not force:
+        with _preview_stream_lock:
+            cached = _preview_manifest_by_url.get(url)
+            if cached and cached.get("expires_at", 0) > now + 60:
+                return dict(cached)
+
+    with _preview_extract_sem:
+        if not force:
+            with _preview_stream_lock:
+                cached = _preview_manifest_by_url.get(url)
+                if cached and cached.get("expires_at", 0) > now + 60:
+                    return dict(cached)
+
+        info = _extract_preview_info(url)
+        # Preserve token across refresh so in-flight media URLs keep working.
+        existing_token: Optional[str] = None
+        with _preview_stream_lock:
+            prev = _preview_manifest_by_url.get(url)
+            if prev:
+                existing_token = str(prev.get("token") or "") or None
+
+        entry = _build_manifest_entry(url, info)
+        if existing_token and force:
+            entry["token"] = existing_token
+        _store_manifest_entry(url, entry)
+        return dict(entry)
+
+
+def build_dash_manifest(session: dict[str, Any]) -> str:
+    """Build a SegmentBase DASH MPD with proxied BaseURLs."""
+    token = str(session["token"])
+    duration = session.get("duration")
+    try:
+        dur = float(duration) if duration is not None else 0.0
+    except (TypeError, ValueError):
+        dur = 0.0
+    media_duration = f"PT{max(dur, 0.1):.3f}S"
+
+    formats: dict[str, dict[str, Any]] = session.get("formats") or {}
+    videos = [
+        r for r in formats.values() if r.get("kind") == "video"
+    ]
+    audios = [
+        r for r in formats.values() if r.get("kind") == "audio"
+    ]
+    videos.sort(key=lambda r: int(r.get("height") or 0), reverse=True)
+
+    lines: list[str] = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        (
+            '<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" '
+            'profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" '
+            'type="static" '
+            f'mediaPresentationDuration="{media_duration}" '
+            'minBufferTime="PT1.5S">'
+        ),
+        "<Period>",
+    ]
+
+    if videos:
+        lines.append(
+            '<AdaptationSet id="0" contentType="video" '
+            'mimeType="video/mp4" segmentAlignment="true" '
+            'startWithSAP="1" subsegmentAlignment="true" '
+            'subsegmentStartsWithSAP="1">'
+        )
+        for rep in videos:
+            itag = xml_escape(str(rep["itag"]))
+            codecs = xml_escape(str(rep.get("codecs") or "avc1.4D401F"))
+            bandwidth = int(rep.get("bandwidth") or 1_000_000)
+            width = int(rep.get("width") or 0)
+            height = int(rep.get("height") or 0)
+            fps = rep.get("fps")
+            attrs = [
+                f'id="{itag}"',
+                f'bandwidth="{bandwidth}"',
+                f'codecs="{codecs}"',
+            ]
+            if width > 0:
+                attrs.append(f'width="{width}"')
+            if height > 0:
+                attrs.append(f'height="{height}"')
+            if fps:
+                attrs.append(f'frameRate="{int(fps)}"')
+            base = (
+                f"/api/preview/media?token={xml_escape(token)}"
+                f"&amp;itag={itag}"
+            )
+            init_r = xml_escape(str(rep["init_range"]))
+            index_r = xml_escape(str(rep["index_range"]))
+            lines.append(f"<Representation {' '.join(attrs)}>")
+            lines.append(f"<BaseURL>{base}</BaseURL>")
+            lines.append(f'<SegmentBase indexRange="{index_r}">')
+            lines.append(f'<Initialization range="{init_r}"/>')
+            lines.append("</SegmentBase>")
+            lines.append("</Representation>")
+        lines.append("</AdaptationSet>")
+
+    if audios:
+        lines.append(
+            '<AdaptationSet id="1" contentType="audio" '
+            'mimeType="audio/mp4" segmentAlignment="true" '
+            'startWithSAP="1" subsegmentAlignment="true" '
+            'subsegmentStartsWithSAP="1" lang="und">'
+        )
+        for rep in audios:
+            itag = xml_escape(str(rep["itag"]))
+            codecs = xml_escape(str(rep.get("codecs") or "mp4a.40.2"))
+            bandwidth = int(rep.get("bandwidth") or 128_000)
+            channels = int(rep.get("audio_channels") or 2)
+            base = (
+                f"/api/preview/media?token={xml_escape(token)}"
+                f"&amp;itag={itag}"
+            )
+            init_r = xml_escape(str(rep["init_range"]))
+            index_r = xml_escape(str(rep["index_range"]))
+            lines.append(
+                f'<Representation id="{itag}" bandwidth="{bandwidth}" '
+                f'codecs="{codecs}">'
+            )
+            lines.append(
+                '<AudioChannelConfiguration '
+                'schemeIdUri="urn:mpeg:dash:23003:3:'
+                'audio_channel_configuration:2011" '
+                f'value="{channels}"/>'
+            )
+            lines.append(f"<BaseURL>{base}</BaseURL>")
+            lines.append(f'<SegmentBase indexRange="{index_r}">')
+            lines.append(f'<Initialization range="{init_r}"/>')
+            lines.append("</SegmentBase>")
+            lines.append("</Representation>")
+        lines.append("</AdaptationSet>")
+
+    lines.append("</Period>")
+    lines.append("</MPD>")
+    return "\n".join(lines)
+
+
+def lookup_preview_media(
+    token: str, itag: str, *, refresh: bool = False
+) -> dict[str, Any]:
+    """Look up a cached adaptive format for the media proxy.
+
+    On refresh=True (e.g. upstream 403), re-resolve URLs keeping the same token.
+    """
+    with _preview_stream_lock:
+        session = _preview_manifest_by_token.get(token)
+
+    if session is None:
+        raise KeyError("Unknown or expired preview media token")
+
+    source_url = str(session.get("source_url") or "")
+    if refresh:
+        if not source_url:
+            raise RuntimeError("Cannot refresh preview media: missing source URL")
+        session = resolve_preview_manifest(source_url, force=True)
+        # Ensure token index still points at the refreshed entry.
+        with _preview_stream_lock:
+            session["token"] = token
+            _preview_manifest_by_token[token] = session
+            _preview_manifest_by_url[source_url] = session
+
+    formats: dict[str, dict[str, Any]] = session.get("formats") or {}
+    fmt = formats.get(itag)
+    if fmt is None:
+        raise KeyError(f"Unknown itag {itag} for preview token")
+
+    return {
+        "direct_url": str(fmt["direct_url"]),
+        "http_headers": dict(fmt.get("http_headers") or {}),
+        "content_type": str(fmt.get("content_type") or "video/mp4"),
+        "source_url": source_url,
+    }

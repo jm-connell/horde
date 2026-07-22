@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    include: ["shaka-player/dist/shaka-player.dash.js"],
+  },
   server: {
     proxy: {
       "/api": {

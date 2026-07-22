@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   api,
-  previewStreamUrl,
+  previewManifestUrl,
   streamUrl,
   subtitleUrl,
   thumbnailUrl,
@@ -653,8 +653,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       />
     ) : preview != null ? (
       <VideoPlayer
-        src={previewStreamUrl(preview.url)}
-        mimeType="video/mp4"
+        src={previewManifestUrl(preview.url)}
+        streamType="dash"
+        mimeType="application/dash+xml"
         poster={preview.poster}
         mode={effectiveMode}
         onModeChange={setMode}

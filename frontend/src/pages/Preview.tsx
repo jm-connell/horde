@@ -27,7 +27,7 @@ import {
 import { setWatchResume } from "../utils/watchHandoff";
 
 const PREVIEW_QUALITY_TIP =
-  "Preview streams are limited to progressive (muxed) formats—often 360p, sometimes up to 720p. YouTube serves higher resolutions as separate adaptive video/audio streams that are unreliable to proxy cleanly in-browser. Download the video for full quality.";
+  "Preview plays YouTube's adaptive stream at the highest available resolution (up to 4K when AV1/H.264 is available). Download still saves a local copy to your library.";
 
 const STAY_DOWNLOAD_TOAST =
   "Downloading - Video will switch to full quality when ready";
@@ -406,7 +406,7 @@ export default function Preview() {
               <button
                 type="button"
                 className="flex h-4 w-4 items-center justify-center rounded-full border border-amber-500/50 text-[10px] font-bold text-amber-300/90 hover:bg-amber-500/20"
-                aria-label="Why is preview quality limited?"
+                aria-label="About preview quality"
               >
                 ?
               </button>

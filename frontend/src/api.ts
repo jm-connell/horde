@@ -830,6 +830,10 @@ export function previewStreamUrl(url: string): string {
   return `/api/preview/stream?url=${encodeURIComponent(url)}`;
 }
 
+export function previewManifestUrl(url: string): string {
+  return `/api/preview/manifest?url=${encodeURIComponent(url)}`;
+}
+
 export function downloadFileUrl(id: number): string {
   return `/api/videos/${id}/file`;
 }
