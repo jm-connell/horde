@@ -85,6 +85,8 @@ export interface ChannelFeedEntry {
   thumbnail_url: string | null;
   view_count: number | null;
   published_at: string | null;
+  /** Present on global catalog search results. */
+  channel?: string | null;
   in_library: boolean;
   video_id: number | null;
   library_height_px: number | null;

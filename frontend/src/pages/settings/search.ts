@@ -62,6 +62,15 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "playback",
+    keywords:
+      "undownloaded channel feed show undownloaded library downloads",
+  },
+  {
+    tab: "playback",
+    keywords: "stream quality resolution 4k 1080p 720p streaming auto",
+  },
+  {
+    tab: "playback",
     keywords: "subtitles caption vertical position",
   },
   {

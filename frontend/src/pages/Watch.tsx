@@ -1,40 +1,54 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { api, thumbnailUrl } from "../api";
 import AddToPlaylist from "../components/AddToPlaylist";
-import ChaptersList from "../components/ChaptersList";
-import Collapse from "../components/Collapse";
-import LinkifiedText from "../components/LinkifiedText";
+import LoadingIndicator from "../components/LoadingIndicator";
 import PlaybackQueue from "../components/PlaybackQueue";
 import VideoActionsMenu from "../components/VideoActionsMenu";
 import VideoAiPanel from "../components/VideoAiPanel";
 import VideoCard from "../components/VideoCard";
 import VideoEditForm from "../components/VideoEditForm";
-import { useDownloads } from "../context/DownloadContext";
+import WatchMeta from "../components/WatchMeta";
+import {
+  isActiveJob,
+  useDownloads,
+} from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
 import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
-import type { Video } from "../types";
-import LoadingIndicator from "../components/LoadingIndicator";
+import { PRESET_ORDER, presetOptionLabel } from "../presets";
+import type { StreamPreviewMeta, Video } from "../types";
 import {
   formatDate,
   formatDuration,
   formatResolution,
   formatSize,
+  formatViewCount,
   parseChapters,
   stripChapterLines,
 } from "../utils";
 import {
   clearWatchResume,
   peekWatchResume,
+  setWatchResume,
 } from "../utils/watchHandoff";
 
 const RELATED_PAGE = 8;
 const RELATED_MAX = 48;
 
+const STAY_DOWNLOAD_TOAST =
+  "Downloading - Video will switch to full quality when ready";
+
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
+  "2160p": "4K (2160p)",
   "1440p": "1440p (2K)",
   "1080p": "1080p",
   "720p": "720p",
@@ -42,17 +56,45 @@ const PRESET_LABELS: Record<string, string> = {
   audio: "Audio only",
 };
 
+type WatchSource =
+  | { kind: "library"; video: Video }
+  | { kind: "stream"; url: string; meta: StreamPreviewMeta };
+
+function downloadButtonLabel(preset: string): string {
+  if (preset === "best") return "Download Best Quality";
+  if (preset === "audio") return "Download Audio Only";
+  if (preset === "2160p") return "Download 4K";
+  return `Download ${preset}`;
+}
+
+function bestAvailablePreset(presets: string[]): string {
+  for (const p of PRESET_ORDER) {
+    if (p === "best" || p === "audio") continue;
+    if (presets.includes(p)) return p;
+  }
+  if (presets.includes("audio")) return "audio";
+  return "best";
+}
+
+function orderPresets(presets: string[]): string[] {
+  const set = new Set(presets);
+  return PRESET_ORDER.filter((p) => p !== "best" && set.has(p));
+}
+
 export default function Watch() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const videoId = Number(id);
-  const [video, setVideo] = useState<Video | null>(null);
+  const libraryId = id ? Number(id) : NaN;
+  const streamUrlParam = (searchParams.get("url") || "").trim();
+  const channelParam = (searchParams.get("channel") || "").trim();
+
+  const [source, setSource] = useState<WatchSource | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
-  const [descExpanded, setDescExpanded] = useState(false);
-  const [tagDraft, setTagDraft] = useState("");
   const [moreLikeThis, setMoreLikeThis] = useState<Video[]>([]);
   const [relatedHasMore, setRelatedHasMore] = useState(false);
   const [relatedLoading, setRelatedLoading] = useState(false);
@@ -61,49 +103,253 @@ export default function Watch() {
   const [redownloadPreset, setRedownloadPreset] = useState("1080p");
   const [presets, setPresets] = useState<string[]>(["best"]);
   const [redownloading, setRedownloading] = useState(false);
-  const [settings, updateSettings] = useSettings();
+  const [settings] = useSettings();
   const [aiSummariesEnabled, setAiSummariesEnabled] = useState(false);
   const [aiChatEnabled, setAiChatEnabled] = useState(false);
   const [showAiCosts, setShowAiCosts] = useState(false);
+
+  // Stream download controls
+  const [queuing, setQueuing] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<number | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState("best");
+  const [availablePresets, setAvailablePresets] = useState<string[]>([]);
+  const [presetSizes, setPresetSizes] = useState<Record<string, number>>({});
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const swapPendingRef = useRef(false);
+  const userPickedPresetRef = useRef(false);
+  const activeJobIdRef = useRef<number | null>(null);
+  activeJobIdRef.current = activeJobId;
+
   const { showToast } = useToast();
-  const { onJobCompleted, refreshJobs } = useDownloads();
+  const { onJobCompleted, refreshJobs, submitDownload, progress, jobs } =
+    useDownloads();
   const redownloadPending = useRef(false);
   const isMobile = useIsMobile();
   const {
     mode,
     playVideo,
+    playStream,
     registerDock,
     queue,
     getCurrentPosition,
+    getStreamPosition,
   } = usePlayback();
 
   const dockRef = useRef<HTMLDivElement>(null);
 
+  // --- Load library video ---
   useEffect(() => {
-    if (!videoId) return;
-    const fromHandoff = peekWatchResume(videoId);
+    if (!Number.isFinite(libraryId) || libraryId <= 0) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const fromHandoff = peekWatchResume(libraryId);
     const navResume = (location.state as { resumeAt?: number } | null)?.resumeAt;
     const resumeAt =
       fromHandoff ??
       (typeof navResume === "number" && navResume > 1 ? navResume : null);
 
     api
-      .getVideo(videoId)
+      .getVideo(libraryId)
       .then((v) => {
+        if (cancelled) return;
         const merged =
           resumeAt != null && resumeAt > 1
             ? { ...v, last_position_sec: resumeAt }
             : v;
-        clearWatchResume(videoId);
-        setVideo(merged);
+        clearWatchResume(libraryId);
+        setSource({ kind: "library", video: merged });
         playVideo(merged);
       })
-      .catch(() => setError("Video not found"));
-    // location.state is read once for the preview handoff; do not re-fetch on state churn.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
-  }, [videoId, playVideo]);
+      .catch(() => {
+        if (!cancelled) setError("Video not found");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional handoff once
+  }, [libraryId, playVideo]);
+
+  // --- Load stream meta ---
+  useEffect(() => {
+    if (Number.isFinite(libraryId) && libraryId > 0) return;
+    if (!streamUrlParam) {
+      setError("Missing video URL");
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setSource(null);
+    setSelectedPreset("best");
+    setAvailablePresets([]);
+    setPresetSizes({});
+    setPresetMenuOpen(false);
+    userPickedPresetRef.current = false;
+    api
+      .getPreviewMeta(streamUrlParam)
+      .then((meta) => {
+        if (cancelled) return;
+        if (meta.library_video_id != null) {
+          navigate(`/watch/${meta.library_video_id}`, { replace: true });
+          return;
+        }
+        setSource({ kind: "stream", url: streamUrlParam, meta });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(
+          err instanceof Error ? err.message : "Could not load stream"
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [streamUrlParam, libraryId, navigate]);
+
+  // Start stream playback
+  useEffect(() => {
+    if (source?.kind !== "stream") return;
+    playStream({
+      url: source.url,
+      title: source.meta.title || "Untitled",
+      channel: source.meta.channel,
+      poster: source.meta.thumbnail_url,
+      chapters: parseChapters(source.meta.description),
+      sourceUrl: source.meta.source_url,
+      channelParam: channelParam || source.meta.channel,
+    });
+  }, [source, channelParam, playStream]);
+
+  // Resolve download presets for stream
+  useEffect(() => {
+    if (source?.kind !== "stream") return;
+    const { url, meta } = source;
+    let cancelled = false;
+    const applyPresets = (presetsList: string[]) => {
+      if (cancelled || presetsList.length === 0) return;
+      const ordered = orderPresets(presetsList);
+      if (ordered.length === 0) return;
+      setAvailablePresets(ordered);
+      if (!userPickedPresetRef.current) {
+        setSelectedPreset(bestAvailablePreset(ordered));
+      }
+    };
+    if (meta.available_presets?.length) applyPresets(meta.available_presets);
+    api
+      .previewDownload(url)
+      .then((p) => {
+        if (cancelled || p.is_playlist) return;
+        if (p.available_presets?.length) applyPresets(p.available_presets);
+        if (p.preset_sizes && Object.keys(p.preset_sizes).length > 0) {
+          setPresetSizes(p.preset_sizes);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
 
   useEffect(() => {
+    if (!presetMenuOpen) return;
+    const onPointer = (e: MouseEvent) => {
+      if (
+        downloadMenuRef.current &&
+        !downloadMenuRef.current.contains(e.target as Node)
+      ) {
+        setPresetMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPresetMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [presetMenuOpen]);
+
+  // Resume in-flight download for this stream URL
+  useEffect(() => {
+    if (source?.kind !== "stream" || activeJobId != null) return;
+    const existing = jobs.find(
+      (j) => j.url === source.url && isActiveJob(j, progress[j.id])
+    );
+    if (existing) setActiveJobId(existing.id);
+  }, [source, jobs, progress, activeJobId]);
+
+  // Download complete → handoff to library watch
+  useEffect(() => {
+    return onJobCompleted((completedId) => {
+      if (source?.kind !== "stream") return;
+      const jobId = activeJobIdRef.current;
+      if (jobId == null || completedId == null) return;
+      if (swapPendingRef.current) return;
+
+      void (async () => {
+        try {
+          const job = await api.getJob(jobId);
+          if (job.status !== "completed" || job.video_id !== completedId) {
+            return;
+          }
+          swapPendingRef.current = true;
+          setActiveJobId(null);
+
+          const sec = getStreamPosition();
+          if (sec >= 5) {
+            await api.saveProgress(completedId, sec).catch(() => undefined);
+          }
+          const video = await api.getVideo(completedId);
+          const resumeAt = sec > 1 ? sec : video.last_position_sec;
+          setWatchResume(completedId, resumeAt);
+          playVideo({
+            ...video,
+            last_position_sec: resumeAt,
+          });
+          showToast("Download complete — switching to full quality");
+          navigate(`/watch/${completedId}`, {
+            state: { resumeAt },
+          });
+        } catch {
+          showToast("Download finished, but could not open the video");
+          swapPendingRef.current = false;
+        }
+      })();
+    });
+  }, [
+    onJobCompleted,
+    source,
+    getStreamPosition,
+    playVideo,
+    navigate,
+    showToast,
+  ]);
+
+  useEffect(() => {
+    if (activeJobId == null) return;
+    const live = progress[activeJobId];
+    if (!live) return;
+    if (live.status === "error") {
+      showToast(live.error || "Download failed");
+      setActiveJobId(null);
+      swapPendingRef.current = false;
+    } else if (live.status === "cancelled") {
+      setActiveJobId(null);
+      swapPendingRef.current = false;
+    }
+  }, [activeJobId, progress, showToast]);
+
+  // --- Library-only effects ---
+  useEffect(() => {
+    if (source?.kind !== "library") return;
     let cancelled = false;
     Promise.all([api.getAppSettings(), api.getAiStatus()])
       .then(([s, status]) => {
@@ -127,7 +373,9 @@ export default function Watch() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [source?.kind]);
+
+  const video = source?.kind === "library" ? source.video : null;
 
   useEffect(() => {
     if (!video) return;
@@ -190,15 +438,18 @@ export default function Watch() {
   useEffect(() => {
     if (!video?.subtitles_pending) return;
     const timer = window.setInterval(() => {
-      api.getVideo(videoId).then(setVideo).catch(() => undefined);
+      api.getVideo(video.id).then((v) => {
+        setSource({ kind: "library", video: v });
+      }).catch(() => undefined);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [videoId, video?.subtitles_pending]);
+  }, [video?.id, video?.subtitles_pending]);
 
   useEffect(() => {
+    if (!source) return;
     registerDock(dockRef.current);
     return () => registerDock(null);
-  }, [registerDock, video, mode]);
+  }, [registerDock, source, mode]);
 
   useEffect(() => {
     api.listPresets().then(setPresets).catch(() => undefined);
@@ -206,19 +457,20 @@ export default function Watch() {
 
   useEffect(() => {
     return onJobCompleted((completedId, event) => {
-      if (!redownloadPending.current || completedId !== videoId) return;
+      if (!redownloadPending.current || !video || completedId !== video.id)
+        return;
       redownloadPending.current = false;
 
       void (async () => {
         try {
           const sec = getCurrentPosition();
           if (sec >= 5) {
-            await api.saveProgress(videoId, sec).catch(() => undefined);
+            await api.saveProgress(video.id, sec).catch(() => undefined);
           }
-          const updated = await api.getVideo(videoId);
+          const updated = await api.getVideo(video.id);
           const resumeAt = sec > 1 ? sec : updated.last_position_sec;
           const merged = { ...updated, last_position_sec: resumeAt };
-          setVideo(merged);
+          setSource({ kind: "library", video: merged });
           playVideo(merged);
           if (event?.quality_warning) {
             showToast(event.quality_warning);
@@ -226,21 +478,27 @@ export default function Watch() {
             showToast("Redownload complete — switching to new quality");
           }
         } catch {
-          api.getVideo(videoId).then(setVideo).catch(() => undefined);
-          showToast(
-            event?.quality_warning || "Redownload complete."
-          );
+          api
+            .getVideo(video.id)
+            .then((v) => setSource({ kind: "library", video: v }))
+            .catch(() => undefined);
+          showToast(event?.quality_warning || "Redownload complete.");
         }
       })();
     });
-  }, [onJobCompleted, videoId, showToast, getCurrentPosition, playVideo]);
+  }, [onJobCompleted, video, showToast, getCurrentPosition, playVideo]);
+
+  const setVideo = useCallback((v: Video) => {
+    setSource({ kind: "library", video: v });
+  }, []);
 
   const onRedownload = async () => {
+    if (!video) return;
     setRedownloading(true);
     try {
       redownloadPending.current = true;
       await api.redownloadVideo(
-        videoId,
+        video.id,
         redownloadPreset,
         settings.normalizeVolumeOnDownload
       );
@@ -274,7 +532,7 @@ export default function Watch() {
     setRedownloading(true);
     try {
       redownloadPending.current = true;
-      await api.redownloadVideo(videoId, preset, true);
+      await api.redownloadVideo(video.id, preset, true);
       showToast(
         "Normalizing via redownload — check the Download page for progress."
       );
@@ -302,38 +560,95 @@ export default function Watch() {
     }
   };
 
-  if (error) {
-    return <p className="py-20 text-center text-gray-500">{error}</p>;
-  }
-  if (!video) {
-    return <LoadingIndicator />;
+  async function handleStreamDownload() {
+    if (source?.kind !== "stream" || queuing) return;
+    setPresetMenuOpen(false);
+    setQueuing(true);
+    try {
+      const job = await submitDownload(source.url, selectedPreset, {
+        title: source.meta.title ?? undefined,
+        channel: source.meta.channel ?? (channelParam || undefined),
+      });
+      setActiveJobId(job.id);
+      swapPendingRef.current = false;
+      showToast(STAY_DOWNLOAD_TOAST);
+    } catch (err: unknown) {
+      showToast(
+        err instanceof Error ? err.message : "Could not start download"
+      );
+    } finally {
+      setQueuing(false);
+    }
   }
 
+  const presetOptions = useMemo(() => {
+    if (availablePresets.length > 0) return availablePresets;
+    return ["best"];
+  }, [availablePresets]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <LoadingIndicator label="Loading…" />
+      </div>
+    );
+  }
+
+  if (error || !source) {
+    const backHref = channelParam
+      ? `/?channel=${encodeURIComponent(channelParam)}`
+      : "/";
+    return (
+      <div className="mx-auto max-w-lg space-y-4 py-16 text-center">
+        <p className="text-gray-300">{error || "Video unavailable"}</p>
+        <Link to={backHref} className="text-sm text-accent hover:underline">
+          ← Back
+        </Link>
+      </div>
+    );
+  }
+
+  const isLibrary = source.kind === "library";
   const isWide = !isMobile && mode === "theater";
   const showRelatedRight =
+    isLibrary &&
     !isMobile &&
     mode === "standard" &&
     settings.showRelatedVideos &&
     moreLikeThis.length > 0;
-  const chapters = parseChapters(video.description);
-  const descriptionBody = stripChapterLines(video.description);
-  const showDescriptionPanel =
-    settings.showDescription &&
-    !!(descriptionBody || video.notes || video.tags?.length || video.ai_tags?.length);
-  const canAiSummarize =
-    aiSummariesEnabled && (video.subtitles?.length ?? 0) > 0;
-  const canAiChat =
-    aiChatEnabled &&
-    !!(
-      (video.title || "").trim() ||
-      (video.description || "").trim() ||
-      (video.subtitles?.length ?? 0) > 0
-    );
-  const showAiSection = canAiSummarize || canAiChat;
-  const queueVisible = queue.length > 0;
-  const metaSideBySide =
-    chapters.length > 0 && showDescriptionPanel && !queueVisible;
-  const resolution = formatResolution(video.height_px);
+
+  const title = isLibrary
+    ? source.video.title
+    : source.meta.title || "Untitled";
+  const channelName = isLibrary
+    ? source.video.channel
+    : source.meta.channel || channelParam;
+  const description = isLibrary
+    ? source.video.description
+    : source.meta.description;
+  const chapters = parseChapters(description);
+  const descriptionBody = stripChapterLines(description);
+  const queueVisible = isLibrary && queue.length > 0;
+
+  const live = activeJobId != null ? progress[activeJobId] : undefined;
+  const activeJob =
+    activeJobId != null
+      ? jobs.find((j) => j.id === activeJobId) ?? null
+      : null;
+  const downloadPercent = Math.round(
+    Math.min(100, Math.max(0, live?.progress ?? activeJob?.progress ?? 0))
+  );
+  const downloadActive =
+    activeJob != null && isActiveJob(activeJob, live);
+
+  const streamRes =
+    source.kind === "stream"
+      ? formatResolution(source.meta.preview_height)
+      : "";
+  const resolution = isLibrary
+    ? formatResolution(source.video.height_px)
+    : streamRes;
+
   const contentClass = showRelatedRight
     ? "mx-auto max-w-[90rem]"
     : "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-7xl";
@@ -347,7 +662,28 @@ export default function Watch() {
         : "mx-auto max-w-5xl";
   const playerInnerClass = isWide && !isMobile ? "mx-auto w-full" : "w-full";
 
-  const relatedList = (
+  const channelHref = channelName
+    ? `/?channel=${encodeURIComponent(channelName)}`
+    : "/";
+  const backHref = channelParam
+    ? `/?channel=${encodeURIComponent(channelParam)}`
+    : "/";
+
+  const canAiSummarize =
+    isLibrary &&
+    aiSummariesEnabled &&
+    (source.video.subtitles?.length ?? 0) > 0;
+  const canAiChat =
+    isLibrary &&
+    aiChatEnabled &&
+    !!(
+      (source.video.title || "").trim() ||
+      (source.video.description || "").trim() ||
+      (source.video.subtitles?.length ?? 0) > 0
+    );
+  const showAiSection = canAiSummarize || canAiChat;
+
+  const relatedList = isLibrary ? (
     <div className="space-y-3">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
         More like this
@@ -399,7 +735,7 @@ export default function Watch() {
         <p className="text-xs text-gray-500">Loading more…</p>
       )}
     </div>
-  );
+  ) : null;
 
   return (
     <div className={`${contentClass} ${isWide ? "-mt-6" : ""}`}>
@@ -418,422 +754,321 @@ export default function Watch() {
           </div>
 
           <div className={isWide ? "px-3 md:px-6" : undefined}>
-        {/* Metadata change banner */}
-        {video.title_is_custom &&
-          video.source_title &&
-          video.source_title !== video.title && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink-800 px-4 py-3 ring-1 ring-ink-600">
-              <p className="text-sm text-gray-300">
-                Source title changed:{" "}
-                <span className="text-gray-400 line-through">{video.title}</span>{" "}
-                →{" "}
-                <span className="text-gray-200">{video.source_title}</span>
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    const updated = await api
-                      .updateVideo(video!.id, { title: video!.source_title! })
-                      .catch(() => null);
-                    if (updated) setVideo(updated);
-                  }}
-                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-accent-soft"
-                >
-                  Use source
-                </button>
-                <button
-                  onClick={async () => {
-                    const updated = await api
-                      .updateVideo(video!.id, { title: video!.title })
-                      .catch(() => null);
-                    if (updated) setVideo(updated);
-                  }}
-                  className="rounded-lg bg-ink-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-600"
-                >
-                  Keep mine
-                </button>
-              </div>
-            </div>
-          )}
-        <div className="mt-5 flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-gray-100">{video.title}</h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-400">
-              {video.channel && (
-                <Link
-                  to={`/?channel=${encodeURIComponent(video.channel)}`}
-                  className="font-medium text-accent hover:underline"
-                >
-                  {video.channel}
-                </Link>
-              )}
-              {video.published_at && <span>{formatDate(video.published_at)}</span>}
-              <span>{formatSize(video.file_size)}</span>
-              {resolution && (
-                <span className="text-xs text-gray-500">{resolution}</span>
-              )}
-              {video.frame_rate && video.frame_rate > 60 && (
-                <span className="text-xs text-gray-500">
-                  {Math.round(video.frame_rate)}fps
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-          <div
-            className={
-              !showRelatedRight && queue.length > 0
-                ? "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
-                : "mt-4 space-y-4"
-            }
-          >
-            <div className="min-w-0 space-y-4">
-              {showAiSection && (
-                <VideoAiPanel
-                  video={video}
-                  canSummarize={canAiSummarize}
-                  canChat={canAiChat}
-                  showCosts={showAiCosts}
-                  onVideoUpdate={setVideo}
-                  showToast={showToast}
-                />
-              )}
-
-              {(showDescriptionPanel || chapters.length > 0) && (
-                <div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateSettings({
-                        descriptionExpanded: !settings.descriptionExpanded,
-                      })
-                    }
-                    className="ui-panel-toggle ui-interactive flex w-full items-center justify-between py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
-                  >
-                    <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
-                      <span>Description</span>
-                      <span>
-                        {settings.descriptionExpanded ? "▲" : "▼"}
-                      </span>
+            {isLibrary &&
+              source.video.title_is_custom &&
+              source.video.source_title &&
+              source.video.source_title !== source.video.title && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink-800 px-4 py-3 ring-1 ring-ink-600">
+                  <p className="text-sm text-gray-300">
+                    Source title changed:{" "}
+                    <span className="text-gray-400 line-through">
+                      {source.video.title}
+                    </span>{" "}
+                    →{" "}
+                    <span className="text-gray-200">
+                      {source.video.source_title}
                     </span>
-                  </button>
-                  <Collapse open={settings.descriptionExpanded}>
-                    <div
-                      className={
-                        metaSideBySide
-                          ? "grid gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(12rem,0.85fr)] lg:items-stretch"
-                          : undefined
-                      }
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        const updated = await api
+                          .updateVideo(source.video.id, {
+                            title: source.video.source_title!,
+                          })
+                          .catch(() => null);
+                        if (updated) setVideo(updated);
+                      }}
+                      className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-accent-soft"
                     >
-                      {showDescriptionPanel && (
-                        <div
-                          className={
-                            metaSideBySide
-                              ? descExpanded
-                                ? "ui-panel isolate flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
-                                : "ui-panel isolate flex h-full min-h-0 max-h-48 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
-                              : "ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
-                          }
+                      Use source
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const updated = await api
+                          .updateVideo(source.video.id, {
+                            title: source.video.title,
+                          })
+                          .catch(() => null);
+                        if (updated) setVideo(updated);
+                      }}
+                      className="rounded-lg bg-ink-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-600"
+                    >
+                      Keep mine
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            <div className="mt-5 flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl font-bold text-gray-100">{title}</h1>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-400">
+                  {channelName && (
+                    <Link
+                      to={channelHref}
+                      className="font-medium text-accent hover:underline"
+                    >
+                      {channelName}
+                    </Link>
+                  )}
+                  {isLibrary && source.video.published_at && (
+                    <span>{formatDate(source.video.published_at)}</span>
+                  )}
+                  {isLibrary && (
+                    <span>{formatSize(source.video.file_size)}</span>
+                  )}
+                  {!isLibrary && source.meta.duration != null && (
+                    <span>{formatDuration(source.meta.duration)}</span>
+                  )}
+                  {!isLibrary && source.meta.view_count != null && (
+                    <span>{formatViewCount(source.meta.view_count)}</span>
+                  )}
+                  {resolution && (
+                    <span className="text-xs text-gray-500">{resolution}</span>
+                  )}
+                  {isLibrary &&
+                    source.video.frame_rate &&
+                    source.video.frame_rate > 60 && (
+                      <span className="text-xs text-gray-500">
+                        {Math.round(source.video.frame_rate)}fps
+                      </span>
+                    )}
+                  {!isLibrary && !downloadActive && (
+                    <div className="relative" ref={downloadMenuRef}>
+                      <div className="inline-flex overflow-hidden rounded-lg bg-accent text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60">
+                        <button
+                          type="button"
+                          onClick={() => void handleStreamDownload()}
+                          disabled={queuing}
+                          className="px-3 py-1 disabled:opacity-60"
                         >
-                          <div
-                            className={
-                              metaSideBySide
-                                ? "flex min-h-0 flex-1 flex-col px-4 py-3"
-                                : "px-4 py-3"
-                            }
+                          {queuing
+                            ? "Queuing…"
+                            : downloadButtonLabel(selectedPreset)}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPresetMenuOpen((v) => !v)}
+                          disabled={queuing}
+                          aria-label="Choose download quality"
+                          aria-expanded={presetMenuOpen}
+                          aria-haspopup="listbox"
+                          className="border-l border-ink-950/25 px-2 py-1 disabled:opacity-60"
+                        >
+                          <span
+                            className={`inline-block text-[10px] leading-none transition-transform ${
+                              presetMenuOpen ? "rotate-180" : ""
+                            }`}
                           >
-                            {descriptionBody && (
-                              <>
-                                <div
-                                  className={
-                                    metaSideBySide
-                                      ? descExpanded
-                                        ? "overflow-hidden"
-                                        : "horde-scrollbar min-h-0 flex-1 overflow-y-auto"
-                                      : `overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                          descExpanded
-                                            ? "max-h-[80rem]"
-                                            : "max-h-[7.5rem]"
-                                        }`
-                                  }
-                                >
-                                  <p
-                                    className={`text-sm text-gray-300 ${
-                                      descExpanded || metaSideBySide
-                                        ? "whitespace-pre-wrap"
-                                        : "line-clamp-5 whitespace-normal"
-                                    }`}
-                                  >
-                                    <LinkifiedText text={descriptionBody} />
-                                  </p>
-                                </div>
-                                <button
-                                  onClick={() => setDescExpanded((v) => !v)}
-                                  className="mt-2 shrink-0 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
-                                >
-                                  {descExpanded ? "Show less" : "Show more"}
-                                </button>
-                              </>
-                            )}
-
-                            <Collapse
-                              open={
-                                !!video.notes &&
-                                (descExpanded || !descriptionBody)
-                              }
+                            ▼
+                          </span>
+                        </button>
+                      </div>
+                      {presetMenuOpen && (
+                        <ul
+                          role="listbox"
+                          aria-label="Download quality"
+                          className="absolute left-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-lg border border-ink-700 bg-ink-900 py-1 shadow-lg ring-1 ring-ink-700"
+                        >
+                          {presetOptions.map((p) => (
+                            <li
+                              key={p}
+                              role="option"
+                              aria-selected={p === selectedPreset}
                             >
-                              <div
-                                className={
-                                  descriptionBody
-                                    ? "mt-4 border-t border-ink-700 pt-4"
-                                    : ""
-                                }
-                              >
-                                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
-                                  Your notes
-                                </h3>
-                                <p className="whitespace-pre-wrap text-sm text-gray-300">
-                                  <LinkifiedText text={video.notes ?? ""} />
-                                </p>
-                              </div>
-                            </Collapse>
-
-                            <Collapse open={descExpanded || !descriptionBody}>
-                              <div
-                                className={`mt-4 border-t border-ink-700 pt-4 ${
-                                  descriptionBody || video.notes ? "" : ""
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  userPickedPresetRef.current = true;
+                                  setSelectedPreset(p);
+                                  setPresetMenuOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-xs hover:bg-ink-800 ${
+                                  p === selectedPreset
+                                    ? "font-semibold text-accent"
+                                    : "text-gray-200"
                                 }`}
                               >
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {[
-                                    ...(video.ai_tags || []).map((t) => ({
-                                      tag: t,
-                                      kind: "ai" as const,
-                                    })),
-                                    ...(video.user_tags || []).map((t) => ({
-                                      tag: t,
-                                      kind: "user" as const,
-                                    })),
-                                    ...(video.tags || [])
-                                      .filter((t) => {
-                                        const lower = t.toLowerCase();
-                                        const ai = (video.ai_tags || []).map(
-                                          (a) => a.toLowerCase()
-                                        );
-                                        const user = (video.user_tags || []).map(
-                                          (u) => u.toLowerCase()
-                                        );
-                                        return (
-                                          !ai.includes(lower) &&
-                                          !user.includes(lower)
-                                        );
-                                      })
-                                      .map((t) => ({
-                                        tag: t,
-                                        kind: "meta" as const,
-                                      })),
-                                  ].map(({ tag, kind }) => (
-                                    <span
-                                      key={`${kind}-${tag}`}
-                                      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs ${
-                                        kind === "ai"
-                                          ? "border-accent/40 bg-accent/10 text-accent"
-                                          : kind === "user"
-                                            ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
-                                            : "ui-panel border-ink-700 bg-ink-900 text-gray-300"
-                                      }`}
-                                      title={
-                                        kind === "ai"
-                                          ? "AI tag"
-                                          : kind === "user"
-                                            ? "Your tag"
-                                            : "Metadata tag"
-                                      }
-                                    >
-                                      <Link
-                                        to={`/?tag=${encodeURIComponent(tag)}`}
-                                        className="hover:underline"
-                                      >
-                                        #{tag}
-                                      </Link>
-                                      <button
-                                        type="button"
-                                        className="ml-0.5 text-[10px] opacity-60 hover:opacity-100"
-                                        title="Remove tag"
-                                        onClick={async () => {
-                                          const next = (video.tags || []).filter(
-                                            (t) =>
-                                              t.toLowerCase() !==
-                                              tag.toLowerCase()
-                                          );
-                                          try {
-                                            const updated =
-                                              await api.updateVideo(video.id, {
-                                                tags: next,
-                                              });
-                                            setVideo(updated);
-                                          } catch {
-                                            showToast("Could not remove tag");
-                                          }
-                                        }}
-                                      >
-                                        ×
-                                      </button>
-                                    </span>
-                                  ))}
-                                  <form
-                                    className="inline-flex items-center gap-1.5"
-                                    onSubmit={async (e) => {
-                                      e.preventDefault();
-                                      const cleaned = tagDraft.trim();
-                                      if (!cleaned) return;
-                                      const exists = (video.tags || []).some(
-                                        (t) =>
-                                          t.toLowerCase() ===
-                                          cleaned.toLowerCase()
-                                      );
-                                      if (exists) {
-                                        setTagDraft("");
-                                        return;
-                                      }
-                                      try {
-                                        const updated = await api.updateVideo(
-                                          video.id,
-                                          {
-                                            tags: [
-                                              ...(video.tags || []),
-                                              cleaned,
-                                            ],
-                                            user_tag: cleaned,
-                                          }
-                                        );
-                                        setVideo(updated);
-                                        setTagDraft("");
-                                      } catch {
-                                        showToast("Could not add tag");
-                                      }
-                                    }}
-                                  >
-                                    <input
-                                      value={tagDraft}
-                                      onChange={(e) =>
-                                        setTagDraft(e.target.value)
-                                      }
-                                      placeholder="Add tag…"
-                                      className="ui-panel w-28 max-w-[9rem] rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-100 outline-none focus:border-accent"
-                                    />
-                                    <button
-                                      type="submit"
-                                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
-                                    >
-                                      +
-                                    </button>
-                                  </form>
-                                </div>
-                              </div>
-                            </Collapse>
-                          </div>
-                        </div>
-                      )}
-                      {chapters.length > 0 && (
-                        <ChaptersList
-                          chapters={chapters}
-                          maxHeightClass={
-                            metaSideBySide
-                              ? descExpanded
-                                ? "max-h-[28rem] lg:max-h-none lg:h-full"
-                                : "max-h-48 lg:h-full"
-                              : descExpanded
-                                ? "max-h-[28rem]"
-                                : "max-h-48"
-                          }
-                          className={
-                            metaSideBySide ? "h-full min-h-0" : undefined
-                          }
-                        />
+                                <span>
+                                  {presetOptionLabel(p, presetSizes)}
+                                </span>
+                                {p === selectedPreset && (
+                                  <span className="text-accent">✓</span>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </div>
-                  </Collapse>
+                  )}
+                  {!isLibrary && downloadActive && (
+                    <span className="inline-flex items-center gap-2 text-xs font-medium text-gray-300">
+                      <span>
+                        {live?.status === "processing"
+                          ? "Processing…"
+                          : live?.status === "queued"
+                            ? "Queued…"
+                            : `Downloading ${downloadPercent}%`}
+                      </span>
+                      <span className="inline-block h-1 w-20 overflow-hidden rounded-full bg-ink-800">
+                        <span
+                          className="block h-full rounded-full bg-accent/70 transition-all duration-300"
+                          style={{ width: `${downloadPercent}%` }}
+                        />
+                      </span>
+                      {(live?.downloaded_bytes != null ||
+                        live?.total_bytes != null) && (
+                        <span className="text-[10px] text-gray-600">
+                          {live.downloaded_bytes != null
+                            ? formatSize(live.downloaded_bytes)
+                            : "…"}
+                          {live.total_bytes != null
+                            ? ` / ${formatSize(live.total_bytes)}`
+                            : ""}
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </div>
-              )}
-
-              {!settings.showDescription && video.notes && (
-                <div className="ui-panel rounded-xl border border-accent/30 bg-accent/5 p-4 ring-1 ring-ink-700">
-                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent">
-                    Your notes
-                  </h3>
-                  <p className="whitespace-pre-wrap text-sm text-gray-300">
-                    <LinkifiedText text={video.notes} />
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {!showRelatedRight && queue.length > 0 && (
-              <PlaybackQueue className="lg:sticky lg:top-20 lg:self-start" />
-            )}
-          </div>
-
-          {editing && (
-            <div className="mt-4">
-              <VideoEditForm
-                video={video}
-                saveLabel="Save changes"
-                focusField={editFocus}
-                onCancel={() => {
-                  setEditing(false);
-                  setEditFocus(undefined);
-                }}
-                onSaved={(updated) => {
-                  setVideo(updated);
-                  setEditing(false);
-                  setEditFocus(undefined);
-                }}
-              />
-            </div>
-          )}
-
-          <div className="mt-5 flex gap-2">
-            <Link
-              to="/"
-              className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
-            >
-              ← Back to library
-            </Link>
-            <AddToPlaylist videoId={video.id} />
-            <VideoActionsMenu
-              video={video}
-              onEdit={() => {
-                setEditFocus(undefined);
-                setEditing((v) => !v);
-              }}
-              onAddNote={() => {
-                setEditFocus("notes");
-                setEditing(true);
-              }}
-              onChangeResolution={() => setRedownloadOpen(true)}
-              onNormalizeVolume={onNormalizeVolume}
-              onDelete={onDelete}
-              onVideoUpdated={setVideo}
-            />
-          </div>
-
-          {/* More like this — bottom grid when sidebar is off */}
-          {!showRelatedRight && moreLikeThis.length > 0 && (
-            <div className="mt-6">
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                More like this
-              </h3>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {moreLikeThis.map((v) => (
-                  <VideoCard key={v.id} video={v} />
-                ))}
               </div>
-              <div ref={relatedSentinelRef} className="h-4" />
-              {relatedLoading && <LoadingIndicator />}
+              {!isLibrary && (
+                <Link
+                  to={backHref}
+                  className="shrink-0 text-sm text-gray-400 hover:text-accent"
+                >
+                  ← Back
+                </Link>
+              )}
             </div>
-          )}
+
+            <div
+              className={
+                !showRelatedRight && queueVisible
+                  ? "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
+                  : "mt-4 space-y-4"
+              }
+            >
+              <div className="min-w-0 space-y-4">
+                {isLibrary && showAiSection && (
+                  <VideoAiPanel
+                    video={source.video}
+                    canSummarize={canAiSummarize}
+                    canChat={canAiChat}
+                    showCosts={showAiCosts}
+                    onVideoUpdate={setVideo}
+                    showToast={showToast}
+                  />
+                )}
+
+                <WatchMeta
+                  description={descriptionBody}
+                  chapters={chapters}
+                  queueVisible={queueVisible}
+                  notes={isLibrary ? source.video.notes : null}
+                  tags={isLibrary ? source.video.tags : []}
+                  aiTags={isLibrary ? source.video.ai_tags : []}
+                  userTags={isLibrary ? source.video.user_tags : []}
+                  onAddTag={
+                    isLibrary
+                      ? async (cleaned) => {
+                          const updated = await api.updateVideo(
+                            source.video.id,
+                            {
+                              tags: [...(source.video.tags || []), cleaned],
+                              user_tag: cleaned,
+                            }
+                          );
+                          setVideo(updated);
+                        }
+                      : undefined
+                  }
+                  onRemoveTag={
+                    isLibrary
+                      ? async (tag) => {
+                          const next = (source.video.tags || []).filter(
+                            (t) => t.toLowerCase() !== tag.toLowerCase()
+                          );
+                          const updated = await api.updateVideo(
+                            source.video.id,
+                            { tags: next }
+                          );
+                          setVideo(updated);
+                        }
+                      : undefined
+                  }
+                  onTagError={(msg) => showToast(msg)}
+                />
+              </div>
+
+              {!showRelatedRight && queueVisible && (
+                <PlaybackQueue className="lg:sticky lg:top-20 lg:self-start" />
+              )}
+            </div>
+
+            {isLibrary && editing && (
+              <div className="mt-4">
+                <VideoEditForm
+                  video={source.video}
+                  saveLabel="Save changes"
+                  focusField={editFocus}
+                  onCancel={() => {
+                    setEditing(false);
+                    setEditFocus(undefined);
+                  }}
+                  onSaved={(updated) => {
+                    setVideo(updated);
+                    setEditing(false);
+                    setEditFocus(undefined);
+                  }}
+                />
+              </div>
+            )}
+
+            {isLibrary && (
+              <div className="mt-5 flex gap-2">
+                <Link
+                  to="/"
+                  className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+                >
+                  ← Back to library
+                </Link>
+                <AddToPlaylist videoId={source.video.id} />
+                <VideoActionsMenu
+                  video={source.video}
+                  onEdit={() => {
+                    setEditFocus(undefined);
+                    setEditing((v) => !v);
+                  }}
+                  onAddNote={() => {
+                    setEditFocus("notes");
+                    setEditing(true);
+                  }}
+                  onChangeResolution={() => setRedownloadOpen(true)}
+                  onNormalizeVolume={onNormalizeVolume}
+                  onDelete={onDelete}
+                  onVideoUpdated={setVideo}
+                />
+              </div>
+            )}
+
+            {isLibrary &&
+              !showRelatedRight &&
+              moreLikeThis.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    More like this
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                    {moreLikeThis.map((v) => (
+                      <VideoCard key={v.id} video={v} />
+                    ))}
+                  </div>
+                  <div ref={relatedSentinelRef} className="h-4" />
+                  {relatedLoading && <LoadingIndicator />}
+                </div>
+              )}
           </div>
         </div>
 
@@ -849,16 +1084,16 @@ export default function Watch() {
         )}
       </div>
 
-      {redownloadOpen && (
+      {isLibrary && redownloadOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700">
             <h2 className="mb-1 text-lg font-semibold text-gray-100">
               Change resolution
             </h2>
             <p className="mb-4 text-sm text-gray-400">
-              This replaces the video file on disk with a newly downloaded copy at
-              the selected resolution. Your title, notes, and other metadata are
-              kept. Playback may be unavailable until the download finishes.
+              This replaces the video file on disk with a newly downloaded copy
+              at the selected resolution. Your title, notes, and other metadata
+              are kept. Playback may be unavailable until the download finishes.
             </p>
             <label className="mb-1 block text-xs font-medium text-gray-400">
               Quality

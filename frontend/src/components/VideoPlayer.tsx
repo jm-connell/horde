@@ -4,15 +4,26 @@ import { absoluteUrl, api, spritesImageUrl, streamUrl } from "../api";
 import LoadingIndicator from "./LoadingIndicator";
 import { useAirPlay } from "../hooks/useAirPlay";
 import { useChromecast } from "../hooks/useChromecast";
-import type { SubtitleSize } from "../hooks/useSettings";
+import { usePlaybackHealth } from "../hooks/usePlaybackHealth";
+import {
+  useSettings,
+  type StreamQuality,
+  type SubtitleSize,
+} from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import type { SpriteMeta } from "../types";
 import { formatDuration, formatTimestamp, type Chapter } from "../utils";
+import {
+  probeDecodeSupport,
+  readBandwidthEstimate,
+  readDowngrade,
+  type DecodeSupport,
+} from "../utils/decodeCapability";
 import type {
+  ShakaError,
   ShakaNamespace,
   ShakaPlayer,
-  ShakaVariantTrack,
 } from "shaka-player/dist/shaka-player.dash.js";
 
 export type ViewMode = "standard" | "theater" | "windowed";
@@ -24,6 +35,30 @@ export interface SubtitleSource {
 
 const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 const CONTROLS_HIDE_DELAY_MS = 2500;
+
+type QualityChoice = "auto" | number;
+
+function streamQualityToChoice(q: StreamQuality): QualityChoice {
+  if (q === "auto") return "auto";
+  const n = Number(q);
+  return Number.isFinite(n) && n > 0 ? n : "auto";
+}
+
+function qualityMenuLabel(choice: QualityChoice): string {
+  if (choice === "auto") return "Auto";
+  if (choice >= 2160) return "4K";
+  return `${choice}p`;
+}
+
+function distinctHeights(
+  tracks: { height: number | null }[]
+): number[] {
+  const set = new Set<number>();
+  for (const t of tracks) {
+    if (t.height != null && t.height > 0) set.add(t.height);
+  }
+  return [...set].sort((a, b) => b - a);
+}
 const HOLD_DELAY_MS = 250;
 const MIN_MINI_WIDTH = 160;
 const MAX_MINI_WIDTH = 960;
@@ -61,6 +96,11 @@ interface Props {
   src: string;
   /** Progressive local/remote file (default) or adaptive DASH manifest. */
   streamType?: StreamType;
+  /**
+   * Progressive (<=720p) URL used when DASH is unsupported or fails critically.
+   * Typically `/api/preview/stream?url=...`.
+   */
+  progressiveFallbackSrc?: string;
   videoId?: number;
   mimeType?: string;
   poster?: string | null;
@@ -104,6 +144,7 @@ interface Props {
 export default function VideoPlayer({
   src,
   streamType = "file",
+  progressiveFallbackSrc,
   videoId,
   mimeType = "video/mp4",
   poster = null,
@@ -140,8 +181,10 @@ export default function VideoPlayer({
 }: Props) {
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
+  const [settings] = useSettings();
   const videoRef = useRef<HTMLVideoElement>(null);
   const shakaPlayerRef = useRef<ShakaPlayer | null>(null);
+  const capabilityMaxHeightRef = useRef<number>(2160);
   const chromecast = useChromecast();
   const airplay = useAirPlay(videoRef, src);
   const playerRootRef = useRef<HTMLDivElement>(null);
@@ -157,6 +200,13 @@ export default function VideoPlayer({
   const [captionLang, setCaptionLang] = useState<string | null>(null);
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
   const [showSpeed, setShowSpeed] = useState(false);
+  const [showQuality, setShowQuality] = useState(false);
+  const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
+    streamQualityToChoice(settings.defaultStreamQuality)
+  );
+  const [availableHeights, setAvailableHeights] = useState<number[]>([]);
+  const qualityChoiceRef = useRef(qualityChoice);
+  qualityChoiceRef.current = qualityChoice;
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [miniControlsVisible, setMiniControlsVisible] = useState(true);
   const [videoAspect, setVideoAspect] = useState<number | null>(null);
@@ -186,6 +236,12 @@ export default function VideoPlayer({
   const suppressedSegmentsRef = useRef(new Set<string>());
   const [ccNotice, setCcNotice] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [qualityNotice, setQualityNotice] = useState<string | null>(null);
+  const qualityNoticeTimer = useRef<number | null>(null);
+  /** When DASH fails, switch to progressive fallback without remounting the page. */
+  const [compatMode, setCompatMode] = useState(false);
+  const [dashReloadToken, setDashReloadToken] = useState(0);
+  const [shakaReady, setShakaReady] = useState(false);
   const [spriteMeta, setSpriteMeta] = useState<SpriteMeta | null>(null);
   const [scrubHover, setScrubHover] = useState<{
     time: number;
@@ -220,6 +276,41 @@ export default function VideoPlayer({
       ? "AirPlay"
       : null;
 
+  const effectiveStreamType: StreamType =
+    compatMode || streamType !== "dash" ? "file" : "dash";
+  const effectiveSrc =
+    compatMode && progressiveFallbackSrc ? progressiveFallbackSrc : src;
+
+  const showQualityNotice = useCallback((msg: string) => {
+    setQualityNotice(msg);
+    if (qualityNoticeTimer.current !== null) {
+      clearTimeout(qualityNoticeTimer.current);
+    }
+    qualityNoticeTimer.current = window.setTimeout(() => {
+      setQualityNotice(null);
+      qualityNoticeTimer.current = null;
+    }, 4000);
+  }, []);
+
+  const enterCompatMode = useCallback(() => {
+    if (!progressiveFallbackSrc) return false;
+    const el = videoRef.current;
+    if (el && Number.isFinite(el.currentTime) && el.currentTime > 1) {
+      pendingSeekRef.current = el.currentTime;
+    }
+    const existing = shakaPlayerRef.current;
+    shakaPlayerRef.current = null;
+    setShakaReady(false);
+    if (existing) {
+      void existing.destroy().catch(() => undefined);
+    }
+    setCompatMode(true);
+    setMediaError(null);
+    setBuffering(true);
+    showQualityNotice("Reduced quality (compatibility mode)");
+    return true;
+  }, [progressiveFallbackSrc, showQualityNotice]);
+
   useEffect(() => {
     suppressedSegmentsRef.current.clear();
     prevTimeRef.current = 0;
@@ -228,13 +319,21 @@ export default function VideoPlayer({
     setCcNotice(null);
     setMediaError(null);
     setBuffering(true);
+    setCompatMode(false);
+    setShakaReady(false);
+    setAvailableHeights([]);
+    setShowQuality(false);
+    setQualityChoice(streamQualityToChoice(settings.defaultStreamQuality));
+    // Seed from the setting once per src; in-player changes stay session-scoped.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
   }, [src]);
 
   // Adaptive DASH via Shaka (preview); library playback stays native progressive.
   useEffect(() => {
-    if (streamType !== "dash") {
+    if (effectiveStreamType !== "dash") {
       const existing = shakaPlayerRef.current;
       shakaPlayerRef.current = null;
+      setShakaReady(false);
       if (existing) {
         void existing.destroy().catch(() => undefined);
       }
@@ -246,6 +345,7 @@ export default function VideoPlayer({
 
     let cancelled = false;
     let player: ShakaPlayer | null = null;
+    let criticalHits = 0;
 
     const loadDash = async () => {
       try {
@@ -255,18 +355,40 @@ export default function VideoPlayer({
         if (cancelled || !videoRef.current) return;
 
         if (!shaka.Player.isBrowserSupported()) {
-          setMediaError("Adaptive streaming is not supported in this browser");
-          setBuffering(false);
+          if (!enterCompatMode()) {
+            setMediaError(
+              "Adaptive streaming is not supported in this browser"
+            );
+            setBuffering(false);
+          }
           return;
         }
 
         // Detach any previous instance before attaching a new one.
         const prev = shakaPlayerRef.current;
         shakaPlayerRef.current = null;
+        setShakaReady(false);
         if (prev) {
           await prev.destroy().catch(() => undefined);
         }
         if (cancelled || !videoRef.current) return;
+
+        const [caps, persistedBw]: [DecodeSupport, number | null] =
+          await Promise.all([
+            probeDecodeSupport(),
+            Promise.resolve(readBandwidthEstimate()),
+          ]);
+        if (cancelled || !videoRef.current) return;
+
+        const downgrade = readDowngrade();
+        const maxHeight = Math.min(
+          caps.maxEfficientHeight,
+          downgrade?.maxHeight ?? Infinity
+        );
+        capabilityMaxHeightRef.current = maxHeight;
+        const preferAv1 = caps.av1Efficient && !downgrade?.blacklistAv1;
+        const bwEstimate = persistedBw ?? 5_000_000;
+        const initialChoice = qualityChoiceRef.current;
 
         shaka.polyfill.installAll();
         const p = new shaka.Player();
@@ -276,11 +398,18 @@ export default function VideoPlayer({
           return;
         }
 
+        const abrEnabled = initialChoice === "auto";
+
         p.configure({
           streaming: {
             bufferingGoal: 30,
-            rebufferingGoal: 2,
-            bufferBehind: 30,
+            rebufferingGoal: 4,
+            bufferBehind: 60,
+            stallEnabled: true,
+            stallThreshold: 1,
+            stallSkip: 0.1,
+            gapDetectionThreshold: 0.5,
+            gapJumpTimerTime: 0.25,
             retryParameters: {
               maxAttempts: 4,
               baseDelay: 400,
@@ -290,19 +419,38 @@ export default function VideoPlayer({
             },
           },
           abr: {
-            enabled: true,
-            defaultBandwidthEstimate: 8_000_000,
+            enabled: abrEnabled,
+            defaultBandwidthEstimate: bwEstimate,
+            switchInterval: 8,
+          },
+          preferredVideoCodecs: preferAv1 ? ["av01", "avc1"] : ["avc1"],
+          // Auto stays inside the device-capability cap; a fixed pick may exceed it.
+          restrictions: {
+            maxHeight: abrEnabled ? maxHeight : 4320,
+          },
+          mediaSource: {
+            codecSwitchingStrategy: "smooth",
           },
         });
 
         p.addEventListener("error", ((event: Event) => {
-          const detail = (event as CustomEvent<{ message?: string; code?: number }>)
-            .detail;
+          const detail = (event as CustomEvent<ShakaError>).detail;
+          const severity = detail?.severity ?? 2;
           const msg =
             detail?.message ||
             (detail?.code != null
               ? `Playback error (${detail.code})`
               : "Adaptive playback failed");
+          // RECOVERABLE (1): Shaka already handled it — do not paint a fatal overlay.
+          if (severity === 1) {
+            console.warn("[preview] recoverable shaka error", detail);
+            return;
+          }
+          criticalHits += 1;
+          console.error("[preview] critical shaka error", detail);
+          if (criticalHits >= 2 && enterCompatMode()) {
+            return;
+          }
           setMediaError(msg);
           setBuffering(false);
         }) as EventListener);
@@ -315,22 +463,31 @@ export default function VideoPlayer({
 
         player = p;
         shakaPlayerRef.current = p;
-        setBuffering(false);
-
-        // Prefer the highest available track once variants are known, then
-        // leave ABR on so the player can step down on weak networks.
-        try {
-          const tracks = p.getVariantTracks() ?? [];
-          if (tracks.length > 0) {
-            const best = tracks.reduce((a: ShakaVariantTrack, b: ShakaVariantTrack) =>
-              (b.height ?? 0) > (a.height ?? 0) ? b : a
+        const heights = distinctHeights(p.getVariantTracks() ?? []);
+        setAvailableHeights(heights);
+        if (initialChoice !== "auto") {
+          // Pin the highest-bandwidth track at the chosen height (or nearest below).
+          const target =
+            heights.find((h) => h <= initialChoice) ?? heights[heights.length - 1];
+          if (target != null) {
+            p.configure({
+              abr: { enabled: false },
+              restrictions: { maxHeight: 2160 },
+            });
+            const candidates = (p.getVariantTracks() ?? []).filter(
+              (t) => t.height === target
             );
-            p.selectVariantTrack(best, /* clearBuffer= */ true);
-            p.configure({ abr: { enabled: true } });
+            candidates.sort((a, b) => b.bandwidth - a.bandwidth);
+            if (candidates[0]) {
+              p.selectVariantTrack(candidates[0], /* clearBuffer */ true);
+            }
+            if (target !== initialChoice) {
+              setQualityChoice(target);
+            }
           }
-        } catch {
-          // ABR continues if explicit selection fails.
         }
+        setShakaReady(true);
+        setBuffering(false);
 
         if (!chromecast.casting) {
           videoRef.current?.play().catch(() => undefined);
@@ -339,8 +496,10 @@ export default function VideoPlayer({
         if (cancelled) return;
         const msg =
           err instanceof Error ? err.message : "Failed to start adaptive stream";
-        setMediaError(msg);
-        setBuffering(false);
+        if (!enterCompatMode()) {
+          setMediaError(msg);
+          setBuffering(false);
+        }
       }
     };
 
@@ -348,6 +507,7 @@ export default function VideoPlayer({
 
     return () => {
       cancelled = true;
+      setShakaReady(false);
       const active = player ?? shakaPlayerRef.current;
       shakaPlayerRef.current = null;
       if (active) {
@@ -356,7 +516,103 @@ export default function VideoPlayer({
     };
     // Intentionally omit chromecast.casting — only checked at load time for autoplay.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, streamType]);
+  }, [src, effectiveStreamType, dashReloadToken, enterCompatMode]);
+
+  const applyQualityChoice = useCallback((choice: QualityChoice) => {
+    const p = shakaPlayerRef.current;
+    if (!p) return;
+    setQualityChoice(choice);
+    try {
+      if (choice === "auto") {
+        const cap = capabilityMaxHeightRef.current;
+        p.configure({
+          abr: { enabled: true },
+          restrictions: { maxHeight: cap },
+        });
+        return;
+      }
+      p.configure({
+        abr: { enabled: false },
+        restrictions: { maxHeight: 2160 },
+      });
+      const tracks = p.getVariantTracks() ?? [];
+      const heights = distinctHeights(tracks);
+      const target =
+        heights.find((h) => h <= choice) ?? heights[heights.length - 1];
+      if (target == null) return;
+      const candidates = tracks.filter((t) => t.height === target);
+      candidates.sort((a, b) => b.bandwidth - a.bandwidth);
+      if (candidates[0]) {
+        p.selectVariantTrack(candidates[0], /* clearBuffer */ true);
+      }
+      if (target !== choice) setQualityChoice(target);
+    } catch (err) {
+      console.warn("[stream-quality] apply failed", err);
+    }
+  }, []);
+
+  usePlaybackHealth({
+    enabled: effectiveStreamType === "dash" && shakaReady,
+    player: shakaReady ? shakaPlayerRef.current : null,
+    onDowngrade: ({ maxHeight, blacklistAv1, notice }) => {
+      const p = shakaPlayerRef.current;
+      if (!p) return;
+      capabilityMaxHeightRef.current = Math.min(
+        capabilityMaxHeightRef.current,
+        maxHeight
+      );
+      // Relabel the menu to the new ceiling so UI matches what can play.
+      setQualityChoice(maxHeight);
+      try {
+        if (blacklistAv1) {
+          // Codec family change needs a reload so Shaka re-filters AdaptationSets.
+          // readDowngrade() is consulted on the next load.
+          const t = videoRef.current?.currentTime ?? 0;
+          if (t > 1) pendingSeekRef.current = t;
+          setDashReloadToken((n) => n + 1);
+        } else {
+          p.configure({
+            abr: { enabled: false },
+            restrictions: { maxHeight },
+          });
+          const tracks = p.getVariantTracks() ?? [];
+          const candidates = tracks.filter((t) => (t.height ?? 0) <= maxHeight);
+          candidates.sort((a, b) => {
+            const ha = a.height ?? 0;
+            const hb = b.height ?? 0;
+            if (hb !== ha) return hb - ha;
+            return b.bandwidth - a.bandwidth;
+          });
+          if (candidates[0]) {
+            p.selectVariantTrack(candidates[0], true);
+          }
+        }
+      } catch (err) {
+        console.warn("[preview-health] configure failed", err);
+      }
+      showQualityNotice(notice);
+    },
+  });
+
+  const retryPlayback = useCallback(() => {
+    setMediaError(null);
+    setBuffering(true);
+    if (effectiveStreamType === "dash" && shakaPlayerRef.current) {
+      try {
+        const ok = shakaPlayerRef.current.retryStreaming();
+        if (ok) return;
+      } catch {
+        // fall through to full reload
+      }
+      setDashReloadToken((n) => n + 1);
+      return;
+    }
+    const el = videoRef.current;
+    if (el) {
+      el.load();
+      el.play().catch(() => undefined);
+    }
+  }, [effectiveStreamType]);
 
   // Lazy-load seek-preview sprites for full library playback.
   useEffect(() => {
@@ -800,12 +1056,18 @@ export default function VideoPlayer({
 
   const scheduleHideControls = useCallback(() => {
     clearHideControlsTimer();
-    if (!playing || showSpeed || controlsInteracting.current) return;
+    if (
+      !playing ||
+      showSpeed ||
+      showQuality ||
+      controlsInteracting.current
+    )
+      return;
     hideControlsTimer.current = window.setTimeout(() => {
       setControlsVisible(false);
       hideControlsTimer.current = null;
     }, CONTROLS_HIDE_DELAY_MS);
-  }, [playing, showSpeed, clearHideControlsTimer]);
+  }, [playing, showSpeed, showQuality, clearHideControlsTimer]);
 
   const revealControls = useCallback(() => {
     setControlsVisible(true);
@@ -842,10 +1104,17 @@ export default function VideoPlayer({
   }, [isMini, revealControls, revealMiniControls]);
 
   const onPlayerMouseLeave = useCallback(() => {
-    if (isMini || !playing || showSpeed || controlsInteracting.current) return;
+    if (
+      isMini ||
+      !playing ||
+      showSpeed ||
+      showQuality ||
+      controlsInteracting.current
+    )
+      return;
     clearHideControlsTimer();
     setControlsVisible(false);
-  }, [isMini, playing, showSpeed, clearHideControlsTimer]);
+  }, [isMini, playing, showSpeed, showQuality, clearHideControlsTimer]);
 
   const onControlsInteractionStart = useCallback(() => {
     controlsInteracting.current = true;
@@ -1274,13 +1543,20 @@ export default function VideoPlayer({
 
   useEffect(() => {
     if (isMini) return;
-    if (showSpeed) {
+    if (showSpeed || showQuality) {
       clearHideControlsTimer();
       setControlsVisible(true);
     } else if (playing) {
       scheduleHideControls();
     }
-  }, [isMini, showSpeed, playing, clearHideControlsTimer, scheduleHideControls]);
+  }, [
+    isMini,
+    showSpeed,
+    showQuality,
+    playing,
+    clearHideControlsTimer,
+    scheduleHideControls,
+  ]);
 
   useEffect(() => () => clearHideControlsTimer(), [clearHideControlsTimer]);
 
@@ -1372,7 +1648,7 @@ export default function VideoPlayer({
       >
         <video
           ref={videoRef}
-          src={streamType === "dash" ? undefined : src}
+          src={effectiveStreamType === "dash" ? undefined : effectiveSrc}
           playsInline
           {...{ "x-webkit-airplay": "allow" }}
           controls={false}
@@ -1465,7 +1741,22 @@ export default function VideoPlayer({
           onEnded={onEnded}
           onError={() => {
             setBuffering(false);
-            setMediaError("This video could not be played. The file may be incomplete or corrupt.");
+            if (effectiveStreamType === "dash") {
+              if (enterCompatMode()) return;
+              setMediaError(
+                "The preview stream failed. Check your connection and try again."
+              );
+              return;
+            }
+            if (compatMode) {
+              setMediaError(
+                "Compatibility-mode preview failed. Try again or download the video."
+              );
+              return;
+            }
+            setMediaError(
+              "This video could not be played. The file may be incomplete or corrupt."
+            );
           }}
           onPointerDown={isMini ? undefined : onVideoPointerDown}
           onPointerUp={isMini ? undefined : onVideoPointerUp}
@@ -1475,7 +1766,7 @@ export default function VideoPlayer({
         >
           {tracks.map((t) => (
             <track
-              key={`${src}-${t.lang}`}
+              key={`${effectiveSrc}-${t.lang}`}
               kind="subtitles"
               src={t.src}
               srcLang={t.lang}
@@ -1491,8 +1782,22 @@ export default function VideoPlayer({
         )}
 
         {mediaError && !isMini && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/80 px-4">
+          <div className="absolute inset-0 z-[6] flex flex-col items-center justify-center gap-3 bg-black/80 px-4">
             <p className="max-w-sm text-center text-sm text-red-300">{mediaError}</p>
+            <button
+              type="button"
+              onClick={retryPlayback}
+              className="rounded-md bg-white/10 px-3 py-1.5 text-sm text-white hover:bg-white/20"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {(qualityNotice || compatMode) && !mediaError && !isMini && (
+          <div className="pointer-events-none absolute left-1/2 top-4 z-[6] -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs text-gray-100">
+            {qualityNotice ??
+              (compatMode ? "Reduced quality (compatibility mode)" : null)}
           </div>
         )}
 
@@ -1787,9 +2092,69 @@ export default function VideoPlayer({
               </span>
 
               <div className="ml-auto flex items-center gap-2">
+                {effectiveStreamType === "dash" &&
+                  availableHeights.length > 0 && (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSpeed(false);
+                          setShowQuality((s) => !s);
+                        }}
+                        className={`rounded px-2 py-1 text-xs font-medium tabular-nums ${
+                          qualityChoice !== "auto"
+                            ? "bg-accent text-ink-950"
+                            : "bg-ink-700 text-gray-200 hover:text-accent"
+                        }`}
+                        title="Stream quality"
+                      >
+                        {qualityMenuLabel(qualityChoice)}
+                      </button>
+                      {showQuality && (
+                        <div className="absolute bottom-9 right-0 z-10 w-28 rounded-lg bg-ink-800 p-2 ring-1 ring-ink-600">
+                          <div className="flex flex-col gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                applyQualityChoice("auto");
+                                setShowQuality(false);
+                              }}
+                              className={`rounded px-2 py-1.5 text-left text-[11px] font-medium ${
+                                qualityChoice === "auto"
+                                  ? "bg-accent text-ink-950"
+                                  : "bg-ink-700 text-gray-200 hover:text-accent"
+                              }`}
+                            >
+                              Auto
+                            </button>
+                            {availableHeights.map((h) => (
+                              <button
+                                key={h}
+                                type="button"
+                                onClick={() => {
+                                  applyQualityChoice(h);
+                                  setShowQuality(false);
+                                }}
+                                className={`rounded px-2 py-1.5 text-left text-[11px] font-medium tabular-nums ${
+                                  qualityChoice === h
+                                    ? "bg-accent text-ink-950"
+                                    : "bg-ink-700 text-gray-200 hover:text-accent"
+                                }`}
+                              >
+                                {qualityMenuLabel(h)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 <div className="relative">
                   <button
-                    onClick={() => setShowSpeed((s) => !s)}
+                    onClick={() => {
+                      setShowQuality(false);
+                      setShowSpeed((s) => !s);
+                    }}
                     className={`rounded px-2 py-1 text-xs font-medium tabular-nums ${
                       rate !== 1
                         ? "bg-accent text-ink-950"

@@ -1,11 +1,10 @@
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import Library from "./pages/Library";
 import History from "./pages/History";
 import Download from "./pages/Download";
 import Import from "./pages/Import";
 import Watch from "./pages/Watch";
-import Preview from "./pages/Preview";
 import Settings from "./pages/Settings";
 import Playlists from "./pages/Playlists";
 import PlaylistDetail from "./pages/PlaylistDetail";
@@ -15,6 +14,18 @@ import { PlaybackProvider } from "./context/PlaybackContext";
 import { DownloadProvider } from "./context/DownloadContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
+
+/** Back-compat: /preview?url=&channel= → /watch?url=&channel= */
+function PreviewRedirect() {
+  const [params] = useSearchParams();
+  const qs = new URLSearchParams();
+  const url = params.get("url");
+  const channel = params.get("channel");
+  if (url) qs.set("url", url);
+  if (channel) qs.set("channel", channel);
+  const search = qs.toString();
+  return <Navigate to={search ? `/watch?${search}` : "/"} replace />;
+}
 
 function AppRoutes() {
   const location = useLocation();
@@ -44,7 +55,8 @@ function AppRoutes() {
         <Route path="/review" element={<Navigate to="/import" replace />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/watch/:id" element={<Watch />} />
-        <Route path="/preview" element={<Preview />} />
+        <Route path="/watch" element={<Watch />} />
+        <Route path="/preview" element={<PreviewRedirect />} />
       </Routes>
     </main>
   );

@@ -173,6 +173,8 @@ class ChannelFeedEntry(BaseModel):
     thumbnail_url: Optional[str] = None
     view_count: Optional[int] = None
     published_at: Optional[str] = None
+    # Channel display name (set for global catalog search).
+    channel: Optional[str] = None
     in_library: bool = False
     video_id: Optional[int] = None
     library_height_px: Optional[int] = None

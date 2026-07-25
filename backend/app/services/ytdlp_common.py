@@ -77,31 +77,39 @@ def extract_info_gated(
     opts: dict[str, Any],
     *,
     cache_key: Optional[str] = None,
+    force: bool = False,
 ) -> dict[str, Any]:
     """Run yt-dlp extract_info with global spacing + short result cache.
 
     Feed cards, download previews, and stream previews all share this gate so
     scrolling a channel feed cannot open dozens of parallel YouTube sessions.
+
+    When force=True, skip the cache read and invalidate any existing entry so
+    CDN URL refresh actually fetches fresh format URLs.
     """
     global _last_extract_at
 
     key = cache_key or url
     now = time.time()
-    cached = _info_cache.get(key)
-    if cached and cached[0] > now:
-        return dict(cached[1])
+    if not force:
+        cached = _info_cache.get(key)
+        if cached and cached[0] > now:
+            return dict(cached[1])
+    else:
+        _info_cache.pop(key, None)
 
     ensure_plugins_loaded()
     import yt_dlp
 
     with _extract_sem:
-        cached = _info_cache.get(key)
-        now = time.time()
-        if cached and cached[0] > now:
-            return dict(cached[1])
+        if not force:
+            cached = _info_cache.get(key)
+            now = time.time()
+            if cached and cached[0] > now:
+                return dict(cached[1])
 
         with _extract_gate_lock:
-            wait = _EXTRACT_MIN_INTERVAL_SEC - (now - _last_extract_at)
+            wait = _EXTRACT_MIN_INTERVAL_SEC - (time.time() - _last_extract_at)
         if wait > 0:
             time.sleep(wait)
 

@@ -825,6 +825,26 @@ def catalog_feed_page(
     }
 
 
+_EMBED_SEARCH_ROW_CEILING = 20_000
+
+
+def _catalog_entry_dict(
+    video: ChannelCatalogVideo,
+    *,
+    channel_name: Optional[str] = None,
+) -> dict[str, Any]:
+    return {
+        "id": video.yt_id,
+        "url": video.url,
+        "title": video.title,
+        "duration": video.duration,
+        "thumbnail_url": video.thumbnail_url,
+        "view_count": video.view_count,
+        "published_at": video.published_at,
+        "channel": channel_name,
+    }
+
+
 def search_catalog(
     session: Session,
     channel_url: str,
@@ -880,21 +900,94 @@ def search_catalog(
     # Preserve keyword order first, then semantic extras.
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
+    channel_name = catalog.channel_name
     for r in list(rows) + semantic_extra:
         if r.yt_id in seen:
             continue
         seen.add(r.yt_id)
-        out.append(
-            {
-                "id": r.yt_id,
-                "url": r.url,
-                "title": r.title,
-                "duration": r.duration,
-                "thumbnail_url": r.thumbnail_url,
-                "view_count": r.view_count,
-                "published_at": r.published_at,
-            }
+        out.append(_catalog_entry_dict(r, channel_name=channel_name))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def search_all_catalogs(
+    session: Session,
+    query: str,
+    *,
+    limit: int = 40,
+) -> list[dict[str, Any]]:
+    """Search indexed channel catalogs across all channels (keyword + optional embeddings)."""
+    q = query.strip()
+    if not q:
+        return []
+    pattern = f"%{q}%"
+    rows = session.exec(
+        select(ChannelCatalogVideo, ChannelCatalog)
+        .join(
+            ChannelCatalog,
+            ChannelCatalogVideo.catalog_id == ChannelCatalog.id,  # type: ignore[arg-type]
         )
+        .where(
+            or_(
+                col(ChannelCatalogVideo.title).ilike(pattern),
+                col(ChannelCatalogVideo.description).ilike(pattern),
+            )
+        )
+        .order_by(ChannelCatalogVideo.position.asc())
+        .limit(limit)
+    ).all()
+
+    keyword_hits: list[tuple[ChannelCatalogVideo, Optional[str]]] = []
+    for row in rows:
+        if isinstance(row, tuple) and len(row) >= 2:
+            video, catalog = row[0], row[1]
+            keyword_hits.append((video, getattr(catalog, "channel_name", None)))
+        else:
+            keyword_hits.append((row, None))  # type: ignore[arg-type]
+
+    semantic_extra: list[tuple[ChannelCatalogVideo, Optional[str]]] = []
+    try:
+        emb_count = session.exec(
+            select(func.count()).select_from(ChannelCatalogEmbedding)  # type: ignore[arg-type]
+        ).one()
+        if int(emb_count or 0) <= _EMBED_SEARCH_ROW_CEILING:
+            from .ai import embeddings as emb_mod
+            from .ai.provider import get_embed_provider, resolve_embed_model
+
+            provider = get_embed_provider()
+            if provider is not None:
+                model = resolve_embed_model(provider)
+                query_vec = provider.embed(q, model)
+                emb_rows = session.exec(select(ChannelCatalogEmbedding)).all()
+                scored: list[tuple[float, ChannelCatalogVideo, Optional[str]]] = []
+                for emb in emb_rows:
+                    video = session.get(ChannelCatalogVideo, emb.catalog_video_id)
+                    if video is None:
+                        continue
+                    catalog = session.get(ChannelCatalog, video.catalog_id)
+                    vec = emb_mod.unpack_vector(emb.vector, emb.dim)
+                    score = emb_mod.cosine(query_vec, vec)
+                    if score >= 0.35:
+                        scored.append(
+                            (
+                                score,
+                                video,
+                                catalog.channel_name if catalog else None,
+                            )
+                        )
+                scored.sort(key=lambda x: x[0], reverse=True)
+                semantic_extra = [(v, ch) for _, v, ch in scored[:limit]]
+    except Exception:  # noqa: BLE001
+        semantic_extra = []
+
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for video, channel_name in keyword_hits + semantic_extra:
+        if video.yt_id in seen:
+            continue
+        seen.add(video.yt_id)
+        out.append(_catalog_entry_dict(video, channel_name=channel_name))
         if len(out) >= limit:
             break
     return out

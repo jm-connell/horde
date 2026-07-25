@@ -109,6 +109,14 @@ export interface CustomThemePreset {
   uiFont: string;
 }
 
+export type StreamQuality =
+  | "auto"
+  | "2160"
+  | "1440"
+  | "1080"
+  | "720"
+  | "480";
+
 export interface Settings {
   theme: Theme;
   customColors: CustomColors;
@@ -169,6 +177,10 @@ export interface Settings {
   showRelatedVideos: boolean;
   /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
   autoplayRelated: boolean;
+  /** On a channel page, include uploads that are not yet in the library. */
+  showUndownloadedOnChannel: boolean;
+  /** Default quality for adaptive stream playback (Auto = ABR within device cap). */
+  defaultStreamQuality: StreamQuality;
 }
 
 const DEFAULT_CUSTOM_COLORS: CustomColors = {
@@ -228,6 +240,8 @@ const DEFAULTS: Settings = {
   aiTab: "summary",
   showRelatedVideos: true,
   autoplayRelated: true,
+  showUndownloadedOnChannel: true,
+  defaultStreamQuality: "auto",
 };
 
 /** Keys persisted to server `ui` blob (excludes ephemeral/session fields). */
@@ -280,6 +294,8 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "aiTab",
   "showRelatedVideos",
   "autoplayRelated",
+  "showUndownloadedOnChannel",
+  "defaultStreamQuality",
 ];
 
 const STORAGE_KEY = "horde.settings";

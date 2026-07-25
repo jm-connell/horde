@@ -3,6 +3,7 @@ import type {
   FontSize,
   HoverMotion,
   NavIndicator,
+  StreamQuality,
   SubtitleSize,
   Theme,
 } from "../../hooks/useSettings";
@@ -44,6 +45,18 @@ export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "medium", label: "Medium" },
   { value: "large", label: "Large" },
   { value: "xl", label: "XL" },
+];
+
+export const STREAM_QUALITY_OPTIONS: {
+  value: StreamQuality;
+  label: string;
+}[] = [
+  { value: "auto", label: "Auto" },
+  { value: "2160", label: "4K (2160p)" },
+  { value: "1440", label: "1440p" },
+  { value: "1080", label: "1080p" },
+  { value: "720", label: "720p" },
+  { value: "480", label: "480p" },
 ];
 
 export const AI_PROCESS_CATCH_UP: {

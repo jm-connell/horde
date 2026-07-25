@@ -1,4 +1,10 @@
-import { SPEED_STEPS, SUBTITLE_SIZES } from "./constants";
+import ThemedSelect from "../../components/ThemedSelect";
+import type { StreamQuality } from "../../hooks/useSettings";
+import {
+  SPEED_STEPS,
+  STREAM_QUALITY_OPTIONS,
+  SUBTITLE_SIZES,
+} from "./constants";
 import { Chip, Section, SettingRow, Toggle } from "./ui";
 import { useSettingsPage } from "./context";
 
@@ -58,6 +64,60 @@ export default function PlaybackTab() {
                     autoplayRelated: !settings.autoplayRelated,
                   })
                 }
+              />
+            }
+          />
+          <SettingRow
+            title="Show undownloaded on channel pages"
+            description="When browsing a channel, include uploads that are not yet in your library. Turn off to show only downloaded videos."
+            hidden={
+              !!q &&
+              !match(
+                "undownloaded",
+                "channel",
+                "feed",
+                "show undownloaded"
+              )
+            }
+            control={
+              <Toggle
+                checked={settings.showUndownloadedOnChannel}
+                onChange={() =>
+                  update({
+                    showUndownloadedOnChannel:
+                      !settings.showUndownloadedOnChannel,
+                  })
+                }
+              />
+            }
+          />
+          <SettingRow
+            title="Default stream quality"
+            description="Starting quality for streamed (not yet downloaded) videos. Auto adapts to your device and network; you can still change quality in the player."
+            hidden={
+              !!q &&
+              !match(
+                "stream quality",
+                "resolution",
+                "4k",
+                "1080p",
+                "streaming"
+              )
+            }
+            control={
+              <ThemedSelect
+                aria-label="Default stream quality"
+                value={settings.defaultStreamQuality}
+                options={STREAM_QUALITY_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                }))}
+                onChange={(value) =>
+                  update({
+                    defaultStreamQuality: value as StreamQuality,
+                  })
+                }
+                className="w-full min-w-[10rem] max-w-[14rem]"
               />
             }
           />

@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
     from .services.ytdlp_common import ensure_plugins_loaded
 
     ensure_plugins_loaded()
+    await preview.init_preview_client()
     downloader.download_queue.recover()
     observer = start_scanner()
 
@@ -62,6 +63,7 @@ async def lifespan(app: FastAPI):
         stop_ai_worker()
         observer.stop()
         observer.join(timeout=5)
+        await preview.close_preview_client()
 
 
 app = FastAPI(title="Horde", lifespan=lifespan)
