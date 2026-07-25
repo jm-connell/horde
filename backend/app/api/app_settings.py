@@ -28,6 +28,8 @@ class AiSettingsRead(BaseModel):
     openrouter_embed_model: str = "openai/text-embedding-3-small"
     ollama_prefer_embeddings: bool = False
     openrouter_show_costs: bool = True
+    openrouter_weekly_budget_usd: Optional[float] = None
+    openrouter_budget_hard_limit: bool = False
     schedule: Literal["on_download", "on_request", "timer", "set_time"] = "on_download"
     timer_hours: float = 6
     schedule_time: str = "03:00"
@@ -58,6 +60,9 @@ class AiSettingsUpdate(BaseModel):
     openrouter_embed_model: Optional[str] = None
     ollama_prefer_embeddings: Optional[bool] = None
     openrouter_show_costs: Optional[bool] = None
+    # null clears; 0 / empty also cleared in clamp_weekly_budget_usd.
+    openrouter_weekly_budget_usd: Optional[float] = None
+    openrouter_budget_hard_limit: Optional[bool] = None
     schedule: Optional[Literal["on_download", "on_request", "timer", "set_time"]] = None
     timer_hours: Optional[float] = Field(default=None, ge=0.25, le=168)
     schedule_time: Optional[str] = None
@@ -141,6 +146,14 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     filtered["openrouter_show_costs"] = bool(
         filtered.get("openrouter_show_costs", True)
     )
+    filtered["openrouter_weekly_budget_usd"] = (
+        app_settings.clamp_weekly_budget_usd(
+            filtered.get("openrouter_weekly_budget_usd")
+        )
+    )
+    filtered["openrouter_budget_hard_limit"] = bool(
+        filtered.get("openrouter_budget_hard_limit")
+    )
     return AiSettingsRead(**filtered)
 
 
@@ -188,6 +201,12 @@ def update_settings(payload: AppSettingsUpdate):
         if "vram_gb" in ai_updates:
             # Allow clearing the override with null; Field ge=0.5 rejects 0.
             ai_updates["vram_gb"] = app_settings.clamp_vram_gb(ai_updates["vram_gb"])
+        if "openrouter_weekly_budget_usd" in ai_updates:
+            ai_updates["openrouter_weekly_budget_usd"] = (
+                app_settings.clamp_weekly_budget_usd(
+                    ai_updates["openrouter_weekly_budget_usd"]
+                )
+            )
         if "summary_length" in ai_updates:
             ai_updates["summary_length"] = app_settings.normalize_summary_length(
                 ai_updates["summary_length"]

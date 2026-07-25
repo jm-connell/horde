@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...database import engine
 from ...models import OpenRouterUsage, utcnow
+from ...services import app_settings
+
+
+class OpenRouterBudgetExceeded(RuntimeError):
+    """Raised when a hard weekly OpenRouter spend limit is exceeded."""
 
 
 def record_cost(
@@ -42,6 +47,7 @@ def record_cost(
         )
         session.add(row)
         session.commit()
+    _maybe_pause_on_hard_budget()
     return value
 
 
@@ -95,6 +101,16 @@ def record_from_response(
     )
 
 
+def sum_since(cutoff: datetime) -> float:
+    """Sum OpenRouter costs with created_at >= cutoff."""
+    with Session(engine) as session:
+        rows = session.exec(
+            select(OpenRouterUsage).where(col(OpenRouterUsage.created_at) >= cutoff)
+        ).all()
+        total = sum(float(row.cost or 0.0) for row in rows)
+    return round(total, 8)
+
+
 def totals() -> dict[str, float]:
     """Sum costs for rolling windows (UTC-ish via stored timestamps)."""
     now = utcnow()
@@ -120,3 +136,58 @@ def totals() -> dict[str, float]:
                 if created >= cutoff:
                     out[key] += c
     return {k: round(v, 8) for k, v in out.items()}
+
+
+def budget_status(
+    *,
+    window_totals: Optional[dict[str, float]] = None,
+) -> dict[str, Any]:
+    """Return weekly budget config vs rolling 7-day spend."""
+    ai = app_settings.ai_settings()
+    budget = app_settings.clamp_weekly_budget_usd(
+        ai.get("openrouter_weekly_budget_usd")
+    )
+    hard = bool(ai.get("openrouter_budget_hard_limit"))
+    if window_totals is None:
+        d7 = sum_since(utcnow() - timedelta(days=7))
+    else:
+        d7 = float(window_totals.get("d7") or 0.0)
+    over = budget is not None and d7 >= budget
+    return {
+        "weekly_budget_usd": budget,
+        "hard_limit": hard,
+        "d7": d7,
+        "over_budget": over,
+        "blocked": bool(over and hard and budget is not None),
+    }
+
+
+def assert_budget_allows() -> None:
+    """Raise OpenRouterBudgetExceeded when hard weekly limit is hit."""
+    status = budget_status()
+    if not status["blocked"]:
+        return
+    budget = float(status["weekly_budget_usd"] or 0.0)
+    spent = float(status["d7"] or 0.0)
+    raise OpenRouterBudgetExceeded(
+        f"OpenRouter weekly budget of ${budget:g} exceeded "
+        f"(${spent:.4f} in the last 7 days). "
+        "Raise the limit in Settings → AI, or turn off 'Stop when exceeded'."
+    )
+
+
+def _maybe_pause_on_hard_budget() -> None:
+    """Auto-pause the AI queue once a hard weekly budget is crossed."""
+    status = budget_status()
+    if not status["blocked"]:
+        return
+    ai = app_settings.ai_settings()
+    if ai.get("paused"):
+        return
+    app_settings.save({"ai": {"paused": True}})
+    try:
+        from . import worker as ai_worker
+
+        ai_worker.wake_worker()
+    except Exception:  # noqa: BLE001
+        pass

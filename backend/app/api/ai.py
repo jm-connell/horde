@@ -230,19 +230,28 @@ class OpenRouterCostsRead(BaseModel):
     d30: float = 0.0
     y1: float = 0.0
     all: float = 0.0
+    weekly_budget_usd: Optional[float] = None
+    hard_limit: bool = False
+    over_budget: bool = False
+    blocked: bool = False
 
 
 @router.get("/openrouter/costs", response_model=OpenRouterCostsRead)
 def ai_openrouter_costs():
-    from ..services.ai.cost_ledger import totals
+    from ..services.ai.cost_ledger import budget_status, totals
 
     data = totals()
+    budget = budget_status(window_totals=data)
     return OpenRouterCostsRead(
         h24=float(data.get("h24") or 0.0),
         d7=float(data.get("d7") or 0.0),
         d30=float(data.get("d30") or 0.0),
         y1=float(data.get("y1") or 0.0),
         all=float(data.get("all") or 0.0),
+        weekly_budget_usd=budget.get("weekly_budget_usd"),
+        hard_limit=bool(budget.get("hard_limit")),
+        over_budget=bool(budget.get("over_budget")),
+        blocked=bool(budget.get("blocked")),
     )
 
 

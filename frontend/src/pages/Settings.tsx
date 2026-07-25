@@ -289,6 +289,8 @@ const DEFAULT_AI: AiSettings = {
   openrouter_embed_model: "openai/text-embedding-3-small",
   ollama_prefer_embeddings: false,
   openrouter_show_costs: true,
+  openrouter_weekly_budget_usd: null,
+  openrouter_budget_hard_limit: false,
   schedule: "on_download",
   timer_hours: 6,
   schedule_time: "03:00",
@@ -443,6 +445,11 @@ const SEARCH_REGISTRY: { tab: SettingsTab; keywords: string }[] = [
     tab: "ai",
     keywords:
       "ollama connection enable ai base url queue indexed features gpu vram workload light normal heavy override openrouter api key privacy",
+  },
+  {
+    tab: "ai",
+    keywords:
+      "cost costs usage billing spend budget limit threshold warn warning weekly dollar openrouter",
   },
   {
     tab: "ai",
@@ -1228,6 +1235,31 @@ export default function Settings() {
       clearInterval(id);
     };
   }, [tab]);
+
+  useEffect(() => {
+    if (!openRouterCosts?.over_budget) return;
+    const budget = openRouterCosts.weekly_budget_usd;
+    if (budget == null || budget <= 0) return;
+    const dayKey = Math.floor(Date.now() / 86_400_000);
+    const storageKey = `horde:or-budget-warn:${budget}:${dayKey}`;
+    try {
+      if (localStorage.getItem(storageKey)) return;
+      localStorage.setItem(storageKey, "1");
+    } catch {
+      /* ignore */
+    }
+    const spent = formatUsdCost(openRouterCosts.d7) || "$0";
+    const limit = formatUsdCost(budget) || `$${budget}`;
+    if (openRouterCosts.blocked) {
+      showToast(
+        `OpenRouter weekly budget exceeded (${spent} / ${limit}). Calls blocked.`
+      );
+    } else {
+      showToast(
+        `OpenRouter weekly spend is ${spent} (limit ${limit}).`
+      );
+    }
+  }, [openRouterCosts, showToast]);
 
   useEffect(() => {
     if (tab !== "ai" || !q) return;
@@ -4247,7 +4279,11 @@ export default function Settings() {
                   "usage",
                   "billing",
                   "openrouter",
-                  "spend"
+                  "spend",
+                  "budget",
+                  "limit",
+                  "threshold",
+                  "warn"
                 )
               }
             >
@@ -4263,7 +4299,11 @@ export default function Settings() {
                 ).map((row) => (
                   <div
                     key={row.key}
-                    className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-2"
+                    className={`rounded-lg border bg-ink-950/60 px-3 py-2 ${
+                      row.key === "d7" && openRouterCosts?.over_budget
+                        ? "border-amber-500/40"
+                        : "border-ink-700"
+                    }`}
                     title={
                       aiDraft.openrouter_model
                         ? aiDraft.openrouter_model
@@ -4273,7 +4313,13 @@ export default function Settings() {
                     <p className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
                       {row.label}
                     </p>
-                    <p className="mt-1 text-sm font-medium tabular-nums text-gray-200">
+                    <p
+                      className={`mt-1 text-sm font-medium tabular-nums ${
+                        row.key === "d7" && openRouterCosts?.over_budget
+                          ? "text-amber-200"
+                          : "text-gray-200"
+                      }`}
+                    >
                       {formatUsdCost(openRouterCosts?.[row.key] ?? 0) || "$0"}
                     </p>
                   </div>
@@ -4283,6 +4329,119 @@ export default function Settings() {
                 Totals are recorded locally from OpenRouter usage responses.
                 They may differ slightly from the OpenRouter dashboard.
               </p>
+
+              <div className="mt-4 max-w-2xl space-y-3 border-t border-ink-800 pt-4">
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-gray-200">
+                      Warn if weekly spend exceeds
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-sm text-gray-500">$</span>
+                      <input
+                        type="number"
+                        min={0.01}
+                        max={100000}
+                        step={0.01}
+                        inputMode="decimal"
+                        value={aiDraft.openrouter_weekly_budget_usd ?? ""}
+                        onChange={(e) => {
+                          const raw = e.target.value.trim();
+                          setAiDraft((d) => ({
+                            ...d,
+                            openrouter_weekly_budget_usd:
+                              raw === "" ? null : Number(raw),
+                          }));
+                        }}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          if (raw === "") {
+                            void saveAi({ openrouter_weekly_budget_usd: null });
+                            return;
+                          }
+                          const n = Number(raw);
+                          if (!Number.isFinite(n) || n <= 0) {
+                            setAiDraft((d) => ({
+                              ...d,
+                              openrouter_weekly_budget_usd:
+                                appSettings?.ai.openrouter_weekly_budget_usd ??
+                                null,
+                            }));
+                            return;
+                          }
+                          void saveAi({ openrouter_weekly_budget_usd: n });
+                        }}
+                        placeholder="e.g. 1"
+                        aria-label="Weekly OpenRouter budget in USD"
+                        className={`${INPUT_COMPACT} w-28`}
+                      />
+                    </span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Uses the rolling last 7 days total. Leave blank for no limit.
+                  You&apos;ll get a toast and a banner when spend crosses this
+                  amount.
+                </p>
+                <div
+                  className={`flex max-w-2xl items-center gap-3 ${
+                    aiDraft.openrouter_weekly_budget_usd == null
+                      ? "opacity-50"
+                      : ""
+                  }`}
+                >
+                  <span className="text-sm font-medium text-gray-200">
+                    Stop OpenRouter when exceeded
+                  </span>
+                  <Toggle
+                    checked={aiDraft.openrouter_budget_hard_limit}
+                    onChange={() => {
+                      if (aiDraft.openrouter_weekly_budget_usd == null) return;
+                      saveAi({
+                        openrouter_budget_hard_limit:
+                          !aiDraft.openrouter_budget_hard_limit,
+                      });
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                  When on, further OpenRouter calls are blocked and the AI queue
+                  pauses once the weekly budget is hit. Local Ollama is
+                  unaffected.
+                </p>
+                {openRouterCosts?.over_budget &&
+                  aiDraft.openrouter_weekly_budget_usd != null && (
+                    <div
+                      className={`rounded-lg border px-3 py-2 text-xs ${
+                        openRouterCosts.blocked
+                          ? "border-red-500/35 bg-red-500/10 text-red-100/90"
+                          : "border-amber-500/30 bg-amber-500/10 text-amber-100/90"
+                      }`}
+                    >
+                      {openRouterCosts.blocked ? (
+                        <p>
+                          Weekly OpenRouter budget of{" "}
+                          {formatUsdCost(aiDraft.openrouter_weekly_budget_usd) ||
+                            `$${aiDraft.openrouter_weekly_budget_usd}`}{" "}
+                          exceeded (
+                          {formatUsdCost(openRouterCosts.d7) || "$0"} in the
+                          last 7 days). OpenRouter calls are blocked and the AI
+                          queue was paused. Raise the limit, clear it, or turn
+                          off the hard stop — then resume the queue.
+                        </p>
+                      ) : (
+                        <p>
+                          Weekly OpenRouter spend is{" "}
+                          {formatUsdCost(openRouterCosts.d7) || "$0"} (limit{" "}
+                          {formatUsdCost(aiDraft.openrouter_weekly_budget_usd) ||
+                            `$${aiDraft.openrouter_weekly_budget_usd}`}
+                          ). Turn on Stop OpenRouter when exceeded to block
+                          further calls.
+                        </p>
+                      )}
+                    </div>
+                  )}
+              </div>
             </Section>
 
             <Section

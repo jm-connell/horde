@@ -104,25 +104,29 @@ export default function Watch() {
   }, [videoId, playVideo]);
 
   useEffect(() => {
-    api
-      .getAppSettings()
-      .then((s) => {
-        const llmOn =
-          !!s.ai.enabled ||
-          (!!s.ai.openrouter_enabled && !!s.ai.openrouter_api_key_set);
-        setAiSummariesEnabled(llmOn && !!s.ai.ai_summaries);
-        setAiChatEnabled(llmOn && !!s.ai.ai_chat);
+    let cancelled = false;
+    Promise.all([api.getAppSettings(), api.getAiStatus()])
+      .then(([s, status]) => {
+        if (cancelled) return;
+        const openRouterConnected =
+          !!status.openrouter_enabled && !!status.openrouter_api_key_set;
+        const localConnected = !!status.enabled && !!status.reachable;
+        const llmConnected = openRouterConnected || localConnected;
+        setAiSummariesEnabled(llmConnected && !!s.ai.ai_summaries);
+        setAiChatEnabled(llmConnected && !!s.ai.ai_chat);
         setShowAiCosts(
-          !!s.ai.openrouter_enabled &&
-            !!s.ai.openrouter_api_key_set &&
-            s.ai.openrouter_show_costs !== false
+          openRouterConnected && s.ai.openrouter_show_costs !== false
         );
       })
       .catch(() => {
+        if (cancelled) return;
         setAiSummariesEnabled(false);
         setAiChatEnabled(false);
         setShowAiCosts(false);
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
