@@ -223,6 +223,7 @@ export default function Watch() {
       chapters: parseChapters(source.meta.description),
       sourceUrl: source.meta.source_url,
       channelParam: channelParam || source.meta.channel,
+      subtitles: source.meta.subtitles ?? [],
     });
   }, [source, channelParam, playStream]);
 

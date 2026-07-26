@@ -40,6 +40,20 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     data?: unknown[];
   }
 
+  export interface ShakaTextTrack {
+    id: number;
+    active: boolean;
+    language: string;
+    label: string | null;
+    kind: string;
+    mimeType?: string | null;
+  }
+
+  export interface ShakaTextDisplayer {
+    destroy(): void;
+    setTextVisibility(visible: boolean): void;
+  }
+
   export interface ShakaPlayer {
     attach(element: HTMLMediaElement): Promise<void>;
     load(manifestUri: string): Promise<void>;
@@ -52,6 +66,19 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     selectVariantTrack(track: ShakaVariantTrack, clearBuffer?: boolean): void;
     getStats(): ShakaStats;
     retryStreaming(retryDelay?: number): boolean;
+    addTextTrackAsync(
+      uri: string,
+      language: string,
+      kind: string,
+      mimeType?: string,
+      codec?: string,
+      label?: string,
+      forced?: boolean
+    ): Promise<ShakaTextTrack>;
+    getTextTracks(): ShakaTextTrack[];
+    selectTextTrack(track: ShakaTextTrack | null): void;
+    setTextTrackVisibility(visible: boolean): void;
+    isTextTrackVisible(): boolean;
   }
 
   export interface ShakaNamespace {
@@ -61,6 +88,12 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     };
     polyfill: {
       installAll(): void;
+    };
+    text?: {
+      SimpleTextDisplayer: new (
+        video: HTMLMediaElement,
+        label?: string
+      ) => ShakaTextDisplayer;
     };
     util?: {
       Error?: {

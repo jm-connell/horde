@@ -399,6 +399,8 @@ export default function VideoPlayer({
         }
 
         const abrEnabled = initialChoice === "auto";
+        const videoEl = videoRef.current;
+        const SimpleTextDisplayer = shaka.text?.SimpleTextDisplayer;
 
         p.configure({
           streaming: {
@@ -431,6 +433,14 @@ export default function VideoPlayer({
           mediaSource: {
             codecSwitchingStrategy: "smooth",
           },
+          // Native <track> children are wiped by MSE/Shaka; render cues via
+          // SimpleTextDisplayer so external VTTs still paint through ::cue.
+          ...(videoEl && SimpleTextDisplayer
+            ? {
+                textDisplayFactory: () =>
+                  new SimpleTextDisplayer(videoEl, "Horde Text"),
+              }
+            : {}),
         });
 
         p.addEventListener("error", ((event: Event) => {
@@ -795,6 +805,8 @@ export default function VideoPlayer({
     const v = videoRef.current;
     if (!v) return;
     const activeCues: VTTCue[] = [];
+    // Include Shaka SimpleTextDisplayer tracks (video.textTracks) as well as
+    // native <track> children used for progressive/library playback.
     for (const tt of Array.from(v.textTracks)) {
       if (tt.mode !== "showing") continue;
       for (const cue of Array.from(tt.activeCues ?? [])) {
@@ -823,13 +835,55 @@ export default function VideoPlayer({
     const v = videoRef.current;
     if (!v) return;
     const selected = captionLang?.toLowerCase() ?? null;
-    Array.from(v.textTracks).forEach((tt, i) => {
+    const player = shakaPlayerRef.current;
+
+    // DASH: Shaka owns text tracks (native <track> children are cleared by MSE).
+    if (effectiveStreamType === "dash" && player) {
+      try {
+        const shakaTracks = player.getTextTracks() ?? [];
+        if (!selected) {
+          player.setTextTrackVisibility(false);
+        } else {
+          const match =
+            shakaTracks.find(
+              (t) => (t.language || "").toLowerCase() === selected
+            ) ??
+            shakaTracks.find(
+              (t) =>
+                (t.language || "").toLowerCase().split("-")[0] ===
+                selected.split("-")[0]
+            );
+          if (match) {
+            player.selectTextTrack(match);
+            player.setTextTrackVisibility(true);
+          } else {
+            player.setTextTrackVisibility(false);
+          }
+        }
+      } catch {
+        // Caption APIs can throw if the player is mid-destroy.
+      }
+      return;
+    }
+
+    // Progressive / library: native <track> children.
+    const trackEls = Array.from(
+      v.querySelectorAll("track")
+    ) as HTMLTrackElement[];
+    trackEls.forEach((el, i) => {
+      const tt = el.track;
+      if (!tt) return;
       if (!selected) {
         tt.mode = "hidden";
         return;
       }
       const metaLang = (tracks[i]?.lang ?? "").toLowerCase();
-      const trackLang = (tt.language || tt.label || tracks[i]?.lang || "").toLowerCase();
+      const trackLang = (
+        tt.language ||
+        tt.label ||
+        tracks[i]?.lang ||
+        ""
+      ).toLowerCase();
       const matches =
         metaLang === selected ||
         metaLang.split("-")[0] === selected.split("-")[0] ||
@@ -837,11 +891,47 @@ export default function VideoPlayer({
         trackLang.split("-")[0] === selected.split("-")[0];
       tt.mode = matches ? "showing" : "hidden";
     });
-  }, [captionLang, tracks]);
+  }, [captionLang, tracks, effectiveStreamType]);
+
+  // Load external VTTs into Shaka after DASH is ready (native <track> won't survive).
+  useEffect(() => {
+    if (effectiveStreamType !== "dash" || !shakaReady) return;
+    const player = shakaPlayerRef.current;
+    if (!player || tracks.length === 0) return;
+    let cancelled = false;
+    const loadText = async () => {
+      try {
+        const existing = new Set(
+          (player.getTextTracks() ?? []).map((t) =>
+            (t.language || "").toLowerCase()
+          )
+        );
+        for (const t of tracks) {
+          const lang = t.lang.toLowerCase();
+          if (existing.has(lang) || existing.has(lang.split("-")[0])) continue;
+          await player.addTextTrackAsync(
+            t.src,
+            t.lang,
+            "subtitles",
+            "text/vtt"
+          );
+          existing.add(lang);
+        }
+        if (cancelled) return;
+        setCaptionMode();
+      } catch {
+        // Best-effort; captions simply stay unavailable if loading fails.
+      }
+    };
+    void loadText();
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveStreamType, shakaReady, tracks, src, setCaptionMode]);
 
   useLayoutEffect(() => {
     setCaptionMode();
-  }, [setCaptionMode, tracks, src]);
+  }, [setCaptionMode, tracks, src, shakaReady]);
 
   useEffect(() => {
     if (playing) setCaptionMode();
@@ -860,17 +950,35 @@ export default function VideoPlayer({
     applyLines();
     setCaptionMode();
     v.addEventListener("loadedmetadata", onTrackLoad);
-    const trackEls = v.querySelectorAll("track");
-    for (const el of trackEls) el.addEventListener("load", onTrackLoad);
+    const trackEls = Array.from(
+      v.querySelectorAll("track")
+    ) as HTMLTrackElement[];
+    for (const el of trackEls) {
+      el.addEventListener("load", onTrackLoad);
+      el.addEventListener("error", onTrackLoad);
+    }
+    // Include Shaka SimpleTextDisplayer tracks (not only <track> children).
     const tracksList = Array.from(v.textTracks);
     for (const tt of tracksList) tt.addEventListener("cuechange", applyLines);
     return () => {
       v.removeEventListener("loadedmetadata", onTrackLoad);
-      for (const el of trackEls) el.removeEventListener("load", onTrackLoad);
+      for (const el of trackEls) {
+        el.removeEventListener("load", onTrackLoad);
+        el.removeEventListener("error", onTrackLoad);
+      }
       for (const tt of tracksList)
         tt.removeEventListener("cuechange", applyLines);
     };
-  }, [captionLang, subtitleOffset, tracks, src, setCaptionMode, applyCueLines]);
+  }, [
+    captionLang,
+    subtitleOffset,
+    tracks,
+    src,
+    setCaptionMode,
+    applyCueLines,
+    effectiveStreamType,
+    shakaReady,
+  ]);
 
   const seekTo = useCallback(
     (sec: number) => {
@@ -1764,15 +1872,17 @@ export default function VideoPlayer({
           onMouseLeave={isMini ? undefined : endHold}
           className={`${videoClass} ${subtitleClass}`}
         >
-          {tracks.map((t) => (
-            <track
-              key={`${effectiveSrc}-${t.lang}`}
-              kind="subtitles"
-              src={t.src}
-              srcLang={t.lang}
-              label={t.lang}
-            />
-          ))}
+          {/* DASH uses Shaka addTextTrackAsync; native <track> is wiped by MSE. */}
+          {effectiveStreamType !== "dash" &&
+            tracks.map((t) => (
+              <track
+                key={`${effectiveSrc}-${t.lang}`}
+                kind="subtitles"
+                src={t.src}
+                srcLang={t.lang}
+                label={t.lang}
+              />
+            ))}
         </video>
 
         {buffering && !mediaError && !chromecast.casting && (

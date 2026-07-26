@@ -2167,6 +2167,94 @@ def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
     return info
 
 
+def _subtitle_entry_vtt_url(entries: list[Any]) -> Optional[str]:
+    """Pick a VTT URL from a yt-dlp subtitle format list for one language."""
+    import urllib.parse
+
+    if not isinstance(entries, list):
+        return None
+    chosen: Optional[dict[str, Any]] = None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        url = entry.get("url")
+        if not url:
+            continue
+        if str(entry.get("ext") or "").lower() == "vtt":
+            return str(url)
+        if chosen is None:
+            chosen = entry
+    if chosen is None:
+        return None
+    url = str(chosen["url"])
+    if str(chosen.get("ext") or "").lower() == "vtt":
+        return url
+    # YouTube timedtext honors fmt=vtt even when yt-dlp listed json3/srv3/etc.
+    parts = urllib.parse.urlsplit(url)
+    query = urllib.parse.parse_qs(parts.query, keep_blank_values=True)
+    query["fmt"] = ["vtt"]
+    return urllib.parse.urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urllib.parse.urlencode(query, doseq=True),
+            parts.fragment,
+        )
+    )
+
+
+def _collect_preview_subtitles(info: dict[str, Any]) -> list[dict[str, Any]]:
+    """English caption tracks from yt-dlp info; manual wins over auto."""
+    by_lang: dict[str, dict[str, Any]] = {}
+    for source_key, is_auto in (("subtitles", False), ("automatic_captions", True)):
+        bucket = info.get(source_key) or {}
+        if not isinstance(bucket, dict):
+            continue
+        for raw_lang, entries in bucket.items():
+            lang = _normalize_lang(str(raw_lang or ""))
+            if lang != "en":
+                continue
+            # Manual is walked first; skip once a lang is claimed.
+            if lang in by_lang:
+                continue
+            url = _subtitle_entry_vtt_url(entries)
+            if not url:
+                continue
+            by_lang[lang] = {"lang": lang, "auto": is_auto, "url": url}
+    return list(by_lang.values())
+
+
+def list_preview_subtitles(url: str, *, force: bool = False) -> list[dict[str, Any]]:
+    """Return [{lang, auto}] for English captions available on a stream URL."""
+    info = _extract_preview_info(url, force=force)
+    return [
+        {"lang": t["lang"], "auto": t["auto"]}
+        for t in _collect_preview_subtitles(info)
+    ]
+
+
+def resolve_preview_subtitle(
+    url: str, lang: str, *, force: bool = False
+) -> dict[str, Any]:
+    """Resolve a proxied caption track: {direct_url, http_headers, lang, auto}."""
+    wanted = _normalize_lang(lang)
+    info = _extract_preview_info(url, force=force)
+    track = next(
+        (t for t in _collect_preview_subtitles(info) if t["lang"] == wanted),
+        None,
+    )
+    if track is None:
+        raise KeyError(f"No subtitle track for language {lang!r}")
+    headers = dict(info.get("http_headers") or {})
+    return {
+        "direct_url": track["url"],
+        "http_headers": {str(k): str(v) for k, v in headers.items()},
+        "lang": track["lang"],
+        "auto": track["auto"],
+    }
+
+
 def _max_adaptive_height(info: dict[str, Any]) -> Optional[int]:
     videos, _ = _pick_adaptive_formats(info)
     if not videos:
@@ -2234,6 +2322,10 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
         or info.get("original_url")
         or url
     )
+    subtitles = [
+        {"lang": t["lang"], "auto": t["auto"]}
+        for t in _collect_preview_subtitles(info)
+    ]
     return {
         "id": info.get("id"),
         "title": info.get("title"),
@@ -2246,6 +2338,7 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
         "source_url": source,
         "preview_height": preview_height,
         "available_presets": _available_presets(info),
+        "subtitles": subtitles,
     }
 
 

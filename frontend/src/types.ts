@@ -203,6 +203,7 @@ export interface StreamPreviewMeta {
   preview_height: number | null;
   library_video_id: number | null;
   available_presets: string[];
+  subtitles: SubtitleTrack[];
 }
 
 export interface DownloadOverrides {

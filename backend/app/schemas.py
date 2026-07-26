@@ -103,6 +103,7 @@ class StreamPreviewMeta(BaseModel):
     preview_height: Optional[int] = None
     library_video_id: Optional[int] = None
     available_presets: list[str] = []
+    subtitles: list[SubtitleTrack] = []
 
 
 class DownloadJobRead(BaseModel):

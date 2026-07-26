@@ -315,6 +315,91 @@ def preview_meta(url: str = Query(...), session: Session = Depends(get_session))
         preview_height=meta.get("preview_height"),
         library_video_id=library_video_id,
         available_presets=meta.get("available_presets") or [],
+        subtitles=meta.get("subtitles") or [],
+    )
+
+
+@router.get("/subtitles")
+async def preview_subtitles(
+    url: str = Query(...),
+    lang: str = Query("en"),
+):
+    """Proxy an English (or requested) WebVTT caption track for stream preview."""
+    cleaned = _require_video_url(url)
+    try:
+        resolved = downloader.resolve_preview_subtitle(cleaned, lang)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=400, detail=f"Could not load preview subtitles: {exc}"
+        ) from exc
+
+    client = get_preview_client()
+    headers = dict(resolved.get("http_headers") or {})
+
+    try:
+        resp = await client.get(resolved["direct_url"], headers=headers)
+    except httpx.HTTPError as exc:
+        logger.warning("Upstream subtitle fetch failed: %s", exc)
+        raise HTTPException(
+            status_code=502, detail=f"Upstream subtitle failed: {exc}"
+        ) from exc
+
+    if resp.status_code in (401, 403, 404):
+        logger.info(
+            "Refreshing preview subtitle url=%s lang=%s status=%s",
+            cleaned[:80],
+            lang,
+            resp.status_code,
+        )
+        try:
+            resolved = downloader.resolve_preview_subtitle(
+                cleaned, lang, force=True
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not refresh preview subtitles: {exc}",
+            ) from exc
+        headers = dict(resolved.get("http_headers") or {})
+        try:
+            resp = await client.get(resolved["direct_url"], headers=headers)
+        except httpx.HTTPError as exc:
+            logger.warning("Upstream subtitle retry failed: %s", exc)
+            raise HTTPException(
+                status_code=502, detail=f"Upstream subtitle failed: {exc}"
+            ) from exc
+
+    if resp.status_code >= 400:
+        logger.warning(
+            "Upstream subtitle returned %s: %r",
+            resp.status_code,
+            resp.content[:200],
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream returned {resp.status_code}",
+        )
+
+    body = resp.content
+    # Strip a UTF-8 BOM if present so the WEBVTT check is reliable.
+    if body.startswith(b"\xef\xbb\xbf"):
+        body = body[3:]
+    if not body.lstrip().startswith(b"WEBVTT"):
+        logger.warning(
+            "Upstream subtitle was not WEBVTT (prefix=%r)", body[:40]
+        )
+        raise HTTPException(
+            status_code=502, detail="Upstream subtitle was not WEBVTT"
+        )
+
+    return Response(
+        content=body,
+        media_type="text/vtt",
+        headers={"Cache-Control": _CACHE_CONTROL},
     )
 
 

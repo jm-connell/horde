@@ -12,6 +12,7 @@ import {
   api,
   previewManifestUrl,
   previewStreamUrl,
+  previewSubtitleUrl,
   streamUrl,
   subtitleUrl,
   thumbnailUrl,
@@ -25,7 +26,7 @@ import {
   parseChapters,
   type Chapter,
 } from "../utils";
-import type { Video } from "../types";
+import type { SubtitleTrack, Video } from "../types";
 
 export interface StreamSession {
   url: string;
@@ -36,6 +37,7 @@ export interface StreamSession {
   sourceUrl?: string | null;
   /** Channel query for expand / back navigation. */
   channelParam?: string | null;
+  subtitles?: SubtitleTrack[];
 }
 
 export type MiniPlayerRect = {
@@ -663,6 +665,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onModeChange={setMode}
         variant={dock ? "full" : "mini"}
         title={stream.title}
+        tracks={dedupeSubtitleTracks(stream.subtitles ?? []).map((t) => ({
+          lang: t.lang,
+          src: previewSubtitleUrl(stream.url, t.lang),
+        }))}
         onEnded={handleEnded}
         onExpand={() => navigate(streamExpandPath(stream))}
         onClose={close}
