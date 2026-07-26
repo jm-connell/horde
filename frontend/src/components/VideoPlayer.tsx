@@ -19,6 +19,7 @@ import {
   probeDecodeSupport,
   readBandwidthEstimate,
   readDowngrade,
+  trackQuality,
   type DecodeSupport,
 } from "../utils/decodeCapability";
 import type {
@@ -51,14 +52,43 @@ function qualityMenuLabel(choice: QualityChoice): string {
   return `${choice}p`;
 }
 
-function distinctHeights(
-  tracks: { height: number | null }[]
+function distinctQualities(
+  tracks: { width?: number | null; height?: number | null }[]
 ): number[] {
   const set = new Set<number>();
   for (const t of tracks) {
-    if (t.height != null && t.height > 0) set.add(t.height);
+    const q = trackQuality(t);
+    if (q > 0) set.add(q);
   }
   return [...set].sort((a, b) => b - a);
+}
+
+function isPortraitLadder(
+  tracks: { width?: number | null; height?: number | null }[]
+): boolean {
+  let best: { width: number; height: number } | null = null;
+  let bestQ = 0;
+  for (const t of tracks) {
+    const w = t.width ?? 0;
+    const h = t.height ?? 0;
+    const q = trackQuality(t);
+    if (q > bestQ && w > 0 && h > 0) {
+      bestQ = q;
+      best = { width: w, height: h };
+    }
+  }
+  return best != null && best.height > best.width;
+}
+
+/** Cap ABR by the short side so portrait 1080×1920 is not blocked as "1920p". */
+function abrRestrictions(
+  qualityCap: number,
+  tracks: { width?: number | null; height?: number | null }[]
+): { maxWidth: number; maxHeight: number } {
+  if (isPortraitLadder(tracks)) {
+    return { maxWidth: qualityCap, maxHeight: 8192 };
+  }
+  return { maxHeight: qualityCap, maxWidth: 8192 };
 }
 const HOLD_DELAY_MS = 250;
 const MIN_MINI_WIDTH = 160;
@@ -207,9 +237,13 @@ export default function VideoPlayer({
   const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
     streamQualityToChoice(settings.defaultStreamQuality)
   );
+  /** Distinct short-side qualities (min(w,h)), not raw frame heights. */
   const [availableHeights, setAvailableHeights] = useState<number[]>([]);
   const qualityChoiceRef = useRef(qualityChoice);
   qualityChoiceRef.current = qualityChoice;
+  const variantTracksRef = useRef<
+    { width?: number | null; height?: number | null }[]
+  >([]);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [miniControlsVisible, setMiniControlsVisible] = useState(true);
   const [videoAspect, setVideoAspect] = useState<number | null>(null);
@@ -405,6 +439,7 @@ export default function VideoPlayer({
         const videoEl = videoRef.current;
         const SimpleTextDisplayer = shaka.text?.SimpleTextDisplayer;
 
+        // Orientation-aware caps applied after load once tracks are known.
         p.configure({
           streaming: {
             bufferingGoal: 30,
@@ -429,9 +464,10 @@ export default function VideoPlayer({
             switchInterval: 8,
           },
           preferredVideoCodecs: preferAv1 ? ["av01", "avc1"] : ["avc1"],
-          // Auto stays inside the device-capability cap; a fixed pick may exceed it.
+          // Loose until we know orientation; tightened after load.
           restrictions: {
-            maxHeight: abrEnabled ? maxHeight : 4320,
+            maxHeight: abrEnabled ? Math.max(maxHeight, 2160) : 8192,
+            maxWidth: abrEnabled ? Math.max(maxHeight, 2160) : 8192,
           },
           mediaSource: {
             codecSwitchingStrategy: "smooth",
@@ -476,19 +512,26 @@ export default function VideoPlayer({
 
         player = p;
         shakaPlayerRef.current = p;
-        const heights = distinctHeights(p.getVariantTracks() ?? []);
-        setAvailableHeights(heights);
-        if (initialChoice !== "auto") {
-          // Pin the highest-bandwidth track at the chosen height (or nearest below).
+        const variants = p.getVariantTracks() ?? [];
+        variantTracksRef.current = variants;
+        const qualities = distinctQualities(variants);
+        setAvailableHeights(qualities);
+        if (abrEnabled) {
+          p.configure({
+            restrictions: abrRestrictions(maxHeight, variants),
+          });
+        } else {
+          // Pin the highest-bandwidth track at the chosen quality (or nearest below).
           const target =
-            heights.find((h) => h <= initialChoice) ?? heights[heights.length - 1];
+            qualities.find((q) => q <= initialChoice) ??
+            qualities[qualities.length - 1];
           if (target != null) {
             p.configure({
               abr: { enabled: false },
-              restrictions: { maxHeight: 2160 },
+              restrictions: { maxHeight: 8192, maxWidth: 8192 },
             });
-            const candidates = (p.getVariantTracks() ?? []).filter(
-              (t) => t.height === target
+            const candidates = variants.filter(
+              (t) => trackQuality(t) === target
             );
             candidates.sort((a, b) => b.bandwidth - a.bandwidth);
             if (candidates[0]) {
@@ -536,24 +579,25 @@ export default function VideoPlayer({
     if (!p) return;
     setQualityChoice(choice);
     try {
+      const tracks = p.getVariantTracks() ?? [];
+      variantTracksRef.current = tracks;
       if (choice === "auto") {
         const cap = capabilityMaxHeightRef.current;
         p.configure({
           abr: { enabled: true },
-          restrictions: { maxHeight: cap },
+          restrictions: abrRestrictions(cap, tracks),
         });
         return;
       }
       p.configure({
         abr: { enabled: false },
-        restrictions: { maxHeight: 2160 },
+        restrictions: { maxHeight: 8192, maxWidth: 8192 },
       });
-      const tracks = p.getVariantTracks() ?? [];
-      const heights = distinctHeights(tracks);
+      const qualities = distinctQualities(tracks);
       const target =
-        heights.find((h) => h <= choice) ?? heights[heights.length - 1];
+        qualities.find((q) => q <= choice) ?? qualities[qualities.length - 1];
       if (target == null) return;
-      const candidates = tracks.filter((t) => t.height === target);
+      const candidates = tracks.filter((t) => trackQuality(t) === target);
       candidates.sort((a, b) => b.bandwidth - a.bandwidth);
       if (candidates[0]) {
         p.selectVariantTrack(candidates[0], /* clearBuffer */ true);
@@ -584,16 +628,19 @@ export default function VideoPlayer({
           if (t > 1) pendingSeekRef.current = t;
           setDashReloadToken((n) => n + 1);
         } else {
+          const tracks = p.getVariantTracks() ?? [];
+          variantTracksRef.current = tracks;
           p.configure({
             abr: { enabled: false },
-            restrictions: { maxHeight },
+            restrictions: abrRestrictions(maxHeight, tracks),
           });
-          const tracks = p.getVariantTracks() ?? [];
-          const candidates = tracks.filter((t) => (t.height ?? 0) <= maxHeight);
+          const candidates = tracks.filter(
+            (t) => trackQuality(t) <= maxHeight
+          );
           candidates.sort((a, b) => {
-            const ha = a.height ?? 0;
-            const hb = b.height ?? 0;
-            if (hb !== ha) return hb - ha;
+            const qa = trackQuality(a);
+            const qb = trackQuality(b);
+            if (qb !== qa) return qb - qa;
             return b.bandwidth - a.bandwidth;
           });
           if (candidates[0]) {

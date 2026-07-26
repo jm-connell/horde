@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 import {
+  trackQuality,
   writeBandwidthEstimate,
   writeDowngrade,
 } from "../utils/decodeCapability";
@@ -8,9 +9,11 @@ import {
 const POLL_MS = 2000;
 const DROP_RATIO_THRESHOLD = 0.1;
 const SUSTAINED_MS = 6000;
-const HEIGHT_STEPS = [2160, 1440, 1080, 720, 480];
+/** YouTube ladder steps for auto-downgrade. */
+const QUALITY_STEPS = [2160, 1440, 1080, 720, 480];
 
 export type HealthDowngrade = {
+  /** Nominal YouTube quality ceiling (1080, 720, …). */
   maxHeight: number;
   blacklistAv1: boolean;
   notice: string;
@@ -77,9 +80,9 @@ export function usePlaybackHealth({
 
         const tracks = player.getVariantTracks() ?? [];
         const active = tracks.find((t) => t.active);
-        const currentHeight = active?.height ?? 2160;
-        const nextHeight =
-          HEIGHT_STEPS.find((h) => h < currentHeight) ?? 480;
+        const currentQuality = active ? trackQuality(active) : 2160;
+        const nextQuality =
+          QUALITY_STEPS.find((q) => q < currentQuality) ?? 480;
         const isAv1 = (active?.videoCodec ?? "")
           .toLowerCase()
           .startsWith("av01");
@@ -91,17 +94,19 @@ export function usePlaybackHealth({
           stallsDetected: stats.stallsDetected,
           gapsJumped: stats.gapsJumped,
           corruptedFrames: stats.corruptedFrames,
-          currentHeight,
-          nextHeight,
+          currentQuality,
+          nextQuality,
+          activeWidth: active?.width,
+          activeHeight: active?.height,
           isAv1,
         });
 
         writeDowngrade({
-          maxHeight: nextHeight,
+          maxHeight: nextQuality,
           blacklistAv1: isAv1,
         });
         onDowngradeRef.current({
-          maxHeight: nextHeight,
+          maxHeight: nextQuality,
           blacklistAv1: isAv1,
           notice: "Reduced quality for smooth playback",
         });

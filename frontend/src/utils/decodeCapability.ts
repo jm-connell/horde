@@ -21,6 +21,43 @@ const WIDTH_FOR: Record<number, number> = {
   720: 1280,
 };
 
+/**
+ * YouTube quality ladder: nominal "Xp" is keyed off the 16:9 long side, even
+ * for 2:1 / ultrawide (e.g. 1920×960 → 1080p, not 960p) and portrait
+ * (1080×1920 → 1080p).
+ */
+const QUALITY_BY_LONG_SIDE: { quality: number; longSide: number }[] = [
+  { quality: 2160, longSide: 3840 },
+  { quality: 1440, longSide: 2560 },
+  { quality: 1080, longSide: 1920 },
+  { quality: 720, longSide: 1280 },
+  { quality: 480, longSide: 854 },
+  { quality: 360, longSide: 640 },
+  { quality: 240, longSide: 426 },
+  { quality: 144, longSide: 256 },
+];
+
+/** Map a variant's pixel size to YouTube's format_note quality (1080, 720, …). */
+export function trackQuality(t: {
+  width?: number | null;
+  height?: number | null;
+}): number {
+  const w = t.width ?? 0;
+  const h = t.height ?? 0;
+  if (w <= 0 && h <= 0) return 0;
+  const longSide = Math.max(w, h);
+  let bestQ = 0;
+  let bestDist = Infinity;
+  for (const { quality, longSide: ref } of QUALITY_BY_LONG_SIDE) {
+    const dist = Math.abs(longSide - ref);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestQ = quality;
+    }
+  }
+  return bestQ;
+}
+
 const CACHE_KEY = "horde.decode-capability.v1";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
