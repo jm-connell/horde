@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Link } from "react-router-dom";
 import { absoluteUrl, api, spritesImageUrl, streamUrl } from "../api";
 import LoadingIndicator from "./LoadingIndicator";
+import SubtitleOverlay from "./SubtitleOverlay";
 import { useAirPlay } from "../hooks/useAirPlay";
 import { useChromecast } from "../hooks/useChromecast";
 import { usePlaybackHealth } from "../hooks/usePlaybackHealth";
@@ -198,6 +199,8 @@ export default function VideoPlayer({
   const [volume, setVolume] = useState(volumeProp ?? 1);
   const [muted, setMuted] = useState(false);
   const [captionLang, setCaptionLang] = useState<string | null>(null);
+  /** PiP / iOS native fullscreen — overlay can't paint; use native cues. */
+  const [nativeTextActive, setNativeTextActive] = useState(false);
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
   const [showSpeed, setShowSpeed] = useState(false);
   const [showQuality, setShowQuality] = useState(false);
@@ -801,43 +804,15 @@ export default function VideoPlayer({
     airplay.showPicker,
   ]);
 
-  const applyCueLines = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const activeCues: VTTCue[] = [];
-    // Include Shaka SimpleTextDisplayer tracks (video.textTracks) as well as
-    // native <track> children used for progressive/library playback.
-    for (const tt of Array.from(v.textTracks)) {
-      if (tt.mode !== "showing") continue;
-      for (const cue of Array.from(tt.activeCues ?? [])) {
-        activeCues.push(cue as VTTCue);
-      }
-    }
-    // Stack simultaneous cues upward so they don't sit on the same line.
-    const lineStep = 7;
-    const baseLine = Math.max(10, 100 - subtitleOffset);
-    activeCues.forEach((vtt, index) => {
-      try {
-        vtt.snapToLines = false;
-        vtt.line = baseLine - index * lineStep;
-        vtt.lineAlign = "end";
-        vtt.position = 50;
-        vtt.positionAlign = "center";
-        vtt.align = "center";
-        vtt.size = 100;
-      } catch {
-        // Some browsers reject edits on inactive or read-only cues.
-      }
-    });
-  }, [subtitleOffset]);
-
   const setCaptionMode = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
     const selected = captionLang?.toLowerCase() ?? null;
     const player = shakaPlayerRef.current;
+    // Overlay paints captions in the normal player; native/Shaka text only
+    // when PiP or iOS native fullscreen owns the pixels.
+    const showNative = Boolean(selected) && nativeTextActive;
 
-    // DASH: Shaka owns text tracks (native <track> children are cleared by MSE).
     if (effectiveStreamType === "dash" && player) {
       try {
         const shakaTracks = player.getTextTracks() ?? [];
@@ -853,12 +828,8 @@ export default function VideoPlayer({
                 (t.language || "").toLowerCase().split("-")[0] ===
                 selected.split("-")[0]
             );
-          if (match) {
-            player.selectTextTrack(match);
-            player.setTextTrackVisibility(true);
-          } else {
-            player.setTextTrackVisibility(false);
-          }
+          if (match) player.selectTextTrack(match);
+          player.setTextTrackVisibility(showNative);
         }
       } catch {
         // Caption APIs can throw if the player is mid-destroy.
@@ -866,7 +837,6 @@ export default function VideoPlayer({
       return;
     }
 
-    // Progressive / library: native <track> children.
     const trackEls = Array.from(
       v.querySelectorAll("track")
     ) as HTMLTrackElement[];
@@ -889,11 +859,12 @@ export default function VideoPlayer({
         metaLang.split("-")[0] === selected.split("-")[0] ||
         trackLang === selected ||
         trackLang.split("-")[0] === selected.split("-")[0];
-      tt.mode = matches ? "showing" : "hidden";
+      // Keep matched tracks loaded (hidden) for PiP fallback; show only when needed.
+      tt.mode = matches ? (showNative ? "showing" : "hidden") : "hidden";
     });
-  }, [captionLang, tracks, effectiveStreamType]);
+  }, [captionLang, tracks, effectiveStreamType, nativeTextActive]);
 
-  // Load external VTTs into Shaka after DASH is ready (native <track> won't survive).
+  // Load external VTTs into Shaka after DASH is ready (PiP / iOS fallback).
   useEffect(() => {
     if (effectiveStreamType !== "dash" || !shakaReady) return;
     const player = shakaPlayerRef.current;
@@ -920,7 +891,7 @@ export default function VideoPlayer({
         if (cancelled) return;
         setCaptionMode();
       } catch {
-        // Best-effort; captions simply stay unavailable if loading fails.
+        // Best-effort; overlay fetch is the primary path.
       }
     };
     void loadText();
@@ -937,18 +908,10 @@ export default function VideoPlayer({
     if (playing) setCaptionMode();
   }, [playing, setCaptionMode]);
 
-  // Lift captions above the control bar. Native cues sit at the bottom edge by
-  // default, so we override each cue's line as it becomes active.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const applyLines = () => applyCueLines();
-    const onTrackLoad = () => {
-      setCaptionMode();
-      applyLines();
-    };
-    applyLines();
-    setCaptionMode();
+    const onTrackLoad = () => setCaptionMode();
     v.addEventListener("loadedmetadata", onTrackLoad);
     const trackEls = Array.from(
       v.querySelectorAll("track")
@@ -957,28 +920,14 @@ export default function VideoPlayer({
       el.addEventListener("load", onTrackLoad);
       el.addEventListener("error", onTrackLoad);
     }
-    // Include Shaka SimpleTextDisplayer tracks (not only <track> children).
-    const tracksList = Array.from(v.textTracks);
-    for (const tt of tracksList) tt.addEventListener("cuechange", applyLines);
     return () => {
       v.removeEventListener("loadedmetadata", onTrackLoad);
       for (const el of trackEls) {
         el.removeEventListener("load", onTrackLoad);
         el.removeEventListener("error", onTrackLoad);
       }
-      for (const tt of tracksList)
-        tt.removeEventListener("cuechange", applyLines);
     };
-  }, [
-    captionLang,
-    subtitleOffset,
-    tracks,
-    src,
-    setCaptionMode,
-    applyCueLines,
-    effectiveStreamType,
-    shakaReady,
-  ]);
+  }, [tracks, src, setCaptionMode, effectiveStreamType, shakaReady]);
 
   const seekTo = useCallback(
     (sec: number) => {
@@ -1352,8 +1301,7 @@ export default function VideoPlayer({
     const v = videoRef.current;
     if (!v?.requestPictureInPicture) return;
     await v.requestPictureInPicture();
-    applyCueLines();
-  }, [applyCueLines]);
+  }, []);
 
   const requestPiP = useCallback(async () => {
     const v = videoRef.current;
@@ -1389,16 +1337,22 @@ export default function VideoPlayer({
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [isMobile, enterPiP]);
 
-  // Re-apply cue positioning when PiP starts (some browsers reset cues).
+  // PiP and iOS native fullscreen paint via the video element — switch to native cues.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const onEnterPiP = () => applyCueLines();
+    const onEnterPiP = () => setNativeTextActive(true);
+    const onLeavePiP = () => setNativeTextActive(false);
     v.addEventListener("enterpictureinpicture", onEnterPiP);
-    return () => v.removeEventListener("enterpictureinpicture", onEnterPiP);
-  }, [applyCueLines]);
+    v.addEventListener("leavepictureinpicture", onLeavePiP);
+    return () => {
+      v.removeEventListener("enterpictureinpicture", onEnterPiP);
+      v.removeEventListener("leavepictureinpicture", onLeavePiP);
+    };
+  }, []);
 
   // Block iOS native fullscreen hijack unless the user tapped Fullscreen.
+  // When it does enter, fall back to native cue painting.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -1408,10 +1362,17 @@ export default function VideoPlayer({
           webkitExitFullscreen?: () => void;
         };
         el.webkitExitFullscreen?.();
+        return;
       }
+      setNativeTextActive(true);
     };
+    const onEndFullscreen = () => setNativeTextActive(false);
     v.addEventListener("webkitbeginfullscreen", onBeginFullscreen);
-    return () => v.removeEventListener("webkitbeginfullscreen", onBeginFullscreen);
+    v.addEventListener("webkitendfullscreen", onEndFullscreen);
+    return () => {
+      v.removeEventListener("webkitbeginfullscreen", onBeginFullscreen);
+      v.removeEventListener("webkitendfullscreen", onEndFullscreen);
+    };
   }, [mode]);
 
   const activateHold = useCallback(() => {
@@ -1733,6 +1694,15 @@ export default function VideoPlayer({
         ? "mx-auto block max-h-[70vh] w-full bg-black object-contain"
         : "mx-auto block max-h-[85vh] w-full bg-black object-contain";
   const subtitleClass = `sub-${subtitleSize}`;
+  const activeSubtitleSrc =
+    captionLang == null
+      ? null
+      : (tracks.find(
+          (t) =>
+            t.lang === captionLang ||
+            t.lang.toLowerCase().split("-")[0] ===
+              captionLang.toLowerCase().split("-")[0]
+        )?.src ?? null);
 
   // Ultrawide (e.g. 2:1) letterboxes inside a 16:9 dock — compact the up-next
   // card so it stays within the visible video picture.
@@ -1872,7 +1842,7 @@ export default function VideoPlayer({
           onMouseLeave={isMini ? undefined : endHold}
           className={`${videoClass} ${subtitleClass}`}
         >
-          {/* DASH uses Shaka addTextTrackAsync; native <track> is wiped by MSE. */}
+          {/* Kept for PiP / iOS native-fullscreen fallback; overlay paints normally. */}
           {effectiveStreamType !== "dash" &&
             tracks.map((t) => (
               <track
@@ -1884,6 +1854,16 @@ export default function VideoPlayer({
               />
             ))}
         </video>
+
+        {activeSubtitleSrc && !nativeTextActive && !chromecast.casting && (
+          <SubtitleOverlay
+            videoRef={videoRef}
+            src={activeSubtitleSrc}
+            size={subtitleSize}
+            offset={subtitleOffset}
+            active
+          />
+        )}
 
         {buffering && !mediaError && !chromecast.casting && (
           <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-black/35">
