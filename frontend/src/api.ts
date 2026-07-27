@@ -834,6 +834,10 @@ export function previewManifestUrl(url: string): string {
   return `/api/preview/manifest?url=${encodeURIComponent(url)}`;
 }
 
+export function previewSubtitleUrl(url: string, lang: string): string {
+  return `/api/preview/subtitles?url=${encodeURIComponent(url)}&lang=${encodeURIComponent(lang)}`;
+}
+
 export function downloadFileUrl(id: number): string {
   return `/api/videos/${id}/file`;
 }

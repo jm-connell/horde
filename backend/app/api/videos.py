@@ -298,12 +298,17 @@ def channel_catalog_search(
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
-    if not channel_url:
-        return ChannelFeedPage(channel=channel_name, channel_url=None, entries=[], has_more=False)
-    raw_entries = channel_catalog.search_catalog(
-        session, channel_url, q, limit=limit
-    )
-    lib_map = library.youtube_library_map(session, channel=channel_name)
+
+    global_search = not channel_url
+    if global_search:
+        raw_entries = channel_catalog.search_all_catalogs(session, q, limit=limit)
+        lib_map = library.youtube_library_map(session, channel=None)
+    else:
+        raw_entries = channel_catalog.search_catalog(
+            session, channel_url, q, limit=limit
+        )
+        lib_map = library.youtube_library_map(session, channel=channel_name)
+
     yt_ids = [str(e["id"]) for e in raw_entries if e.get("id")]
     meta_cache = feed_meta_cache.get_many(yt_ids)
     entries: list[ChannelFeedEntry] = []
@@ -314,6 +319,11 @@ def channel_catalog_search(
         lib = lib_map.get(yt_id) if yt_id else None
         video_id = lib[0] if lib else None
         library_height = lib[1] if lib else None
+        in_library = video_id is not None
+        # Global search is for streamable hits; library matches appear in the
+        # primary library results section on the frontend.
+        if global_search and in_library:
+            continue
         cached = meta_cache.get(str(yt_id)) if yt_id else None
         view_count = raw.get("view_count")
         if view_count is None and cached:
@@ -333,7 +343,8 @@ def channel_catalog_search(
                     int(dislike_count) if dislike_count is not None else None
                 ),
                 published_at=raw.get("published_at"),
-                in_library=video_id is not None,
+                channel=raw.get("channel") or channel_name,
+                in_library=in_library,
                 video_id=video_id,
                 library_height_px=library_height,
             )

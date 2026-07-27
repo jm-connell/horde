@@ -6,6 +6,52 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     height: number | null;
     width: number | null;
     bandwidth: number;
+    videoCodec?: string | null;
+    audioCodec?: string | null;
+    frameRate?: number | null;
+  }
+
+  export interface ShakaStats {
+    width?: number;
+    height?: number;
+    streamBandwidth?: number;
+    decodedFrames?: number;
+    droppedFrames?: number;
+    corruptedFrames?: number;
+    stallsDetected?: number;
+    gapsJumped?: number;
+    estimatedBandwidth?: number;
+    loadLatency?: number;
+    playTime?: number;
+    pauseTime?: number;
+    bufferingTime?: number;
+  }
+
+  export const enum ShakaErrorSeverity {
+    RECOVERABLE = 1,
+    CRITICAL = 2,
+  }
+
+  export interface ShakaError {
+    severity?: number;
+    category?: number;
+    code?: number;
+    message?: string;
+    data?: unknown[];
+  }
+
+  export interface ShakaTextTrack {
+    id: number;
+    active: boolean;
+    language: string;
+    label: string | null;
+    kind: string;
+    mimeType?: string | null;
+  }
+
+  export interface ShakaTextDisplayer {
+    destroy(): void;
+    setTextVisibility(visible: boolean): void;
   }
 
   export interface ShakaPlayer {
@@ -13,10 +59,26 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     load(manifestUri: string): Promise<void>;
     destroy(): Promise<void>;
     configure(config: Record<string, unknown>): void;
+    getConfiguration(): Record<string, unknown>;
     addEventListener(type: string, listener: EventListener): void;
     removeEventListener(type: string, listener: EventListener): void;
     getVariantTracks(): ShakaVariantTrack[];
     selectVariantTrack(track: ShakaVariantTrack, clearBuffer?: boolean): void;
+    getStats(): ShakaStats;
+    retryStreaming(retryDelay?: number): boolean;
+    addTextTrackAsync(
+      uri: string,
+      language: string,
+      kind: string,
+      mimeType?: string,
+      codec?: string,
+      label?: string,
+      forced?: boolean
+    ): Promise<ShakaTextTrack>;
+    getTextTracks(): ShakaTextTrack[];
+    selectTextTrack(track: ShakaTextTrack | null): void;
+    setTextTrackVisibility(visible: boolean): void;
+    isTextTrackVisible(): boolean;
   }
 
   export interface ShakaNamespace {
@@ -26,6 +88,20 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     };
     polyfill: {
       installAll(): void;
+    };
+    text?: {
+      SimpleTextDisplayer: new (
+        video: HTMLMediaElement,
+        label?: string
+      ) => ShakaTextDisplayer;
+    };
+    util?: {
+      Error?: {
+        Severity: {
+          RECOVERABLE: number;
+          CRITICAL: number;
+        };
+      };
     };
   }
 

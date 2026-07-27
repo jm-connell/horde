@@ -11,6 +11,8 @@ import { useNavigate } from "react-router-dom";
 import {
   api,
   previewManifestUrl,
+  previewStreamUrl,
+  previewSubtitleUrl,
   streamUrl,
   subtitleUrl,
   thumbnailUrl,
@@ -24,9 +26,9 @@ import {
   parseChapters,
   type Chapter,
 } from "../utils";
-import type { Video } from "../types";
+import type { SubtitleTrack, Video } from "../types";
 
-export interface PreviewSession {
+export interface StreamSession {
   url: string;
   title: string;
   channel: string | null;
@@ -35,6 +37,7 @@ export interface PreviewSession {
   sourceUrl?: string | null;
   /** Channel query for expand / back navigation. */
   channelParam?: string | null;
+  subtitles?: SubtitleTrack[];
 }
 
 export type MiniPlayerRect = {
@@ -48,14 +51,14 @@ export type MiniPlayerRect = {
 
 interface PlaybackValue {
   current: Video | null;
-  preview: PreviewSession | null;
+  stream: StreamSession | null;
   queue: Video[];
   mode: ViewMode;
   setMode: (mode: ViewMode) => void;
   playVideo: (video: Video, opts?: { queue?: Video[] }) => void;
-  playPreview: (session: PreviewSession) => void;
-  /** Latest preview playback position (seconds). */
-  getPreviewPosition: () => number;
+  playStream: (session: StreamSession) => void;
+  /** Latest stream playback position (seconds). */
+  getStreamPosition: () => number;
   /** Latest library playback position (seconds). */
   getCurrentPosition: () => number;
   addToQueue: (video: Video) => void;
@@ -65,7 +68,7 @@ interface PlaybackValue {
   clearQueue: () => void;
   close: () => void;
   registerDock: (el: HTMLElement | null) => void;
-  /** True when the floating mini-player is showing (browsing away from Watch/Preview). */
+  /** True when the floating mini-player is showing (browsing away from Watch). */
   miniPlayerActive: boolean;
   /** Live bounds of the floating mini-player (null when not mini). */
   miniPlayerRect: MiniPlayerRect | null;
@@ -129,12 +132,12 @@ function loadQueue(): Video[] {
   }
 }
 
-function previewExpandPath(session: PreviewSession): string {
+function streamExpandPath(session: StreamSession): string {
   const qs = new URLSearchParams();
   qs.set("url", session.url);
   const channel = session.channelParam || session.channel;
   if (channel) qs.set("channel", channel);
-  return `/preview?${qs.toString()}`;
+  return `/watch?${qs.toString()}`;
 }
 
 export function PlaybackProvider({ children }: { children: React.ReactNode }) {
@@ -142,7 +145,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [settings, updateSettings] = useSettings();
   const isMobile = useIsMobile();
   const [current, setCurrent] = useState<Video | null>(null);
-  const [preview, setPreview] = useState<PreviewSession | null>(null);
+  const [stream, setStream] = useState<StreamSession | null>(null);
   const [queue, setQueue] = useState<Video[]>(loadQueue);
   const [dock, setDock] = useState<HTMLElement | null>(null);
   const [mode, setModeState] = useState<ViewMode>(
@@ -152,7 +155,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Session-only; always starts bottom-right when a miniplayer opens after close.
   const [miniPos, setMiniPosState] = useState<MiniPos | null>(null);
   const miniPosLiveRef = useRef<MiniPos | null>(null);
-  const previewPosRef = useRef(0);
+  const streamPosRef = useRef(0);
   const libraryPosRef = useRef(0);
   const recentWatchedRef = useRef<number[]>([]);
   const [miniPlayerRect, setMiniPlayerRect] = useState<MiniPlayerRect | null>(
@@ -199,7 +202,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     hostRef.current = document.createElement("div");
   }
 
-  const activeSession = Boolean(current || preview);
+  const activeSession = Boolean(current || stream);
 
   // Persist watch position at most once every 5s while playing.
   // Skip saving near the end (>=90%) — treat as finished (restart next time).
@@ -293,7 +296,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.style.right = "";
       host.style.bottom = "";
     }
-  }, [dock, current, preview, activeSession, isMobile, mode, miniWidth, miniPos]);
+  }, [dock, current, stream, activeSession, isMobile, mode, miniWidth, miniPos]);
 
   const miniPlayerActive = Boolean(
     activeSession && !dock && !( !isMobile && mode === "windowed")
@@ -328,7 +331,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       ro.disconnect();
       window.removeEventListener("resize", publish);
     };
-  }, [miniPlayerActive, miniWidth, miniPos, current?.id, preview?.url]);
+  }, [miniPlayerActive, miniWidth, miniPos, current?.id, stream?.url]);
 
   // Hide page scroll while windowed fullscreen is active.
   useEffect(() => {
@@ -358,8 +361,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         }
         return video;
       });
-      setPreview(null);
-      previewPosRef.current = 0;
+      setStream(null);
+      streamPosRef.current = 0;
       libraryPosRef.current = video.last_position_sec || 0;
       if (opts?.queue) {
         setQueue(opts.queue.filter((v) => v.id !== video.id));
@@ -370,14 +373,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const playPreview = useCallback((session: PreviewSession) => {
+  const playStream = useCallback((session: StreamSession) => {
     setCurrent(null);
-    previewPosRef.current = 0;
+    streamPosRef.current = 0;
     libraryPosRef.current = 0;
-    setPreview(session);
+    setStream(session);
   }, []);
 
-  const getPreviewPosition = useCallback(() => previewPosRef.current, []);
+  const getStreamPosition = useCallback(() => streamPosRef.current, []);
   const getCurrentPosition = useCallback(() => libraryPosRef.current, []);
 
   const addToQueue = useCallback((video: Video) => {
@@ -414,8 +417,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const close = useCallback(() => {
     setCurrent(null);
-    setPreview(null);
-    previewPosRef.current = 0;
+    setStream(null);
+    streamPosRef.current = 0;
     libraryPosRef.current = 0;
     setDock(null);
     setMiniPos(null);
@@ -439,7 +442,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     clearUpNext();
-  }, [current?.id, preview?.url, clearUpNext]);
+  }, [current?.id, stream?.url, clearUpNext]);
 
   // Turning autoplay off mid-countdown cancels the overlay.
   useEffect(() => {
@@ -449,7 +452,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const playSuggested = useCallback(
     (video: Video) => {
       clearUpNext();
-      setPreview(null);
+      setStream(null);
       libraryPosRef.current = 0;
       setCurrent(video);
       setQueue((q) => q.filter((v) => v.id !== video.id));
@@ -484,7 +487,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setQueue((q) => {
       if (q.length === 0) return q;
       const [next, ...rest] = q;
-      setPreview(null);
+      setStream(null);
       setCurrent(next);
       navigate(`/watch/${next.id}`);
       return rest;
@@ -494,7 +497,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Reset saved progress when a video finishes so it leaves Continue watching.
   // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
-    if (preview) return;
+    if (stream) return;
     if (current) {
       api.saveProgress(current.id, 0).catch(() => undefined);
       recentWatchedRef.current = [
@@ -520,7 +523,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       .catch(() => undefined);
   }, [
     current,
-    preview,
+    stream,
     advance,
     startUpNextCountdown,
     settings.autoplayRelated,
@@ -532,7 +535,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const sponsorSegments = useSponsorBlock(
     current?.source_url ?? null,
     current?.file_path ?? "",
-    settings.sponsorBlockEnabled && !preview
+    settings.sponsorBlockEnabled && !stream
   );
 
   const refreshCurrentVideo = useCallback(() => {
@@ -541,20 +544,20 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [current]);
 
   useEffect(() => {
-    if (!current?.subtitles_pending || preview) return;
+    if (!current?.subtitles_pending || stream) return;
     const timer = window.setInterval(refreshCurrentVideo, 3000);
     return () => window.clearInterval(timer);
-  }, [current?.id, current?.subtitles_pending, preview, refreshCurrentVideo]);
+  }, [current?.id, current?.subtitles_pending, stream, refreshCurrentVideo]);
 
   const value: PlaybackValue = {
     current,
-    preview,
+    stream,
     queue,
     mode,
     setMode,
     playVideo,
-    playPreview,
-    getPreviewPosition,
+    playStream,
+    getStreamPosition,
     getCurrentPosition,
     addToQueue,
     playNext,
@@ -651,18 +654,23 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           updateSettings({ autoplayRelated: enabled })
         }
       />
-    ) : preview != null ? (
+    ) : stream != null ? (
       <VideoPlayer
-        src={previewManifestUrl(preview.url)}
+        src={previewManifestUrl(stream.url)}
         streamType="dash"
+        progressiveFallbackSrc={previewStreamUrl(stream.url)}
         mimeType="application/dash+xml"
-        poster={preview.poster}
+        poster={stream.poster}
         mode={effectiveMode}
         onModeChange={setMode}
         variant={dock ? "full" : "mini"}
-        title={preview.title}
+        title={stream.title}
+        tracks={dedupeSubtitleTracks(stream.subtitles ?? []).map((t) => ({
+          lang: t.lang,
+          src: previewSubtitleUrl(stream.url, t.lang),
+        }))}
         onEnded={handleEnded}
-        onExpand={() => navigate(previewExpandPath(preview))}
+        onExpand={() => navigate(streamExpandPath(stream))}
         onClose={close}
         subtitleSize={settings.subtitleSize}
         subtitleOffset={settings.subtitleOffset}
@@ -673,9 +681,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         volume={settings.volume}
         onVolumeChange={(v) => updateSettings({ volume: v })}
         onProgress={(sec) => {
-          previewPosRef.current = sec;
+          streamPosRef.current = sec;
         }}
-        chapters={preview.chapters}
+        chapters={stream.chapters}
         miniWidth={miniWidth}
         onMiniResize={setMiniWidth}
         onMiniMove={(left, top) => {

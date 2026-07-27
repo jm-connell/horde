@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import ChannelFeed from "../components/ChannelFeed";
+import ChannelFeedCard from "../components/ChannelFeedCard";
 import Collapse from "../components/Collapse";
 import HelpTip from "../components/HelpTip";
 import LiquidNav from "../components/LiquidNav";
@@ -23,11 +24,18 @@ import {
 } from "../hooks/useLibrarySort";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
-import type { ChannelStat, Playlist, TagStat, Video } from "../types";
+import type {
+  ChannelFeedEntry,
+  ChannelStat,
+  Playlist,
+  TagStat,
+  Video,
+} from "../types";
 import {
   queueDockAlignClass,
   queueDockStyle,
 } from "../utils/miniPlayerLayout";
+import { Toggle } from "./settings/ui";
 
 const TAG_MIN_COUNT = 3;
 
@@ -346,6 +354,10 @@ function ChannelSidebarList({
 export default function Library() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [otherVideos, setOtherVideos] = useState<Video[]>([]);
+  const [streamResults, setStreamResults] = useState<ChannelFeedEntry[]>([]);
+  const [streamDownloading, setStreamDownloading] = useState<Set<string>>(
+    () => new Set()
+  );
   const [continueWatching, setContinueWatching] = useState<Video[]>([]);
   const [channels, setChannels] = useState<ChannelStat[]>([]);
   const [tags, setTags] = useState<TagStat[]>([]);
@@ -370,7 +382,7 @@ export default function Library() {
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [metadataSyncing, setMetadataSyncing] = useState(false);
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { search, setSearch } = useSearch();
   const [activeChannel, setActiveChannel] = useState<string | null>(
     searchParams.get("channel")
@@ -420,7 +432,7 @@ export default function Library() {
   const [settings, update] = useSettings();
   const { showToast } = useToast();
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
-  const { onJobCompleted } = useDownloads();
+  const { onJobCompleted, submitDownload } = useDownloads();
   const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
   const [narrowViewport, setNarrowViewport] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 1100
@@ -532,12 +544,12 @@ export default function Library() {
     setActiveTag(searchParams.get("tag"));
     setActiveChannel(searchParams.get("channel"));
     if (searchParams.get("tab") === "feed" && searchParams.get("channel")) {
-      // Deep-link once when URL says feed; don't fight a later user toggle-off.
-      if (!loadSettings().channelShowUndownloaded) {
-        update({ channelShowUndownloaded: true });
-      }
+      update({ showUndownloadedOnChannel: true });
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      setSearchParams(next, { replace: true });
     }
-  }, [searchParams, update]);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setFeedSearch("");
@@ -615,6 +627,26 @@ export default function Library() {
     randomSeed,
     refreshKey,
   ]);
+
+  // Global catalog search (home search only — channel pages use feed search).
+  useEffect(() => {
+    if (!debouncedSearch || activeChannel) {
+      setStreamResults([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .searchChannelCatalog({ q: debouncedSearch, limit: 40 })
+      .then((page) => {
+        if (!cancelled) setStreamResults(page.entries ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setStreamResults([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch, activeChannel, refreshKey]);
 
   const visibleContinueWatching = useMemo(
     () => continueWatching.filter((v) => !isDismissed(v.id)),
@@ -748,32 +780,14 @@ export default function Library() {
     );
   }, [activeChannel, channels, channelUrlOverrides]);
 
-  // Prefer undownloaded feed when this channel has no library videos yet.
-  useEffect(() => {
-    if (!activeChannel) return;
-    if (settings.channelShowUndownloaded) return;
-    const inLibrary = channels.find((c) => c.channel === activeChannel);
-    const count = inLibrary?.count ?? 0;
-    if (count === 0 && activeChannelUrl) {
-      update({ channelShowUndownloaded: true });
-    }
-  }, [
-    activeChannel,
-    channels,
-    activeChannelUrl,
-    settings.channelShowUndownloaded,
-    update,
-  ]);
-
-  const showUndownloaded =
-    Boolean(activeChannel) && settings.channelShowUndownloaded;
+  const onChannelPage = Boolean(activeChannel);
   const [indexingChannel, setIndexingChannel] = useState(false);
   const [catalogProgress, setCatalogProgress] = useState<CatalogProgress | null>(
     null
   );
 
   useEffect(() => {
-    if (!showUndownloaded || !activeChannelUrl) {
+    if (!onChannelPage || !activeChannelUrl) {
       setCatalogProgress(null);
       return;
     }
@@ -838,7 +852,7 @@ export default function Library() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [showUndownloaded, activeChannelUrl]);
+  }, [onChannelPage, activeChannelUrl]);
 
   const triggerChannelIndex = async () => {
     if (!activeChannel || indexingChannel) return;
@@ -932,6 +946,8 @@ export default function Library() {
 
   const selectChannel = (channel: string | null) => {
     setActiveChannel(channel);
+    setActiveTag(null);
+    setSearch("");
     if (narrowViewport) closeSidebar();
   };
 
@@ -944,7 +960,8 @@ export default function Library() {
     setChannelUrlOverrides((prev) => ({ ...prev, [hit.name]: hit.url }));
     setActiveChannel(hit.name);
     setActiveTag(null);
-    update({ channelShowUndownloaded: true });
+    setSearch("");
+    update({ showUndownloadedOnChannel: true });
     if (narrowViewport) closeSidebar();
   };
 
@@ -1275,18 +1292,18 @@ export default function Library() {
             </LiquidNav>
           )}
           {activeChannel && !activeTag && (
-            <label className="ui-panel inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl bg-ink-900 px-3 py-1.5 ring-1 ring-ink-700">
-              <input
-                type="checkbox"
-                checked={settings.channelShowUndownloaded}
-                onChange={(e) =>
-                  update({ channelShowUndownloaded: e.target.checked })
+            <label className="inline-flex shrink-0 items-center gap-2 text-sm text-gray-300">
+              <span className="hidden sm:inline">Show undownloaded</span>
+              <span className="sm:hidden">Undownloaded</span>
+              <Toggle
+                checked={settings.showUndownloadedOnChannel}
+                onChange={() =>
+                  update({
+                    showUndownloadedOnChannel:
+                      !settings.showUndownloadedOnChannel,
+                  })
                 }
-                className="h-3.5 w-3.5 rounded border-ink-600 bg-ink-950 text-accent focus:ring-accent/40"
               />
-              <span className="text-sm font-medium text-gray-300">
-                Show undownloaded
-              </span>
             </label>
           )}
 
@@ -1294,7 +1311,7 @@ export default function Library() {
             data-header-filters
             className="ml-auto flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-1.5 sm:gap-2"
           >
-            {showUndownloaded ? (
+            {onChannelPage ? (
               <>
                 <div className="flex min-w-0 flex-1 items-center gap-1.5 md:flex-initial md:w-auto">
                   <input
@@ -1480,7 +1497,7 @@ export default function Library() {
               Show more ({hiddenTagCount})
             </button>
           )}
-          {showUndownloaded && catalogProgress && (
+          {onChannelPage && catalogProgress && (
             <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
               {formatCatalogProgress(catalogProgress)}
               <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
@@ -1489,14 +1506,14 @@ export default function Library() {
         </div>
         )}
 
-        {showUndownloaded && feedSort === "popular" && (
+        {onChannelPage && feedSort === "popular" && (
           <p className="mb-4 text-xs text-gray-600">
             Popularity is based on loaded videos, not full channel history
             (YouTube limitation).
           </p>
         )}
 
-        {showContinueRow && !showUndownloaded && !onRecommendedTab && (
+        {showContinueRow && !onChannelPage && !onRecommendedTab && (
           <ContinueWatchingRow
             videos={visibleContinueWatching}
             showProgress={settings.showProgressOnContinueWatching}
@@ -1507,15 +1524,11 @@ export default function Library() {
 
         <div
           key={
-            showUndownloaded
-              ? "feed"
-              : onRecommendedTab
-                ? "recommended"
-                : "library"
+            onChannelPage ? "feed" : onRecommendedTab ? "recommended" : "library"
           }
           className="page-shell page-shell--animate"
         >
-        {showUndownloaded ? (
+        {onChannelPage ? (
           <ChannelFeed
             channel={activeChannel!}
             channelUrl={activeChannelUrl}
@@ -1524,22 +1537,41 @@ export default function Library() {
             feedSort={feedSort}
             feedOrder={feedOrder}
             feedLayout={feedLayout}
+            showUndownloaded={settings.showUndownloadedOnChannel}
             queueDockedBottom={showQueuePanel && queueDockedBottom}
           />
         ) : onRecommendedTab && !debouncedSearch ? (
           <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
         ) : loading ? (
           <LoadingIndicator />
-        ) : videos.length === 0 && otherVideos.length === 0 ? (
+        ) : videos.length === 0 &&
+          otherVideos.length === 0 &&
+          streamResults.length === 0 ? (
           <div className="py-20 text-center text-gray-500">
-            <p className="text-lg">No videos yet.</p>
-            <p className="mt-1 text-sm">
-              Paste a link on the Download page or drop files into your media
-              folder.
+            <p className="text-lg">
+              {debouncedSearch ? "No matching videos." : "No videos yet."}
             </p>
+            {!debouncedSearch && (
+              <p className="mt-1 text-sm">
+                Paste a link on the Download page or drop files into your media
+                folder.
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
+            {debouncedSearch && videos.length > 0 && (
+              <div className="flex items-center gap-3">
+                <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+                <span className="shrink-0 text-xs font-medium text-gray-400">
+                  In your library
+                  <span className="ml-1.5 text-gray-500">
+                    ({videos.length})
+                  </span>
+                </span>
+                <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+              </div>
+            )}
             {videos.length > 0 && (
               <div
                 className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
@@ -1559,33 +1591,108 @@ export default function Library() {
                 ))}
               </div>
             )}
-            {debouncedSearch && videos.length > 0 && otherVideos.length > 0 && (
-              <div className="flex items-center gap-3">
-                <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
-                <span className="shrink-0 text-xs text-gray-500">Other videos</span>
-                <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
-              </div>
+            {debouncedSearch && streamResults.length > 0 && (
+              <>
+                <div className="flex items-center gap-3">
+                  <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+                  <span className="shrink-0 text-xs font-medium text-gray-400">
+                    Available to stream
+                    <span className="ml-1.5 text-gray-500">
+                      ({streamResults.length})
+                    </span>
+                  </span>
+                  <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+                </div>
+                <div
+                  className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+                    settings.sidebarCollapsed
+                      ? "xl:grid-cols-5"
+                      : "xl:grid-cols-4"
+                  }`}
+                >
+                  {streamResults.map((entry) => {
+                    const channelName = entry.channel || "Unknown channel";
+                    return (
+                      <ChannelFeedCard
+                        key={entry.id || entry.url}
+                        entry={entry}
+                        channelName={channelName}
+                        layout="grid"
+                        inLibrary={false}
+                        onDownload={() => {
+                          if (!entry.url || streamDownloading.has(entry.url))
+                            return;
+                          setStreamDownloading((prev) =>
+                            new Set(prev).add(entry.url)
+                          );
+                          void submitDownload(entry.url, "1080p", {
+                            title: entry.title ?? undefined,
+                            channel: channelName,
+                          })
+                            .then(() =>
+                              showToast("Download queued")
+                            )
+                            .catch((err: unknown) =>
+                              showToast(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Could not start download"
+                              )
+                            )
+                            .finally(() => {
+                              setStreamDownloading((prev) => {
+                                const next = new Set(prev);
+                                next.delete(entry.url);
+                                return next;
+                              });
+                            });
+                        }}
+                        downloading={streamDownloading.has(entry.url)}
+                        skipRemotePreview
+                      />
+                    );
+                  })}
+                </div>
+              </>
             )}
             {debouncedSearch && otherVideos.length > 0 && (
-              <div
-                className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
-                  settings.sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
-                }`}
-              >
-                {otherVideos.map((v, idx) => (
-                  <VideoCard
-                    key={v.id}
-                    video={v}
-                    showViewCount={sort === "view_count"}
-                    progress={settings.showProgressOnAllVideos ? videoProgress(v) : undefined}
-                    selectable={selectMode}
-                    selected={selectedIds.has(v.id)}
-                    onSelect={(id, e) =>
-                      toggleSelect(id, videos.length + idx, e.shiftKey)
-                    }
-                  />
-                ))}
-              </div>
+              <>
+                <div className="flex items-center gap-3">
+                  <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+                  <span className="shrink-0 text-xs font-medium text-gray-400">
+                    Other videos
+                    <span className="ml-1.5 text-gray-500">
+                      ({otherVideos.length})
+                    </span>
+                  </span>
+                  <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+                </div>
+                <div
+                  className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+                    settings.sidebarCollapsed
+                      ? "xl:grid-cols-5"
+                      : "xl:grid-cols-4"
+                  }`}
+                >
+                  {otherVideos.map((v, idx) => (
+                    <VideoCard
+                      key={v.id}
+                      video={v}
+                      showViewCount={sort === "view_count"}
+                      progress={
+                        settings.showProgressOnAllVideos
+                          ? videoProgress(v)
+                          : undefined
+                      }
+                      selectable={selectMode}
+                      selected={selectedIds.has(v.id)}
+                      onSelect={(id, e) =>
+                        toggleSelect(id, videos.length + idx, e.shiftKey)
+                      }
+                    />
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}

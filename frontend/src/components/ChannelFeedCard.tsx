@@ -45,11 +45,17 @@ function LikeRatioBadge({
   );
 }
 
-function previewHref(entry: ChannelFeedEntry, channelName: string): string {
-  const qs = new URLSearchParams();
-  qs.set("url", entry.url);
-  if (channelName) qs.set("channel", channelName);
-  return `/preview?${qs.toString()}`;
+function watchHref(entry: ChannelFeedEntry, channelName: string): string | null {
+  if (entry.in_library && entry.video_id != null) {
+    return `/watch/${entry.video_id}`;
+  }
+  if (entry.url) {
+    const qs = new URLSearchParams();
+    qs.set("url", entry.url);
+    if (channelName) qs.set("channel", channelName);
+    return `/watch?${qs.toString()}`;
+  }
+  return null;
 }
 
 function FeedMetaRow({
@@ -57,7 +63,6 @@ function FeedMetaRow({
   entry,
   maxRes,
   inLibrary,
-  videoId,
   downloading,
   onDownload,
 }: {
@@ -65,34 +70,9 @@ function FeedMetaRow({
   entry: ChannelFeedEntry;
   maxRes: string;
   inLibrary: boolean;
-  videoId?: number;
   downloading?: boolean;
   onDownload: () => void;
 }) {
-  const action = inLibrary ? (
-    videoId ? (
-      <Link
-        to={`/watch/${videoId}`}
-        className="rounded bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/40 hover:bg-emerald-500/25"
-      >
-        In Library
-      </Link>
-    ) : (
-      <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/40">
-        In Library
-      </span>
-    )
-  ) : (
-    <button
-      type="button"
-      onClick={onDownload}
-      disabled={downloading}
-      className="rounded bg-accent px-2 py-0.5 text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
-    >
-      {downloading ? "Queued…" : "Download"}
-    </button>
-  );
-
   const dateLabel = entry.published_at ? formatDate(entry.published_at) : "";
 
   return (
@@ -111,60 +91,31 @@ function FeedMetaRow({
           likes={entry.like_count}
           dislikes={entry.dislike_count}
         />
+        {inLibrary && (
+          <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/40">
+            Downloaded
+          </span>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {maxRes && (
           <span className="text-[10px] font-medium text-gray-500">{maxRes}</span>
         )}
-        {action}
+        {!inLibrary && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDownload();
+            }}
+            disabled={downloading}
+            className="rounded bg-accent px-2 py-0.5 text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+          >
+            {downloading ? "Queued…" : "Download"}
+          </button>
+        )}
       </div>
-    </div>
-  );
-}
-
-function ListActionColumn({
-  maxRes,
-  inLibrary,
-  videoId,
-  downloading,
-  onDownload,
-}: {
-  maxRes: string;
-  inLibrary: boolean;
-  videoId?: number;
-  downloading?: boolean;
-  onDownload: () => void;
-}) {
-  const action = inLibrary ? (
-    videoId ? (
-      <Link
-        to={`/watch/${videoId}`}
-        className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-400 ring-1 ring-emerald-500/40 hover:bg-emerald-500/25"
-      >
-        In Library
-      </Link>
-    ) : (
-      <span className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-400 ring-1 ring-emerald-500/40">
-        In Library
-      </span>
-    )
-  ) : (
-    <button
-      type="button"
-      onClick={onDownload}
-      disabled={downloading}
-      className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
-    >
-      {downloading ? "Queued…" : "Download"}
-    </button>
-  );
-
-  return (
-    <div className="flex h-full min-h-[4.5rem] shrink-0 flex-col items-end justify-between py-0.5 pl-3">
-      <div className="pt-0.5">{action}</div>
-      {maxRes && (
-        <span className="pb-0.5 text-[10px] font-medium text-gray-500">{maxRes}</span>
-      )}
     </div>
   );
 }
@@ -174,13 +125,11 @@ function FeedThumbnail({
   duration,
   className,
   showDuration = true,
-  previewTo,
 }: {
   thumbSrc: string | null;
   duration: string;
   className: string;
   showDuration?: boolean;
-  previewTo?: string | null;
 }) {
   return (
     <div className={`relative overflow-hidden bg-ink-800 ${className}`}>
@@ -196,18 +145,11 @@ function FeedThumbnail({
           <span className="text-4xl">▶</span>
         </div>
       )}
-      {previewTo && (
-        <Link
-          to={previewTo}
-          onClick={(e) => e.stopPropagation()}
-          className="absolute inset-0 z-10 flex items-center justify-center bg-black/55 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
-          aria-label="Preview video"
-        >
-          <span className="rounded-lg bg-black/70 px-3 py-1.5 text-sm font-semibold tracking-wide text-gray-100 ring-1 ring-white/20">
-            Preview
-          </span>
-        </Link>
-      )}
+      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+        <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-gray-100 ring-1 ring-white/20">
+          ▶
+        </span>
+      </div>
       {showDuration && duration && (
         <span className="pointer-events-none absolute bottom-2 right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
           {duration}
@@ -251,8 +193,14 @@ export default function ChannelFeedCard({
   });
   const viewCount = entry.view_count;
   const dateLabel = entry.published_at ? formatDate(entry.published_at) : "";
-  const canPreview = !inLibrary && !!entry.url;
-  const previewTo = canPreview ? previewHref(entry, channelName) : null;
+  const href = watchHref(
+    {
+      ...entry,
+      in_library: inLibrary || entry.in_library,
+      video_id: videoId ?? entry.video_id,
+    },
+    channelName
+  );
 
   useEffect(() => {
     if (entry.library_height_px) {
@@ -268,9 +216,8 @@ export default function ChannelFeedCard({
       setMaxRes(cachedRes);
       return;
     }
-    if (skipRemotePreview) return;
+    if (skipRemotePreview || inLibrary) return;
 
-    // Only fetch preview for max-res badge when not already known.
     const el = cardRef.current;
     if (!el) return;
     let cancelled = false;
@@ -301,35 +248,23 @@ export default function ChannelFeedCard({
     entry.library_height_px,
     entry.max_height,
     skipRemotePreview,
+    inLibrary,
   ]);
 
-  if (layout === "list") {
-    return (
-      <div
-        ref={cardRef}
-        className="group flex w-full gap-3 rounded-xl bg-ink-900 p-2.5 ring-1 ring-ink-700"
-      >
+  const cardInner =
+    layout === "list" ? (
+      <div className="group flex w-full gap-3 rounded-xl bg-ink-900 p-2.5 ring-1 ring-ink-700">
         <FeedThumbnail
           thumbSrc={thumbSrc}
           duration={duration}
           showDuration={false}
-          previewTo={previewTo}
           className="h-[4.5rem] w-32 shrink-0 rounded-lg"
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
-          <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-28">
-            {previewTo ? (
-              <Link
-                to={previewTo}
-                className="line-clamp-2 text-sm font-semibold text-gray-100 hover:text-accent group-hover:text-accent"
-              >
-                {entry.title || "Untitled"}
-              </Link>
-            ) : (
-              <h3 className="line-clamp-2 text-sm font-semibold text-gray-100 group-hover:text-accent">
-                {entry.title || "Untitled"}
-              </h3>
-            )}
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-24">
+            <h3 className="line-clamp-2 text-sm font-semibold text-gray-100 group-hover:text-accent">
+              {entry.title || "Untitled"}
+            </h3>
             <span className="truncate text-xs text-gray-400">{channelName}</span>
             <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
               {duration && <span>{duration}</span>}
@@ -350,54 +285,73 @@ export default function ChannelFeedCard({
                 likes={entry.like_count}
                 dislikes={entry.dislike_count}
               />
+              {inLibrary && (
+                <>
+                  <span className="text-gray-600">·</span>
+                  <span className="text-emerald-400">Downloaded</span>
+                </>
+              )}
             </div>
           </div>
-          <ListActionColumn
+          <div className="flex h-full min-h-[4.5rem] shrink-0 flex-col items-end justify-between py-0.5 pl-3">
+            {!inLibrary ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDownload();
+                }}
+                disabled={downloading}
+                className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+              >
+                {downloading ? "Queued…" : "Download"}
+              </button>
+            ) : (
+              <span className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-400 ring-1 ring-emerald-500/40">
+                Downloaded
+              </span>
+            )}
+            {maxRes && (
+              <span className="pb-0.5 text-[10px] font-medium text-gray-500">
+                {maxRes}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    ) : (
+      <div className="ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
+        <FeedThumbnail
+          thumbSrc={thumbSrc}
+          duration={duration}
+          className="aspect-video w-full"
+        />
+        <div className="flex flex-col gap-1 p-3">
+          <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 group-hover:text-accent">
+            {entry.title || "Untitled"}
+          </h3>
+          <FeedMetaRow
+            channelName={channelName}
+            entry={entry}
             maxRes={maxRes}
             inLibrary={inLibrary}
-            videoId={videoId}
             downloading={downloading}
             onDownload={onDownload}
           />
         </div>
       </div>
     );
-  }
 
   return (
-    <div
-      ref={cardRef}
-      className="ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700"
-    >
-      <FeedThumbnail
-        thumbSrc={thumbSrc}
-        duration={duration}
-        previewTo={previewTo}
-        className="aspect-video w-full"
-      />
-      <div className="flex flex-col gap-1 p-3">
-        {previewTo ? (
-          <Link
-            to={previewTo}
-            className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 hover:text-accent group-hover:text-accent"
-          >
-            {entry.title || "Untitled"}
-          </Link>
-        ) : (
-          <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 group-hover:text-accent">
-            {entry.title || "Untitled"}
-          </h3>
-        )}
-        <FeedMetaRow
-          channelName={channelName}
-          entry={entry}
-          maxRes={maxRes}
-          inLibrary={inLibrary}
-          videoId={videoId}
-          downloading={downloading}
-          onDownload={onDownload}
-        />
-      </div>
+    <div ref={cardRef}>
+      {href ? (
+        <Link to={href} className="block">
+          {cardInner}
+        </Link>
+      ) : (
+        cardInner
+      )}
     </div>
   );
 }

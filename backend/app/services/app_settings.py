@@ -22,6 +22,10 @@ AI_DEFAULTS: dict[str, Any] = {
     "ollama_prefer_embeddings": False,
     # Show per-response cost chips in Watch UI (Settings totals always show).
     "openrouter_show_costs": True,
+    # Soft/hard weekly OpenRouter spend limit (rolling 7 days). null = off.
+    "openrouter_weekly_budget_usd": None,
+    # When true and weekly spend >= budget, block further OpenRouter calls.
+    "openrouter_budget_hard_limit": False,
     # on_download | on_request | timer | set_time
     "schedule": "on_download",
     "timer_hours": 6,
@@ -52,6 +56,8 @@ _TAG_RESCAN_DAYS_LO = 7
 _TAG_RESCAN_DAYS_HI = 365
 TAG_RESCAN_DAYS_MIN = _TAG_RESCAN_DAYS_LO
 TAG_RESCAN_DAYS_MAX = _TAG_RESCAN_DAYS_HI
+_WEEKLY_BUDGET_USD_LO = 0.01
+_WEEKLY_BUDGET_USD_HI = 100_000.0
 _SUMMARY_LENGTHS = frozenset({"short", "medium", "long"})
 _OPENROUTER_SCOPES = frozenset({"specialized", "all"})
 
@@ -103,6 +109,20 @@ def clamp_vram_gb(value: Any) -> float | None:
         return None
     return max(_VRAM_GB_LO, min(_VRAM_GB_HI, gb))
 
+
+def clamp_weekly_budget_usd(value: Any) -> float | None:
+    """None/empty/0 clears the weekly spend limit; otherwise clamp USD."""
+    if value is None or value == "":
+        return None
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return None
+    if amount <= 0 or amount != amount:  # NaN
+        return None
+    return max(_WEEKLY_BUDGET_USD_LO, min(_WEEKLY_BUDGET_USD_HI, amount))
+
+
 DEFAULTS: dict[str, Any] = {
     "progress_expiry_days": 14,
     "continue_watching_days": 7,
@@ -149,6 +169,15 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     )
     merged["ollama_prefer_embeddings"] = bool(
         merged.get("ollama_prefer_embeddings")
+    )
+    merged["openrouter_show_costs"] = bool(
+        merged.get("openrouter_show_costs", True)
+    )
+    merged["openrouter_weekly_budget_usd"] = clamp_weekly_budget_usd(
+        merged.get("openrouter_weekly_budget_usd")
+    )
+    merged["openrouter_budget_hard_limit"] = bool(
+        merged.get("openrouter_budget_hard_limit")
     )
     return merged
 

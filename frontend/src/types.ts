@@ -87,6 +87,8 @@ export interface ChannelFeedEntry {
   like_count: number | null;
   dislike_count: number | null;
   published_at: string | null;
+  /** Present on global catalog search results. */
+  channel?: string | null;
   in_library: boolean;
   video_id: number | null;
   library_height_px: number | null;
@@ -203,6 +205,7 @@ export interface StreamPreviewMeta {
   preview_height: number | null;
   library_video_id: number | null;
   available_presets: string[];
+  subtitles: SubtitleTrack[];
 }
 
 export interface DownloadOverrides {
@@ -251,6 +254,10 @@ export interface AiSettings {
   ollama_prefer_embeddings: boolean;
   /** When false, hide per-response cost chips in Watch (Settings totals still show). */
   openrouter_show_costs: boolean;
+  /** Soft/hard weekly OpenRouter spend limit (rolling 7 days). null = off. */
+  openrouter_weekly_budget_usd: number | null;
+  /** When true and weekly spend >= budget, block further OpenRouter calls. */
+  openrouter_budget_hard_limit: boolean;
   schedule: AiSchedule;
   timer_hours: number;
   schedule_time: string;
@@ -287,6 +294,10 @@ export interface OpenRouterCosts {
   d30: number;
   y1: number;
   all: number;
+  weekly_budget_usd?: number | null;
+  hard_limit?: boolean;
+  over_budget?: boolean;
+  blocked?: boolean;
 }
 
 export interface AppSettings {

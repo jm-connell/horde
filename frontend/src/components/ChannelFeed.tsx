@@ -5,12 +5,80 @@ import ChannelFeedCard from "./ChannelFeedCard";
 import LoadingIndicator from "./LoadingIndicator";
 import { useChannelDownloadQueue } from "../hooks/useChannelDownloadQueue";
 import { useSettings } from "../hooks/useSettings";
-import type { ChannelFeedEntry, ChannelStat } from "../types";
+import type { ChannelFeedEntry, ChannelStat, Video } from "../types";
 
 type FeedSort = "recent" | "popular";
 type FeedLayout = "grid" | "list";
 
 const PAGE_SIZE = 30;
+
+function extractYoutubeId(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const watch = url.match(/[?&]v=([\w-]{11})/);
+  if (watch) return watch[1];
+  const short = url.match(/youtu\.be\/([\w-]{11})/);
+  if (short) return short[1];
+  return null;
+}
+
+function videoToFeedEntry(v: Video): ChannelFeedEntry {
+  return {
+    id: extractYoutubeId(v.source_url),
+    url: v.source_url || "",
+    title: v.title,
+    duration: v.duration_sec,
+    thumbnail_url: null,
+    view_count: v.view_count,
+    published_at: v.published_at,
+    in_library: true,
+    video_id: v.id,
+    library_height_px: v.height_px,
+    max_height: null,
+  };
+}
+
+/** Union by youtube id then title; feed entries win for metadata. */
+function mergeFeedWithLibrary(
+  feed: ChannelFeedEntry[],
+  library: ChannelFeedEntry[]
+): ChannelFeedEntry[] {
+  const byId = new Map<string, number>();
+  const byTitle = new Map<string, number>();
+  const result: ChannelFeedEntry[] = [];
+
+  for (const e of feed) {
+    const idx = result.length;
+    result.push({ ...e });
+    if (e.id) byId.set(e.id, idx);
+    if (e.title) byTitle.set(e.title.toLowerCase(), idx);
+  }
+
+  for (const lib of library) {
+    const idIdx = lib.id ? byId.get(lib.id) : undefined;
+    const titleIdx =
+      idIdx === undefined && lib.title
+        ? byTitle.get(lib.title.toLowerCase())
+        : undefined;
+    const hit = idIdx ?? titleIdx;
+    if (hit !== undefined) {
+      const existing = result[hit];
+      result[hit] = {
+        ...existing,
+        in_library: true,
+        video_id: lib.video_id ?? existing.video_id,
+        library_height_px:
+          lib.library_height_px ?? existing.library_height_px,
+      };
+      continue;
+    }
+    const idx = result.length;
+    result.push({ ...lib });
+    if (lib.id) byId.set(lib.id, idx);
+    if (lib.title) byTitle.set(lib.title.toLowerCase(), idx);
+  }
+
+  return result;
+}
 
 export default function ChannelFeed({
   channel,
@@ -20,6 +88,7 @@ export default function ChannelFeed({
   feedSort,
   feedOrder,
   feedLayout,
+  showUndownloaded,
   queueDockedBottom = false,
 }: {
   channel: string;
@@ -29,10 +98,12 @@ export default function ChannelFeed({
   feedSort: FeedSort;
   feedOrder: "asc" | "desc";
   feedLayout: FeedLayout;
+  showUndownloaded: boolean;
   queueDockedBottom?: boolean;
 }) {
   const [settings] = useSettings();
   const [entries, setEntries] = useState<ChannelFeedEntry[]>([]);
+  const [libraryEntries, setLibraryEntries] = useState<ChannelFeedEntry[]>([]);
   const [searchEntries, setSearchEntries] = useState<ChannelFeedEntry[] | null>(
     null
   );
@@ -190,6 +261,22 @@ export default function ChannelFeed({
   );
 
   useEffect(() => {
+    let cancelled = false;
+    setLibraryEntries([]);
+    api
+      .listVideos({ channel })
+      .then((videos) => {
+        if (!cancelled) setLibraryEntries(videos.map(videoToFeedEntry));
+      })
+      .catch(() => {
+        if (!cancelled) setLibraryEntries([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [channel]);
+
+  useEffect(() => {
     setEntries([]);
     setSearchEntries(null);
     setHasMore(false);
@@ -234,12 +321,24 @@ export default function ChannelFeed({
 
   const filteredEntries = useMemo(() => {
     const q = feedSearch.trim().toLowerCase();
+    const libraryForQuery = q
+      ? libraryEntries.filter((e) =>
+          (e.title ?? "").toLowerCase().includes(q)
+        )
+      : libraryEntries;
     let list =
       q && searchEntries != null
-        ? searchEntries
+        ? mergeFeedWithLibrary(searchEntries, libraryForQuery)
         : q
-          ? entries.filter((e) => (e.title ?? "").toLowerCase().includes(q))
-          : entries;
+          ? mergeFeedWithLibrary(entries, libraryEntries).filter((e) =>
+              (e.title ?? "").toLowerCase().includes(q)
+            )
+          : mergeFeedWithLibrary(entries, libraryEntries);
+    if (!showUndownloaded) {
+      list = list.filter(
+        (e) => e.in_library || e.video_id != null || resolveVideoId(e) != null
+      );
+    }
     if (feedSort === "popular") {
       list = [...list].sort((a, b) => {
         const av = a.view_count ?? -1;
@@ -250,7 +349,16 @@ export default function ChannelFeed({
       list = [...list].reverse();
     }
     return list;
-  }, [entries, searchEntries, feedSearch, feedSort, feedOrder]);
+  }, [
+    entries,
+    libraryEntries,
+    searchEntries,
+    feedSearch,
+    feedSort,
+    feedOrder,
+    showUndownloaded,
+    resolveVideoId,
+  ]);
 
   const canLoadMore =
     hasMore && !feedSearch.trim() && !loading && !loadingMore;
@@ -275,7 +383,7 @@ export default function ChannelFeed({
     [pending]
   );
 
-  if (!channelUrl) {
+  if (!channelUrl && libraryEntries.length === 0 && !loading) {
     return (
       <div className="py-20 text-center text-gray-500">
         <p className="text-lg">Channel feed unavailable</p>
@@ -301,7 +409,7 @@ export default function ChannelFeed({
         </p>
       )}
 
-      {loading ? (
+      {loading && channelUrl ? (
         <LoadingIndicator label="Loading channel feed" />
       ) : filteredEntries.length === 0 ? (
         <div className="py-20 text-center text-gray-500">
@@ -309,7 +417,9 @@ export default function ChannelFeed({
           <p className="mt-1 text-sm">
             {feedSearch
               ? "Try a different search term."
-              : "This channel has no public uploads, or they could not be loaded."}
+              : !channelUrl
+                ? "No YouTube URL is known for this channel yet."
+                : "This channel has no public uploads, or they could not be loaded."}
           </p>
         </div>
       ) : (
@@ -328,7 +438,7 @@ export default function ChannelFeed({
               const videoId = resolveVideoId(entry);
               return (
                 <ChannelFeedCard
-                  key={entry.url}
+                  key={entry.url || String(entry.video_id ?? entry.id)}
                   entry={entry}
                   channelName={channel}
                   layout={feedLayout}

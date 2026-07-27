@@ -429,6 +429,9 @@ class OpenRouterProvider:
     ) -> str:
         global _last_error
         self.last_cost = None
+        from . import cost_ledger
+
+        cost_ledger.assert_budget_allows()
         payload_messages = self._build_messages(
             prompt, system=system, messages=messages
         )
@@ -489,6 +492,9 @@ class OpenRouterProvider:
     ) -> Iterator[str]:
         global _last_error
         self.last_cost = None
+        from . import cost_ledger
+
+        cost_ledger.assert_budget_allows()
         payload_messages = self._build_messages(
             prompt, system=system, messages=messages
         )
@@ -570,6 +576,9 @@ class OpenRouterProvider:
         """Batch-embed texts via OpenRouter ``/embeddings``."""
         global _last_error
         self.last_cost = None
+        from . import cost_ledger
+
+        cost_ledger.assert_budget_allows()
         cleaned = [t for t in texts if (t or "").strip()]
         if not cleaned:
             return []
