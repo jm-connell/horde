@@ -166,6 +166,11 @@ export interface Settings {
   aiExpanded: boolean;
   /** Last selected AI panel tab when both summary and chat are available. */
   aiTab: "summary" | "chat";
+  /**
+   * Channel page: when true, show full channel feed (incl. undownloaded /
+   * streamable). When false, show local library videos for that channel only.
+   */
+  channelShowUndownloaded: boolean;
   showRelatedVideos: boolean;
   /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
   autoplayRelated: boolean;
@@ -226,6 +231,7 @@ const DEFAULTS: Settings = {
   descriptionExpanded: true,
   aiExpanded: true,
   aiTab: "summary",
+  channelShowUndownloaded: false,
   showRelatedVideos: true,
   autoplayRelated: true,
 };
@@ -278,6 +284,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "descriptionExpanded",
   "aiExpanded",
   "aiTab",
+  "channelShowUndownloaded",
   "showRelatedVideos",
   "autoplayRelated",
 ];
@@ -715,6 +722,10 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
     translucentPanelLegibility: normalizeBool(
       parsed.translucentPanelLegibility,
       DEFAULTS.translucentPanelLegibility
+    ),
+    channelShowUndownloaded: normalizeBool(
+      parsed.channelShowUndownloaded,
+      DEFAULTS.channelShowUndownloaded
     ),
     fontSize: normalizeFontSize(
       parsed.fontSize,

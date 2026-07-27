@@ -6,6 +6,7 @@ import type { ChannelFeedEntry } from "../types";
 import {
   formatDate,
   formatDuration,
+  formatLikeRatio,
   formatResolution,
   formatViewCount,
   youtubeThumbnailUrl,
@@ -13,6 +14,36 @@ import {
 import { enqueueYtPreview } from "../utils/ytPreviewQueue";
 
 const maxResCache = new Map<string, string>();
+
+function LikeRatioBadge({
+  likes,
+  dislikes,
+}: {
+  likes: number | null | undefined;
+  dislikes: number | null | undefined;
+}) {
+  const label = formatLikeRatio(likes, dislikes);
+  if (!label || likes == null || dislikes == null) return null;
+  const total = likes + dislikes;
+  const pct = total > 0 ? (likes / total) * 100 : 0;
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-500"
+      title={`${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes`}
+    >
+      <span
+        className="inline-block h-1 w-8 overflow-hidden rounded-full bg-ink-700"
+        aria-hidden
+      >
+        <span
+          className="block h-full rounded-full bg-emerald-500/80"
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+      <span>{label}</span>
+    </span>
+  );
+}
 
 function previewHref(entry: ChannelFeedEntry, channelName: string): string {
   const qs = new URLSearchParams();
@@ -76,6 +107,10 @@ function FeedMetaRow({
             {formatViewCount(entry.view_count)}
           </span>
         )}
+        <LikeRatioBadge
+          likes={entry.like_count}
+          dislikes={entry.dislike_count}
+        />
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {maxRes && (
@@ -306,6 +341,15 @@ export default function ChannelFeedCard({
                 <span className="text-gray-600">·</span>
               )}
               {viewCount != null && <span>{formatViewCount(viewCount)}</span>}
+              {(duration || dateLabel || viewCount != null) &&
+                entry.like_count != null &&
+                entry.dislike_count != null && (
+                  <span className="text-gray-600">·</span>
+                )}
+              <LikeRatioBadge
+                likes={entry.like_count}
+                dislikes={entry.dislike_count}
+              />
             </div>
           </div>
           <ListActionColumn

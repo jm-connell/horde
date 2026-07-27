@@ -63,6 +63,8 @@ def upsert_many(entries: list[dict[str, Any]]) -> None:
                 "thumbnail_url",
                 "title",
                 "max_height",
+                "like_count",
+                "dislike_count",
             ):
                 val = entry.get(key)
                 if val is not None:

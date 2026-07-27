@@ -158,6 +158,18 @@ export function formatViewCount(count: number | null): string {
   return `${count} views`;
 }
 
+/** Compact like ratio label (e.g. "92%") when both counts are known. */
+export function formatLikeRatio(
+  likes: number | null | undefined,
+  dislikes: number | null | undefined
+): string {
+  if (likes == null || dislikes == null) return "";
+  if (likes < 0 || dislikes < 0) return "";
+  const total = likes + dislikes;
+  if (total <= 0) return "";
+  return `${Math.round((likes / total) * 100)}%`;
+}
+
 export function youtubeThumbnailUrl(
   videoId: string | null,
   thumbnailUrl?: string | null

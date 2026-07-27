@@ -36,6 +36,7 @@ from ..schemas import (
 )
 from ..services import channel_catalog, downloader, feed_meta_cache, library
 from ..services import app_settings as app_settings_svc
+from ..services.ytdlp_common import is_members_only_entry
 from ..services.metadata import (
     delete_sprite_files,
     load_sprite_meta,
@@ -303,12 +304,22 @@ def channel_catalog_search(
         session, channel_url, q, limit=limit
     )
     lib_map = library.youtube_library_map(session, channel=channel_name)
+    yt_ids = [str(e["id"]) for e in raw_entries if e.get("id")]
+    meta_cache = feed_meta_cache.get_many(yt_ids)
     entries: list[ChannelFeedEntry] = []
     for raw in raw_entries:
+        if is_members_only_entry(raw):
+            continue
         yt_id = raw.get("id")
         lib = lib_map.get(yt_id) if yt_id else None
         video_id = lib[0] if lib else None
         library_height = lib[1] if lib else None
+        cached = meta_cache.get(str(yt_id)) if yt_id else None
+        view_count = raw.get("view_count")
+        if view_count is None and cached:
+            view_count = cached.get("view_count")
+        like_count = cached.get("like_count") if cached else None
+        dislike_count = cached.get("dislike_count") if cached else None
         entries.append(
             ChannelFeedEntry(
                 id=yt_id,
@@ -316,7 +327,11 @@ def channel_catalog_search(
                 title=raw.get("title"),
                 duration=raw.get("duration"),
                 thumbnail_url=raw.get("thumbnail_url"),
-                view_count=raw.get("view_count"),
+                view_count=view_count,
+                like_count=int(like_count) if like_count is not None else None,
+                dislike_count=(
+                    int(dislike_count) if dislike_count is not None else None
+                ),
                 published_at=raw.get("published_at"),
                 in_library=video_id is not None,
                 video_id=video_id,
@@ -430,6 +445,8 @@ def channel_feed(
     to_cache: list[dict] = []
     entries: list[ChannelFeedEntry] = []
     for raw in data.get("entries") or []:
+        if is_members_only_entry(raw):
+            continue
         yt_id = raw.get("id")
         lib = lib_map.get(yt_id) if yt_id else None
         video_id = lib[0] if lib else None
@@ -444,6 +461,8 @@ def channel_feed(
         )
         if view_count is None:
             view_count = library_views
+        like_count = cached.get("like_count") if cached else None
+        dislike_count = cached.get("dislike_count") if cached else None
         published_at = raw.get("published_at") or (
             cached.get("published_at") if cached else None
         )
@@ -479,6 +498,10 @@ def channel_feed(
                 duration=duration,
                 thumbnail_url=thumbnail_url,
                 view_count=view_count,
+                like_count=int(like_count) if like_count is not None else None,
+                dislike_count=(
+                    int(dislike_count) if dislike_count is not None else None
+                ),
                 published_at=published_at,
                 in_library=video_id is not None,
                 video_id=video_id,
@@ -486,46 +509,82 @@ def channel_feed(
                 max_height=int(max_height) if max_height else None,
             )
         )
-    if to_cache and not from_catalog:
+    if to_cache:
         feed_meta_cache.upsert_many(to_cache)
 
-    # Background-fill missing view counts / dates for a few entries (non-blocking).
-    if not from_catalog:
-        missing = [
-            e
-            for e in entries
-            if e.id and (e.view_count is None or not e.published_at)
-        ][:8]
-        if missing:
+    # Background-fill missing views / dates / votes (catalog + live).
+    missing_meta = [
+        e
+        for e in entries
+        if e.id and (e.view_count is None or not e.published_at)
+    ][:8]
+    missing_votes = [
+        e for e in entries if e.id and (e.like_count is None or e.dislike_count is None)
+    ][:8]
+    if missing_meta or missing_votes:
+        from ..services import return_youtube_dislike
 
-            def _enrich(ids_urls: list[tuple[str, str]]) -> None:
-                updates: list[dict] = []
-                for yt_id, entry_url in ids_urls:
+        def _enrich(
+            meta_rows: list[tuple[str, str]],
+            vote_ids: list[str],
+            catalog_url: Optional[str],
+        ) -> None:
+            updates: list[dict] = []
+            catalog_view_updates: list[tuple[str, int]] = []
+            for yt_id, entry_url in meta_rows:
+                try:
+                    preview = downloader.extract_preview(entry_url)
+                except Exception:  # noqa: BLE001
+                    continue
+                if preview.get("is_playlist"):
+                    continue
+                row: dict = {"id": yt_id}
+                if preview.get("view_count") is not None:
+                    row["view_count"] = preview["view_count"]
                     try:
-                        preview = downloader.extract_preview(entry_url)
-                    except Exception:  # noqa: BLE001
-                        continue
-                    if preview.get("is_playlist"):
-                        continue
-                    row: dict = {"id": yt_id}
-                    if preview.get("view_count") is not None:
-                        row["view_count"] = preview["view_count"]
-                    if preview.get("thumbnail_url"):
-                        row["thumbnail_url"] = preview["thumbnail_url"]
-                    if preview.get("published_at"):
-                        row["published_at"] = preview["published_at"]
-                    if len(row) > 1:
-                        updates.append(row)
-                if updates:
-                    feed_meta_cache.upsert_many(updates)
+                        catalog_view_updates.append(
+                            (yt_id, int(preview["view_count"]))
+                        )
+                    except (TypeError, ValueError):
+                        pass
+                if preview.get("thumbnail_url"):
+                    row["thumbnail_url"] = preview["thumbnail_url"]
+                if preview.get("published_at"):
+                    row["published_at"] = preview["published_at"]
+                if len(row) > 1:
+                    updates.append(row)
+            for yt_id in vote_ids:
+                votes = return_youtube_dislike.fetch_votes(yt_id)
+                if not votes:
+                    continue
+                updates.append(
+                    {
+                        "id": yt_id,
+                        "like_count": votes["like_count"],
+                        "dislike_count": votes["dislike_count"],
+                    }
+                )
+            if updates:
+                feed_meta_cache.upsert_many(updates)
+            if catalog_url and catalog_view_updates:
+                try:
+                    channel_catalog.update_catalog_view_counts(
+                        catalog_url, catalog_view_updates
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
 
-            import threading
+        import threading
 
-            threading.Thread(
-                target=_enrich,
-                args=([(e.id, e.url) for e in missing if e.id],),
-                daemon=True,
-            ).start()
+        threading.Thread(
+            target=_enrich,
+            args=(
+                [(e.id, e.url) for e in missing_meta if e.id],
+                [e.id for e in missing_votes if e.id],
+                channel_url,
+            ),
+            daemon=True,
+        ).start()
 
     progress = channel_catalog.catalog_progress(session, channel_url)
     # Prefer live page flags when serving from catalog mid-index.

@@ -93,6 +93,55 @@ export default function ChannelFeed({
     }
   }, [channel, channelUrl]);
 
+  /** Re-fetch catalog page so background view/vote enrichments show up. */
+  const softMetaRefresh = useCallback(async () => {
+    if (!channelUrl && !channel) return;
+    const gen = liveRefreshGen.current;
+    try {
+      const page = await api.getChannelFeed({
+        channel,
+        url: channelUrl ?? undefined,
+        offset: 0,
+        limit: PAGE_SIZE,
+        live: false,
+      });
+      if (gen !== liveRefreshGen.current) return;
+      setEntries((prev) => {
+        if (prev.length === 0) return page.entries;
+        const byId = new Map(
+          page.entries
+            .filter((e) => e.id)
+            .map((e) => [e.id as string, e] as const)
+        );
+        let changed = false;
+        const next = prev.map((e) => {
+          if (!e.id) return e;
+          const fresh = byId.get(e.id);
+          if (!fresh) return e;
+          if (
+            fresh.view_count === e.view_count &&
+            fresh.like_count === e.like_count &&
+            fresh.dislike_count === e.dislike_count &&
+            fresh.published_at === e.published_at
+          ) {
+            return e;
+          }
+          changed = true;
+          return {
+            ...e,
+            view_count: fresh.view_count ?? e.view_count,
+            like_count: fresh.like_count ?? e.like_count,
+            dislike_count: fresh.dislike_count ?? e.dislike_count,
+            published_at: fresh.published_at ?? e.published_at,
+          };
+        });
+        return changed ? next : prev;
+      });
+    } catch {
+      /* ignore */
+    }
+  }, [channel, channelUrl]);
+
   const loadPage = useCallback(
     async (offset: number, append: boolean) => {
       if (!channelUrl && !channel) return;
@@ -117,6 +166,18 @@ export default function ChannelFeed({
         if (!append && usedCatalog) {
           void softLiveRefresh();
         }
+        if (!append) {
+          const needsMeta = page.entries.some(
+            (e) =>
+              e.view_count == null ||
+              e.like_count == null ||
+              e.dislike_count == null
+          );
+          if (needsMeta) {
+            window.setTimeout(() => void softMetaRefresh(), 4500);
+            window.setTimeout(() => void softMetaRefresh(), 12000);
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load feed");
         if (!append) setEntries([]);
@@ -125,7 +186,7 @@ export default function ChannelFeed({
         setLoadingMore(false);
       }
     },
-    [channel, channelUrl, softLiveRefresh]
+    [channel, channelUrl, softLiveRefresh, softMetaRefresh]
   );
 
   useEffect(() => {

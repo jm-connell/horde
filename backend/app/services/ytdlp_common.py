@@ -1,5 +1,6 @@
 """Shared yt-dlp option helpers."""
 
+import re
 import threading
 import time
 from typing import Any, Optional
@@ -9,6 +10,28 @@ from ..config import (
     YTDLP_COOKIE_FILE,
     YTDLP_POT_BASE_URL,
 )
+
+_MEMBERS_ONLY_TITLE = re.compile(
+    r"(?i)\[?\s*members?\s*-?\s*only\s*\]?"
+)
+_MEMBERS_ONLY_AVAILABILITY = frozenset(
+    {"subscriber_only", "premium_only", "needs_auth"}
+)
+
+
+def is_members_only_entry(entry: Optional[dict[str, Any]]) -> bool:
+    """True when a yt-dlp / catalog entry looks like members-only content."""
+    if not entry or not isinstance(entry, dict):
+        return False
+    availability = entry.get("availability")
+    if isinstance(availability, str) and availability.strip().lower() in (
+        _MEMBERS_ONLY_AVAILABILITY
+    ):
+        return True
+    title = entry.get("title")
+    if isinstance(title, str) and _MEMBERS_ONLY_TITLE.search(title):
+        return True
+    return False
 
 
 def youtube_extractor_args() -> dict[str, Any]:

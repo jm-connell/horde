@@ -84,6 +84,8 @@ export interface ChannelFeedEntry {
   duration: number | null;
   thumbnail_url: string | null;
   view_count: number | null;
+  like_count: number | null;
+  dislike_count: number | null;
   published_at: string | null;
   in_library: boolean;
   video_id: number | null;

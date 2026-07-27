@@ -389,7 +389,6 @@ export default function Library() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [channelTab, setChannelTab] = useState<"library" | "feed">("library");
   const [channelUrlOverrides, setChannelUrlOverrides] = useState<
     Record<string, string>
   >(loadChannelUrlMap);
@@ -533,9 +532,12 @@ export default function Library() {
     setActiveTag(searchParams.get("tag"));
     setActiveChannel(searchParams.get("channel"));
     if (searchParams.get("tab") === "feed" && searchParams.get("channel")) {
-      setChannelTab("feed");
+      // Deep-link once when URL says feed; don't fight a later user toggle-off.
+      if (!loadSettings().channelShowUndownloaded) {
+        update({ channelShowUndownloaded: true });
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, update]);
 
   useEffect(() => {
     setFeedSearch("");
@@ -746,24 +748,32 @@ export default function Library() {
     );
   }, [activeChannel, channels, channelUrlOverrides]);
 
-  // Prefer channel feed when this channel has no library videos yet.
+  // Prefer undownloaded feed when this channel has no library videos yet.
   useEffect(() => {
     if (!activeChannel) return;
+    if (settings.channelShowUndownloaded) return;
     const inLibrary = channels.find((c) => c.channel === activeChannel);
     const count = inLibrary?.count ?? 0;
     if (count === 0 && activeChannelUrl) {
-      setChannelTab("feed");
+      update({ channelShowUndownloaded: true });
     }
-  }, [activeChannel, channels, activeChannelUrl]);
+  }, [
+    activeChannel,
+    channels,
+    activeChannelUrl,
+    settings.channelShowUndownloaded,
+    update,
+  ]);
 
-  const onFeedTab = Boolean(activeChannel) && channelTab === "feed";
+  const showUndownloaded =
+    Boolean(activeChannel) && settings.channelShowUndownloaded;
   const [indexingChannel, setIndexingChannel] = useState(false);
   const [catalogProgress, setCatalogProgress] = useState<CatalogProgress | null>(
     null
   );
 
   useEffect(() => {
-    if (!onFeedTab || !activeChannelUrl) {
+    if (!showUndownloaded || !activeChannelUrl) {
       setCatalogProgress(null);
       return;
     }
@@ -828,7 +838,7 @@ export default function Library() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [onFeedTab, activeChannelUrl]);
+  }, [showUndownloaded, activeChannelUrl]);
 
   const triggerChannelIndex = async () => {
     if (!activeChannel || indexingChannel) return;
@@ -922,7 +932,6 @@ export default function Library() {
 
   const selectChannel = (channel: string | null) => {
     setActiveChannel(channel);
-    setChannelTab("library");
     if (narrowViewport) closeSidebar();
   };
 
@@ -935,7 +944,7 @@ export default function Library() {
     setChannelUrlOverrides((prev) => ({ ...prev, [hit.name]: hit.url }));
     setActiveChannel(hit.name);
     setActiveTag(null);
-    setChannelTab("feed");
+    update({ channelShowUndownloaded: true });
     if (narrowViewport) closeSidebar();
   };
 
@@ -1266,57 +1275,26 @@ export default function Library() {
             </LiquidNav>
           )}
           {activeChannel && !activeTag && (
-            <LiquidNav
-              className="ui-panel inline-flex shrink-0 rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
-              pillClassName="bg-ink-800"
-              dependency={channelTab}
-            >
-              <button
-                type="button"
-                data-liquid-active={
-                  channelTab === "library" ? "true" : undefined
+            <label className="ui-panel inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl bg-ink-900 px-3 py-1.5 ring-1 ring-ink-700">
+              <input
+                type="checkbox"
+                checked={settings.channelShowUndownloaded}
+                onChange={(e) =>
+                  update({ channelShowUndownloaded: e.target.checked })
                 }
-                onClick={() => setChannelTab("library")}
-                className={`ui-interactive relative z-10 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
-                  channelTab === "library"
-                    ? settings.navIndicator !== "none"
-                      ? "text-gray-100"
-                      : "bg-ink-800 text-gray-100"
-                    : "text-gray-400 hover:text-gray-200"
-                } ${
-                  settings.navIndicator === "none" && channelTab !== "library"
-                    ? "hover:bg-ink-800/60"
-                    : ""
-                }`}
-              >
-                Library
-              </button>
-              <button
-                type="button"
-                data-liquid-active={channelTab === "feed" ? "true" : undefined}
-                onClick={() => setChannelTab("feed")}
-                className={`ui-interactive relative z-10 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors sm:px-3 ${
-                  channelTab === "feed"
-                    ? settings.navIndicator !== "none"
-                      ? "text-gray-100"
-                      : "bg-ink-800 text-gray-100"
-                    : "text-gray-400 hover:text-gray-200"
-                } ${
-                  settings.navIndicator === "none" && channelTab !== "feed"
-                    ? "hover:bg-ink-800/60"
-                    : ""
-                }`}
-              >
-                Channel feed
-              </button>
-            </LiquidNav>
+                className="h-3.5 w-3.5 rounded border-ink-600 bg-ink-950 text-accent focus:ring-accent/40"
+              />
+              <span className="text-sm font-medium text-gray-300">
+                Show undownloaded
+              </span>
+            </label>
           )}
 
           <div
             data-header-filters
             className="ml-auto flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-1.5 sm:gap-2"
           >
-            {onFeedTab ? (
+            {showUndownloaded ? (
               <>
                 <div className="flex min-w-0 flex-1 items-center gap-1.5 md:flex-initial md:w-auto">
                   <input
@@ -1502,7 +1480,7 @@ export default function Library() {
               Show more ({hiddenTagCount})
             </button>
           )}
-          {onFeedTab && catalogProgress && (
+          {showUndownloaded && catalogProgress && (
             <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
               {formatCatalogProgress(catalogProgress)}
               <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
@@ -1511,14 +1489,14 @@ export default function Library() {
         </div>
         )}
 
-        {onFeedTab && feedSort === "popular" && (
+        {showUndownloaded && feedSort === "popular" && (
           <p className="mb-4 text-xs text-gray-600">
             Popularity is based on loaded videos, not full channel history
             (YouTube limitation).
           </p>
         )}
 
-        {showContinueRow && !onFeedTab && !onRecommendedTab && (
+        {showContinueRow && !showUndownloaded && !onRecommendedTab && (
           <ContinueWatchingRow
             videos={visibleContinueWatching}
             showProgress={settings.showProgressOnContinueWatching}
@@ -1528,10 +1506,16 @@ export default function Library() {
         )}
 
         <div
-          key={onFeedTab ? "feed" : onRecommendedTab ? "recommended" : "library"}
+          key={
+            showUndownloaded
+              ? "feed"
+              : onRecommendedTab
+                ? "recommended"
+                : "library"
+          }
           className="page-shell page-shell--animate"
         >
-        {onFeedTab ? (
+        {showUndownloaded ? (
           <ChannelFeed
             channel={activeChannel!}
             channelUrl={activeChannelUrl}

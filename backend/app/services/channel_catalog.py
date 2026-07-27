@@ -22,7 +22,12 @@ from ..models import (
 )
 from . import app_settings
 from .feed_meta_cache import parse_upload_date
-from .ytdlp_common import apply_cookie_opts, extract_info_gated, youtube_extractor_args
+from .ytdlp_common import (
+    apply_cookie_opts,
+    extract_info_gated,
+    is_members_only_entry,
+    youtube_extractor_args,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +292,8 @@ def _upsert_flat_entries(
     """Upsert flat entries starting at start_position. Returns next position."""
     pos = start_position
     for raw in entries:
+        if is_members_only_entry(raw):
+            continue
         yt_id = raw.get("id")
         entry_url = raw.get("url")
         if not yt_id or not entry_url:
@@ -390,7 +397,10 @@ def sync_feed_head(
         by_yt: dict[str, ChannelCatalogVideo] = {v.yt_id: v for v in existing}
 
         live_ids: list[str] = []
-        for pos, raw in enumerate(entries):
+        pos = 0
+        for raw in entries:
+            if is_members_only_entry(raw):
+                continue
             yt_id = str(raw["id"])
             live_ids.append(yt_id)
             row = by_yt.get(yt_id)
@@ -417,6 +427,7 @@ def sync_feed_head(
             row.position = pos
             row.indexed_at = utcnow()
             session.add(row)
+            pos += 1
 
         live_set = set(live_ids)
         next_pos = len(live_ids)
@@ -765,6 +776,37 @@ def catalog_progress(
     }
 
 
+def update_catalog_view_counts(
+    channel_url: str, updates: list[tuple[str, int]]
+) -> None:
+    """Persist enriched view counts onto catalog rows when present."""
+    if not updates:
+        return
+    url = _normalize_channel_url(channel_url)
+    with Session(engine) as session:
+        catalog = get_catalog_by_url(session, url)
+        if catalog is None or catalog.id is None:
+            return
+        by_id = {yt_id: views for yt_id, views in updates}
+        rows = session.exec(
+            select(ChannelCatalogVideo).where(
+                ChannelCatalogVideo.catalog_id == catalog.id,
+                col(ChannelCatalogVideo.yt_id).in_(list(by_id.keys())),
+            )
+        ).all()
+        changed = False
+        for row in rows:
+            views = by_id.get(row.yt_id)
+            if views is None:
+                continue
+            if row.view_count != views:
+                row.view_count = views
+                session.add(row)
+                changed = True
+        if changed:
+            session.commit()
+
+
 def catalog_feed_page(
     session: Session,
     channel_url: str,
@@ -808,6 +850,7 @@ def catalog_feed_page(
             "published_at": r.published_at,
         }
         for r in rows
+        if not is_members_only_entry({"title": r.title})
     ]
     return {
         "channel": catalog.channel_name,
@@ -882,6 +925,8 @@ def search_catalog(
     out: list[dict[str, Any]] = []
     for r in list(rows) + semantic_extra:
         if r.yt_id in seen:
+            continue
+        if is_members_only_entry({"title": r.title}):
             continue
         seen.add(r.yt_id)
         out.append(

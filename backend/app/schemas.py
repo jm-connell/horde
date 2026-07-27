@@ -172,6 +172,8 @@ class ChannelFeedEntry(BaseModel):
     duration: Optional[float] = None
     thumbnail_url: Optional[str] = None
     view_count: Optional[int] = None
+    like_count: Optional[int] = None
+    dislike_count: Optional[int] = None
     published_at: Optional[str] = None
     in_library: bool = False
     video_id: Optional[int] = None

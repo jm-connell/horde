@@ -80,7 +80,7 @@ export default function VideoAiPanel({
     async (force: boolean) => {
       if (!canSummarize) return;
       if (!force && hasAiSummary) {
-        updateSettings({ aiExpanded: true, aiTab: "summary" });
+        updateSettings({ aiExpanded: true });
         setSummaryError(null);
         return;
       }
@@ -136,6 +136,33 @@ export default function VideoAiPanel({
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-2">
+          {activeTab === "summary" &&
+            expanded &&
+            (summarizing ? (
+              <button
+                type="button"
+                onClick={() => {
+                  summarizeAbortRef.current?.abort();
+                  summarizeAbortRef.current = null;
+                  setSummarizing(false);
+                  setSummaryError(null);
+                  showToast("Summary cancelled");
+                }}
+                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
+              >
+                Cancel
+              </button>
+            ) : (
+              (hasAiSummary || !!summaryError) && (
+                <button
+                  type="button"
+                  onClick={() => void runSummarize(true)}
+                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
+                >
+                  Regenerate
+                </button>
+              )
+            ))}
           {expanded && showToggle && (
             <div className="flex items-center gap-0.5">
               <button
@@ -165,33 +192,6 @@ export default function VideoAiPanel({
               </button>
             </div>
           )}
-          {activeTab === "summary" &&
-            expanded &&
-            (summarizing ? (
-              <button
-                type="button"
-                onClick={() => {
-                  summarizeAbortRef.current?.abort();
-                  summarizeAbortRef.current = null;
-                  setSummarizing(false);
-                  setSummaryError(null);
-                  showToast("Summary cancelled");
-                }}
-                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
-              >
-                Cancel
-              </button>
-            ) : (
-              (hasAiSummary || !!summaryError) && (
-                <button
-                  type="button"
-                  onClick={() => void runSummarize(true)}
-                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
-                >
-                  Regenerate
-                </button>
-              )
-            ))}
         </div>
       </div>
 

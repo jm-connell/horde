@@ -17,8 +17,6 @@ import { useSettings } from "../hooks/useSettings";
 import { PRESET_ORDER, presetOptionLabel } from "../presets";
 import type { StreamPreviewMeta } from "../types";
 import {
-  formatDuration,
-  formatResolution,
   formatSize,
   formatViewCount,
   parseChapters,
@@ -352,7 +350,6 @@ export default function Preview() {
     );
   }
 
-  const previewRes = formatResolution(meta.preview_height);
   const channelName = meta.channel || channelParam;
 
   return (
@@ -387,9 +384,6 @@ export default function Preview() {
                 {channelName}
               </Link>
             )}
-            {meta.duration != null && (
-              <span>{formatDuration(meta.duration)}</span>
-            )}
             {meta.view_count != null && (
               <span>{formatViewCount(meta.view_count)}</span>
             )}
@@ -400,7 +394,6 @@ export default function Preview() {
           <div className="inline-flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5">
             <span className="text-xs font-bold uppercase tracking-wide text-amber-300">
               Preview
-              {previewRes ? ` · ${previewRes}` : ""}
             </span>
             <HelpTip text={PREVIEW_QUALITY_TIP}>
               <button

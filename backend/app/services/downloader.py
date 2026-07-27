@@ -18,7 +18,12 @@ from ..models import DownloadJob, JobStatus, Video, VideoStatus
 from . import library, scanner
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .paths import find_video_by_path, to_rel_path
-from .ytdlp_common import apply_cookie_opts, extract_info_gated, youtube_extractor_args
+from .ytdlp_common import (
+    apply_cookie_opts,
+    extract_info_gated,
+    is_members_only_entry,
+    youtube_extractor_args,
+)
 
 # Live progress snapshots keyed by job id, consumed by the SSE endpoint.
 progress_store: dict[int, dict[str, Any]] = {}
@@ -1466,6 +1471,8 @@ def fetch_channel_feed(
     for entry in info.get("entries") or []:
         if not isinstance(entry, dict):
             continue
+        if is_members_only_entry(entry):
+            continue
         entry_url = entry.get("url") or entry.get("webpage_url")
         vid = entry.get("id")
         if entry_url and not str(entry_url).startswith("http"):
@@ -1485,6 +1492,7 @@ def fetch_channel_feed(
         published_at = parse_upload_date(
             entry.get("upload_date") or entry.get("release_timestamp") or entry.get("timestamp")
         )
+        availability = entry.get("availability")
         entries.append(
             {
                 "id": vid,
@@ -1494,6 +1502,7 @@ def fetch_channel_feed(
                 "thumbnail_url": _entry_thumbnail_url(entry, vid),
                 "view_count": view_count,
                 "published_at": published_at,
+                "availability": availability,
             }
         )
 
