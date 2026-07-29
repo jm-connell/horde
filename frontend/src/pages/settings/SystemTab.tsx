@@ -288,7 +288,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
 
       <Section
         title="Background activity"
-        description="Live progress for channel catalog indexing, AI jobs, and metadata sync."
+        description="Live progress for channel catalog work, AI jobs, and metadata sync. Refresh catalogs indexes new channels and checks ready ones for new uploads; Full reindex re-walks every channel."
         hidden={
           !match(
             "background tasks",
@@ -297,7 +297,9 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
             "index",
             "queue",
             "ai process",
-            "metadata sync"
+            "metadata sync",
+            "refresh catalogs",
+            "full reindex"
           )
         }
       >
@@ -308,32 +310,71 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                 <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
                   Channel catalog
                 </p>
-                <button
-                  type="button"
-                  disabled={catalogIndexing}
-                  onClick={async () => {
-                    if (catalogIndexing) return;
-                    setCatalogIndexing(true);
-                    try {
-                      const result = await api.indexChannelCatalog({
-                        force: true,
-                      });
-                      showToast(result.detail || "Channel indexing queued");
-                      refreshCatalogStatus();
-                    } catch (err) {
-                      showToast(
-                        err instanceof Error && err.message
-                          ? err.message
-                          : "Could not start channel indexing"
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={catalogIndexing}
+                    onClick={async () => {
+                      if (catalogIndexing) return;
+                      setCatalogIndexing(true);
+                      try {
+                        const result = await api.indexChannelCatalog({
+                          mode: "incremental",
+                        });
+                        showToast(
+                          result.detail || "Channel catalogs refreshed"
+                        );
+                        refreshCatalogStatus();
+                      } catch (err) {
+                        showToast(
+                          err instanceof Error && err.message
+                            ? err.message
+                            : "Could not refresh channel catalogs"
+                        );
+                      } finally {
+                        setCatalogIndexing(false);
+                      }
+                    }}
+                    className={PANEL_BTN + " !px-2.5 !py-1 !text-xs"}
+                  >
+                    {catalogIndexing ? "Working…" : "Refresh catalogs"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={catalogIndexing}
+                    onClick={async () => {
+                      if (catalogIndexing) return;
+                      const ok = window.confirm(
+                        "Re-walk every channel’s upload list up to the max-videos cap. This can take a long time on large libraries. Continue?"
                       );
-                    } finally {
-                      setCatalogIndexing(false);
+                      if (!ok) return;
+                      setCatalogIndexing(true);
+                      try {
+                        const result = await api.indexChannelCatalog({
+                          mode: "full",
+                        });
+                        showToast(
+                          result.detail || "Full channel reindex queued"
+                        );
+                        refreshCatalogStatus();
+                      } catch (err) {
+                        showToast(
+                          err instanceof Error && err.message
+                            ? err.message
+                            : "Could not start full reindex"
+                        );
+                      } finally {
+                        setCatalogIndexing(false);
+                      }
+                    }}
+                    className={
+                      PANEL_BTN +
+                      " !px-2.5 !py-1 !text-xs !border-ink-600 !text-gray-400 hover:!text-gray-200"
                     }
-                  }}
-                  className={PANEL_BTN + " !px-2.5 !py-1 !text-xs"}
-                >
-                  {catalogIndexing ? "Queuing…" : "Index all channels"}
-                </button>
+                  >
+                    Full reindex…
+                  </button>
+                </div>
               </div>
               {catalogStatus ? (
                 <dl className="space-y-1.5 text-sm">

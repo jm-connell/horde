@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -229,12 +229,14 @@ class ChannelCatalogStatusResponse(BaseModel):
 class ChannelCatalogIndexRequest(BaseModel):
     channel: Optional[str] = None
     url: Optional[str] = None
-    force: bool = True
+    force: bool = False
+    mode: Literal["incremental", "full"] = "incremental"
 
 
 class ChannelCatalogIndexResult(BaseModel):
     queued: int = 0
     skipped: int = 0
+    refreshed: int = 0
     catalog_id: Optional[int] = None
     detail: str = ""
 

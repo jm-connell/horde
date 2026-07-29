@@ -279,9 +279,11 @@ export const api = {
     channel?: string;
     url?: string;
     force?: boolean;
+    mode?: "incremental" | "full";
   } = {}): Promise<{
     queued: number;
     skipped: number;
+    refreshed: number;
     catalog_id: number | null;
     detail: string;
   }> {
@@ -291,7 +293,8 @@ export const api = {
       body: JSON.stringify({
         channel: params.channel ?? null,
         url: params.url ?? null,
-        force: params.force ?? true,
+        force: params.force ?? false,
+        mode: params.mode ?? "incremental",
       }),
     });
   },

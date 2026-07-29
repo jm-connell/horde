@@ -255,9 +255,12 @@ def channel_catalog_index(
     channel_url = (payload.url or "").strip() or None
     channel_name = (payload.channel or "").strip() or None
 
-    # No channel specified → index every library channel with a URL.
+    # No channel specified → refresh or full-index every library channel with a URL.
     if not channel_url and not channel_name:
-        result = channel_catalog.enqueue_all_library_channels(force=payload.force)
+        if payload.mode == "full" or payload.force:
+            result = channel_catalog.enqueue_all_library_channels(force=True)
+        else:
+            result = channel_catalog.refresh_all_library_channels()
         return ChannelCatalogIndexResult(**result)
 
     if not channel_url and channel_name:
@@ -277,6 +280,7 @@ def channel_catalog_index(
         return ChannelCatalogIndexResult(
             queued=0,
             skipped=1,
+            refreshed=0,
             detail="Could not queue channel (disabled or unsupported URL)",
         )
     return ChannelCatalogIndexResult(

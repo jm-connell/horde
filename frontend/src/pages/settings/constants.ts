@@ -34,11 +34,11 @@ export const INPUT_KEY =
   "ui-panel w-48 max-w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
 
 export const CATALOG_INDEX_TIP =
-  "When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube.";
+  "When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Settings → System → Refresh catalogs catches new channels and new uploads on ready catalogs; Full reindex re-walks every channel.";
 export const CATALOG_MAX_TIP =
   "Maximum uploads to keep per channel. Values above 1000 can take a long time and may slow other YouTube work while indexing.";
 export const METADATA_INTERVAL_TIP =
-  "How often Horde refreshes library video metadata and re-checks channel catalogs for new uploads.";
+  "How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.";
 
 export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "small", label: "Small" },

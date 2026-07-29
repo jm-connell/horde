@@ -221,22 +221,31 @@ def maybe_enqueue_for_feed(
         enqueue_channel(channel_url, channel_name=channel_name, force=True)
 
 
-def enqueue_all_library_channels(*, force: bool = True) -> dict[str, Any]:
-    """Queue catalog indexing for every library channel that has a URL."""
-    if not _enabled():
-        return {"queued": 0, "skipped": 0, "detail": "Channel catalog indexing is disabled"}
-    queued = 0
-    skipped = 0
+def _library_channel_targets() -> list[tuple[Optional[str], str]]:
+    """Library channels that have a YouTube URL: (name, url)."""
     with Session(engine) as session:
         from . import library as library_svc
 
         stats = library_svc.channel_stats(session)
-        targets = [
+        return [
             (row.channel, row.channel_url)
             for row in stats
             if row.channel_url
         ]
-    for name, url in targets:
+
+
+def enqueue_all_library_channels(*, force: bool = True) -> dict[str, Any]:
+    """Queue catalog indexing for every library channel that has a URL."""
+    if not _enabled():
+        return {
+            "queued": 0,
+            "skipped": 0,
+            "refreshed": 0,
+            "detail": "Channel catalog indexing is disabled",
+        }
+    queued = 0
+    skipped = 0
+    for name, url in _library_channel_targets():
         catalog_id = enqueue_channel(url, channel_name=name, force=force)
         if catalog_id is None:
             skipped += 1
@@ -246,9 +255,80 @@ def enqueue_all_library_channels(*, force: bool = True) -> dict[str, Any]:
     return {
         "queued": queued,
         "skipped": skipped,
+        "refreshed": 0,
         "detail": f"Queued {queued} channel(s)"
         + (f", skipped {skipped}" if skipped else ""),
     }
+
+
+def refresh_all_library_channels() -> dict[str, Any]:
+    """Incremental refresh: full index for new/error; head sync for ready catalogs."""
+    if not _enabled():
+        return {
+            "queued": 0,
+            "skipped": 0,
+            "refreshed": 0,
+            "detail": "Channel catalog indexing is disabled",
+        }
+    queued = 0
+    skipped = 0
+    refreshed = 0
+    for name, url in _library_channel_targets():
+        with Session(engine) as session:
+            catalog = get_catalog_by_url(session, url)
+            status = catalog.status if catalog else None
+            indexed = int(catalog.indexed_count or 0) if catalog else 0
+
+        if status in (
+            ChannelCatalogStatus.queued,
+            ChannelCatalogStatus.indexing,
+        ):
+            skipped += 1
+            continue
+
+        if (
+            status == ChannelCatalogStatus.ready
+            and indexed > 0
+        ):
+            try:
+                sync_feed_head(url, channel_name=name, limit=50)
+                refreshed += 1
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "incremental head sync failed for %s", url, exc_info=True
+                )
+                skipped += 1
+            continue
+
+        # Missing, idle/incomplete, or error → full index queue.
+        force = status == ChannelCatalogStatus.error
+        catalog_id = enqueue_channel(url, channel_name=name, force=force)
+        if catalog_id is None:
+            skipped += 1
+        else:
+            queued += 1
+
+    parts: list[str] = []
+    if queued:
+        parts.append(f"queued {queued} for full index")
+    if refreshed:
+        parts.append(f"refreshed {refreshed} ready channel(s)")
+    if skipped:
+        parts.append(f"skipped {skipped}")
+    detail = (
+        "; ".join(parts).capitalize()
+        if parts
+        else "No library channels to refresh"
+    )
+    return {
+        "queued": queued,
+        "skipped": skipped,
+        "refreshed": refreshed,
+        "detail": detail,
+    }
+
+
+def refresh_stale_catalogs() -> None:
     """Called from metadata sync worker: re-queue ready catalogs past interval."""
     if not _enabled():
         return
@@ -265,16 +345,15 @@ def enqueue_all_library_channels(*, force: bool = True) -> dict[str, Any]:
                 ChannelCatalog.status == ChannelCatalogStatus.ready
             )
         ).all()
+        stale_urls: list[tuple[str, Optional[str]]] = []
         for catalog in rows:
             updated = catalog.updated_at
             if updated is not None and updated.tzinfo is None:
                 updated = updated.replace(tzinfo=timezone.utc)
             if updated is None or updated < cutoff:
-                enqueue_channel(
-                    catalog.channel_url,
-                    channel_name=catalog.channel_name,
-                    force=True,
-                )
+                stale_urls.append((catalog.channel_url, catalog.channel_name))
+    for channel_url, channel_name in stale_urls:
+        enqueue_channel(channel_url, channel_name=channel_name, force=True)
 
 
 def _fetch_flat_page(channel_url: str, offset: int, limit: int) -> dict[str, Any]:
