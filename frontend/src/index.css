@@ -650,13 +650,31 @@ html[data-hover-motion="lift"] select:hover {
   transform: translateY(-1px);
 }
 
-html[data-hover-motion="glow"] button:not(:disabled):hover,
-html[data-hover-motion="glow"] .ui-interactive:hover,
+html[data-hover-motion="glow"] button:not(:disabled):not(.ui-panel-toggle):hover,
+html[data-hover-motion="glow"] .ui-interactive:not(.ui-panel-toggle):hover,
 html[data-hover-motion="glow"] select:hover,
 html[data-hover-motion="glow"] input:not([type="range"]):not([type="color"]):hover {
   box-shadow:
     0 0 0 1px rgb(var(--accent) / 0.25),
     0 0 16px rgb(var(--accent) / 0.12);
+}
+
+/* Panel toggles keep a wide hit target; glow the label chip instead of a
+   full-width rectangle hugging the text. */
+html[data-hover-motion="glow"] .ui-panel-toggle .ui-panel-toggle-press {
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.55rem;
+  margin: -0.3rem -0.55rem;
+  transition:
+    box-shadow 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-hover-motion="glow"] .ui-panel-toggle:hover .ui-panel-toggle-press,
+html[data-hover-motion="glow"] .ui-panel-toggle:focus-visible .ui-panel-toggle-press {
+  box-shadow:
+    0 0 0 1px rgb(var(--accent) / 0.35),
+    0 0 18px rgb(var(--accent) / 0.16);
 }
 
 /* Button press feedback (always on unless reduced motion).
@@ -685,6 +703,7 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   html[data-hover-motion="subtle"] .ui-interactive,
   html[data-hover-motion="lift"] .ui-interactive,
   html[data-hover-motion="glow"] .ui-interactive,
+  html[data-hover-motion="glow"] .ui-panel-toggle-press,
   html[data-button-press="on"] button,
   html[data-button-press="on"] .ui-interactive,
   html[data-button-press="on"] .ui-panel-toggle-press,

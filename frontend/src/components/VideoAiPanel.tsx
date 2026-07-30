@@ -128,7 +128,7 @@ export default function VideoAiPanel({
         <button
           type="button"
           onClick={() => updateSettings({ aiExpanded: !expanded })}
-          className="ui-panel-toggle ui-interactive flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
+          className="ui-panel-toggle ui-interactive flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
         >
           <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
             <span>AI</span>
