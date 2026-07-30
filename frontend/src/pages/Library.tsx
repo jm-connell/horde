@@ -4,8 +4,9 @@ import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import ChannelFeed from "../components/ChannelFeed";
 import ChannelFeedCard from "../components/ChannelFeedCard";
-import Collapse from "../components/Collapse";
+import ChannelSidebar from "../components/ChannelSidebar";
 import HelpTip from "../components/HelpTip";
+import LibraryBulkBar from "../components/LibraryBulkBar";
 import LiquidNav from "../components/LiquidNav";
 import LoadingIndicator from "../components/LoadingIndicator";
 import PlaybackQueue from "../components/PlaybackQueue";
@@ -36,319 +37,33 @@ import {
   queueDockStyle,
 } from "../utils/miniPlayerLayout";
 import { Toggle } from "./settings/ui";
+import {
+  FEED_INDEX_TIP,
+  FEED_SEARCH_TIP,
+  formatCatalogProgress,
+  type CatalogProgress,
+} from "./libraryCatalogProgress";
+import {
+  loadChannelUrlMap,
+  loadFeedLayout,
+  loadHomeTab,
+  saveChannelUrl,
+  saveFeedLayout,
+  saveHomeTab,
+  type HomeTab,
+} from "./libraryStorage";
 
 const TAG_MIN_COUNT = 3;
 
-const FEED_SEARCH_TIP =
-  "Horde indexes this channel’s library in the background so you can search beyond what’s loaded on the page.";
 
-const FEED_INDEX_TIP =
-  "Horde indexes this channel’s uploads (titles, and descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Indexing runs in the background and respects your max-videos setting.";
-
-type CatalogProgress = {
-  indexed: number;
-  /** Full YouTube library size when known. */
-  total: number | null;
-  /** Per-channel index cap from settings. */
-  maxVideos: number;
-  complete: boolean;
-  status: string | null;
-  indexing: boolean;
-};
-
-/** Denominator for UI: real library size if under the cap, else the cap. */
-function catalogDenominator(p: CatalogProgress): number {
-  if (p.total != null && p.total > 0) {
-    return Math.min(p.total, p.maxVideos);
-  }
-  return Math.max(1, p.maxVideos);
-}
-
-function formatCatalogProgress(p: CatalogProgress): string {
-  const { indexed, total, complete, indexing } = p;
-  const denom = catalogDenominator(p);
-  const capped =
-    total != null && total > p.maxVideos;
-
-  if (indexing) {
-    return `Indexing… ${indexed}/${denom}`;
-  }
-  if (complete && indexed > 0) {
-    if (!capped && (total == null || indexed >= total || indexed >= denom)) {
-      return `Fully indexed (${indexed})`;
-    }
-    return `${indexed}/${denom} indexed`;
-  }
-  if (indexed > 0) {
-    return `${indexed}/${denom} indexed`;
-  }
-  return "Not indexed";
-}
 const TAG_PAGE_SIZE = 20;
-const CHANNEL_SIDEBAR_LIMIT = 30;
-const FEED_LAYOUT_KEY = "horde.channelFeed.layout";
-const HOME_TAB_KEY = "horde.home.tab";
 // Fixed queue overlay width (w-[26rem]) — dock to bottom when grid extends into this zone.
 const QUEUE_RESERVE_PX = 416;
-
-type HomeTab = "library" | "recommended";
-
-function loadHomeTab(): HomeTab {
-  try {
-    return localStorage.getItem(HOME_TAB_KEY) === "recommended"
-      ? "recommended"
-      : "library";
-  } catch {
-    return "library";
-  }
-}
-
-function loadFeedLayout(): "grid" | "list" {
-  try {
-    return localStorage.getItem(FEED_LAYOUT_KEY) === "list" ? "list" : "grid";
-  } catch {
-    return "grid";
-  }
-}
 
 function videoProgress(video: Video): number | undefined {
   if (!video.duration_sec || video.duration_sec <= 0) return undefined;
   if (video.last_position_sec <= 0) return undefined;
   return Math.min(1, video.last_position_sec / video.duration_sec);
-}
-
-function formatSubscriberCount(count: number | null) {
-  if (count === null) return null;
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
-  return String(count);
-}
-
-const CHANNEL_URLS_KEY = "horde.channelUrls";
-
-function loadChannelUrlMap(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(CHANNEL_URLS_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, string>;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveChannelUrl(name: string, url: string) {
-  try {
-    const map = loadChannelUrlMap();
-    map[name] = url;
-    localStorage.setItem(CHANNEL_URLS_KEY, JSON.stringify(map));
-  } catch {
-    /* ignore */
-  }
-}
-
-function ChannelSidebarList({
-  channels,
-  activeChannel,
-  channelSort,
-  showAllChannels,
-  onSelectChannel,
-  onSelectRemoteChannel,
-  onToggleShowAll,
-}: {
-  channels: ChannelStat[];
-  activeChannel: string | null;
-  channelSort: string;
-  showAllChannels: boolean;
-  onSelectChannel: (channel: string | null) => void;
-  onSelectRemoteChannel: (hit: {
-    name: string;
-    url: string;
-    subscriber_count: number | null;
-  }) => void;
-  onToggleShowAll: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [remoteHits, setRemoteHits] = useState<
-    {
-      name: string;
-      url: string;
-      thumbnail_url: string | null;
-      subscriber_count: number | null;
-    }[]
-  >([]);
-  const [searching, setSearching] = useState(false);
-  const debounced = useMemo(() => query.trim().toLowerCase(), [query]);
-
-  const libraryMatches = useMemo(() => {
-    if (!debounced) return channels;
-    return channels.filter((c) => c.channel.toLowerCase().includes(debounced));
-  }, [channels, debounced]);
-
-  useEffect(() => {
-    if (!debounced || debounced.length < 2) {
-      setRemoteHits([]);
-      return;
-    }
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      setSearching(true);
-      api
-        .searchChannels(debounced, 8)
-        .then((data) => {
-          if (cancelled) return;
-          const libraryNames = new Set(
-            channels.map((c) => c.channel.toLowerCase())
-          );
-          setRemoteHits(
-            (data.results || []).filter(
-              (h) => !libraryNames.has(h.name.toLowerCase())
-            )
-          );
-        })
-        .catch(() => {
-          if (!cancelled) setRemoteHits([]);
-        })
-        .finally(() => {
-          if (!cancelled) setSearching(false);
-        });
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [debounced, channels]);
-
-  const visibleLibrary = debounced
-    ? libraryMatches
-    : channels.slice(0, CHANNEL_SIDEBAR_LIMIT);
-
-  return (
-    <div className="space-y-2">
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search channels"
-        className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-xs text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
-      />
-      <ul className="space-y-0.5">
-        {!debounced && (
-          <li>
-            <button
-              onClick={() => onSelectChannel(null)}
-              className={`w-full rounded-lg px-3 py-1.5 text-left text-sm ${
-                !activeChannel
-                  ? "bg-accent/15 text-accent"
-                  : "text-gray-300 hover:bg-ink-800"
-              }`}
-            >
-              All channels
-            </button>
-          </li>
-        )}
-        {visibleLibrary.map((c) => (
-          <li key={c.channel}>
-            <button
-              onClick={() => onSelectChannel(c.channel)}
-              className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
-                activeChannel === c.channel
-                  ? "bg-accent/15 text-accent"
-                  : "text-gray-300 hover:bg-ink-800"
-              }`}
-            >
-              <span className="truncate">{c.channel}</span>
-              <span className="ml-2 shrink-0 text-xs text-gray-500">
-                {channelSort === "subscriber_count" &&
-                c.subscriber_count !== null
-                  ? formatSubscriberCount(c.subscriber_count)
-                  : c.count}
-              </span>
-            </button>
-          </li>
-        ))}
-        {!debounced && channels.length > CHANNEL_SIDEBAR_LIMIT && (
-          <>
-            <Collapse open={showAllChannels}>
-              <ul className="space-y-0.5">
-                {channels.slice(CHANNEL_SIDEBAR_LIMIT).map((c) => (
-                  <li key={c.channel}>
-                    <button
-                      onClick={() => onSelectChannel(c.channel)}
-                      className={`group flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ${
-                        activeChannel === c.channel
-                          ? "bg-accent/15 text-accent"
-                          : "text-gray-300 hover:bg-ink-800"
-                      }`}
-                    >
-                      <span className="truncate">{c.channel}</span>
-                      <span className="ml-2 shrink-0 text-xs text-gray-500">
-                        {channelSort === "subscriber_count" &&
-                        c.subscriber_count !== null
-                          ? formatSubscriberCount(c.subscriber_count)
-                          : c.count}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </Collapse>
-            <li>
-              <button
-                type="button"
-                onClick={onToggleShowAll}
-                className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-accent hover:bg-ink-800"
-              >
-                {showAllChannels
-                  ? "Show less"
-                  : `Show more (${channels.length - CHANNEL_SIDEBAR_LIMIT})`}
-              </button>
-            </li>
-          </>
-        )}
-        {debounced && (
-          <>
-            {searching && (
-              <li className="px-3 py-1.5 text-xs text-gray-500">Searching…</li>
-            )}
-            {remoteHits.length > 0 && (
-              <li className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                From YouTube
-              </li>
-            )}
-            {remoteHits.map((hit) => (
-              <li key={hit.url}>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onSelectRemoteChannel({
-                      name: hit.name,
-                      url: hit.url,
-                      subscriber_count: hit.subscriber_count,
-                    })
-                  }
-                  className="flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-ink-800"
-                >
-                  <span className="truncate">{hit.name}</span>
-                  <span className="ml-2 shrink-0 text-xs text-gray-500">
-                    {hit.subscriber_count != null
-                      ? formatSubscriberCount(hit.subscriber_count)
-                      : "New"}
-                  </span>
-                </button>
-              </li>
-            ))}
-            {!searching &&
-              libraryMatches.length === 0 &&
-              remoteHits.length === 0 && (
-                <li className="px-3 py-1.5 text-xs text-gray-500">
-                  No channels found
-                </li>
-              )}
-          </>
-        )}
-      </ul>
-    </div>
-  );
 }
 
 export default function Library() {
@@ -413,20 +128,12 @@ export default function Library() {
 
   const setHomeTab = useCallback((tab: HomeTab) => {
     setHomeTabState(tab);
-    try {
-      localStorage.setItem(HOME_TAB_KEY, tab);
-    } catch {
-      /* ignore */
-    }
+    saveHomeTab(tab);
   }, []);
 
   const setFeedLayout = useCallback((layout: "grid" | "list") => {
     setFeedLayoutState(layout);
-    try {
-      localStorage.setItem(FEED_LAYOUT_KEY, layout);
-    } catch {
-      // ignore storage errors
-    }
+    saveFeedLayout(layout);
   }, []);
 
   const [settings, update] = useSettings();
@@ -1125,7 +832,7 @@ export default function Library() {
                 </h2>
               </div>
               <div className="min-h-0 overflow-y-auto">
-                <ChannelSidebarList
+                <ChannelSidebar
                   channels={channels}
                   activeChannel={activeChannel}
                   channelSort={settings.channelSort}
@@ -1160,7 +867,7 @@ export default function Library() {
                   Channels
                 </h2>
               </div>
-              <ChannelSidebarList
+              <ChannelSidebar
                 channels={channels}
                 activeChannel={activeChannel}
                 channelSort={settings.channelSort}
@@ -1702,112 +1409,25 @@ export default function Library() {
         </div>
 
         {selectMode && selectedIds.size > 0 && (
-            <div className="ui-panel ui-panel-legible fixed inset-x-0 bottom-0 z-40 border border-ink-700 px-4 py-3">
-              <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3">
-                <span className="text-sm font-medium text-gray-300">
-                  {selectedIds.size} selected
-                </span>
-
-                {/* Add to playlist */}
-                <div className="relative">
-                  <button
-                    onClick={() =>
-                      playlistOpen ? setPlaylistOpen(false) : openPlaylistPicker()
-                    }
-                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-                  >
-                    + Playlist
-                  </button>
-                  {playlistOpen && (
-                    <div className="absolute bottom-10 left-0 z-50 w-56 rounded-lg bg-ink-800 p-2 shadow-xl ring-1 ring-ink-600">
-                      {playlists.length === 0 ? (
-                        <p className="px-2 py-1 text-xs text-gray-500">No playlists yet.</p>
-                      ) : (
-                        playlists.map((p) => (
-                          <button
-                            key={p.id}
-                            onClick={() => bulkAddToPlaylist(p.id)}
-                            className="block w-full truncate rounded px-2 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
-                          >
-                            {p.name}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Add note */}
-                <div className="relative">
-                  <button
-                    onClick={() => setBulkNoteOpen((v) => !v)}
-                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-                  >
-                    Add note
-                  </button>
-                  {bulkNoteOpen && (
-                    <div className="absolute bottom-10 left-0 z-50 w-72 rounded-lg bg-ink-800 p-3 shadow-xl ring-1 ring-ink-600">
-                      <div className="mb-1 flex items-baseline justify-between gap-2">
-                        <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                          Note
-                        </span>
-                        <span className="text-[10px] font-medium uppercase tracking-wide text-accent/80">
-                          Helps AI Features
-                        </span>
-                      </div>
-                      <textarea
-                        value={bulkNote}
-                        onChange={(e) => setBulkNote(e.target.value)}
-                        rows={3}
-                        placeholder="Note to apply to all selected..."
-                        className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                        autoFocus
-                      />
-                      <button
-                        onClick={bulkSaveNote}
-                        disabled={!bulkNote.trim()}
-                        className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-40"
-                      >
-                        Apply to {selectedIds.size} video{selectedIds.size === 1 ? "" : "s"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Resync metadata */}
-                <button
-                  onClick={bulkRefreshMetadata}
-                  disabled={metadataSyncing}
-                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:opacity-50"
-                >
-                  {metadataSyncing ? "Syncing…" : "Resync metadata"}
-                </button>
-
-                {/* Download to device */}
-                <button
-                  onClick={bulkDownload}
-                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-                >
-                  Download
-                </button>
-
-                {/* Delete */}
-                <button
-                  onClick={bulkDelete}
-                  className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
-                >
-                  Delete
-                </button>
-
-                <button
-                  onClick={exitSelectMode}
-                  className="ml-auto text-xs text-gray-500 hover:text-accent"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+          <LibraryBulkBar
+            selectedCount={selectedIds.size}
+            playlists={playlists}
+            playlistOpen={playlistOpen}
+            bulkNote={bulkNote}
+            bulkNoteOpen={bulkNoteOpen}
+            metadataSyncing={metadataSyncing}
+            onTogglePlaylist={() => setPlaylistOpen(false)}
+            onOpenPlaylistPicker={openPlaylistPicker}
+            onAddToPlaylist={bulkAddToPlaylist}
+            onToggleNote={() => setBulkNoteOpen((v) => !v)}
+            onNoteChange={setBulkNote}
+            onSaveNote={bulkSaveNote}
+            onRefreshMetadata={bulkRefreshMetadata}
+            onDownload={bulkDownload}
+            onDelete={bulkDelete}
+            onCancel={exitSelectMode}
+          />
+        )}
       </div>
 
       {showQueuePanel && queueDockedBottom && (

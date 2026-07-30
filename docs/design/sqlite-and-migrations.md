@@ -21,12 +21,23 @@ Postgres or MySQL would add operational surface area without matching the threat
 On startup, `init_db()`:
 
 1. Imports models and runs `SQLModel.metadata.create_all` (new tables)
-2. Walks known **extra column** lists per table
-3. For each missing column, executes `ALTER TABLE … ADD COLUMN …`
+2. Ensures a **`schema_migrations`** ledger table exists
+3. Runs any **pending versioned steps** from `MIGRATION_STEPS` in [`backend/app/database.py`](../../backend/app/database.py)
+4. Re-applies the idempotent **extra column** lists (safe `ALTER TABLE … ADD COLUMN` for any still-missing fields)
+5. Calls `verify_schema()`
 
-Columns added after the initial schema live in lists such as `_VIDEO_COLUMNS`, `_DOWNLOAD_JOB_COLUMNS`, AI meta/chat/job columns, and so on inside `backend/app/database.py`. New features ship by appending to those lists with SQLite-compatible definitions (and defaults where needed).
+Columns added after the initial schema live in lists such as `_VIDEO_COLUMNS`, `_DOWNLOAD_JOB_COLUMNS`, AI meta/chat/job columns, and so on inside `backend/app/database.py`. New additive features usually append to those lists; the ledger step `2026_07_additive_columns` records that the additive pass exists, and the lists themselves remain the source of truth for *which* columns to add.
 
-There is no automated path for **renaming**, **dropping**, or **type-changing** columns. Breaking changes require a documented one-off or a fresh database.
+There is no automated path for **renaming**, **dropping**, or **type-changing** columns via ALTER alone. For a future breaking change, add a new numbered entry to `MIGRATION_STEPS` whose Python function copies/transforms data, then records the step id — still manual and reviewed, but no longer “ALTER forever with no ledger.”
+
+## `schema_migrations` ledger
+
+| Column | Role |
+|--------|------|
+| `id` | Stable step id (e.g. `2026_07_additive_columns`) |
+| `applied_at` | UTC ISO timestamp when the step first ran |
+
+`applied_migrations()` returns ledger ids in order for tests and diagnostics. Do **not** introduce Alembic for this single-admin SQLite app.
 
 ## `verify_schema`
 

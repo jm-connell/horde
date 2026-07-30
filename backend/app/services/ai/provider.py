@@ -28,6 +28,30 @@ OPENROUTER_PRESETS: dict[str, str] = {
 }
 OPENROUTER_DEFAULT_MODEL = OPENROUTER_PRESETS["budget"]
 
+
+def classify_provider_error(exc: BaseException) -> tuple[str, str]:
+    """Map provider exceptions to (kind, user-facing message) for job/status UI."""
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout", "AI provider request timed out"
+    if isinstance(exc, (httpx.ConnectError, httpx.NetworkError)):
+        return "network", "Could not reach AI provider"
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code if exc.response is not None else 0
+        if code in (401, 403):
+            return "auth", "AI provider rejected credentials"
+        if code == 429:
+            return "rate_limit", "AI provider rate limited the request"
+        return "http", f"AI provider HTTP {code}"
+    msg = str(exc).strip() or "AI provider request failed"
+    return "unknown", msg
+
+
+def format_provider_error(exc: BaseException) -> str:
+    kind, message = classify_provider_error(exc)
+    if kind == "unknown":
+        return message
+    return f"{message} ({kind})"
+
 # Prefer localhost first outside Docker — Docker DNS names hang on Windows/macOS
 # host networking and were stalling /api/health (and thus dev.bat).
 _AUTO_CANDIDATES = (
@@ -180,7 +204,7 @@ class OllamaProvider:
                 resp.raise_for_status()
             _last_error = None
         except Exception as exc:  # noqa: BLE001
-            _last_error = f"Failed to pull {model}: {exc}"
+            _last_error = f"Failed to pull {model}: {format_provider_error(exc)}"
             logger.warning(_last_error)
             raise
         finally:
@@ -203,7 +227,7 @@ class OllamaProvider:
             _last_error = None
             return [float(x) for x in vec]
         except Exception as exc:  # noqa: BLE001
-            _last_error = str(exc)
+            _last_error = format_provider_error(exc)
             raise
 
     def chat(
@@ -244,7 +268,7 @@ class OllamaProvider:
             _last_error = None
             return str(content)
         except Exception as exc:  # noqa: BLE001
-            _last_error = str(exc)
+            _last_error = format_provider_error(exc)
             raise
 
     def chat_stream(
@@ -294,7 +318,7 @@ class OllamaProvider:
                             break
             _last_error = None
         except Exception as exc:  # noqa: BLE001
-            _last_error = str(exc)
+            _last_error = format_provider_error(exc)
             raise
 
     @staticmethod
@@ -474,7 +498,7 @@ class OpenRouterProvider:
             _last_error = None
             return str(content)
         except Exception as exc:  # noqa: BLE001
-            _last_error = str(exc)
+            _last_error = format_provider_error(exc)
             raise
 
     def chat_stream(
@@ -556,7 +580,7 @@ class OpenRouterProvider:
                 )
             _last_error = None
         except Exception as exc:  # noqa: BLE001
-            _last_error = str(exc)
+            _last_error = format_provider_error(exc)
             raise
 
     def embed(self, text: str, model: str, **kwargs: Any) -> list[float]:
@@ -617,7 +641,7 @@ class OpenRouterProvider:
             _last_error = None
             return out
         except Exception as exc:  # noqa: BLE001
-            _last_error = str(exc)
+            _last_error = format_provider_error(exc)
             raise
 
     def list_embedding_models(self) -> list[dict[str, Any]]:
@@ -997,7 +1021,7 @@ def _cached_model_presence(
             chat_ok = provider.has_model(chat_model)
         except Exception as exc:  # noqa: BLE001
             global _last_error
-            _last_error = str(exc)
+            _last_error = format_provider_error(exc)
             embed_ok, chat_ok = False, False
     _model_cache[cache_key] = (now, embed_ok, chat_ok)
     return embed_ok, chat_ok
@@ -1114,7 +1138,7 @@ def build_status(
                 pull=not quick and bool(ai.get("auto_pull_models", True)),
             )
         except Exception as exc:  # noqa: BLE001
-            _last_error = str(exc)
+            _last_error = format_provider_error(exc)
             reachable = False
 
     ready = reachable and embed_ok  # chat optional for search/related

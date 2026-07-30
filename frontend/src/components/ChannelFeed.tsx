@@ -34,6 +34,8 @@ function videoToFeedEntry(v: Video): ChannelFeedEntry {
     video_id: v.id,
     library_height_px: v.height_px,
     max_height: null,
+    like_count: null,
+    dislike_count: null,
   };
 }
 

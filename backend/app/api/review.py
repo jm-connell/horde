@@ -1,3 +1,4 @@
+import logging
 import re
 from pathlib import Path
 from typing import Any, Optional
@@ -14,7 +15,9 @@ from ..services import library
 from ..services.metadata import probe_is_playable
 from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
 from ..services.scanner import ingest_media_file, mark_active, unmark_active
-from .videos import _to_read
+from .video_serialize import to_read as _to_read
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
@@ -97,13 +100,14 @@ async def upload_import(
         part.unlink(missing_ok=True)
         if dest.exists() and find_video_by_path(session, rel_path) is None:
             dest.unlink(missing_ok=True)
+        logger.exception("review import failed for %s", rel_path)
         raise
     finally:
         unmark_active(rel_path)
         try:
             await file.close()
         except Exception:  # noqa: BLE001
-            pass
+            logger.debug("failed closing upload stream", exc_info=True)
 
 
 @router.post("/{video_id}/skip", response_model=VideoRead)
@@ -122,7 +126,7 @@ def skip_review(video_id: int, session: Session = Depends(get_session)):
 
         enqueue_for_video(video_id, include_tags=True, force=False)
     except Exception:  # noqa: BLE001
-        pass
+        logger.debug("AI enqueue after review skip failed", exc_info=True)
     return _to_read(video, session)
 
 

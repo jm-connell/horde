@@ -93,6 +93,25 @@ Start the backend before the frontend so the proxy has something to talk to.
 
 Scanner import extensions: **`.mp4`**, **`.mkv`**, **`.webm`**. Fallback poll interval: **`SCAN_INTERVAL_SEC`** (default **60**), same as Docker.
 
+## Tests
+
+Backend (from `backend/`, with the repo venv activated):
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+PYTHONPATH=. pytest
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm test
+```
+
+CI runs the same suites (plus `npm run build`) on pull requests via `.github/workflows/ci.yml`.
+
 ## Sync frontend into the backend static tree
 
 Production Docker serves a built SPA from the backend. After frontend changes you want baked into a container image (or a static-only run):

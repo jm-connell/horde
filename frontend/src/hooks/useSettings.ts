@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { ViewMode } from "../components/VideoPlayer";
+import type { ViewMode } from "../components/videoPlayerTypes";
 import {
   applyUiFont,
   newCustomFontId,

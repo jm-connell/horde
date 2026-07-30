@@ -21,6 +21,7 @@ from .api import (
     ai,
     app_settings,
     backgrounds,
+    channels,
     downloads,
     fonts,
     playlists,
@@ -86,6 +87,7 @@ app.add_middleware(
 )
 
 app.include_router(videos.router)
+app.include_router(channels.router)
 app.include_router(downloads.router)
 app.include_router(preview.router)
 app.include_router(review.router)

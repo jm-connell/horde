@@ -14,9 +14,14 @@ from starlette.background import BackgroundTask
 
 from ..database import get_session
 from ..schemas import StreamPreviewMeta
-from ..services import downloader, library
+from ..services import library, stream_preview
 from ..services.url_clean import _youtube_video_id, clean_url
-from ..services.ytdlp_common import http_detail_for_error
+from ..services.ytdlp_common import (
+    ERROR_KIND_UNKNOWN,
+    MembersOnlyError,
+    classify_ytdlp_error,
+    http_detail_for_error,
+)
 
 router = APIRouter(prefix="/api/preview", tags=["preview"])
 logger = logging.getLogger(__name__)
@@ -115,10 +120,10 @@ async def _proxy_upstream(
         token, itag = allow_refresh
         logger.info("Refreshing preview media token=%s itag=%s", token[:8], itag)
         try:
-            resolved = downloader.lookup_preview_media(
+            resolved = stream_preview.lookup_preview_media(
                 token, itag, refresh=True
             )
-        except downloader.PreviewRefreshError as exc:
+        except stream_preview.PreviewRefreshError as exc:
             logger.warning("Preview media refresh failed: %s", exc)
             raise HTTPException(
                 status_code=503,
@@ -232,10 +237,10 @@ async def _head_upstream(
     if resp.status_code in (401, 403) and allow_refresh is not None:
         token, itag = allow_refresh
         try:
-            resolved = downloader.lookup_preview_media(
+            resolved = stream_preview.lookup_preview_media(
                 token, itag, refresh=True
             )
-        except downloader.PreviewRefreshError as exc:
+        except stream_preview.PreviewRefreshError as exc:
             raise HTTPException(
                 status_code=503,
                 detail=str(exc),
@@ -288,12 +293,21 @@ async def _head_upstream(
 def preview_meta(url: str = Query(...), session: Session = Depends(get_session)):
     cleaned = _require_video_url(url)
     try:
-        meta = downloader.extract_stream_preview_meta(cleaned)
-    except Exception as exc:  # noqa: BLE001
+        meta = stream_preview.extract_stream_preview_meta(cleaned)
+    except MembersOnlyError as exc:
         raise HTTPException(
             status_code=400,
             detail=http_detail_for_error(exc, prefix="Could not load preview"),
         ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        kind, _ = classify_ytdlp_error(exc)
+        detail = http_detail_for_error(exc, prefix="Could not load preview")
+        if kind == ERROR_KIND_UNKNOWN:
+            logger.exception("stream preview meta failed for %r", cleaned)
+            raise HTTPException(status_code=500, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
 
     library_video_id = None
     yt_id = meta.get("id")
@@ -329,7 +343,7 @@ async def preview_subtitles(
     """Proxy an English (or requested) WebVTT caption track for stream preview."""
     cleaned = _require_video_url(url)
     try:
-        resolved = downloader.resolve_preview_subtitle(cleaned, lang)
+        resolved = stream_preview.resolve_preview_subtitle(cleaned, lang)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
@@ -356,7 +370,7 @@ async def preview_subtitles(
             resp.status_code,
         )
         try:
-            resolved = downloader.resolve_preview_subtitle(
+            resolved = stream_preview.resolve_preview_subtitle(
                 cleaned, lang, force=True
             )
         except KeyError as exc:
@@ -410,8 +424,8 @@ def preview_manifest(url: str = Query(...)):
     """DASH MPD for adaptive high-res preview streaming."""
     cleaned = _require_video_url(url)
     try:
-        session = downloader.resolve_preview_manifest(cleaned)
-        xml = downloader.build_dash_manifest(session)
+        session = stream_preview.resolve_preview_manifest(cleaned)
+        xml = stream_preview.build_dash_manifest(session)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status_code=400,
@@ -437,10 +451,10 @@ async def preview_media(
     if not token.strip() or not itag.strip():
         raise HTTPException(status_code=400, detail="token and itag are required")
     try:
-        resolved = downloader.lookup_preview_media(token, itag)
+        resolved = stream_preview.lookup_preview_media(token, itag)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except downloader.PreviewRefreshError as exc:
+    except stream_preview.PreviewRefreshError as exc:
         raise HTTPException(
             status_code=503,
             detail=str(exc),
@@ -465,10 +479,10 @@ async def preview_media_head(
     if not token.strip() or not itag.strip():
         raise HTTPException(status_code=400, detail="token and itag are required")
     try:
-        resolved = downloader.lookup_preview_media(token, itag)
+        resolved = stream_preview.lookup_preview_media(token, itag)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except downloader.PreviewRefreshError as exc:
+    except stream_preview.PreviewRefreshError as exc:
         raise HTTPException(
             status_code=503,
             detail=str(exc),
@@ -489,7 +503,7 @@ async def preview_stream(request: Request, url: str = Query(...)):
     """Legacy progressive (<=720p) proxy — kept as fallback."""
     cleaned = _require_video_url(url)
     try:
-        resolved = downloader.resolve_preview_stream(cleaned)
+        resolved = stream_preview.resolve_preview_stream(cleaned)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status_code=400, detail=f"Could not open preview stream: {exc}"

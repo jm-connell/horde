@@ -1,4 +1,14 @@
-from collections.abc import Generator
+"""SQLite engine, additive migrations, and schema verification.
+
+Migrations are recorded in ``schema_migrations`` so order is explicit and tests
+can assert idempotency. New columns still use ``ALTER TABLE … ADD COLUMN``;
+destructive one-shots can be added as numbered Python steps later.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Generator
+from datetime import datetime, timezone
 
 from sqlalchemy import inspect, text
 from sqlmodel import Session, SQLModel, create_engine
@@ -87,7 +97,41 @@ def _migrate_table(table: str, columns: list[tuple[str, str]]) -> None:
                 )
 
 
-def _migrate_columns() -> None:
+def _ensure_schema_migrations_table() -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS schema_migrations ("
+                "id VARCHAR PRIMARY KEY, "
+                "applied_at VARCHAR NOT NULL"
+                ")"
+            )
+        )
+
+
+def _applied_migration_ids() -> set[str]:
+    inspector = inspect(engine)
+    if "schema_migrations" not in inspector.get_table_names():
+        return set()
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id FROM schema_migrations")).fetchall()
+    return {str(row[0]) for row in rows}
+
+
+def _record_migration(step_id: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT OR IGNORE INTO schema_migrations (id, applied_at) "
+                "VALUES (:id, :applied_at)"
+            ),
+            {"id": step_id, "applied_at": now},
+        )
+
+
+def _step_add_columns() -> None:
+    """Idempotent additive ALTER TABLE pass (safe to re-run)."""
     _migrate_table("videos", _VIDEO_COLUMNS)
     _migrate_table("download_jobs", _DOWNLOAD_JOB_COLUMNS)
     _migrate_table("video_ai_meta", _VIDEO_AI_META_COLUMNS)
@@ -95,6 +139,34 @@ def _migrate_columns() -> None:
     _migrate_table("ai_jobs", _AI_JOB_COLUMNS)
     _migrate_table("channel_catalogs", _CHANNEL_CATALOG_COLUMNS)
     _migrate_table("ai_categories", _AI_CATEGORY_COLUMNS)
+
+
+# Ordered migration ledger. Additive column sync is always re-applied for safety
+# on older DBs; the step id is recorded so future destructive migrations can
+# follow the same pattern without Alembic.
+MIGRATION_STEPS: list[tuple[str, Callable[[], None]]] = [
+    ("2026_07_additive_columns", _step_add_columns),
+]
+
+
+def _migrate_columns() -> None:
+    """Apply pending ledger steps, then always re-run additive column sync."""
+    _ensure_schema_migrations_table()
+    applied = _applied_migration_ids()
+    for step_id, fn in MIGRATION_STEPS:
+        if step_id in applied:
+            continue
+        fn()
+        _record_migration(step_id)
+    # Keep ALTER ADD COLUMN idempotent for DBs created before the ledger and
+    # for columns appended to the lists after a step was already recorded.
+    _step_add_columns()
+
+
+def applied_migrations() -> list[str]:
+    """Return applied migration ids in ledger order (for tests / health)."""
+    applied = _applied_migration_ids()
+    return [step_id for step_id, _ in MIGRATION_STEPS if step_id in applied]
 
 
 def verify_schema() -> None:

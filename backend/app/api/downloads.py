@@ -22,11 +22,16 @@ from ..services.ytdlp_common import (
     ERROR_KIND_COOKIES,
     ERROR_KIND_MEMBERS,
     ERROR_KIND_UNAVAILABLE,
+    ERROR_KIND_UNKNOWN,
+    MembersOnlyError,
     classify_ytdlp_error,
     http_detail_for_error,
     record_extract_failure,
 )
 from urllib.parse import urlparse
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 
@@ -109,11 +114,20 @@ def preview_download(url: str):
         raise HTTPException(status_code=400, detail="URL is required")
     try:
         return downloader.extract_preview(clean_url(url, keep_playlist=True))
-    except Exception as exc:  # noqa: BLE001
+    except MembersOnlyError as exc:
         raise HTTPException(
             status_code=400,
             detail=http_detail_for_error(exc, prefix="Could not read link"),
         ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        kind, _ = classify_ytdlp_error(exc)
+        detail = http_detail_for_error(exc, prefix="Could not read link")
+        if kind == ERROR_KIND_UNKNOWN:
+            logger.exception("download preview extract failed for %r", url)
+            raise HTTPException(status_code=500, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
 
 
 @router.get("/queue/status", response_model=DownloadQueueStatus)
