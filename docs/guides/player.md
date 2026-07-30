@@ -38,9 +38,11 @@ See also the [keyboard shortcuts reference](../reference/keyboard-shortcuts.md).
 
 Supported speeds: **0.25× through 3×** (steps: 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3).
 
-**Hold to 2×:** press and hold the play surface for **250ms** to temporarily play at 2×; release to restore the previous speed.
+**Hold to 2×:** press and hold the play surface for **250ms** to temporarily play at 2×; release (including outside the video / on blur) restores the previous speed. Short taps on mobile still toggle play.
 
 Default speed is configurable under [Settings → Playback](../settings/playback.md).
+
+Theater mode is remembered in playback settings and should survive leaving watch for the mini player and expanding back on desktop.
 
 ## Subtitles
 

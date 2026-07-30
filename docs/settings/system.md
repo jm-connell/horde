@@ -26,19 +26,25 @@ When the wiki is bundled (`health.wiki_available`):
 
 ## Status
 
-Health snapshot from the API:
+Health snapshot from `GET /api/health`:
 
 | Row | Source |
 |-----|--------|
 | Horde | `horde_version` (+ update available / up to date when the update check succeeds) |
 | yt-dlp | `yt_dlp_version` |
 | PO token provider | Connected / version, or error detail |
-| Ollama | Disabled / Ready / Connected / Offline |
+| Ollama | Disabled / Ready / Connected / Offline — shows `ollama.last_error` when not Ready |
 | OpenRouter | Disabled / Configured / No API key |
+| Cookies | Configured / Not configured (`youtube.cookies_configured`) |
 | Library | Video count |
 | Pending import | Review queue depth |
-| Active downloads | In-flight download jobs |
+| Active downloads | Count + **paused** when the download queue is paused |
+| AI queue | Depth (+ running count) from `workers` |
+| Catalog queue | Depth (+ indexing) from `workers` |
+| Last extract failure | Kind + message from `youtube.last_extract_failure` (when set) |
 | Disk free | Free / total bytes on the media volume |
+
+See [Troubleshooting](../ops/troubleshooting.md) for `error_kind` values and restart recovery.
 
 ## Storage
 

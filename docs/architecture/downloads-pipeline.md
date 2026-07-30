@@ -19,6 +19,18 @@ URL
   -> optional AI enqueue (embed / tags)
 ```
 
+## Module split
+
+Download-related code is split for maintainability (façades may still re-export):
+
+| Module | Role |
+|--------|------|
+| `downloader.py` | `DownloadQueue`, finalize, playlist import orchestration |
+| `ytdlp_extract.py` | Download-card preview, channel feed fetch, channel search |
+| `ytdlp_formats.py` | Quality preset / format-chain helpers |
+| `stream_preview.py` | In-app progressive + DASH preview caches/manifests |
+| `ytdlp_common.py` | Cookies, POT, extract gate, error classification |
+
 ## URL cleaning
 
 `url_clean` normalizes share links and strips noisy query params before extract/download so duplicate jobs and cache keys stay stable.
@@ -54,11 +66,11 @@ Probe helpers fill duration, dimensions, playability before the row is marked re
 
 ## Video row
 
-On success the job links to a `videos` row (`file_path` relative to downloads, status `ready`). Replace-download flows can target an existing `replace_video_id`. Failed jobs keep `error` text; cancel cleans fragments.
+On success the job links to a `videos` row (`file_path` relative to downloads, status `ready`). Replace-download flows can target an existing `replace_video_id`. Failed jobs keep `error` text plus typed `error_kind`; cancel cleans fragments.
 
 ## SSE events
 
-`GET /api/downloads/{id}/events` (EventSource) streams progress snapshots (`progress`, status, title, speed, etc.) for the Download page and job cards. See [API overview](api-overview.md).
+`GET /api/downloads/{id}/events` (EventSource) streams progress snapshots (`progress`, status, title, `error` / `error_kind`, etc.) for the Download page and job cards. See [API overview](api-overview.md).
 
 ## Related
 

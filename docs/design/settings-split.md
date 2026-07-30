@@ -41,6 +41,7 @@ See [Local vs cloud AI](local-vs-cloud-ai.md) and [Settings → AI](../settings/
 Browser localStorage     →  ephemeral UI state
 Server settings.ui       →  durable presentation & playback prefs (merged)
 Server settings.ai       →  providers, keys, models, schedules
+Server top-level keys    →  sync intervals, catalog caps, download_queue_paused, …
 SQLite                   →  library, jobs, progress, embeddings metadata
 ```
 

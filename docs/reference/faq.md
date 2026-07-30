@@ -32,6 +32,10 @@ In Docker/production, the wiki is built into the image and served at **`/wiki/`*
 
 Only if **yt-dlp on your server** can access them — typically with appropriate cookies / account configuration on the host. Horde does not bypass YouTube membership paywalls by itself. Bot checks and PO tokens are a separate problem; see [YouTube access](../ops/youtube-access.md).
 
+## Why did my download fail with “Bot check” / “PO token”?
+
+YouTube challenged the extract. Check Settings → System → Status (POT provider, cookies, **Last extract failure**), then [YouTube access](../ops/youtube-access.md) and [Troubleshooting](../ops/troubleshooting.md#bot-checks-youtube-blocks). Download cards show a typed `error_kind` with a short fix hint.
+
 ## Can I expose this to the internet?
 
 **Not recommended** without your own auth layer. CORS is wide for Chromecast, and there is no app login. Prefer VPN. See [No authentication](../design/no-auth.md).

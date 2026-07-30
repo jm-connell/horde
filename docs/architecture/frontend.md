@@ -46,6 +46,14 @@ This preserves playback state across route changes without remounting the media 
 
 Edits patch local state immediately and **debounced sync** to the server (~**300 ms**) so typing and slider drags do not spam `PATCH /api/settings`. Appearance and AI panes follow the same pattern.
 
+## Key UI modules
+
+| Area | Notes |
+|------|--------|
+| `pages/Library.tsx` | Browse composition; sidebar/bulk helpers live in `ChannelSidebar`, `LibraryBulkBar`, `libraryCatalogProgress` / `libraryStorage` |
+| `components/VideoPlayer.tsx` | Orchestration; types/quality in `videoPlayerTypes` / `videoPlayerQuality`; DASH load in `hooks/useShakaDash`; overlays in `PlayerOverlays` |
+| `hooks/useSettings.ts` | Hydrate + debounced PATCH; `ViewMode` type from `videoPlayerTypes` |
+
 ## Related
 
 - [Overview](overview.md)

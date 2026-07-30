@@ -33,7 +33,21 @@ Library (and preview) media endpoints support HTTP **Range** requests so the bro
 
 ### Health
 
-`GET /api/health` returns process readiness plus library counts, disk usage, Ollama/OpenRouter summaries, POT provider status, git SHA, and `wiki_available`.
+`GET /api/health` is kept **probe-cheap** (no remote model lists, no yt-dlp extract). It returns:
+
+| Field | Meaning |
+|-------|---------|
+| `status`, `horde_sha`, `horde_version`, `yt_dlp_version` | Process / build identity |
+| `pot_provider` | bgutil POT ping (`ok` / `error`) |
+| `ollama` / `openrouter` | Enabled/ready summaries; Ollama may include `last_error` |
+| `disk` | Free/used/total on `DOWNLOADS_DIR` |
+| `library_video_count`, `review_pending_count`, `active_downloads` | Library snapshot |
+| `wiki_available` | MkDocs static tree present |
+| `downloads` | `{ active, paused }` — pause from in-memory queue + `download_queue_paused` |
+| `workers` | `{ ai_queue_depth, ai_running, catalog_queue_depth, catalog_indexing }` |
+| `youtube` | `{ cookies_configured, last_extract_failure }` — last classified extract error |
+
+Settings → System → Status renders this snapshot. Full AI model detail remains on `GET /api/ai/status`.
 
 ## Related
 

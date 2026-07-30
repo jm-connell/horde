@@ -25,6 +25,7 @@ See [Settings overview](index.md#three-layer-persistence) for hydration and migr
 | `metadata_sync_interval_hours` | `24` | int | 1–168 | Top-level |
 | `channel_catalog_enabled` | `true` | bool | | Top-level |
 | `channel_catalog_max_videos` | `1000` | int | 100–5000 | Top-level |
+| `download_queue_paused` | `false` | bool | Restored on startup by download queue recover; set by Pause/Resume on Download | Top-level (**Backend-only** — no Settings control) |
 | `ui` | `{}` | object | Deep-merged on save | UI blob container |
 | `ai` | *(see below)* | object | Merged with `AI_DEFAULTS` | AI |
 

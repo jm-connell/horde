@@ -23,16 +23,20 @@ On process start, `lifespan` in `main.py` runs roughly:
 
 ```text
 ensure_dirs
-    -> init_db (create_all + ALTER migrations + verify_schema)
+    -> init_db (create_all + schema_migrations / ALTER + verify_schema)
     -> cleanup_orphans
     -> ensure yt-dlp plugins loaded
     -> init preview HTTP client
-    -> download_queue.recover()
-    -> start_scanner()          # watchdog + poll
-    -> start_sync_worker()      # metadata / catalog freshness
+    -> download_queue.recover()   # downloading→queued; restore pause flag
+    -> recover_ai_jobs()          # running→queued
+    -> recover_catalog_jobs()     # indexing→queued
+    -> start_scanner()            # watchdog + poll
+    -> start_sync_worker()        # metadata / catalog freshness
     -> start_ai_worker()
     -> start_catalog_worker()
 ```
+
+Stuck mid-flight download / AI / catalog work is requeued **before** workers start so a crash cannot leave jobs stranded forever. Download queue pause is restored from `download_queue_paused` in app settings.
 
 Shutdown stops catalog and AI workers, joins the scanner observer, and closes the preview client.
 

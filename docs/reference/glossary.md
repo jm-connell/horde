@@ -12,7 +12,11 @@ A numeric vector representing text (title, description, notes, tags, subtitle ch
 
 ## POT
 
-**Proof of Origin Token** support for YouTube access via yt-dlp’s bgutil HTTP provider. When `YTDLP_POT_BASE_URL` points at a running [bgutil](#bgutil) POT server, Horde configures yt-dlp to use it, which can reduce bot-check failures. Health exposes POT provider status.
+**Proof of Origin Token** support for YouTube access via yt-dlp’s bgutil HTTP provider. When `YTDLP_POT_BASE_URL` points at a running [bgutil](#bgutil) POT server, Horde configures yt-dlp to use it, which can reduce bot-check failures. Health exposes POT provider status, cookie readiness, and the last classified extract failure.
+
+## error_kind
+
+Typed download / preview failure class stored on `download_jobs` and SSE progress (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `cancelled`, `unknown`). The Download UI uses it for labels and fix hints. See [Troubleshooting](../ops/troubleshooting.md#download-error_kind-values).
 
 ## Review
 

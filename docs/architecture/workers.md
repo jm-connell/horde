@@ -15,11 +15,12 @@ Discovers importable video extensions, ignores intermediate `.part` / `.fNNN` / 
 
 ## Download queue
 
-**Recover:** `download_queue.recover()` on startup (interrupted jobs).
+**Recover:** `download_queue.recover()` on startup — jobs left `downloading` become `queued` (restart from scratch; partials are not resumed). Global pause is restored from app settings key `download_queue_paused` so Pause survives process restart.
 
 - FIFO queue with `MAX_DOWNLOAD_CONCURRENCY` workers (default **2**).
-- Per-job cancel/pause events; progress snapshots for SSE.
-- See [Download pipeline](downloads-pipeline.md).
+- Per-job cancel/pause events; progress snapshots for SSE (includes typed `error_kind` on failure).
+- Metadata extracts share the yt-dlp extract gate with preview/feed (1 + 1.25s spacing).
+- See [Download pipeline](downloads-pipeline.md) and [Troubleshooting](../ops/troubleshooting.md#download-error_kind-values).
 
 ## Metadata sync
 
@@ -34,6 +35,8 @@ Each cycle:
 
 ## AI worker
 
+**Recover:** `recover_ai_jobs()` on startup — any `AiJob` left `running` → `queued` (then wake).
+
 **Start:** `start_ai_worker()` — **single-flight** (one job at a time).
 
 | Behavior | Detail |
@@ -47,7 +50,9 @@ Design note: [Single-flight AI](../design/single-flight-ai.md).
 
 ## Catalog worker
 
-**Start:** `start_catalog_worker()` — **one catalog at a time**.
+**Recover:** `recover_catalog_jobs()` on startup — catalogs left `indexing` → `queued` (then wake).
+
+**Start:** `start_catalog_worker()` — **one catalog at a time** (implementation: `services/channel_catalog/` package — `runtime`, `index`, `query`, `skips`).
 
 Phases per catalog:
 

@@ -33,7 +33,7 @@ On the Download page:
 - **Pause** — stops active work and prevents new jobs from starting until you resume
 - **Resume** — continues the FIFO queue
 
-Pause-all stops every download; nothing new starts until you resume.
+Pause-all stops every download; nothing new starts until you resume. The pause flag is stored as `download_queue_paused` in app settings, so it **survives a container restart**.
 
 ## Single video
 
@@ -66,7 +66,11 @@ Toggle via the download options / `normalizeVolumeOnDownload` preference when su
 
 ## Progress and failures
 
-The queue panel shows status, percentage, and errors. Failed jobs can be retried from the UI when available. Active download paths are marked so the [import scanner](import-review.md) does not race the same files.
+The queue panel shows status, percentage, and errors. Failures carry a typed **`error_kind`** (bot check, PO token, cookies, members-only, rate limit, unavailable, post-process, etc.) with a short fix hint on the card; the Download URL field also shows a banner when link preview fails for the same reasons.
+
+Failed jobs can be retried from the UI when available. Active download paths are marked so the [import scanner](import-review.md) does not race the same files.
+
+See [Troubleshooting — error kinds](../ops/troubleshooting.md#download-error_kind-values) and [YouTube access](../ops/youtube-access.md).
 
 ## Related
 

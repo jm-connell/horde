@@ -1,7 +1,7 @@
 # Roadmap
 
 !!! info "Original roadmap (may be partially obsolete)"
-    This page adapts the historical phased plan from the repo’s `roadmap.md`. **Many Phase 1–5 items may already be implemented** in the current app (for example History, SponsorBlock, themes, and a substantial AI layer). Treat this as a **historical roadmap and idea backlog**, not a live status board. **See the running app** (and this wiki’s guides) for what actually ships today.
+    This page adapts the historical phased plan from the repo’s `roadmap.md`. **Many Phase 1–5 items may already be implemented** in the current app (for example History, SponsorBlock, themes, a substantial AI layer, typed download failures, restart recover for downloads/AI/catalog, and player hold-to-2× / theater dock fixes). Treat this as a **historical roadmap and idea backlog**, not a live status board. **See the running app** (and this wiki’s guides) for what actually ships today.
 
 ## Phase 1 — Daily-use polish (original “done”)
 
