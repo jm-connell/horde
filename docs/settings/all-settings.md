@@ -23,7 +23,7 @@ See [Settings overview](index.md#three-layer-persistence) for hydration and migr
 | `progress_expiry_days` | `14` | int | 1–365 | Top-level (+ mirrored as client `progressExpiryDays`) |
 | `continue_watching_days` | `7` | int | Fixed | **Backend-only** — not editable in UI |
 | `metadata_sync_interval_hours` | `24` | int | 1–168 | Top-level |
-| `channel_catalog_enabled` | `true` | bool | | Top-level |
+| `channel_catalog_enabled` | `true` | bool | YouTube channels only | Top-level |
 | `channel_catalog_max_videos` | `1000` | int | 100–5000 | Top-level |
 | `download_queue_paused` | `false` | bool | Restored on startup by download queue recover; set by Pause/Resume on Download | Top-level (**Backend-only** — no Settings control) |
 | `ui` | `{}` | object | Deep-merged on save | UI blob container |
@@ -62,7 +62,7 @@ Related constants: catalog description limit for newest uploads ≈ 200 (`CHANNE
 | `ai_summaries` | `true` | bool | | AI |
 | `ai_chat` | `true` | bool | | AI |
 | `summary_length` | `"short"` | string | `short` \| `medium` \| `long` | AI |
-| `ai_duplicates` | `true` | bool | On-demand Import LLM; see note | AI |
+| `ai_duplicates` | `true` | bool | On-demand Import LLM | AI |
 | `category_min_score` | `0.55` | float | 0.2–0.9 | AI |
 | `workload_profile` | `"normal"` | string | `light` \| `normal` \| `heavy` | AI |
 | `vram_gb` | `null` | float \| null | ~0.5–256 GiB; null = autodetect | AI |
@@ -70,7 +70,7 @@ Related constants: catalog description limit for newest uploads ≈ 200 (`CHANNE
 | `paused` | `false` | bool | Queue pause | AI |
 
 !!! note "Duplicate scoring"
-    Queued job kind `score_duplicates` is a **no-op**. Real duplicate LLM runs on-demand during Import when `ai_duplicates` is true. See [AI → Jobs](ai.md#jobs-panejobs).
+    Duplicate LLM runs on-demand during Import when `ai_duplicates` is true. See [AI → Features](ai.md).
 
 ---
 
@@ -137,7 +137,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `subtitleSize` | `"medium"` | string | `small` \| `medium` \| `large` | UI blob |
 | `subtitleLeft` | `20` | number | % from left (player drag) | UI blob |
 | `subtitleOffset` | `12` | number | % from bottom (player drag) | UI blob |
-| `sponsorBlockEnabled` | `true` | bool | | UI blob |
+| `sponsorBlockEnabled` | `true` | bool | YouTube only | UI blob |
 | `sponsorBlockShowNotice` | `true` | bool | | UI blob |
 | `defaultPlaybackRate` | `1` | number | 0.25–3 step list | UI blob |
 | `playbackMode` | `"standard"` | string | Player view mode | UI blob |

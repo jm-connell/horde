@@ -16,6 +16,12 @@ The **Download** page (`/download`) is where you paste a URL, pick a quality pre
 
 After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known.
 
+Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
+
+## Change resolution (library)
+
+On a library watch page, **••• → Change resolution** re-queues the source URL and **replaces the file in place** at the chosen preset (optional loudnorm via **Normalize volume**). Custom title/description/notes and locked tags are kept. The modal shows the current file height and notes that the source may not offer the selected tier.
+
 ## Queue behavior
 
 Downloads run in a **FIFO** worker queue.

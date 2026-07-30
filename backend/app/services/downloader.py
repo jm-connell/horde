@@ -715,15 +715,11 @@ def _check_quality(
     max_h = PRESET_MAX_HEIGHT.get(preset)
     if max_h is None or height is None:
         return None
-    tiers = [480, 720, 1080, 1440, 2160]
-    cap_idx = next((i for i, t in enumerate(tiers) if t >= max_h), len(tiers) - 1)
-    actual_idx = next(
-        (i for i, t in enumerate(tiers) if t >= height), len(tiers) - 1
-    )
-    if actual_idx < cap_idx:
+    # Allow a few pixels of encoder/probe variance (e.g. 1078 vs 1080).
+    if height + 8 < max_h:
         return (
             f"Requested {preset} but file is {height}p — "
-            "source may not offer higher quality."
+            "source may not offer that quality."
         )
     return None
 
@@ -906,11 +902,41 @@ def _complete_download(
                 video = Video(file_path=rel_path)
                 session.add(video)
 
-        video.title = effective_title or info.get("title") or final_path.stem
+        remote_title = info.get("title") or final_path.stem
+        remote_description = info.get("description")
+        is_replace = replace_video_id is not None and video.id is not None
+
+        # Always keep last-known remote copy for drift banners / sync.
+        if remote_title:
+            video.source_title = remote_title
+        if remote_description is not None:
+            video.source_description = remote_description
+
+        if is_replace and video.title_is_custom:
+            # Keep curated display title; title_override only applies when not custom.
+            pass
+        elif effective_title:
+            video.title = effective_title
+            if effective_title != remote_title:
+                video.title_is_custom = True
+        else:
+            video.title = remote_title
+
         video.channel = effective_channel or info.get("uploader") or info.get("channel")
         video.channel_url = info.get("uploader_url") or info.get("channel_url")
-        video.description = info.get("description")
-        video.tags = library.dump_tags(_collect_tags(info))
+
+        if not (is_replace and video.description_is_custom):
+            video.description = remote_description
+
+        tags_locked = False
+        if is_replace and video.id is not None:
+            from ..models import VideoAiMeta
+
+            meta = session.get(VideoAiMeta, video.id)
+            tags_locked = bool(meta is not None and meta.tags_locked)
+        if not tags_locked:
+            video.tags = library.dump_tags(_collect_tags(info))
+
         video.source_url = source_url
         video.duration_sec = duration
         video.file_size = file_size
@@ -1051,6 +1077,7 @@ def _run_download(
             "merge_output_format": "mp4",
             "ignoreerrors": True,
             "overwrites": True,
+            "format_sort": ["res", "fps", "vbr", "abr"],
             "file_access_retries": 10,
             "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
             "extractor_args": youtube_extractor_args(),

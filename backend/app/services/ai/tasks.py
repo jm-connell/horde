@@ -693,12 +693,6 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     session.commit()
 
 
-def run_score_duplicates(session: Session, _video_id: Optional[int] = None) -> None:
-    # Scoring is done on-demand in the review API; this job is a no-op placeholder
-    # kept for queue kind completeness / future batch precompute.
-    return
-
-
 def dispatch(
     session: Session,
     kind: AiJobKind,
@@ -714,7 +708,5 @@ def dispatch(
         run_enrich_tags(session, video_id)
     elif kind == AiJobKind.refresh_categories:
         run_refresh_categories(session, video_id)
-    elif kind == AiJobKind.score_duplicates:
-        run_score_duplicates(session, video_id)
     else:
         raise RuntimeError(f"Unknown AI job kind: {kind}")

@@ -44,7 +44,7 @@ Those two are not separate Settings rows; they sync with the `ui` blob when the 
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
-| SponsorBlock enabled | `sponsorBlockEnabled` | `true` | Skip sponsored / non-content segments on YouTube sources |
+| SponsorBlock enabled | `sponsorBlockEnabled` | `true` | **YouTube only** — skip sponsored / non-content segments; no-op for other sources |
 | Show skip notice | `sponsorBlockShowNotice` | `true` | Toast/notice when a segment is skipped |
 
 ## Default playback rate

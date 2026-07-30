@@ -34,7 +34,7 @@ Completed yt-dlp jobs normally insert library rows with metadata already filled 
 
 ## Duplicates
 
-The review / library area can surface heuristic duplicate groups (same YouTube id in path/URL, or same channel + similar title + close duration). Optional AI can score borderline cases. Review is a natural place to catch “I dropped this twice” before tags and embeddings proliferate.
+The Import page can surface heuristic duplicate groups among **approved library** videos (same YouTube id in path/URL, or same channel + similar title + close duration). Optional AI can score borderline cases. Actions: open Watch, **Keep this** (delete the other files), **Delete**, or **Not a duplicate** (hide the group in this browser). See [Import & review](../guides/import-review.md).
 
 ## Operator guide
 

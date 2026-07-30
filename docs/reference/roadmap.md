@@ -48,7 +48,8 @@ Some items may still be relevant as polish; verify on your devices rather than a
 - Quality preset audit; redownload at another resolution from watch menu
 - Optional post-download **loudnorm** / volume normalization
 
-Download queue and normalize options continue to evolve; see [Downloads](../guides/downloads.md).
+!!! note "Likely present now"
+    FIFO queue, pause, normalize, and watch-menu **Change resolution** (with height-capped presets + quality warning toast) are in current builds — see [Downloads](../guides/downloads.md) and [Watching](../guides/watching.md).
 
 ## Phase 5 — Themes, health, content features, AI & platform
 
@@ -58,7 +59,7 @@ Originally the “large features” bucket:
 |-------|----------------|
 | Homelab polish | Themes (OLED, terminal, …), health dashboard, PWA icons |
 | Playback intelligence | SponsorBlock, chapters from description, duplicate detection, “more like this” |
-| Metadata | Periodic refresh; respect custom title/description |
+| Metadata | Periodic refresh; custom title/description preserved on sync and replace |
 | AI layer | NL search, auto-tags from subs/notes, AI duplicates/playlists/recs, auto-translate |
 | Platform | Bulk select, followed-channel feed, browser extension, next-chapter hotkey, &gt;60fps manual files |
 

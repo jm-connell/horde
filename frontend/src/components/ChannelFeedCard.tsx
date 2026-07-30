@@ -29,7 +29,7 @@ function LikeRatioBadge({
   return (
     <span
       className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-500"
-      title={`${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes`}
+      title={`${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes (YouTube)`}
     >
       <span
         className="inline-block h-1 w-8 overflow-hidden rounded-full bg-ink-700"

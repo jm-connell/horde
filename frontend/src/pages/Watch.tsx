@@ -23,6 +23,7 @@ import { usePlayback } from "../context/PlaybackContext";
 import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
+import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import { PRESET_ORDER, presetOptionLabel } from "../presets";
 import type { StreamPreviewMeta, Video } from "../types";
 import {
@@ -778,6 +779,7 @@ export default function Watch() {
                         const updated = await api
                           .updateVideo(source.video.id, {
                             title: source.video.source_title!,
+                            title_is_custom: false,
                           })
                           .catch(() => null);
                         if (updated) setVideo(updated);
@@ -791,6 +793,52 @@ export default function Watch() {
                         const updated = await api
                           .updateVideo(source.video.id, {
                             title: source.video.title,
+                            title_is_custom: true,
+                          })
+                          .catch(() => null);
+                        if (updated) setVideo(updated);
+                      }}
+                      className="rounded-lg bg-ink-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-600"
+                    >
+                      Keep mine
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            {isLibrary &&
+              source.video.description_is_custom &&
+              source.video.source_description != null &&
+              source.video.source_description !==
+                (source.video.description ?? "") && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink-800 px-4 py-3 ring-1 ring-ink-600">
+                  <p className="text-sm text-gray-300">
+                    Source description changed while your custom description is
+                    kept.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        const updated = await api
+                          .updateVideo(source.video.id, {
+                            description:
+                              source.video.source_description ?? undefined,
+                            description_is_custom: false,
+                          })
+                          .catch(() => null);
+                        if (updated) setVideo(updated);
+                      }}
+                      className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-accent-soft"
+                    >
+                      Use source
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const updated = await api
+                          .updateVideo(source.video.id, {
+                            description:
+                              source.video.description ?? undefined,
+                            description_is_custom: true,
                           })
                           .catch(() => null);
                         if (updated) setVideo(updated);
@@ -1057,6 +1105,18 @@ export default function Watch() {
             )}
 
             {isLibrary &&
+              settings.sponsorBlockEnabled &&
+              !extractYouTubeId(
+                source.video.source_url,
+                source.video.file_path
+              ) && (
+                <p className="mt-2 text-xs text-gray-600">
+                  SponsorBlock is enabled in settings but only applies to
+                  YouTube videos.
+                </p>
+              )}
+
+            {isLibrary &&
               !showRelatedRight &&
               moreLikeThis.length > 0 && (
                 <div className="mt-6">
@@ -1098,13 +1158,25 @@ export default function Watch() {
               at the selected resolution. Your title, notes, and other metadata
               are kept. Playback may be unavailable until the download finishes.
             </p>
+            {source.kind === "library" && source.video.height_px != null && (
+              <p className="mb-3 text-xs text-gray-500">
+                Current file:{" "}
+                <span className="text-gray-300">
+                  {formatResolution(source.video.height_px) ||
+                    `${source.video.height_px}p`}
+                </span>
+                {source.video.width_px != null
+                  ? ` (${source.video.width_px}×${source.video.height_px})`
+                  : ""}
+              </p>
+            )}
             <label className="mb-1 block text-xs font-medium text-gray-400">
               Quality
             </label>
             <select
               value={redownloadPreset}
               onChange={(e) => setRedownloadPreset(e.target.value)}
-              className="mb-6 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-accent"
+              className="mb-2 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-accent"
             >
               {presets.map((p) => (
                 <option key={p} value={p}>
@@ -1112,6 +1184,11 @@ export default function Watch() {
                 </option>
               ))}
             </select>
+            <p className="mb-6 text-xs text-gray-500">
+              YouTube (and other sites) may not offer the selected tier. If the
+              downloaded file is lower, Horde shows a toast when the job
+              finishes.
+            </p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setRedownloadOpen(false)}

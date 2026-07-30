@@ -50,13 +50,7 @@ Categories are invented/maintained by the AI pipeline; match strictness is tunab
 
 ## Duplicate confirmation
 
-On [Import & review](import-review.md), possible duplicate groups can be scored with AI when **AI duplicate confirmation** is enabled.
-
-### Important: `score_duplicates` jobs
-
-The background AI job kind `score_duplicates` is a **placeholder no-op** in the worker (it acknowledges and does nothing useful). **Real scoring is on-demand** from the Import/review API when you use duplicate confirmation in the UI.
-
-Do not wait on the AI queue’s `score_duplicates` counter to clear a backlog — drive scoring from Import.
+On [Import & review](import-review.md), possible duplicate groups can be scored with AI when **AI duplicate confirmation** is enabled. Scoring is **on-demand** from the Import API (not a background AI job). Use **Keep this**, **Delete**, or **Not a duplicate** to resolve groups.
 
 ## Search indexes & catalog embeds
 

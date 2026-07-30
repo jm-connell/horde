@@ -3,8 +3,25 @@ import { api, downloadFileUrl } from "../api";
 import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
+import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import type { Video } from "../types";
 import { effectiveSourceUrl } from "../utils";
+
+function sourceLinkLabel(video: Video): string {
+  const platform = (video.platform || "").toLowerCase();
+  if (
+    extractYouTubeId(video.source_url, video.file_path) ||
+    platform.includes("youtube")
+  ) {
+    return "Open on YouTube ↗";
+  }
+  if (platform) {
+    const name = platform.replace(/ie$/, "").replace(/_/g, " ");
+    const pretty = name.charAt(0).toUpperCase() + name.slice(1);
+    return `Open on ${pretty} ↗`;
+  }
+  return "Source link ↗";
+}
 
 interface Props {
   video: Video;
@@ -143,7 +160,7 @@ export default function VideoActionsMenu({
             onClick={() => setOpen(false)}
             className={itemClass}
           >
-            Source link ↗
+            {sourceLinkLabel(video)}
           </a>
         )}
         <button

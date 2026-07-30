@@ -36,7 +36,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "library",
     keywords:
-      "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval",
+      "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval youtube only youtube",
   },
   {
     tab: "library",
@@ -75,7 +75,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "playback",
-    keywords: "sponsorblock sponsor skip ad ads advertising commercial",
+    keywords: "sponsorblock sponsor skip ad ads advertising commercial youtube only youtube",
   },
   {
     tab: "playback",
@@ -125,6 +125,10 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "system",
     keywords: "storage disk space library",
+  },
+  {
+    tab: "system",
+    keywords: "backup restore snapshot volume data downloads path zfs quiesce",
   },
   {
     tab: "system",

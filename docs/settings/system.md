@@ -50,6 +50,16 @@ See [Troubleshooting](../ops/troubleshooting.md) for `error_kind` values and res
 
 Library footprint: total bytes used by videos + video count.
 
+## Backup
+
+Guidance for host volumes (not an in-app dump):
+
+- Back up **DATA** (`horde.db`, settings, caches) and **DOWNLOADS** (media) together
+- Prefer stopping Horde briefly or a ZFS/TrueNAS snapshot of both mounts
+- Thumbnails, sprites, and embeddings are regenerable after restore
+
+Deep link from Settings: `/wiki/ops/backup-restore/` when the wiki is bundled. Full checklist: [Backup & restore](../ops/backup-restore.md).
+
 ## Resources
 
 Horde **host** CPU, RAM, and GPU (NVIDIA / AMD / Intel when detectable).

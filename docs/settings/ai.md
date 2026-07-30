@@ -97,8 +97,7 @@ Backend-only bookkeeping: `last_daily_run` (`YYYY-MM-DD` when `set_time` last ra
 
 `pending_category_refresh` is a backend flag set when a category refresh should run after indexing — not a Settings toggle.
 
-!!! warning "`score_duplicates` job kind is a no-op"
-    The queued AI job kind `score_duplicates` exists for queue completeness but **`run_score_duplicates` returns immediately**. Real duplicate LLM scoring runs **on-demand** during Import / review when `ai_duplicates` is enabled — not via a batch Settings job.
+Duplicate LLM scoring is **on-demand** during Import when `ai_duplicates` is enabled — there is no batch Settings job for duplicates.
 
 ## See also
 

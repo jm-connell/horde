@@ -66,7 +66,7 @@ These are **top-level** keys (not the `ui` blob).
 | Index channel libraries | `channel_catalog_enabled` | `true` | boolean |
 | Max videos per channel | `channel_catalog_max_videos` | `1000` | 100–5000 |
 
-When enabled, Horde background-indexes channel uploads (titles; descriptions for the newest ~200) when you download from a channel or open its feed, so feed search works beyond the loaded page.
+When enabled, Horde background-indexes **YouTube** channel uploads (titles; descriptions for the newest ~200) when you download from a channel or open its feed, so feed search works beyond the loaded page. Non-YouTube channel URLs are skipped.
 
 !!! tip "Large indexes"
     Values above **1000** can take a long time and may slow other YouTube work while indexing. System → Background activity has **Refresh catalogs** / **Full reindex**.

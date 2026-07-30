@@ -134,7 +134,6 @@ class AiJobStatus(str, Enum):
 class AiJobKind(str, Enum):
     embed_video = "embed_video"
     enrich_tags = "enrich_tags"
-    score_duplicates = "score_duplicates"
     refresh_categories = "refresh_categories"
     embed_catalog_video = "embed_catalog_video"
 

@@ -267,14 +267,16 @@ export default function LibraryTab() {
             "view counts",
             "channel catalog",
             "index",
-            "refresh interval"
+            "refresh interval",
+            "youtube only",
+            "youtube"
           )
         }
       >
         <div className="mb-4 space-y-4">
           <SettingRow
             title="Index channel libraries"
-            description="Background-index uploads when you download from a channel or open its feed, so feed search works beyond the loaded page."
+            description="YouTube only — background-index uploads when you download from a channel or open its feed, so feed search works beyond the loaded page."
             control={
               <div className="flex items-center gap-2">
                 <HelpTip text={CATALOG_INDEX_TIP} />

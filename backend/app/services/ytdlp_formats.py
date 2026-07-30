@@ -6,11 +6,27 @@ from typing import Any, Optional
 
 QUALITY_FORMATS = {
     "best": "bv*+ba/b",
-    "2160p": "bv*[height<=2160]+ba/b[height<=2160]/b[height<=2160]",
-    "1440p": "bv*[height<=1440]+ba/b[height<=1440]/b[height<=1440]",
-    "1080p": "bv*[height<=1080]+ba/b[height<=1080]/b[height<=1080]",
-    "720p": "bv*[height<=720]+ba/b[height<=720]/b[height<=720]",
-    "480p": "bv*[height<=480]+ba/b[height<=480]/b[height<=480]",
+    # Prefer exact tier height when offered, then best under the cap — never unbounded best.
+    "2160p": (
+        "bv*[height=2160]+ba/bv*[height<=2160]+ba/"
+        "b[height=2160]/b[height<=2160]"
+    ),
+    "1440p": (
+        "bv*[height=1440]+ba/bv*[height<=1440]+ba/"
+        "b[height=1440]/b[height<=1440]"
+    ),
+    "1080p": (
+        "bv*[height=1080]+ba/bv*[height<=1080]+ba/"
+        "b[height=1080]/b[height<=1080]"
+    ),
+    "720p": (
+        "bv*[height=720]+ba/bv*[height<=720]+ba/"
+        "b[height=720]/b[height<=720]"
+    ),
+    "480p": (
+        "bv*[height=480]+ba/bv*[height<=480]+ba/"
+        "b[height=480]/b[height<=480]"
+    ),
     "audio": "ba/b",
 }
 

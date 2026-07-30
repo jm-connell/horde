@@ -42,7 +42,9 @@ class VideoRead(BaseModel):
     status: VideoStatus
     metadata_synced_at: Optional[datetime]
     source_title: Optional[str]
+    source_description: Optional[str] = None
     title_is_custom: bool
+    description_is_custom: bool = False
     subtitles_pending: bool = False
     ai_summary: Optional[str] = None
     ai_summary_length: Optional[str] = None
@@ -62,6 +64,9 @@ class VideoUpdate(BaseModel):
     published_at: Optional[datetime] = None
     # Setting a remote URL fetches and caches the image server-side.
     thumbnail_url: Optional[str] = None
+    # Explicit clear/set for "Use source" / keep-custom flows.
+    title_is_custom: Optional[bool] = None
+    description_is_custom: Optional[bool] = None
 
 
 class WatchProgressUpdate(BaseModel):

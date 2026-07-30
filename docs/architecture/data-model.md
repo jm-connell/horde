@@ -32,7 +32,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `video_ai_chat_messages` | User/assistant turns (+ optional OpenRouter cost/model) |
 | `openrouter_usage` | Append-only cost ledger |
 | `ai_categories` | Recommendation category chips (name, blurb, embedding) |
-| `ai_jobs` | Background job queue (`embed_video`, `enrich_tags`, …) |
+| `ai_jobs` | Background job queue (`embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`) |
 | `schema_migrations` | Ledger of applied migration step ids (`id`, `applied_at`) |
 
 ## Schema lifecycle

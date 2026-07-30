@@ -138,22 +138,68 @@ export default function VideoEditForm({
     setSaving(true);
     setError(null);
     try {
-      const updated = await api.updateVideo(video.id, {
-        title: draft.title.trim(),
-        channel: draft.channel.trim() || undefined,
-        channel_url: draft.channel_url.trim() || null,
-        tags: draft.tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        description: draft.description.trim() || undefined,
-        notes: draft.notes.trim() || null,
-        source_url: draft.source_url.trim() || undefined,
-        published_at: draft.published_at
-          ? new Date(draft.published_at).toISOString()
-          : null,
-        thumbnail_url: draft.thumbnail_url.trim() || undefined,
-      });
+      const initial = toDraft(video);
+      const payload: Parameters<typeof api.updateVideo>[1] = {};
+
+      const title = draft.title.trim();
+      if (title !== initial.title.trim()) payload.title = title;
+
+      const channel = draft.channel.trim();
+      if (channel !== initial.channel.trim()) {
+        payload.channel = channel || undefined;
+      }
+
+      const channelUrl = draft.channel_url.trim() || null;
+      const initialChannelUrl = initial.channel_url.trim() || null;
+      if (channelUrl !== initialChannelUrl) payload.channel_url = channelUrl;
+
+      const tags = draft.tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const initialTags = initial.tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (tags.join("\0") !== initialTags.join("\0")) payload.tags = tags;
+
+      const description = draft.description.trim() || undefined;
+      const initialDescription = initial.description.trim() || undefined;
+      if (description !== initialDescription) {
+        payload.description = description;
+      }
+
+      const notes = draft.notes.trim() || null;
+      const initialNotes = initial.notes.trim() || null;
+      if (notes !== initialNotes) payload.notes = notes;
+
+      const sourceUrl = draft.source_url.trim() || undefined;
+      const initialSourceUrl = initial.source_url.trim() || undefined;
+      if (sourceUrl !== initialSourceUrl) payload.source_url = sourceUrl;
+
+      const publishedAt = draft.published_at
+        ? new Date(draft.published_at).toISOString()
+        : null;
+      const initialPublishedAt = initial.published_at
+        ? new Date(initial.published_at).toISOString()
+        : null;
+      if (publishedAt !== initialPublishedAt) {
+        payload.published_at = publishedAt;
+      }
+
+      const thumbUrl = draft.thumbnail_url.trim();
+      if (thumbUrl) payload.thumbnail_url = thumbUrl;
+
+      // Import approve still requires sending title/channel even if unchanged.
+      if (requireChannel) {
+        payload.title = title;
+        payload.channel = channel || undefined;
+      } else if (!Object.keys(payload).length) {
+        onSaved(video);
+        return;
+      }
+
+      const updated = await api.updateVideo(video.id, payload);
       onSaved(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");

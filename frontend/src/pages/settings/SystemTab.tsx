@@ -143,6 +143,55 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
       </Section>
 
       <Section
+        title="Backup"
+        hidden={
+          !match(
+            "backup",
+            "restore",
+            "snapshot",
+            "volume",
+            "data",
+            "downloads path",
+            "zfs"
+          )
+        }
+      >
+        <div className="max-w-2xl space-y-3 text-sm text-gray-300">
+          <p>
+            Back up both host volumes your Compose stack mounts:{" "}
+            <span className="font-medium text-gray-200">DATA</span> (SQLite DB,
+            settings, caches) and{" "}
+            <span className="font-medium text-gray-200">DOWNLOADS</span> (media
+            files). Keeping them in sync preserves library paths and rows.
+          </p>
+          <p className="text-xs text-gray-500">
+            Prefer stopping Horde briefly (or pausing downloads/AI) so SQLite
+            and in-flight downloads are quiet. On TrueNAS, a ZFS snapshot of
+            both datasets works well. Thumbnails, sprites, and embeddings can be
+            regenerated after restore.
+          </p>
+          {health?.wiki_available ? (
+            <a
+              href="/wiki/ops/backup-restore/"
+              target="_blank"
+              rel="noreferrer"
+              className={PANEL_BTN}
+            >
+              Backup &amp; restore guide
+            </a>
+          ) : (
+            <p className="text-xs text-gray-500">
+              Full checklist:{" "}
+              <span className="font-mono text-gray-400">
+                docs/ops/backup-restore.md
+              </span>{" "}
+              (wiki not bundled in this run).
+            </p>
+          )}
+        </div>
+      </Section>
+
+      <Section
         title="Resources"
         hidden={
           !match(

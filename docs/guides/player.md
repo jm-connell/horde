@@ -96,7 +96,7 @@ Remote playback syncs position where the cast session reports it; ending a cast 
 
 ## SponsorBlock
 
-When enabled in [Settings → Playback](../settings/playback.md), SponsorBlock segments are skipped during playback (playback-only — files on disk are unchanged). Skips can be **undone** from the skip notification / control so you can watch a segment you didn’t want skipped.
+When enabled in [Settings → Playback](../settings/playback.md), SponsorBlock segments are skipped during **YouTube** playback (playback-only — files on disk are unchanged). Non-YouTube sources ignore the setting; the watch page shows a muted hint when SponsorBlock is on but the video has no YouTube id. Skips can be **undone** from the skip notification / control so you can watch a segment you didn’t want skipped.
 
 ## Play queue
 

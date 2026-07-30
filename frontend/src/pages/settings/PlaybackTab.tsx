@@ -144,7 +144,7 @@ export default function PlaybackTab() {
 
       <Section
         title="SponsorBlock"
-        description="Automatically skip sponsored segments and other non-content during playback of YouTube videos."
+        description="Automatically skip sponsored segments and other non-content during playback of YouTube videos. Has no effect on other sources."
         hidden={
           !match(
             "sponsorblock",
@@ -153,14 +153,16 @@ export default function PlaybackTab() {
             "ad",
             "ads",
             "advertising",
-            "commercial"
+            "commercial",
+            "youtube only",
+            "youtube"
           )
         }
       >
         <div className="space-y-4">
           <SettingRow
             title="Enable SponsorBlock"
-            description="Skip sponsors, self-promotion, and intros automatically."
+            description="YouTube only — skip sponsors, self-promotion, and intros automatically. Non-YouTube videos ignore this setting."
             control={
               <Toggle
                 checked={settings.sponsorBlockEnabled}

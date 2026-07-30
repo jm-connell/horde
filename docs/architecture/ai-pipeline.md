@@ -10,12 +10,11 @@ Background and on-demand AI for search, tags, chat, recommendations, and catalog
 | `enrich_tags` | LLM tag enrichment into `video_ai_meta` / `videos.tags` |
 | `refresh_categories` | Rebuild `ai_categories` shelves |
 | `embed_catalog_video` | Embed a channel-catalog upload |
-| `score_duplicates` | **No-op placeholder** — see below |
 
 The worker is single-flight with retries ([Workers](workers.md)).
 
-!!! important "Duplicate LLM scoring is not the queued job"
-    Heuristic duplicate **groups** and optional **LLM confirmation scores** run **on-demand** from the **Import / review API** (`duplicate_groups` + `annotate_group`), not from the background `score_duplicates` job. That job kind exists for queue symmetry but intentionally does nothing.
+!!! important "Duplicate LLM scoring is on-demand"
+    Heuristic duplicate **groups** and optional **LLM confirmation scores** run **on-demand** from the **Import / review API** (`duplicate_groups` + `annotate_group`). There is no background batch job for duplicates.
 
 ## Provider routing
 

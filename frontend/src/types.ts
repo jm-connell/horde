@@ -45,7 +45,9 @@ export interface Video {
   status: VideoStatus;
   metadata_synced_at: string | null;
   source_title: string | null;
+  source_description: string | null;
   title_is_custom: boolean;
+  description_is_custom: boolean;
   subtitles_pending: boolean;
   ai_summary?: string | null;
   /** Length setting used when the summary was generated. */
@@ -67,6 +69,8 @@ export interface VideoUpdate {
   source_url?: string;
   published_at?: string | null;
   thumbnail_url?: string;
+  title_is_custom?: boolean;
+  description_is_custom?: boolean;
 }
 
 export interface ChannelStat {

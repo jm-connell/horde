@@ -41,7 +41,7 @@ Each cycle:
 
 | Behavior | Detail |
 |----------|--------|
-| Kinds | `embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `score_duplicates` (no-op) |
+| Kinds | `embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video` |
 | Retries | Up to **3** attempts; backoff `run_after` ≈ **2 × attempts** minutes |
 | Pause | Settings `ai.paused` or OpenRouter hard budget stop |
 | Schedule | `on_download` enqueue vs timed sweeps |

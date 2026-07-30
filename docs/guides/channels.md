@@ -49,7 +49,7 @@ From a channel page you can open the download panel to queue undownloaded items 
 
 ## Catalog indexing
 
-When you open a channel feed or download from a channel, Horde indexes that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time.
+Catalog indexing is **YouTube only**. When you open a YouTube channel feed or download from a YouTube channel, Horde indexes that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time. Non-YouTube sources skip catalog indexing.
 
 ### Phases
 

@@ -38,13 +38,19 @@ If **Autoplay related** is on and the play queue is empty when a video ends, Hor
 - Turning autoplay off mid-countdown cancels the overlay
 - Items already in the [player queue](player.md) advance immediately without the related countdown
 
-## Title drift banner
+## Title / description drift
 
 If you customized a library video’s title and a metadata resync finds that the **source (YouTube) title** now differs, the watch page shows a banner:
 
 > Source title changed…
 
-You can adopt the new source title or keep your custom title. This appears when `title_is_custom` is set and `source_title` ≠ current `title`.
+You can adopt the new source title or keep your custom title. This appears when `title_is_custom` is set and `source_title` ≠ current `title`. A similar banner appears for custom descriptions when `source_description` drifts.
+
+Redownload (“Change resolution”) and auto-replace of the same YouTube id keep curated title/description/notes (and locked tags); only the media file and non-custom metadata refresh.
+
+## Watch overflow menu
+
+On library videos, **•••** includes edit, notes, **Change resolution**, normalize volume, download file, open source (labeled **Open on YouTube** / site when known), and delete.
 
 ## Stream → library handoff
 

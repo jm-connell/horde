@@ -47,14 +47,13 @@ Horde groups **possible duplicates** (same or near-same content / ids / heuristi
 
 | Action | Notes |
 |--------|--------|
-| Review group | Compare paths, channels, titles |
-| Keep / delete | Remove extras from disk + DB |
+| Open watch | Title links to the watch page |
+| **Keep this** | Deletes the other files in the group (confirm lists titles) |
+| Delete | Remove one video from disk + DB |
+| **Not a duplicate** | Hides the group in this browser (`localStorage`) |
 | **AI duplicate confirmation** | Optional — scores borderline pairs when AI is enabled |
 
-Enable **AI duplicate confirmation** under [Settings → AI](../settings/ai.md) (`ai_duplicates`). Scoring runs **on demand from the Import API**, not as a reliable background batch.
-
-!!! warning "`score_duplicates` job kind"
-    The AI worker job kind `score_duplicates` is a **placeholder no-op**. Real duplicate scoring is invoked on-demand from the Import/review API when you use AI confirmation. Do not expect the background queue counter for `score_duplicates` to process work.
+Enable **AI duplicate confirmation** under [Settings → AI](../settings/ai.md) (`ai_duplicates`). Scoring runs **on demand from the Import API** when the groups endpoint loads — not as a background batch job.
 
 ## After approval
 

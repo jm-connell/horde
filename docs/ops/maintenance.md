@@ -15,7 +15,7 @@ Use the AI process / queue controls to:
 The AI worker is [single-flight](../design/single-flight-ai.md): one job at a time, up to 3 attempts with backoff. Pause the queue before heavy maintenance if you need the GPU for something else.
 
 !!! note "Duplicate scoring"
-    Library duplicate **LLM** scoring is on-demand from the Import/review API — not the queued `score_duplicates` job (that kind is a no-op placeholder). See [AI pipeline](../architecture/ai-pipeline.md).
+    Library duplicate **LLM** scoring is on-demand from the Import/review API. See [AI pipeline](../architecture/ai-pipeline.md).
 
 ## Metadata resync
 
@@ -24,6 +24,7 @@ A background sync worker refreshes stale source metadata (titles, descriptions, 
 - Interval comes from Settings (`metadata_sync_interval_hours`, default often 24h).
 - Each wake processes a **batch of 20** stale rows, then sleeps until the next interval.
 - Custom titles/descriptions (`title_is_custom` / `description_is_custom`) are respected so user edits are not overwritten.
+- Redownload / replace-in-place also preserves custom title, description, notes, and locked tags while refreshing `source_title` / `source_description`.
 
 You can trigger related catalog freshness via channel catalog settings; the sync loop also refreshes stale catalogs when enabled.
 

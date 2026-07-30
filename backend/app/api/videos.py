@@ -182,11 +182,28 @@ def update_video(
         _fetch_thumbnail_from_url(video, data.pop("thumbnail_url"))
     data.pop("thumbnail_url", None)
 
-    # Track user customizations so metadata resync can preserve them.
+    # Track user customizations so metadata resync / replace can preserve them.
+    # Adopting source_* clears the flag; any other edit sets it.
+    explicit_title_custom = data.pop("title_is_custom", None)
+    explicit_desc_custom = data.pop("description_is_custom", None)
+
     if "title" in data:
-        video.title_is_custom = True
+        new_title = data["title"]
+        if video.source_title is not None and new_title == video.source_title:
+            video.title_is_custom = False
+        else:
+            video.title_is_custom = True
     if "description" in data:
-        video.description_is_custom = True
+        new_desc = data["description"]
+        if video.source_description is not None and new_desc == video.source_description:
+            video.description_is_custom = False
+        else:
+            video.description_is_custom = True
+
+    if explicit_title_custom is not None:
+        video.title_is_custom = bool(explicit_title_custom)
+    if explicit_desc_custom is not None:
+        video.description_is_custom = bool(explicit_desc_custom)
 
     for key, value in data.items():
         setattr(video, key, value)

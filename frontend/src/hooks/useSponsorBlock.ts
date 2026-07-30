@@ -6,7 +6,7 @@ export interface SponsorSegment {
   category: string;
 }
 
-function extractYouTubeId(
+export function extractYouTubeId(
   sourceUrl: string | null,
   filePath: string
 ): string | null {

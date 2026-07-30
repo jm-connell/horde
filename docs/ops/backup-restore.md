@@ -1,5 +1,8 @@
 # Backup & restore
 
+!!! tip "In the app"
+    **Settings → System → Backup** summarizes what to back up and links this page at `/wiki/ops/backup-restore/` when the wiki is bundled.
+
 ## What to back up
 
 Back up both volume roots used by Compose (or your local dirs):

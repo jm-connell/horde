@@ -18,7 +18,7 @@ The container listens on **8080** by default (API + SPA + wiki). Map that port i
 
 ## How do I back up?
 
-Back up the **data** volume (SQLite DB, thumbnails, app settings) and the **downloads** volume (media). Restoring both keeps paths and rows aligned. See [Backup & restore](../ops/backup-restore.md) and [Storage layout](../ops/storage-layout.md).
+Back up the **data** volume (SQLite DB, thumbnails, app settings) and the **downloads** volume (media). Restoring both keeps paths and rows aligned. Settings → System → **Backup** summarizes this and links the full guide. See [Backup & restore](../ops/backup-restore.md) and [Storage layout](../ops/storage-layout.md).
 
 ## How do I update?
 

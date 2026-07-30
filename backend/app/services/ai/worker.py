@@ -358,7 +358,6 @@ def queue_breakdown() -> dict[str, int]:
         "embed_video": 0,
         "enrich_tags": 0,
         "refresh_categories": 0,
-        "score_duplicates": 0,
         "embed_catalog_video": 0,
         "running": 0,
     }
@@ -449,8 +448,6 @@ def _job_runnable(
         return llm_ok
     if kind == AiJobKind.refresh_categories:
         return embed_ok and llm_ok
-    if kind == AiJobKind.score_duplicates:
-        return True
     return False
 
 

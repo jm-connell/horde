@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 import LoadingIndicator from "../components/LoadingIndicator";
 import VideoEditForm from "../components/VideoEditForm";
@@ -9,6 +10,7 @@ import { formatSize } from "../utils";
 
 const VIDEO_ACCEPT = ".mp4,.mkv,.webm,video/mp4,video/webm,video/x-matroska";
 const VIDEO_EXTS = new Set([".mp4", ".mkv", ".webm"]);
+const DISMISSED_DUPES_KEY = "horde.dismissedDuplicateGroups";
 
 function verdictLabel(group: DuplicateGroup): string | null {
   if (group.match_type === "youtube_id") return "Same YouTube ID";
@@ -24,6 +26,29 @@ function verdictLabel(group: DuplicateGroup): string | null {
         ? "Similar"
         : "Probably different";
   return `${label}${conf}`;
+}
+
+function duplicateGroupKey(group: DuplicateGroup): string {
+  return group.videos
+    .map((v) => v.id)
+    .sort((a, b) => a - b)
+    .join("-");
+}
+
+function loadDismissedDupes(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_DUPES_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((x): x is string => typeof x === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDismissedDupes(keys: Set<string>) {
+  localStorage.setItem(DISMISSED_DUPES_KEY, JSON.stringify([...keys]));
 }
 
 function isVideoFile(file: File): boolean {
@@ -46,12 +71,53 @@ export default function Import() {
   const { showToast } = useToast();
   const [items, setItems] = useState<Video[]>([]);
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
+  const [dismissedDupes, setDismissedDupes] = useState<Set<string>>(() =>
+    loadDismissedDupes()
+  );
   const [loading, setLoading] = useState(true);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadingRef = useRef(false);
+
+  const visibleGroups = useMemo(
+    () => groups.filter((g) => !dismissedDupes.has(duplicateGroupKey(g))),
+    [groups, dismissedDupes]
+  );
+
+  const dismissGroup = (group: DuplicateGroup) => {
+    const key = duplicateGroupKey(group);
+    setDismissedDupes((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      saveDismissedDupes(next);
+      return next;
+    });
+  };
+
+  const keepVideo = async (group: DuplicateGroup, keep: Video) => {
+    const others = group.videos.filter((v) => v.id !== keep.id);
+    const names = others.map((v) => `"${v.title}"`).join(", ");
+    if (
+      !confirm(
+        `Keep "${keep.title}" and delete ${others.length} other file${
+          others.length === 1 ? "" : "s"
+        }?\n\n${names}`
+      )
+    ) {
+      return;
+    }
+    try {
+      for (const v of others) {
+        await api.deleteVideo(v.id, true);
+      }
+      showToast(`Kept "${keep.title}"`);
+      load();
+    } catch {
+      showToast("Could not delete duplicate(s)");
+    }
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -253,7 +319,7 @@ export default function Import() {
 
       {loading ? (
         <LoadingIndicator />
-      ) : items.length === 0 && groups.length === 0 ? (
+      ) : items.length === 0 && visibleGroups.length === 0 ? (
         <div className="py-12 text-center text-gray-500">
           <p className="text-lg">Nothing to import.</p>
           <p className="mt-1 text-sm">Drop files above to get started.</p>
@@ -301,7 +367,7 @@ export default function Import() {
             </div>
           )}
 
-          {groups.length > 0 && (
+          {visibleGroups.length > 0 && (
             <div>
               <button
                 onClick={() => setShowDuplicates((v) => !v)}
@@ -309,72 +375,97 @@ export default function Import() {
               >
                 <span>{showDuplicates ? "▼" : "▶"}</span>
                 <span>
-                  Possible duplicates ({groups.length} group
-                  {groups.length === 1 ? "" : "s"})
+                  Possible duplicates ({visibleGroups.length} group
+                  {visibleGroups.length === 1 ? "" : "s"})
                 </span>
               </button>
 
               {showDuplicates && (
                 <div className="space-y-6">
-                  {groups.map((group, gi) => {
+                  {visibleGroups.map((group) => {
                     const label = verdictLabel(group);
+                    const gkey = duplicateGroupKey(group);
                     return (
                       <div
-                        key={gi}
+                        key={gkey}
                         className="ui-panel rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700"
                       >
-                        <div className="mb-3 flex flex-wrap items-center gap-2">
-                          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                            Duplicate group {gi + 1}
-                          </p>
-                          {label && (
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                group.ai_verdict === "different"
-                                  ? "bg-ink-800 text-gray-400"
-                                  : group.ai_verdict === "similar"
-                                    ? "bg-amber-500/15 text-amber-300"
-                                    : "bg-accent/15 text-accent"
-                              }`}
-                              title={group.ai_reason || undefined}
-                            >
-                              {label}
-                            </span>
-                          )}
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                              Duplicate group
+                            </p>
+                            {label && (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  group.ai_verdict === "different"
+                                    ? "bg-ink-800 text-gray-400"
+                                    : group.ai_verdict === "similar"
+                                      ? "bg-amber-500/15 text-amber-300"
+                                      : "bg-accent/15 text-accent"
+                                }`}
+                                title={group.ai_reason || undefined}
+                              >
+                                {label}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => dismissGroup(group)}
+                            className="text-xs text-gray-500 hover:text-gray-300"
+                            title="Hide this group on this browser"
+                          >
+                            Not a duplicate
+                          </button>
                         </div>
                         <div className="space-y-3">
                           {group.videos.map((v) => (
                             <div
                               key={v.id}
-                              className="ui-card flex items-center justify-between gap-3 rounded-lg bg-ink-800 px-3 py-2"
+                              className="ui-card flex flex-wrap items-center justify-between gap-3 rounded-lg bg-ink-800 px-3 py-2"
                             >
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-gray-200">
+                              <div className="min-w-0 flex-1">
+                                <Link
+                                  to={`/watch/${v.id}`}
+                                  className="truncate text-sm font-medium text-accent hover:underline"
+                                >
                                   {v.title}
-                                </p>
+                                </Link>
                                 <p className="text-xs text-gray-500">
                                   {v.channel} · {v.file_path}
                                 </p>
                               </div>
-                              <button
-                                onClick={async () => {
-                                  if (
-                                    !confirm(
-                                      `Delete "${v.title}" and its file?`
+                              <div className="flex shrink-0 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void keepVideo(group, v)}
+                                  className="rounded border border-accent/40 px-3 py-1 text-xs text-accent hover:bg-accent/10"
+                                  title="Delete the other files in this group"
+                                >
+                                  Keep this
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (
+                                      !confirm(
+                                        `Delete "${v.title}" and its file?`
+                                      )
                                     )
-                                  )
-                                    return;
-                                  try {
-                                    await api.deleteVideo(v.id, true);
-                                    load();
-                                  } catch {
-                                    showToast("Could not delete video");
-                                  }
-                                }}
-                                className="shrink-0 rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
-                              >
-                                Delete
-                              </button>
+                                      return;
+                                    try {
+                                      await api.deleteVideo(v.id, true);
+                                      load();
+                                    } catch {
+                                      showToast("Could not delete video");
+                                    }
+                                  }}
+                                  className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                                >
+                                  Delete
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
