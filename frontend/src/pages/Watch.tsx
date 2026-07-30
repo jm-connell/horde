@@ -1031,7 +1031,7 @@ export default function Watch() {
               <div className="mt-5 flex gap-2">
                 <Link
                   to="/"
-                  className="ui-panel rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
                 >
                   ← Back to library
                 </Link>
