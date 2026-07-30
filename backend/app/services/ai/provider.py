@@ -228,6 +228,7 @@ class OllamaProvider:
             return [float(x) for x in vec]
         except Exception as exc:  # noqa: BLE001
             _last_error = format_provider_error(exc)
+            invalidate_resolved_url()
             raise
 
     def chat(
@@ -269,6 +270,7 @@ class OllamaProvider:
             return str(content)
         except Exception as exc:  # noqa: BLE001
             _last_error = format_provider_error(exc)
+            invalidate_resolved_url()
             raise
 
     def chat_stream(
@@ -319,6 +321,7 @@ class OllamaProvider:
             _last_error = None
         except Exception as exc:  # noqa: BLE001
             _last_error = format_provider_error(exc)
+            invalidate_resolved_url()
             raise
 
     @staticmethod

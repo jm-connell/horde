@@ -161,7 +161,7 @@ export default function FeaturesPane() {
         />
         <SettingRow
           title="Enrich tags with LLM"
-          description="Suggest extra tags after download (skipped if you edit tags manually)."
+          description="Suggest tags from title, channel, and description after download (subtitles optional). Skipped if you edit tags manually. Summaries still require captions."
           hidden={!!q && !match("enrich tags", "llm")}
           control={
             <Toggle

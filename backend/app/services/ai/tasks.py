@@ -1,4 +1,4 @@
-"""AI job runners: embed, enrich tags, summarize, score duplicates, refresh categories."""
+"""AI job runners: embed, enrich tags, summarize, refresh categories."""
 
 from __future__ import annotations
 
@@ -24,6 +24,9 @@ from .provider import (
 )
 
 logger = logging.getLogger(__name__)
+
+# dispatch() returns None on success, or a short skip reason (job → cancelled).
+SkipReason = str
 
 
 def _parse_json_object(raw: str) -> dict[str, Any]:
@@ -138,20 +141,30 @@ def _extract_summary_text(raw: str) -> str:
     return ""
 
 
-def run_embed_video(session: Session, video_id: Optional[int]) -> None:
+def run_embed_video(session: Session, video_id: Optional[int]) -> Optional[SkipReason]:
     if video_id is None:
         raise RuntimeError("embed_video requires video_id")
-    embeddings.embed_video(session, video_id)
+    ok = embeddings.embed_video(session, video_id)
+    if ok:
+        return None
+    video = session.get(Video, video_id)
+    if video is None:
+        return "video_missing"
+    if video.needs_review:
+        return "needs_review"
+    if get_embed_provider() is None:
+        raise RuntimeError("No embed provider available (enable Ollama or OpenRouter All)")
+    return "embed_skipped"
 
 
 def run_embed_catalog_video(
     session: Session, catalog_video_id: Optional[int]
-) -> None:
+) -> Optional[SkipReason]:
     if catalog_video_id is None:
         raise RuntimeError("embed_catalog_video requires catalog_video_id")
     video = session.get(ChannelCatalogVideo, catalog_video_id)
     if video is None:
-        return
+        return "catalog_video_missing"
     provider = get_embed_provider()
     if provider is None:
         raise RuntimeError("No embed provider available (enable Ollama or OpenRouter All)")
@@ -163,10 +176,10 @@ def run_embed_catalog_video(
         )
     ).first()
     if existing is not None and existing.content_hash == digest:
-        return
+        return None
     doc = channel_catalog.catalog_document(video)
     if not doc.strip():
-        return
+        return "empty_document"
     vec = provider.embed(doc, model, usage_kind="embed")
     if existing is None:
         existing = ChannelCatalogEmbedding(catalog_video_id=catalog_video_id)
@@ -177,6 +190,7 @@ def run_embed_catalog_video(
     existing.updated_at = utcnow()
     session.add(existing)
     session.commit()
+    return None
 
 
 def _tag_norm_key(tag: str) -> str:
@@ -208,20 +222,22 @@ def _is_near_duplicate(tag: str, seen_norms: set[str]) -> bool:
     return False
 
 
-def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
+def run_enrich_tags(session: Session, video_id: Optional[int]) -> Optional[SkipReason]:
     if video_id is None:
         raise RuntimeError("enrich_tags requires video_id")
     ai = app_settings.ai_settings()
     if not ai.get("enrich_tags", True):
-        return
+        return "enrich_tags_disabled"
 
     video = session.get(Video, video_id)
-    if video is None or video.needs_review:
-        return
+    if video is None:
+        return "video_missing"
+    if video.needs_review:
+        return "needs_review"
 
     meta = session.get(VideoAiMeta, video_id)
     if meta is not None and meta.tags_locked:
-        return
+        return "tags_locked"
 
     provider = get_llm_provider()
     if provider is None:
@@ -303,6 +319,7 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> None:
     meta.updated_at = utcnow()
     session.add(meta)
     session.commit()
+    return None
 
 
 class SummarizeError(Exception):
@@ -699,14 +716,15 @@ def dispatch(
     video_id: Optional[int],
     *,
     catalog_video_id: Optional[int] = None,
-) -> None:
+) -> Optional[SkipReason]:
+    """Run a job. Returns None on success, or a skip reason (caller → cancelled)."""
     if kind == AiJobKind.embed_video:
-        run_embed_video(session, video_id)
-    elif kind == AiJobKind.embed_catalog_video:
-        run_embed_catalog_video(session, catalog_video_id)
-    elif kind == AiJobKind.enrich_tags:
-        run_enrich_tags(session, video_id)
-    elif kind == AiJobKind.refresh_categories:
+        return run_embed_video(session, video_id)
+    if kind == AiJobKind.embed_catalog_video:
+        return run_embed_catalog_video(session, catalog_video_id)
+    if kind == AiJobKind.enrich_tags:
+        return run_enrich_tags(session, video_id)
+    if kind == AiJobKind.refresh_categories:
         run_refresh_categories(session, video_id)
-    else:
-        raise RuntimeError(f"Unknown AI job kind: {kind}")
+        return None
+    raise RuntimeError(f"Unknown AI job kind: {kind}")

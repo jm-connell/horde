@@ -25,6 +25,7 @@ export default function JobsPane() {
     setIndividualStepsOpen,
     reindexPrompt,
     setReindexPrompt,
+    refreshAiStatus,
   } = useSettingsPage();
 
   return (
@@ -57,6 +58,84 @@ export default function JobsPane() {
           <p className="mt-2 text-xs text-amber-400/90">
             Queue is paused — jobs won’t run until you resume.
           </p>
+        )}
+        {!aiStatus?.paused &&
+          (aiStatus?.waiting_count ?? 0) > 0 &&
+          aiStatus?.blocked_reason && (
+            <p className="mt-2 text-xs text-amber-400/90">
+              Jobs are waiting — {aiStatus.blocked_reason}
+            </p>
+          )}
+        {(aiStatus?.error_count ?? 0) > 0 && (
+          <div className="ui-panel mt-3 space-y-2 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-medium text-gray-300">
+                Failed jobs ({aiStatus?.error_count})
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={PANEL_BTN}
+                  onClick={async () => {
+                    const res = await api.retryFailedAiJobs().catch(() => null);
+                    if (res) {
+                      showToast(`Retried ${res.retried} job${res.retried === 1 ? "" : "s"}`);
+                      refreshAiStatus();
+                    }
+                  }}
+                >
+                  Retry all
+                </button>
+                <button
+                  type="button"
+                  className={PANEL_BTN}
+                  onClick={async () => {
+                    const res = await api.clearFailedAiJobs(0).catch(() => null);
+                    if (res) {
+                      showToast(`Cleared ${res.deleted} failed job${res.deleted === 1 ? "" : "s"}`);
+                      refreshAiStatus();
+                    }
+                  }}
+                >
+                  Clear failed
+                </button>
+              </div>
+            </div>
+            <ul className="space-y-2">
+              {(aiStatus?.recent_failures ?? []).slice(0, 8).map((job) => (
+                <li
+                  key={job.id ?? `${job.kind}-${job.updated_at}`}
+                  className="flex items-start justify-between gap-3 text-xs"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-gray-200">
+                      {job.title || job.kind.replace(/_/g, " ")}
+                    </p>
+                    <p className="truncate text-gray-500">
+                      {job.kind.replace(/_/g, " ")}
+                      {job.attempts > 0 ? ` · ${job.attempts} attempts` : ""}
+                    </p>
+                    {job.error && (
+                      <p className="mt-0.5 truncate text-red-400/90">{job.error}</p>
+                    )}
+                  </div>
+                  {job.id != null && (
+                    <button
+                      type="button"
+                      className="shrink-0 text-accent hover:underline"
+                      onClick={async () => {
+                        await api.retryAiJob(job.id!).catch(() => undefined);
+                        showToast("Job requeued");
+                        refreshAiStatus();
+                      }}
+                    >
+                      Retry
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {reindexPrompt && (
           <div className="ui-panel mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">

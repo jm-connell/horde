@@ -62,6 +62,7 @@ _VIDEO_AI_META_COLUMNS = [
     ("summary_length", "VARCHAR"),
     ("summary_cost", "FLOAT"),
     ("summary_model", "VARCHAR"),
+    ("embed_error", "VARCHAR"),
 ]
 
 _VIDEO_AI_CHAT_MESSAGE_COLUMNS = [

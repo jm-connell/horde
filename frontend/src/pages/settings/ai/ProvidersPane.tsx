@@ -240,6 +240,18 @@ export default function ProvidersPane() {
                       {aiStatus.ready ? "Connected" : "Reachable"}
                     </span>
                   )}
+                  {aiDraft.enabled &&
+                    aiStatus &&
+                    !aiStatus.reachable &&
+                    !aiStatus.ready && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-300 ring-1 ring-amber-500/30">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                        Unreachable
+                        {(aiStatus.waiting_count ?? 0) > 0
+                          ? ` · ${aiStatus.waiting_count} waiting`
+                          : ""}
+                      </span>
+                    )}
                 </div>
               </div>
               <p className="max-w-2xl text-xs text-gray-500">

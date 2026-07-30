@@ -1,4 +1,5 @@
 import type {
+  AiJobRow,
   AiProcessResult,
   AiSettings,
   AiStatus,
@@ -357,6 +358,31 @@ export const api = {
 
   getAiStatus(): Promise<AiStatus> {
     return request<AiStatus>("/api/ai/status");
+  },
+
+  listAiJobs(status?: string, limit = 50): Promise<AiJobRow[]> {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    params.set("limit", String(limit));
+    return request(`/api/ai/jobs?${params}`);
+  },
+
+  retryAiJob(jobId: number): Promise<{ ok: boolean; id: number }> {
+    return request(`/api/ai/jobs/${jobId}/retry`, { method: "POST" });
+  },
+
+  retryFailedAiJobs(): Promise<{ ok: boolean; retried: number }> {
+    return request("/api/ai/jobs/retry-failed", { method: "POST" });
+  },
+
+  cancelAiJob(jobId: number): Promise<{ ok: boolean; id: number }> {
+    return request(`/api/ai/jobs/${jobId}/cancel`, { method: "POST" });
+  },
+
+  clearFailedAiJobs(keepDays = 0): Promise<{ ok: boolean; deleted: number }> {
+    return request(`/api/ai/jobs/clear-failed?keep_days=${keepDays}`, {
+      method: "POST",
+    });
   },
 
   testAiConnection(base_url?: string): Promise<{

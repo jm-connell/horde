@@ -39,12 +39,14 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
         "ai_verdict": None,
         "ai_confidence": None,
         "ai_reason": None,
+        "ai_error": None,
     }
     ai = app_settings.ai_settings()
     if not ai.get("ai_duplicates", True):
         return result
     provider = get_llm_provider()
     if provider is None:
+        result["ai_error"] = "AI unavailable (no chat provider)"
         return result
 
     # Embedding similarity as a fast signal (Ollama indexes only).
@@ -70,6 +72,8 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
             else:
                 result["ai_verdict"] = "different"
                 result["ai_confidence"] = round(1.0 - float(embed_score), 3)
+        elif not provider.has_model(chat_model):
+            result["ai_error"] = f"Chat model unavailable: {chat_model}"
         return result
 
     try:
@@ -92,8 +96,8 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
             result["ai_reason"] = reason[:200]
         if result["ai_score"] is None and result["ai_confidence"] is not None:
             result["ai_score"] = result["ai_confidence"]
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        result["ai_error"] = str(exc)[:200]
     return result
 
 
@@ -105,5 +109,6 @@ def annotate_group(session: Session, videos: list[Video]) -> dict[str, Any]:
             "ai_verdict": None,
             "ai_confidence": None,
             "ai_reason": None,
+            "ai_error": None,
         }
     return score_pair(session, videos[0], videos[1])

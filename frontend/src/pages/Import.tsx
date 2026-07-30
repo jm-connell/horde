@@ -14,6 +14,7 @@ const DISMISSED_DUPES_KEY = "horde.dismissedDuplicateGroups";
 
 function verdictLabel(group: DuplicateGroup): string | null {
   if (group.match_type === "youtube_id") return "Same YouTube ID";
+  if (group.ai_error && !group.ai_verdict) return "AI unavailable";
   if (!group.ai_verdict) return null;
   const conf =
     group.ai_confidence != null
@@ -398,15 +399,21 @@ export default function Import() {
                             {label && (
                               <span
                                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                  group.ai_verdict === "different"
-                                    ? "bg-ink-800 text-gray-400"
-                                    : group.ai_verdict === "similar"
-                                      ? "bg-amber-500/15 text-amber-300"
-                                      : "bg-accent/15 text-accent"
+                                  group.ai_error && !group.ai_verdict
+                                    ? "bg-amber-500/15 text-amber-300"
+                                    : group.ai_verdict === "different"
+                                      ? "bg-ink-800 text-gray-400"
+                                      : group.ai_verdict === "similar"
+                                        ? "bg-amber-500/15 text-amber-300"
+                                        : "bg-accent/15 text-accent"
                                 }`}
-                                title={group.ai_reason || undefined}
                               >
                                 {label}
+                              </span>
+                            )}
+                            {group.ai_score != null && (
+                              <span className="text-[11px] text-gray-500">
+                                score {group.ai_score.toFixed(2)}
                               </span>
                             )}
                           </div>
@@ -419,6 +426,11 @@ export default function Import() {
                             Not a duplicate
                           </button>
                         </div>
+                        {(group.ai_reason || group.ai_error) && (
+                          <p className="mb-3 text-xs text-gray-400">
+                            {group.ai_reason || group.ai_error}
+                          </p>
+                        )}
                         <div className="space-y-3">
                           {group.videos.map((v) => (
                             <div

@@ -50,6 +50,9 @@ class VideoRead(BaseModel):
     ai_summary_length: Optional[str] = None
     ai_summary_cost: Optional[float] = None
     ai_summary_model: Optional[str] = None
+    embed_status: Optional[str] = None
+    embed_error: Optional[str] = None
+    tags_enriched_at: Optional[datetime] = None
 
 
 class VideoUpdate(BaseModel):

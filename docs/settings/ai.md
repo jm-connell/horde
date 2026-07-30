@@ -64,7 +64,12 @@ Summary length guide: short ≈75–120 words, medium ≈200–280, long ≈300�
 |---------|-----|---------|--------|
 | Paused | `paused` | `false` | Pause/resume from the Jobs pane or System background activity |
 
-Live queue status (counts, current job, GPU notes) appears here and on System.
+Live queue status appears here and on System:
+
+- Indexed count and **runnable / deferred / waiting / failed** breakdown
+- **Blocked** state + reason when jobs cannot run (provider down, paused, budget hard limit)
+- Current job (with attempt number when retrying)
+- **Failed jobs** list with Retry, Retry all, Clear failed
 
 ### Automatic schedule
 

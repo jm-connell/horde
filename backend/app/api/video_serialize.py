@@ -38,6 +38,9 @@ def to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
     ai_summary_length: Optional[str] = None
     ai_summary_cost: Optional[float] = None
     ai_summary_model: Optional[str] = None
+    embed_status: Optional[str] = None
+    embed_error: Optional[str] = None
+    tags_enriched_at = None
     if session is not None and video.id is not None:
         meta = session.get(VideoAiMeta, video.id)
         if meta is not None:
@@ -56,6 +59,11 @@ def to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
             raw_model = getattr(meta, "summary_model", None)
             if raw_model and str(raw_model).strip():
                 ai_summary_model = str(raw_model).strip()
+            embed_status = str(meta.embed_status or "") or None
+            raw_err = getattr(meta, "embed_error", None)
+            if raw_err and str(raw_err).strip():
+                embed_error = str(raw_err).strip()[:500]
+            tags_enriched_at = as_utc(getattr(meta, "tags_enriched_at", None))
     return VideoRead(
         id=video.id,
         title=video.title,
@@ -98,6 +106,9 @@ def to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
         ai_summary_length=ai_summary_length,
         ai_summary_cost=ai_summary_cost,
         ai_summary_model=ai_summary_model,
+        embed_status=embed_status,
+        embed_error=embed_error,
+        tags_enriched_at=tags_enriched_at,
     )
 
 

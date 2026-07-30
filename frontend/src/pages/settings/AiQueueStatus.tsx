@@ -13,6 +13,7 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
   }
 
   const kindLabel = job.kind.replace(/_/g, " ");
+  const attempts = job.attempts ?? 0;
   return (
     <div className="flex items-stretch justify-between gap-3">
       <dt className="shrink-0 pt-1 text-gray-400">Running</dt>
@@ -22,11 +23,22 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
             {job.title || (job.video_id == null ? kindLabel : "Untitled")}
           </span>
           <span className="block truncate text-[11px] text-gray-500">
-            {[job.channel, kindLabel].filter(Boolean).join(" · ")}
+            {[
+              job.channel,
+              kindLabel,
+              attempts > 1 ? `attempt ${attempts}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
           {job.model && (
             <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-500">
               {job.model}
+            </span>
+          )}
+          {job.error && attempts > 1 && (
+            <span className="mt-0.5 block truncate text-[10px] text-amber-400/90">
+              {job.error}
             </span>
           )}
         </span>
@@ -40,6 +52,21 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
       </dd>
     </div>
   );
+}
+
+function queueSummary(aiStatus: AiStatus): string {
+  const parts: string[] = [];
+  const runnable = aiStatus.runnable_count ?? 0;
+  const deferred = aiStatus.deferred_count ?? 0;
+  const waiting = aiStatus.waiting_count ?? 0;
+  const failed = aiStatus.error_count ?? 0;
+  if (runnable > 0) parts.push(`${runnable} ready`);
+  if (deferred > 0) parts.push(`${deferred} deferred`);
+  if (waiting > 0) parts.push(`${waiting} waiting`);
+  if (failed > 0) parts.push(`${failed} failed`);
+  if (parts.length) return parts.join(" · ");
+  if (aiStatus.queue_depth > 0) return `${aiStatus.queue_depth} queued`;
+  return "";
 }
 
 export default function AiQueueStatus({
@@ -57,6 +84,24 @@ export default function AiQueueStatus({
 }) {
   const showPauseControls =
     typeof onPause === "function" && typeof onResume === "function";
+  const summary = queueSummary(aiStatus);
+  const blocked =
+    Boolean(aiStatus.blocked_reason) &&
+    aiStatus.queue_depth > 0 &&
+    !aiStatus.current_job;
+
+  const statusLabel = !aiStatus.enabled
+    ? "Disabled"
+    : aiStatus.paused
+      ? "Paused"
+      : blocked
+        ? "Blocked"
+        : aiStatus.ready
+          ? "Ready"
+          : aiStatus.reachable
+            ? "Connected (models loading)"
+            : "Offline";
+
   return (
     <dl className="space-y-1.5 text-sm">
       {showPauseControls && (
@@ -91,16 +136,14 @@ export default function AiQueueStatus({
         <>
           <div className="flex justify-between gap-3">
             <dt className="text-gray-400">Status</dt>
-            <dd className="text-right text-gray-200">
-              {!aiStatus.enabled
-                ? "Disabled"
-                : aiStatus.paused
-                  ? "Paused"
-                  : aiStatus.ready
-                    ? "Ready"
-                    : aiStatus.reachable
-                      ? "Connected (models loading)"
-                      : "Offline"}
+            <dd
+              className={
+                blocked
+                  ? "text-right text-amber-300"
+                  : "text-right text-gray-200"
+              }
+            >
+              {statusLabel}
             </dd>
           </div>
           <div className="flex justify-between gap-3">
@@ -115,11 +158,12 @@ export default function AiQueueStatus({
         <dt className="text-gray-400">Indexed</dt>
         <dd className="text-right text-gray-200">
           {aiStatus.indexed_videos} / {aiStatus.total_videos}
-          {aiStatus.queue_depth > 0
-            ? ` · ${aiStatus.queue_depth} queued`
-            : ""}
+          {summary ? ` · ${summary}` : ""}
         </dd>
       </div>
+      {blocked && aiStatus.blocked_reason && (
+        <p className="text-xs text-amber-400/90">{aiStatus.blocked_reason}</p>
+      )}
       {aiStatus.current_job && <CurrentAiJob job={aiStatus.current_job} />}
       {(aiStatus.gpu_name || aiStatus.vram_total_bytes != null) && (
         <div className="flex justify-between gap-3">

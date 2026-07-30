@@ -56,6 +56,9 @@ export interface Video {
   ai_summary_cost?: number | null;
   /** Model used for the last summary, when known. */
   ai_summary_model?: string | null;
+  embed_status?: string | null;
+  embed_error?: string | null;
+  tags_enriched_at?: string | null;
 }
 
 export interface VideoUpdate {
@@ -334,6 +337,12 @@ export interface AiStatus {
   queue_depth: number;
   queue_breakdown: Record<string, number>;
   current_job: AiCurrentJob | string | null;
+  blocked_reason?: string | null;
+  runnable_count?: number;
+  deferred_count?: number;
+  waiting_count?: number;
+  error_count?: number;
+  recent_failures?: AiJobFailure[];
   workload_profile?: AiWorkloadProfile;
   recommended_profile?: AiWorkloadProfile;
   profile_locked?: boolean;
@@ -357,6 +366,31 @@ export interface AiStatus {
   embed_backend?: string | null;
 }
 
+export interface AiJobFailure {
+  id: number | null;
+  kind: string;
+  video_id: number | null;
+  catalog_video_id?: number | null;
+  title: string | null;
+  attempts: number;
+  error: string | null;
+  updated_at: string | null;
+}
+
+export interface AiJobRow {
+  id: number | null;
+  kind: string;
+  status: string;
+  video_id: number | null;
+  catalog_video_id?: number | null;
+  title: string | null;
+  attempts: number;
+  error: string | null;
+  run_after: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface RecommendationSection {
   title: string;
   kind?: string;
@@ -372,12 +406,16 @@ export interface RecommendationsResponse {
 }
 
 export interface AiCurrentJob {
+  id?: number | null;
   kind: string;
   video_id: number | null;
   title: string | null;
   channel: string | null;
   has_thumbnail: boolean;
   model?: string | null;
+  attempts?: number;
+  error?: string | null;
+  run_after?: string | null;
 }
 
 export interface SystemStats {
@@ -415,6 +453,7 @@ export interface DuplicateGroup {
   ai_verdict: string | null;
   ai_confidence: number | null;
   ai_reason: string | null;
+  ai_error?: string | null;
 }
 
 export interface HealthStats {
@@ -456,6 +495,8 @@ export interface HealthStats {
   workers?: {
     ai_queue_depth: number;
     ai_running: number;
+    ai_error_count?: number;
+    ai_blocked_reason?: string | null;
     catalog_queue_depth: number;
     catalog_indexing: boolean;
   };

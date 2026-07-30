@@ -39,7 +39,7 @@ Health snapshot from `GET /api/health`:
 | Library | Video count |
 | Pending import | Review queue depth |
 | Active downloads | Count + **paused** when the download queue is paused |
-| AI queue | Depth (+ running count) from `workers` |
+| AI queue | Depth (+ running / failed counts, blocked reason) from `workers` |
 | Catalog queue | Depth (+ indexing) from `workers` |
 | Last extract failure | Kind + message from `youtube.last_extract_failure` (when set) |
 | Disk free | Free / total bytes on the media volume |

@@ -112,7 +112,12 @@ def _embeddings_match_model(
 
 
 def embed_video(session: Session, video_id: int) -> bool:
-    """Compute and store embeddings for a video. Returns True on success."""
+    """Compute and store embeddings for a video.
+
+    Returns True on success. Returns False for soft preconditions (missing video,
+    needs_review, no provider). Raises RuntimeError on hard failures (including
+    empty corpus).
+    """
     video = session.get(Video, video_id)
     if video is None or video.needs_review:
         return False
@@ -131,6 +136,11 @@ def embed_video(session: Session, video_id: int) -> bool:
         and meta.embed_status == "ready"
         and _embeddings_match_model(session, video_id, model)
     ):
+        if meta.embed_error:
+            meta.embed_error = None
+            meta.updated_at = utcnow()
+            session.add(meta)
+            session.commit()
         return True
 
     docs = ai_text.documents_for_video(video, use_subtitles=use_subs)
@@ -145,12 +155,13 @@ def embed_video(session: Session, video_id: int) -> bool:
     try:
         usable = [(idx, doc) for idx, doc in docs if doc.strip()]
         if not usable:
-            meta.embed_status = "ready"
+            meta.embed_status = "error"
+            meta.embed_error = "empty_document"
             meta.content_hash = digest
             meta.updated_at = utcnow()
             session.add(meta)
             session.commit()
-            return True
+            raise RuntimeError("empty_document: no usable metadata or subtitle text")
         texts = [doc for _, doc in usable]
         embed_many = getattr(provider, "embed_many", None)
         if callable(embed_many):
@@ -176,15 +187,19 @@ def embed_video(session: Session, video_id: int) -> bool:
             )
             session.add(row)
         meta.embed_status = "ready"
+        meta.embed_error = None
         meta.content_hash = digest
         meta.updated_at = utcnow()
         session.add(meta)
         session.commit()
         return True
+    except RuntimeError:
+        raise
     except Exception as exc:  # noqa: BLE001
         session.rollback()
         meta = _get_or_create_meta(session, video_id)
         meta.embed_status = "error"
+        meta.embed_error = str(exc)[:500]
         meta.updated_at = utcnow()
         session.add(meta)
         session.commit()

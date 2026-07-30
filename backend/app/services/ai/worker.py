@@ -27,6 +27,9 @@ _stop = threading.Event()
 _thread: Optional[threading.Thread] = None
 _timer_thread: Optional[threading.Thread] = None
 _wake = threading.Event()
+_blocked_reason: Optional[str] = None
+_WAITING_NOTE_PREFIX = "waiting: "
+_WAITING_STAMP_AGE_SEC = 120
 
 
 def _active_job_exists(
@@ -96,8 +99,11 @@ def enqueue_for_video(
     # Automatic per-video enqueue only in on_download mode (timer uses sweeps).
     if schedule != "on_download" and not force:
         return
-    # Still enqueue when providers are temporarily down; the worker retries later.
-    if ollama_on or openrouter_owns_embeddings():
+    # Enqueue embeds only when a backend can eventually serve them (Ollama
+    # enabled, or OpenRouter scope=all). Temporary unreachability is fine —
+    # the worker waits with blocked_reason instead of burning attempts.
+    can_embed = ollama_on or openrouter_owns_embeddings()
+    if can_embed:
         enqueue_job(AiJobKind.embed_video, video_id, force=force)
     if include_tags and ai.get("enrich_tags", True) and (ollama_on or or_on):
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)
@@ -114,6 +120,12 @@ def _runtime_limits() -> tuple[int, int]:
 def enqueue_missing_embeds(*, limit: Optional[int] = None) -> dict:
     """Queue embeds for videos needing index; loops until drained or cap iterations."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
+    ai = app_settings.ai_settings()
+    if not (bool(ai.get("enabled", True)) or openrouter_owns_embeddings()):
+        return _result(
+            breakdown,
+            empty="No embed provider configured (enable Ollama or OpenRouter All)",
+        )
     batch_limit, _ = _runtime_limits()
     if limit is not None:
         batch_limit = limit
@@ -136,12 +148,27 @@ def enqueue_missing_embeds(*, limit: Optional[int] = None) -> dict:
 def enqueue_reindex_embeds(*, limit: Optional[int] = None) -> dict:
     """Queue embeds for missing, stale, or wrong-model indexes (e.g. after model change)."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
+    ai = app_settings.ai_settings()
+    if not (bool(ai.get("enabled", True)) or openrouter_owns_embeddings()):
+        return _result(
+            breakdown,
+            empty="No embed provider configured (enable Ollama or OpenRouter All)",
+        )
     batch_limit, _ = _runtime_limits()
     if limit is not None:
         batch_limit = limit
     for _ in range(50):
         with Session(engine) as session:
             need = embeddings.videos_needing_embed(session, limit=batch_limit)
+            # Clear stale embed_error so retry/reindex starts clean.
+            for video_id in need:
+                meta = session.get(VideoAiMeta, video_id)
+                if meta is not None and meta.embed_error:
+                    meta.embed_error = None
+                    meta.embed_status = "pending"
+                    meta.updated_at = utcnow()
+                    session.add(meta)
+            session.commit()
         if not need:
             break
         added = 0
@@ -375,6 +402,219 @@ def queue_breakdown() -> dict[str, int]:
     return counts
 
 
+def error_count() -> int:
+    with Session(engine) as session:
+        rows = session.exec(
+            select(AiJob).where(AiJob.status == AiJobStatus.error)
+        ).all()
+        return len(rows)
+
+
+def blocked_reason() -> Optional[str]:
+    return _blocked_reason
+
+
+def _set_blocked_reason(reason: Optional[str]) -> None:
+    global _blocked_reason
+    _blocked_reason = reason
+
+
+def _job_title(session: Session, job: AiJob) -> Optional[str]:
+    if job.video_id:
+        video = session.get(Video, job.video_id)
+        if video is not None:
+            return video.title
+    if job.catalog_video_id:
+        from ...models import ChannelCatalogVideo
+
+        cv = session.get(ChannelCatalogVideo, job.catalog_video_id)
+        if cv is not None:
+            return cv.title
+    return None
+
+
+def queue_stats() -> dict:
+    """Breakdown of queued work: runnable / deferred / waiting (+ error count)."""
+    now = utcnow()
+    llm = get_llm_provider()
+    embed = get_embed_provider()
+    llm_ok = llm is not None
+    embed_ok = embed is not None
+    runnable = 0
+    deferred = 0
+    waiting = 0
+    running = 0
+    with Session(engine) as session:
+        rows = session.exec(
+            select(AiJob).where(
+                AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
+            )
+        ).all()
+        for job in rows:
+            if job.status == AiJobStatus.running:
+                running += 1
+                continue
+            due = job.run_after is None or job.run_after <= now
+            if not due:
+                deferred += 1
+                continue
+            if _job_runnable(job.kind, llm_ok=llm_ok, embed_ok=embed_ok):
+                runnable += 1
+            else:
+                waiting += 1
+    return {
+        "runnable_count": runnable,
+        "deferred_count": deferred,
+        "waiting_count": waiting,
+        "running_count": running,
+        "error_count": error_count(),
+    }
+
+
+def recent_failures(*, limit: int = 10) -> list[dict]:
+    limit = max(1, min(int(limit), 50))
+    out: list[dict] = []
+    with Session(engine) as session:
+        rows = session.exec(
+            select(AiJob)
+            .where(AiJob.status == AiJobStatus.error)
+            .order_by(AiJob.updated_at.desc())
+            .limit(limit)
+        ).all()
+        for job in rows:
+            kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
+            out.append(
+                {
+                    "id": job.id,
+                    "kind": kind,
+                    "video_id": job.video_id,
+                    "catalog_video_id": job.catalog_video_id,
+                    "title": _job_title(session, job),
+                    "attempts": job.attempts,
+                    "error": job.error,
+                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                }
+            )
+    return out
+
+
+def list_jobs(
+    *,
+    status: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict]:
+    limit = max(1, min(int(limit), 200))
+    with Session(engine) as session:
+        statement = select(AiJob).order_by(AiJob.updated_at.desc()).limit(limit)
+        if status:
+            try:
+                st = AiJobStatus(status)
+            except ValueError as exc:
+                raise ValueError(f"Unknown status: {status}") from exc
+            statement = (
+                select(AiJob)
+                .where(AiJob.status == st)
+                .order_by(AiJob.updated_at.desc())
+                .limit(limit)
+            )
+        rows = session.exec(statement).all()
+        out: list[dict] = []
+        for job in rows:
+            kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
+            st_val = job.status.value if hasattr(job.status, "value") else str(job.status)
+            out.append(
+                {
+                    "id": job.id,
+                    "kind": kind,
+                    "status": st_val,
+                    "video_id": job.video_id,
+                    "catalog_video_id": job.catalog_video_id,
+                    "title": _job_title(session, job),
+                    "attempts": job.attempts,
+                    "error": job.error,
+                    "run_after": job.run_after.isoformat() if job.run_after else None,
+                    "created_at": job.created_at.isoformat() if job.created_at else None,
+                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                }
+            )
+        return out
+
+
+def retry_job(job_id: int) -> bool:
+    with Session(engine) as session:
+        job = session.get(AiJob, job_id)
+        if job is None:
+            return False
+        if job.status not in (AiJobStatus.error, AiJobStatus.cancelled):
+            return False
+        job.status = AiJobStatus.queued
+        job.attempts = 0
+        job.run_after = utcnow()
+        job.error = None
+        job.updated_at = utcnow()
+        session.add(job)
+        session.commit()
+    _wake.set()
+    return True
+
+
+def retry_failed_jobs() -> int:
+    reset = 0
+    with Session(engine) as session:
+        rows = session.exec(
+            select(AiJob).where(AiJob.status == AiJobStatus.error)
+        ).all()
+        for job in rows:
+            job.status = AiJobStatus.queued
+            job.attempts = 0
+            job.run_after = utcnow()
+            job.error = None
+            job.updated_at = utcnow()
+            session.add(job)
+            reset += 1
+        if reset:
+            session.commit()
+    if reset:
+        _wake.set()
+    return reset
+
+
+def cancel_job(job_id: int) -> bool:
+    with Session(engine) as session:
+        job = session.get(AiJob, job_id)
+        if job is None:
+            return False
+        if job.status != AiJobStatus.queued:
+            return False
+        job.status = AiJobStatus.cancelled
+        job.error = "cancelled_by_user"
+        job.updated_at = utcnow()
+        session.add(job)
+        session.commit()
+    return True
+
+
+def clear_failed_jobs(*, keep_days: int = 0) -> int:
+    """Delete terminal error/cancelled jobs older than keep_days (0 = all)."""
+    keep_days = max(0, int(keep_days))
+    cutoff = utcnow() - timedelta(days=keep_days) if keep_days else None
+    deleted = 0
+    with Session(engine) as session:
+        rows = session.exec(
+            select(AiJob).where(
+                AiJob.status.in_([AiJobStatus.error, AiJobStatus.cancelled])  # type: ignore[attr-defined]
+            )
+        ).all()
+        for job in rows:
+            if cutoff is not None and job.updated_at and job.updated_at > cutoff:
+                continue
+            session.delete(job)
+            deleted += 1
+        if deleted:
+            session.commit()
+    return deleted
+
+
 def current_job_info() -> Optional[dict]:
     with Session(engine) as session:
         job = session.exec(
@@ -397,6 +637,7 @@ def current_job_info() -> Optional[dict]:
         else:
             model = str(ai.get("chat_model") or "")
         info: dict = {
+            "id": job.id,
             "kind": kind,
             "video_id": job.video_id,
             "catalog_video_id": job.catalog_video_id,
@@ -404,6 +645,9 @@ def current_job_info() -> Optional[dict]:
             "channel": None,
             "has_thumbnail": False,
             "model": model or None,
+            "attempts": job.attempts,
+            "error": job.error,
+            "run_after": job.run_after.isoformat() if job.run_after else None,
         }
         if job.video_id:
             video = session.get(Video, job.video_id)
@@ -451,6 +695,91 @@ def _job_runnable(
     return False
 
 
+def _waiting_reason(*, llm_ok: bool, embed_ok: bool) -> Optional[str]:
+    if not llm_ok and not embed_ok:
+        return "No AI provider reachable (enable Ollama or OpenRouter)"
+    if not embed_ok:
+        return "Waiting for embed provider (Ollama or OpenRouter All)"
+    if not llm_ok:
+        return "Waiting for chat provider (Ollama or OpenRouter)"
+    return None
+
+
+def _stamp_waiting_jobs(reason: str) -> None:
+    """Annotate old queued jobs that cannot run yet (no attempt burn)."""
+    note = f"{_WAITING_NOTE_PREFIX}{reason}"[:500]
+    cutoff = utcnow() - timedelta(seconds=_WAITING_STAMP_AGE_SEC)
+    with Session(engine) as session:
+        rows = session.exec(
+            select(AiJob).where(AiJob.status == AiJobStatus.queued)
+        ).all()
+        changed = 0
+        for job in rows:
+            created = job.created_at or job.updated_at
+            if created is None or created > cutoff:
+                continue
+            if job.error == note:
+                continue
+            job.error = note
+            job.updated_at = utcnow()
+            session.add(job)
+            changed += 1
+        if changed:
+            session.commit()
+
+
+def _clear_waiting_notes() -> None:
+    with Session(engine) as session:
+        rows = session.exec(
+            select(AiJob).where(AiJob.status == AiJobStatus.queued)
+        ).all()
+        changed = 0
+        for job in rows:
+            if job.error and str(job.error).startswith(_WAITING_NOTE_PREFIX):
+                job.error = None
+                job.updated_at = utcnow()
+                session.add(job)
+                changed += 1
+        if changed:
+            session.commit()
+
+
+def _compute_blocked_reason(
+    *,
+    paused: bool,
+    llm_ok: bool,
+    embed_ok: bool,
+    has_queued: bool,
+) -> Optional[str]:
+    if paused:
+        return "AI queue is paused"
+    try:
+        from .cost_ledger import budget_status
+
+        budget = budget_status()
+        if budget.get("blocked"):
+            return "OpenRouter weekly budget hard limit reached"
+    except Exception:  # noqa: BLE001
+        pass
+    if not has_queued:
+        return None
+    wait = _waiting_reason(llm_ok=llm_ok, embed_ok=embed_ok)
+    if wait and (not llm_ok or not embed_ok):
+        # Only report blocked when something in queue actually needs the missing side.
+        with Session(engine) as session:
+            rows = session.exec(
+                select(AiJob).where(AiJob.status == AiJobStatus.queued)
+            ).all()
+            needs_missing = False
+            for job in rows:
+                if not _job_runnable(job.kind, llm_ok=llm_ok, embed_ok=embed_ok):
+                    needs_missing = True
+                    break
+            if needs_missing:
+                return wait
+    return None
+
+
 def _next_job(
     session: Session, *, llm_ok: bool, embed_ok: bool
 ) -> Optional[AiJob]:
@@ -470,19 +799,38 @@ def _next_job(
 
 def _process_one() -> bool:
     ai = app_settings.ai_settings()
-    if ai.get("paused"):
-        return False
+    paused = bool(ai.get("paused"))
     llm = get_llm_provider()
     embed = get_embed_provider()
     llm_ok = llm is not None
     embed_ok = embed is not None
+    depth = queue_depth()
+    has_queued = depth > 0
+
+    if paused:
+        _set_blocked_reason("AI queue is paused")
+        return False
+
     if not llm_ok and not embed_ok:
+        reason = _waiting_reason(llm_ok=False, embed_ok=False) or "No AI provider reachable"
+        _set_blocked_reason(reason if has_queued else None)
+        if has_queued:
+            _stamp_waiting_jobs(reason)
         return False
 
     with Session(engine) as session:
         job = _next_job(session, llm_ok=llm_ok, embed_ok=embed_ok)
         if job is None:
+            reason = _compute_blocked_reason(
+                paused=False, llm_ok=llm_ok, embed_ok=embed_ok, has_queued=has_queued
+            )
+            _set_blocked_reason(reason)
+            if reason and has_queued:
+                _stamp_waiting_jobs(reason)
+            elif not reason:
+                _clear_waiting_notes()
             return False
+        _set_blocked_reason(None)
         job.status = AiJobStatus.running
         job.attempts += 1
         job.updated_at = utcnow()
@@ -493,21 +841,30 @@ def _process_one() -> bool:
         video_id = job.video_id
         catalog_video_id = job.catalog_video_id
 
+    _clear_waiting_notes()
+
     try:
         with Session(engine) as session:
-            tasks.dispatch(
+            skip_reason = tasks.dispatch(
                 session, kind, video_id, catalog_video_id=catalog_video_id
             )
         with Session(engine) as session:
             job = session.get(AiJob, job_id)
             if job is not None:
-                job.status = AiJobStatus.completed
-                job.error = None
+                if skip_reason:
+                    job.status = AiJobStatus.cancelled
+                    job.error = f"skipped: {skip_reason}"[:500]
+                else:
+                    job.status = AiJobStatus.completed
+                    job.error = None
                 job.updated_at = utcnow()
                 session.add(job)
                 session.commit()
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI job %s failed: %s", job_id, exc)
+        from .provider import invalidate_resolved_url
+
+        invalidate_resolved_url()
         with Session(engine) as session:
             job = session.get(AiJob, job_id)
             if job is not None:

@@ -37,7 +37,9 @@ Per-video chat lets you ask about content, chapters, or themes. Context is built
 
 ## Enrich tags
 
-**Enrich tags** proposes tags from content signals. Existing tags are respected (avoid near-duplicates). Tags then appear as library chips when counts exceed the display threshold ([Library](library.md)).
+**Enrich tags** proposes tags from **title, channel, and description** (subtitle excerpt is optional when captions exist). Existing tags are respected (avoid near-duplicates). Tags then appear as library chips when counts exceed the display threshold ([Library](library.md)).
+
+Summaries still require downloaded captions; tag enrichment does not.
 
 ## Recommended tab
 
@@ -50,17 +52,24 @@ Categories are invented/maintained by the AI pipeline; match strictness is tunab
 
 ## Duplicate confirmation
 
-On [Import & review](import-review.md), possible duplicate groups can be scored with AI when **AI duplicate confirmation** is enabled. Scoring is **on-demand** from the Import API (not a background AI job). Use **Keep this**, **Delete**, or **Not a duplicate** to resolve groups.
+On [Import & review](import-review.md), possible duplicate groups can be scored with AI when **AI duplicate confirmation** is enabled. Scoring is **on-demand** from the Import API (not a background AI job). Groups show verdict, confidence, optional similarity score, and reason text; if AI is enabled but no chat provider is up, the UI shows **AI unavailable** (`ai_error`) instead of a silent blank. Use **Keep this**, **Delete**, or **Not a duplicate** to resolve groups.
 
 ## Search indexes & catalog embeds
 
 - Library videos get `embed_video` jobs for semantic search and related
 - Channel catalog entries can get `embed_catalog_video` after [catalog phases](channels.md) reach **embed**
 - Changing the embedding model prompts a rebuild so shelves and search stay coherent
+- Failed indexes store `embed_status=error` + `embed_error` on the video; rebuild from Jobs
 
 ## Single-flight & queues
 
-AI work is queued and rate-limited (single-flight patterns, workload profiles). Watch [Settings → AI](../settings/ai.md) queue status for embed / catalog / enrich breakdowns. See [Single-flight AI](../design/single-flight-ai.md) and [AI pipeline](../architecture/ai-pipeline.md).
+AI work is queued and rate-limited (single-flight patterns, workload profiles). Watch [Settings → AI → Jobs](../settings/ai.md) for:
+
+- **Runnable / deferred / waiting / failed** counts (not one opaque “N queued”)
+- **Blocked** state when jobs sit waiting on Ollama/OpenRouter
+- **Failed jobs** list with Retry / Retry all / Clear failed
+
+See [Single-flight AI](../design/single-flight-ai.md) and [AI pipeline](../architecture/ai-pipeline.md).
 
 ## Related
 

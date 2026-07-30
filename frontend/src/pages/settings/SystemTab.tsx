@@ -343,11 +343,19 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
               <>
                 <div className="flex justify-between">
                   <dt className="text-gray-400">AI queue</dt>
-                  <dd className="text-gray-200">
+                  <dd className="text-right text-gray-200">
                     {health.workers.ai_queue_depth}
                     {health.workers.ai_running
                       ? ` · ${health.workers.ai_running} running`
                       : ""}
+                    {(health.workers.ai_error_count ?? 0) > 0
+                      ? ` · ${health.workers.ai_error_count} failed`
+                      : ""}
+                    {health.workers.ai_blocked_reason ? (
+                      <span className="mt-0.5 block text-xs text-amber-400/90">
+                        {health.workers.ai_blocked_reason}
+                      </span>
+                    ) : null}
                   </dd>
                 </div>
                 <div className="flex justify-between">

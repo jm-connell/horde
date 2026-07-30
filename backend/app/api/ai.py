@@ -25,12 +25,41 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
 class AiCurrentJob(BaseModel):
+    id: Optional[int] = None
     kind: str
     video_id: Optional[int] = None
     title: Optional[str] = None
     channel: Optional[str] = None
     has_thumbnail: bool = False
     model: Optional[str] = None
+    attempts: int = 0
+    error: Optional[str] = None
+    run_after: Optional[str] = None
+
+
+class AiJobFailure(BaseModel):
+    id: Optional[int] = None
+    kind: str
+    video_id: Optional[int] = None
+    catalog_video_id: Optional[int] = None
+    title: Optional[str] = None
+    attempts: int = 0
+    error: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class AiJobRow(BaseModel):
+    id: Optional[int] = None
+    kind: str
+    status: str
+    video_id: Optional[int] = None
+    catalog_video_id: Optional[int] = None
+    title: Optional[str] = None
+    attempts: int = 0
+    error: Optional[str] = None
+    run_after: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 
 class AiStatusRead(BaseModel):
@@ -52,6 +81,12 @@ class AiStatusRead(BaseModel):
     queue_depth: int = 0
     queue_breakdown: dict[str, int] = Field(default_factory=dict)
     current_job: Optional[AiCurrentJob] = None
+    blocked_reason: Optional[str] = None
+    runnable_count: int = 0
+    deferred_count: int = 0
+    waiting_count: int = 0
+    error_count: int = 0
+    recent_failures: list[AiJobFailure] = Field(default_factory=list)
     workload_profile: str = "normal"
     recommended_profile: str = "normal"
     profile_locked: bool = False
@@ -130,16 +165,37 @@ def ai_status(session: Session = Depends(get_session)):
     )
     breakdown = worker.queue_breakdown()
     current = worker.current_job_info()
+    stats = worker.queue_stats()
     ai = app_settings.ai_settings()
     runtime = ai_workload.resolve_runtime(ai.get("workload_profile"))
     models_match = (
         str(ai.get("embed_model") or "") == runtime.embed_model
         and str(ai.get("chat_model") or "") == runtime.chat_model
     )
+    current_job = None
+    if current:
+        current_job = AiCurrentJob(
+            id=current.get("id"),
+            kind=current["kind"],
+            video_id=current.get("video_id"),
+            title=current.get("title"),
+            channel=current.get("channel"),
+            has_thumbnail=bool(current.get("has_thumbnail")),
+            model=current.get("model"),
+            attempts=int(current.get("attempts") or 0),
+            error=current.get("error"),
+            run_after=current.get("run_after"),
+        )
     return AiStatusRead(
         **status.__dict__,
         queue_breakdown=breakdown,
-        current_job=AiCurrentJob(**current) if current else None,
+        current_job=current_job,
+        blocked_reason=worker.blocked_reason(),
+        runnable_count=int(stats.get("runnable_count") or 0),
+        deferred_count=int(stats.get("deferred_count") or 0),
+        waiting_count=int(stats.get("waiting_count") or 0),
+        error_count=int(stats.get("error_count") or 0),
+        recent_failures=[AiJobFailure(**row) for row in worker.recent_failures(limit=10)],
         workload_profile=runtime.profile,
         recommended_profile=runtime.recommended_profile,
         profile_locked=runtime.profile_locked,
@@ -300,6 +356,44 @@ def ai_resume():
     app_settings.save({"ai": {"paused": False}})
     worker.wake_worker()
     return {"paused": False}
+
+
+@router.get("/jobs", response_model=list[AiJobRow])
+def ai_list_jobs(
+    status: Optional[str] = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    try:
+        rows = worker.list_jobs(status=status, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return [AiJobRow(**row) for row in rows]
+
+
+@router.post("/jobs/retry-failed")
+def ai_retry_failed():
+    count = worker.retry_failed_jobs()
+    return {"ok": True, "retried": count}
+
+
+@router.post("/jobs/clear-failed")
+def ai_clear_failed(keep_days: int = Query(default=0, ge=0, le=365)):
+    deleted = worker.clear_failed_jobs(keep_days=keep_days)
+    return {"ok": True, "deleted": deleted}
+
+
+@router.post("/jobs/{job_id}/retry")
+def ai_retry_job(job_id: int):
+    if not worker.retry_job(job_id):
+        raise HTTPException(status_code=404, detail="Job not found or not retryable")
+    return {"ok": True, "id": job_id}
+
+
+@router.post("/jobs/{job_id}/cancel")
+def ai_cancel_job(job_id: int):
+    if not worker.cancel_job(job_id):
+        raise HTTPException(status_code=404, detail="Job not found or not cancellable")
+    return {"ok": True, "id": job_id}
 
 
 @router.get("/recommendations")

@@ -86,6 +86,12 @@ OpenRouter spend is tracked locally in `openrouter_usage` (rolling 7 days).
 
 Soft budget alone warns in the UI without stopping the queue.
 
+## Queue visibility & recovery
+
+Settings → AI → Jobs shows **runnable / deferred / waiting / failed** counts plus a blocked reason when providers are down. Terminal failures list under **Failed jobs** with Retry / Retry all / Clear failed.
+
+If Ollama was offline, waiting jobs resume automatically once it is reachable again (no Horde restart required). See [Troubleshooting — Ollama offline](troubleshooting.md#ollama-offline).
+
 ## Related
 
 - [AI features guide](../guides/ai-features.md)

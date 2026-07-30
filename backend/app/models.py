@@ -247,6 +247,8 @@ class VideoAiMeta(SQLModel, table=True):
     user_tags: str = Field(default="[]")
     tags_enriched_at: Optional[datetime] = None
     tags_locked: bool = Field(default=False)
+    # Last embed failure message (cleared on successful index).
+    embed_error: Optional[str] = None
     updated_at: datetime = Field(default_factory=utcnow)
 
 

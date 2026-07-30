@@ -215,6 +215,8 @@ def health():
     last_extract = None
     ai_queue_depth = 0
     ai_running = 0
+    ai_error_count = 0
+    ai_blocked_reason = None
     catalog_queue_depth = 0
     catalog_indexing = False
     try:
@@ -223,7 +225,7 @@ def health():
             cookie_configured,
             get_last_extract_failure,
         )
-        from .services.ai.worker import queue_breakdown, queue_depth
+        from .services.ai.worker import blocked_reason, error_count, queue_breakdown, queue_depth
         from .services.channel_catalog import get_runtime_status
 
         downloads_paused = bool(
@@ -235,6 +237,8 @@ def health():
         ai_queue_depth = queue_depth()
         breakdown = queue_breakdown()
         ai_running = int(breakdown.get("running") or 0)
+        ai_error_count = error_count()
+        ai_blocked_reason = blocked_reason()
         cat = get_runtime_status()
         catalog_queue_depth = int(cat.get("queue_depth") or 0)
         catalog_indexing = bool(cat.get("running"))
@@ -261,6 +265,8 @@ def health():
         "workers": {
             "ai_queue_depth": ai_queue_depth,
             "ai_running": ai_running,
+            "ai_error_count": ai_error_count,
+            "ai_blocked_reason": ai_blocked_reason,
             "catalog_queue_depth": catalog_queue_depth,
             "catalog_indexing": catalog_indexing,
         },

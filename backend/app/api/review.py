@@ -31,6 +31,7 @@ class DuplicateGroupRead(BaseModel):
     ai_verdict: Optional[str] = None
     ai_confidence: Optional[float] = None
     ai_reason: Optional[str] = None
+    ai_error: Optional[str] = None
 
 
 @router.get("", response_model=list[VideoRead])
@@ -200,14 +201,21 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
             raw_groups.append(("heuristic", cluster))
 
     annotate = False
+    ai_unavailable_reason: Optional[str] = None
     try:
         from ..services import app_settings
         from ..services.ai.provider import get_llm_provider
 
         ai = app_settings.ai_settings()
-        annotate = bool(ai.get("ai_duplicates", True)) and get_llm_provider() is not None
+        want_ai = bool(ai.get("ai_duplicates", True))
+        if want_ai:
+            if get_llm_provider() is not None:
+                annotate = True
+            else:
+                ai_unavailable_reason = "AI unavailable (no chat provider)"
     except Exception:  # noqa: BLE001
         annotate = False
+        ai_unavailable_reason = "AI unavailable"
 
     out: list[dict[str, Any]] = []
     for match_type, group in raw_groups:
@@ -218,6 +226,7 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
             "ai_verdict": None,
             "ai_confidence": None,
             "ai_reason": None,
+            "ai_error": None,
         }
         if annotate and match_type == "heuristic":
             try:
@@ -225,8 +234,10 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
 
                 scored = annotate_group(session, group)
                 entry.update(scored)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                entry["ai_error"] = str(exc)[:200]
+        elif match_type == "heuristic" and ai_unavailable_reason:
+            entry["ai_error"] = ai_unavailable_reason
         elif match_type == "youtube_id":
             entry["ai_verdict"] = "same"
             entry["ai_confidence"] = 1.0

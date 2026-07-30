@@ -55,12 +55,23 @@ Docker entrypoint runs Horde as `PUID`:`PGID` (defaults `1000:1000`) and chowns 
 
 ## Ollama offline
 
-**Symptoms:** AI status not ready; embeds/tags stuck queued; `/api/health` shows `ollama.reachable: false`. Settings → System shows `ollama.last_error` when Offline.
+**Symptoms:** AI status Offline / Blocked; embeds/tags show **waiting** (not progressing); `/api/health` shows `ollama.reachable: false` and may include `workers.ai_blocked_reason`. Settings → System / AI → Jobs shows the blocked reason.
+
+**Waiting vs failed:**
+
+| State | Meaning |
+|-------|---------|
+| **Waiting** | Jobs stay `queued`, attempts stay `0`, provider missing/unreachable. Resume when Ollama (or OpenRouter) is back — no Retry needed. |
+| **Deferred** | Job failed once/twice and has a future `run_after` backoff. |
+| **Failed** | Terminal after 3 attempts — use **Retry** / **Retry all** under Settings → AI → Jobs. |
+
+**Checks:**
 
 1. If using Compose AI profile: `docker compose --profile ai up -d` and wait for Ollama to listen on 11434.
 2. Set `OLLAMA_BASE_URL` explicitly if auto-discover fails (especially remote GPUs).
 3. From inside the Horde container, curl the candidate URLs in [AI setup](ai-setup.md) order.
 4. OpenRouter-only setups can run without Ollama when scope covers the tasks you need (embeddings may still want Ollama unless scope is **all** or cloud embeds are configured).
+5. After Ollama returns, jobs should claim without restarting Horde (dead URL cache is invalidated on provider errors).
 
 ## DASH / stream preview issues
 
