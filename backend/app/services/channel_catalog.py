@@ -988,6 +988,28 @@ def start_catalog_worker() -> None:
     _thread.start()
 
 
+def recover_catalog_jobs() -> int:
+    """Requeue catalogs left indexing after a process crash/restart."""
+    reset = 0
+    with Session(engine) as session:
+        rows = session.exec(
+            select(ChannelCatalog).where(
+                ChannelCatalog.status == ChannelCatalogStatus.indexing
+            )
+        ).all()
+        for catalog in rows:
+            catalog.status = ChannelCatalogStatus.queued
+            catalog.updated_at = utcnow()
+            session.add(catalog)
+            reset += 1
+        if reset:
+            session.commit()
+    if reset:
+        logger.info("Recovered %s stuck catalog(s) → queued", reset)
+        _wake.set()
+    return reset
+
+
 def stop_catalog_worker() -> None:
     _stop.set()
     _wake.set()

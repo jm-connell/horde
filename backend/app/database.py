@@ -42,6 +42,7 @@ _DOWNLOAD_JOB_COLUMNS = [
     ("normalize_volume", "BOOLEAN DEFAULT 0"),
     ("replace_video_id", "INTEGER"),
     ("file_size", "INTEGER"),
+    ("error_kind", "VARCHAR"),
 ]
 
 _VIDEO_AI_META_COLUMNS = [

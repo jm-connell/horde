@@ -1421,21 +1421,15 @@ export default function VideoPlayer({
     };
   }, [mode]);
 
-  const activateHold = useCallback(() => {
-    const v = videoRef.current;
-    if (!v || heldRate.current !== null) return;
-    holdActive.current = true;
-    wasPlayingBeforeHold.current = !v.paused;
-    heldRate.current = rate;
-    setRate(2);
-    if (v.paused) v.play().catch(() => undefined);
-  }, [rate]);
+  const holdWindowCleanup = useRef<(() => void) | null>(null);
 
   const endHold = useCallback(() => {
     if (holdTimer.current !== null) {
       clearTimeout(holdTimer.current);
       holdTimer.current = null;
     }
+    holdWindowCleanup.current?.();
+
     if (!holdActive.current && heldRate.current === null) return;
 
     const v = videoRef.current;
@@ -1449,6 +1443,7 @@ export default function VideoPlayer({
     holdActive.current = false;
     wasPlayingBeforeHold.current = false;
 
+    // Only suppress the click that follows a real hold-to-2x engagement.
     if (hadHold) {
       suppressClick.current = true;
       window.setTimeout(() => {
@@ -1460,12 +1455,50 @@ export default function VideoPlayer({
     }
   }, []);
 
+  const activateHold = useCallback(() => {
+    const v = videoRef.current;
+    if (!v || heldRate.current !== null) return;
+    holdActive.current = true;
+    wasPlayingBeforeHold.current = !v.paused;
+    heldRate.current = rate;
+    setRate(2);
+    if (v.paused) v.play().catch(() => undefined);
+
+    // End hold if pointer is released outside the video element.
+    holdWindowCleanup.current?.();
+    const onWinPointerUp = () => endHold();
+    const onWinBlur = () => endHold();
+    window.addEventListener("pointerup", onWinPointerUp);
+    window.addEventListener("pointercancel", onWinPointerUp);
+    window.addEventListener("blur", onWinBlur);
+    holdWindowCleanup.current = () => {
+      window.removeEventListener("pointerup", onWinPointerUp);
+      window.removeEventListener("pointercancel", onWinPointerUp);
+      window.removeEventListener("blur", onWinBlur);
+      holdWindowCleanup.current = null;
+    };
+  }, [rate, endHold]);
+
+  useEffect(() => {
+    return () => {
+      holdWindowCleanup.current?.();
+      if (holdTimer.current !== null) {
+        clearTimeout(holdTimer.current);
+        holdTimer.current = null;
+      }
+    };
+  }, []);
+
   const onVideoPointerDown = useCallback(
     (e: React.PointerEvent<HTMLVideoElement>) => {
       if (isMini) return;
       pointerDownOnVideo.current = true;
       if (e.pointerType === "touch") {
-        e.currentTarget.setPointerCapture(e.pointerId);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // ignore
+        }
       }
       if (holdTimer.current !== null || heldRate.current !== null) return;
       holdTimer.current = window.setTimeout(() => {
@@ -1960,15 +1993,16 @@ export default function VideoPlayer({
               />
             )}
             <div
-              className={`absolute inset-x-0 top-0 z-10 flex items-center gap-1 bg-gradient-to-b from-black/90 to-transparent px-2 pb-2 pt-1 text-gray-100 transition-opacity duration-300 ${
+              className={`absolute inset-x-0 top-0 z-10 flex items-center gap-1 bg-gradient-to-b from-black/90 to-transparent px-2 pb-3 pt-1.5 text-gray-100 transition-opacity duration-300 ${
                 miniControlsVisible
                   ? "pointer-events-auto opacity-100"
                   : "pointer-events-none opacity-0"
               }`}
             >
               <button
+                type="button"
                 onClick={togglePlay}
-                className="flex min-h-[48px] min-w-[48px] items-center justify-center text-2xl leading-none hover:text-accent"
+                className="flex min-h-[44px] min-w-[44px] touch-manipulation items-center justify-center text-2xl leading-none hover:text-accent"
                 aria-label={playing ? "Pause" : "Play"}
               >
                 {playing ? "❚❚" : "►"}
@@ -1980,9 +2014,10 @@ export default function VideoPlayer({
                 typeof document !== "undefined" &&
                 document.pictureInPictureEnabled && (
                   <button
+                    type="button"
                     data-mini-no-drag
                     onClick={requestPiP}
-                    className="flex min-h-[48px] shrink-0 items-center justify-center rounded px-2 text-xs font-medium hover:text-accent"
+                    className="flex min-h-[44px] shrink-0 touch-manipulation items-center justify-center rounded px-2 text-xs font-medium hover:text-accent"
                     title="Picture in picture"
                     aria-label="Picture in picture"
                   >
@@ -1990,16 +2025,18 @@ export default function VideoPlayer({
                   </button>
                 )}
               <button
+                type="button"
                 onClick={onExpand}
-                className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center text-lg hover:text-accent"
+                className="flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center text-lg hover:text-accent"
                 title="Expand"
                 aria-label="Expand"
               >
                 ⤢
               </button>
               <button
+                type="button"
                 onClick={onClose}
-                className="flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center text-lg hover:text-accent"
+                className="flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center text-lg hover:text-accent"
                 title="Close"
                 aria-label="Close"
               >

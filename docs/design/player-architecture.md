@@ -41,6 +41,15 @@ That split keeps archive watching simple (one file, one codec path) while previe
 
 Cast receivers fetch media cross-origin; the API enables wide CORS for GET/HEAD/Range — see [No authentication](no-auth.md).
 
+## Manual stability checklist
+
+After player or playback changes, verify:
+
+1. Desktop theater: toggle on, navigate away to mini, expand back — theater layout should still apply if that mode is saved.
+2. Hold-to-2x: mouse and touch — release restores previous rate; short tap still toggles play on mobile.
+3. Mini player on phone-width: play/pause and close hit targets (≥44px) remain usable.
+4. Library file playback and one DASH stream preview each play once without media errors.
+
 ## Related
 
 - [Watching](../guides/watching.md)

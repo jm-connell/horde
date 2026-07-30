@@ -450,7 +450,9 @@ export default function Watch() {
     if (!source) return;
     registerDock(dockRef.current);
     return () => registerDock(null);
-  }, [registerDock, source, mode]);
+    // Do not depend on mode — re-registering on theater toggle briefly clears
+    // the dock and can collapse the player into mini layout.
+  }, [registerDock, source]);
 
   useEffect(() => {
     api.listPresets().then(setPresets).catch(() => undefined);

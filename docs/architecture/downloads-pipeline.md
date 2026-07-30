@@ -33,9 +33,13 @@ URL
   ```
 
 - Extractor args include bgutil POT when `YTDLP_POT_BASE_URL` is set; cookies via [YouTube access](../ops/youtube-access.md).
+- Metadata extracts for downloads share the same global extract gate (1 + 1.25s spacing) as preview/feed extracts so concurrent browsing does not stampede YouTube.
 - Progress hooks update an in-memory `progress_store` consumed by SSE.
+- Failures set `DownloadJob.error` plus a typed `error_kind` (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `cancelled`, `unknown`) for actionable UI.
 
 Members-only detection aborts/skips rather than looping forever.
+
+Global queue pause is persisted as `download_queue_paused` in app settings so it survives process restart. Jobs left `downloading` are requeued on startup.
 
 ## Post-processing
 

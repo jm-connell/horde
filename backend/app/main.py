@@ -32,7 +32,12 @@ from .api import (
 from .services.scanner import cleanup_orphans, start_scanner
 from .services import downloader, app_settings as app_settings_svc
 from .services.ai import start_ai_worker, stop_ai_worker
-from .services.channel_catalog import start_catalog_worker, stop_catalog_worker
+from .services.ai.worker import recover_ai_jobs
+from .services.channel_catalog import (
+    recover_catalog_jobs,
+    start_catalog_worker,
+    stop_catalog_worker,
+)
 
 # Static frontend build copied next to the backend in the Docker image.
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -49,6 +54,8 @@ async def lifespan(app: FastAPI):
     ensure_plugins_loaded()
     await preview.init_preview_client()
     downloader.download_queue.recover()
+    recover_ai_jobs()
+    recover_catalog_jobs()
     observer = start_scanner()
 
     from .services.metadata_sync import start_sync_worker
@@ -200,6 +207,38 @@ def health():
         openrouter = {"enabled": False, "configured": False, "reachable": False}
 
     sha = resolve_git_sha()
+
+    downloads_paused = False
+    cookies_ok = False
+    last_extract = None
+    ai_queue_depth = 0
+    ai_running = 0
+    catalog_queue_depth = 0
+    catalog_indexing = False
+    try:
+        from .services import app_settings as settings_svc
+        from .services.ytdlp_common import (
+            cookie_configured,
+            get_last_extract_failure,
+        )
+        from .services.ai.worker import queue_breakdown, queue_depth
+        from .services.channel_catalog import get_runtime_status
+
+        downloads_paused = bool(
+            downloader.download_queue.is_paused()
+            or settings_svc.load().get("download_queue_paused", False)
+        )
+        cookies_ok = cookie_configured()
+        last_extract = get_last_extract_failure()
+        ai_queue_depth = queue_depth()
+        breakdown = queue_breakdown()
+        ai_running = int(breakdown.get("running") or 0)
+        cat = get_runtime_status()
+        catalog_queue_depth = int(cat.get("queue_depth") or 0)
+        catalog_indexing = bool(cat.get("running"))
+    except Exception:  # noqa: BLE001
+        pass
+
     return {
         "status": "ok",
         "horde_sha": sha,
@@ -213,6 +252,20 @@ def health():
         "review_pending_count": review_count,
         "active_downloads": active_downloads,
         "wiki_available": WIKI_DIR.is_dir(),
+        "downloads": {
+            "active": active_downloads,
+            "paused": downloads_paused,
+        },
+        "workers": {
+            "ai_queue_depth": ai_queue_depth,
+            "ai_running": ai_running,
+            "catalog_queue_depth": catalog_queue_depth,
+            "catalog_indexing": catalog_indexing,
+        },
+        "youtube": {
+            "cookies_configured": cookies_ok,
+            "last_extract_failure": last_extract,
+        },
     }
 
 

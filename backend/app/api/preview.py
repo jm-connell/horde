@@ -16,6 +16,7 @@ from ..database import get_session
 from ..schemas import StreamPreviewMeta
 from ..services import downloader, library
 from ..services.url_clean import _youtube_video_id, clean_url
+from ..services.ytdlp_common import http_detail_for_error
 
 router = APIRouter(prefix="/api/preview", tags=["preview"])
 logger = logging.getLogger(__name__)
@@ -290,7 +291,8 @@ def preview_meta(url: str = Query(...), session: Session = Depends(get_session))
         meta = downloader.extract_stream_preview_meta(cleaned)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
-            status_code=400, detail=f"Could not load preview: {exc}"
+            status_code=400,
+            detail=http_detail_for_error(exc, prefix="Could not load preview"),
         ) from exc
 
     library_video_id = None
@@ -412,7 +414,10 @@ def preview_manifest(url: str = Query(...)):
         xml = downloader.build_dash_manifest(session)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
-            status_code=400, detail=f"Could not build preview manifest: {exc}"
+            status_code=400,
+            detail=http_detail_for_error(
+                exc, prefix="Could not build preview manifest"
+            ),
         ) from exc
 
     return Response(

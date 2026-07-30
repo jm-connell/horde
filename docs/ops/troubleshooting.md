@@ -2,15 +2,40 @@
 
 ## Bot checks / YouTube blocks
 
-**Symptoms:** downloads fail with bot, PO token, or “sign in” style errors; previews hang; feed cards never load metadata.
+**Symptoms:** downloads fail with bot, PO token, or “sign in” style errors; previews hang; feed cards never load metadata. Download cards may show a typed label such as **Bot check**, **PO token**, or **Cookies / login** (`error_kind` on the job).
 
 **Checks:**
 
 1. Is `bgutil-pot` running? Health → `pot_provider` should be `ok` (`GET /api/health`).
 2. `YTDLP_POT_BASE_URL` reachable from the Horde container (`http://bgutil-pot:4416` in Compose).
-3. Add [cookies](youtube-access.md) if POT alone is not enough.
+3. Add [cookies](youtube-access.md) if POT alone is not enough — Status also shows whether cookies are configured.
 4. Reduce bursty browsing — extracts are already serialized (1.25s spacing); avoid restarting jobs in a tight loop.
 5. Update the image / yt-dlp — extractor breakage is common when YouTube changes.
+6. Settings → System → Status → **Last extract failure** shows the most recent classified extract error (`youtube.last_extract_failure` on `/api/health`).
+
+### Download `error_kind` values
+
+| Kind | Meaning |
+|------|---------|
+| `bot` | YouTube bot check |
+| `pot` | PO token / player challenge |
+| `cookies` | Login / age gate / private needing cookies |
+| `members` | Members-only |
+| `rate_limit` | HTTP 429 / temporary block |
+| `unavailable` | Removed, geo, no formats |
+| `postprocess` | Merge / subtitles / ffmpeg salvage failed |
+| `cancelled` | User cancel |
+| `unknown` | Unclassified yt-dlp message |
+
+## Restart recovery
+
+On process start Horde:
+
+1. Requeues download jobs left in `downloading` (from scratch; partials are not resumed).
+2. Restores **download queue pause** from `download_queue_paused` in app settings (pause survives restart).
+3. Requeues AI jobs left in `running` and channel catalogs left in `indexing`.
+
+A cancel that crashes before the DB write can requeue once — rare and acceptable.
 
 ## Files not appearing in the library
 
@@ -30,7 +55,7 @@ Docker entrypoint runs Horde as `PUID`:`PGID` (defaults `1000:1000`) and chowns 
 
 ## Ollama offline
 
-**Symptoms:** AI status not ready; embeds/tags stuck queued; `/api/health` shows `ollama.reachable: false`.
+**Symptoms:** AI status not ready; embeds/tags stuck queued; `/api/health` shows `ollama.reachable: false`. Settings → System shows `ollama.last_error` when Offline.
 
 1. If using Compose AI profile: `docker compose --profile ai up -d` and wait for Ollama to listen on 11434.
 2. Set `OLLAMA_BASE_URL` explicitly if auto-discover fails (especially remote GPUs).
@@ -44,6 +69,7 @@ In-app watch-before-download preview resolves progressive or adaptive formats vi
 - Retry after POT/cookies are healthy.
 - Preview refresh uses `force=True` on extract to bust the 180s info cache when refreshing media URLs.
 - Some sources simply lack a usable progressive format under the preview height cap.
+- Preview API errors include a structured `error_kind` when classification succeeds.
 
 ## Stale UI after update
 

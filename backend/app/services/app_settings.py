@@ -129,6 +129,7 @@ DEFAULTS: dict[str, Any] = {
     "metadata_sync_interval_hours": 24,
     "channel_catalog_enabled": True,
     "channel_catalog_max_videos": 1000,
+    "download_queue_paused": False,
     "ui": {},
     "ai": dict(AI_DEFAULTS),
 }

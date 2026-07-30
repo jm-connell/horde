@@ -27,6 +27,16 @@ import type {
   VideoAiChatMessage,
 } from "./types";
 
+export class ApiError extends Error {
+  errorKind?: string;
+
+  constructor(message: string, errorKind?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.errorKind = errorKind;
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   let resp: Response;
   try {
@@ -38,14 +48,25 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     throw err;
   }
   if (!resp.ok) {
-    let detail = resp.statusText;
+    let detail: unknown = resp.statusText;
     try {
       const body = await resp.json();
       detail = body.detail ?? detail;
     } catch {
       // non-JSON error body; keep status text
     }
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    if (typeof detail === "object" && detail !== null) {
+      const d = detail as {
+        message?: string;
+        error_kind?: string;
+        detail?: string;
+      };
+      throw new ApiError(
+        d.message || d.detail || JSON.stringify(detail),
+        d.error_kind
+      );
+    }
+    throw new ApiError(typeof detail === "string" ? detail : String(detail));
   }
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;

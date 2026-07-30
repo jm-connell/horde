@@ -17,11 +17,29 @@ from ..schemas import (
 )
 from ..services import downloader, library
 from ..services.url_clean import _youtube_video_id, clean_url
+from ..services.ytdlp_common import (
+    ERROR_KIND_BOT,
+    ERROR_KIND_COOKIES,
+    ERROR_KIND_MEMBERS,
+    ERROR_KIND_UNAVAILABLE,
+    classify_ytdlp_error,
+    http_detail_for_error,
+    record_extract_failure,
+)
 from urllib.parse import urlparse
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 
 QUALITY_PRESETS = list(downloader.QUALITY_FORMATS.keys())
+
+_PREVIEW_ATTACH_KINDS = frozenset(
+    {
+        ERROR_KIND_MEMBERS,
+        ERROR_KIND_BOT,
+        ERROR_KIND_COOKIES,
+        ERROR_KIND_UNAVAILABLE,
+    }
+)
 
 
 def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobRead]:
@@ -92,7 +110,10 @@ def preview_download(url: str):
     try:
         return downloader.extract_preview(clean_url(url, keep_playlist=True))
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"Could not read link: {exc}")
+        raise HTTPException(
+            status_code=400,
+            detail=http_detail_for_error(exc, prefix="Could not read link"),
+        ) from exc
 
 
 @router.get("/queue/status", response_model=DownloadQueueStatus)
@@ -132,10 +153,13 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
     url = clean_url(payload.url, keep_playlist=False)
 
     preview: dict = {}
+    preview_kind: str | None = None
+    preview_message: str | None = None
     try:
         preview = downloader.extract_preview(url)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        preview_kind, preview_message = classify_ytdlp_error(exc)
+        record_extract_failure(preview_kind, preview_message)
 
     # If this YouTube id is already in the library, replace that row on completion.
     replace_video_id = None
@@ -163,6 +187,10 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         normalize_volume=payload.normalize_volume,
         replace_video_id=replace_video_id,
     )
+    if preview_kind and preview_kind in _PREVIEW_ATTACH_KINDS and preview_message:
+        # Still enqueue, but surface why metadata is missing on the card.
+        job.error = preview_message
+        job.error_kind = preview_kind
     session.add(job)
     session.commit()
     session.refresh(job)

@@ -23,13 +23,17 @@ from . import library, scanner
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .paths import find_video_by_path, to_rel_path
 from .ytdlp_common import (
+    ERROR_KIND_CANCELLED,
+    ERROR_KIND_MEMBERS,
     MembersOnlyError,
     QuietYtdlpLogger,
     apply_cookie_opts,
+    classify_ytdlp_error,
     extract_info_gated,
     is_members_only_entry,
     is_members_only_error,
     is_members_only_message,
+    record_extract_failure,
     youtube_extractor_args,
 )
 
@@ -250,7 +254,13 @@ class DownloadQueue:
         self._dispatch()
 
     def recover(self) -> None:
-        """Resume dispatching jobs left queued from a previous server run."""
+        """Resume dispatching jobs left mid-download from a previous server run."""
+        from . import app_settings as settings_svc
+
+        paused = bool(settings_svc.load().get("download_queue_paused", False))
+        with self._lock:
+            self._global_paused = paused
+
         with Session(engine) as session:
             for job in session.exec(
                 select(DownloadJob).where(
@@ -260,14 +270,40 @@ class DownloadQueue:
                 if job.id not in self._running:
                     job.status = JobStatus.queued
                     job.progress = 0.0
+                    if paused:
+                        job.paused = True
+                    session.add(job)
+
+            if paused:
+                for job in session.exec(
+                    select(DownloadJob).where(
+                        DownloadJob.status == JobStatus.queued,
+                        DownloadJob.paused == False,  # noqa: E712
+                    )
+                ).all():
+                    job.paused = True
+                    session.add(job)
+            else:
+                for job in session.exec(
+                    select(DownloadJob).where(
+                        DownloadJob.status == JobStatus.queued,
+                        DownloadJob.paused == True,  # noqa: E712
+                    )
+                ).all():
+                    job.paused = False
                     session.add(job)
             session.commit()
-        self._dispatch()
+
+        if not paused:
+            self._dispatch()
 
     def pause_all(self) -> None:
+        from . import app_settings as settings_svc
+
         with self._lock:
             self._global_paused = True
             events = list(self._cancel_events.values())
+        settings_svc.save({"download_queue_paused": True})
         for event in events:
             event.set()
         with Session(engine) as session:
@@ -286,8 +322,11 @@ class DownloadQueue:
             session.commit()
 
     def resume_all(self) -> None:
+        from . import app_settings as settings_svc
+
         with self._lock:
             self._global_paused = False
+        settings_svc.save({"download_queue_paused": False})
         with Session(engine) as session:
             for job in session.exec(
                 select(DownloadJob).where(
@@ -314,23 +353,27 @@ class DownloadQueue:
             if job.status == JobStatus.queued:
                 job.status = JobStatus.cancelled
                 job.error = "Cancelled"
+                job.error_kind = ERROR_KIND_CANCELLED
                 session.add(job)
                 session.commit()
                 progress_store[job_id] = {
                     "status": "cancelled",
                     "error": "Cancelled",
+                    "error_kind": ERROR_KIND_CANCELLED,
                 }
                 return True
             if event is None and job.status == JobStatus.downloading:
                 # Orphaned job — no worker thread to signal.
                 job.status = JobStatus.cancelled
                 job.error = "Cancelled"
+                job.error_kind = ERROR_KIND_CANCELLED
                 job.progress = 0.0
                 session.add(job)
                 session.commit()
                 progress_store[job_id] = {
                     "status": "cancelled",
                     "error": "Cancelled",
+                    "error_kind": ERROR_KIND_CANCELLED,
                 }
                 return True
             # downloading — hook will mark cancelled when thread exits
@@ -961,6 +1004,7 @@ def _complete_download(
         video_id=video_id,
         file_size=file_size,
         error=None,
+        error_kind=None,
     )
     progress_store[job_id] = snapshot
     return video_id
@@ -1001,7 +1045,13 @@ def _run_download(
         replace_video_id = job.replace_video_id
         notes_pending = job.notes_pending
 
-    _update_job(job_id, status=JobStatus.downloading, paused=False)
+    _update_job(
+        job_id,
+        status=JobStatus.downloading,
+        paused=False,
+        error=None,
+        error_kind=None,
+    )
     progress_store[job_id] = {"status": "downloading", "progress": 0.0}
 
     active_paths: set[str] = set()
@@ -1034,16 +1084,40 @@ def _run_download(
             attempt_paths: set[str] = set()
             ydl_opts = {**base_ydl_opts, "format": fmt}
             try:
+                # Share extract spacing with preview/meta so downloads don't
+                # stampede YouTube alongside feed browsing.
+                meta_opts = apply_cookie_opts(
+                    {
+                        "quiet": True,
+                        "no_warnings": True,
+                        "skip_download": True,
+                        "logger": QuietYtdlpLogger(),
+                        "extractor_args": youtube_extractor_args(),
+                    }
+                )
+                try:
+                    fetched = extract_info_gated(
+                        url,
+                        meta_opts,
+                        cache_key=f"download-meta:{url}",
+                    )
+                except Exception as exc:
+                    if is_members_only_error(exc):
+                        raise MembersOnlyError(
+                            "Members-only video — skipped"
+                        ) from exc
+                    raise
+
+                if is_members_only_entry(
+                    fetched if isinstance(fetched, dict) else None
+                ):
+                    raise MembersOnlyError("Members-only video — skipped")
+                metadata_info = _merge_info(metadata_info, fetched)
+                info = metadata_info
+
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    fetched = ydl.extract_info(url, download=False)
                     if ytdlp_logger.members_only:
                         raise MembersOnlyError("Members-only video — skipped")
-                    if is_members_only_entry(
-                        fetched if isinstance(fetched, dict) else None
-                    ):
-                        raise MembersOnlyError("Members-only video — skipped")
-                    metadata_info = _merge_info(metadata_info, fetched)
-                    info = metadata_info
                     prepared = Path(ydl.prepare_filename(metadata_info))
                     for candidate in (prepared, prepared.with_suffix(".mp4")):
                         rel = _safe_rel(candidate)
@@ -1141,6 +1215,7 @@ def _run_download(
                 job.paused = True
                 job.progress = 0.0
                 job.error = None
+                job.error_kind = None
                 progress_store[job_id] = {
                     "status": "queued",
                     "progress": 0.0,
@@ -1150,10 +1225,12 @@ def _run_download(
             else:
                 job.status = JobStatus.cancelled
                 job.error = "Cancelled"
+                job.error_kind = ERROR_KIND_CANCELLED
                 job.progress = 0.0
                 progress_store[job_id] = {
                     "status": "cancelled",
                     "error": "Cancelled",
+                    "error_kind": ERROR_KIND_CANCELLED,
                 }
             session.add(job)
             session.commit()
@@ -1188,14 +1265,19 @@ def _run_download(
 
         _cleanup_partial_files(active_paths)
         prev = progress_store.get(job_id, {})
-        message = _strip_ansi(str(exc))
-        if is_members_only_error(exc) or is_members_only_message(message):
+        kind, message = classify_ytdlp_error(exc)
+        if kind == ERROR_KIND_MEMBERS or is_members_only_error(exc):
+            kind = ERROR_KIND_MEMBERS
             message = "Members-only video — skipped"
             _purge_members_only_url(url)
-        _update_job(job_id, status=JobStatus.error, error=message)
+        record_extract_failure(kind, message)
+        _update_job(
+            job_id, status=JobStatus.error, error=message, error_kind=kind
+        )
         progress_store[job_id] = {
             "status": "error",
             "error": message,
+            "error_kind": kind,
             "title": prev.get("title"),
             "channel": prev.get("channel"),
         }

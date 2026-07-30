@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { useDownloads, isActiveJob } from "../context/DownloadContext";
 import { useToast } from "../context/ToastContext";
 import ChannelPicker from "../components/ChannelPicker";
 import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
 import LoadingIndicator from "../components/LoadingIndicator";
+import {
+  downloadErrorHint,
+  downloadErrorLabel,
+} from "../downloadErrors";
 import {
   formatApproxSize,
   mergePinnedPreset,
@@ -39,6 +43,10 @@ export default function Download() {
 
   const [preview, setPreview] = useState<DownloadPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<{
+    message: string;
+    kind?: string;
+  } | null>(null);
 
   const [title, setTitle] = useState("");
   const [channel, setChannel] = useState("");
@@ -106,6 +114,7 @@ export default function Download() {
     const trimmed = url.trim();
     if (!trimmed) {
       setPreview(null);
+      setPreviewError(null);
       setPreset("best");
       return;
     }
@@ -115,6 +124,7 @@ export default function Download() {
         .previewDownload(trimmed)
         .then((p) => {
           setPreview(p);
+          setPreviewError(null);
           setTitle(p.title ?? "");
           // Leave channel empty so the picker stays on "Auto-detected".
           if (!p.is_playlist && p.available_presets.length > 0) {
@@ -123,7 +133,19 @@ export default function Download() {
             );
           }
         })
-        .catch(() => setPreview(null))
+        .catch((err: unknown) => {
+          setPreview(null);
+          if (err instanceof ApiError) {
+            setPreviewError({
+              message: err.message,
+              kind: err.errorKind,
+            });
+          } else if (err instanceof Error) {
+            setPreviewError({ message: err.message });
+          } else {
+            setPreviewError({ message: "Could not read link" });
+          }
+        })
         .finally(() => setPreviewing(false));
     }, 600);
     return () => {
@@ -271,6 +293,7 @@ export default function Download() {
       });
       setUrl("");
       setPreview(null);
+      setPreviewError(null);
       setTitle("");
       setChannel("");
     } catch (err) {
@@ -296,6 +319,7 @@ export default function Download() {
       );
       setUrl("");
       setPreview(null);
+      setPreviewError(null);
       setPlaylistEntries([]);
       setSelectedUrls(new Set());
       setPlaylistName("");
@@ -382,6 +406,21 @@ export default function Download() {
           </div>
           {previewing && (
             <p className="mt-1 text-xs text-gray-500">Reading link...</p>
+          )}
+          {!previewing && previewError && (
+            <div className="mt-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+              <p className="font-medium">
+                {downloadErrorLabel(previewError.kind)}
+              </p>
+              <p className="mt-0.5 text-xs text-red-300/90">
+                {previewError.message}
+              </p>
+              {downloadErrorHint(previewError.kind) && (
+                <p className="mt-1 text-xs text-red-400/80">
+                  {downloadErrorHint(previewError.kind)}
+                </p>
+              )}
+            </div>
           )}
         </div>
 

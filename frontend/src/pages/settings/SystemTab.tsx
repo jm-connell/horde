@@ -3,6 +3,7 @@ import { Section } from "./ui";
 import { PANEL_BTN } from "./constants";
 import { saveDismissedUpdateSha } from "./helpers";
 import { api } from "../../api";
+import { downloadErrorLabel } from "../../downloadErrors";
 import { formatSize } from "../../utils";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import AiQueueStatus from "./AiQueueStatus";
@@ -231,9 +232,9 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
               </div>
             )}
             {health.ollama && (
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-4">
                 <dt className="text-gray-400">Ollama</dt>
-                <dd className="text-gray-200">
+                <dd className="text-right text-gray-200">
                   {!health.ollama.enabled
                     ? "Disabled"
                     : health.ollama.ready
@@ -241,6 +242,13 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                       : health.ollama.reachable
                         ? "Connected"
                         : "Offline"}
+                  {!health.ollama.enabled || health.ollama.ready
+                    ? null
+                    : health.ollama.last_error ? (
+                        <div className="mt-0.5 max-w-xs text-xs text-red-400">
+                          {health.ollama.last_error}
+                        </div>
+                      ) : null}
                 </dd>
               </div>
             )}
@@ -258,6 +266,14 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
               </div>
             )}
             <div className="flex justify-between">
+              <dt className="text-gray-400">Cookies</dt>
+              <dd className="text-gray-200">
+                {health.youtube?.cookies_configured
+                  ? "Configured"
+                  : "Not configured"}
+              </dd>
+            </div>
+            <div className="flex justify-between">
               <dt className="text-gray-400">Library</dt>
               <dd className="text-gray-200">
                 {health.library_video_count} videos
@@ -269,8 +285,46 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
             </div>
             <div className="flex justify-between">
               <dt className="text-gray-400">Active downloads</dt>
-              <dd className="text-gray-200">{health.active_downloads}</dd>
+              <dd className="text-gray-200">
+                {health.downloads?.active ?? health.active_downloads}
+                {health.downloads?.paused ? " · paused" : ""}
+              </dd>
             </div>
+            {health.workers && (
+              <>
+                <div className="flex justify-between">
+                  <dt className="text-gray-400">AI queue</dt>
+                  <dd className="text-gray-200">
+                    {health.workers.ai_queue_depth}
+                    {health.workers.ai_running
+                      ? ` · ${health.workers.ai_running} running`
+                      : ""}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-400">Catalog queue</dt>
+                  <dd className="text-gray-200">
+                    {health.workers.catalog_queue_depth}
+                    {health.workers.catalog_indexing ? " · indexing" : ""}
+                  </dd>
+                </div>
+              </>
+            )}
+            {health.youtube?.last_extract_failure && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-gray-400">Last extract failure</dt>
+                <dd className="max-w-xs text-right text-gray-200">
+                  <span className="text-red-400">
+                    {downloadErrorLabel(
+                      health.youtube.last_extract_failure.kind
+                    )}
+                  </span>
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    {health.youtube.last_extract_failure.message}
+                  </div>
+                </dd>
+              </div>
+            )}
             {health.disk && (
               <div className="flex justify-between">
                 <dt className="text-gray-400">Disk free</dt>

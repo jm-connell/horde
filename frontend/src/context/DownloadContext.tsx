@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { api } from "../api";
+import { downloadErrorToast } from "../downloadErrors";
 import { useSettings } from "../hooks/useSettings";
 import { subscribeToJob } from "../hooks/useJobEvents";
 import type { DownloadJob, DownloadQueueStatus, ProgressEvent } from "../types";
@@ -111,7 +112,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
             }
           } else if (event.status === "error" && !toastedErrors.current.has(jobId)) {
             toastedErrors.current.add(jobId);
-            showToast(event.error || "Download failed");
+            showToast(downloadErrorToast(event.error_kind, event.error));
           }
         }
       });

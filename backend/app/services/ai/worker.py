@@ -626,6 +626,27 @@ def start_ai_worker() -> None:
     _timer_thread.start()
 
 
+def recover_ai_jobs() -> int:
+    """Requeue AI jobs left in running after a process crash/restart."""
+    reset = 0
+    with Session(engine) as session:
+        rows = session.exec(
+            select(AiJob).where(AiJob.status == AiJobStatus.running)
+        ).all()
+        for job in rows:
+            job.status = AiJobStatus.queued
+            job.run_after = None
+            job.updated_at = utcnow()
+            session.add(job)
+            reset += 1
+        if reset:
+            session.commit()
+    if reset:
+        logger.info("Recovered %s stuck AI job(s) → queued", reset)
+        _wake.set()
+    return reset
+
+
 def stop_ai_worker() -> None:
     _stop.set()
     _wake.set()

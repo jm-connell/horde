@@ -122,6 +122,7 @@ class DownloadJobRead(BaseModel):
     notes_pending: Optional[str]
     paused: bool
     error: Optional[str]
+    error_kind: Optional[str] = None
     video_id: Optional[int]
     replace_video_id: Optional[int] = None
     file_size: Optional[int]

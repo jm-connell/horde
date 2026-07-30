@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useDownloads, jobStatus } from "../context/DownloadContext";
+import {
+  downloadErrorHint,
+  downloadErrorLabel,
+} from "../downloadErrors";
 import type { ChannelStat, DownloadJob, ProgressEvent } from "../types";
 import { formatSize } from "../utils";
 import ChannelPicker from "./ChannelPicker";
@@ -159,7 +163,7 @@ export default function DownloadJobCard({
   };
 
   const statusLabel = failed
-    ? "Failed"
+    ? downloadErrorLabel(live?.error_kind ?? job.error_kind)
     : cancelled
       ? "Cancelled"
       : completed
@@ -178,8 +182,10 @@ export default function DownloadJobCard({
       ? `/api/thumbnails/${videoId}`
       : null;
 
+  const errorKind = failed ? live?.error_kind ?? job.error_kind ?? null : null;
   const errorMsg =
     failed && !completed ? stripAnsi(live?.error ?? job.error ?? "") : "";
+  const errorHint = failed ? downloadErrorHint(errorKind) : null;
 
   const sizeLabel = (() => {
     if (completed) {
@@ -309,8 +315,13 @@ export default function DownloadJobCard({
             </div>
           )}
 
-          {failed && errorMsg && (
-            <p className="mb-3 text-sm text-red-400">{errorMsg}</p>
+          {failed && (errorMsg || errorHint) && (
+            <div className="mb-3 space-y-1 text-sm text-red-400">
+              {errorMsg && <p>{errorMsg}</p>}
+              {errorHint && errorHint !== errorMsg && (
+                <p className="text-xs text-red-400/80">{errorHint}</p>
+              )}
+            </div>
           )}
 
           {!cancelled && (

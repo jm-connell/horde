@@ -158,6 +158,7 @@ export interface DownloadJob {
   notes_pending: string | null;
   paused: boolean;
   error: string | null;
+  error_kind?: string | null;
   video_id: number | null;
   replace_video_id?: number | null;
   file_size: number | null;
@@ -173,6 +174,7 @@ export interface ProgressEvent {
   channel?: string;
   video_id?: number;
   error?: string;
+  error_kind?: string;
   total_bytes?: number;
   downloaded_bytes?: number;
   file_size?: number;
@@ -443,6 +445,24 @@ export interface HealthStats {
   review_pending_count: number;
   active_downloads: number;
   wiki_available?: boolean;
+  downloads?: {
+    active: number;
+    paused: boolean;
+  };
+  workers?: {
+    ai_queue_depth: number;
+    ai_running: number;
+    catalog_queue_depth: number;
+    catalog_indexing: boolean;
+  };
+  youtube?: {
+    cookies_configured: boolean;
+    last_extract_failure: {
+      kind: string;
+      message: string;
+      at: string;
+    } | null;
+  };
 }
 
 export interface UpdateCheck {
