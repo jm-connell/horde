@@ -150,6 +150,9 @@ export interface Settings {
   customFonts: SavedCustomFont[];
   showDescription: boolean;
   subtitleSize: SubtitleSize;
+  /** Horizontal caption position (% from left). Default is left-padded so text reads centered-ish. */
+  subtitleLeft: number;
+  /** Vertical caption position (% from bottom). */
   subtitleOffset: number;
   defaultPlaybackRate: number;
   volume: number;
@@ -216,6 +219,7 @@ const DEFAULTS: Settings = {
   customFonts: [],
   showDescription: true,
   subtitleSize: "medium",
+  subtitleLeft: 20,
   subtitleOffset: 12,
   defaultPlaybackRate: 1,
   volume: 1,
@@ -273,6 +277,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "customFonts",
   "showDescription",
   "subtitleSize",
+  "subtitleLeft",
   "subtitleOffset",
   "defaultPlaybackRate",
   "playbackMode",

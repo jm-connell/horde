@@ -3,6 +3,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from "react";
 import type { SubtitleSize } from "../hooks/useSettings";
@@ -17,33 +18,53 @@ interface Props {
   videoRef: RefObject<HTMLVideoElement | null>;
   src: string;
   size: SubtitleSize;
+  /** Horizontal position as % from the left of the player. */
+  left: number;
+  /** Vertical position as % from the bottom of the player. */
   offset: number;
   active: boolean;
+  onPositionChange?: (left: number, offset: number) => void;
 }
 
 const SLIDE_MS = 250;
 
 type ViewLine = {
   key: number;
-  /** Full line text — sizes the row so the centered block stays stable. */
+  /** Full line text — sizes the row so width stays stable while words reveal. */
   fullText: string;
   /** Words to show; null means fully revealed (previous line). */
   words: string[] | null;
 };
 
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
 export default function SubtitleOverlay({
   videoRef,
   src,
   size,
+  left,
   offset,
   active,
+  onPositionChange,
 }: Props) {
   const [lines, setLines] = useState<CaptionLine[]>([]);
   const [view, setView] = useState<ViewLine[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const stackRef = useRef<HTMLDivElement>(null);
   const lineIndexRef = useRef(-1);
   const wordCountRef = useRef(0);
   const slidingRef = useRef(false);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    startLeft: number;
+    startOffset: number;
+    parentW: number;
+    parentH: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!active || !src) {
@@ -218,13 +239,80 @@ export default function SubtitleOverlay({
     return () => cancelAnimationFrame(raf);
   }, [active, lines, videoRef]);
 
+  const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setDragging(false);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+  };
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!onPositionChange || e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const root = rootRef.current;
+    const parent = root?.offsetParent as HTMLElement | null;
+    if (!parent) return;
+    const rect = parent.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: left,
+      startOffset: offset,
+      parentW: rect.width,
+      parentH: rect.height,
+    };
+    setDragging(true);
+  };
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || !onPositionChange) return;
+    e.stopPropagation();
+    const root = rootRef.current;
+    const boxW = root?.offsetWidth ?? 0;
+    const boxH = root?.offsetHeight ?? 0;
+    const maxLeft =
+      drag.parentW > 0
+        ? Math.max(0, ((drag.parentW - boxW) / drag.parentW) * 100)
+        : 90;
+    const maxBottom =
+      drag.parentH > 0
+        ? Math.max(0, ((drag.parentH - boxH) / drag.parentH) * 100)
+        : 85;
+    const dxPct = ((e.clientX - drag.startX) / drag.parentW) * 100;
+    const dyPct = ((drag.startY - e.clientY) / drag.parentH) * 100;
+    onPositionChange(
+      clamp(Math.round(drag.startLeft + dxPct), 0, maxLeft),
+      clamp(Math.round(drag.startOffset + dyPct), 0, maxBottom)
+    );
+  };
+
   if (!active || view.length === 0) return null;
+
+  const canDrag = Boolean(onPositionChange);
 
   return (
     <div
-      className={`subtitle-overlay subtitle-overlay-${size}`}
-      style={{ bottom: `${Math.max(0, Math.min(40, offset))}%` }}
+      ref={rootRef}
+      className={`subtitle-overlay subtitle-overlay-${size}${
+        dragging ? " subtitle-overlay-dragging" : ""
+      }${canDrag ? " subtitle-overlay-draggable" : ""}`}
+      style={{
+        left: `${clamp(left, 0, 90)}%`,
+        bottom: `${clamp(offset, 0, 85)}%`,
+      }}
       aria-hidden
+      onPointerDown={canDrag ? onPointerDown : undefined}
+      onPointerMove={canDrag ? onPointerMove : undefined}
+      onPointerUp={canDrag ? endDrag : undefined}
+      onPointerCancel={canDrag ? endDrag : undefined}
     >
       <div className="subtitle-overlay-clip">
         <div ref={stackRef} className="subtitle-overlay-stack">
@@ -234,7 +322,7 @@ export default function SubtitleOverlay({
             return (
               <div key={row.key} className="subtitle-overlay-line">
                 <span className="subtitle-overlay-text">
-                  {/* Invisible full line sets width so the centered block stays put. */}
+                  {/* Invisible full line sets width so the row stays put while words reveal. */}
                   <span className="subtitle-overlay-measure" aria-hidden>
                     {row.fullText}
                   </span>

@@ -594,9 +594,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onExpand={() => navigate(`/watch/${current.id}`)}
         onClose={close}
         subtitleSize={settings.subtitleSize}
+        subtitleLeft={settings.subtitleLeft}
         subtitleOffset={settings.subtitleOffset}
-        onSubtitleOffsetChange={(offset) =>
-          updateSettings({ subtitleOffset: offset })
+        onSubtitlePositionChange={(left, offset) =>
+          updateSettings({ subtitleLeft: left, subtitleOffset: offset })
         }
         defaultRate={settings.defaultPlaybackRate}
         volume={settings.volume}
@@ -673,9 +674,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onExpand={() => navigate(streamExpandPath(stream))}
         onClose={close}
         subtitleSize={settings.subtitleSize}
+        subtitleLeft={settings.subtitleLeft}
         subtitleOffset={settings.subtitleOffset}
-        onSubtitleOffsetChange={(offset) =>
-          updateSettings({ subtitleOffset: offset })
+        onSubtitlePositionChange={(left, offset) =>
+          updateSettings({ subtitleLeft: left, subtitleOffset: offset })
         }
         defaultRate={settings.defaultPlaybackRate}
         volume={settings.volume}

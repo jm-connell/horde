@@ -126,10 +126,10 @@ export default function PlaybackTab() {
 
       <Section
         title="Subtitles"
-        description="Caption size and how far they sit above the player controls."
-        hidden={!match("subtitles", "caption", "vertical position")}
+        description="Caption size. Drag subtitles on the player to reposition; placement is remembered across videos."
+        hidden={!match("subtitles", "caption", "size")}
       >
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           {SUBTITLE_SIZES.map((opt) => (
             <Chip
               key={opt.value}
@@ -140,20 +140,6 @@ export default function PlaybackTab() {
             </Chip>
           ))}
         </div>
-        <label className="block text-xs text-gray-500">
-          Vertical position: {settings.subtitleOffset}
-        </label>
-        <input
-          type="range"
-          min={0}
-          max={40}
-          step={1}
-          value={settings.subtitleOffset}
-          onChange={(e) =>
-            update({ subtitleOffset: Number(e.target.value) })
-          }
-          className="accent-scrubber mt-2 w-full"
-        />
       </Section>
 
       <Section

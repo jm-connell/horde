@@ -144,8 +144,9 @@ interface Props {
   onExpand?: () => void;
   onClose?: () => void;
   subtitleSize?: SubtitleSize;
+  subtitleLeft?: number;
   subtitleOffset?: number;
-  onSubtitleOffsetChange?: (offset: number) => void;
+  onSubtitlePositionChange?: (left: number, offset: number) => void;
   defaultRate?: number;
   volume?: number;
   onVolumeChange?: (volume: number) => void;
@@ -188,8 +189,9 @@ export default function VideoPlayer({
   onExpand,
   onClose,
   subtitleSize = "medium",
+  subtitleLeft = 20,
   subtitleOffset = 12,
-  onSubtitleOffsetChange,
+  onSubtitlePositionChange,
   defaultRate = 1,
   volume: volumeProp,
   onVolumeChange,
@@ -301,9 +303,6 @@ export default function VideoPlayer({
       }
     }
   }, [initialPosition, src, chromecast.casting]);
-
-  // Subtitle drag
-  const subtitleDragRef = useRef<{ startY: number; startOffset: number } | null>(null);
 
   const castAvailable = chromecast.available || airplay.available;
   const casting = chromecast.casting || airplay.casting;
@@ -1907,8 +1906,10 @@ export default function VideoPlayer({
             videoRef={videoRef}
             src={activeSubtitleSrc}
             size={subtitleSize}
+            left={subtitleLeft}
             offset={subtitleOffset}
             active
+            onPositionChange={onSubtitlePositionChange}
           />
         )}
 
@@ -2119,39 +2120,6 @@ export default function VideoPlayer({
             {ccNotice && (
               <div className="absolute left-4 top-4 rounded-lg bg-black/70 px-3 py-1.5 text-xs text-gray-300">
                 {ccNotice}
-              </div>
-            )}
-            {/* Subtitle drag handle — only shown when CC is active */}
-            {captionLang && onSubtitleOffsetChange && (
-              <div
-                className="absolute inset-x-0 top-0 flex cursor-ns-resize justify-center opacity-0 hover:opacity-100"
-                style={{ height: "24px", marginTop: "-24px" }}
-                title="Drag to reposition subtitles"
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  subtitleDragRef.current = {
-                    startY: e.clientY,
-                    startOffset: subtitleOffset,
-                  };
-                }}
-                onPointerMove={(e) => {
-                  if (!subtitleDragRef.current) return;
-                  const dy = subtitleDragRef.current.startY - e.clientY;
-                  const newOffset = Math.max(
-                    0,
-                    Math.min(40, subtitleDragRef.current.startOffset + Math.round(dy / 4))
-                  );
-                  onSubtitleOffsetChange(newOffset);
-                }}
-                onPointerUp={() => {
-                  subtitleDragRef.current = null;
-                }}
-                onPointerCancel={() => {
-                  subtitleDragRef.current = null;
-                }}
-              >
-                <div className="h-1 w-12 rounded-full bg-white/40" />
               </div>
             )}
             <div className="mt-2 flex items-center gap-3 text-gray-100">

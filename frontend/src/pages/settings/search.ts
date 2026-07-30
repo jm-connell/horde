@@ -71,7 +71,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "playback",
-    keywords: "subtitles caption vertical position",
+    keywords: "subtitles caption size",
   },
   {
     tab: "playback",
