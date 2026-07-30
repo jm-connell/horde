@@ -1,0 +1,97 @@
+site_name: Horde
+site_description: Self-hosted media downloader and library
+docs_dir: docs
+
+theme:
+  name: material
+  font: false
+  palette:
+    scheme: slate
+    primary: black
+    accent: cyan
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - content.code.copy
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.keys
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install with Docker: getting-started/install-docker.md
+      - TrueNAS / Dockge: getting-started/truenas-dockge.md
+      - First run: getting-started/first-run.md
+      - Updating: getting-started/updating.md
+      - Local development: getting-started/local-dev.md
+  - Using Horde:
+      - Library: guides/library.md
+      - Search: guides/search.md
+      - Channels: guides/channels.md
+      - Watching: guides/watching.md
+      - Video player: guides/player.md
+      - Downloads: guides/downloads.md
+      - Import & review: guides/import-review.md
+      - Playlists: guides/playlists.md
+      - History & continue watching: guides/history.md
+      - AI features: guides/ai-features.md
+  - Settings:
+      - Overview: settings/index.md
+      - Appearance: settings/appearance.md
+      - Library: settings/library.md
+      - Playback: settings/playback.md
+      - AI: settings/ai.md
+      - System: settings/system.md
+      - All settings appendix: settings/all-settings.md
+  - Configuration & ops:
+      - Environment variables: ops/environment.md
+      - Storage layout: ops/storage-layout.md
+      - Ports & networking: ops/ports-networking.md
+      - YouTube access: ops/youtube-access.md
+      - AI setup: ops/ai-setup.md
+      - Backup & restore: ops/backup-restore.md
+      - Maintenance: ops/maintenance.md
+      - Troubleshooting: ops/troubleshooting.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Backend: architecture/backend.md
+      - Frontend: architecture/frontend.md
+      - Data model: architecture/data-model.md
+      - Background workers: architecture/workers.md
+      - Download pipeline: architecture/downloads-pipeline.md
+      - AI pipeline: architecture/ai-pipeline.md
+      - API overview: architecture/api-overview.md
+  - Design decisions:
+      - Why Horde: design/why-horde.md
+      - No authentication: design/no-auth.md
+      - Channel/year layout: design/channel-year-layout.md
+      - Review queue: design/review-queue.md
+      - SQLite & migrations: design/sqlite-and-migrations.md
+      - Single container: design/single-container.md
+      - Local vs cloud AI: design/local-vs-cloud-ai.md
+      - Workload profiles: design/workload-profiles.md
+      - Player architecture: design/player-architecture.md
+      - Settings split: design/settings-split.md
+      - Single-flight AI: design/single-flight-ai.md
+      - Vibecoded: design/vibecoded.md
+  - Reference:
+      - Keyboard shortcuts: reference/keyboard-shortcuts.md
+      - Glossary: reference/glossary.md
+      - FAQ: reference/faq.md
+      - Roadmap: reference/roadmap.md

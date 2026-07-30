@@ -127,7 +127,8 @@ export default function LibraryTab() {
           </h3>
           <p className="mb-3 text-xs text-gray-500">
             Saved watch position resets after this many days of inactivity.
-            The continue watching row hides videos after 7 days.
+            The continue watching row hides videos after 7 days (fixed, not
+            configurable).
           </p>
           <div className="flex items-center gap-3">
             <input

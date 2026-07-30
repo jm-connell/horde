@@ -10,3 +10,4 @@ downloads
 .venv
 *.db
 .env
+site/

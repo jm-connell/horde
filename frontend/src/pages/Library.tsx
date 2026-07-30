@@ -1112,7 +1112,10 @@ export default function Library() {
           />
           <div
             className={`absolute top-0 flex h-full max-w-[85vw] flex-col p-3 pt-20 left-3 pl-12 md:left-6 md:pl-[3.25rem] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-              sidebarOverlayOpen ? "translate-x-0" : "-translate-x-full"
+              // Clear left-3 / md:left-6 so the panel fully exits the viewport.
+              sidebarOverlayOpen
+                ? "translate-x-0"
+                : "-translate-x-[calc(100%+0.75rem)] md:-translate-x-[calc(100%+1.5rem)]"
             }`}
           >
             <div className="ui-panel ui-panel-legible flex max-h-full w-56 flex-col overflow-hidden rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">

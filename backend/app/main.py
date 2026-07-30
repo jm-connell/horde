@@ -36,6 +36,7 @@ from .services.channel_catalog import start_catalog_worker, stop_catalog_worker
 
 # Static frontend build copied next to the backend in the Docker image.
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
+WIKI_DIR = FRONTEND_DIR / "wiki"
 
 
 @asynccontextmanager
@@ -211,6 +212,7 @@ def health():
         "library_video_count": video_count,
         "review_pending_count": review_count,
         "active_downloads": active_downloads,
+        "wiki_available": WIKI_DIR.is_dir(),
     }
 
 
@@ -228,6 +230,14 @@ if FRONTEND_DIR.exists():
         StaticFiles(directory=FRONTEND_DIR / "assets"),
         name="assets",
     )
+
+    # Mount before the SPA catch-all so /wiki/ is not swallowed by index.html.
+    if WIKI_DIR.is_dir():
+        app.mount(
+            "/wiki",
+            StaticFiles(directory=WIKI_DIR, html=True),
+            name="wiki",
+        )
 
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):

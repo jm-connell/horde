@@ -123,6 +123,50 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
 
       <Section
         first
+        title="Storage"
+        hidden={!match("storage", "disk", "space", "library")}
+      >
+        {storage ? (
+          <div className="flex items-baseline gap-3">
+            <span className="text-2xl font-bold text-gray-100">
+              {formatSize(storage.total_bytes) || "0 B"}
+            </span>
+            <span className="text-xs text-gray-500">
+              {storage.video_count} video
+              {storage.video_count === 1 ? "" : "s"}
+            </span>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">Calculating...</p>
+        )}
+      </Section>
+
+      <Section
+        title="Resources"
+        hidden={
+          !match(
+            "resources",
+            "cpu",
+            "ram",
+            "gpu",
+            "vram",
+            "temperature",
+            "nvidia",
+            "amd",
+            "intel",
+            "rocm",
+            "system"
+          )
+        }
+      >
+        <p className="mb-3 max-w-2xl text-xs text-gray-500">
+          Horde host CPU, RAM, and GPU. AI workload sizing uses the Ollama
+          machine instead (see AI → Providers).
+        </p>
+        <SystemStatsSnippet stats={systemStats} />
+      </Section>
+
+      <Section
         title="Status"
         hidden={
           !match(
@@ -240,50 +284,6 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
         ) : (
           <LoadingIndicator label="Loading" className="py-4" />
         )}
-      </Section>
-
-      <Section
-        title="Storage"
-        hidden={!match("storage", "disk", "space", "library")}
-      >
-        {storage ? (
-          <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-bold text-gray-100">
-              {formatSize(storage.total_bytes) || "0 B"}
-            </span>
-            <span className="text-xs text-gray-500">
-              {storage.video_count} video
-              {storage.video_count === 1 ? "" : "s"}
-            </span>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">Calculating...</p>
-        )}
-      </Section>
-
-      <Section
-        title="Resources"
-        hidden={
-          !match(
-            "resources",
-            "cpu",
-            "ram",
-            "gpu",
-            "vram",
-            "temperature",
-            "nvidia",
-            "amd",
-            "intel",
-            "rocm",
-            "system"
-          )
-        }
-      >
-        <p className="mb-3 max-w-2xl text-xs text-gray-500">
-          Horde host CPU, RAM, and GPU. AI workload sizing uses the Ollama
-          machine instead (see AI → Providers).
-        </p>
-        <SystemStatsSnippet stats={systemStats} />
       </Section>
 
       <Section
@@ -485,6 +485,46 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
           )}
         </div>
       </Section>
+
+      {health?.wiki_available ? (
+        <Section
+          title="Documentation"
+          hidden={
+            !match(
+              "documentation",
+              "docs",
+              "wiki",
+              "manual",
+              "help",
+              "guide",
+              "api",
+              "swagger"
+            )
+          }
+        >
+          <p className="mb-3 text-xs text-gray-500">
+            Product wiki and interactive API reference for this Horde install.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <a
+              href="/wiki/"
+              target="_blank"
+              rel="noreferrer"
+              className={PANEL_BTN}
+            >
+              Wiki
+            </a>
+            <a
+              href="/docs"
+              target="_blank"
+              rel="noreferrer"
+              className={PANEL_BTN}
+            >
+              API (Swagger)
+            </a>
+          </div>
+        </Section>
+      ) : null}
     </>
   );
 }

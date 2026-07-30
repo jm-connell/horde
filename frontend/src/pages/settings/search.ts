@@ -120,6 +120,10 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   // System
   {
     tab: "system",
+    keywords: "documentation docs wiki manual help guide api swagger",
+  },
+  {
+    tab: "system",
     keywords: "storage disk space library",
   },
   {

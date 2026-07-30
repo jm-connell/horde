@@ -8,7 +8,15 @@ RUN npm install
 COPY frontend/ ./
 RUN npm run build
 
-# --- Stage 2: python runtime serving API + static build ---
+# --- Stage 2: build the MkDocs wiki ---
+FROM python:3.12-slim AS docs
+WORKDIR /docs
+RUN pip install --no-cache-dir "mkdocs-material>=9.5,<10"
+COPY mkdocs.yml ./
+COPY docs/ ./docs/
+RUN mkdocs build -d /docs-out --strict
+
+# --- Stage 3: python runtime serving API + static build + wiki ---
 FROM python:3.12-slim AS runtime
 WORKDIR /app
 
@@ -29,6 +37,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app ./app
 COPY --from=frontend /build/dist ./static
+COPY --from=docs /docs-out ./static/wiki
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

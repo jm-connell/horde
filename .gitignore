@@ -21,6 +21,10 @@ backend/downloads/
 # Local dev helpers (not committed)
 .local/
 
+# MkDocs
+site/
+backend/static/wiki/
+
 # OS / editor
 .DS_Store
 Thumbs.db

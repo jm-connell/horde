@@ -442,6 +442,7 @@ export interface HealthStats {
   library_video_count: number;
   review_pending_count: number;
   active_downloads: number;
+  wiki_available?: boolean;
 }
 
 export interface UpdateCheck {
