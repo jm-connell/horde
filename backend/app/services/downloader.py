@@ -23,9 +23,13 @@ from . import library, scanner
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .paths import find_video_by_path, to_rel_path
 from .ytdlp_common import (
+    MembersOnlyError,
+    QuietYtdlpLogger,
     apply_cookie_opts,
     extract_info_gated,
     is_members_only_entry,
+    is_members_only_error,
+    is_members_only_message,
     youtube_extractor_args,
 )
 
@@ -187,6 +191,10 @@ class DownloadCancelled(Exception):
 class _YtdlpLogger:
     """Suppress noisy Windows file-lock rename errors from intermediate fragments."""
 
+    def __init__(self) -> None:
+        self.members_only = False
+        self.last_members_only_msg: Optional[str] = None
+
     def debug(self, msg: str) -> None:
         pass
 
@@ -201,6 +209,28 @@ class _YtdlpLogger:
             return
         if "Unable to download video subtitles" in msg:
             return
+        if is_members_only_message(msg):
+            self.members_only = True
+            self.last_members_only_msg = msg
+            return
+        # Fall through: leave other errors to raised exceptions / default silence.
+
+
+def _purge_members_only_yt_id(yt_id: str) -> None:
+    try:
+        from . import channel_catalog
+
+        channel_catalog.purge_members_only_by_yt_id(yt_id)
+    except Exception:  # noqa: BLE001
+        logger.debug("members-only catalog purge failed", exc_info=True)
+
+
+def _purge_members_only_url(url: str) -> None:
+    from .url_clean import youtube_video_id
+
+    yt_id = youtube_video_id(url)
+    if yt_id:
+        _purge_members_only_yt_id(yt_id)
 
 
 class DownloadQueue:
@@ -980,6 +1010,7 @@ def _run_download(
     prepared: Optional[Path] = None
     final_path: Optional[Path] = None
     last_exc: Optional[Exception] = None
+    ytdlp_logger = _YtdlpLogger()
 
     base_ydl_opts: dict[str, Any] = apply_cookie_opts(
         {
@@ -988,7 +1019,7 @@ def _run_download(
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
-            "logger": _YtdlpLogger(),
+            "logger": ytdlp_logger,
             "merge_output_format": "mp4",
             "ignoreerrors": True,
             "overwrites": True,
@@ -1005,6 +1036,12 @@ def _run_download(
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     fetched = ydl.extract_info(url, download=False)
+                    if ytdlp_logger.members_only:
+                        raise MembersOnlyError("Members-only video — skipped")
+                    if is_members_only_entry(
+                        fetched if isinstance(fetched, dict) else None
+                    ):
+                        raise MembersOnlyError("Members-only video — skipped")
                     metadata_info = _merge_info(metadata_info, fetched)
                     info = metadata_info
                     prepared = Path(ydl.prepare_filename(metadata_info))
@@ -1024,10 +1061,16 @@ def _run_download(
 
                     try:
                         downloaded = ydl.extract_info(url, download=True)
+                        if ytdlp_logger.members_only:
+                            raise MembersOnlyError("Members-only video — skipped")
                         info = _merge_info(metadata_info, downloaded)
                         metadata_info = info
                     except Exception as exc:
                         last_exc = exc
+                        if ytdlp_logger.members_only or is_members_only_error(exc):
+                            raise MembersOnlyError(
+                                "Members-only video — skipped"
+                            ) from exc
                         if not _is_recoverable_download_error(exc):
                             raise
                         final_path = _resolve_merged_video(prepared, active_paths)
@@ -1047,8 +1090,12 @@ def _run_download(
 
                 if final_path is not None and final_path.exists():
                     break
+            except MembersOnlyError:
+                raise
             except Exception as exc:
                 last_exc = exc
+                if ytdlp_logger.members_only or is_members_only_error(exc):
+                    raise MembersOnlyError("Members-only video — skipped") from exc
                 recovered = _resolve_merged_video(prepared, active_paths)
                 recovered = _reject_unplayable(recovered, attempt_paths)
                 if recovered is not None:
@@ -1056,6 +1103,8 @@ def _run_download(
                     break
                 _cleanup_partial_files(attempt_paths)
 
+        if ytdlp_logger.members_only:
+            raise MembersOnlyError("Members-only video — skipped")
         if final_path is None or not final_path.exists():
             final_path = _resolve_merged_video(prepared, active_paths)
         final_path = _reject_unplayable(final_path, active_paths)
@@ -1140,6 +1189,9 @@ def _run_download(
         _cleanup_partial_files(active_paths)
         prev = progress_store.get(job_id, {})
         message = _strip_ansi(str(exc))
+        if is_members_only_error(exc) or is_members_only_message(message):
+            message = "Members-only video — skipped"
+            _purge_members_only_url(url)
         _update_job(job_id, status=JobStatus.error, error=message)
         progress_store[job_id] = {
             "status": "error",
@@ -1269,10 +1321,24 @@ def extract_preview(url: str) -> dict[str, Any]:
             "no_warnings": True,
             "skip_download": True,
             "extract_flat": "in_playlist",
+            "logger": QuietYtdlpLogger(),
             "extractor_args": youtube_extractor_args(),
         }
     )
-    info = _as_info(extract_info_gated(url, opts, cache_key=f"preview:{url}"))
+    try:
+        info = _as_info(extract_info_gated(url, opts, cache_key=f"preview:{url}"))
+    except Exception as exc:  # noqa: BLE001
+        if is_members_only_error(exc):
+            _purge_members_only_url(url)
+            raise MembersOnlyError("Members-only video — skipped") from exc
+        raise
+    if is_members_only_entry(info):
+        yt_id = info.get("id")
+        if yt_id:
+            _purge_members_only_yt_id(str(yt_id))
+        else:
+            _purge_members_only_url(url)
+        raise MembersOnlyError("Members-only video — skipped")
 
     if info.get("_type") == "playlist" or info.get("entries") is not None:
         entries = [e for e in (info.get("entries") or []) if e]
@@ -1335,6 +1401,8 @@ def extract_playlist_entries(url: str) -> dict[str, Any]:
     entries: list[dict[str, Any]] = []
     for entry in info.get("entries") or []:
         if not isinstance(entry, dict):
+            continue
+        if is_members_only_entry(entry):
             continue
         entry_url = entry.get("url") or entry.get("webpage_url")
         vid = entry.get("id")
@@ -2160,15 +2228,29 @@ def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
+            "logger": QuietYtdlpLogger(),
             "extractor_args": youtube_extractor_args(),
         }
     )
     # Share cache with download-preview when possible (same URL, full extract).
-    info = _as_info(
-        extract_info_gated(
-            url, opts, cache_key=f"stream:{url}", force=force
+    try:
+        info = _as_info(
+            extract_info_gated(
+                url, opts, cache_key=f"stream:{url}", force=force
+            )
         )
-    )
+    except Exception as exc:  # noqa: BLE001
+        if is_members_only_error(exc):
+            _purge_members_only_url(url)
+            raise MembersOnlyError("Members-only video — skipped") from exc
+        raise
+    if is_members_only_entry(info):
+        yt_id = info.get("id")
+        if yt_id:
+            _purge_members_only_yt_id(str(yt_id))
+        else:
+            _purge_members_only_url(url)
+        raise MembersOnlyError("Members-only video — skipped")
     if info.get("_type") == "playlist" or (
         info.get("entries") is not None and not info.get("formats")
     ):

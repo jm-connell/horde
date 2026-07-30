@@ -43,6 +43,18 @@ def get_many(ids: list[str]) -> dict[str, dict[str, Any]]:
         return {i: cache[i] for i in ids if i in cache}
 
 
+def drop(yt_id: str) -> None:
+    """Remove a single YouTube id from the feed meta cache."""
+    if not yt_id:
+        return
+    with _lock:
+        cache = load()
+        if yt_id not in cache:
+            return
+        cache.pop(yt_id, None)
+        save(cache)
+
+
 def upsert_many(entries: list[dict[str, Any]]) -> None:
     """Merge entry dicts keyed by YouTube id into the cache."""
     if not entries:

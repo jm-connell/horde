@@ -149,9 +149,11 @@ export default function WatchMeta({
                     <button
                       type="button"
                       onClick={() => setDescExpanded((v) => !v)}
-                      className="mt-2 shrink-0 text-xs font-medium text-accent outline-none transition-[filter] hover:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)] focus:outline-none focus-visible:drop-shadow-[0_0_8px_rgb(var(--accent)/0.55)]"
+                      className="ui-panel-toggle ui-interactive mt-2 shrink-0 text-xs font-medium text-accent outline-none focus:outline-none"
                     >
-                      {descExpanded ? "Show less" : "Show more"}
+                      <span className="ui-panel-toggle-press inline-flex transition-transform">
+                        {descExpanded ? "Show less" : "Show more"}
+                      </span>
                     </button>
                   </>
                 )}

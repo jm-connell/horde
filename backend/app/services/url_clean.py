@@ -42,6 +42,17 @@ def _youtube_video_id(parsed) -> str | None:
     return None
 
 
+def youtube_video_id(url: str) -> str | None:
+    """Extract a YouTube video id from a watch/shorts/embed/youtu.be URL."""
+    try:
+        parsed = urlparse(url.strip())
+    except ValueError:
+        return None
+    if parsed.netloc.lower() not in _YOUTUBE_HOSTS:
+        return None
+    return _youtube_video_id(parsed)
+
+
 def clean_url(url: str, keep_playlist: bool = False) -> str:
     """Return a canonical URL with tracking parameters removed.
 

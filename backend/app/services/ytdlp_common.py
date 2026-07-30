@@ -17,6 +17,31 @@ _MEMBERS_ONLY_TITLE = re.compile(
 _MEMBERS_ONLY_AVAILABILITY = frozenset(
     {"subscriber_only", "premium_only", "needs_auth"}
 )
+# yt-dlp error / log lines for locked membership videos (incl. tiered levels).
+_MEMBERS_ONLY_MESSAGE = re.compile(
+    r"(?i)("
+    r"members?-?\s*only\s+content"
+    r"|available to this channel'?s members"
+    r"|join this channel to get access to members?-?\s*only"
+    r"|members on level"
+    r")"
+)
+
+
+class MembersOnlyError(Exception):
+    """Raised when a video is YouTube members-only and should be skipped."""
+
+
+def is_members_only_message(text: Optional[str]) -> bool:
+    """True when a yt-dlp log/error string indicates members-only content."""
+    if not text or not isinstance(text, str):
+        return False
+    return bool(_MEMBERS_ONLY_MESSAGE.search(text))
+
+
+def is_members_only_error(exc: BaseException) -> bool:
+    """True when an exception came from a members-only extract/download failure."""
+    return is_members_only_message(str(exc))
 
 
 def is_members_only_entry(entry: Optional[dict[str, Any]]) -> bool:
@@ -32,6 +57,30 @@ def is_members_only_entry(entry: Optional[dict[str, Any]]) -> bool:
     if isinstance(title, str) and _MEMBERS_ONLY_TITLE.search(title):
         return True
     return False
+
+
+class QuietYtdlpLogger:
+    """yt-dlp logger that swallows members-only errors (and stays quiet otherwise)."""
+
+    def __init__(self) -> None:
+        self.members_only = False
+        self.last_members_only_msg: Optional[str] = None
+
+    def debug(self, msg: str) -> None:
+        pass
+
+    def info(self, msg: str) -> None:
+        pass
+
+    def warning(self, msg: str) -> None:
+        pass
+
+    def error(self, msg: str) -> None:
+        if is_members_only_message(msg):
+            self.members_only = True
+            self.last_members_only_msg = msg
+            return
+        # Leave non-members errors to yt-dlp's raised exceptions; avoid stderr spam.
 
 
 def youtube_extractor_args() -> dict[str, Any]:

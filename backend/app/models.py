@@ -187,6 +187,19 @@ class ChannelCatalogVideo(SQLModel, table=True):
     indexed_at: datetime = Field(default_factory=utcnow)
 
 
+class ChannelCatalogSkip(SQLModel, table=True):
+    """IDs permanently excluded from a channel catalog (e.g. members-only)."""
+
+    __tablename__ = "channel_catalog_skips"
+    __table_args__ = (UniqueConstraint("catalog_id", "yt_id"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    catalog_id: int = Field(foreign_key="channel_catalogs.id", index=True)
+    yt_id: str = Field(index=True)
+    reason: str = Field(default="members_only")
+    skipped_at: datetime = Field(default_factory=utcnow)
+
+
 class ChannelCatalogEmbedding(SQLModel, table=True):
     __tablename__ = "channel_catalog_embeddings"
 

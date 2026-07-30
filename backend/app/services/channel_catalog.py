@@ -14,18 +14,24 @@ from sqlmodel import Session, col, func, or_, select
 
 from ..database import engine
 from ..models import (
+    AiJob,
     ChannelCatalog,
     ChannelCatalogEmbedding,
+    ChannelCatalogSkip,
     ChannelCatalogStatus,
     ChannelCatalogVideo,
     utcnow,
 )
 from . import app_settings
+from . import feed_meta_cache
 from .feed_meta_cache import parse_upload_date
 from .ytdlp_common import (
+    MembersOnlyError,
+    QuietYtdlpLogger,
     apply_cookie_opts,
     extract_info_gated,
     is_members_only_entry,
+    is_members_only_error,
     youtube_extractor_args,
 )
 
@@ -356,6 +362,133 @@ def refresh_stale_catalogs() -> None:
         enqueue_channel(channel_url, channel_name=channel_name, force=True)
 
 
+def skipped_yt_ids(session: Session, catalog_id: int) -> set[str]:
+    rows = session.exec(
+        select(ChannelCatalogSkip.yt_id).where(
+            ChannelCatalogSkip.catalog_id == catalog_id
+        )
+    ).all()
+    return {str(yt_id) for yt_id in rows if yt_id}
+
+
+def is_skipped(session: Session, catalog_id: int, yt_id: str) -> bool:
+    row = session.exec(
+        select(ChannelCatalogSkip).where(
+            ChannelCatalogSkip.catalog_id == catalog_id,
+            ChannelCatalogSkip.yt_id == yt_id,
+        )
+    ).first()
+    return row is not None
+
+
+def record_members_only_skip(
+    session: Session,
+    catalog_id: int,
+    yt_id: str,
+    *,
+    commit: bool = False,
+) -> None:
+    yt_id = str(yt_id)
+    existing = session.exec(
+        select(ChannelCatalogSkip).where(
+            ChannelCatalogSkip.catalog_id == catalog_id,
+            ChannelCatalogSkip.yt_id == yt_id,
+        )
+    ).first()
+    if existing is None:
+        session.add(
+            ChannelCatalogSkip(
+                catalog_id=catalog_id,
+                yt_id=yt_id,
+                reason="members_only",
+                skipped_at=utcnow(),
+            )
+        )
+    if commit:
+        session.commit()
+
+
+def purge_catalog_video(
+    session: Session,
+    row: ChannelCatalogVideo,
+    *,
+    reason: str = "members_only",
+    commit: bool = True,
+) -> None:
+    """Delete catalog video + embedding + AI jobs, drop feed cache, record skip."""
+    catalog_id = row.catalog_id
+    yt_id = row.yt_id
+    video_id = row.id
+
+    if video_id is not None:
+        emb = session.exec(
+            select(ChannelCatalogEmbedding).where(
+                ChannelCatalogEmbedding.catalog_video_id == video_id
+            )
+        ).first()
+        if emb is not None:
+            session.delete(emb)
+        for job in session.exec(
+            select(AiJob).where(AiJob.catalog_video_id == video_id)
+        ).all():
+            session.delete(job)
+        session.delete(row)
+
+    record_members_only_skip(session, catalog_id, yt_id)
+    _ = reason
+    feed_meta_cache.drop(yt_id)
+    if commit:
+        session.commit()
+
+
+def purge_members_only_by_yt_id(yt_id: str) -> None:
+    """Purge any catalog rows for a YouTube id and record skips (all catalogs)."""
+    yt_id = str(yt_id).strip()
+    if not yt_id:
+        return
+    with Session(engine) as session:
+        rows = session.exec(
+            select(ChannelCatalogVideo).where(ChannelCatalogVideo.yt_id == yt_id)
+        ).all()
+        for row in rows:
+            purge_catalog_video(session, row, commit=False)
+        session.commit()
+        feed_meta_cache.drop(yt_id)
+
+
+def _reject_members_or_skipped(
+    session: Session,
+    catalog: ChannelCatalog,
+    raw: dict[str, Any],
+    *,
+    skipped: Optional[set[str]] = None,
+) -> Optional[str]:
+    """If entry must be ignored, purge any existing row and return yt_id; else None."""
+    yt_id = raw.get("id")
+    if not yt_id:
+        return None
+    yt_id = str(yt_id)
+    skip_set = (
+        skipped
+        if skipped is not None
+        else skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
+    )
+    members = is_members_only_entry(raw) or yt_id in skip_set
+    if not members:
+        return None
+    existing = session.exec(
+        select(ChannelCatalogVideo).where(
+            ChannelCatalogVideo.catalog_id == catalog.id,
+            ChannelCatalogVideo.yt_id == yt_id,
+        )
+    ).first()
+    if existing is not None:
+        purge_catalog_video(session, existing, commit=False)
+    elif catalog.id is not None:
+        record_members_only_skip(session, catalog.id, yt_id)
+    return yt_id
+
+
 def _fetch_flat_page(channel_url: str, offset: int, limit: int) -> dict[str, Any]:
     from . import downloader
 
@@ -370,8 +503,13 @@ def _upsert_flat_entries(
 ) -> int:
     """Upsert flat entries starting at start_position. Returns next position."""
     pos = start_position
+    skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
     for raw in entries:
-        if is_members_only_entry(raw):
+        rejected = _reject_members_or_skipped(
+            session, catalog, raw, skipped=skipped
+        )
+        if rejected is not None:
+            skipped.add(rejected)
             continue
         yt_id = raw.get("id")
         entry_url = raw.get("url")
@@ -474,11 +612,17 @@ def sync_feed_head(
             .order_by(ChannelCatalogVideo.position.asc())
         ).all()
         by_yt: dict[str, ChannelCatalogVideo] = {v.yt_id: v for v in existing}
+        skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
 
         live_ids: list[str] = []
         pos = 0
         for raw in entries:
-            if is_members_only_entry(raw):
+            rejected = _reject_members_or_skipped(
+                session, catalog, raw, skipped=skipped
+            )
+            if rejected is not None:
+                skipped.add(rejected)
+                by_yt.pop(rejected, None)
                 continue
             yt_id = str(raw["id"])
             live_ids.append(yt_id)
@@ -510,8 +654,13 @@ def sync_feed_head(
 
         live_set = set(live_ids)
         next_pos = len(live_ids)
-        for row in existing:
+        for row in list(existing):
+            if row.yt_id in skipped:
+                continue
             if row.yt_id in live_set:
+                continue
+            # Row may have been purged during reject.
+            if session.get(ChannelCatalogVideo, row.id) is None:
                 continue
             row.position = next_pos
             next_pos += 1
@@ -569,13 +718,18 @@ def _fetch_description(url: str) -> Optional[str]:
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
+            "logger": QuietYtdlpLogger(),
             "extractor_args": youtube_extractor_args(),
         }
     )
     try:
         info = extract_info_gated(url, opts, cache_key=f"catalog-desc:{url}")
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        if is_members_only_error(exc):
+            raise MembersOnlyError(str(exc)) from exc
         return None
+    if is_members_only_entry(info):
+        raise MembersOnlyError("members-only")
     desc = info.get("description")
     if not isinstance(desc, str) or not desc.strip():
         return None
@@ -600,10 +754,19 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
     for i, row in enumerate(rows):
         if _stop.is_set():
             return
+        if is_members_only_entry({"title": row.title}):
+            purge_catalog_video(session, row)
+            _set_runtime(done=i + 1)
+            continue
         if row.description:
             _set_runtime(done=i + 1)
             continue
-        desc = _fetch_description(row.url)
+        try:
+            desc = _fetch_description(row.url)
+        except MembersOnlyError:
+            purge_catalog_video(session, row)
+            _set_runtime(done=i + 1)
+            continue
         if desc:
             row.description = desc
             row.indexed_at = utcnow()
@@ -911,6 +1074,7 @@ def catalog_feed_page(
     total_n = int(total or 0)
     if total_n == 0:
         return None
+    skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
     rows = session.exec(
         select(ChannelCatalogVideo)
         .where(ChannelCatalogVideo.catalog_id == catalog.id)
@@ -929,7 +1093,8 @@ def catalog_feed_page(
             "published_at": r.published_at,
         }
         for r in rows
-        if not is_members_only_entry({"title": r.title})
+        if r.yt_id not in skipped
+        and not is_members_only_entry({"title": r.title})
     ]
     return {
         "channel": catalog.channel_name,
@@ -1023,10 +1188,11 @@ def search_catalog(
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
     channel_name = catalog.channel_name
+    skipped = skipped_yt_ids(session, catalog.id)
     for r in list(rows) + semantic_extra:
         if r.yt_id in seen:
             continue
-        if is_members_only_entry({"title": r.title}):
+        if r.yt_id in skipped or is_members_only_entry({"title": r.title}):
             continue
         seen.add(r.yt_id)
         out.append(_catalog_entry_dict(r, channel_name=channel_name))
@@ -1107,8 +1273,16 @@ def search_all_catalogs(
 
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
+    # Preload skips for catalogs we might hit.
+    skip_by_catalog: dict[int, set[str]] = {}
     for video, channel_name in keyword_hits + semantic_extra:
         if video.yt_id in seen:
+            continue
+        cat_skips = skip_by_catalog.get(video.catalog_id)
+        if cat_skips is None:
+            cat_skips = skipped_yt_ids(session, video.catalog_id)
+            skip_by_catalog[video.catalog_id] = cat_skips
+        if video.yt_id in cat_skips or is_members_only_entry({"title": video.title}):
             continue
         seen.add(video.yt_id)
         out.append(_catalog_entry_dict(video, channel_name=channel_name))
