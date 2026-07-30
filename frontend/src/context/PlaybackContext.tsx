@@ -72,6 +72,8 @@ interface PlaybackValue {
   miniPlayerActive: boolean;
   /** Live bounds of the floating mini-player (null when not mini). */
   miniPlayerRect: MiniPlayerRect | null;
+  /** Live DASH/file track quality (YouTube ladder), null until known. */
+  activeStreamQuality: number | null;
 }
 
 const Ctx = createContext<PlaybackValue | null>(null);
@@ -159,6 +161,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const libraryPosRef = useRef(0);
   const recentWatchedRef = useRef<number[]>([]);
   const [miniPlayerRect, setMiniPlayerRect] = useState<MiniPlayerRect | null>(
+    null
+  );
+  const [activeStreamQuality, setActiveStreamQuality] = useState<number | null>(
     null
   );
 
@@ -362,6 +367,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         return video;
       });
       setStream(null);
+      setActiveStreamQuality(null);
       streamPosRef.current = 0;
       libraryPosRef.current = video.last_position_sec || 0;
       if (opts?.queue) {
@@ -375,6 +381,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const playStream = useCallback((session: StreamSession) => {
     setCurrent(null);
+    setActiveStreamQuality(null);
     streamPosRef.current = 0;
     libraryPosRef.current = 0;
     setStream(session);
@@ -418,6 +425,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const close = useCallback(() => {
     setCurrent(null);
     setStream(null);
+    setActiveStreamQuality(null);
     streamPosRef.current = 0;
     libraryPosRef.current = 0;
     setDock(null);
@@ -568,6 +576,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     registerDock,
     miniPlayerActive,
     miniPlayerRect,
+    activeStreamQuality,
   };
 
   const streamSrc =
@@ -654,6 +663,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onAutoplayRelatedChange={(enabled) =>
           updateSettings({ autoplayRelated: enabled })
         }
+        onActiveQualityChange={setActiveStreamQuality}
       />
     ) : stream != null ? (
       <VideoPlayer
@@ -712,6 +722,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             setMiniPos(miniPosLiveRef.current);
           }
         }}
+        onActiveQualityChange={setActiveStreamQuality}
       />
     ) : null;
 

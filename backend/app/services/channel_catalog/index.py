@@ -26,6 +26,7 @@ from ..ytdlp_common import (
     QuietYtdlpLogger,
     apply_cookie_opts,
     extract_info_gated,
+    is_members_only_entry,
     is_members_only_error,
     youtube_extractor_args,
 )
@@ -34,7 +35,9 @@ from .runtime import (
     _PAGE_SIZE,
     _enabled,
     _max_videos,
+    _normalize_channel_url,
     _set_runtime,
+    get_catalog_by_url,
 )
 from .skips import (
     _reject_members_or_skipped,

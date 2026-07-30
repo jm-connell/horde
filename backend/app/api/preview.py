@@ -419,14 +419,15 @@ async def preview_subtitles(
     )
 
 
-@router.get("/manifest")
-def preview_manifest(url: str = Query(...)):
+@router.api_route("/manifest", methods=["GET", "HEAD"])
+def preview_manifest(request: Request, url: str = Query(...)):
     """DASH MPD for adaptive high-res preview streaming."""
     cleaned = _require_video_url(url)
     try:
         session = stream_preview.resolve_preview_manifest(cleaned)
         xml = stream_preview.build_dash_manifest(session)
     except Exception as exc:  # noqa: BLE001
+        logger.exception("preview manifest failed for %r", cleaned)
         raise HTTPException(
             status_code=400,
             detail=http_detail_for_error(
@@ -434,10 +435,20 @@ def preview_manifest(url: str = Query(...)):
             ),
         ) from exc
 
+    headers = {"Cache-Control": "no-store"}
+    if request.method == "HEAD":
+        # Shaka / browsers probe with HEAD; body is omitted by the server.
+        headers["Content-Length"] = str(len(xml.encode("utf-8")))
+        return Response(
+            status_code=200,
+            media_type="application/dash+xml",
+            headers=headers,
+        )
+
     return Response(
         content=xml,
         media_type="application/dash+xml",
-        headers={"Cache-Control": "no-store"},
+        headers=headers,
     )
 
 

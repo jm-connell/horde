@@ -120,12 +120,14 @@ export function useShakaDashLoad({
         if (cancelled || !videoRef.current) return;
 
         const downgrade = readDowngrade();
+        // Allow the full supported ladder (incl. 4K AV1). Health monitor
+        // downgrades if the decoder starts dropping frames.
         const maxHeight = Math.min(
-          caps.maxEfficientHeight,
+          caps.maxSupportedHeight,
           downgrade?.maxHeight ?? Infinity
         );
         capabilityMaxHeightRef.current = maxHeight;
-        const preferAv1 = caps.av1Efficient && !downgrade?.blacklistAv1;
+        const preferAv1 = caps.av1Supported && !downgrade?.blacklistAv1;
         const bwEstimate = persistedBw ?? 5_000_000;
         const initialChoice = qualityChoiceRef.current;
 
@@ -166,8 +168,8 @@ export function useShakaDashLoad({
           },
           preferredVideoCodecs: preferAv1 ? ["av01", "avc1"] : ["avc1"],
           restrictions: {
-            maxHeight: abrEnabled ? Math.max(maxHeight, 2160) : 8192,
-            maxWidth: abrEnabled ? Math.max(maxHeight, 2160) : 8192,
+            maxHeight: abrEnabled ? maxHeight : 8192,
+            maxWidth: 8192,
           },
           mediaSource: {
             codecSwitchingStrategy: "smooth",
@@ -231,6 +233,10 @@ export function useShakaDashLoad({
             );
             candidates.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0));
             if (candidates[0]) {
+              const codec = (candidates[0].videoCodec ?? "").toLowerCase();
+              if (codec.startsWith("av01")) {
+                p.configure({ preferredVideoCodecs: ["av01", "avc1"] });
+              }
               p.selectVariantTrack(candidates[0], /* clearBuffer */ true);
             }
             if (target !== initialChoice) {
@@ -310,6 +316,12 @@ export function useApplyShakaQuality(
         const candidates = tracks.filter((t) => trackQuality(t) === target);
         candidates.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0));
         if (candidates[0]) {
+          // YouTube 1440/4K is typically AV1-only; honor an explicit pick even
+          // when Auto prefers H.264 for power efficiency.
+          const codec = (candidates[0].videoCodec ?? "").toLowerCase();
+          if (codec.startsWith("av01")) {
+            p.configure({ preferredVideoCodecs: ["av01", "avc1"] });
+          }
           p.selectVariantTrack(candidates[0], /* clearBuffer */ true);
         }
         if (target !== choice) setQualityChoice(target);

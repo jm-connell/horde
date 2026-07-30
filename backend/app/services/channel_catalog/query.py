@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from sqlmodel import Session, col, func, or_, select
 
+from ...database import engine
 from ...models import (
     ChannelCatalog,
     ChannelCatalogEmbedding,
@@ -14,7 +15,12 @@ from ...models import (
     ChannelCatalogVideo,
 )
 from .. import feed_meta_cache
-from .runtime import get_runtime_status
+from ..ytdlp_common import is_members_only_entry
+from .runtime import (
+    _normalize_channel_url,
+    get_catalog_by_url,
+    get_runtime_status,
+)
 from .skips import skipped_yt_ids
 
 logger = logging.getLogger(__name__)
@@ -189,8 +195,8 @@ def search_catalog(
     # Hybrid: boost with embedding similarity when available.
     semantic_extra: list[ChannelCatalogVideo] = []
     try:
-        from .ai import embeddings as emb_mod
-        from .ai.provider import get_embed_provider, resolve_embed_model
+        from ..ai import embeddings as emb_mod
+        from ..ai.provider import get_embed_provider, resolve_embed_model
 
         provider = get_embed_provider()
         if provider is not None:
@@ -269,8 +275,8 @@ def search_all_catalogs(
             select(func.count()).select_from(ChannelCatalogEmbedding)  # type: ignore[arg-type]
         ).one()
         if int(emb_count or 0) <= _EMBED_SEARCH_ROW_CEILING:
-            from .ai import embeddings as emb_mod
-            from .ai.provider import get_embed_provider, resolve_embed_model
+            from ..ai import embeddings as emb_mod
+            from ..ai.provider import get_embed_provider, resolve_embed_model
 
             provider = get_embed_provider()
             if provider is not None:

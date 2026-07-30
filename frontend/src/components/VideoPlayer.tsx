@@ -112,6 +112,8 @@ interface Props {
   onPlayUpNext?: () => void;
   autoplayRelated?: boolean;
   onAutoplayRelatedChange?: (enabled: boolean) => void;
+  /** Fires when the live DASH track quality changes (YouTube ladder height). */
+  onActiveQualityChange?: (quality: number | null) => void;
 }
 
 export default function VideoPlayer({
@@ -152,6 +154,7 @@ export default function VideoPlayer({
   onPlayUpNext,
   autoplayRelated = true,
   onAutoplayRelatedChange,
+  onActiveQualityChange,
 }: Props) {
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
@@ -182,6 +185,8 @@ export default function VideoPlayer({
   );
   /** Distinct short-side qualities (min(w,h)), not raw frame heights. */
   const [availableHeights, setAvailableHeights] = useState<number[]>([]);
+  /** Live ABR / selected track quality (YouTube ladder), when known. */
+  const [activeQuality, setActiveQuality] = useState<number | null>(null);
   const qualityChoiceRef = useRef(qualityChoice);
   qualityChoiceRef.current = qualityChoice;
   const variantTracksRef = useRef<
@@ -303,6 +308,7 @@ export default function VideoPlayer({
     setCompatMode(false);
     setShakaReady(false);
     setAvailableHeights([]);
+    setActiveQuality(null);
     setShowQuality(false);
     setQualityChoice(streamQualityToChoice(settings.defaultStreamQuality));
     // Seed from the setting once per src; in-player changes stay session-scoped.
@@ -327,11 +333,88 @@ export default function VideoPlayer({
     setBuffering,
   });
 
+  // Keep the quality chip honest: Auto often sits well below the ladder ceiling.
+  useEffect(() => {
+    if (effectiveStreamType !== "dash" || !shakaReady) {
+      setActiveQuality(null);
+      onActiveQualityChange?.(null);
+      return;
+    }
+    const p = shakaPlayerRef.current;
+    if (!p) return;
+
+    const sync = () => {
+      try {
+        const tracks = p.getVariantTracks() ?? [];
+        variantTracksRef.current = tracks;
+        const active = tracks.find((t) => t.active);
+        const q = active ? trackQuality(active) : null;
+        setActiveQuality(q);
+        onActiveQualityChange?.(q);
+      } catch {
+        // player may be mid-destroy
+      }
+    };
+    sync();
+    p.addEventListener("adaptation", sync);
+    p.addEventListener("variantchanged", sync);
+    const id = window.setInterval(sync, 2500);
+    return () => {
+      p.removeEventListener("adaptation", sync);
+      p.removeEventListener("variantchanged", sync);
+      window.clearInterval(id);
+    };
+    // onActiveQualityChange is stable enough via PlaybackContext setter
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveStreamType, shakaReady, dashReloadToken, src]);
+
+  // Progressive / compat: report video element's decoded size when known.
+  useEffect(() => {
+    if (effectiveStreamType === "dash" && !compatMode) return;
+    const el = videoRef.current;
+    if (!el) {
+      onActiveQualityChange?.(null);
+      return;
+    }
+    const sync = () => {
+      const q = trackQuality({
+        width: el.videoWidth || null,
+        height: el.videoHeight || null,
+      });
+      const next = q > 0 ? q : null;
+      setActiveQuality(next);
+      onActiveQualityChange?.(next);
+    };
+    sync();
+    el.addEventListener("loadedmetadata", sync);
+    el.addEventListener("resize", sync);
+    return () => {
+      el.removeEventListener("loadedmetadata", sync);
+      el.removeEventListener("resize", sync);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveStreamType, compatMode, src]);
+
   const applyQualityChoice = useApplyShakaQuality(
     shakaPlayerRef,
     capabilityMaxHeightRef,
     variantTracksRef,
     setQualityChoice
+  );
+
+  const pickQuality = useCallback(
+    (choice: QualityChoice) => {
+      // Explicit ladder picks override a persisted auto-downgrade / AV1 blacklist.
+      if (choice !== "auto") {
+        void import("../utils/decodeCapability").then((m) => m.clearDowngrade());
+        capabilityMaxHeightRef.current = Math.max(
+          capabilityMaxHeightRef.current,
+          typeof choice === "number" ? choice : 2160
+        );
+      }
+      applyQualityChoice(choice);
+    },
+    [applyQualityChoice]
   );
 
     usePlaybackHealth({
@@ -1954,15 +2037,17 @@ export default function VideoPlayer({
                         }`}
                         title="Stream quality"
                       >
-                        {qualityMenuLabel(qualityChoice)}
+                        {qualityChoice === "auto" && activeQuality
+                          ? `Auto · ${qualityMenuLabel(activeQuality)}`
+                          : qualityMenuLabel(qualityChoice)}
                       </button>
                       {showQuality && (
-                        <div className="absolute bottom-9 right-0 z-10 w-28 rounded-lg bg-ink-800 p-2 ring-1 ring-ink-600">
+                        <div className="absolute bottom-9 right-0 z-10 w-32 rounded-lg bg-ink-800 p-2 ring-1 ring-ink-600">
                           <div className="flex flex-col gap-1">
                             <button
                               type="button"
                               onClick={() => {
-                                applyQualityChoice("auto");
+                                pickQuality("auto");
                                 setShowQuality(false);
                               }}
                               className={`rounded px-2 py-1.5 text-left text-[11px] font-medium ${
@@ -1972,13 +2057,16 @@ export default function VideoPlayer({
                               }`}
                             >
                               Auto
+                              {activeQuality && qualityChoice === "auto"
+                                ? ` · ${qualityMenuLabel(activeQuality)}`
+                                : ""}
                             </button>
                             {availableHeights.map((h) => (
                               <button
                                 key={h}
                                 type="button"
                                 onClick={() => {
-                                  applyQualityChoice(h);
+                                  pickQuality(h);
                                   setShowQuality(false);
                                 }}
                                 className={`rounded px-2 py-1.5 text-left text-[11px] font-medium tabular-nums ${

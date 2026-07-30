@@ -135,6 +135,7 @@ export default function Watch() {
     queue,
     getCurrentPosition,
     getStreamPosition,
+    activeStreamQuality,
   } = usePlayback();
 
   const dockRef = useRef<HTMLDivElement>(null);
@@ -645,13 +646,10 @@ export default function Watch() {
   const downloadActive =
     activeJob != null && isActiveJob(activeJob, live);
 
-  const streamRes =
-    source.kind === "stream"
-      ? formatResolution(source.meta.preview_height)
-      : "";
+  // Live track quality for streams; file height for library.
   const resolution = isLibrary
     ? formatResolution(source.video.height_px)
-    : streamRes;
+    : formatResolution(activeStreamQuality);
 
   const contentClass = showRelatedRight
     ? "mx-auto max-w-[90rem]"

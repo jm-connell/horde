@@ -10,6 +10,7 @@ import logging
 import secrets
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
 from xml.sax.saxutils import escape as xml_escape
 
@@ -568,6 +569,11 @@ def _subtitle_entry_vtt_url(entries: list[Any]) -> Optional[str]:
             parts.fragment,
         )
     )
+
+
+def _normalize_lang(lang: str) -> str:
+    """Collapse ``en-US`` / ``en-orig`` style codes to a base language tag."""
+    return lang.split("-")[0].lower()
 
 
 def _collect_preview_subtitles(info: dict[str, Any]) -> list[dict[str, Any]]:

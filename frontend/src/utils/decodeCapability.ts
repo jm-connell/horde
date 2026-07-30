@@ -1,9 +1,16 @@
-/** Probe hardware-efficient decode capability for preview DASH gating. */
+/** Probe decode capability for preview DASH gating. */
 
 export type DecodeSupport = {
-  /** True when AV1 at 1080p+ reports supported && powerEfficient. */
+  /** True when any AV1 ladder step reports MediaCapabilities.supported. */
+  av1Supported: boolean;
+  /** True when AV1 at some step also reports powerEfficient. */
   av1Efficient: boolean;
-  /** Highest height this device can decode efficiently (AV1 or H.264). */
+  /**
+   * Highest height this device can decode (supported). Used as the Auto ABR
+   * ceiling — playback health still downgrades if frames drop.
+   */
+  maxSupportedHeight: number;
+  /** Highest height reported powerEfficient (informational / soft preference). */
   maxEfficientHeight: number;
 };
 
@@ -19,6 +26,14 @@ const WIDTH_FOR: Record<number, number> = {
   1440: 2560,
   1080: 1920,
   720: 1280,
+};
+
+/** YouTube-typical AV1 codec strings by ladder step (Main profile tiers). */
+const AV1_CODEC_FOR: Record<number, string> = {
+  2160: "av01.0.12M.08",
+  1440: "av01.0.12M.08",
+  1080: "av01.0.08M.08",
+  720: "av01.0.05M.08",
 };
 
 /**
@@ -58,7 +73,8 @@ export function trackQuality(t: {
   return bestQ;
 }
 
-const CACHE_KEY = "horde.decode-capability.v1";
+// v2: supported≠powerEfficient split + height-appropriate AV1 codec strings.
+const CACHE_KEY = "horde.decode-capability.v2";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type Cached = DecodeSupport & { at: number };
@@ -71,8 +87,10 @@ function readCache(): DecodeSupport | null {
     if (!parsed || typeof parsed.at !== "number") return null;
     if (Date.now() - parsed.at > CACHE_TTL_MS) return null;
     return {
+      av1Supported: Boolean(parsed.av1Supported),
       av1Efficient: Boolean(parsed.av1Efficient),
-      maxEfficientHeight: Number(parsed.maxEfficientHeight) || 1080,
+      maxSupportedHeight: Number(parsed.maxSupportedHeight) || 1080,
+      maxEfficientHeight: Number(parsed.maxEfficientHeight) || 720,
     };
   } catch {
     return null;
@@ -120,53 +138,70 @@ async function canDecode(
 
 /** Default when Media Capabilities API is unavailable: H.264 only, up to 1080p. */
 export const DEFAULT_DECODE_SUPPORT: DecodeSupport = {
+  av1Supported: false,
   av1Efficient: false,
+  maxSupportedHeight: 1080,
   maxEfficientHeight: 1080,
 };
 
 /**
- * Probe efficient decode support for AV1 and H.264 ladders.
- * Results are cached in localStorage for a week.
+ * Probe decode support for AV1 and H.264 ladders.
+ * Results are cached in localStorage for a week (v2 key).
  */
 export async function probeDecodeSupport(): Promise<DecodeSupport> {
   const cached = readCache();
   if (cached) return cached;
 
-  if (typeof navigator === "undefined" || !navigator.mediaCapabilities?.decodingInfo) {
+  if (
+    typeof navigator === "undefined" ||
+    !navigator.mediaCapabilities?.decodingInfo
+  ) {
     return DEFAULT_DECODE_SUPPORT;
   }
 
-  // Representative codec strings YouTube commonly serves.
-  const av1Codec = "av01.0.08M.08";
   const avcCodec = "avc1.640028";
 
+  let av1Supported = false;
   let av1Efficient = false;
-  let maxAv1 = 0;
-  let maxAvc = 0;
+  let maxAv1Supported = 0;
+  let maxAv1Efficient = 0;
+  let maxAvcSupported = 0;
+  let maxAvcEfficient = 0;
 
   for (const h of HEIGHTS) {
-    const av1 = await canDecode(av1Codec, h);
-    if (av1.supported && av1.powerEfficient) {
-      av1Efficient = true;
-      maxAv1 = Math.max(maxAv1, h);
+    const av1 = await canDecode(AV1_CODEC_FOR[h] ?? "av01.0.08M.08", h);
+    if (av1.supported) {
+      av1Supported = true;
+      maxAv1Supported = Math.max(maxAv1Supported, h);
+      if (av1.powerEfficient) {
+        av1Efficient = true;
+        maxAv1Efficient = Math.max(maxAv1Efficient, h);
+      }
     }
     const avc = await canDecode(avcCodec, h);
-    if (avc.supported && avc.powerEfficient) {
-      maxAvc = Math.max(maxAvc, h);
-    } else if (avc.supported && maxAvc === 0) {
-      // Software H.264 is usually fine at 720p; allow at least that.
-      maxAvc = Math.max(maxAvc, Math.min(h, 720));
+    if (avc.supported) {
+      maxAvcSupported = Math.max(maxAvcSupported, h);
+      if (avc.powerEfficient) {
+        maxAvcEfficient = Math.max(maxAvcEfficient, h);
+      }
     }
   }
 
-  // If nothing reported efficient, still allow 720p H.264 (MSE isTypeSupported path).
-  const maxEfficientHeight = Math.max(maxAv1, maxAvc, 720);
-  const support: DecodeSupport = { av1Efficient, maxEfficientHeight };
+  // Floor: always allow at least 720p when MSE exists.
+  const maxSupportedHeight = Math.max(maxAv1Supported, maxAvcSupported, 720);
+  const maxEfficientHeight = Math.max(maxAv1Efficient, maxAvcEfficient, 720);
+  const support: DecodeSupport = {
+    av1Supported,
+    av1Efficient,
+    maxSupportedHeight,
+    maxEfficientHeight,
+  };
   writeCache(support);
   return support;
 }
 
 const DOWNGRADE_KEY = "horde.decode-downgrade.v1";
+const DOWNGRADE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type DowngradeRecord = {
   maxHeight: number;
@@ -180,6 +215,13 @@ export function readDowngrade(): DowngradeRecord | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DowngradeRecord;
     if (!parsed || typeof parsed.maxHeight !== "number") return null;
+    if (
+      typeof parsed.at === "number" &&
+      Date.now() - parsed.at > DOWNGRADE_TTL_MS
+    ) {
+      localStorage.removeItem(DOWNGRADE_KEY);
+      return null;
+    }
     return parsed;
   } catch {
     return null;
@@ -192,6 +234,15 @@ export function writeDowngrade(record: Omit<DowngradeRecord, "at">): void {
       DOWNGRADE_KEY,
       JSON.stringify({ ...record, at: Date.now() })
     );
+  } catch {
+    // ignore
+  }
+}
+
+/** Clear a persisted auto-downgrade (e.g. user explicitly picks 4K / AV1). */
+export function clearDowngrade(): void {
+  try {
+    localStorage.removeItem(DOWNGRADE_KEY);
   } catch {
     // ignore
   }
