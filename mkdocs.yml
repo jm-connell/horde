@@ -63,6 +63,7 @@ nav:
       - Environment variables: ops/environment.md
       - Storage layout: ops/storage-layout.md
       - Ports & networking: ops/ports-networking.md
+      - Remote access: ops/remote-access.md
       - YouTube access: ops/youtube-access.md
       - AI setup: ops/ai-setup.md
       - Backup & restore: ops/backup-restore.md

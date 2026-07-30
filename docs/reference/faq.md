@@ -26,7 +26,7 @@ Pull the latest git revision and **rebuild** the image (`docker compose up --bui
 
 ## Where is the wiki in development?
 
-In Docker/production, the wiki is built into the image and served at **`/wiki/`**. For local docs work, run MkDocs against `mkdocs.yml` (Material theme) from the repo; the app only serves `/wiki/` when `static/wiki` (or the image equivalent) exists. API Swagger remains at **`/docs`**. See [Local development](../getting-started/local-dev.md) and [Single container](../design/single-container.md).
+In Docker/production, the wiki is built into the image and served at **`/wiki/`**. Locally, `./start.sh` builds the same tree into `backend/static/wiki/` by default (skip with `SKIP_WIKI=1`). The app only serves `/wiki/` when that directory exists. API Swagger remains at **`/docs`**. See [Local development](../getting-started/local-dev.md) and [Single container](../design/single-container.md).
 
 ## Do members-only / paid YouTube videos work?
 
@@ -38,7 +38,7 @@ YouTube challenged the extract. Check Settings → System → Status (POT provid
 
 ## Can I expose this to the internet?
 
-**Not recommended** without your own auth layer. CORS is wide for Chromecast, and there is no app login. Prefer VPN. See [No authentication](../design/no-auth.md).
+**Not recommended** without your own auth layer. CORS is wide for Chromecast, and there is no app login. Prefer a VPN (Tailscale / WireGuard) or put HTTP Basic Auth / SSO on a reverse proxy in front of Horde. See [Remote access](../ops/remote-access.md) and [No authentication](../design/no-auth.md).
 
 ## Who wrote this?
 

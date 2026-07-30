@@ -47,7 +47,7 @@ If you must reach Horde remotely:
 3. Keep OpenRouter API keys and Ollama on the private network; do not expose Ollama publicly either
 4. Bind published ports to a LAN interface when your Docker host allows it
 
-See also [Ports & networking](../ops/ports-networking.md) and the [FAQ](../reference/faq.md).
+Copy-paste recipes: [Remote access](../ops/remote-access.md). See also [Ports & networking](../ops/ports-networking.md) and the [FAQ](../reference/faq.md).
 
 ## Related decisions
 

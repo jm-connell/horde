@@ -27,17 +27,25 @@ From the repo root:
 
 1. Sets `DOWNLOADS_DIR` and `DATA_DIR` to `./downloads` and `./data` under the repo (creating them if needed)
 2. Creates `.venv` if missing and installs `backend/requirements.txt` when needed
-3. Runs `npm install` in `frontend/` when `node_modules` is missing
-4. Starts **uvicorn** with `--reload` on port **8080**
-5. Starts **Vite** (`npm run dev`, usually **5173**) once the backend health check passes
+3. Installs `backend/requirements-dev.txt` (pytest, mkdocs-material) when needed
+4. Builds the MkDocs wiki into `backend/static/wiki/` when missing or when `docs/` / `mkdocs.yml` changed (unless `SKIP_WIKI=1`)
+5. Runs `npm install` in `frontend/` when `node_modules` is missing
+6. Starts **uvicorn** with `--reload` on port **8080**
+7. Starts **Vite** (`npm run dev`, usually **5173**) once the backend health check passes
 
 Open the Vite URL printed in the terminal (typically `http://localhost:5173`). Vite proxies `/api`, `/docs`, `/redoc`, `/openapi.json`, and `/wiki` to `http://127.0.0.1:8080`.
 
-!!! tip "Wiki in local dev"
-    The Documentation link in Settings appears only when `backend/static/wiki/` exists (`wiki_available` on `/api/health`). Docker builds that tree automatically. Locally:
+!!! tip "Wiki in local development"
+    `./start.sh` builds the wiki by default so Settings → Documentation and `/wiki/` work locally (`wiki_available` on `/api/health`). Skip with:
 
     ```bash
-    # from repo root, with mkdocs-material installed
+    SKIP_WIKI=1 ./start.sh
+    ```
+
+    Manual rebuild (same output path Docker uses):
+
+    ```bash
+    # from repo root, with the venv activated (or after start.sh installed requirements-dev)
     mkdocs build -d backend/static/wiki --strict
     ```
 

@@ -59,4 +59,5 @@ Downloads themselves stay limited by `MAX_DOWNLOAD_CONCURRENCY` (default **2**).
 
 - [Environment variables](environment.md)
 - [Troubleshooting](troubleshooting.md) — bot checks
+- [Bumping yt-dlp](maintenance.md#bumping-yt-dlp) — pin and rebuild when extractors break
 - [Download pipeline](../architecture/downloads-pipeline.md)

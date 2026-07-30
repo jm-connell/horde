@@ -22,7 +22,7 @@ On startup, `init_db()`:
 
 1. Imports models and runs `SQLModel.metadata.create_all` (new tables)
 2. Ensures a **`schema_migrations`** ledger table exists
-3. Runs any **pending versioned steps** from `MIGRATION_STEPS` in [`backend/app/database.py`](../../backend/app/database.py)
+3. Runs any **pending versioned steps** from `MIGRATION_STEPS` in `backend/app/database.py`
 4. Re-applies the idempotent **extra column** lists (safe `ALTER TABLE … ADD COLUMN` for any still-missing fields)
 5. Calls `verify_schema()`
 

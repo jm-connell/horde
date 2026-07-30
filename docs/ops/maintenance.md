@@ -40,8 +40,25 @@ On every boot, after `init_db()`, Horde runs **orphan cleanup**: library rows wh
 
 The downloads-tree [scanner](../architecture/workers.md) continues to pick up new files and may flag orphans during poll cycles as well.
 
+## Bumping yt-dlp
+
+Horde pins an exact yt-dlp version in `backend/requirements.txt` (for example `yt-dlp==2026.7.4`). The Docker image installs that pin at build time — the container does **not** auto-upgrade yt-dlp on start.
+
+When YouTube breaks extractors (format errors, bot checks that a newer yt-dlp already fixed, etc.):
+
+1. Edit the `yt-dlp==…` pin in `backend/requirements.txt` to the version you want (check [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases)).
+2. Keep `bgutil-ytdlp-pot-provider` aligned with the Compose `bgutil-pot` image tag when that plugin needs a matching bump ([YouTube access](youtube-access.md)).
+3. Rebuild and recreate via [`update.sh`](../getting-started/updating.md) (or Compose with `HORDE_GIT_SHA`).
+4. Smoke-test: Settings → System (or `GET /api/health`) shows the new `yt_dlp_version`, then paste a short URL and download.
+
+Mention the bump in the commit or PR message when extractors were the reason (“bump yt-dlp for YouTube extractor fix”). For day-to-day app updates, a normal rebuild already picks up whatever pin is in the tree.
+
+Local development: reinstall the venv deps after changing the pin (`pip install -r backend/requirements.txt`), or let `./start.sh` reinstall when `requirements.txt` is newer than its stamp.
+
 ## Related
 
+- [Updating](../getting-started/updating.md)
+- [YouTube access](youtube-access.md)
 - [AI setup](ai-setup.md)
 - [Troubleshooting](troubleshooting.md)
 - [Backup & restore](backup-restore.md)

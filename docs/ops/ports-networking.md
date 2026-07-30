@@ -35,7 +35,7 @@ This exists so Chromecast / cast receivers can fetch media and subtitle URLs cro
 !!! danger "Do not expose to the internet"
     Horde has **no login, no API keys, no reverse-proxy auth of its own**. Anyone who can reach the port can download, delete, change settings, and read your library.
 
-    Keep it on a trusted LAN, VPN, or a gateway that terminates auth. See [No authentication](../design/no-auth.md).
+    Keep it on a trusted LAN, VPN, or a gateway that terminates auth. Recipes: [Remote access](remote-access.md). Design: [No authentication](../design/no-auth.md).
 
 ## Local development
 
@@ -46,9 +46,10 @@ Typical split:
 | Backend (`uvicorn`) | `http://127.0.0.1:8080` |
 | Frontend (`vite`) | `http://127.0.0.1:5173` |
 
-The wiki is only present when MkDocs output is copied into the static tree (Docker image). Local API-only runs report `wiki_available: false` on `/api/health`. See [Troubleshooting](troubleshooting.md) and [Local development](../getting-started/local-dev.md).
+The wiki is only present when MkDocs output is copied into the static tree. Docker builds it into the image; `./start.sh` builds it locally by default. See [Troubleshooting](troubleshooting.md), [Local development](../getting-started/local-dev.md), and [Remote access](remote-access.md).
 
 ## Related
 
 - [Environment variables](environment.md)
+- [Remote access](remote-access.md)
 - [API overview](../architecture/api-overview.md)

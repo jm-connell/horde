@@ -10,7 +10,7 @@
 2. `YTDLP_POT_BASE_URL` reachable from the Horde container (`http://bgutil-pot:4416` in Compose).
 3. Add [cookies](youtube-access.md) if POT alone is not enough — Status also shows whether cookies are configured.
 4. Reduce bursty browsing — extracts are already serialized (1.25s spacing); avoid restarting jobs in a tight loop.
-5. Update the image / yt-dlp — extractor breakage is common when YouTube changes.
+5. Update the image / yt-dlp — extractor breakage is common when YouTube changes. Horde pins yt-dlp in `backend/requirements.txt`; see [Bumping yt-dlp](maintenance.md#bumping-yt-dlp).
 6. Settings → System → Status → **Last extract failure** shows the most recent classified extract error (`youtube.last_extract_failure` on `/api/health`).
 
 ### Download `error_kind` values
@@ -98,11 +98,14 @@ The MkDocs wiki is built in the Docker image and served at `/wiki/`. Local `uvic
 "wiki_available": false
 ```
 
-on `/api/health`. That is expected. Build docs (`mkdocs build`) into the static tree, or use the full Docker image, to enable Settings → System → Documentation.
+on `/api/health`.
+
+**Fix:** run `./start.sh` (or `scripts/dev.sh` / `scripts/dev.ps1`) — it installs `mkdocs-material` from `requirements-dev.txt` and builds into `backend/static/wiki/` when missing or stale. Use `SKIP_WIKI=1` only if you intentionally want to skip that step. Manual rebuild: `mkdocs build -d backend/static/wiki --strict` from the repo root. See [Local development](../getting-started/local-dev.md).
 
 ## Related
 
 - [YouTube access](youtube-access.md)
 - [Ports & networking](ports-networking.md)
+- [Remote access](remote-access.md)
 - [Updating](../getting-started/updating.md)
 - [Local development](../getting-started/local-dev.md)

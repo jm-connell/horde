@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Start Horde backend + frontend for local development.
 # Usage: ./start.sh   (or ./scripts/dev.sh)
+#
+# Set SKIP_WIKI=1 to skip the MkDocs build (Settings → Documentation stays hidden).
 
 set -euo pipefail
 
@@ -42,6 +44,41 @@ if [[ ! -f "$VENV/.horde-reqs-stamp" ]] || [[ "$ROOT/backend/requirements.txt" -
   echo "Installing backend dependencies ..."
   pip install -r "$ROOT/backend/requirements.txt"
   touch "$VENV/.horde-reqs-stamp"
+fi
+
+if [[ ! -f "$VENV/.horde-dev-reqs-stamp" ]] || [[ "$ROOT/backend/requirements-dev.txt" -nt "$VENV/.horde-dev-reqs-stamp" ]]; then
+  echo "Installing backend dev dependencies (pytest, mkdocs-material) ..."
+  pip install -r "$ROOT/backend/requirements-dev.txt"
+  touch "$VENV/.horde-dev-reqs-stamp"
+fi
+
+wiki_needs_build() {
+  local wiki_index="$ROOT/backend/static/wiki/index.html"
+  local stamp="$VENV/.horde-wiki-stamp"
+  if [[ ! -f "$wiki_index" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$stamp" ]]; then
+    return 0
+  fi
+  if [[ "$ROOT/mkdocs.yml" -nt "$stamp" ]]; then
+    return 0
+  fi
+  if find "$ROOT/docs" -type f -newer "$stamp" -print -quit 2>/dev/null | grep -q .; then
+    return 0
+  fi
+  return 1
+}
+
+if [[ "${SKIP_WIKI:-}" == "1" ]]; then
+  echo "SKIP_WIKI=1 — not building wiki (wiki_available will stay false until you build)."
+elif wiki_needs_build; then
+  echo "Building MkDocs wiki into backend/static/wiki ..."
+  (cd "$ROOT" && mkdocs build -d backend/static/wiki --strict)
+  touch "$VENV/.horde-wiki-stamp"
+  echo "Wiki ready at /wiki/ (via Vite proxy or http://127.0.0.1:8080/wiki/)."
+else
+  echo "Wiki already up to date at backend/static/wiki."
 fi
 
 if [[ ! -d "$ROOT/frontend/node_modules" ]]; then
