@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, THUMBNAILS_DIR, VIDEO_EXTENSIONS
 from ..database import engine
-from ..models import DownloadJob, JobStatus, Video, VideoStatus
+from ..models import DownloadDestination, DownloadJob, JobStatus, Video, VideoStatus
 from . import library, scanner
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .paths import find_video_by_path, to_rel_path
@@ -66,6 +66,81 @@ progress_store: dict[int, dict[str, Any]] = {}
 OUTPUT_TEMPLATE = str(
     DOWNLOADS_DIR / "%(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s"
 )
+
+# Ephemeral staging for "download to this device" jobs (not library media).
+DEVICE_STAGING_DIR = "_device"
+
+
+def device_job_dir(job_id: int) -> Path:
+    return DOWNLOADS_DIR / DEVICE_STAGING_DIR / str(job_id)
+
+
+def device_outtmpl(job_id: int) -> str:
+    return str(device_job_dir(job_id) / "%(title)s [%(id)s].%(ext)s")
+
+
+def is_device_staging_path(rel_path: str) -> bool:
+    posix = (rel_path or "").replace("\\", "/").lstrip("/")
+    return posix == DEVICE_STAGING_DIR or posix.startswith(f"{DEVICE_STAGING_DIR}/")
+
+
+def cleanup_device_job_files(
+    job_id: int, device_file_path: Optional[str] = None
+) -> None:
+    """Remove ephemeral device-job media (file + staging dir)."""
+    root = DOWNLOADS_DIR.resolve()
+    staging = (DOWNLOADS_DIR / DEVICE_STAGING_DIR).resolve()
+    if device_file_path and is_device_staging_path(device_file_path):
+        full = (DOWNLOADS_DIR / device_file_path).resolve()
+        try:
+            full.relative_to(root)
+        except ValueError:
+            pass
+        else:
+            _safe_unlink(full)
+            parent = full.parent
+            if parent.is_dir():
+                stem = full.stem
+                for entry in list(parent.iterdir()):
+                    if entry.name.startswith(stem) or entry.suffix in {
+                        ".part",
+                        ".ytdl",
+                    }:
+                        _safe_unlink(entry)
+    job_dir = device_job_dir(job_id)
+    try:
+        resolved = job_dir.resolve()
+        resolved.relative_to(staging)
+    except (OSError, ValueError):
+        return
+    if resolved.is_dir():
+        shutil.rmtree(resolved, ignore_errors=True)
+
+
+def gc_orphaned_device_dirs() -> int:
+    """Remove `_device/{id}` dirs with no matching device DownloadJob row."""
+    root = DOWNLOADS_DIR / DEVICE_STAGING_DIR
+    if not root.is_dir():
+        return 0
+    removed = 0
+    with Session(engine) as session:
+        for child in list(root.iterdir()):
+            if not child.is_dir() or not child.name.isdigit():
+                continue
+            job_id = int(child.name)
+            job = session.get(DownloadJob, job_id)
+            keep = (
+                job is not None
+                and job.destination == DownloadDestination.device.value
+                and job.status
+                in (JobStatus.queued, JobStatus.downloading, JobStatus.completed)
+            )
+            if keep:
+                continue
+            shutil.rmtree(child, ignore_errors=True)
+            removed += 1
+    return removed
+
 
 # yt-dlp per-format fragments (e.g. ".f401.mp4") — not the final merged file.
 _FRAGMENT_RE = re.compile(r"\.f\d+\.[^.]+$")
@@ -838,7 +913,8 @@ def _complete_download(
     replace_video_id: Optional[int],
     notes_pending: Optional[str],
     cancel_event: Optional[threading.Event] = None,
-) -> int:
+    destination: str = DownloadDestination.library.value,
+) -> Optional[int]:
     if cancel_event is not None and cancel_event.is_set():
         raise DownloadCancelled()
 
@@ -867,6 +943,50 @@ def _complete_download(
         height = int(raw_h) if raw_h else None
 
     quality_warning = _check_quality(quality_preset, int(height) if height else None)
+
+    # Ephemeral "to this device" — no library row, sprites, or AI.
+    if destination == DownloadDestination.device.value:
+        with Session(engine) as session:
+            job = session.get(DownloadJob, job_id)
+            effective_title = (
+                (job.title_override if job else None)
+                or title_override
+                or info.get("title")
+                or final_path.stem
+            )
+            effective_channel = (
+                (job.channel_override if job else None)
+                or channel_override
+                or (job.channel if job else None)
+                or info.get("uploader")
+                or info.get("channel")
+            )
+        snapshot: dict[str, Any] = {
+            "status": "completed",
+            "progress": 100.0,
+            "destination": DownloadDestination.device.value,
+            "title": effective_title,
+            "channel": effective_channel,
+            "file_size": file_size,
+        }
+        if quality_warning:
+            snapshot["quality_warning"] = quality_warning
+        if volume_warning:
+            snapshot["volume_warning"] = volume_warning
+
+        _update_job(
+            job_id,
+            status=JobStatus.completed,
+            progress=100.0,
+            title=effective_title,
+            device_file_path=rel_path,
+            file_size=file_size,
+            video_id=None,
+            error=None,
+            error_kind=None,
+        )
+        progress_store[job_id] = snapshot
+        return None
 
     with Session(engine) as session:
         job = session.get(DownloadJob, job_id)
@@ -988,9 +1108,10 @@ def _complete_download(
         video_id, final_path, source_url, info.get("thumbnail")
     )
 
-    snapshot: dict[str, Any] = {
+    snapshot = {
         "status": "completed",
         "progress": 100.0,
+        "destination": DownloadDestination.library.value,
         "video_id": video_id,
         "title": info.get("title"),
         "file_size": file_size,
@@ -1048,6 +1169,18 @@ def _run_download(
         normalize_volume = job.normalize_volume
         replace_video_id = job.replace_video_id
         notes_pending = job.notes_pending
+        destination = job.destination or DownloadDestination.library.value
+
+    if destination == DownloadDestination.device.value:
+        # Never overwrite a library row from an ephemeral device job.
+        replace_video_id = None
+        outtmpl = device_outtmpl(job_id)
+        device_job_dir(job_id).mkdir(parents=True, exist_ok=True)
+    else:
+        outtmpl = str(
+            DOWNLOADS_DIR
+            / "%(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s"
+        )
 
     _update_job(
         job_id,
@@ -1056,7 +1189,11 @@ def _run_download(
         error=None,
         error_kind=None,
     )
-    progress_store[job_id] = {"status": "downloading", "progress": 0.0}
+    progress_store[job_id] = {
+        "status": "downloading",
+        "progress": 0.0,
+        "destination": destination,
+    }
 
     active_paths: set[str] = set()
     info: dict[str, Any] = {}
@@ -1068,7 +1205,7 @@ def _run_download(
 
     base_ydl_opts: dict[str, Any] = apply_cookie_opts(
         {
-            "outtmpl": OUTPUT_TEMPLATE,
+            "outtmpl": outtmpl,
             "progress_hooks": [_make_progress_hook(job_id, cancel)],
             "noplaylist": True,
             "quiet": True,
@@ -1207,10 +1344,13 @@ def _run_download(
             replace_video_id,
             notes_pending,
             cancel_event=cancel,
+            destination=destination,
         )
 
     except DownloadCancelled:
         _cleanup_partial_files(active_paths)
+        if destination == DownloadDestination.device.value:
+            cleanup_device_job_files(job_id)
         with Session(engine) as session:
             job = session.get(DownloadJob, job_id)
             if job is None:
@@ -1226,16 +1366,19 @@ def _run_download(
                     "progress": 0.0,
                     "title": job.title,
                     "channel": job.channel,
+                    "destination": destination,
                 }
             else:
                 job.status = JobStatus.cancelled
                 job.error = "Cancelled"
                 job.error_kind = ERROR_KIND_CANCELLED
                 job.progress = 0.0
+                job.device_file_path = None
                 progress_store[job_id] = {
                     "status": "cancelled",
                     "error": "Cancelled",
                     "error_kind": ERROR_KIND_CANCELLED,
+                    "destination": destination,
                 }
             session.add(job)
             session.commit()
@@ -1264,11 +1407,14 @@ def _run_download(
                     replace_video_id,
                     notes_pending,
                     cancel_event=cancel,
+                    destination=destination,
                 )
             except Exception:  # noqa: BLE001
                 pass
 
         _cleanup_partial_files(active_paths)
+        if destination == DownloadDestination.device.value:
+            cleanup_device_job_files(job_id)
         prev = progress_store.get(job_id, {})
         kind, message = classify_ytdlp_error(exc)
         if kind == ERROR_KIND_MEMBERS or is_members_only_error(exc):
@@ -1281,7 +1427,11 @@ def _run_download(
         else:
             logger.warning("download job %s failed (%s): %s", job_id, kind, message)
         _update_job(
-            job_id, status=JobStatus.error, error=message, error_kind=kind
+            job_id,
+            status=JobStatus.error,
+            error=message,
+            error_kind=kind,
+            device_file_path=None,
         )
         progress_store[job_id] = {
             "status": "error",
@@ -1289,6 +1439,7 @@ def _run_download(
             "error_kind": kind,
             "title": prev.get("title"),
             "channel": prev.get("channel"),
+            "destination": destination,
         }
         return None
     finally:

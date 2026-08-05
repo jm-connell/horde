@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from .models import JobStatus, PlaylistSource, VideoStatus
+from .models import DownloadDestination, JobStatus, PlaylistSource, VideoStatus
 
 
 class SubtitleTrack(BaseModel):
@@ -83,6 +83,7 @@ class DownloadCreate(BaseModel):
     channel_override: Optional[str] = None
     notes_pending: Optional[str] = None
     normalize_volume: bool = False
+    destination: DownloadDestination = DownloadDestination.library
 
 
 class DownloadPreview(BaseModel):
@@ -131,6 +132,8 @@ class DownloadJobRead(BaseModel):
     paused: bool
     error: Optional[str]
     error_kind: Optional[str] = None
+    destination: str = DownloadDestination.library.value
+    device_file_path: Optional[str] = None
     video_id: Optional[int]
     replace_video_id: Optional[int] = None
     file_size: Optional[int]

@@ -16,7 +16,7 @@ import {
   PRESET_ORDER,
   presetOptionLabel,
 } from "../presets";
-import type { ChannelStat, DownloadPreview, PlaylistPreviewEntry } from "../types";
+import type { ChannelStat, DownloadDestination, DownloadPreview, PlaylistPreviewEntry } from "../types";
 import { formatDuration, formatViewCount } from "../utils";
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
@@ -37,6 +37,7 @@ export default function Download() {
   const [url, setUrl] = useState("");
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [preset, setPreset] = useState("best");
+  const [destination, setDestination] = useState<DownloadDestination>("library");
   const [allPresets, setAllPresets] = useState<string[]>([...PRESET_ORDER]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -204,14 +205,24 @@ export default function Download() {
   }, [metadataLoaded, preview, preset, allPresets]);
 
   const isPlaylist = preview?.is_playlist ?? false;
+  const toDevice = !isPlaylist && destination === "device";
   const presetSizes = preview?.preset_sizes;
   const selectedPresetSize = presetSizes?.[preset];
+
+  useEffect(() => {
+    if (isPlaylist && destination === "device") {
+      setDestination("library");
+    }
+  }, [isPlaylist, destination]);
 
   const downloadButtonLabel = useMemo(() => {
     if (submitting) return "Starting...";
     const approx = formatApproxSize(selectedPresetSize);
+    if (toDevice) {
+      return approx ? `Save to device (${approx})` : "Save to device";
+    }
     return approx ? `Download (${approx})` : "Download";
-  }, [submitting, selectedPresetSize]);
+  }, [submitting, selectedPresetSize, toDevice]);
 
   const playlistTotalSize = useMemo(() => {
     if (!isPlaylist || selectedUrls.size === 0) return undefined;
@@ -289,13 +300,16 @@ export default function Download() {
       const c = channel.trim();
       await submitDownload(url.trim(), preset, {
         title: t && t !== detectedTitle ? t : undefined,
-        channel: c && c !== detectedChannel ? c : undefined,
+        channel:
+          toDevice || !c || c === detectedChannel ? undefined : c,
+        destination: toDevice ? "device" : "library",
       });
       setUrl("");
       setPreview(null);
       setPreviewError(null);
       setTitle("");
       setChannel("");
+      setDestination("library");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Download failed");
     } finally {
@@ -425,10 +439,10 @@ export default function Download() {
         </div>
 
         <Collapse open={!isPlaylist}>
-          <div className="space-y-4">
+          <div className={toDevice ? undefined : "space-y-4"}>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-300">
-                Title
+                {toDevice ? "File name" : "Title"}
               </label>
               <input
                 value={title}
@@ -437,21 +451,26 @@ export default function Download() {
                 className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-300">
-                Channel
-              </label>
-              <ChannelPicker
-                value={channel}
-                onChange={setChannel}
-                channels={channels}
-                placeholder="Auto-detected"
-              />
-            </div>
+            <Collapse open={!toDevice}>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-300">
+                  Channel
+                </label>
+                <ChannelPicker
+                  value={channel}
+                  onChange={setChannel}
+                  channels={channels}
+                  placeholder="Auto-detected"
+                />
+              </div>
+            </Collapse>
           </div>
         </Collapse>
 
-        <Collapse open={!!(preview && isPlaylist)}>
+        <Collapse
+          open={!!(preview && isPlaylist)}
+          className={preview && isPlaylist ? undefined : "!mt-0"}
+        >
           <div className="space-y-4 rounded-lg border border-accent/30 bg-accent/5 p-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-300">
@@ -549,6 +568,44 @@ export default function Download() {
             ))}
           </select>
         </div>
+
+        <Collapse open={!isPlaylist}>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-300">
+              Destination
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setDestination("library")}
+                className={`rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                  destination === "library"
+                    ? "border-accent bg-accent/15 text-accent"
+                    : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-500"
+                }`}
+              >
+                Save to library
+              </button>
+              <button
+                type="button"
+                onClick={() => setDestination("device")}
+                className={`rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                  destination === "device"
+                    ? "border-accent bg-accent/15 text-accent"
+                    : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-500"
+                }`}
+              >
+                Download to this device
+              </button>
+            </div>
+            {toDevice && (
+              <p className="mt-2 text-xs text-gray-500">
+                Horde fetches the file then saves it to your browser.
+                It is not kept in the library.
+              </p>
+            )}
+          </div>
+        </Collapse>
 
         {isPlaylist ? (
           <button

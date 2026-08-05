@@ -50,6 +50,8 @@ _DOWNLOAD_JOB_COLUMNS = [
     ("notes_pending", "VARCHAR"),
     ("paused", "BOOLEAN DEFAULT 0"),
     ("normalize_volume", "BOOLEAN DEFAULT 0"),
+    ("destination", "VARCHAR DEFAULT 'library'"),
+    ("device_file_path", "VARCHAR"),
     ("replace_video_id", "INTEGER"),
     ("file_size", "INTEGER"),
     ("error_kind", "VARCHAR"),

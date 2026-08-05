@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+# Audio-only bitrate caps (kbps). Shown as labeled presets when the source has audio.
+AUDIO_ABR_TIERS: tuple[int, ...] = (160, 128, 64)
+
 QUALITY_FORMATS = {
     "best": "bv*+ba/b",
     # Prefer exact tier height when offered, then best under the cap — never unbounded best.
@@ -28,6 +31,10 @@ QUALITY_FORMATS = {
         "b[height=480]/b[height<=480]"
     ),
     "audio": "ba/b",
+    **{
+        f"audio-{abr}": f"ba[abr<={abr}]/bestaudio[abr<={abr}]/ba/b"
+        for abr in AUDIO_ABR_TIERS
+    },
 }
 
 PRESET_MAX_HEIGHT: dict[str, Optional[int]] = {
@@ -38,9 +45,14 @@ PRESET_MAX_HEIGHT: dict[str, Optional[int]] = {
     "720p": 720,
     "480p": 480,
     "audio": None,
+    **{f"audio-{abr}": None for abr in AUDIO_ABR_TIERS},
 }
 
 STANDARD_HEIGHTS = (2160, 1440, 1080, 720, 480)
+
+
+def is_audio_preset(preset: str) -> bool:
+    return preset == "audio" or preset.startswith("audio-")
 
 
 def format_chain(preset: str) -> list[str]:
@@ -52,7 +64,7 @@ def format_chain(preset: str) -> list[str]:
         chain.append(f"best[ext=mp4][height<={max_h}]/best[height<={max_h}]")
     elif preset == "best":
         chain.append("best[ext=mp4]/best")
-    elif preset == "audio":
+    elif is_audio_preset(preset):
         chain.append("bestaudio/best")
     unique: list[str] = []
     seen: set[str] = set()
@@ -83,6 +95,26 @@ def has_audio(info: dict[str, Any]) -> bool:
     return False
 
 
+def audio_abrs(info: dict[str, Any]) -> list[float]:
+    """Collect known audio bitrates (kbps) from format metadata."""
+    abrs: list[float] = []
+    for fmt in info.get("formats") or []:
+        if fmt.get("acodec") in (None, "none"):
+            continue
+        raw = fmt.get("abr")
+        if raw is None and fmt.get("vcodec") in (None, "none"):
+            raw = fmt.get("tbr")
+        if raw is None:
+            continue
+        try:
+            abr = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if abr > 0:
+            abrs.append(abr)
+    return abrs
+
+
 def height_to_tier(height: int) -> int:
     """Map an actual pixel height to the nearest standard quality tier."""
     best = STANDARD_HEIGHTS[-1]
@@ -105,6 +137,17 @@ def available_presets(info: dict[str, Any]) -> list[str]:
             presets.append(f"{tier}p")
     if has_audio(info):
         presets.append("audio")
+        abrs = audio_abrs(info)
+        best_abr = max(abrs) if abrs else None
+        if best_abr is None:
+            # No abr metadata — still offer the standard caps.
+            presets.extend(f"audio-{abr}" for abr in AUDIO_ABR_TIERS)
+        else:
+            for abr in AUDIO_ABR_TIERS:
+                # Skip caps at/above the best known stream — "audio" already covers that.
+                if best_abr <= abr:
+                    continue
+                presets.append(f"audio-{abr}")
     return presets
 
 
@@ -113,3 +156,4 @@ _video_heights = video_heights
 _has_audio = has_audio
 _height_to_tier = height_to_tier
 _available_presets = available_presets
+_is_audio_preset = is_audio_preset

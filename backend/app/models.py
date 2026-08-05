@@ -24,6 +24,11 @@ class JobStatus(str, Enum):
     cancelled = "cancelled"
 
 
+class DownloadDestination(str, Enum):
+    library = "library"
+    device = "device"
+
+
 class Video(SQLModel, table=True):
     __tablename__ = "videos"
 
@@ -90,6 +95,10 @@ class DownloadJob(SQLModel, table=True):
     notes_pending: Optional[str] = None
     paused: bool = Field(default=False)
     normalize_volume: bool = Field(default=False)
+    # "library" archives to the server; "device" is ephemeral browser save.
+    destination: str = Field(default=DownloadDestination.library.value)
+    # Relative path under DOWNLOADS_DIR for device jobs (serve + cleanup).
+    device_file_path: Optional[str] = None
     replace_video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
     error: Optional[str] = None
     error_kind: Optional[str] = None

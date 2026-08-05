@@ -8,6 +8,9 @@ export const PRESET_ORDER = [
   "720p",
   "480p",
   "audio",
+  "audio-160",
+  "audio-128",
+  "audio-64",
 ] as const;
 
 export const PRESET_LABELS: Record<string, string> = {
@@ -17,8 +20,15 @@ export const PRESET_LABELS: Record<string, string> = {
   "1080p": "1080p",
   "720p": "720p",
   "480p": "480p",
-  audio: "Audio only",
+  audio: "Audio (best)",
+  "audio-160": "Audio · 160 kbps",
+  "audio-128": "Audio · 128 kbps",
+  "audio-64": "Audio · 64 kbps",
 };
+
+export function isAudioPreset(preset: string): boolean {
+  return preset === "audio" || preset.startsWith("audio-");
+}
 
 export function formatApproxSize(bytes: number | undefined): string {
   const label = formatSize(bytes ?? null);
@@ -48,7 +58,7 @@ export function maxPresetLabel(presets: string[]): string {
       return p;
     }
   }
-  if (presets.includes("audio") && !presets.some((p) => order.includes(p as typeof order[number]))) {
+  if (presets.some((p) => isAudioPreset(p))) {
     return "Audio";
   }
   if (presets.includes("best")) return "Best";

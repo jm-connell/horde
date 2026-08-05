@@ -106,6 +106,10 @@ def ingest_media_file(
     if _is_active(rel_path):
         return None
 
+    # Ephemeral "download to device" staging — never library media.
+    if rel_path.replace("\\", "/").startswith("_device/"):
+        return None
+
     existing = find_video_by_path(session, rel_path)
     if existing is not None:
         return None

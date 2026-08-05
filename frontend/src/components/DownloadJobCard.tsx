@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api";
+import { api, deviceDownloadFileUrl, triggerBrowserDownload } from "../api";
 import { useDownloads, jobStatus } from "../context/DownloadContext";
 import {
   downloadErrorHint,
@@ -8,6 +8,7 @@ import {
 } from "../downloadErrors";
 import type { ChannelStat, DownloadJob, ProgressEvent } from "../types";
 import { formatSize } from "../utils";
+import { PRESET_LABELS } from "../presets";
 import ChannelPicker from "./ChannelPicker";
 
 interface Props {
@@ -68,7 +69,11 @@ export default function DownloadJobCard({
   const failed = status === "error";
   const cancelled = status === "cancelled";
   const videoId = live?.video_id ?? job.video_id;
-  const videoGone = Boolean(job.video_missing || job.superseded);
+  const isDeviceJob =
+    (live?.destination ?? job.destination) === "device";
+  const videoGone = Boolean(
+    !isDeviceJob && (job.video_missing || job.superseded)
+  );
   const isReplacing =
     active && Boolean(job.replace_video_id) && !completed && !failed && !cancelled;
 
@@ -277,6 +282,11 @@ export default function DownloadJobCard({
                   Replacing
                 </span>
               )}
+              {isDeviceJob && (
+                <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+                  This device
+                </span>
+              )}
             </span>
             <div className="flex shrink-0 items-center gap-2">
               {!completed && (
@@ -365,7 +375,18 @@ export default function DownloadJobCard({
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            {completed && videoId && !videoGone && (
+            {completed && isDeviceJob && (
+              <button
+                type="button"
+                onClick={() =>
+                  triggerBrowserDownload(deviceDownloadFileUrl(job.id))
+                }
+                className="inline-block rounded-lg bg-accent/15 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/25"
+              >
+                Save again
+              </button>
+            )}
+            {completed && !isDeviceJob && videoId && !videoGone && (
               <Link
                 to={`/watch/${videoId}`}
                 className="inline-block rounded-lg bg-accent/15 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/25"
@@ -373,7 +394,7 @@ export default function DownloadJobCard({
                 Watch now →
               </Link>
             )}
-            {completed && videoGone && (
+            {completed && !isDeviceJob && videoGone && (
               <span className="text-xs text-gray-500">
                 {job.video_missing
                   ? "Video no longer in library"
@@ -383,7 +404,11 @@ export default function DownloadJobCard({
             {failed && (
               <button
                 onClick={() =>
-                  submitDownload(job.url, job.quality_preset, { title, channel })
+                  submitDownload(job.url, job.quality_preset, {
+                    title,
+                    channel,
+                    destination: isDeviceJob ? "device" : "library",
+                  })
                 }
                 className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
               >
@@ -398,7 +423,7 @@ export default function DownloadJobCard({
                 Save changes
               </button>
             )}
-            {!failed && !cancelled && (
+            {!isDeviceJob && !failed && !cancelled && (
               <button
                 onClick={() => setShowNote((v) => !v)}
                 className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
@@ -406,7 +431,7 @@ export default function DownloadJobCard({
                 {showNote ? "Hide note" : "Add note"}
               </button>
             )}
-            {showNote && !cancelled && (
+            {!isDeviceJob && showNote && !cancelled && (
               <button
                 onClick={saveNote}
                 className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
@@ -420,10 +445,10 @@ export default function DownloadJobCard({
                 {sizeLabel && <span>{sizeLabel}</span>}
                 {job.quality_preset && (
                   <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400">
-                    {job.quality_preset}
+                    {PRESET_LABELS[job.quality_preset] ?? job.quality_preset}
                   </span>
                 )}
-                {completed && !videoGone && (
+                {completed && (!videoGone || isDeviceJob) && (
                   <span className="text-gray-400">Done</span>
                 )}
               </span>
@@ -436,7 +461,9 @@ export default function DownloadJobCard({
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
         <div className="ui-panel w-full max-w-sm rounded-xl bg-ink-900 p-5 ring-1 ring-ink-600 shadow-xl">
           <p className="text-sm text-gray-200">
-            Remove this card from the list? The video stays in your library.
+            {isDeviceJob
+              ? "Remove this card? The temporary file on the server will be deleted."
+              : "Remove this card from the list? The video stays in your library."}
           </p>
           <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-gray-400">
             <input

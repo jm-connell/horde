@@ -12,9 +12,10 @@ The **Download** page (`/download`) is where you paste a URL, pick a quality pre
 | **1080p** | Cap ≤ 1080 |
 | **720p** | Cap ≤ 720 |
 | **480p** | Cap ≤ 480 |
-| **audio** | Audio-only extract |
+| **audio** | Best audio-only stream |
+| **audio-160** / **128** / **64** | Audio-only capped at that bitrate (kbps) |
 
-After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known.
+After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known. Audio bitrate caps that are at or above the source’s best stream are omitted (use **Audio (best)** instead).
 
 Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
 
@@ -46,9 +47,14 @@ Pause-all stops every download; nothing new starts until you resume. The pause f
 1. Paste a video URL (YouTube or other [yt-dlp](https://github.com/yt-dlp/yt-dlp)-supported site).
 2. Wait for preview metadata.
 3. Choose a preset (and optional volume normalize).
-4. Submit — the job appears in the queue with live progress.
+4. Choose a **destination**:
+   - **Save to library** (default) — archives on the server under Channel/Year and appears in Library.
+   - **Download to this device** — Horde still fetches/merges on the server into a temporary folder, then your browser saves the file. It is **not** kept in the library; dismissing the job card deletes the temp file.
+5. Submit — the job appears in the queue with live progress.
 
-Completed downloads land in the [Library](library.md), organized by channel/year on disk ([storage layout](../ops/storage-layout.md)).
+Completed library downloads land in the [Library](library.md), organized by channel/year on disk ([storage layout](../ops/storage-layout.md)). Device jobs show a **Save again** action on the card if the browser download was missed.
+
+Playlist import is library-only (device destination is hidden for playlist URLs).
 
 ## Playlist import
 

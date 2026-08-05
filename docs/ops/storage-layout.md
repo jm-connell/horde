@@ -40,6 +40,14 @@ downloads/imports/
 
 Files dropped or uploaded for the [import / review](../guides/import-review.md) queue land here (or anywhere under downloads that the scanner sees). After approval they are moved into the channel/year layout.
 
+### Device staging (ephemeral)
+
+```text
+downloads/_device/{job_id}/
+```
+
+Temporary output for **Download to this device** jobs. Not indexed into the library; removed when the job card is dismissed (or by startup GC for orphaned dirs).
+
 ### Sidecars and temps
 
 | Pattern | Role |

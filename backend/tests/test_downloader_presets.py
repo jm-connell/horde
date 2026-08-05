@@ -19,6 +19,36 @@ def test_format_chain_best_and_audio():
     assert "best[ext=mp4]/best" in best
     audio = downloader._format_chain("audio")
     assert "bestaudio/best" in audio
+    capped = downloader._format_chain("audio-128")
+    assert capped[0].startswith("ba[abr<=128]")
+    assert "bestaudio/best" in capped
+
+
+def test_available_presets_audio_bitrate_tiers():
+    info = {
+        "formats": [
+            {"vcodec": "avc1", "acodec": "none", "height": 1080},
+            {"vcodec": "none", "acodec": "mp4a", "abr": 160},
+            {"vcodec": "none", "acodec": "opus", "abr": 64},
+        ]
+    }
+    presets = downloader._available_presets(info)
+    assert "1080p" in presets
+    assert "audio" in presets
+    # Best is 160 → skip audio-160; keep lower caps.
+    assert "audio-160" not in presets
+    assert "audio-128" in presets
+    assert "audio-64" in presets
+
+
+def test_available_presets_audio_without_abr_metadata():
+    info = {
+        "formats": [
+            {"vcodec": "none", "acodec": "mp4a"},
+        ]
+    }
+    presets = downloader._available_presets(info)
+    assert presets == ["audio", "audio-160", "audio-128", "audio-64"]
 
 
 def test_is_intermediate_media():

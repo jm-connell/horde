@@ -7,16 +7,16 @@ End-to-end path from a pasted URL to a library row and live UI updates.
 ```text
 URL
   -> url_clean (normalize / strip tracking)
-  -> enqueue DownloadJob
-  -> worker slot (MAX_DOWNLOAD_CONCURRENCY)
-  -> yt-dlp download (POT + cookies, quality preset)
-  -> output template: Channel/YYYY/Title [id].ext
-  -> FFmpegSubtitlesConvertor -> .vtt
-  -> optional loudnorm (.norm intermediate)
-  -> thumbnails + sprites
-  -> Video row (ready) + library paths
-  -> SSE progress events -> Download UI
-  -> optional AI enqueue (embed / tags)
+    -> enqueue DownloadJob (destination: library | device)
+    -> worker slot (MAX_DOWNLOAD_CONCURRENCY)
+    -> yt-dlp download (POT + cookies, quality preset)
+    -> library: Channel/YYYY/Title [id].ext
+       device:  _device/{job_id}/Title [id].ext (ephemeral)
+    -> optional loudnorm (.norm intermediate)
+    -> library only: FFmpegSubtitlesConvertor -> .vtt, thumbnails + sprites, Video row
+    -> SSE progress events -> Download UI
+    -> device: browser GET /api/downloads/{id}/file; delete on dismiss
+    -> library: optional AI enqueue (embed / tags)
 ```
 
 ## Module split

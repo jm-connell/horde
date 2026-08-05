@@ -892,6 +892,19 @@ export function downloadFileUrl(id: number): string {
   return `/api/videos/${id}/file`;
 }
 
+export function deviceDownloadFileUrl(jobId: number): string {
+  return `/api/downloads/${jobId}/file`;
+}
+
+export function triggerBrowserDownload(url: string): void {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export function subtitleUrl(id: number, lang: string): string {
   return `/api/videos/${id}/subtitles/${encodeURIComponent(lang)}`;
 }

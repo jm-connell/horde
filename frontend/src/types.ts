@@ -151,6 +151,8 @@ export type JobStatus =
   | "error"
   | "cancelled";
 
+export type DownloadDestination = "library" | "device";
+
 export interface DownloadJob {
   id: number;
   url: string;
@@ -166,6 +168,8 @@ export interface DownloadJob {
   paused: boolean;
   error: string | null;
   error_kind?: string | null;
+  destination?: DownloadDestination;
+  device_file_path?: string | null;
   video_id: number | null;
   replace_video_id?: number | null;
   file_size: number | null;
@@ -180,6 +184,7 @@ export interface ProgressEvent {
   title?: string;
   channel?: string;
   video_id?: number;
+  destination?: DownloadDestination;
   error?: string;
   error_kind?: string;
   total_bytes?: number;
@@ -222,6 +227,7 @@ export interface DownloadOverrides {
   channel_override?: string;
   notes_pending?: string;
   normalize_volume?: boolean;
+  destination?: DownloadDestination;
 }
 
 export interface DownloadQueueStatus {

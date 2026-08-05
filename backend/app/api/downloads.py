@@ -1,13 +1,16 @@
 import asyncio
 import json
+import logging
 from typing import AsyncGenerator
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlmodel import Session, select
 
+from ..config import DOWNLOADS_DIR
 from ..database import get_session
-from ..models import DownloadJob, JobStatus, Video
+from ..models import DownloadDestination, DownloadJob, JobStatus, Video
 from ..schemas import (
     DownloadCreate,
     DownloadJobRead,
@@ -16,6 +19,7 @@ from ..schemas import (
     DownloadQueueStatus,
 )
 from ..services import downloader, library
+from ..services.paths import safe_filename
 from ..services.url_clean import _youtube_video_id, clean_url
 from ..services.ytdlp_common import (
     ERROR_KIND_BOT,
@@ -28,14 +32,22 @@ from ..services.ytdlp_common import (
     http_detail_for_error,
     record_extract_failure,
 )
-from urllib.parse import urlparse
-import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 
 QUALITY_PRESETS = list(downloader.QUALITY_FORMATS.keys())
+
+_CONTENT_TYPES = {
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mkv": "video/x-matroska",
+    ".m4a": "audio/mp4",
+    ".mp3": "audio/mpeg",
+    ".opus": "audio/opus",
+    ".ogg": "audio/ogg",
+}
 
 _PREVIEW_ATTACH_KINDS = frozenset(
     {
@@ -165,6 +177,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         raise HTTPException(status_code=400, detail="URL is required")
 
     url = clean_url(payload.url, keep_playlist=False)
+    destination = payload.destination.value if payload.destination else "library"
 
     preview: dict = {}
     preview_kind: str | None = None
@@ -176,17 +189,19 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         record_extract_failure(preview_kind, preview_message)
 
     # If this YouTube id is already in the library, replace that row on completion.
+    # Device jobs must never overwrite library files.
     replace_video_id = None
-    yt_id = preview.get("id") if isinstance(preview, dict) else None
-    if not yt_id:
-        try:
-            yt_id = _youtube_video_id(urlparse(url))
-        except Exception:  # noqa: BLE001
-            yt_id = None
-    if yt_id:
-        existing = library.find_video_by_youtube_id(session, str(yt_id))
-        if existing is not None:
-            replace_video_id = existing.id
+    if destination == "library":
+        yt_id = preview.get("id") if isinstance(preview, dict) else None
+        if not yt_id:
+            try:
+                yt_id = _youtube_video_id(urlparse(url))
+            except Exception:  # noqa: BLE001
+                yt_id = None
+        if yt_id:
+            existing = library.find_video_by_youtube_id(session, str(yt_id))
+            if existing is not None:
+                replace_video_id = existing.id
 
     job = DownloadJob(
         url=url,
@@ -199,6 +214,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         channel_override=(payload.channel_override or "").strip() or None,
         notes_pending=(payload.notes_pending or "").strip() or None,
         normalize_volume=payload.normalize_volume,
+        destination=destination,
         replace_video_id=replace_video_id,
     )
     if preview_kind and preview_kind in _PREVIEW_ATTACH_KINDS and preview_message:
@@ -277,6 +293,8 @@ def dismiss_finished_jobs(session: Session = Depends(get_session)):
     )
     jobs = list(session.exec(statement).all())
     for job in jobs:
+        if job.destination == DownloadDestination.device.value:
+            downloader.cleanup_device_job_files(job.id, job.device_file_path)
         downloader.progress_store.pop(job.id, None)
         session.delete(job)
     session.commit()
@@ -293,6 +311,8 @@ def dismiss_job(job_id: int, session: Session = Depends(get_session)):
             status_code=409,
             detail="Only finished jobs can be removed from the list",
         )
+    if job.destination == DownloadDestination.device.value:
+        downloader.cleanup_device_job_files(job.id, job.device_file_path)
     session.delete(job)
     session.commit()
     downloader.progress_store.pop(job_id, None)
@@ -311,6 +331,37 @@ def get_job(job_id: int, session: Session = Depends(get_session)):
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return _enrich_jobs(session, [job])[0]
+
+
+@router.get("/{job_id}/file")
+def download_device_file(job_id: int, session: Session = Depends(get_session)):
+    """Serve an ephemeral device-destination download as a browser attachment."""
+    job = session.get(DownloadJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.destination != DownloadDestination.device.value:
+        raise HTTPException(
+            status_code=409, detail="Job is not a device download"
+        )
+    if job.status != JobStatus.completed or not job.device_file_path:
+        raise HTTPException(status_code=409, detail="File not ready")
+
+    rel = job.device_file_path.replace("\\", "/")
+    if not downloader.is_device_staging_path(rel):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    path = (DOWNLOADS_DIR / rel).resolve()
+    try:
+        path.relative_to(DOWNLOADS_DIR.resolve())
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="File not found") from exc
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    title = (job.title_override or job.title or path.stem).strip() or "video"
+    filename = f"{safe_filename(title)}{path.suffix.lower()}"
+    content_type = _CONTENT_TYPES.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, media_type=content_type, filename=filename)
 
 
 @router.get("/{job_id}/events")

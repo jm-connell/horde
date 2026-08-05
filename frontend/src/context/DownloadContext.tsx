@@ -6,17 +6,23 @@ import {
   useRef,
   useState,
 } from "react";
-import { api } from "../api";
+import { api, deviceDownloadFileUrl, triggerBrowserDownload } from "../api";
 import { downloadErrorToast } from "../downloadErrors";
 import { useSettings } from "../hooks/useSettings";
 import { subscribeToJob } from "../hooks/useJobEvents";
-import type { DownloadJob, DownloadQueueStatus, ProgressEvent } from "../types";
+import type {
+  DownloadDestination,
+  DownloadJob,
+  DownloadQueueStatus,
+  ProgressEvent,
+} from "../types";
 import { useToast } from "./ToastContext";
 
 interface SubmitOverrides {
   title?: string;
   channel?: string;
   notes?: string;
+  destination?: DownloadDestination;
 }
 
 interface DownloadContextValue {
@@ -71,6 +77,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const sources = useRef<Map<number, () => void>>(new Map());
   const toastedErrors = useRef<Set<number>>(new Set());
+  const deviceSaved = useRef<Set<number>>(new Set());
   const completionListeners = useRef<
     Set<(videoId: number | null, event?: ProgressEvent) => void>
   >(new Set());
@@ -88,11 +95,26 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
               progress: 100,
               video_id: fresh.video_id ?? undefined,
               title: fresh.title ?? undefined,
+              destination: fresh.destination,
             },
           }));
+          if (
+            fresh.destination === "device" &&
+            !deviceSaved.current.has(jobId)
+          ) {
+            deviceSaved.current.add(jobId);
+            triggerBrowserDownload(deviceDownloadFileUrl(jobId));
+          }
         }
       })
       .catch(() => undefined);
+  }, []);
+
+  const maybeSaveDeviceFile = useCallback((jobId: number, destination?: string) => {
+    if (destination !== "device") return;
+    if (deviceSaved.current.has(jobId)) return;
+    deviceSaved.current.add(jobId);
+    triggerBrowserDownload(deviceDownloadFileUrl(jobId));
   }, []);
 
   const subscribe = useCallback(
@@ -106,6 +128,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           refreshJob(jobId);
           if (event.status === "completed") {
             const videoId = event.video_id ?? null;
+            maybeSaveDeviceFile(jobId, event.destination);
             completionListeners.current.forEach((cb) => cb(videoId, event));
             if (event.quality_warning) {
               showToast(event.quality_warning);
@@ -118,7 +141,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       });
       sources.current.set(jobId, close);
     },
-    [refreshJob, showToast]
+    [refreshJob, showToast, maybeSaveDeviceFile]
   );
 
   const refreshJobs = useCallback(() => {
@@ -169,6 +192,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         channel_override: overrides.channel?.trim() || undefined,
         notes_pending: overrides.notes?.trim() || undefined,
         normalize_volume: settings.normalizeVolumeOnDownload,
+        destination: overrides.destination ?? "library",
       });
       setJobs((prev) => [job, ...prev]);
       subscribe(job.id);
