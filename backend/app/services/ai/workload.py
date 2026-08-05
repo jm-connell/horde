@@ -692,11 +692,6 @@ def resolve_runtime(
     else:
         effective = requested
 
-    if warning is None and effective == "heavy" and tier in ("small", "medium", "unknown"):
-        warning = (
-            "Heavy workload uses more compute power and time, and will only use models that fit the Ollama GPU's VRAM."
-        )
-
     embed_model, chat_model = _models_for_tier(tier)
     intensity = _scale_intensity(_NORMAL_BY_TIER[tier], effective)
 

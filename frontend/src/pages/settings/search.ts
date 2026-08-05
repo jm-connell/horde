@@ -92,7 +92,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "ai",
     pane: "providers",
     keywords:
-      "ollama connection enable ai base url queue indexed features gpu vram workload light normal heavy override openrouter api key privacy",
+      "ollama connection enable ai base url queue indexed features gpu vram workload light normal heavy general override openrouter api key privacy",
   },
   {
     tab: "ai",

@@ -72,7 +72,89 @@ export default function ProvidersPane() {
 
   return (
     <>
-      <div className="mb-4 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+      <Section
+        first
+        title="General"
+        description="Settings that apply whether you use Local AI, OpenRouter, or both."
+        hidden={
+          !!q &&
+          !match("workload", "light", "normal", "heavy", "gpu", "general")
+        }
+      >
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1.5 text-sm font-medium text-gray-200">
+              Workload
+              <HelpTip text={WORKLOAD_TIP} />
+            </span>
+            <div className="ui-panel flex rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+              {WORKLOAD_OPTIONS.map((opt) => {
+                const locked =
+                  Boolean(aiStatus?.profile_locked) &&
+                  opt.value !== "light";
+                const selected = aiDraft.workload_profile === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={locked}
+                    onClick={() => void applyWorkload(opt.value)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      selected
+                        ? "bg-accent/15 text-accent"
+                        : "text-gray-400 hover:text-gray-200"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {reindexPrompt && (
+            <div className="ui-panel rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+              <p>{reindexPrompt}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={PANEL_BTN}
+                  onClick={() => {
+                    setReindexPrompt(null);
+                    void runAiProcess("reindex_embeds");
+                  }}
+                >
+                  Rebuild indexes
+                </button>
+                <button
+                  type="button"
+                  className={PANEL_BTN}
+                  onClick={() => setReindexPrompt(null)}
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          )}
+          {aiStatus?.profile_locked && aiStatus.lock_reason && (
+            <p className="text-xs text-amber-400/90">
+              {aiStatus.lock_reason}
+            </p>
+          )}
+          {aiStatus?.workload_warning && (
+            <p className="text-xs text-amber-400/90">
+              {aiStatus.workload_warning}
+            </p>
+          )}
+          {aiStatus && aiStatus.models_match_profile === false && (
+            <p className="text-xs text-gray-500">
+              Local AI models customized in Advanced — re-apply a workload to
+              reset them for the Ollama GPU.
+            </p>
+          )}
+        </div>
+      </Section>
+
+      <div className="mb-4 mt-6 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
         {(
           [
             { id: "local" as const, label: "Local AI" },
@@ -277,151 +359,55 @@ export default function ProvidersPane() {
               </p>
               <div
                 className={
-                  !!q &&
-                  !match("workload", "light", "normal", "heavy", "gpu") &&
-                  !match("vram", "gpu", "ollama")
+                  !!q && !match("vram", "gpu", "ollama")
                     ? "hidden"
                     : "space-y-2"
                 }
               >
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                  <div
-                    className={
-                      !!q &&
-                      !match("workload", "light", "normal", "heavy", "gpu")
-                        ? "hidden"
-                        : "flex flex-wrap items-center gap-2"
-                    }
-                  >
-                    <span className="flex items-center gap-1.5 text-sm font-medium text-gray-200">
-                      Workload
-                      <HelpTip text={WORKLOAD_TIP} />
-                    </span>
-                    <div className="ui-panel flex rounded-lg border border-ink-700 bg-ink-900 p-0.5">
-                      {WORKLOAD_OPTIONS.map((opt) => {
-                        const locked =
-                          Boolean(aiStatus?.profile_locked) &&
-                          opt.value !== "light";
-                        const selected =
-                          aiDraft.workload_profile === opt.value;
-                        return (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            disabled={locked}
-                            onClick={() => void applyWorkload(opt.value)}
-                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                              selected
-                                ? "bg-accent/15 text-accent"
-                                : "text-gray-400 hover:text-gray-200"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {aiStatus?.recommended_profile && (
-                      <HelpTip
-                        text={
-                          aiStatus.gpu_name
-                            ? `Best starting workload for ${aiStatus.gpu_name}. Applies models and invent intensity that fit the Ollama GPU’s VRAM.`
-                            : "Best starting workload for the Ollama machine. Applies models and invent intensity that fit detected (or overridden) GPU VRAM."
-                        }
-                      />
-                    )}
-                  </div>
-                  <div
-                    className={
-                      !!q && !match("vram", "gpu", "ollama")
-                        ? "hidden"
-                        : "flex flex-wrap items-center gap-2"
-                    }
-                  >
-                    <span className="flex items-center gap-1.5 text-sm font-medium text-gray-200">
-                      Ollama VRAM (GB)
-                      <HelpTip text={VRAM_OVERRIDE_TIP} />
-                    </span>
-                    <input
-                      type="number"
-                      min={0.5}
-                      max={256}
-                      step={0.5}
-                      inputMode="decimal"
-                      value={aiDraft.vram_gb ?? ""}
-                      onChange={(e) => {
-                        const raw = e.target.value.trim();
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-gray-200">
+                    Ollama VRAM (GB)
+                    <HelpTip text={VRAM_OVERRIDE_TIP} />
+                  </span>
+                  <input
+                    type="number"
+                    min={0.5}
+                    max={256}
+                    step={0.5}
+                    inputMode="decimal"
+                    value={aiDraft.vram_gb ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      setAiDraft((d) => ({
+                        ...d,
+                        vram_gb: raw === "" ? null : Number(raw),
+                      }));
+                    }}
+                    onBlur={(e) => {
+                      const raw = e.target.value.trim();
+                      if (raw === "") {
+                        void saveAi({ vram_gb: null });
+                        return;
+                      }
+                      const n = Number(raw);
+                      if (!Number.isFinite(n) || n <= 0) {
                         setAiDraft((d) => ({
                           ...d,
-                          vram_gb: raw === "" ? null : Number(raw),
+                          vram_gb: appSettings?.ai.vram_gb ?? null,
                         }));
-                      }}
-                      onBlur={(e) => {
-                        const raw = e.target.value.trim();
-                        if (raw === "") {
-                          void saveAi({ vram_gb: null });
-                          return;
-                        }
-                        const n = Number(raw);
-                        if (!Number.isFinite(n) || n <= 0) {
-                          setAiDraft((d) => ({
-                            ...d,
-                            vram_gb: appSettings?.ai.vram_gb ?? null,
-                          }));
-                          return;
-                        }
-                        void saveAi({ vram_gb: n });
-                      }}
-                      placeholder="Auto"
-                      aria-label="Ollama VRAM in GB"
-                      className={INPUT_COMPACT}
-                    />
-                  </div>
+                        return;
+                      }
+                      void saveAi({ vram_gb: n });
+                    }}
+                    placeholder="Auto"
+                    aria-label="Ollama VRAM in GB"
+                    className={INPUT_COMPACT}
+                  />
                 </div>
-                {reindexPrompt && (
-                  <div className="ui-panel rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
-                    <p>{reindexPrompt}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className={PANEL_BTN}
-                        onClick={() => {
-                          setReindexPrompt(null);
-                          void runAiProcess("reindex_embeds");
-                        }}
-                      >
-                        Rebuild indexes
-                      </button>
-                      <button
-                        type="button"
-                        className={PANEL_BTN}
-                        onClick={() => setReindexPrompt(null)}
-                      >
-                        Not now
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {aiStatus?.profile_locked && aiStatus.lock_reason && (
-                  <p className="text-xs text-amber-400/90">
-                    {aiStatus.lock_reason}
-                  </p>
-                )}
-                {aiStatus?.workload_warning && (
-                  <p className="text-xs text-amber-400/90">
-                    {aiStatus.workload_warning}
-                  </p>
-                )}
                 {aiStatus?.gpu_source === "override" && (
                   <p className="text-xs text-gray-500">
                     Using your Ollama VRAM override for model sizing.
                     Re-apply a workload after changing it.
-                  </p>
-                )}
-                {aiStatus && aiStatus.models_match_profile === false && (
-                  <p className="text-xs text-gray-500">
-                    Models customized in Advanced — re-apply a workload to
-                    reset them for the Ollama GPU.
                   </p>
                 )}
               </div>

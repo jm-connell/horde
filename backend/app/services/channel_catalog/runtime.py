@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from urllib.parse import urlparse
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, func, select
 
 from ...database import engine
 from ...models import ChannelCatalog, ChannelCatalogStatus, ChannelCatalogVideo, utcnow
@@ -210,7 +210,7 @@ def maybe_enqueue_for_feed(
 def _library_channel_targets() -> list[tuple[Optional[str], str]]:
     """Library channels that have a YouTube URL: (name, url)."""
     with Session(engine) as session:
-        from . import library as library_svc
+        from .. import library as library_svc
 
         stats = library_svc.channel_stats(session)
         return [

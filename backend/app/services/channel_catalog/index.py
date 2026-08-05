@@ -32,11 +32,13 @@ from ..ytdlp_common import (
 )
 from .runtime import (
     _DESC_LIMIT,
+    _MAX_DESC_CHARS,
     _PAGE_SIZE,
     _enabled,
     _max_videos,
     _normalize_channel_url,
     _set_runtime,
+    _stop,
     get_catalog_by_url,
 )
 from .skips import (
@@ -336,8 +338,8 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
 
 def _enqueue_catalog_embeds(catalog_id: int) -> None:
     try:
-        from ..models import AiJobKind
-        from .ai import worker as ai_worker
+        from ...models import AiJobKind
+        from ..ai import worker as ai_worker
 
         ai = app_settings.ai_settings()
         if not ai.get("enabled", True) or ai.get("paused"):

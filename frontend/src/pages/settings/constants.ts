@@ -202,11 +202,11 @@ export const CHAT_MODEL_OPTIONS = [
 ];
 
 export const WORKLOAD_TIP =
-  "Light keeps invent samples and indexing queues small for faster, quieter runs. " +
-  "Normal is the balanced default. Heavy uses larger invent samples, deeper subtitle " +
-  "context, and bigger index batches — more GPU time, better coverage on large libraries. " +
-  "Models are chosen from the Ollama machine’s VRAM (not the Horde host); the profile " +
-  "only changes how hard Horde works.";
+  "Applies with Local AI or OpenRouter. Light keeps invent samples and indexing queues " +
+  "small for quieter runs. Normal is the balanced default. Heavy uses larger invent " +
+  "samples, deeper subtitle context, and bigger index batches — more processing time, " +
+  "better coverage on large libraries. When Local AI is used, applying a workload also " +
+  "picks Ollama models based on available VRAM.";
 
 export const VRAM_OVERRIDE_TIP =
   "When Ollama runs on another PC, Horde cannot always read that GPU. Enter its VRAM in " +
