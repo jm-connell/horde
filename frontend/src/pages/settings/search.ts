@@ -128,10 +128,6 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "system",
-    keywords: "backup restore snapshot volume data downloads path zfs quiesce",
-  },
-  {
-    tab: "system",
     keywords:
       "background tasks channel catalog index queue ai process metadata sync",
   },

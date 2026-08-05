@@ -22,6 +22,9 @@ import {
   WORKLOAD_TIP,
 } from "../constants";
 
+const OPTIONS_MUTED =
+  "pointer-events-none select-none opacity-50";
+
 export default function ProvidersPane() {
   const {
     q,
@@ -60,6 +63,12 @@ export default function ProvidersPane() {
     applyWorkload,
     saveModels,
   } = useSettingsPage();
+
+  const localAiUnused =
+    aiDraft.openrouter_enabled &&
+    aiDraft.openrouter_api_key_set &&
+    aiDraft.openrouter_scope === "all" &&
+    !aiDraft.ollama_prefer_embeddings;
 
   return (
     <>
@@ -171,6 +180,14 @@ export default function ProvidersPane() {
                   onChange={() => saveAi({ enabled: !aiDraft.enabled })}
                 />
               </div>
+              <div
+                className={
+                  localAiUnused
+                    ? `space-y-4 ${OPTIONS_MUTED}`
+                    : "space-y-4"
+                }
+                aria-disabled={localAiUnused || undefined}
+              >
               <div
                 className={
                   !!q && !match("ollama", "connection", "base url", "test")
@@ -408,6 +425,7 @@ export default function ProvidersPane() {
                   </p>
                 )}
               </div>
+              </div>
             </div>
           </Section>
 
@@ -425,6 +443,10 @@ export default function ProvidersPane() {
               )
             }
           >
+            <div
+              className={localAiUnused ? OPTIONS_MUTED : undefined}
+              aria-disabled={localAiUnused || undefined}
+            >
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="min-w-0 text-xs text-gray-500">
                 Optional overrides. Workload already picks models for the
@@ -541,6 +563,7 @@ export default function ProvidersPane() {
                 </button>
               </div>
             </Collapse>
+            </div>
           </Section>
         </>
       )}
@@ -589,6 +612,15 @@ export default function ProvidersPane() {
                   : ". Embeddings, hybrid search, related videos, and category invent still need Ollama (or switch Tasks to All)."}{" "}
                 Works without a local GPU when OpenRouter is enabled.
               </p>
+              {!aiDraft.openrouter_enabled && (
+                <div className="max-w-2xl rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                  <p className="text-xs text-amber-200/90">
+                    OpenRouter is disabled. Local AI (Ollama) handles AI tasks
+                    when enabled. Turn OpenRouter on to use cloud models for
+                    summaries, chat, and related features.
+                  </p>
+                </div>
+              )}
               {aiDraft.openrouter_enabled &&
                 (aiDraft.openrouter_scope === "specialized" ||
                   aiDraft.ollama_prefer_embeddings) && (
@@ -603,8 +635,16 @@ export default function ProvidersPane() {
                       : "Turn off the Local AI override to use OpenRouter for embeddings."}
                   </div>
                 )}
-              {aiDraft.openrouter_enabled && (
-                <>
+              <div
+                className={
+                  !aiDraft.openrouter_enabled
+                    ? `space-y-4 ${OPTIONS_MUTED}`
+                    : "space-y-4"
+                }
+                aria-disabled={
+                  !aiDraft.openrouter_enabled || undefined
+                }
+              >
                   <div className="max-w-2xl space-y-2">
                     <span className="text-sm font-medium text-gray-200">
                       Tasks
@@ -911,8 +951,7 @@ export default function ProvidersPane() {
                       cost tag. Settings totals below always track usage.
                     </p>
                   </div>
-                </>
-              )}
+              </div>
             </div>
           </Section>
 

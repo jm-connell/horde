@@ -204,20 +204,14 @@ export default function VideoAiPanel({
                   <p className="mb-2 text-xs text-amber-400/90">{summaryError}</p>
                 )}
                 {hasAiSummary ? (
-                  <div
-                    className={
-                      summaryCostLabel || video.ai_summary_length
-                        ? "relative pr-24"
-                        : undefined
-                    }
-                  >
+                  <div>
                     <AiMarkdown text={video.ai_summary || ""} />
                     {(summaryCostLabel ||
                       (video.ai_summary_length &&
                         ["short", "medium", "long"].includes(
                           video.ai_summary_length
                         ))) && (
-                      <span className="absolute bottom-0 right-0 inline-flex items-center gap-1.5 text-[10px] tracking-wider text-gray-500/70">
+                      <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5 text-[10px] tracking-wider text-gray-500/70">
                         {summaryCostLabel && (
                           <span
                             className="font-normal normal-case tabular-nums"
@@ -238,7 +232,7 @@ export default function VideoAiPanel({
                               {video.ai_summary_length}
                             </span>
                           )}
-                      </span>
+                      </div>
                     )}
                   </div>
                 ) : summarizing ? (

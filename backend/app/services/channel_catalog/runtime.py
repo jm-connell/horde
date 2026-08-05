@@ -366,7 +366,7 @@ def _worker_loop() -> None:
             if job is not None and job.id is not None:
                 catalog_id = job.id
         if catalog_id is not None:
-            _index_catalog(catalog_id)
+            index_catalog(catalog_id)
             continue
         _wake.wait(timeout=15)
         _wake.clear()

@@ -3,16 +3,20 @@ import { CHIP, CHIP_ACTIVE, PANEL_BTN } from "./constants";
 export function Toggle({
   checked,
   onChange,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       role="switch"
       aria-checked={checked}
+      aria-disabled={disabled || undefined}
+      disabled={disabled}
       onClick={onChange}
-      className={`ui-interactive flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+      className={`ui-interactive flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         checked ? "bg-accent" : "bg-ink-700"
       }`}
     >

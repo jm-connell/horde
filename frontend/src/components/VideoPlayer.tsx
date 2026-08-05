@@ -236,6 +236,9 @@ export default function VideoPlayer({
     time: number;
     pct: number;
   } | null>(null);
+  const [hoveredChapterSec, setHoveredChapterSec] = useState<number | null>(
+    null
+  );
   const scrubberRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1555,6 +1558,11 @@ export default function VideoPlayer({
         })()
       : null;
 
+  const hoveredChapter =
+    hoveredChapterSec != null
+      ? (chapters.find((ch) => ch.startSec === hoveredChapterSec) ?? null)
+      : null;
+
   const wrapperClass = isMini
     ? `relative w-full overflow-hidden bg-black leading-none${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
     : isNativeFullscreen
@@ -1857,8 +1865,23 @@ export default function VideoPlayer({
                       style={scrubPreview.tileStyle}
                     />
                   )}
-                  <span className="rounded bg-black/90 px-1.5 py-0.5 font-mono text-xs text-accent">
-                    {formatTimestamp(scrubPreview.time)}
+                  <span
+                    className={`rounded bg-black/90 px-1.5 py-0.5 text-xs ${
+                      hoveredChapter
+                        ? "max-w-[min(280px,70vw)] whitespace-normal text-center text-gray-100"
+                        : "font-mono text-accent"
+                    }`}
+                  >
+                    {hoveredChapter ? (
+                      <>
+                        <span className="font-mono text-accent">
+                          {formatTimestamp(hoveredChapter.startSec)}
+                        </span>{" "}
+                        {hoveredChapter.title}
+                      </>
+                    ) : (
+                      formatTimestamp(scrubPreview.time)
+                    )}
                   </span>
                 </div>
               </div>
@@ -1890,6 +1913,8 @@ export default function VideoPlayer({
                       type="button"
                       className="group pointer-events-auto absolute top-1/2 z-10 h-4 w-3 -translate-x-1/2 -translate-y-1/2"
                       style={{ left: `${(ch.startSec / duration) * 100}%` }}
+                      onPointerEnter={() => setHoveredChapterSec(ch.startSec)}
+                      onPointerLeave={() => setHoveredChapterSec(null)}
                       onPointerDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -1908,12 +1933,6 @@ export default function VideoPlayer({
                             : "bg-white/50 group-hover:bg-accent"
                         }`}
                       />
-                      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden max-w-[200px] -translate-x-1/2 truncate rounded bg-black/90 px-2 py-1 text-xs text-gray-100 group-hover:block">
-                        <span className="font-mono text-accent">
-                          {formatTimestamp(ch.startSec)}
-                        </span>{" "}
-                        {ch.title}
-                      </span>
                     </button>
                   );
                 })}
