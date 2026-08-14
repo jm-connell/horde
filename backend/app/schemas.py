@@ -370,5 +370,29 @@ class MetadataSyncStatus(BaseModel):
     finished_at: Optional[str] = None
 
 
+class ActivityTaskRead(BaseModel):
+    id: str
+    kind: str
+    group: str
+    label: str
+    reason: Optional[str] = None
+    engine: Optional[str] = None
+    detail: Optional[str] = None
+    video_id: Optional[int] = None
+    done: Optional[int] = None
+    total: Optional[int] = None
+    status: str
+    started_at: float
+    finished_at: Optional[float] = None
+    error: Optional[str] = None
+
+
+class SystemActivityRead(BaseModel):
+    running: list[ActivityTaskRead] = []
+    recent: list[ActivityTaskRead] = []
+    queued: dict[str, int] = {}
+    cpu_percent: Optional[float] = None
+
+
 class BulkPlaylistAdd(BaseModel):
     video_ids: list[int]

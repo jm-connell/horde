@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
 from ..database import engine
 from ..models import Video
-from . import library
+from . import activity, library
 from .ytdlp_common import apply_cookie_opts, youtube_extractor_args
 
 SyncField = Literal["views", "thumbnails", "captions", "titles_descriptions", "all"]
@@ -216,6 +216,15 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
         last_error=None,
         finished_at=None,
     )
+    act = activity.start(
+        "metadata_sync",
+        "Syncing video metadata",
+        reason="Bulk metadata refresh started",
+        engine="yt-dlp",
+        total=len(video_ids),
+        done=0,
+        detail=f"0/{len(video_ids)}",
+    )
     try:
         for vid in video_ids:
             with Session(engine) as session:
@@ -225,6 +234,10 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
                     continue
                 title = video.title
                 _set_job(current_title=title, current_video_id=vid)
+                act.update(
+                    detail=title,
+                    done=_job_state["done"] + _job_state["failed"] + _job_state["skipped"],
+                )
             try:
                 with _sync_lock:
                     refresh_video_metadata(vid, fields=want)
@@ -234,7 +247,18 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
                     failed=_job_state["failed"] + 1,
                     last_error=str(exc),
                 )
+        act.finish(
+            detail=(
+                f"{_job_state['done']} synced"
+                + (f", {_job_state['failed']} failed" if _job_state["failed"] else "")
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        act.finish(status="failed", error=str(exc)[:500])
+        raise
     finally:
+        if not act._closed:
+            act.discard()
         _set_job(
             running=False,
             current_title=None,
@@ -292,11 +316,29 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
                 ).all()
                 stale = [v for v in all_videos if _should_sync(v, interval_hours)]
 
-            for video in stale[:batch_size]:
+            batch = stale[:batch_size]
+            if batch:
+                act = activity.start(
+                    "metadata_sync",
+                    "Periodic metadata refresh",
+                    reason=f"Scheduled sync (every {interval_hours}h)",
+                    engine="yt-dlp",
+                    total=len(batch),
+                    done=0,
+                )
                 try:
-                    refresh_video_metadata(video.id)
-                except Exception:  # noqa: BLE001
-                    pass
+                    for i, video in enumerate(batch):
+                        act.update(done=i, detail=video.title)
+                        try:
+                            refresh_video_metadata(video.id)
+                        except Exception:  # noqa: BLE001
+                            pass
+                    act.finish(detail=f"{len(batch)} video(s)")
+                except Exception as exc:  # noqa: BLE001
+                    act.finish(status="failed", error=str(exc)[:500])
+                finally:
+                    if not act._closed:
+                        act.discard()
 
         try:
             from . import channel_catalog

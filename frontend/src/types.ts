@@ -446,6 +446,30 @@ export interface SystemStats {
   } | null;
 }
 
+export interface ActivityTask {
+  id: string;
+  kind: string;
+  group: string;
+  label: string;
+  reason: string | null;
+  engine: string | null;
+  detail: string | null;
+  video_id: number | null;
+  done: number | null;
+  total: number | null;
+  status: "running" | "completed" | "failed" | "cancelled" | string;
+  started_at: number;
+  finished_at: number | null;
+  error: string | null;
+}
+
+export interface SystemActivity {
+  running: ActivityTask[];
+  recent: ActivityTask[];
+  queued: Record<string, number>;
+  cpu_percent: number | null;
+}
+
 export interface AiProcessResult {
   enqueued: number;
   breakdown: Record<string, number>;

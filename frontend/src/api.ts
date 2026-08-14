@@ -19,6 +19,7 @@ import type {
   RecommendationsResponse,
   StorageStats,
   StreamPreviewMeta,
+  SystemActivity,
   SystemStats,
   TagStat,
   UpdateCheck,
@@ -455,6 +456,10 @@ export const api = {
 
   getSystemStats(): Promise<SystemStats> {
     return request<SystemStats>("/api/system/stats");
+  },
+
+  getSystemActivity(): Promise<SystemActivity> {
+    return request<SystemActivity>("/api/system/activity");
   },
 
   checkUpdates(refresh = false): Promise<UpdateCheck> {

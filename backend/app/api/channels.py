@@ -375,50 +375,70 @@ def channel_feed(
             vote_ids: list[str],
             catalog_url: Optional[str],
         ) -> None:
-            updates: list[dict] = []
-            catalog_view_updates: list[tuple[str, int]] = []
-            for yt_id, entry_url in meta_rows:
-                try:
-                    preview = downloader.extract_preview(entry_url)
-                except Exception:  # noqa: BLE001
-                    continue
-                if preview.get("is_playlist"):
-                    continue
-                row: dict = {"id": yt_id}
-                if preview.get("view_count") is not None:
-                    row["view_count"] = preview["view_count"]
+            from ..services import activity
+
+            total = len(meta_rows) + len(vote_ids)
+            with activity.track(
+                "feed_enrich",
+                "Enriching channel feed metadata",
+                reason="Channel feed opened with missing view counts, dates, or votes",
+                engine="yt-dlp",
+                detail=f"0/{total}" if total else None,
+                total=total or None,
+                done=0,
+            ) as handle:
+                updates: list[dict] = []
+                catalog_view_updates: list[tuple[str, int]] = []
+                done = 0
+                for yt_id, entry_url in meta_rows:
                     try:
-                        catalog_view_updates.append(
-                            (yt_id, int(preview["view_count"]))
+                        preview = downloader.extract_preview(entry_url)
+                    except Exception:  # noqa: BLE001
+                        done += 1
+                        handle.update(done=done, detail=f"{done}/{total}")
+                        continue
+                    if preview.get("is_playlist"):
+                        done += 1
+                        handle.update(done=done, detail=f"{done}/{total}")
+                        continue
+                    row: dict = {"id": yt_id}
+                    if preview.get("view_count") is not None:
+                        row["view_count"] = preview["view_count"]
+                        try:
+                            catalog_view_updates.append(
+                                (yt_id, int(preview["view_count"]))
+                            )
+                        except (TypeError, ValueError):
+                            pass
+                    if preview.get("thumbnail_url"):
+                        row["thumbnail_url"] = preview["thumbnail_url"]
+                    if preview.get("published_at"):
+                        row["published_at"] = preview["published_at"]
+                    if len(row) > 1:
+                        updates.append(row)
+                    done += 1
+                    handle.update(done=done, detail=f"{done}/{total}")
+                for yt_id in vote_ids:
+                    votes = return_youtube_dislike.fetch_votes(yt_id)
+                    if votes:
+                        updates.append(
+                            {
+                                "id": yt_id,
+                                "like_count": votes["like_count"],
+                                "dislike_count": votes["dislike_count"],
+                            }
                         )
-                    except (TypeError, ValueError):
+                    done += 1
+                    handle.update(done=done, detail=f"{done}/{total}")
+                if updates:
+                    feed_meta_cache.upsert_many(updates)
+                if catalog_url and catalog_view_updates:
+                    try:
+                        channel_catalog.update_catalog_view_counts(
+                            catalog_url, catalog_view_updates
+                        )
+                    except Exception:  # noqa: BLE001
                         pass
-                if preview.get("thumbnail_url"):
-                    row["thumbnail_url"] = preview["thumbnail_url"]
-                if preview.get("published_at"):
-                    row["published_at"] = preview["published_at"]
-                if len(row) > 1:
-                    updates.append(row)
-            for yt_id in vote_ids:
-                votes = return_youtube_dislike.fetch_votes(yt_id)
-                if not votes:
-                    continue
-                updates.append(
-                    {
-                        "id": yt_id,
-                        "like_count": votes["like_count"],
-                        "dislike_count": votes["dislike_count"],
-                    }
-                )
-            if updates:
-                feed_meta_cache.upsert_many(updates)
-            if catalog_url and catalog_view_updates:
-                try:
-                    channel_catalog.update_catalog_view_counts(
-                        catalog_url, catalog_view_updates
-                    )
-                except Exception:  # noqa: BLE001
-                    pass
 
         import threading
 

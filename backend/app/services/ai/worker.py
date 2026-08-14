@@ -797,6 +797,15 @@ def _next_job(
     return None
 
 
+_AI_KIND_LABELS = {
+    "embed_video": "Embedding video for search",
+    "enrich_tags": "Enriching tags",
+    "refresh_categories": "Refreshing recommendation categories",
+    "score_duplicates": "Scoring duplicate candidates",
+    "embed_catalog_video": "Embedding catalog video",
+}
+
+
 def _process_one() -> bool:
     ai = app_settings.ai_settings()
     paused = bool(ai.get("paused"))
@@ -843,6 +852,35 @@ def _process_one() -> bool:
 
     _clear_waiting_notes()
 
+    kind_key = kind.value if hasattr(kind, "value") else str(kind)
+    info = current_job_info() or {}
+    detail = info.get("title") or info.get("channel")
+    ai_engine = "ollama"
+    try:
+        from .provider import embed_backend_name, llm_backend_name
+
+        if kind_key in ("embed_video", "embed_catalog_video"):
+            ai_engine = embed_backend_name() or "ollama"
+        else:
+            ai_engine = llm_backend_name() or "ollama"
+    except Exception:  # noqa: BLE001
+        ai_engine = "ollama"
+
+    act = None
+    try:
+        from .. import activity
+
+        act = activity.start(
+            "ai",
+            _AI_KIND_LABELS.get(kind_key, kind_key.replace("_", " ").title()),
+            reason="AI queue job",
+            engine=ai_engine,
+            detail=detail,
+            video_id=video_id,
+        )
+    except Exception:  # noqa: BLE001
+        act = None
+
     try:
         with Session(engine) as session:
             skip_reason = tasks.dispatch(
@@ -860,6 +898,8 @@ def _process_one() -> bool:
                 job.updated_at = utcnow()
                 session.add(job)
                 session.commit()
+        if act is not None:
+            act.finish(detail=detail)
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI job %s failed: %s", job_id, exc)
         from .provider import invalidate_resolved_url
@@ -877,6 +917,8 @@ def _process_one() -> bool:
                 job.updated_at = utcnow()
                 session.add(job)
                 session.commit()
+        if act is not None:
+            act.finish(status="failed", error=str(exc)[:500])
     return True
 
 

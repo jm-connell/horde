@@ -20,6 +20,7 @@ import type {
   HealthStats,
   OpenRouterCosts,
   StorageStats,
+  SystemActivity,
   SystemStats,
   UpdateCheck,
 } from "../types";
@@ -125,6 +126,9 @@ export default function Settings() {
   const [catalogStatus, setCatalogStatus] =
     useState<ChannelCatalogStatus | null>(null);
   const [catalogIndexing, setCatalogIndexing] = useState(false);
+  const [systemActivity, setSystemActivity] = useState<SystemActivity | null>(
+    null
+  );
   const [metadataSyncing, setMetadataSyncing] = useState(false);
   const [metadataSyncFields, setMetadataSyncFields] = useState<string[]>([
     "all",
@@ -383,6 +387,19 @@ export default function Settings() {
     if (tab !== "system" && tab !== "ai") return;
     refreshSystemStats();
     const id = setInterval(refreshSystemStats, 3000);
+    return () => clearInterval(id);
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "system") return;
+    const poll = () => {
+      api
+        .getSystemActivity()
+        .then(setSystemActivity)
+        .catch(() => setSystemActivity(null));
+    };
+    poll();
+    const id = setInterval(poll, 2000);
     return () => clearInterval(id);
   }, [tab]);
 
@@ -892,6 +909,7 @@ export default function Settings() {
     catalogIndexing,
     setCatalogIndexing,
     refreshCatalogStatus,
+    systemActivity,
   };
 
   return (

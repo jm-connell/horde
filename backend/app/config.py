@@ -38,6 +38,9 @@ PORT: int = int(os.environ.get("PORT", "8080"))
 # Max simultaneous download workers (FIFO queue).
 MAX_DOWNLOAD_CONCURRENCY: int = int(os.environ.get("MAX_DOWNLOAD_CONCURRENCY", "2"))
 
+# Max simultaneous ffmpeg sprite-sheet workers (CPU-heavy full-video decode).
+SPRITE_CONCURRENCY: int = max(1, int(os.environ.get("SPRITE_CONCURRENCY", "1")))
+
 # YouTube bot checks — bgutil POT sidecar (default in Docker) or cookie fallback.
 # See https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
 YTDLP_POT_BASE_URL: str = os.environ.get("YTDLP_POT_BASE_URL", "").strip()

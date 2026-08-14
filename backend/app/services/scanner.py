@@ -16,6 +16,7 @@ from ..config import (
 )
 from ..database import engine
 from ..models import Video, VideoStatus
+from . import activity
 from .metadata import (
     grab_frame,
     probe_dimensions,
@@ -117,50 +118,64 @@ def ingest_media_file(
     if require_stable and not _is_stable(path):
         return None
 
-    if not probe_is_playable(path):
-        return None
+    with activity.track(
+        "scan",
+        "Importing media file",
+        reason="New file found by the folder scanner",
+        engine="ffprobe",
+        detail=path.name,
+    ) as handle:
+        if not probe_is_playable(path):
+            handle.discard()
+            return None
 
-    try:
-        file_size = path.stat().st_size
-    except OSError:
-        return None
-
-    dims = probe_dimensions(path)
-    video = Video(
-        title=path.stem,
-        channel=None,
-        file_path=rel_path,
-        duration_sec=probe_duration(path),
-        file_size=file_size,
-        width_px=dims[0] if dims else None,
-        height_px=dims[1] if dims else None,
-        frame_rate=probe_frame_rate(path),
-        needs_review=True,
-        status=VideoStatus.ready,
-    )
-    session.add(video)
-    try:
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        return None
-    session.refresh(video)
-
-    thumb_path = THUMBNAILS_DIR / f"{video.id}.jpg"
-    if grab_frame(path, thumb_path):
-        video.thumbnail_path = str(thumb_path)
-        session.add(video)
-        session.commit()
-
-    if video.id is not None:
         try:
-            from .sprites import enqueue_sprite_generation
+            file_size = path.stat().st_size
+        except OSError:
+            handle.discard()
+            return None
 
-            enqueue_sprite_generation(video.id)
-        except Exception:  # noqa: BLE001
-            pass
+        dims = probe_dimensions(path)
+        video = Video(
+            title=path.stem,
+            channel=None,
+            file_path=rel_path,
+            duration_sec=probe_duration(path),
+            file_size=file_size,
+            width_px=dims[0] if dims else None,
+            height_px=dims[1] if dims else None,
+            frame_rate=probe_frame_rate(path),
+            needs_review=True,
+            status=VideoStatus.ready,
+        )
+        session.add(video)
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            handle.discard()
+            return None
+        session.refresh(video)
 
-    return video
+        handle.update(engine="ffmpeg", detail=video.title)
+        thumb_path = THUMBNAILS_DIR / f"{video.id}.jpg"
+        if grab_frame(path, thumb_path):
+            video.thumbnail_path = str(thumb_path)
+            session.add(video)
+            session.commit()
+
+        if video.id is not None:
+            try:
+                from .sprites import enqueue_sprite_generation
+
+                enqueue_sprite_generation(
+                    video.id,
+                    reason="New file found by the folder scanner",
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+        return video
 
 
 def _ingest_file(session: Session, path: Path) -> bool:
@@ -174,10 +189,25 @@ def scan_once() -> int:
         return 0
     added = 0
     try:
-        with Session(engine) as session:
-            for path in DOWNLOADS_DIR.rglob("*"):
-                if _is_media(path) and _ingest_file(session, path):
-                    added += 1
+        handle = activity.start(
+            "scan",
+            "Scanning downloads folder",
+            reason="Looking for new or dropped media files",
+        )
+        try:
+            with Session(engine) as session:
+                for path in DOWNLOADS_DIR.rglob("*"):
+                    if _is_media(path) and _ingest_file(session, path):
+                        added += 1
+                        handle.update(done=added, detail=f"{added} new file(s)")
+            if added:
+                handle.finish(detail=f"{added} new file(s)")
+            else:
+                # Idle polls every SCAN_INTERVAL_SEC — don't spam recent history.
+                handle.discard()
+        except Exception:
+            handle.finish(status="failed")
+            raise
     finally:
         _scan_lock.release()
     return added

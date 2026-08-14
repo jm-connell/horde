@@ -129,7 +129,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "system",
     keywords:
-      "background tasks channel catalog index queue ai process metadata sync",
+      "background tasks background activity channel catalog index queue ai process metadata sync ffmpeg sprites seek previews thumbnails cpu usage scanner loudness normalization yt-dlp activity refresh catalogs full reindex",
   },
   {
     tab: "system",

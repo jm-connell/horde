@@ -18,6 +18,7 @@ import type {
   HealthStats,
   OpenRouterCosts,
   StorageStats,
+  SystemActivity,
   SystemStats,
   UpdateCheck,
 } from "../../types";
@@ -133,6 +134,7 @@ export type SettingsPageContextValue = {
   catalogIndexing: boolean;
   setCatalogIndexing: Dispatch<SetStateAction<boolean>>;
   refreshCatalogStatus: () => void;
+  systemActivity: SystemActivity | null;
 };
 
 // Re-exported so tabs can pull the same underlying types from one place.

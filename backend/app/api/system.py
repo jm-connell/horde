@@ -159,3 +159,18 @@ def system_stats():
         "gpu": gpu,
         "disk": disk,
     }
+
+
+@router.get("/activity")
+def system_activity():
+    """Live + recent background tasks (ffmpeg, downloads, AI, catalog, …)."""
+    from ..services import activity
+
+    snap = activity.snapshot()
+    cpu = _cpu_ram().get("cpu_percent")
+    return {
+        "running": snap["running"],
+        "recent": snap["recent"],
+        "queued": snap["queued"],
+        "cpu_percent": cpu,
+    }

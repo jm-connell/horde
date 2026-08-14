@@ -573,6 +573,7 @@ def generate_thumbnail_candidates(
     session: Session = Depends(get_session),
 ):
     """Extract several frames from the video for the user to pick as thumbnail."""
+    from ..services import activity
     from ..services.metadata import generate_thumbnail_candidates as _gen
 
     video = session.get(Video, video_id)
@@ -580,13 +581,22 @@ def generate_thumbnail_candidates(
         raise HTTPException(status_code=404, detail="Video not found")
     media = _resolve_media(video)
     THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
-    candidates = _gen(
-        media,
-        THUMBNAILS_DIR,
-        video_id,
-        count=count,
-        duration=video.duration_sec,
-    )
+    with activity.track(
+        "thumbnail",
+        "Generating thumbnail candidates",
+        reason="You asked to pick a new thumbnail",
+        engine="ffmpeg",
+        detail=video.title,
+        video_id=video_id,
+        total=count,
+    ):
+        candidates = _gen(
+            media,
+            THUMBNAILS_DIR,
+            video_id,
+            count=count,
+            duration=video.duration_sec,
+        )
     if not candidates:
         raise HTTPException(status_code=400, detail="Could not generate thumbnails")
     return {
@@ -682,7 +692,10 @@ def generate_sprites(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    status = enqueue_sprite_generation(video_id)
+    status = enqueue_sprite_generation(
+        video_id,
+        reason="You opened this video in the player",
+    )
     return {"status": status}
 
 

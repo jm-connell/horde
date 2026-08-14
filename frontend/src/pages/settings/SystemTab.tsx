@@ -7,6 +7,7 @@ import { downloadErrorLabel } from "../../downloadErrors";
 import { formatSize } from "../../utils";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import AiQueueStatus from "./AiQueueStatus";
+import BackgroundActivity from "./BackgroundActivity";
 import SystemStatsSnippet from "./SystemStatsSnippet";
 
 export default function SystemTab() {
@@ -28,6 +29,7 @@ export default function SystemTab() {
     systemStats,
     saveAi,
     appSettings,
+    systemActivity,
     metadataSyncStatus,
   } = useSettingsPage();
 
@@ -350,11 +352,21 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
 
       <Section
         title="Background activity"
-        description="Live progress for channel catalog work, AI jobs, and metadata sync. Refresh catalogs indexes new channels and checks ready ones for new uploads; Full reindex re-walks every channel."
+        description="Live and recent jobs — ffmpeg, downloads, AI, catalog indexing, folder scans — with why each started. Refresh catalogs indexes new channels and checks ready ones for new uploads; Full reindex re-walks every channel."
         hidden={
           !match(
             "background tasks",
             "background activity",
+            "ffmpeg",
+            "sprites",
+            "seek previews",
+            "thumbnails",
+            "cpu usage",
+            "scanner",
+            "loudness",
+            "normalization",
+            "yt-dlp",
+            "activity",
             "channel catalog",
             "index",
             "queue",
@@ -366,6 +378,10 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
         }
       >
         <div className="space-y-4">
+          <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-3">
+            <BackgroundActivity activity={systemActivity} />
+          </div>
+
           {(appSettings?.channel_catalog_enabled ?? true) && (
             <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-3">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

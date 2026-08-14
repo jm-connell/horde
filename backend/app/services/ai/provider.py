@@ -962,10 +962,20 @@ def ensure_models(provider: OllamaProvider) -> tuple[bool, bool]:
                 continue
 
             def _pull(m: str = model) -> None:
+                from .. import activity
+
+                handle = activity.start(
+                    "model_pull",
+                    f"Downloading model {m}",
+                    reason="Required Ollama model is missing",
+                    engine="ollama",
+                    detail=m,
+                )
                 try:
                     provider.pull_model(m)
-                except Exception:  # noqa: BLE001
-                    pass
+                    handle.finish(detail=m)
+                except Exception as exc:  # noqa: BLE001
+                    handle.finish(status="failed", error=str(exc)[:500])
 
             # Drop stale "present" cache so status shows the pull promptly.
             _model_cache.clear()

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, THUMBNAILS_DIR, VIDEO_EXTENSIONS
 from ..database import engine
 from ..models import DownloadDestination, DownloadJob, JobStatus, Video, VideoStatus
-from . import library, scanner
+from . import activity, library, scanner
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .paths import find_video_by_path, to_rel_path
 from .ytdlp_common import (
@@ -518,15 +518,22 @@ def _update_job(job_id: int, **fields: Any) -> None:
         session.commit()
 
 
-def _make_progress_hook(job_id: int, cancel_event: threading.Event):
+def _make_progress_hook(
+    job_id: int,
+    cancel_event: threading.Event,
+    activity_handle: Optional[activity.ActivityHandle] = None,
+):
     accumulated_bytes = 0
     last_stream_downloaded = 0
     max_displayed_bytes = 0
     max_percent = 0.0
+    last_activity_at = 0.0
+    last_activity_pct = -1.0
 
     def hook(d: dict[str, Any]) -> None:
         nonlocal accumulated_bytes, last_stream_downloaded
         nonlocal max_displayed_bytes, max_percent
+        nonlocal last_activity_at, last_activity_pct
         if cancel_event.is_set():
             raise DownloadCancelled()
         if not isinstance(d, dict):
@@ -548,14 +555,26 @@ def _make_progress_hook(job_id: int, cancel_event: threading.Event):
                 percent = min(100.0, (combined / total * 100) if total else 0.0)
                 max_percent = min(100.0, max(max_percent, percent))
                 info = _as_info(d.get("info_dict"))
+                title = info.get("title")
                 progress_store[job_id] = {
                     "status": "downloading",
                     "progress": round(max_percent, 1),
-                    "title": info.get("title"),
+                    "title": title,
                     "channel": info.get("uploader") or info.get("channel"),
                     "total_bytes": total,
                     "downloaded_bytes": max_displayed_bytes,
                 }
+                if activity_handle is not None:
+                    now = time.time()
+                    pct_i = int(max_percent)
+                    if now - last_activity_at >= 1.0 or pct_i >= last_activity_pct + 5:
+                        last_activity_at = now
+                        last_activity_pct = pct_i
+                        activity_handle.update(
+                            done=pct_i,
+                            total=100,
+                            detail=title or None,
+                        )
             elif status == "finished":
                 info = _as_info(d.get("info_dict"))
                 size = (
@@ -570,6 +589,13 @@ def _make_progress_hook(job_id: int, cancel_event: threading.Event):
                     "status": "processing",
                     "progress": min(100.0, max(max_percent, 99.0)),
                 }
+                if activity_handle is not None:
+                    activity_handle.update(
+                        done=99,
+                        total=100,
+                        detail="Merging streams",
+                        engine="ffmpeg",
+                    )
         except Exception:  # noqa: BLE001 — never fail a download over progress UI
             return
 
@@ -844,8 +870,15 @@ def _apply_loudnorm(path: Path) -> Optional[str]:
         str(tmp),
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, timeout=3600)
-        _replace_with_retries(tmp, path)
+        with activity.track(
+            "loudnorm",
+            "Normalizing volume",
+            reason="Volume normalization enabled for this download",
+            engine="ffmpeg",
+            detail=path.name,
+        ):
+            subprocess.run(cmd, check=True, capture_output=True, timeout=3600)
+            _replace_with_retries(tmp, path)
         return None
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         _safe_unlink(tmp)
@@ -866,39 +899,55 @@ def _finalize_in_background(
     """Fetch subtitles and thumbnail without blocking watchability."""
 
     def run() -> None:
-        tracks: list[dict[str, Any]] = []
-        thumb: Optional[str] = None
-        try:
-            tracks = download_subtitles(final_path, source_url)
-            thumb = _save_thumbnail(thumbnail_url, video_id)
-        except Exception:  # noqa: BLE001
-            pass
+        title: Optional[str] = None
         with Session(engine) as session:
             video = session.get(Video, video_id)
-            if video is None:
-                return
-            if tracks:
-                video.subtitles = library.dump_subtitles(tracks)
-            if thumb:
-                video.thumbnail_path = thumb
-            video.subtitles_pending = False
-            session.add(video)
-            session.commit()
-        # Re-embed with subtitle text once captions are on disk.
-        try:
-            from .ai import enqueue_for_video
+            if video is not None:
+                title = video.title
+        with activity.track(
+            "finalize",
+            "Fetching subtitles and thumbnail",
+            reason="Download finished",
+            engine="yt-dlp",
+            detail=title,
+            video_id=video_id,
+        ):
+            tracks: list[dict[str, Any]] = []
+            thumb: Optional[str] = None
+            try:
+                tracks = download_subtitles(final_path, source_url)
+                thumb = _save_thumbnail(thumbnail_url, video_id)
+            except Exception:  # noqa: BLE001
+                pass
+            with Session(engine) as session:
+                video = session.get(Video, video_id)
+                if video is None:
+                    return
+                if tracks:
+                    video.subtitles = library.dump_subtitles(tracks)
+                if thumb:
+                    video.thumbnail_path = thumb
+                video.subtitles_pending = False
+                session.add(video)
+                session.commit()
+            # Re-embed with subtitle text once captions are on disk.
+            try:
+                from .ai import enqueue_for_video
 
-            enqueue_for_video(video_id, include_tags=False, force=False)
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            from .sprites import enqueue_sprite_generation
+                enqueue_for_video(video_id, include_tags=False, force=False)
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                from .sprites import enqueue_sprite_generation
 
-            enqueue_sprite_generation(video_id)
-        except Exception:  # noqa: BLE001
-            pass
+                enqueue_sprite_generation(
+                    video_id,
+                    reason="Download finished",
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
-    threading.Thread(target=run, daemon=True).start()
+    threading.Thread(target=run, daemon=True, name=f"finalize-{video_id}").start()
 
 
 def _complete_download(
@@ -1203,10 +1252,20 @@ def _run_download(
     last_exc: Optional[Exception] = None
     ytdlp_logger = _YtdlpLogger()
 
+    act = activity.start(
+        "download",
+        "Downloading video",
+        reason="Queued from the Download tab",
+        engine="yt-dlp",
+        detail=title_override or url,
+        total=100,
+        done=0,
+    )
+
     base_ydl_opts: dict[str, Any] = apply_cookie_opts(
         {
             "outtmpl": outtmpl,
-            "progress_hooks": [_make_progress_hook(job_id, cancel)],
+            "progress_hooks": [_make_progress_hook(job_id, cancel, act)],
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
@@ -1331,8 +1390,9 @@ def _run_download(
             raise DownloadCancelled()
 
         effective_info = _merge_info(_as_info(metadata_info), _as_info(info))
-
-        return _complete_download(
+        detail = str(title_override or effective_info.get("title") or url)
+        act.update(done=100, detail=detail)
+        video_id = _complete_download(
             job_id,
             final_path,
             effective_info,
@@ -1346,6 +1406,8 @@ def _run_download(
             cancel_event=cancel,
             destination=destination,
         )
+        act.finish(detail=detail)
+        return video_id
 
     except DownloadCancelled:
         _cleanup_partial_files(active_paths)
@@ -1354,6 +1416,7 @@ def _run_download(
         with Session(engine) as session:
             job = session.get(DownloadJob, job_id)
             if job is None:
+                act.finish(status="cancelled")
                 return None
             if download_queue.is_paused():
                 job.status = JobStatus.queued
@@ -1368,6 +1431,7 @@ def _run_download(
                     "channel": job.channel,
                     "destination": destination,
                 }
+                act.discard()
             else:
                 job.status = JobStatus.cancelled
                 job.error = "Cancelled"
@@ -1380,6 +1444,7 @@ def _run_download(
                     "error_kind": ERROR_KIND_CANCELLED,
                     "destination": destination,
                 }
+                act.finish(status="cancelled")
             session.add(job)
             session.commit()
         return None
@@ -1395,7 +1460,10 @@ def _run_download(
             and not cancel.is_set()
         ):
             try:
-                return _complete_download(
+                detail = str(
+                    title_override or effective_info.get("title") or url
+                )
+                video_id = _complete_download(
                     job_id,
                     recovered,
                     effective_info,
@@ -1409,6 +1477,8 @@ def _run_download(
                     cancel_event=cancel,
                     destination=destination,
                 )
+                act.finish(detail=detail)
+                return video_id
             except Exception:  # noqa: BLE001
                 pass
 
@@ -1441,8 +1511,12 @@ def _run_download(
             "channel": prev.get("channel"),
             "destination": destination,
         }
+        act.finish(status="failed", error=message[:500])
         return None
     finally:
+        # Ensure activity never leaks if an unexpected path skips finish.
+        if not act._closed:
+            act.discard()
         # Keep paths marked briefly so the filesystem watcher does not race
         # the DB commit and try to ingest the file as a duplicate review item.
         paths = list(active_paths)
@@ -1474,63 +1548,78 @@ def _run_playlist_import(
 ) -> None:
     from ..models import PlaylistItem
 
-    for index, entry_url in enumerate(entries):
-        with Session(engine) as session:
-            # Best-effort preview for title/channel/thumbnail on each entry.
-            preview: dict = {}
-            try:
-                preview = extract_preview(entry_url)
-            except Exception:  # noqa: BLE001
-                pass
-            job = DownloadJob(
-                url=entry_url,
-                quality_preset=quality_preset,
-                status=JobStatus.queued,
-                title=preview.get("title"),
-                channel=preview.get("channel"),
-                thumbnail_url=preview.get("thumbnail_url"),
-            )
-            session.add(job)
-            session.commit()
-            session.refresh(job)
-            job_id = job.id
-
-        enqueue_download(job_id)
-
-        video_id = None
-        while True:
+    total = len(entries)
+    with activity.track(
+        "playlist_import",
+        "Importing playlist",
+        reason="Playlist import started",
+        engine="yt-dlp",
+        detail=f"0/{total} videos",
+        total=total,
+        done=0,
+    ) as handle:
+        for index, entry_url in enumerate(entries):
             with Session(engine) as session:
-                job = session.get(DownloadJob, job_id)
-                if job is None:
-                    break
-                if job.status in (
-                    JobStatus.completed,
-                    JobStatus.error,
-                    JobStatus.cancelled,
-                ):
-                    video_id = job.video_id
-                    break
-            threading.Event().wait(1.0)
-
-        if video_id is None:
-            continue
-
-        with Session(engine) as session:
-            existing = session.exec(
-                select(PlaylistItem).where(
-                    PlaylistItem.playlist_id == playlist_id,
-                    PlaylistItem.video_id == video_id,
+                # Best-effort preview for title/channel/thumbnail on each entry.
+                preview: dict = {}
+                try:
+                    preview = extract_preview(entry_url)
+                except Exception:  # noqa: BLE001
+                    pass
+                job = DownloadJob(
+                    url=entry_url,
+                    quality_preset=quality_preset,
+                    status=JobStatus.queued,
+                    title=preview.get("title"),
+                    channel=preview.get("channel"),
+                    thumbnail_url=preview.get("thumbnail_url"),
                 )
-            ).first()
-            if existing is None:
-                session.add(
-                    PlaylistItem(
-                        playlist_id=playlist_id,
-                        video_id=video_id,
-                        position=index,
-                    )
-                )
+                session.add(job)
                 session.commit()
+                session.refresh(job)
+                job_id = job.id
+
+            enqueue_download(job_id)
+            handle.update(
+                done=index,
+                detail=preview.get("title") or f"{index + 1}/{total} videos",
+            )
+
+            video_id = None
+            while True:
+                with Session(engine) as session:
+                    job = session.get(DownloadJob, job_id)
+                    if job is None:
+                        break
+                    if job.status in (
+                        JobStatus.completed,
+                        JobStatus.error,
+                        JobStatus.cancelled,
+                    ):
+                        video_id = job.video_id
+                        break
+                threading.Event().wait(1.0)
+
+            if video_id is None:
+                continue
+
+            with Session(engine) as session:
+                existing = session.exec(
+                    select(PlaylistItem).where(
+                        PlaylistItem.playlist_id == playlist_id,
+                        PlaylistItem.video_id == video_id,
+                    )
+                ).first()
+                if existing is None:
+                    session.add(
+                        PlaylistItem(
+                            playlist_id=playlist_id,
+                            video_id=video_id,
+                            position=index,
+                        )
+                    )
+                    session.commit()
+            handle.update(done=index + 1, detail=f"{index + 1}/{total} videos")
 
 
 def start_playlist_import(

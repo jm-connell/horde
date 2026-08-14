@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, func, select
 
 from ...database import engine
 from ...models import (
@@ -18,7 +18,7 @@ from ...models import (
     ChannelCatalogVideo,
     utcnow,
 )
-from .. import app_settings
+from .. import activity, app_settings
 from .. import feed_meta_cache
 from ..feed_meta_cache import parse_upload_date
 from ..ytdlp_common import (
@@ -395,6 +395,16 @@ def index_catalog(catalog_id: int) -> None:
         catalog_id=catalog_id,
     )
 
+    act = activity.start(
+        "catalog",
+        "Indexing channel catalog",
+        reason="Channel catalog indexing queued",
+        engine="yt-dlp",
+        detail=channel_name or channel_url,
+        total=max_videos,
+        done=0,
+    )
+
     try:
         offset = 0
         position = 0
@@ -412,6 +422,7 @@ def index_catalog(catalog_id: int) -> None:
             with Session(engine) as session:
                 catalog = session.get(ChannelCatalog, catalog_id)
                 if catalog is None:
+                    act.discard()
                     return
                 if channel_name and catalog.channel_name != channel_name:
                     catalog.channel_name = channel_name
@@ -427,6 +438,12 @@ def index_catalog(catalog_id: int) -> None:
                 total=channel_total or max_videos,
                 current_channel=channel_name,
             )
+            act.update(
+                done=position,
+                total=channel_total or max_videos,
+                detail=f"{channel_name or channel_url} · listing videos",
+                label="Indexing channel catalog",
+            )
             if not entries or not data.get("has_more"):
                 reached_end = True
                 break
@@ -437,6 +454,7 @@ def index_catalog(catalog_id: int) -> None:
         with Session(engine) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is None:
+                act.discard()
                 return
             _trim_beyond_cap(session, catalog)
             count = session.exec(
@@ -455,9 +473,15 @@ def index_catalog(catalog_id: int) -> None:
             catalog.updated_at = utcnow()
             session.add(catalog)
             session.commit()
+            _set_runtime(current_phase="descriptions")
+            act.update(
+                detail=f"{channel_name or channel_url} · fetching descriptions",
+                label="Enriching channel catalog",
+            )
             _run_description_pass(session, catalog)
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is None:
+                act.discard()
                 return
             catalog.complete = bool(
                 reached_end
@@ -477,6 +501,11 @@ def index_catalog(catalog_id: int) -> None:
             session.commit()
 
         _set_runtime(current_phase="embed")
+        act.update(
+            detail=f"{channel_name or channel_url} · queueing embeddings",
+            label="Queueing catalog embeddings",
+            engine="ollama",
+        )
         _enqueue_catalog_embeds(catalog_id)
 
         with Session(engine) as session:
@@ -487,6 +516,7 @@ def index_catalog(catalog_id: int) -> None:
                 catalog.updated_at = utcnow()
                 session.add(catalog)
                 session.commit()
+        act.finish(detail=channel_name or channel_url)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Catalog index failed for %s: %s", channel_url, exc)
         with Session(engine) as session:
@@ -499,7 +529,10 @@ def index_catalog(catalog_id: int) -> None:
                 catalog.updated_at = utcnow()
                 session.add(catalog)
                 session.commit()
+        act.finish(status="failed", error=str(exc)[:500])
     finally:
+        if not act._closed:
+            act.discard()
         _set_runtime(
             running=False,
             current_channel=None,
