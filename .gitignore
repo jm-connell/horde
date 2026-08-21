@@ -18,6 +18,12 @@ backend/downloads/
 # Env
 .env
 
+# Local Compose overrides (put extra ports/devices here; volume paths belong in .env)
+docker-compose.override.yml
+docker-compose.override.yaml
+compose.override.yml
+compose.override.yaml
+
 # Local dev helpers (not committed)
 .local/
 

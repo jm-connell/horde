@@ -2,10 +2,12 @@
 
 Horde’s Docker image is **built from source** on your host (`build: .` in `docker-compose.yml`). Updating means pulling new git commits, rebuilding the `horde` image with the current commit SHA, and recreating containers.
 
-Library media (`DOWNLOADS_PATH`) and app data (`DATA_PATH`) live on host volumes and are **not** wiped by a rebuild.
+Library media (`DOWNLOADS_PATH`) and app data (`DATA_PATH`) live on host volumes and are **not** wiped by a rebuild. `update.sh` snapshots bind mounts from the running container into `.env` *before* `git pull`, so a compose-file refresh cannot remount Horde onto empty default directories (which looks like "settings reset" and "storage paths changed").
 
 !!! warning "TrueNAS / Dockge: use the host shell"
     Run updates from the **TrueNAS shell** or SSH on the Docker host, inside the stack directory. Do **not** use Dockge’s per-service **Bash** button — that shell is inside the running container, where host `docker compose` and stack `git pull` are not available. See [TrueNAS / Dockge](truenas-dockge.md).
+
+    After `update.sh` finishes, refresh Dockge so it reloads the compose file. Do **not** click **Deploy** with an older compose still sitting in the Dockge editor — that can rewrite volume paths. The script already recreates containers.
 
 ## Recommended: `update.sh`
 
@@ -18,12 +20,16 @@ bash update.sh
 
 The script:
 
-1. `git pull` — fetch the latest code
-2. `HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde` — rebuild with the commit SHA baked in (keeps in-app update checks accurate)
-3. `docker compose up -d` — recreate containers from the new image (adds `--profile ai` when needed; see below)
-4. Polls `GET /api/health` until `status` is `ok` (default up to 90s) and prints a short summary (`horde_version`, `yt_dlp_version`, POT, wiki, library count)
+1. Snapshot live `/downloads` and `/app/data` bind mounts (and `PUID`/`PGID`) into `.env` if a Horde container already exists
+2. `git pull --ff-only --autostash` — fetch the latest code without `git reset --hard` (`.env` is gitignored and is never discarded)
+3. Refuse to recreate if the new compose would mount different host paths (override with `HORDE_FORCE_VOLUME_CHANGE=1`)
+4. `HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde` — rebuild with the commit SHA baked in (keeps in-app update checks accurate)
+5. `docker compose up -d` — recreate containers from the new image (adds `--profile ai` when needed; see below)
+6. Polls `GET /api/health` until `status` is `ok` (default up to 90s) and prints a short summary (`horde_version`, `yt_dlp_version`, POT, wiki, library count)
 
 On hosts that need elevated Docker access, the script uses `sudo` when invoking compose (as in the repo’s `update.sh`).
+
+Keep `DOWNLOADS_PATH` and `DATA_PATH` in `.env` (not hardcoded in `docker-compose.yml`). Extra compose tweaks belong in gitignored `docker-compose.override.yml`.
 
 After it finishes, hard-refresh the browser (`Ctrl+Shift+R`) if the UI still looks old.
 
@@ -33,8 +39,9 @@ After it finishes, hard-refresh the browser (`Ctrl+Shift+R`) if the UI still loo
 |-----|---------|
 | `HORDE_COMPOSE_PROFILES` or `COMPOSE_PROFILES` | Set to `ai` (or include `ai` in a comma list) so `update.sh` runs `docker compose --profile ai up -d` |
 | *(auto)* | If the `horde-ollama` container is already running, the script includes `--profile ai` automatically |
-| `HORDE_HEALTH_URL` | Override the readiness URL (default `http://127.0.0.1:8686/api/health`) |
+| `HORDE_HEALTH_URL` | Override the readiness URL (default `http://127.0.0.1:8686/api/health`, or the live host port when the container is already mapped elsewhere) |
 | `HORDE_HEALTH_TIMEOUT_SEC` | Seconds to wait for health (default `90`) |
+| `HORDE_FORCE_VOLUME_CHANGE` | Set to `1` only if you **intend** to move `DOWNLOADS_PATH` / `DATA_PATH`. Otherwise `update.sh` aborts when a recreate would remount empty defaults |
 
 Example:
 
@@ -56,6 +63,8 @@ curl -sf http://127.0.0.1:8686/api/health
 
 Passing `HORDE_GIT_SHA` on the same line as `sudo` matters so the variable is not stripped from the environment.
 
+Prefer `update.sh` over a raw `git pull`. Never `git reset --hard` to unstick a pull — that drops local compose edits and can remount empty default data/media directories.
+
 If you use the optional Ollama profile:
 
 ```bash
@@ -68,7 +77,8 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose --profile ai up -d
 |---------|--------|
 | `bgutil-pot` | Always part of the default stack; recreated with `up -d` |
 | `ollama` | Only if started with `--profile ai` (or preserved by `update.sh` as above) |
-| Host volumes | `DOWNLOADS_PATH` → `/downloads`, `DATA_PATH` → `/app/data` untouched |
+| Host volumes | `DOWNLOADS_PATH` → `/downloads`, `DATA_PATH` → `/app/data` untouched (script aborts if those host paths would change) |
+| `.env` | Seeded from the running container before pull; gitignored so `git pull` cannot reset paths |
 
 ## Update notices in the UI
 

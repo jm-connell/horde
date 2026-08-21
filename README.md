@@ -39,7 +39,7 @@ cd /path/to/your/horde/stack
 bash update.sh
 ```
 
-Then hard-refresh the browser (`Ctrl+Shift+R`). Library data on host volumes is preserved.
+Then hard-refresh the browser (`Ctrl+Shift+R`). Library data and settings on host volumes are preserved (`.env` volume paths survive `git pull`).
 
 ## Local development
 
