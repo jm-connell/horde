@@ -90,6 +90,27 @@ After pulling a new image or rebuilding the frontend, browsers may keep old hash
 
 If Settings → System still shows an old version, confirm the container actually restarted on the new image (`horde_version` / `horde_sha` on `/api/health`).
 
+## Settings or library empty after update
+
+**Symptoms:** theme/AI/catalog settings back to defaults, library looks empty, or downloads land in a different folder after `bash update.sh`.
+
+That happens when the recreated container bind-mounts **different host paths** than before. `app_settings.json` and `horde.db` live on `DATA_PATH`; media lives on `DOWNLOADS_PATH`. Pointing those at empty defaults (`/opt/dockge/horde/data`, `/mnt/tank/media/youtube_archive`) looks like a reset.
+
+Typical causes:
+
+1. Volume paths were edited in **Dockge / `docker-compose.yml`** instead of `.env`. `git pull` refreshes the tracked compose file and interpolation falls back to those defaults.
+2. `git reset --hard` (or discarding local compose edits) to make `git pull` succeed.
+3. Clicking **Deploy** in Dockge after `update.sh` with an older compose still in the editor.
+
+**Fix:**
+
+1. Do not recreate again until paths are correct.
+2. Confirm `.env` has the directories that actually hold `horde.db` / `app_settings.json` and your media.
+3. Run `bash update.sh` from the host stack folder (current versions snapshot live mounts into `.env` before pulling).
+4. Hard-refresh the browser. Appearance may still be in `localStorage`; AI/library settings only return if the original `DATA_PATH` is mounted again.
+
+If the old data directory still exists on disk, set `DATA_PATH` / `DOWNLOADS_PATH` back to it — files were not deleted, only unmounted.
+
 ## Wiki missing in local development
 
 The MkDocs wiki is built in the Docker image and served at `/wiki/`. Local `uvicorn` without a wiki build reports:

@@ -58,7 +58,7 @@ SCAN_INTERVAL_SEC=60
 | `DOWNLOADS_PATH` | `/downloads` | Media dataset (Channel / Year / files) |
 | `DATA_PATH` | `/app/data` | Persistent DB + thumbnails (survive rebuilds) |
 
-Ensure `DATA_PATH` exists and is writable by `PUID`/`PGID`. It must survive container recreation.
+Ensure `DATA_PATH` exists and is writable by `PUID`/`PGID`. It must survive container recreation. Keep these values in `.env` so `update.sh` / `git pull` cannot fall back to the compose defaults.
 
 ## 4. Start the stack
 
@@ -98,9 +98,11 @@ cd /mnt/tank/dockge/stacks/horde   # your stack path
 bash update.sh
 ```
 
-`update.sh` pulls the latest code, builds with `HORDE_GIT_SHA=$(git rev-parse HEAD)`, and recreates containers. Full details: [Updating](updating.md).
+`update.sh` pulls the latest code, records the running container’s volume mounts into `.env`, builds with `HORDE_GIT_SHA=$(git rev-parse HEAD)`, and recreates containers **only if** `DOWNLOADS_PATH` and `DATA_PATH` would stay the same. Full details: [Updating](updating.md).
 
-Your library on `DOWNLOADS_PATH` and database on `DATA_PATH` are unchanged by a rebuild.
+Put host paths in `.env`, not in the compose file. `git pull` overwrites tracked `docker-compose.yml`; if you hardcoded `/mnt/...` volume lines in Dockge, that is what used to remount empty defaults and look like a settings wipe.
+
+Your library on `DOWNLOADS_PATH` and database/settings on `DATA_PATH` are unchanged by a rebuild.
 
 ## Storage layout on disk
 

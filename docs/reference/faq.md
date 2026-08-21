@@ -22,7 +22,7 @@ Back up the **data** volume (SQLite DB, thumbnails, app settings) and the **down
 
 ## How do I update?
 
-Pull the latest git revision and **rebuild** the image (`docker compose up --build -d` or Dockge rebuild). Horde is typically built from source on the host, not pulled as a fixed registry tag. Settings → System can notice a newer GitHub commit. See [Updating](../getting-started/updating.md).
+Pull the latest git revision with **`bash update.sh`** on the host (not Dockge Bash) and **rebuild** the image. Horde is typically built from source on the host, not pulled as a fixed registry tag. Settings, the SQLite library, and media stay on `DATA_PATH` / `DOWNLOADS_PATH` in `.env` — do not hardcode those only in `docker-compose.yml`. Settings → System can notice a newer GitHub commit. See [Updating](../getting-started/updating.md).
 
 ## Where is the wiki in development?
 

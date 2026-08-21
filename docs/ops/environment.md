@@ -44,7 +44,7 @@ Cookie file wins over browser cookies when the file exists. Details: [YouTube ac
 
 ## Docker Compose host paths
 
-These are **Compose / host** variables used when mounting volumes — not read by the Python app itself. The app sees the in-container paths (`DOWNLOADS_DIR`, `DATA_DIR`).
+These are **Compose / host** variables used when mounting volumes — not read by the Python app itself. The app sees the in-container paths (`DOWNLOADS_DIR`, `DATA_DIR`). Keep `DOWNLOADS_PATH` and `DATA_PATH` in `.env` (gitignored). `update.sh` copies the running container's bind mounts into `.env` before `git pull` so an update cannot remount empty defaults.
 
 | Variable | Typical default | Mounted as |
 |----------|-----------------|------------|

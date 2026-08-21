@@ -65,7 +65,7 @@ Put the numeric `uid` and `gid` into `.env`. The entrypoint creates a matching u
 | `DOWNLOADS_PATH` | `/downloads` | Video files under Channel / Year / Title |
 | `DATA_PATH` | `/app/data` | `horde.db`, thumbnails, sprites, backgrounds, fonts |
 
-Create both host directories before the first start if they do not exist yet. Library media and the database live on these volumes — rebuilding the image does not wipe them.
+Create both host directories before the first start if they do not exist yet. Library media and the database live on these volumes — rebuilding the image does not wipe them. Set the paths in `.env` (`DOWNLOADS_PATH` / `DATA_PATH`) rather than hardcoding them in `docker-compose.yml`, so `git pull` cannot replace them with compose defaults.
 
 ## What Compose starts
 

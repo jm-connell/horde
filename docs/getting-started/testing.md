@@ -8,7 +8,7 @@ This is not a substitute for playing a real video on your LAN. The player still 
 
 | Layer | Tool | Runs in CI? | Protects |
 |-------|------|-------------|----------|
-| **Backend unit** | pytest against services (paths, URL clean, queue, settings clamps, yt-dlp error kinds, migrations) | Yes | Logic that used to regress without an HTTP server |
+| **Backend unit** | pytest against services (paths, URL clean, queue, settings clamps, yt-dlp error kinds, migrations, `update.sh` env/mount helpers) | Yes | Logic that used to regress without an HTTP server |
 | **Backend API** | pytest + FastAPI `TestClient` on a temp SQLite + temp `DOWNLOADS_DIR` | Yes | Library, review, playlists, settings, download enqueue (yt-dlp stubbed), Range streaming |
 | **Frontend unit** | Vitest (node) | Yes | Formatters, presets, catalog progress copy, URL helpers |
 | **Frontend build** | `tsc -b && vite build` | Yes | Type errors and a broken production bundle |
@@ -20,7 +20,7 @@ This is not a substitute for playing a real video on your LAN. The player still 
 CI **must not** call YouTube, OpenRouter, or a real Ollama. Download tests stub `extract_preview`; AI enqueue is a no-op. That keeps the suite deterministic and under a minute for the Python/Node jobs.
 
 !!! tip "Write a test when you fix a bug"
-    If something broke in production (queue pause, device downloads, progress expiry, settings merge), add a pytest or Vitest case next to the fix. The existing files under `backend/tests/` and `frontend/src/**/*.test.ts` are the pattern.
+    If something broke in production (queue pause, device downloads, progress expiry, settings merge, update wiping host paths), add a pytest or Vitest case next to the fix. The existing files under `backend/tests/` and `frontend/src/**/*.test.ts` are the pattern.
 
 ## Local commands
 
