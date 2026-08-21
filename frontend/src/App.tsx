@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { useEffect, useRef } from "react";
+import { applyPageId } from "./customCss";
 import Library from "./pages/Library";
 import History from "./pages/History";
 import Download from "./pages/Download";
@@ -32,6 +33,10 @@ function AppRoutes() {
   const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
+    applyPageId(location.pathname);
+  }, [location.pathname]);
+
+  useEffect(() => {
     const el = mainRef.current;
     if (!el) return;
     el.classList.remove("page-shell--animate");
@@ -43,6 +48,7 @@ function AppRoutes() {
   return (
     <main
       ref={mainRef}
+      data-horde="main"
       className="page-shell relative z-10 mx-auto max-w-[1600px] px-3 py-6 md:px-6"
     >
       <Routes>

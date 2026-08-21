@@ -139,6 +139,7 @@ export default function BackgroundEffect() {
     return (
       <div
         aria-hidden
+        data-horde="background"
         className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
         style={{ opacity }}
       >
@@ -180,6 +181,7 @@ export default function BackgroundEffect() {
     <canvas
       ref={canvasRef}
       aria-hidden
+      data-horde="background"
       className="pointer-events-none fixed inset-0 z-0 h-full w-full"
     />
   );

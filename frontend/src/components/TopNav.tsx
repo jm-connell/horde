@@ -164,7 +164,10 @@ export default function TopNav() {
   });
 
   return (
-    <header className="ui-panel sticky top-0 z-30 border-b border-ink-700 bg-ink-950/90 backdrop-blur">
+    <header
+      data-horde="nav"
+      className="ui-panel sticky top-0 z-30 border-b border-ink-700 bg-ink-950/90 backdrop-blur"
+    >
       <div
         ref={headerRowRef}
         className="mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-3 md:px-6"

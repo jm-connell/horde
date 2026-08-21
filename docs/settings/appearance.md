@@ -36,10 +36,18 @@ When theme is `custom`, `customColors` supplies:
 
 ### Saved custom theme presets
 
-**Save current** snapshots appearance-related fields into `customThemes` (name up to 64 characters). Applying a preset restores theme colors, background effect knobs, nav/hover/loading chrome, font size, and UI font.
+**Save current** snapshots appearance-related fields into `customThemes` (name up to 64 characters). Applying a preset restores theme colors, **custom CSS**, background effect knobs, nav/hover/loading chrome, font size, and UI font.
 
 !!! note "Cap"
     At most **40** presets. Extra entries are dropped on normalize (`customThemes.slice(0, 40)`).
+
+## Custom CSS
+
+Paste arbitrary CSS under **Custom CSS**. It is injected as `#horde-custom-css` after built-in theme styles, capped at **64 000** characters, and synced in the `ui` blob (`customCss`).
+
+Prefer CSS variables (`--accent`, `--ink-950` …) and stable hooks (`html[data-page]`, `[data-horde="nav"]`, `.ui-card`) over scraping every Tailwind class. Settings shows a collapsed selector list; the full catalog is [Custom CSS](custom-css.md).
+
+A generated “HTML element wiki” is intentionally **not** shipped — component markup changes often, so DevTools is the source of truth for one-off selectors.
 
 ## Fonts
 
@@ -176,5 +184,6 @@ Legacy boolean `liquidNav` migrates to `liquid` / `none`.
 ## See also
 
 - [Settings overview](index.md)
+- [Custom CSS](custom-css.md) — user stylesheet and stable selectors
 - [All settings](all-settings.md#ui-blob-keys-server_ui_keys)
 - [Playback](playback.md) — watch-page content (not chrome)

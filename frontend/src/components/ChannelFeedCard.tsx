@@ -344,7 +344,7 @@ export default function ChannelFeedCard({
     );
 
   return (
-    <div ref={cardRef}>
+    <div ref={cardRef} data-horde="feed-card">
       {href ? (
         <Link to={href} className="block">
           {cardInner}

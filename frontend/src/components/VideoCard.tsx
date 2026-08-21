@@ -52,6 +52,7 @@ export default function VideoCard({
       className={`ui-card group flex flex-col rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-colors ${
         selected ? "ring-accent" : "hover:ring-accent/60"
       }`}
+      data-horde="video-card"
     >
       <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-ink-800">
         {thumb ? (

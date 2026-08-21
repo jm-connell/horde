@@ -89,7 +89,7 @@ export default function ChannelSidebar({
     : channels.slice(0, CHANNEL_SIDEBAR_LIMIT);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-horde="channel-list">
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
