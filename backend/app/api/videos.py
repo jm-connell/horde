@@ -137,6 +137,44 @@ def storage_stats(session: Session = Depends(get_session)):
     )
 
 
+# Static /videos/... paths must be registered before /videos/{video_id}
+# or FastAPI treats the last segment as an int and returns 422.
+@router.post("/videos/bulk-delete", status_code=204)
+def bulk_delete_videos(
+    payload: BulkVideoDelete,
+    session: Session = Depends(get_session),
+):
+    for vid_id in payload.video_ids:
+        video = session.get(Video, vid_id)
+        if video is None:
+            continue
+        if payload.delete_files:
+            _delete_media_files(video)
+        if video.thumbnail_path:
+            Path(video.thumbnail_path).unlink(missing_ok=True)
+        if video.id is not None:
+            delete_sprite_files(SPRITES_DIR, video.id)
+        session.delete(video)
+    session.commit()
+    return Response(status_code=204)
+
+
+@router.patch("/videos/bulk-notes", status_code=204)
+def bulk_update_notes(
+    payload: BulkVideoNotes,
+    session: Session = Depends(get_session),
+):
+    note = payload.notes.strip() or None
+    for vid_id in payload.video_ids:
+        video = session.get(Video, vid_id)
+        if video is None:
+            continue
+        video.notes = note
+        session.add(video)
+    session.commit()
+    return Response(status_code=204)
+
+
 @router.get("/videos/{video_id}", response_model=VideoRead)
 def get_video(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
@@ -370,42 +408,6 @@ def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
         video.thumbnail_path = str(dest)
     except (httpx.HTTPError, OSError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not fetch thumbnail: {exc}")
-
-
-@router.post("/videos/bulk-delete", status_code=204)
-def bulk_delete_videos(
-    payload: BulkVideoDelete,
-    session: Session = Depends(get_session),
-):
-    for vid_id in payload.video_ids:
-        video = session.get(Video, vid_id)
-        if video is None:
-            continue
-        if payload.delete_files:
-            _delete_media_files(video)
-        if video.thumbnail_path:
-            Path(video.thumbnail_path).unlink(missing_ok=True)
-        if video.id is not None:
-            delete_sprite_files(SPRITES_DIR, video.id)
-        session.delete(video)
-    session.commit()
-    return Response(status_code=204)
-
-
-@router.patch("/videos/bulk-notes", status_code=204)
-def bulk_update_notes(
-    payload: BulkVideoNotes,
-    session: Session = Depends(get_session),
-):
-    note = payload.notes.strip() or None
-    for vid_id in payload.video_ids:
-        video = session.get(Video, vid_id)
-        if video is None:
-            continue
-        video.notes = note
-        session.add(video)
-    session.commit()
-    return Response(status_code=204)
 
 
 @router.post("/videos/refresh-metadata", response_model=MetadataRefreshResult)

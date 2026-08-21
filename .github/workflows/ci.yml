@@ -2,8 +2,15 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   backend:
@@ -41,3 +48,23 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wiki
+        run: |
+          python -m pip install --upgrade pip
+          pip install "mkdocs-material>=9.5,<10"
+          mkdocs build --strict
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build --build-arg HORDE_GIT_SHA=${{ github.sha }} -t horde:ci .

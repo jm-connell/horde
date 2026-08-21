@@ -40,6 +40,7 @@ nav:
       - First run: getting-started/first-run.md
       - Updating: getting-started/updating.md
       - Local development: getting-started/local-dev.md
+      - Automated testing: getting-started/testing.md
   - Using Horde:
       - Library: guides/library.md
       - Search: guides/search.md
