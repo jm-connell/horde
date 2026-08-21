@@ -107,7 +107,7 @@ export function normalizeCustomCss(value: unknown): string {
  * ever assigned via HTML instead of textContent.
  */
 export function sanitizeCustomCss(css: string): string {
-  return css.replace(/<\/style/gi, "<\\/style");
+  return css.replace(/<\/style/gi, (match) => match.replace("/", "\\/"));
 }
 
 export function applyCustomCss(css: string): void {
