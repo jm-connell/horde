@@ -1532,6 +1532,52 @@ def enqueue_download(job_id: int) -> None:
     download_queue.enqueue(job_id)
 
 
+# Serialize create/retry so two clicks cannot insert two active rows.
+job_mutate_lock = threading.Lock()
+
+_ACTIVE_JOB_STATUSES = (JobStatus.queued, JobStatus.downloading)
+
+
+def find_active_job(
+    session: Session,
+    url: str,
+    destination: str,
+    quality_preset: str,
+) -> Optional[DownloadJob]:
+    """Return an already-queued/downloading job for the same URL+dest+preset."""
+    return session.exec(
+        select(DownloadJob)
+        .where(
+            DownloadJob.url == url,
+            DownloadJob.destination == destination,
+            DownloadJob.quality_preset == quality_preset,
+            DownloadJob.status.in_(list(_ACTIVE_JOB_STATUSES)),
+        )
+        .order_by(DownloadJob.id.asc())
+    ).first()
+
+
+def prepare_job_retry(job: DownloadJob) -> None:
+    """Reset a failed/cancelled job so it can run again. Caller must commit."""
+    if job.destination == DownloadDestination.device.value and job.id is not None:
+        cleanup_device_job_files(job.id, job.device_file_path)
+    job.status = JobStatus.queued
+    job.progress = 0.0
+    job.error = None
+    job.error_kind = None
+    job.paused = download_queue.is_paused()
+    job.device_file_path = None
+    job.file_size = None
+    if job.id is not None:
+        progress_store[job.id] = {
+            "status": "queued",
+            "progress": 0.0,
+            "title": job.title_override or job.title,
+            "channel": job.channel_override or job.channel,
+            "destination": job.destination,
+        }
+
+
 def start_download(
     job_id: int,
     url: str,

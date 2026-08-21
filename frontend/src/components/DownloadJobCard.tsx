@@ -39,7 +39,7 @@ export default function DownloadJobCard({
   channels,
   active = false,
 }: Props) {
-  const { updateJobOverrides, submitDownload, cancelJob, dismissJob } =
+  const { updateJobOverrides, retryJob, cancelJob, dismissJob } =
     useDownloads();
   const status = jobStatus(job, live);
   const maxPercentRef = useRef(0);
@@ -87,6 +87,8 @@ export default function DownloadJobCard({
   const [showNote, setShowNote] = useState(Boolean(job.notes_pending));
   const [dismissConfirm, setDismissConfirm] = useState(false);
   const [dontAskAgain, setDontAskAgain] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const retryingRef = useRef(false);
 
   const savedTitle = useRef(resolveTitle());
   const savedChannel = useRef(resolveChannel());
@@ -165,6 +167,22 @@ export default function DownloadJobCard({
     }
     if (!confirm("Cancel this download?")) return;
     await cancelJob(job.id);
+  };
+
+  const onRetry = async () => {
+    if (retryingRef.current) return;
+    retryingRef.current = true;
+    setRetrying(true);
+    try {
+      await retryJob(job.id, {
+        title,
+        channel,
+        destination: isDeviceJob ? "device" : "library",
+      });
+    } catch {
+      retryingRef.current = false;
+      setRetrying(false);
+    }
   };
 
   const statusLabel = failed
@@ -403,16 +421,12 @@ export default function DownloadJobCard({
             )}
             {failed && (
               <button
-                onClick={() =>
-                  submitDownload(job.url, job.quality_preset, {
-                    title,
-                    channel,
-                    destination: isDeviceJob ? "device" : "library",
-                  })
-                }
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+                type="button"
+                onClick={onRetry}
+                disabled={retrying}
+                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Retry
+                {retrying ? "Retrying…" : "Retry"}
               </button>
             )}
             {!failed && !cancelled && isDirty && (

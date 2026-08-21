@@ -80,7 +80,7 @@ Toggle via the download options / `normalizeVolumeOnDownload` preference when su
 
 The queue panel shows status, percentage, and errors. Failures carry a typed **`error_kind`** (bot check, PO token, cookies, members-only, rate limit, unavailable, post-process, etc.) with a short fix hint on the card; the Download URL field also shows a banner when link preview fails for the same reasons.
 
-Failed jobs can be retried from the UI when available. Active download paths are marked so the [import scanner](import-review.md) does not race the same files.
+Failed jobs can be retried from the card. Retry **requeues the same job** (it does not create a second queue entry), so extra clicks while it is already queued or downloading are ignored. Active download paths are marked so the [import scanner](import-review.md) does not race the same files.
 
 See [Troubleshooting — error kinds](../ops/troubleshooting.md#download-error_kind-values) and [YouTube access](../ops/youtube-access.md).
 
