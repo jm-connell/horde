@@ -103,11 +103,13 @@ Scanner import extensions: **`.mp4`**, **`.mkv`**, **`.webm`**. Fallback poll in
 
 ## Tests
 
+See **[Automated testing](testing.md)** for the intended layers (pytest API tests, Vitest, MkDocs, Docker image), local commands, and how GitHub Actions runs the same jobs on every **push**, **pull request**, and manual **Run workflow**.
+
 Backend (from `backend/`, with the repo venv activated):
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
-PYTHONPATH=. pytest
+pytest
 ```
 
 Frontend:
@@ -118,7 +120,7 @@ npm install
 npm test
 ```
 
-CI runs the same suites (plus `npm run build`) on pull requests via `.github/workflows/ci.yml`.
+CI is `.github/workflows/ci.yml`.
 
 ## Sync frontend into the backend static tree
 

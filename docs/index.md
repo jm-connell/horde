@@ -27,7 +27,7 @@ It exists because Plex is great for Movies and TV, and awkward for everything el
 
 ## Map of this wiki
 
-- **Getting started** — install, update, local development
+- **Getting started** — install, update, local development, [automated testing](getting-started/testing.md)
 - **Using Horde** — day-to-day guides for every major screen
 - **Settings** — every control and what it does
 - **Configuration & ops** — env vars, storage, YouTube bot checks, backups, troubleshooting

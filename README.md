@@ -48,6 +48,8 @@ Then hard-refresh the browser (`Ctrl+Shift+R`). Library data on host volumes is 
 # or on Windows: dev.bat
 ```
 
+Automated tests (pytest, Vitest, wiki build, Docker image) run on every GitHub push. See the [testing](docs/getting-started/testing.md) wiki page, or `docs/getting-started/testing.md` in the repo.
+
 ## Documentation
 
 | Topic | Where |
