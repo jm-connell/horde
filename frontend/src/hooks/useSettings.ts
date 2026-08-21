@@ -10,6 +10,7 @@ import {
   type SavedCustomFont,
   type UiFont,
 } from "../fonts";
+import { applyCustomCss, normalizeCustomCss } from "../customCss";
 
 export type { SavedCustomFont, UiFont };
 
@@ -107,6 +108,8 @@ export interface CustomThemePreset {
   loadingStyle: LoadingStyle;
   fontSize: FontSize;
   uiFont: string;
+  /** User CSS overlay; empty on older snapshots. */
+  customCss: string;
 }
 
 export type StreamQuality =
@@ -121,6 +124,8 @@ export interface Settings {
   theme: Theme;
   customColors: CustomColors;
   customThemes: CustomThemePreset[];
+  /** Raw CSS injected after built-in theme styles. */
+  customCss: string;
   backgroundEffect: BackgroundEffect;
   backgroundOpacity: number;
   backgroundEffectSpeed: number;
@@ -195,6 +200,7 @@ const DEFAULTS: Settings = {
   theme: "default",
   customColors: DEFAULT_CUSTOM_COLORS,
   customThemes: [],
+  customCss: "",
   backgroundEffect: "none",
   backgroundOpacity: 0.45,
   backgroundEffectSpeed: 1,
@@ -253,6 +259,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "theme",
   "customColors",
   "customThemes",
+  "customCss",
   "backgroundEffect",
   "backgroundOpacity",
   "backgroundEffectSpeed",
@@ -680,6 +687,7 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
             ? "default"
             : r.uiFont
           : DEFAULTS.uiFont,
+      customCss: normalizeCustomCss(r.customCss),
     });
   }
   return out.slice(0, 40);
@@ -692,6 +700,7 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
     theme: normalizeTheme(parsed.theme),
     customColors: normalizeCustomColors(parsed.customColors),
     customThemes: normalizeCustomThemes(parsed.customThemes),
+    customCss: normalizeCustomCss(parsed.customCss),
     backgroundEffect: normalizeBackgroundEffect(parsed.backgroundEffect),
     backgroundOpacity: normalizeBackgroundOpacity(parsed.backgroundOpacity),
     backgroundEffectSpeed: normalizeBackgroundSpeed(
@@ -940,6 +949,10 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   useEffect(() => {
     applyTheme(settings.theme, settings.customColors);
   }, [settings.theme, settings.customColors]);
+
+  useEffect(() => {
+    applyCustomCss(settings.customCss);
+  }, [settings.customCss]);
 
   useEffect(() => {
     void applyUiFont({

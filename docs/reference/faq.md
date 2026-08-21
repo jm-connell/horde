@@ -40,6 +40,10 @@ YouTube challenged the extract. Check Settings → System → Status (POT provid
 
 **Not recommended** without your own auth layer. CORS is wide for Chromecast, and there is no app login. Prefer a VPN (Tailscale / WireGuard) or put HTTP Basic Auth / SSO on a reverse proxy in front of Horde. See [Remote access](../ops/remote-access.md) and [No authentication](../design/no-auth.md).
 
+## Can I restyle the UI with custom CSS?
+
+Yes. **Settings → Appearance → Custom CSS** accepts a full stylesheet (Jellyfin-style). Prefer CSS variables and `data-horde` / `data-page` hooks; see [Custom CSS](../settings/custom-css.md). There is no generated dump of every HTML node — that would go stale whenever the React tree changes.
+
 ## Who wrote this?
 
 It was [vibecoded](../design/vibecoded.md) in Cursor with AI assistants. For questions, open the repo in Ask mode rather than expecting a full-time support desk.

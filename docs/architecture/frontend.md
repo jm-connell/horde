@@ -53,6 +53,7 @@ Edits patch local state immediately and **debounced sync** to the server (~**300
 | `pages/Library.tsx` | Browse composition; sidebar/bulk helpers live in `ChannelSidebar`, `LibraryBulkBar`, `libraryCatalogProgress` / `libraryStorage` |
 | `components/VideoPlayer.tsx` | Orchestration; types/quality in `videoPlayerTypes` / `videoPlayerQuality`; DASH load in `hooks/useShakaDash`; overlays in `PlayerOverlays` |
 | `hooks/useSettings.ts` | Hydrate + debounced PATCH; `ViewMode` type from `videoPlayerTypes` |
+| `customCss.ts` | User CSS overlay (`#horde-custom-css`) and `data-page` / `data-horde` hooks |
 
 ## Related
 

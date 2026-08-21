@@ -30,6 +30,11 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "appearance",
     keywords:
+      "custom css css stylesheet selector variables data-horde data-page jellyfin theme css",
+  },
+  {
+    tab: "appearance",
+    keywords:
       "background animation atmospheric effects intensity speed size color pause while watching custom image upload blur tint palette flowing rgb wave cool warm mono",
   },
   // Library

@@ -16,6 +16,7 @@ import {
 } from "./constants";
 import { Chip, Section, SettingRow, Toggle } from "./ui";
 import { useSettingsPage } from "./context";
+import CustomCssSection from "./CustomCssSection";
 
 export default function AppearanceTab() {
   const {
@@ -50,7 +51,7 @@ export default function AppearanceTab() {
       <Section
         first
         title="Theme"
-        description="Choose a color palette. Snapshot the current Appearance choices — colors, background, font, and UI — then reapply later."
+        description="Choose a color palette. Snapshot the current Appearance choices — colors, custom CSS, background, font, and UI — then reapply later."
         hidden={
           !!q &&
           !match(
@@ -195,6 +196,8 @@ export default function AppearanceTab() {
           </div>
         </Collapse>
       </Section>
+
+      <CustomCssSection />
 
       <Section
         title="Font"

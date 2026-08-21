@@ -55,6 +55,7 @@ nav:
   - Settings:
       - Overview: settings/index.md
       - Appearance: settings/appearance.md
+      - Custom CSS: settings/custom-css.md
       - Library: settings/library.md
       - Playback: settings/playback.md
       - AI: settings/ai.md

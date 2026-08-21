@@ -848,6 +848,7 @@ export default function Library() {
       )}
 
       <aside
+        data-horde="sidebar"
         className={`relative hidden shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
           narrowViewport || settings.sidebarCollapsed ? "w-10" : "w-56"
         }${narrowViewport && sidebarOverlayOpen ? " z-[60]" : ""}`}

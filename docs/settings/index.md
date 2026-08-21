@@ -23,7 +23,7 @@ flowchart LR
 
 ### How sync works
 
-1. **Boot** — Load `horde.settings` from localStorage and apply theme/fonts immediately.
+1. **Boot** — Load `horde.settings` from localStorage and apply theme, custom CSS, and fonts immediately.
 2. **Hydrate** — One `GET /api/settings` for the whole app. If `ui` has keys, they overwrite matching local fields (plus `progress_expiry_days` → `progressExpiryDays`). If `ui` is empty, the client **migrates** local `SERVER_UI_KEYS` up to the server.
 3. **Edits** — `useSettings` writes localStorage first, then schedules a patch of the `ui` blob. Top-level and AI fields use explicit save helpers (e.g. progress expiry, catalog caps, `saveAi`).
 
@@ -73,6 +73,7 @@ The search box at the top of Settings filters rows **across tabs** using a keywo
 ## Related pages
 
 - [Appearance](appearance.md) — themes, fonts, backgrounds, chrome
+- [Custom CSS](custom-css.md) — user stylesheet and stable selectors
 - [Library](library.md) — continue watching, sorts, catalog, metadata
 - [Playback](playback.md) — watch page, subtitles, SponsorBlock, speed
 - [AI](ai.md) — providers, features, jobs
