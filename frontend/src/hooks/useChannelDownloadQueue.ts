@@ -20,6 +20,16 @@ export interface PendingChannelDownload {
   submitting: boolean;
 }
 
+/** Confirm pending feed downloads (e.g. on navigate) instead of dropping them. */
+export function confirmPendingOnLeave(
+  pending: ReadonlyArray<Pick<PendingChannelDownload, "tempId" | "submitting">>,
+  submit: (tempId: number) => void
+): void {
+  for (const item of pending) {
+    if (!item.submitting) submit(item.tempId);
+  }
+}
+
 let nextTempId = 0;
 
 function loadDefaultPreset(): string {
@@ -140,22 +150,25 @@ export function useChannelDownloadQueue(channelName: string) {
     [channelName, clearTimer, removePending, submitDownload]
   );
 
+  const submitPendingRef = useRef(submitPending);
+  submitPendingRef.current = submitPending;
+
   const startCountdown = useCallback(
     (tempId: number) => {
       clearTimer(tempId);
       const handle = setInterval(() => {
-        setPending((prev) => {
-          const item = prev.find((p) => p.tempId === tempId);
-          if (!item || item.submitting) return prev;
-          if (item.secondsLeft <= 1) {
-            clearTimer(tempId);
-            void submitPending(tempId);
-            return prev;
-          }
-          return prev.map((p) =>
+        const item = pendingRef.current.find((p) => p.tempId === tempId);
+        if (!item || item.submitting) return;
+        if (item.secondsLeft <= 1) {
+          clearTimer(tempId);
+          void submitPending(tempId);
+          return;
+        }
+        setPending((prev) =>
+          prev.map((p) =>
             p.tempId === tempId ? { ...p, secondsLeft: p.secondsLeft - 1 } : p
-          );
-        });
+          )
+        );
       }, 1000);
       intervalsRef.current.set(tempId, handle);
     },
@@ -263,6 +276,11 @@ export function useChannelDownloadQueue(channelName: string) {
     return () => {
       intervalsRef.current.forEach((handle) => clearInterval(handle));
       intervalsRef.current.clear();
+      // Leaving the channel feed (route change, library home, etc.) should
+      // keep queued downloads — confirm anything still counting down.
+      confirmPendingOnLeave(pendingRef.current, (tempId) => {
+        void submitPendingRef.current(tempId);
+      });
     };
   }, []);
 
