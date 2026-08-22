@@ -35,6 +35,10 @@ interface DownloadContextValue {
     preset: string,
     overrides: SubmitOverrides
   ) => Promise<DownloadJob>;
+  retryJob: (
+    jobId: number,
+    overrides?: SubmitOverrides
+  ) => Promise<DownloadJob>;
   updateJobOverrides: (
     jobId: number,
     overrides: SubmitOverrides & { notes?: string }
@@ -194,7 +198,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         normalize_volume: settings.normalizeVolumeOnDownload,
         destination: overrides.destination ?? "library",
       });
-      setJobs((prev) => [job, ...prev]);
+      setJobs((prev) => [job, ...prev.filter((j) => j.id !== job.id)]);
       subscribe(job.id);
       syncQueue();
       if (overrides.channel?.trim()) {
@@ -203,6 +207,43 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       return job;
     },
     [subscribe, updateSettings, settings.normalizeVolumeOnDownload, syncQueue]
+  );
+
+  const retryJob = useCallback(
+    async (jobId: number, overrides: SubmitOverrides = {}) => {
+      toastedErrors.current.delete(jobId);
+      deviceSaved.current.delete(jobId);
+      setProgress((prev) => ({
+        ...prev,
+        [jobId]: {
+          status: "queued",
+          progress: 0,
+          title: overrides.title?.trim() || prev[jobId]?.title,
+          channel: overrides.channel?.trim() || prev[jobId]?.channel,
+          destination: overrides.destination ?? prev[jobId]?.destination,
+        },
+      }));
+      try {
+        const job = await api.retryJob(jobId, {
+          title_override: overrides.title?.trim() || undefined,
+          channel_override: overrides.channel?.trim() || undefined,
+          notes_pending: overrides.notes?.trim() || undefined,
+        });
+        setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
+        subscribe(job.id);
+        syncQueue();
+        return job;
+      } catch (err) {
+        setProgress((prev) => {
+          const next = { ...prev };
+          delete next[jobId];
+          return next;
+        });
+        refreshJob(jobId);
+        throw err;
+      }
+    },
+    [refreshJob, subscribe, syncQueue]
   );
 
   const updateJobOverrides = useCallback(
@@ -295,6 +336,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     activeCount,
     queuePaused,
     submitDownload,
+    retryJob,
     updateJobOverrides,
     cancelJob,
     dismissJob,

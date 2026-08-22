@@ -1,10 +1,10 @@
 import asyncio
 import json
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlmodel import Session, select
 
@@ -203,27 +203,34 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
             if existing is not None:
                 replace_video_id = existing.id
 
-    job = DownloadJob(
-        url=url,
-        quality_preset=payload.quality_preset,
-        status=JobStatus.queued,
-        title=preview.get("title"),
-        channel=preview.get("channel"),
-        thumbnail_url=preview.get("thumbnail_url"),
-        title_override=(payload.title_override or "").strip() or None,
-        channel_override=(payload.channel_override or "").strip() or None,
-        notes_pending=(payload.notes_pending or "").strip() or None,
-        normalize_volume=payload.normalize_volume,
-        destination=destination,
-        replace_video_id=replace_video_id,
-    )
-    if preview_kind and preview_kind in _PREVIEW_ATTACH_KINDS and preview_message:
-        # Still enqueue, but surface why metadata is missing on the card.
-        job.error = preview_message
-        job.error_kind = preview_kind
-    session.add(job)
-    session.commit()
-    session.refresh(job)
+    with downloader.job_mutate_lock:
+        active = downloader.find_active_job(
+            session, url, destination, payload.quality_preset
+        )
+        if active is not None:
+            return _enrich_jobs(session, [active])[0]
+
+        job = DownloadJob(
+            url=url,
+            quality_preset=payload.quality_preset,
+            status=JobStatus.queued,
+            title=preview.get("title"),
+            channel=preview.get("channel"),
+            thumbnail_url=preview.get("thumbnail_url"),
+            title_override=(payload.title_override or "").strip() or None,
+            channel_override=(payload.channel_override or "").strip() or None,
+            notes_pending=(payload.notes_pending or "").strip() or None,
+            normalize_volume=payload.normalize_volume,
+            destination=destination,
+            replace_video_id=replace_video_id,
+        )
+        if preview_kind and preview_kind in _PREVIEW_ATTACH_KINDS and preview_message:
+            # Still enqueue, but surface why metadata is missing on the card.
+            job.error = preview_message
+            job.error_kind = preview_kind
+        session.add(job)
+        session.commit()
+        session.refresh(job)
 
     downloader.enqueue_download(job.id)
     return _enrich_jobs(session, [job])[0]
@@ -260,6 +267,41 @@ def update_job(
     session.add(job)
     session.commit()
     session.refresh(job)
+    return _enrich_jobs(session, [job])[0]
+
+
+@router.post("/{job_id}/retry", response_model=DownloadJobRead)
+def retry_job(
+    job_id: int,
+    payload: Optional[DownloadJobUpdate] = Body(default=None),
+    session: Session = Depends(get_session),
+):
+    """Requeue a failed/cancelled job. Extra clicks return the same active job."""
+    data = (payload or DownloadJobUpdate()).model_dump(exclude_unset=True)
+    with downloader.job_mutate_lock:
+        job = session.get(DownloadJob, job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if job.status == JobStatus.completed:
+            raise HTTPException(status_code=409, detail="Job already finished")
+        if job.status in (JobStatus.queued, JobStatus.downloading):
+            return _enrich_jobs(session, [job])[0]
+        if job.status not in (JobStatus.error, JobStatus.cancelled):
+            raise HTTPException(status_code=409, detail="Job is not retryable")
+
+        if "title_override" in data:
+            job.title_override = (data["title_override"] or "").strip() or None
+        if "channel_override" in data:
+            job.channel_override = (data["channel_override"] or "").strip() or None
+        if "notes_pending" in data:
+            job.notes_pending = (data["notes_pending"] or "").strip() or None
+
+        downloader.prepare_job_retry(job)
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+
+    downloader.enqueue_download(job.id)
     return _enrich_jobs(session, [job])[0]
 
 

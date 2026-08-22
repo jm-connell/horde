@@ -738,6 +738,17 @@ export const api = {
     });
   },
 
+  retryJob(
+    jobId: number,
+    overrides: DownloadOverrides = {}
+  ): Promise<DownloadJob> {
+    return request<DownloadJob>(`/api/downloads/${jobId}/retry`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(overrides),
+    });
+  },
+
   dismissJob(jobId: number): Promise<void> {
     return request<void>(`/api/downloads/${jobId}`, { method: "DELETE" });
   },
