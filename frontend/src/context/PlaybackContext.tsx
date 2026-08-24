@@ -584,9 +584,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       ? `${streamUrl(current.id)}?s=${current.file_size ?? 0}&h=${current.height_px ?? 0}`
       : "";
 
+  // Distinct keys so preview DASH (Shaka/MSE) does not reuse the same
+  // VideoPlayer instance as library progressive playback. Updating src in
+  // place leaves MediaSource attached and hangs on a black spinner.
   const playerPortal =
     current != null ? (
       <VideoPlayer
+        key="library"
         src={streamSrc}
         videoId={current.id}
         mimeType={mimeFromPath(current.file_path)}
@@ -667,6 +671,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       />
     ) : stream != null ? (
       <VideoPlayer
+        key="stream"
         src={previewManifestUrl(stream.url)}
         streamType="dash"
         progressiveFallbackSrc={previewStreamUrl(stream.url)}

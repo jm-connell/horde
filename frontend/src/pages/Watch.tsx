@@ -313,10 +313,12 @@ export default function Watch() {
           const video = await api.getVideo(completedId);
           const resumeAt = sec > 1 ? sec : video.last_position_sec;
           setWatchResume(completedId, resumeAt);
-          playVideo({
+          const handedOff = {
             ...video,
             last_position_sec: resumeAt,
-          });
+          };
+          setSource({ kind: "library", video: handedOff });
+          playVideo(handedOff);
           showToast("Download complete — switching to full quality");
           navigate(`/watch/${completedId}`, {
             state: { resumeAt },

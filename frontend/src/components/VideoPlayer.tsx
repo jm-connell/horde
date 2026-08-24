@@ -241,22 +241,6 @@ export default function VideoPlayer({
   );
   const scrubberRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    pendingSeekRef.current = initialPosition;
-    const el = videoRef.current;
-    if (!el || initialPosition <= 1) return;
-    // Same-src handoff (preview → library): metadata already loaded, seek now.
-    if (el.readyState >= 1 && Number.isFinite(el.duration) && initialPosition < el.duration) {
-      if (Math.abs(el.currentTime - initialPosition) > 1.25) {
-        el.currentTime = initialPosition;
-      }
-      pendingSeekRef.current = 0;
-      if (!chromecast.casting) {
-        el.play().catch(() => undefined);
-      }
-    }
-  }, [initialPosition, src, chromecast.casting]);
-
   const castAvailable = chromecast.available || airplay.available;
   const casting = chromecast.casting || airplay.casting;
   const castDeviceName = chromecast.casting
@@ -269,6 +253,25 @@ export default function VideoPlayer({
     compatMode || streamType !== "dash" ? "file" : "dash";
   const effectiveSrc =
     compatMode && progressiveFallbackSrc ? progressiveFallbackSrc : src;
+
+  useEffect(() => {
+    pendingSeekRef.current = initialPosition;
+    const el = videoRef.current;
+    if (!el || initialPosition <= 1) return;
+    // Do not treat a leftover Shaka MediaSource as "already loaded" file
+    // metadata — seeking/playing on it hangs after preview → library handoff.
+    if (el.srcObject) return;
+    if (effectiveStreamType === "dash") return;
+    if (el.readyState >= 1 && Number.isFinite(el.duration) && initialPosition < el.duration) {
+      if (Math.abs(el.currentTime - initialPosition) > 1.25) {
+        el.currentTime = initialPosition;
+      }
+      pendingSeekRef.current = 0;
+      if (!chromecast.casting) {
+        el.play().catch(() => undefined);
+      }
+    }
+  }, [initialPosition, src, chromecast.casting, effectiveStreamType]);
 
   const showQualityNotice = useCallback((msg: string) => {
     setQualityNotice(msg);
@@ -287,12 +290,10 @@ export default function VideoPlayer({
     if (el && Number.isFinite(el.currentTime) && el.currentTime > 1) {
       pendingSeekRef.current = el.currentTime;
     }
-    const existing = shakaPlayerRef.current;
+    // Drop the ref so the DASH effect cleanup owns destroy(). The <video>
+    // key switches with effectiveStreamType so the MSE element is not reused.
     shakaPlayerRef.current = null;
     setShakaReady(false);
-    if (existing) {
-      void existing.destroy().catch(() => undefined);
-    }
     setCompatMode(true);
     setMediaError(null);
     setBuffering(true);
@@ -1622,6 +1623,7 @@ export default function VideoPlayer({
         onTouchStart={isMini ? revealMiniControls : revealControls}
       >
         <video
+          key={effectiveStreamType === "dash" ? "dash" : "file"}
           ref={videoRef}
           src={effectiveStreamType === "dash" ? undefined : effectiveSrc}
           playsInline

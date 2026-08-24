@@ -33,7 +33,7 @@ Moving the same DOM node keeps the media element alive: **no reload, no seek res
 
 **Downloaded library files** play as progressive media from Horde’s static/range endpoints.
 
-**In-app YouTube stream preview** (watch before download) uses a different path: the backend exposes preview APIs (`stream_preview` + `api/preview.py`), and the client loads **Shaka Player** via `useShakaDash` for adaptive **DASH** when available. If DASH is unsupported or fails critically, playback falls back to a progressive (≤720p-class) proxy URL.
+**In-app YouTube stream preview** (watch before download) uses a different path: the backend exposes preview APIs (`stream_preview` + `api/preview.py`), and the client loads **Shaka Player** via `useShakaDash` for adaptive **DASH** when available. If DASH is unsupported or fails critically, playback falls back to a progressive (≤720p-class) proxy URL. Preview → library download handoff remounts the player (and the `<video>` element) so the file URL is never applied to an element that still has Shaka’s MediaSource attached.
 
 That split keeps archive watching simple (one file, one codec path) while preview can adapt bitrate on live extracts. Subtitle handling differs slightly under MSE/Shaka (cues rendered via overlays / text tracks as needed) compared to native library playback.
 
