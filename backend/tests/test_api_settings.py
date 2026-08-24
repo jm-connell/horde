@@ -56,11 +56,16 @@ def test_settings_masks_openrouter_key(client):
 
 def test_settings_persists_custom_css(client):
     css = ":root { --accent: 255 120 40; }"
-    patched = client.patch("/api/settings", json={"ui": {"custom_css": css}})
+    patched = client.patch(
+        "/api/settings",
+        json={"ui": {"custom_css": css, "custom_css_enabled": True}},
+    )
     assert patched.status_code == 200
     assert patched.json()["ui"]["custom_css"] == css
+    assert patched.json()["ui"]["custom_css_enabled"] is True
     again = client.get("/api/settings").json()
     assert again["ui"]["custom_css"] == css
+    assert again["ui"]["custom_css_enabled"] is True
 
 
 def test_settings_rejects_out_of_range_expiry(client):

@@ -110,9 +110,18 @@ export function sanitizeCustomCss(css: string): string {
   return css.replace(/<\/style/gi, (match) => match.replace("/", "\\/"));
 }
 
-export function applyCustomCss(css: string): void {
+/**
+ * Missing `enabled` (older localStorage / theme snapshots) stays on when CSS
+ * is already saved so existing overlays keep applying.
+ */
+export function isCustomCssEnabled(enabled: unknown, css: string): boolean {
+  if (typeof enabled === "boolean") return enabled;
+  return normalizeCustomCss(css).trim().length > 0;
+}
+
+export function applyCustomCss(css: string, enabled = true): void {
   if (typeof document === "undefined") return;
-  const next = sanitizeCustomCss(normalizeCustomCss(css));
+  const next = enabled ? sanitizeCustomCss(normalizeCustomCss(css)) : "";
   let el = document.getElementById(
     CUSTOM_CSS_STYLE_ID
   ) as HTMLStyleElement | null;

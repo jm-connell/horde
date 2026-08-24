@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CUSTOM_CSS_MAX_CHARS,
+  isCustomCssEnabled,
   normalizeCustomCss,
   pageIdFromPath,
   sanitizeCustomCss,
@@ -19,6 +20,19 @@ describe("normalizeCustomCss", () => {
     expect(normalizeCustomCss("a\0b")).toBe("ab");
     const huge = "x".repeat(CUSTOM_CSS_MAX_CHARS + 50);
     expect(normalizeCustomCss(huge).length).toBe(CUSTOM_CSS_MAX_CHARS);
+  });
+});
+
+describe("isCustomCssEnabled", () => {
+  it("honors an explicit boolean", () => {
+    expect(isCustomCssEnabled(true, "")).toBe(true);
+    expect(isCustomCssEnabled(false, "body { color: red; }")).toBe(false);
+  });
+
+  it("treats missing flag as on when CSS is already saved", () => {
+    expect(isCustomCssEnabled(undefined, "body { color: red; }")).toBe(true);
+    expect(isCustomCssEnabled(undefined, "   ")).toBe(false);
+    expect(isCustomCssEnabled(undefined, "")).toBe(false);
   });
 });
 

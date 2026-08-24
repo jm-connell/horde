@@ -44,7 +44,8 @@ export default function WatchMeta({
 
   const descriptionBody = (description ?? "").trim() ? description : null;
   const hasTags = tags.length > 0 || aiTags.length > 0 || userTags.length > 0;
-  const showLibraryExtras = !!(notes || hasTags || onAddTag);
+  const showLibraryExtras = !!(notes || hasTags);
+  const showDescriptionText = settings.showDescription && !!descriptionBody;
   const showDescriptionPanel =
     settings.showDescription && !!(descriptionBody || showLibraryExtras);
   const metaSideBySide =
@@ -80,23 +81,7 @@ export default function WatchMeta({
       .map((t) => ({ tag: t, kind: "meta" as const })),
   ];
 
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() =>
-          updateSettings({
-            descriptionExpanded: !settings.descriptionExpanded,
-          })
-        }
-        className="ui-panel-toggle ui-interactive flex w-full items-center justify-between py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
-      >
-        <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
-          <span>Description</span>
-          <span>{settings.descriptionExpanded ? "▲" : "▼"}</span>
-        </span>
-      </button>
-      <Collapse open={settings.descriptionExpanded}>
+  const metaBody = (
         <div
           className={
             metaSideBySide
@@ -179,7 +164,13 @@ export default function WatchMeta({
 
                 {(hasTags || onAddTag) && (
                   <Collapse open={descExpanded || !descriptionBody}>
-                    <div className="mt-4 border-t border-ink-700 pt-4">
+                    <div
+                      className={
+                        descriptionBody || notes
+                          ? "mt-4 border-t border-ink-700 pt-4"
+                          : ""
+                      }
+                    >
                       <div className="flex flex-wrap items-center gap-1.5">
                         {tagItems.map(({ tag, kind }) => (
                           <span
@@ -280,6 +271,30 @@ export default function WatchMeta({
             />
           )}
         </div>
+  );
+
+  if (!showDescriptionText) {
+    return <div>{metaBody}</div>;
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() =>
+          updateSettings({
+            descriptionExpanded: !settings.descriptionExpanded,
+          })
+        }
+        className="ui-panel-toggle ui-interactive flex w-full items-center justify-between py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
+      >
+        <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
+          <span>Description</span>
+          <span>{settings.descriptionExpanded ? "▲" : "▼"}</span>
+        </span>
+      </button>
+      <Collapse open={settings.descriptionExpanded}>
+        {metaBody}
       </Collapse>
     </div>
   );

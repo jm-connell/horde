@@ -10,7 +10,11 @@ import {
   type SavedCustomFont,
   type UiFont,
 } from "../fonts";
-import { applyCustomCss, normalizeCustomCss } from "../customCss";
+import {
+  applyCustomCss,
+  isCustomCssEnabled,
+  normalizeCustomCss,
+} from "../customCss";
 
 export type { SavedCustomFont, UiFont };
 
@@ -110,6 +114,8 @@ export interface CustomThemePreset {
   uiFont: string;
   /** User CSS overlay; empty on older snapshots. */
   customCss: string;
+  /** Whether the overlay is injected. Inferred from non-empty CSS on old snapshots. */
+  customCssEnabled: boolean;
 }
 
 export type StreamQuality =
@@ -124,8 +130,10 @@ export interface Settings {
   theme: Theme;
   customColors: CustomColors;
   customThemes: CustomThemePreset[];
-  /** Raw CSS injected after built-in theme styles. */
+  /** Raw CSS injected after built-in theme styles when `customCssEnabled`. */
   customCss: string;
+  /** When false, the CSS editor is hidden and the overlay is not injected. */
+  customCssEnabled: boolean;
   backgroundEffect: BackgroundEffect;
   backgroundOpacity: number;
   backgroundEffectSpeed: number;
@@ -201,6 +209,7 @@ const DEFAULTS: Settings = {
   customColors: DEFAULT_CUSTOM_COLORS,
   customThemes: [],
   customCss: "",
+  customCssEnabled: false,
   backgroundEffect: "none",
   backgroundOpacity: 0.45,
   backgroundEffectSpeed: 1,
@@ -260,6 +269,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "customColors",
   "customThemes",
   "customCss",
+  "customCssEnabled",
   "backgroundEffect",
   "backgroundOpacity",
   "backgroundEffectSpeed",
@@ -688,6 +698,7 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
             : r.uiFont
           : DEFAULTS.uiFont,
       customCss: normalizeCustomCss(r.customCss),
+      customCssEnabled: isCustomCssEnabled(r.customCssEnabled, r.customCss ?? ""),
     });
   }
   return out.slice(0, 40);
@@ -701,6 +712,10 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
     customColors: normalizeCustomColors(parsed.customColors),
     customThemes: normalizeCustomThemes(parsed.customThemes),
     customCss: normalizeCustomCss(parsed.customCss),
+    customCssEnabled: isCustomCssEnabled(
+      parsed.customCssEnabled,
+      parsed.customCss ?? ""
+    ),
     backgroundEffect: normalizeBackgroundEffect(parsed.backgroundEffect),
     backgroundOpacity: normalizeBackgroundOpacity(parsed.backgroundOpacity),
     backgroundEffectSpeed: normalizeBackgroundSpeed(
@@ -951,8 +966,8 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   }, [settings.theme, settings.customColors]);
 
   useEffect(() => {
-    applyCustomCss(settings.customCss);
-  }, [settings.customCss]);
+    applyCustomCss(settings.customCss, settings.customCssEnabled);
+  }, [settings.customCss, settings.customCssEnabled]);
 
   useEffect(() => {
     void applyUiFont({

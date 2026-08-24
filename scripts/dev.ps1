@@ -20,7 +20,7 @@ function Wait-ForBackend {
     $url = "http://127.0.0.1:8080/api/health"
     for ($i = 0; $i -lt 90; $i++) {
         try {
-            # Allow a few seconds — health may briefly probe optional services.
+            # Allow a few seconds -- health may briefly probe optional services.
             $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5
             if ($resp.StatusCode -eq 200) { return }
         } catch {
@@ -83,7 +83,7 @@ if ($needDevReqs) {
 
 $skipWiki = $env:SKIP_WIKI -eq "1"
 if ($skipWiki) {
-    Write-Host "SKIP_WIKI=1 — not building wiki (wiki_available will stay false until you build)."
+    Write-Host "SKIP_WIKI=1 -- not building wiki (wiki_available will stay false until you build)."
 } elseif (Test-WikiNeedsBuild -WikiIndex $wikiIndex -Stamp $wikiStamp) {
     Write-Host "Building MkDocs wiki into backend/static/wiki ..."
     Push-Location $Root

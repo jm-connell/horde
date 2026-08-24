@@ -82,6 +82,8 @@ In-app watch-before-download preview resolves progressive or adaptive formats vi
 - Some sources simply lack a usable progressive format under the preview height cap.
 - Preview API errors include a structured `error_kind` when classification succeeds.
 
+**Preview plays ~40–60s then Shaka error 1001 / “Compatibility-mode preview failed”, and downloads say “Download produced no file”:** YouTube started rejecting `android_vr` googlevideo URLs after the first minute of Range requests (`Upstream returned 403`). Horde no longer forces that client; yt-dlp 2026.8.19+ uses `visionos` instead. Rebuild so the yt-dlp pin updates (`yt_dlp_version` on Settings → System / `/api/health` should be `2026.08.19` or newer), then retry. If 403s continue, treat it as a [bot check / POT](#bot-checks-youtube-blocks) problem.
+
 ## Stale UI after update
 
 After pulling a new image or rebuilding the frontend, browsers may keep old hashed assets incorrectly, or service workers/cache may serve a previous shell.

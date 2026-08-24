@@ -86,15 +86,55 @@ async def _close_upstream(upstream: Optional[httpx.Response]) -> None:
         pass
 
 
+def _reresolve_preview(
+    *,
+    allow_refresh: Optional[tuple[str, str]] = None,
+    stream_url: Optional[str] = None,
+) -> dict:
+    """Re-extract CDN URLs after a 401/403. Raises HTTPException on failure."""
+    if allow_refresh is not None:
+        token, itag = allow_refresh
+        logger.warning("Refreshing preview media token=%s itag=%s", token[:8], itag)
+        try:
+            return stream_preview.lookup_preview_media(
+                token, itag, refresh=True
+            )
+        except stream_preview.PreviewRefreshError as exc:
+            logger.warning("Preview media refresh failed: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail=str(exc),
+                headers={"Retry-After": str(exc.retry_after)},
+            ) from exc
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not refresh preview media: %s", exc)
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not refresh preview media: {exc}",
+            ) from exc
+    assert stream_url is not None
+    logger.warning("Refreshing preview stream url=%s", stream_url[:80])
+    try:
+        return stream_preview.resolve_preview_stream(stream_url, force=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not refresh preview stream: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not refresh preview stream: {exc}",
+        ) from exc
+
+
 async def _proxy_upstream(
     request: Request,
     resolved: dict,
     *,
     allow_refresh: Optional[tuple[str, str]] = None,
+    stream_url: Optional[str] = None,
 ) -> StreamingResponse:
     """Proxy a CDN media URL with Range support.
 
     If allow_refresh is (token, itag) and upstream returns 403, refresh once.
+    Progressive /stream uses stream_url the same way.
     """
     client = get_preview_client()
     upstream_headers = dict(resolved.get("http_headers") or {})
@@ -113,29 +153,14 @@ async def _proxy_upstream(
             status_code=502, detail=f"Upstream stream failed: {exc}"
         ) from exc
 
-    # Expired CDN URL — re-resolve once and retry.
-    if upstream.status_code in (401, 403) and allow_refresh is not None:
+    can_refresh = allow_refresh is not None or stream_url is not None
+    # Expired / PO-token-doomed CDN URL — re-resolve once and retry.
+    if upstream.status_code in (401, 403) and can_refresh:
         await _close_upstream(upstream)
         upstream = None
-        token, itag = allow_refresh
-        logger.info("Refreshing preview media token=%s itag=%s", token[:8], itag)
-        try:
-            resolved = stream_preview.lookup_preview_media(
-                token, itag, refresh=True
-            )
-        except stream_preview.PreviewRefreshError as exc:
-            logger.warning("Preview media refresh failed: %s", exc)
-            raise HTTPException(
-                status_code=503,
-                detail=str(exc),
-                headers={"Retry-After": str(exc.retry_after)},
-            ) from exc
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not refresh preview media: %s", exc)
-            raise HTTPException(
-                status_code=502,
-                detail=f"Could not refresh preview media: {exc}",
-            ) from exc
+        resolved = _reresolve_preview(
+            allow_refresh=allow_refresh, stream_url=stream_url
+        )
         upstream_headers = dict(resolved.get("http_headers") or {})
         if range_header:
             upstream_headers["Range"] = range_header
@@ -235,22 +260,7 @@ async def _head_upstream(
         ) from exc
 
     if resp.status_code in (401, 403) and allow_refresh is not None:
-        token, itag = allow_refresh
-        try:
-            resolved = stream_preview.lookup_preview_media(
-                token, itag, refresh=True
-            )
-        except stream_preview.PreviewRefreshError as exc:
-            raise HTTPException(
-                status_code=503,
-                detail=str(exc),
-                headers={"Retry-After": str(exc.retry_after)},
-            ) from exc
-        except Exception as exc:  # noqa: BLE001
-            raise HTTPException(
-                status_code=502,
-                detail=f"Could not refresh preview media: {exc}",
-            ) from exc
+        resolved = _reresolve_preview(allow_refresh=allow_refresh)
         upstream_headers = dict(resolved.get("http_headers") or {})
         if range_header:
             upstream_headers["Range"] = range_header
@@ -520,4 +530,4 @@ async def preview_stream(request: Request, url: str = Query(...)):
             status_code=400, detail=f"Could not open preview stream: {exc}"
         ) from exc
 
-    return await _proxy_upstream(request, resolved)
+    return await _proxy_upstream(request, resolved, stream_url=cleaned)

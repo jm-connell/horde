@@ -197,6 +197,14 @@ def classify_ytdlp_error(exc_or_message: Any) -> tuple[str, str]:
             )
         return ERROR_KIND_COOKIES, msg
 
+    if re.search(r"http error 403|403:\s*forbidden", raw, re.I):
+        return (
+            ERROR_KIND_POT,
+            "YouTube rejected the media URL (HTTP 403). Usually a stale "
+            "player client or missing PO token — update yt-dlp and check "
+            "the POT sidecar.",
+        )
+
     if _RATE_LIMIT_MESSAGE.search(raw):
         return (
             ERROR_KIND_RATE_LIMIT,
@@ -269,8 +277,11 @@ class QuietYtdlpLogger:
 
 
 def youtube_extractor_args() -> dict[str, Any]:
+    # Do not force android_vr. YouTube now 403s those GVS URLs after ~60s of
+    # Range requests (Shaka 1001 / empty downloads). yt-dlp 2026.8.19+ defaults
+    # to visionos, which still serves https adaptive URLs without a PO token.
     args: dict[str, Any] = {
-        "youtube": {"player_client": ["android_vr", "web", "ios"]},
+        "youtube": {"player_client": ["default", "-android_vr"]},
     }
     if YTDLP_POT_BASE_URL:
         args["youtubepot-bgutilhttp"] = {"base_url": [YTDLP_POT_BASE_URL]}

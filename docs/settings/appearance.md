@@ -43,9 +43,9 @@ When theme is `custom`, `customColors` supplies:
 
 ## Custom CSS
 
-Paste arbitrary CSS under **Custom CSS**. It is injected as `#horde-custom-css` after built-in theme styles, capped at **64 000** characters, and synced in the `ui` blob (`customCss`).
+**Custom CSS** is off by default. Turn on **Enable custom CSS** to show the editor and inject the stylesheet as `#horde-custom-css` after built-in theme styles. Capped at **64 000** characters; synced in the `ui` blob (`customCss`, `customCssEnabled`). Turning the toggle off leaves the CSS in place but stops injecting it.
 
-Prefer CSS variables (`--accent`, `--ink-950` …) and stable hooks (`html[data-page]`, `[data-horde="nav"]`, `.ui-card`) over scraping every Tailwind class. Settings shows a collapsed selector list; the full catalog is [Custom CSS](custom-css.md).
+Prefer CSS variables (`--accent`, `--ink-950` …) and stable hooks (`html[data-page]`, `[data-horde="nav"]`, `.ui-card`) over scraping every Tailwind class. When enabled, Settings shows a collapsed selector list; the full catalog is [Custom CSS](custom-css.md).
 
 A generated “HTML element wiki” is intentionally **not** shipped — component markup changes often, so DevTools is the source of truth for one-off selectors.
 

@@ -52,6 +52,105 @@ def format_provider_error(exc: BaseException) -> str:
         return message
     return f"{message} ({kind})"
 
+
+ChatFormat = Union[str, dict[str, Any], None]
+
+
+def _json_value_has_text(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, list):
+        return any(_json_value_has_text(v) for v in value)
+    if isinstance(value, dict):
+        return any(_json_value_has_text(v) for v in value.values())
+    return False
+
+
+def is_empty_json_payload(raw: str) -> bool:
+    """True when ``raw`` is empty or JSON with no string payload (e.g. ``{  }``)."""
+    text = (raw or "").strip()
+    if not text:
+        return True
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return False
+    if data in ({}, [], None):
+        return True
+    if isinstance(data, dict):
+        return not any(_json_value_has_text(v) for v in data.values())
+    if isinstance(data, list):
+        return not any(_json_value_has_text(v) for v in data)
+    if isinstance(data, str):
+        return not data.strip()
+    return False
+
+
+def _stringify_message_content(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                parts.append(str(item.get("text") or item.get("content") or ""))
+        return "".join(parts)
+    return str(content)
+
+
+def assistant_message_text(message: Any) -> str:
+    """Best-effort assistant text from an OpenAI/Ollama chat message.
+
+    JSON mode plus thinking models (Gemini 2.5, Qwen3, …) often leave
+    ``content`` as ``{  }`` and put the real answer in ``reasoning`` /
+    ``thinking``.
+    """
+    if not isinstance(message, dict):
+        return ""
+    content = _stringify_message_content(message.get("content"))
+    extras: list[str] = []
+    for key in ("reasoning", "reasoning_content", "thinking"):
+        extra = message.get(key)
+        if isinstance(extra, str) and extra.strip():
+            extras.append(extra.strip())
+    details = message.get("reasoning_details")
+    if isinstance(details, list):
+        for item in details:
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("content") or ""
+                if isinstance(text, str) and text.strip():
+                    extras.append(text.strip())
+            elif isinstance(item, str) and item.strip():
+                extras.append(item.strip())
+    if content.strip() and not is_empty_json_payload(content):
+        return content
+    if extras:
+        return "\n".join(extras)
+    return content
+
+
+def openrouter_response_format(fmt: ChatFormat) -> Optional[dict[str, Any]]:
+    """Map Horde's chat ``format`` into OpenRouter ``response_format``."""
+    if not fmt:
+        return None
+    if isinstance(fmt, dict):
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "result",
+                "strict": True,
+                "schema": fmt,
+            },
+        }
+    if fmt == "json":
+        return {"type": "json_object"}
+    return None
+
+
 # Prefer localhost first outside Docker — Docker DNS names hang on Windows/macOS
 # host networking and were stalling /api/health (and thus dev.bat).
 _AUTO_CANDIDATES = (
@@ -116,7 +215,7 @@ class LlmProvider(Protocol):
         messages: Optional[list[dict[str, str]]] = None,
         num_predict: Optional[int] = None,
         timeout: Optional[float] = None,
-        format: Optional[str] = "json",
+        format: ChatFormat = "json",
     ) -> str: ...
 
 
@@ -240,7 +339,7 @@ class OllamaProvider:
         messages: Optional[list[dict[str, str]]] = None,
         num_predict: Optional[int] = None,
         timeout: Optional[float] = None,
-        format: Optional[str] = "json",
+        format: ChatFormat = "json",
         temperature: float = 0.2,
         **_kwargs: Any,
     ) -> str:
@@ -265,9 +364,8 @@ class OllamaProvider:
                 resp = client.post("/api/chat", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
-            content = (data.get("message") or {}).get("content") or ""
             _last_error = None
-            return str(content)
+            return assistant_message_text(data.get("message") or {})
         except Exception as exc:  # noqa: BLE001
             _last_error = format_provider_error(exc)
             invalidate_resolved_url()
@@ -449,7 +547,7 @@ class OpenRouterProvider:
         messages: Optional[list[dict[str, str]]] = None,
         num_predict: Optional[int] = None,
         timeout: Optional[float] = None,
-        format: Optional[str] = "json",
+        format: ChatFormat = "json",
         temperature: float = 0.2,
         usage_kind: Optional[str] = None,
         video_id: Optional[int] = None,
@@ -471,35 +569,36 @@ class OpenRouterProvider:
         }
         if num_predict is not None and num_predict > 0:
             payload["max_tokens"] = int(num_predict)
-        if format == "json":
-            payload["response_format"] = {"type": "json_object"}
+        rf = openrouter_response_format(format)
+        if rf:
+            payload["response_format"] = rf
         req_timeout = timeout if timeout is not None else self.timeout
         try:
             with self._client(timeout=req_timeout) as client:
                 resp = client.post("/chat/completions", json=payload)
-                if resp.status_code >= 400 and format == "json":
-                    # Some models reject response_format; retry without it.
+                if resp.status_code >= 400 and "response_format" in payload:
+                    # Schema/json_object unsupported: loosen, then drop format.
                     payload.pop("response_format", None)
-                    resp = client.post("/chat/completions", json=payload)
+                    if isinstance(format, dict):
+                        payload["response_format"] = {"type": "json_object"}
+                        resp = client.post("/chat/completions", json=payload)
+                        if resp.status_code >= 400:
+                            payload.pop("response_format", None)
+                            resp = client.post("/chat/completions", json=payload)
+                    else:
+                        resp = client.post("/chat/completions", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
             choices = data.get("choices") if isinstance(data, dict) else None
             if not isinstance(choices, list) or not choices:
                 raise RuntimeError("OpenRouter returned no choices")
             message = choices[0].get("message") if isinstance(choices[0], dict) else {}
-            content = (message or {}).get("content") or ""
-            if isinstance(content, list):
-                parts = [
-                    str(p.get("text") or "")
-                    for p in content
-                    if isinstance(p, dict)
-                ]
-                content = "".join(parts)
+            content = assistant_message_text(message or {})
             self._record_usage(
                 data, model=model, usage_kind=usage_kind, video_id=video_id
             )
             _last_error = None
-            return str(content)
+            return content
         except Exception as exc:  # noqa: BLE001
             _last_error = format_provider_error(exc)
             raise

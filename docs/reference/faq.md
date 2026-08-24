@@ -42,7 +42,7 @@ YouTube challenged the extract. Check Settings → System → Status (POT provid
 
 ## Can I restyle the UI with custom CSS?
 
-Yes. **Settings → Appearance → Custom CSS** accepts a full stylesheet (Jellyfin-style). Prefer CSS variables and `data-horde` / `data-page` hooks; see [Custom CSS](../settings/custom-css.md). There is no generated dump of every HTML node — that would go stale whenever the React tree changes.
+Yes. Turn on **Enable custom CSS** under **Settings → Appearance → Custom CSS**, then paste a stylesheet (Jellyfin-style). Prefer CSS variables and `data-horde` / `data-page` hooks; see [Custom CSS](../settings/custom-css.md). There is no generated dump of every HTML node — that would go stale whenever the React tree changes.
 
 ## Who wrote this?
 

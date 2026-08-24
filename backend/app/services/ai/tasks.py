@@ -88,8 +88,9 @@ def _extract_summary_text(raw: str) -> str:
         return ""
 
     data = _parse_json_object(raw)
+    lowered = {str(k).lower(): v for k, v in data.items()} if data else {}
     for key in _SUMMARY_ALT_KEYS:
-        value = data.get(key)
+        value = lowered.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
     # Alternate shapes some models use
@@ -111,7 +112,7 @@ def _extract_summary_text(raw: str) -> str:
         match = re.search(
             rf'"{re.escape(key)}"\s*:\s*"((?:[^"\\]|\\.)*)"',
             raw,
-            re.DOTALL,
+            re.DOTALL | re.IGNORECASE,
         )
         if match:
             text = _unescape_json_string(match.group(1)).strip()
@@ -123,7 +124,7 @@ def _extract_summary_text(raw: str) -> str:
         match = re.search(
             rf'"{re.escape(key)}"\s*:\s*"(.*)\Z',
             raw,
-            re.DOTALL,
+            re.DOTALL | re.IGNORECASE,
         )
         if match:
             frag = match.group(1)
@@ -394,12 +395,18 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
             saw_cost = True
 
     for attempt in range(2):
+        # Attempt 0: JSON schema so empty `{  }` is invalid.
+        # Attempt 1: unconstrained — Gemini 2.5 / small local models often
+        # emit `{  }` under json_object on long caption prompts.
+        use_schema = attempt == 0
         raw = provider.chat(
             prompt,
             chat_model,
             system=system,
             num_predict=num_predict,
             timeout=_SUMMARIZE_TIMEOUT,
+            format=ai_text.SUMMARY_JSON_SCHEMA if use_schema else None,
+            temperature=0.2 if use_schema else 0.5,
             usage_kind="summary",
             video_id=video_id,
         )
@@ -435,6 +442,7 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
             num_predict=num_predict,
             timeout=_SUMMARIZE_TIMEOUT,
             temperature=0.5,
+            format=ai_text.SUMMARY_JSON_SCHEMA,
             usage_kind="summary",
             video_id=video_id,
         )

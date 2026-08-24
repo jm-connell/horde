@@ -44,7 +44,7 @@ Download-related code is split for maintainability (façades may still re-export
   %(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s
   ```
 
-- Extractor args include bgutil POT when `YTDLP_POT_BASE_URL` is set; cookies via [YouTube access](../ops/youtube-access.md).
+- Extractor args use yt-dlp’s default YouTube player clients minus `android_vr` (those CDN URLs now 403 after ~60s of range requests). bgutil POT is attached when `YTDLP_POT_BASE_URL` is set; cookies via [YouTube access](../ops/youtube-access.md).
 - Metadata extracts for downloads share the same global extract gate (1 + 1.25s spacing) as preview/feed extracts so concurrent browsing does not stampede YouTube.
 - Progress hooks update an in-memory `progress_store` consumed by SSE.
 - Failures set `DownloadJob.error` plus a typed `error_kind` (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `cancelled`, `unknown`) for actionable UI.

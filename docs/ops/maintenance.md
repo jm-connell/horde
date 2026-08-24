@@ -42,7 +42,7 @@ The downloads-tree [scanner](../architecture/workers.md) continues to pick up ne
 
 ## Bumping yt-dlp
 
-Horde pins an exact yt-dlp version in `backend/requirements.txt` (for example `yt-dlp==2026.7.4`). The Docker image installs that pin at build time — the container does **not** auto-upgrade yt-dlp on start.
+Horde pins an exact yt-dlp version in `backend/requirements.txt` (for example `yt-dlp==2026.8.19`). The Docker image installs that pin at build time — the container does **not** auto-upgrade yt-dlp on start.
 
 When YouTube breaks extractors (format errors, bot checks that a newer yt-dlp already fixed, etc.):
 

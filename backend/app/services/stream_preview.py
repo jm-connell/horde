@@ -714,26 +714,28 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
     }
 
 
-def resolve_preview_stream(url: str) -> dict[str, Any]:
+def resolve_preview_stream(url: str, *, force: bool = False) -> dict[str, Any]:
     """Resolve a short-lived progressive media URL for proxy streaming.
 
     Returns dict with direct_url, http_headers, height, content_type, expires_at.
     Kept as a fallback for clients that cannot play DASH.
     """
     now = time.time()
-    with _preview_stream_lock:
-        cached = _preview_stream_cache.get(url)
-        if cached and cached.get("expires_at", 0) > now + 15:
-            return dict(cached)
-
-    with _preview_extract_sem:
-        # Re-check cache after waiting for the semaphore.
+    if not force:
         with _preview_stream_lock:
             cached = _preview_stream_cache.get(url)
             if cached and cached.get("expires_at", 0) > now + 15:
                 return dict(cached)
 
-        info = _extract_preview_info(url)
+    with _preview_extract_sem:
+        # Re-check cache after waiting for the semaphore.
+        if not force:
+            with _preview_stream_lock:
+                cached = _preview_stream_cache.get(url)
+                if cached and cached.get("expires_at", 0) > now + 15:
+                    return dict(cached)
+
+        info = _extract_preview_info(url, force=force)
         fmt = _pick_progressive_format(info)
         if fmt is None:
             raise RuntimeError(

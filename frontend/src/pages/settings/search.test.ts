@@ -19,6 +19,7 @@ describe("settings search routing", () => {
   it("finds tabs and AI panes", () => {
     expect(firstMatchingTab("sponsorblock")).toBe("playback");
     expect(firstMatchingTab("custom css")).toBe("appearance");
+    expect(firstMatchingTab("enable custom css")).toBe("appearance");
     expect(firstMatchingTab("jellyfin")).toBe("appearance");
     expect(firstMatchingTab("ollama")).toBe("ai");
     expect(firstMatchingAiPane("ollama")).toBe("providers");

@@ -709,6 +709,7 @@ export default function Settings() {
       fontSize: current.fontSize,
       uiFont: current.uiFont === "custom" ? "default" : current.uiFont,
       customCss: current.customCss,
+      customCssEnabled: current.customCssEnabled,
     };
     update({ customThemes: [...current.customThemes, preset] });
     setThemeNameDraft("");
@@ -774,6 +775,7 @@ export default function Settings() {
       fontSize: preset.fontSize,
       uiFont: preset.uiFont,
       customCss: preset.customCss,
+      customCssEnabled: preset.customCssEnabled,
     });
     showToast(`Applied “${preset.name}”`);
   };

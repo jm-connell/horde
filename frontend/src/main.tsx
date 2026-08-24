@@ -15,7 +15,7 @@ import "./index.css";
 const bootSettings = loadSettings();
 applyTheme(bootSettings.theme, bootSettings.customColors);
 applyMotionPrefs(bootSettings);
-applyCustomCss(bootSettings.customCss);
+applyCustomCss(bootSettings.customCss, bootSettings.customCssEnabled);
 applyPageId(window.location.pathname);
 void applyUiFont({
   uiFont: bootSettings.uiFont,

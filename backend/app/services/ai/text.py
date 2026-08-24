@@ -149,6 +149,19 @@ def has_subtitle_text(video: Video) -> bool:
 _SUMMARY_DESC_CHARS = 1500
 SummaryLength = Literal["short", "medium", "long"]
 
+# Constrained decoding so json_object mode cannot legally emit `{  }`.
+SUMMARY_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "summary": {
+            "type": "string",
+            "description": "Spoiler-light video summary; paragraph breaks as \\n\\n",
+        }
+    },
+    "required": ["summary"],
+    "additionalProperties": False,
+}
+
 # Caps for stored text; prompts aim lower so models stay in range.
 _SUMMARY_LENGTH_SPEC: dict[str, dict[str, Any]] = {
     "short": {

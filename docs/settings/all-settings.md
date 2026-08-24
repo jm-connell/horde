@@ -85,7 +85,8 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `theme` | `"default"` | string | `default` \| `oled` \| `terminal` \| `nord` \| `light` \| `indigo` \| `cyber` \| `sunset` \| `forest` \| `slate` \| `earthy` \| `frozen` \| `mocha` \| `custom` | UI blob |
 | `customColors` | `{ accent: "#22d3ee", background: "#08090c" }` | object | Hex colors | UI blob |
 | `customThemes` | `[]` | array | Max **40** presets | UI blob |
-| `customCss` | `""` | string | Max **64 000** chars; injected as `#horde-custom-css` | UI blob |
+| `customCss` | `""` | string | Max **64 000** chars; injected as `#horde-custom-css` when enabled | UI blob |
+| `customCssEnabled` | `false` | bool | Shows the editor and injects `customCss`. Missing flag + non-empty CSS → treated as on | UI blob |
 | `backgroundEffect` | `"none"` | string | See [Appearance](appearance.md#background-effects) | UI blob |
 | `backgroundOpacity` | `0.45` | number | 0.1–1 | UI blob |
 | `backgroundEffectSpeed` | `1` | number | 0.25–3 | UI blob |

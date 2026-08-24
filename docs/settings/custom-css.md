@@ -1,6 +1,6 @@
 # Custom CSS
 
-Horde can inject **arbitrary CSS** over the running UI, similar to Jellyfin’s custom CSS box. Paste a theme in **Settings → Appearance → Custom CSS** (`?tab=appearance`). It applies immediately, persists in the server [`ui` blob](index.md#three-layer-persistence) as `customCss` / `custom_css`, and is included when you **Save theme**.
+Horde can inject **arbitrary CSS** over the running UI, similar to Jellyfin’s custom CSS box. The editor is hidden until you turn on **Enable custom CSS** under **Settings → Appearance → Custom CSS** (`?tab=appearance`). Edits apply immediately, persist in the server [`ui` blob](index.md#three-layer-persistence) as `customCss` / `custom_css` plus `customCssEnabled` / `custom_css_enabled`, and are included when you **Save theme**.
 
 ## Why not an HTML element wiki?
 
@@ -18,19 +18,19 @@ Instead Horde documents a **small stable surface**:
 
 For one-off targeting, **inspect the running page** (browser DevTools). That is always accurate; a scraped HTML catalog is not.
 
-Settings includes a collapsed **Selector reference** next to the CSS box so you do not have to leave the app for the common hooks.
+When enabled, Settings includes a collapsed **Selector reference** next to the CSS box so you do not have to leave the app for the common hooks.
 
 ## How injection works
 
-1. Boot reads `horde.settings` and writes a `<style id="horde-custom-css">` in `<head>` **before first paint**.
+1. Boot reads `horde.settings`. If custom CSS is enabled, it writes a `<style id="horde-custom-css">` in `<head>` **before first paint**.
 2. Edits update that tag as you type (same 300 ms server debounce as other UI keys).
-3. Empty CSS removes the tag.
+3. Empty CSS, or **Enable custom CSS** off, removes the tag. The source stays saved when the toggle is off.
 4. The stylesheet comes **after** built-in theme CSS, so your rules win at equal specificity. Raise specificity or use `!important` only when a built-in rule already does.
 
 Cap: **64 000** characters. `</style` sequences are neutralized so the payload cannot break out of the style tag.
 
 !!! warning "You can hide the UI"
-    Custom CSS runs as the admin of this [no-auth](../design/no-auth.md) instance. A rule like `* { display: none }` will hide Settings too. Clear the box if you can still reach it, or remove `custom_css` from `app_settings.json` → `ui` and refresh.
+    Custom CSS runs as the admin of this [no-auth](../design/no-auth.md) instance. A rule like `* { display: none }` will hide Settings too. Turn **Enable custom CSS** off if you can still reach Settings, clear the box, or remove `custom_css` from `app_settings.json` → `ui` and refresh.
 
 ## CSS variables
 
@@ -116,7 +116,7 @@ Rounder library cards:
 
 ## Saved themes
 
-**Save theme** snapshots `customCss` with colors, background, font, and chrome. Applying a preset restores that CSS. Snapshots saved before this field existed have empty CSS and will **clear** the box when applied.
+**Save theme** snapshots `customCss` and `customCssEnabled` with colors, background, font, and chrome. Applying a preset restores that CSS and the enable flag. Snapshots saved before these fields existed have empty CSS (and will **clear** the box when applied); a snapshot with CSS but no enable flag is treated as enabled.
 
 ## See also
 

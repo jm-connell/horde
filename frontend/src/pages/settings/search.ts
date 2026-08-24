@@ -30,7 +30,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "appearance",
     keywords:
-      "custom css css stylesheet selector variables data-horde data-page jellyfin theme css",
+      "custom css enable custom css css stylesheet selector variables data-horde data-page jellyfin theme css",
   },
   {
     tab: "appearance",
