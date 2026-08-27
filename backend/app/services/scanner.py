@@ -75,6 +75,8 @@ def _is_media(path: Path) -> bool:
         return False
     if ".norm." in name or name.endswith(".norm.mp4"):
         return False
+    if ".compat." in name:
+        return False
     return True
 
 

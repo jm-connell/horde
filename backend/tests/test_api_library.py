@@ -181,6 +181,7 @@ def test_stream_range_and_missing_file(client, add_video):
     full = client.get(f"/api/videos/{video.id}/stream")
     assert full.status_code == 200
     assert full.content == payload
+    assert full.headers["Accept-Ranges"] == "bytes"
 
     ranged = client.get(
         f"/api/videos/{video.id}/stream", headers={"Range": "bytes=10-19"}

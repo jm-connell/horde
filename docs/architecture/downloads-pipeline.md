@@ -12,6 +12,7 @@ URL
     -> yt-dlp download (POT + cookies, quality preset)
     -> library: Channel/YYYY/Title [id].ext
        device:  _device/{job_id}/Title [id].ext (ephemeral)
+    -> optional HTML5 compat remux (.compat intermediate)
     -> optional loudnorm (.norm intermediate)
     -> library only: FFmpegSubtitlesConvertor -> .vtt, thumbnails + sprites, Video row
     -> SSE progress events -> Download UI
@@ -59,7 +60,8 @@ Global queue pause is persisted as `download_queue_paused` in app settings so it
 | Step | Detail |
 |------|--------|
 | **FFmpegSubtitlesConvertor** | yt-dlp postprocessor → WebVTT sidecars |
-| **loudnorm** | Optional EBU-ish loudness (`I=-16:TP=-1.5:LRA=11`) when the job requests normalize |
+| **HTML5 compat remux** | Prefer H.264 + AAC at download time; remux with `-movflags +faststart`. Transcode leftover Opus audio always; transcode AV1/VP9 video only at ≤1080p |
+| **loudnorm** | Optional EBU-ish loudness (`I=-16:TP=-1.5:LRA=11`) when the job requests normalize; writes AAC + faststart |
 | **Thumbnails** | Cached under `DATA_DIR/thumbnails` |
 | **Sprites** | Seek-preview sheet + JSON under `DATA_DIR/sprites` |
 

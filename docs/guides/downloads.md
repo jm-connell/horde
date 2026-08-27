@@ -6,18 +6,22 @@ The **Download** page (`/download`) is where you paste a URL, pick a quality pre
 
 | Preset | Meaning |
 |--------|---------|
-| **best** | Best combined video+audio yt-dlp can get |
-| **2160p** | Cap height ≤ 2160 (4K) |
-| **1440p** | Cap ≤ 1440 |
-| **1080p** | Cap ≤ 1080 |
-| **720p** | Cap ≤ 720 |
-| **480p** | Cap ≤ 480 |
+| **best** | Best **phone-playable** file (H.264 + AAC, typically 1080p) — not 4K AV1 |
+| **2160p** | Cap height ≤ 2160 (4K). Uses H.264 when YouTube offers it at 4K; otherwise AV1/VP9 |
+| **1440p** | Cap ≤ 1440 (same codec preference as 4K) |
+| **1080p** | Cap ≤ 1080, preferring H.264 + AAC |
+| **720p** | Cap ≤ 720, preferring H.264 + AAC |
+| **480p** | Cap ≤ 480, preferring H.264 + AAC |
 | **audio** | Best audio-only stream |
 | **audio-160** / **128** / **64** | Audio-only capped at that bitrate (kbps) |
 
 After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known. Audio bitrate caps that are at or above the source’s best stream are omitted (use **Audio (best)** instead).
 
-Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
+Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. Video presets prefer **H.264 + AAC in MP4** so files play on iPhones and other phones; desktop Chrome can play AV1/Opus-in-MP4, but Safari/WebKit reports those as corrupt. After the merge, Horde remuxes with `faststart` (and transcodes leftover Opus/AV1 up to 1080p when needed).
+
+If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
+
+Already-downloaded AV1/Opus files will not fix themselves — use **••• → Change resolution** on the watch page to re-download with the new selectors.
 
 ## Change resolution (library)
 

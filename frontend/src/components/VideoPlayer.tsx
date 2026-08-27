@@ -1732,7 +1732,7 @@ export default function VideoPlayer({
               return;
             }
             setMediaError(
-              "This video could not be played. The file may be incomplete or corrupt."
+              "This video could not be played. This device may not support the file's codec. Try Change resolution to re-download."
             );
           }}
           onPointerDown={isMini ? undefined : onVideoPointerDown}

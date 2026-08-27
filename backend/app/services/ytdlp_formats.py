@@ -7,35 +7,48 @@ from typing import Any, Optional
 # Audio-only bitrate caps (kbps). Shown as labeled presets when the source has audio.
 AUDIO_ABR_TIERS: tuple[int, ...] = (160, 128, 64)
 
+# YouTube's "best" video is often AV1/VP9 and "best" audio is Opus. Merging
+# those into MP4 plays in desktop Chrome (and DevTools "mobile" emulation) but
+# fails on real iOS/WebKit and many phones with "incomplete or corrupt".
+_AVC = "[vcodec~='^(avc|h264)']"
+_AAC = "[acodec~='^(mp4a|aac)']"
+
+
+def _pair(height_filter: str) -> str:
+    """Video+audio selector: H.264+AAC first, then H.264, then any at this height."""
+    h = height_filter
+    return (
+        f"bv*{h}{_AVC}+ba{_AAC}/"
+        f"bv*{h}{_AVC}+ba/"
+        f"b{h}{_AVC}{_AAC}/"
+        f"bv*{h}+ba{_AAC}/"
+        f"bv*{h}+ba/"
+        f"b{h}"
+    )
+
+
 QUALITY_FORMATS = {
-    "best": "bv*+ba/b",
+    # Best universally playable file (typically 1080p H.264 + AAC), not 4K AV1.
+    "best": _pair(""),
     # Prefer exact tier height when offered, then best under the cap — never unbounded best.
-    "2160p": (
-        "bv*[height=2160]+ba/bv*[height<=2160]+ba/"
-        "b[height=2160]/b[height<=2160]"
-    ),
-    "1440p": (
-        "bv*[height=1440]+ba/bv*[height<=1440]+ba/"
-        "b[height=1440]/b[height<=1440]"
-    ),
-    "1080p": (
-        "bv*[height=1080]+ba/bv*[height<=1080]+ba/"
-        "b[height=1080]/b[height<=1080]"
-    ),
-    "720p": (
-        "bv*[height=720]+ba/bv*[height<=720]+ba/"
-        "b[height=720]/b[height<=720]"
-    ),
-    "480p": (
-        "bv*[height=480]+ba/bv*[height<=480]+ba/"
-        "b[height=480]/b[height<=480]"
-    ),
-    "audio": "ba/b",
+    # Exact-height tries H.264 first, then any codec (so 4K still downloads 4K when requested).
+    "2160p": _pair("[height=2160]") + "/" + _pair("[height<=2160]"),
+    "1440p": _pair("[height=1440]") + "/" + _pair("[height<=1440]"),
+    "1080p": _pair("[height=1080]") + "/" + _pair("[height<=1080]"),
+    "720p": _pair("[height=720]") + "/" + _pair("[height<=720]"),
+    "480p": _pair("[height=480]") + "/" + _pair("[height<=480]"),
+    "audio": f"ba{_AAC}/ba/b",
     **{
-        f"audio-{abr}": f"ba[abr<={abr}]/bestaudio[abr<={abr}]/ba/b"
+        f"audio-{abr}": (
+            f"ba{_AAC}[abr<={abr}]/ba[abr<={abr}]/"
+            f"bestaudio[abr<={abr}]/ba/b"
+        )
         for abr in AUDIO_ABR_TIERS
     },
 }
+
+# Within a selector, prefer H.264 / AAC at the same resolution.
+FORMAT_SORT = ["res", "fps", "vcodec:h264", "acodec:mp4a", "vbr", "abr"]
 
 PRESET_MAX_HEIGHT: dict[str, Optional[int]] = {
     "best": None,
@@ -61,11 +74,15 @@ def format_chain(preset: str) -> list[str]:
     max_h = PRESET_MAX_HEIGHT.get(preset)
     chain = [primary]
     if max_h:
-        chain.append(f"best[ext=mp4][height<={max_h}]/best[height<={max_h}]")
+        chain.append(
+            f"best[vcodec~='^(avc|h264)'][height<={max_h}]/"
+            f"best[ext=mp4][height<={max_h}]/"
+            f"best[height<={max_h}]"
+        )
     elif preset == "best":
-        chain.append("best[ext=mp4]/best")
+        chain.append("best[vcodec~='^(avc|h264)']/best[ext=mp4]/best")
     elif is_audio_preset(preset):
-        chain.append("bestaudio/best")
+        chain.append("bestaudio[acodec~='^(mp4a|aac)']/bestaudio/best")
     unique: list[str] = []
     seen: set[str] = set()
     for fmt in chain:
