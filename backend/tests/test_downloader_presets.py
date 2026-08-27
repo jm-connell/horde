@@ -16,12 +16,14 @@ def test_format_chain_height_capped_no_unbounded_best():
 
 def test_format_chain_best_and_audio():
     best = downloader._format_chain("best")
-    assert "best[ext=mp4]/best" in best
+    assert any("best[ext=mp4]/best" in c for c in best)
+    assert any("h264" in c or "avc" in c for c in best)
     audio = downloader._format_chain("audio")
-    assert "bestaudio/best" in audio
+    assert any("bestaudio/best" in c for c in audio)
+    assert "mp4a" in audio[0] or "aac" in audio[0]
     capped = downloader._format_chain("audio-128")
-    assert capped[0].startswith("ba[abr<=128]")
-    assert "bestaudio/best" in capped
+    assert "abr<=128" in capped[0]
+    assert any("bestaudio/best" in c for c in capped)
 
 
 def test_available_presets_audio_bitrate_tiers():
@@ -56,6 +58,7 @@ def test_is_intermediate_media():
     assert downloader._is_intermediate_media("video.part")
     assert downloader._is_intermediate_media("video.norm.mp4")
     assert downloader._is_intermediate_media("video.temp.mp4")
+    assert downloader._is_intermediate_media("video.compat.99.mp4")
     assert not downloader._is_intermediate_media("video.mp4")
 
 

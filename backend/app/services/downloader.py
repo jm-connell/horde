@@ -20,6 +20,7 @@ from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, THUMBNAILS_DIR, VI
 from ..database import engine
 from ..models import DownloadDestination, DownloadJob, JobStatus, Video, VideoStatus
 from . import activity, library, scanner
+from .html5_compat import ensure_html5_compatible
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .paths import find_video_by_path, to_rel_path
 from .ytdlp_common import (
@@ -39,6 +40,7 @@ from .ytdlp_common import (
 )
 
 from .ytdlp_formats import (
+    FORMAT_SORT,
     PRESET_MAX_HEIGHT,
     QUALITY_FORMATS,
     STANDARD_HEIGHTS,
@@ -47,6 +49,7 @@ from .ytdlp_formats import (
     _has_audio,
     _height_to_tier,
     format_chain,
+    is_audio_preset,
 )
 from .ytdlp_extract import (
     estimate_playlist_sizes,
@@ -186,6 +189,8 @@ def _is_intermediate_media(name: str) -> bool:
     if ".temp." in low or low.endswith(".temp.mp4"):
         return True
     if ".norm." in low or low.endswith(".norm.mp4"):
+        return True
+    if ".compat." in low:
         return True
     return False
 
@@ -867,6 +872,10 @@ def _apply_loudnorm(path: Path) -> Optional[str]:
         "loudnorm=I=-16:TP=-1.5:LRA=11",
         "-c:v",
         "copy",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "+faststart",
         str(tmp),
     ]
     try:
@@ -969,6 +978,11 @@ def _complete_download(
 
     info = _as_info(info)
     source_url = info.get("webpage_url") or url
+
+    if final_path.exists():
+        final_path = ensure_html5_compatible(
+            final_path, audio_only=is_audio_preset(quality_preset)
+        )
 
     volume_warning: Optional[str] = None
     if normalize_volume and final_path.exists():
@@ -1273,7 +1287,7 @@ def _run_download(
             "merge_output_format": "mp4",
             "ignoreerrors": True,
             "overwrites": True,
-            "format_sort": ["res", "fps", "vbr", "abr"],
+            "format_sort": FORMAT_SORT,
             "file_access_retries": 10,
             "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
             "extractor_args": youtube_extractor_args(),

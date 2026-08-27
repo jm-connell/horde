@@ -19,6 +19,7 @@ KIND_GROUPS: dict[str, str] = {
     "sprites": "media",
     "thumbnail": "media",
     "loudnorm": "media",
+    "compat": "media",
     "download": "download",
     "finalize": "download",
     "playlist_import": "download",

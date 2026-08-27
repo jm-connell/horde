@@ -22,6 +22,7 @@ from .ytdlp_common import (
     youtube_extractor_args,
 )
 from .ytdlp_formats import (
+    FORMAT_SORT,
     QUALITY_FORMATS,
     _available_presets,
     _has_audio,
@@ -81,7 +82,14 @@ def _estimate_preset_sizes(
     import yt_dlp
 
     sizes: dict[str, int] = {}
-    opts = apply_cookie_opts({"quiet": True, "no_warnings": True, "skip_download": True})
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "format_sort": FORMAT_SORT,
+        }
+    )
     with yt_dlp.YoutubeDL(opts) as ydl:
         for preset in presets:
             format_spec = QUALITY_FORMATS.get(preset)

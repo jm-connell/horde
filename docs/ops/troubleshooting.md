@@ -73,6 +73,18 @@ Docker entrypoint runs Horde as `PUID`:`PGID` (defaults `1000:1000`) and chowns 
 4. OpenRouter-only setups can run without Ollama when scope covers the tasks you need (embeddings may still want Ollama unless scope is **all** or cloud embeds are configured).
 5. After Ollama returns, jobs should claim without restarting Horde (dead URL cache is invalidated on provider errors).
 
+## Phone playback: “file may be incomplete or corrupt”
+
+**Symptoms:** library videos play on desktop (even with DevTools set to a phone) but fail on a real phone. Older downloads still work; new ones do not.
+
+Desktop Chrome (and DevTools device mode) can decode **AV1** and **Opus-in-MP4**. Safari, iOS Chrome (WebKit), and many Android devices cannot — they surface that as a corrupt file.
+
+Horde now prefers **H.264 + AAC** for new downloads and remuxes with faststart so the `moov` atom is at the start of the file.
+
+**Already-downloaded videos:** re-download with **••• → Change resolution** (1080p or Best). Existing AV1/Opus files are not rewritten in place.
+
+**4K / 1440p:** YouTube rarely offers H.264 above 1080p, so those presets may still store AV1/VP9. They play on desktop; phones may still reject them — pick 1080p for phone watching.
+
 ## DASH / stream preview issues
 
 In-app watch-before-download preview resolves progressive or adaptive formats via yt-dlp. Failures often share root causes with [bot checks](#bot-checks-youtube-blocks) or expired CDN URLs.
