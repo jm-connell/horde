@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "../api";
 import { useDownloads, isActiveJob } from "../context/DownloadContext";
-import { useToast } from "../context/ToastContext";
 import ChannelPicker from "../components/ChannelPicker";
 import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
@@ -17,12 +16,23 @@ import {
   presetOptionLabel,
 } from "../presets";
 import type { ChannelStat, DownloadDestination, DownloadPreview, PlaylistPreviewEntry } from "../types";
-import { formatDuration, formatViewCount } from "../utils";
+import {
+  clipboardTextToUrl,
+  formatDuration,
+  formatViewCount,
+  readClipboardText,
+  youtubeListThumbnailUrl,
+} from "../utils";
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
+function pasteEventTargetIsOtherField(target: EventTarget | null): boolean {
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (target instanceof HTMLElement && target.isContentEditable) return true;
+  return false;
+}
+
 export default function Download() {
-  const { showToast } = useToast();
   const {
     jobs,
     progress,
@@ -269,6 +279,32 @@ export default function Download() {
     }
   };
 
+  const applyClipboardText = useCallback((text: string) => {
+    const next = clipboardTextToUrl(text);
+    if (!next) return false;
+    setUrl(next);
+    return true;
+  }, []);
+
+  // Native paste always carries the clipboard (including http://LAN). Don't
+  // steal it from other fields; do take it from the page or the Paste button.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target;
+      if (target instanceof HTMLInputElement && target !== urlInputRef.current) {
+        return;
+      }
+      if (pasteEventTargetIsOtherField(target)) return;
+      if (target === urlInputRef.current) return;
+      const next = clipboardTextToUrl(e.clipboardData?.getData("text/plain") ?? "");
+      if (!next) return;
+      e.preventDefault();
+      setUrl(next);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
+
   const { activeJobs, recentJobs } = useMemo(() => {
     const active: typeof jobs = [];
     const recent: typeof jobs = [];
@@ -389,29 +425,12 @@ export default function Download() {
             />
             <button
               type="button"
+              // Keep focus on the URL field so a following Ctrl/Cmd+V goes
+              // there. Also avoids dismissing Firefox's paste permission menu.
+              onMouseDown={(e) => e.preventDefault()}
               onClick={async () => {
-                try {
-                  if (navigator.clipboard?.readText) {
-                    const text = await navigator.clipboard.readText();
-                    if (text.trim()) {
-                      setUrl(text.trim());
-                      return;
-                    }
-                  }
-                } catch {
-                  /* Clipboard API unavailable (e.g. HTTP LAN) */
-                }
-                const el = urlInputRef.current;
-                if (el) {
-                  el.focus();
-                  try {
-                    const ok = document.execCommand("paste");
-                    if (ok) return;
-                  } catch {
-                    /* ignore */
-                  }
-                }
-                showToast("Press Ctrl+V to paste (clipboard needs HTTPS or localhost)");
+                if (applyClipboardText(await readClipboardText())) return;
+                urlInputRef.current?.focus();
               }}
               className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
             >
@@ -501,7 +520,12 @@ export default function Download() {
                   </button>
                 </div>
                 <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg border border-ink-700 bg-ink-950/50 p-2">
-                  {playlistEntries.map((entry) => (
+                  {playlistEntries.map((entry) => {
+                    const thumbSrc = youtubeListThumbnailUrl(
+                      entry.id,
+                      entry.thumbnail_url
+                    );
+                    return (
                     <label
                       key={entry.url}
                       className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-ink-900"
@@ -513,10 +537,11 @@ export default function Download() {
                         className="mt-1 shrink-0 accent-accent"
                       />
                       <div className="h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
-                        {entry.thumbnail_url ? (
+                        {thumbSrc ? (
                           <img
-                            src={entry.thumbnail_url}
+                            src={thumbSrc}
                             alt=""
+                            loading="lazy"
                             className="h-full w-full object-cover"
                           />
                         ) : (
@@ -540,7 +565,8 @@ export default function Download() {
                         </div>
                       </div>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             ) : (

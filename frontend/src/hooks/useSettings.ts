@@ -168,6 +168,8 @@ export interface Settings {
   /** Vertical caption position (% from bottom). */
   subtitleOffset: number;
   defaultPlaybackRate: number;
+  /** Temporary rate while holding click on the video. */
+  holdPlaybackRate: number;
   volume: number;
   playbackMode: ViewMode;
   lastCustomChannel: string;
@@ -237,6 +239,7 @@ const DEFAULTS: Settings = {
   subtitleLeft: 20,
   subtitleOffset: 12,
   defaultPlaybackRate: 1,
+  holdPlaybackRate: 2,
   volume: 1,
   playbackMode: "standard",
   lastCustomChannel: "",
@@ -297,6 +300,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "subtitleLeft",
   "subtitleOffset",
   "defaultPlaybackRate",
+  "holdPlaybackRate",
   "playbackMode",
   "showContinueWatching",
   "showDownloadNavBadge",
@@ -464,6 +468,12 @@ function normalizeBackgroundEffect(
     return effect as BackgroundEffect;
   }
   return DEFAULTS.backgroundEffect;
+}
+
+function normalizeHoldPlaybackRate(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULTS.holdPlaybackRate;
+  return Math.min(16, Math.max(0.25, Math.round(n * 100) / 100));
 }
 
 function normalizeBackgroundOpacity(value: unknown): number {
@@ -765,6 +775,7 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
       parsed.fontSize,
       (parsed as { uiScale?: unknown }).uiScale
     ),
+    holdPlaybackRate: normalizeHoldPlaybackRate(parsed.holdPlaybackRate),
     ...normalizeFontSettings(parsed),
   };
 }

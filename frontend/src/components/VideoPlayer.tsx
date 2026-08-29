@@ -209,6 +209,7 @@ export default function VideoPlayer({
   const wasPlayingBeforeHold = useRef(false);
   const suppressClick = useRef(false);
   const pointerDownOnVideo = useRef(false);
+  const volumePointerActive = useRef(false);
 
   // SponsorBlock skip notice
   const [skipNotice, setSkipNotice] = useState<string | null>(null);
@@ -1139,15 +1140,30 @@ export default function VideoPlayer({
     }
   };
 
-  const onVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = Number(e.target.value);
+  const applyVolume = (value: number, persist: boolean) => {
     setVolume(value);
     setMuted(value === 0);
     if (videoRef.current) {
       videoRef.current.volume = value;
       videoRef.current.muted = value === 0;
     }
-    onVolumeChange?.(value);
+    if (persist) onVolumeChange?.(value);
+  };
+
+  const onVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
+    applyVolume(Number(e.target.value), !volumePointerActive.current);
+  };
+
+  const onVolumePointerDown = () => {
+    volumePointerActive.current = true;
+    onControlsInteractionStart();
+  };
+
+  const onVolumePointerUp = (e: React.PointerEvent<HTMLInputElement>) => {
+    const value = Number(e.currentTarget.value);
+    if (Number.isFinite(value)) onVolumeChange?.(value);
+    volumePointerActive.current = false;
+    onControlsInteractionEnd();
   };
 
   const toggleMute = () => {
@@ -1257,7 +1273,7 @@ export default function VideoPlayer({
     holdActive.current = false;
     wasPlayingBeforeHold.current = false;
 
-    // Only suppress the click that follows a real hold-to-2x engagement.
+    // Only suppress the click that follows a real hold-to-speedup engagement.
     if (hadHold) {
       suppressClick.current = true;
       window.setTimeout(() => {
@@ -1275,7 +1291,7 @@ export default function VideoPlayer({
     holdActive.current = true;
     wasPlayingBeforeHold.current = !v.paused;
     heldRate.current = rate;
-    setRate(2);
+    setRate(settings.holdPlaybackRate);
     if (v.paused) v.play().catch(() => undefined);
 
     // End hold if pointer is released outside the video element.
@@ -1291,7 +1307,7 @@ export default function VideoPlayer({
       window.removeEventListener("blur", onWinBlur);
       holdWindowCleanup.current = null;
     };
-  }, [rate, endHold]);
+  }, [rate, endHold, settings.holdPlaybackRate]);
 
   useEffect(() => {
     return () => {
@@ -1774,6 +1790,7 @@ export default function VideoPlayer({
           qualityNotice={qualityNotice}
           compatMode={compatMode}
           isMini={isMini}
+          isPreview={streamType === "dash"}
           onRetry={retryPlayback}
         />
 
@@ -2018,13 +2035,13 @@ export default function VideoPlayer({
                     type="range"
                     min={0}
                     max={1}
-                    step={0.05}
+                    step={0.01}
                     value={muted ? 0 : volume}
                     onChange={onVolume}
-                    onPointerDown={onControlsInteractionStart}
-                    onPointerUp={onControlsInteractionEnd}
-                    onPointerCancel={onControlsInteractionEnd}
-                    className="accent-scrubber w-20 sm:w-28 xl:w-36"
+                    onPointerDown={onVolumePointerDown}
+                    onPointerUp={onVolumePointerUp}
+                    onPointerCancel={onVolumePointerUp}
+                    className="accent-scrubber w-[6.25rem] sm:w-[8.75rem] xl:w-[11.25rem]"
                   />
                 </div>
               )}

@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import ThemedSelect from "../../components/ThemedSelect";
 import type { StreamQuality } from "../../hooks/useSettings";
 import {
+  INPUT_COMPACT,
   SPEED_STEPS,
   STREAM_QUALITY_OPTIONS,
   SUBTITLE_SIZES,
@@ -10,6 +12,20 @@ import { useSettingsPage } from "./context";
 
 export default function PlaybackTab() {
   const { q, match, settings, update } = useSettingsPage();
+  const [holdDraft, setHoldDraft] = useState(String(settings.holdPlaybackRate));
+
+  useEffect(() => {
+    setHoldDraft(String(settings.holdPlaybackRate));
+  }, [settings.holdPlaybackRate]);
+
+  const commitHoldRate = (raw: string) => {
+    const n = Number(raw);
+    if (raw.trim() === "" || !Number.isFinite(n)) {
+      setHoldDraft(String(settings.holdPlaybackRate));
+      return;
+    }
+    update({ holdPlaybackRate: n });
+  };
 
   return (
     <>
@@ -196,7 +212,7 @@ export default function PlaybackTab() {
 
       <Section
         title="Default playback speed"
-        description="Speed a video starts at. Hold-click the video for a temporary 2x."
+        description="Speed a video starts at."
         hidden={!match("playback speed", "speed", "default")}
       >
         <div className="flex flex-wrap gap-2">
@@ -211,6 +227,39 @@ export default function PlaybackTab() {
             </Chip>
           ))}
         </div>
+      </Section>
+
+      <Section
+        title="Hold-click speed"
+        description="Hold the video to play at this speed until you release."
+        hidden={!match("hold", "hold-click", "hold speed", "click to hold", "speed")}
+      >
+        <SettingRow
+          title="Hold speed"
+          description="Any rate, e.g. 1.25, 1.75, 3."
+          control={
+            <span className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0.25}
+                max={16}
+                step={0.05}
+                inputMode="decimal"
+                aria-label="Hold-click playback speed"
+                value={holdDraft}
+                onChange={(e) => setHoldDraft(e.target.value)}
+                onBlur={(e) => commitHoldRate(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  }
+                }}
+                className={`${INPUT_COMPACT} tabular-nums`}
+              />
+              <span className="text-sm text-gray-400">x</span>
+            </span>
+          }
+        />
       </Section>
     </>
   );

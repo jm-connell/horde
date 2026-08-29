@@ -9,6 +9,7 @@ export default function PlayerOverlays({
   qualityNotice,
   compatMode,
   isMini,
+  isPreview = false,
   onRetry,
 }: {
   buffering: boolean;
@@ -18,13 +19,22 @@ export default function PlayerOverlays({
   qualityNotice: string | null;
   compatMode: boolean;
   isMini: boolean;
+  /** DASH/stream preview — YouTube ingest is slow; show an explanation. */
+  isPreview?: boolean;
   onRetry: () => void;
 }) {
+  const bufferingLabel = isPreview
+    ? "This takes a minute (YouTube’s fault)"
+    : "Buffering";
   return (
     <>
       {buffering && !mediaError && !casting && (
         <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-black/35">
-          <LoadingIndicator label="Buffering" className="py-0" />
+          <LoadingIndicator
+            label={bufferingLabel}
+            labelVisible={isPreview}
+            className="py-0"
+          />
         </div>
       )}
 

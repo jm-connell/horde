@@ -3,9 +3,12 @@ import { useSettings, type LoadingStyle } from "../hooks/useSettings";
 export default function LoadingIndicator({
   label = "Loading",
   className = "py-20",
+  labelVisible = false,
 }: {
   label?: string;
   className?: string;
+  /** When true, show the label on screen (not only to screen readers). */
+  labelVisible?: boolean;
 }) {
   const [settings] = useSettings();
   const style: LoadingStyle = settings.loadingStyle ?? "dots";
@@ -48,7 +51,13 @@ export default function LoadingIndicator({
           />
         </span>
       )}
-      <span className="sr-only">{label}</span>
+      {labelVisible ? (
+        <span className="max-w-xs px-3 text-center text-sm text-gray-300">
+          {label}
+        </span>
+      ) : (
+        <span className="sr-only">{label}</span>
+      )}
     </div>
   );
 }

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useSettings } from "../hooks/useSettings";
 import type { Video } from "../types";
-import { formatUsdCost } from "../utils";
 import AiMarkdown from "./AiMarkdown";
 import Collapse from "./Collapse";
 import TypingDots from "./TypingDots";
@@ -60,16 +59,6 @@ export default function VideoAiPanel({
   }, []);
 
   const hasAiSummary = !!(video.ai_summary && video.ai_summary.trim());
-  const summaryCostLabel =
-    showCosts &&
-    typeof video.ai_summary_cost === "number" &&
-    video.ai_summary_cost >= 0
-      ? formatUsdCost(video.ai_summary_cost)
-      : "";
-  const summaryModel =
-    typeof video.ai_summary_model === "string" && video.ai_summary_model.trim()
-      ? video.ai_summary_model.trim()
-      : "";
 
   function setTab(next: AiTab) {
     if (next === settings.aiTab) return;
@@ -204,37 +193,7 @@ export default function VideoAiPanel({
                   <p className="mb-2 text-xs text-amber-400/90">{summaryError}</p>
                 )}
                 {hasAiSummary ? (
-                  <div>
-                    <AiMarkdown text={video.ai_summary || ""} />
-                    {(summaryCostLabel ||
-                      (video.ai_summary_length &&
-                        ["short", "medium", "long"].includes(
-                          video.ai_summary_length
-                        ))) && (
-                      <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5 text-[10px] tracking-wider text-gray-500/70">
-                        {summaryCostLabel && (
-                          <span
-                            className="font-normal normal-case tabular-nums"
-                            title={summaryModel || undefined}
-                            aria-label={`Summary cost ${summaryCostLabel}${summaryModel ? ` (${summaryModel})` : ""}`}
-                          >
-                            {summaryCostLabel}
-                          </span>
-                        )}
-                        {video.ai_summary_length &&
-                          ["short", "medium", "long"].includes(
-                            video.ai_summary_length
-                          ) && (
-                            <span
-                              className="font-medium uppercase"
-                              aria-label={`Summary length: ${video.ai_summary_length}`}
-                            >
-                              {video.ai_summary_length}
-                            </span>
-                          )}
-                      </div>
-                    )}
-                  </div>
+                  <AiMarkdown text={video.ai_summary || ""} />
                 ) : summarizing ? (
                   <div className="flex justify-center py-8">
                     <TypingDots label="Generating summary" />

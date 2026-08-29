@@ -183,6 +183,20 @@ export function youtubeThumbnailUrl(
   return null;
 }
 
+const YOUTUBE_VIDEO_ID_RE = /^[\w-]{11}$/;
+
+/** Medium CDN thumb (~320×180) for small list tiles — avoids downscaling maxres. */
+export function youtubeListThumbnailUrl(
+  videoId: string | null,
+  thumbnailUrl?: string | null
+): string | null {
+  const id = videoId?.trim() ?? "";
+  if (YOUTUBE_VIDEO_ID_RE.test(id)) {
+    return `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+  }
+  return youtubeThumbnailUrl(videoId, thumbnailUrl);
+}
+
 export function formatRelative(iso: string | null): string {
   if (!iso) return "";
   const d = parseApiDate(iso);
@@ -198,6 +212,68 @@ export function formatRelative(iso: string | null): string {
   const diffMo = Math.floor(diffDay / 30);
   if (diffMo < 12) return `${diffMo}mo ago`;
   return `${Math.floor(diffMo / 12)}y ago`;
+}
+
+function stripTrailingUrlPunctuation(url: string): string {
+  return url.replace(/[.,;:!?)]+$/, "");
+}
+
+/** First URL (or first line) from a clipboard paste. */
+export function clipboardTextToUrl(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const firstLine = trimmed.split(/\r?\n/, 1)[0]!.trim();
+  if (/^https?:\/\//i.test(firstLine)) {
+    return stripTrailingUrlPunctuation(firstLine.split(/\s+/, 1)[0]!);
+  }
+  const match = trimmed.match(/https?:\/\/[^\s<>"']+/i);
+  if (!match) return firstLine;
+  return stripTrailingUrlPunctuation(match[0]);
+}
+
+function hrefFromHtml(html: string): string {
+  const href = html.match(/href=["'](https?:\/\/[^"']+)["']/i);
+  return href?.[1] ?? "";
+}
+
+/** Read clipboard text. Returns "" when the API is missing, denied, or empty. */
+export async function readClipboardText(): Promise<string> {
+  const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard;
+  if (!clipboard) return "";
+
+  let denied = false;
+  try {
+    if (typeof clipboard.readText === "function") {
+      const text = await clipboard.readText();
+      if (text?.trim()) return text;
+    }
+  } catch {
+    denied = true;
+  }
+  if (denied) return "";
+
+  try {
+    if (typeof clipboard.read !== "function") return "";
+    const items = await clipboard.read();
+    for (const item of items) {
+      if (item.types.includes("text/plain")) {
+        const raw = await (await item.getType("text/plain")).text();
+        if (raw.trim()) return raw;
+      }
+      if (item.types.includes("text/uri-list")) {
+        const raw = await (await item.getType("text/uri-list")).text();
+        if (raw.trim()) return raw;
+      }
+      if (item.types.includes("text/html")) {
+        const raw = await (await item.getType("text/html")).text();
+        const href = hrefFromHtml(raw);
+        if (href) return href;
+      }
+    }
+  } catch {
+    return "";
+  }
+  return "";
 }
 
 /** Source URL for re-downloading; falls back to YouTube id in the file path. */

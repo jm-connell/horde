@@ -17,6 +17,48 @@ _MAX_SUBTITLE_CHARS = 80_000
 _MAX_DESCRIPTION_CHARS = 4000
 _MAX_NOTES_CHARS = 2000
 
+_NAMED_VTT_ENTITIES = {
+    "nbsp": " ",
+    "amp": "&",
+    "lt": "<",
+    "gt": ">",
+    "quot": '"',
+    "apos": "'",
+    "lrm": "",
+    "rlm": "",
+}
+_VTT_ENTITY_RE = re.compile(r"&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);?")
+
+
+def _decode_vtt_entities(raw: str) -> str:
+    """Decode HTML/YouTube entities; unknown named ones (nsps, npsp, …) become a space."""
+
+    def repl(match: re.Match[str]) -> str:
+        ent = match.group(1)
+        if ent.startswith("#"):
+            try:
+                code = int(ent[2:], 16) if ent[1] in "xX" else int(ent[1:])
+            except ValueError:
+                return " "
+            if code in (160, 0x202F, 0x2007):
+                return " "
+            try:
+                return chr(code)
+            except ValueError:
+                return " "
+        mapped = _NAMED_VTT_ENTITIES.get(ent.lower())
+        if mapped is not None:
+            return mapped
+        return " "
+
+    out = raw
+    for _ in range(3):
+        nxt = _VTT_ENTITY_RE.sub(repl, out)
+        if nxt == out:
+            break
+        out = nxt
+    return out
+
 
 def _strip_vtt(raw: str) -> str:
     lines: list[str] = []
@@ -32,12 +74,11 @@ def _strip_vtt(raw: str) -> str:
             continue
         if s.startswith("NOTE") or s.startswith("STYLE") or s.startswith("REGION"):
             continue
-        # Drop simple cue settings / tags.
+        # Drop simple cue settings / tags and leftover HTML/YouTube entities.
+        s = _decode_vtt_entities(s)
         s = re.sub(r"<[^>]+>", "", s)
-        s = re.sub(r"&nbsp;", " ", s)
-        s = re.sub(r"&amp;", "&", s)
-        s = re.sub(r"&lt;", "<", s)
-        s = re.sub(r"&gt;", ">", s)
+        s = _decode_vtt_entities(s)
+        s = re.sub(r"\s+", " ", s).strip()
         if s:
             lines.append(s)
     # Collapse consecutive duplicates common in auto-captions.

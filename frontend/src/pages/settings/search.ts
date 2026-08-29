@@ -84,7 +84,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "playback",
-    keywords: "playback speed speed default",
+    keywords: "playback speed speed default hold hold-click hold speed click to hold",
   },
   // Downloads (legacy tab, redirected to library)
   {

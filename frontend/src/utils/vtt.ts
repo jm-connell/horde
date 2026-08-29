@@ -30,8 +30,53 @@ export function parseVttTimestamp(ts: string): number {
   return h * 3600 + min * 60 + sec + ms / 1000;
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: " ",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  lrm: "",
+  rlm: "",
+};
+
+/** Decode HTML/YouTube entities. Unknown named entities (nsps, npsp, …) → space. */
+export function decodeVttEntities(raw: string): string {
+  let out = raw;
+  for (let i = 0; i < 3; i++) {
+    const next = out.replace(
+      /&(#x[0-9a-f]+|#\d+|[a-z]+);?/gi,
+      (_full, ent: string) => {
+        if (ent.startsWith("#")) {
+          const hex = ent[1] === "x" || ent[1] === "X";
+          const code = hex
+            ? parseInt(ent.slice(2), 16)
+            : parseInt(ent.slice(1), 10);
+          if (!Number.isFinite(code) || code < 0) return " ";
+          if (code === 160 || code === 0x202f || code === 0x2007) return " ";
+          try {
+            return String.fromCodePoint(code);
+          } catch {
+            return " ";
+          }
+        }
+        const mapped = NAMED_ENTITIES[ent.toLowerCase()];
+        if (mapped !== undefined) return mapped;
+        return " ";
+      }
+    );
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
 function stripTags(raw: string): string {
-  return raw.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  return decodeVttEntities(raw)
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function parseWordsFromLine(line: string, cueStart: number): CaptionWord[] {
@@ -50,7 +95,7 @@ function parseWordsFromLine(line: string, cueStart: number): CaptionWord[] {
       }
     }
     sawTag = true;
-    const wordText = match[2].replace(/\s+/g, " ").trim();
+    const wordText = decodeVttEntities(match[2]).replace(/\s+/g, " ").trim();
     if (wordText) {
       words.push({
         text: wordText,
