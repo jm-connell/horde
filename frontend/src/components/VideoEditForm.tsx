@@ -436,9 +436,6 @@ export default function VideoEditForm({
           <div>
             <div className="mb-1 flex items-baseline justify-between gap-2">
               <label className={labelClass + " mb-0"}>Notes</label>
-              <span className="text-[10px] font-medium uppercase tracking-wide text-accent/80">
-                Helps AI Features
-              </span>
             </div>
             <textarea
               ref={notesRef}

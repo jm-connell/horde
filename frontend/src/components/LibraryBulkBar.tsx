@@ -83,9 +83,6 @@ export default function LibraryBulkBar({
                 <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
                   Note
                 </span>
-                <span className="text-[10px] font-medium uppercase tracking-wide text-accent/80">
-                  Helps AI Features
-                </span>
               </div>
               <textarea
                 value={bulkNote}

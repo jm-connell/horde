@@ -2320,9 +2320,9 @@ export default function VideoPlayer({
         )}
 
         {upNext && !isMini && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden bg-black/65 p-4">
+          <div className="ui-up-next-scrim absolute inset-0 z-30 flex items-center justify-center overflow-hidden bg-black/65 p-4">
             <div
-              className={`w-full max-w-sm overflow-hidden rounded-xl border border-ink-700 bg-ink-900/95 shadow-2xl ring-1 ring-ink-600 ${
+              className={`ui-panel ui-panel-legible w-full max-w-sm overflow-hidden rounded-xl border border-ink-700 bg-ink-900 shadow-2xl ring-1 ring-ink-600 ${
                 compactUpNext
                   ? "flex max-h-full flex-col sm:max-h-[min(100%,16rem)]"
                   : ""

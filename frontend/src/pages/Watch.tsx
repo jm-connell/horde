@@ -23,7 +23,6 @@ import { usePlayback } from "../context/PlaybackContext";
 import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
-import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import { PRESET_ORDER, presetOptionLabel } from "../presets";
 import type { StreamPreviewMeta, Video } from "../types";
 import {
@@ -690,17 +689,16 @@ export default function Watch() {
     ? `/?channel=${encodeURIComponent(channelParam)}`
     : "/";
 
-  const canAiSummarize =
-    isLibrary &&
-    aiSummariesEnabled &&
-    (source.video.subtitles?.length ?? 0) > 0;
+  const hasSubtitles =
+    isLibrary && (source.video.subtitles?.length ?? 0) > 0;
+  const canAiSummarize = hasSubtitles && aiSummariesEnabled;
   const canAiChat =
     isLibrary &&
     aiChatEnabled &&
     !!(
       (source.video.title || "").trim() ||
       (source.video.description || "").trim() ||
-      (source.video.subtitles?.length ?? 0) > 0
+      hasSubtitles
     );
   const showAiSection = canAiSummarize || canAiChat;
 
@@ -1132,18 +1130,6 @@ export default function Watch() {
                 />
               </div>
             )}
-
-            {isLibrary &&
-              settings.sponsorBlockEnabled &&
-              !extractYouTubeId(
-                source.video.source_url,
-                source.video.file_path
-              ) && (
-                <p className="mt-2 text-xs text-gray-600">
-                  SponsorBlock is enabled in settings but only applies to
-                  YouTube videos.
-                </p>
-              )}
 
             {isLibrary &&
               !showRelatedRight &&

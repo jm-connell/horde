@@ -625,6 +625,15 @@ html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-panel-legible
   -webkit-backdrop-filter: blur(calc(var(--ui-panel-blur, 4px) + 4px));
 }
 
+/* Up-next overlay: dim the ended video; follow translucent + legibility. */
+html[data-translucent-panels="on"] .ui-up-next-scrim {
+  background-color: rgb(0 0 0 / 0.12);
+}
+
+html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-up-next-scrim {
+  background-color: rgb(0 0 0 / 0.55);
+}
+
 /* Hover motion — transitions on base so un-hover eases out */
 html[data-hover-motion="subtle"] .ui-card,
 html[data-hover-motion="lift"] .ui-card,
