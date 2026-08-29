@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, SPRITES_DIR
-from ..models import Video, VideoAiMeta
+from ..models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc
 from ..schemas import VideoRead
 from ..services import library
 from ..services.metadata import sprites_exist
+
 
 def safe_filename(name: str) -> str:
     """Strip characters that break Content-Disposition or filesystems."""
@@ -22,16 +22,12 @@ def safe_filename(name: str) -> str:
     return cleaned or "video"
 
 
-def as_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    """Ensure datetimes are timezone-aware UTC so JSON includes a Z offset."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
-def to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
+def to_read(
+    video: Video,
+    session: Optional[Session] = None,
+    *,
+    include_processing: bool = False,
+) -> VideoRead:
     ai_tags: list[str] = []
     user_tags: list[str] = []
     ai_summary: Optional[str] = None
@@ -41,6 +37,8 @@ def to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
     embed_status: Optional[str] = None
     embed_error: Optional[str] = None
     tags_enriched_at = None
+    processing_summary = False
+    processing_sprites = False
     if session is not None and video.id is not None:
         meta = session.get(VideoAiMeta, video.id)
         if meta is not None:
@@ -64,6 +62,18 @@ def to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
             if raw_err and str(raw_err).strip():
                 embed_error = str(raw_err).strip()[:500]
             tags_enriched_at = as_utc(getattr(meta, "tags_enriched_at", None))
+        if include_processing:
+            from ..services.sprites import sprites_in_progress
+
+            processing_sprites = sprites_in_progress(video.id)
+            job = session.exec(
+                select(AiJob).where(
+                    AiJob.video_id == video.id,
+                    AiJob.kind == AiJobKind.summarize,
+                    AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running]),  # type: ignore[attr-defined]
+                )
+            ).first()
+            processing_summary = job is not None
     return VideoRead(
         id=video.id,
         title=video.title,
@@ -109,6 +119,8 @@ def to_read(video: Video, session: Optional[Session] = None) -> VideoRead:
         embed_status=embed_status,
         embed_error=embed_error,
         tags_enriched_at=tags_enriched_at,
+        processing_summary=processing_summary,
+        processing_sprites=processing_sprites,
     )
 
 
@@ -120,5 +132,3 @@ def resolve_media(video: Video) -> Path:
     if not path.exists():
         raise HTTPException(status_code=404, detail="File missing on disk")
     return path
-
-

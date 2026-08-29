@@ -53,6 +53,8 @@ class VideoRead(BaseModel):
     embed_status: Optional[str] = None
     embed_error: Optional[str] = None
     tags_enriched_at: Optional[datetime] = None
+    processing_summary: bool = False
+    processing_sprites: bool = False
 
 
 class VideoUpdate(BaseModel):

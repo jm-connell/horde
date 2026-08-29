@@ -89,6 +89,13 @@ def test_save_merges_ui_and_ai(tmp_dirs):
     assert raw["ui"]["theme"] == "oled"
 
 
+def test_openrouter_show_costs_defaults_false():
+    merged = settings_svc._merge_ai({})
+    assert merged["openrouter_show_costs"] is False
+    on = settings_svc._merge_ai({"openrouter_show_costs": True})
+    assert on["openrouter_show_costs"] is True
+
+
 def test_mask_openrouter_api_key():
     assert mask_openrouter_api_key("") == ""
     assert mask_openrouter_api_key("abcd") == "••••"

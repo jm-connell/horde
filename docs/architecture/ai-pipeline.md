@@ -10,6 +10,7 @@ Background and on-demand AI for search, tags, chat, recommendations, and catalog
 | `enrich_tags` | LLM tag enrichment into `video_ai_meta` / `videos.tags` |
 | `refresh_categories` | Rebuild `ai_categories` shelves |
 | `embed_catalog_video` | Embed a channel-catalog upload |
+| `summarize` | Generate a Watch summary from captions (after download) |
 
 The worker is single-flight with up to **3 attempts** and `run_after` backoff ([Workers](workers.md), [Single-flight AI](../design/single-flight-ai.md)).
 

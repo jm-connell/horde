@@ -10,6 +10,15 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def as_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Treat naive datetimes as UTC. SQLite often strips tzinfo on read."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 class VideoStatus(str, Enum):
     downloading = "downloading"
     ready = "ready"
@@ -145,6 +154,7 @@ class AiJobKind(str, Enum):
     enrich_tags = "enrich_tags"
     refresh_categories = "refresh_categories"
     embed_catalog_video = "embed_catalog_video"
+    summarize = "summarize"
 
 
 class ChannelCatalogStatus(str, Enum):

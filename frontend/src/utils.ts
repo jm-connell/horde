@@ -76,6 +76,18 @@ export function stripChapterLines(description: string | null): string {
   return kept.join("\n").replace(/^\n+|\n+$/g, "").replace(/\n{3,}/g, "\n\n");
 }
 
+/** Percent for a live download; prefer bytes over a possibly-stale progress field. */
+export function downloadProgressPercent(
+  progress: number | undefined,
+  downloaded?: number | null,
+  total?: number | null
+): number {
+  if (total && total > 0 && downloaded != null && downloaded >= 0) {
+    return Math.min(100, Math.max(0, Math.round((downloaded / total) * 100)));
+  }
+  return Math.min(100, Math.max(0, Math.round(progress ?? 0)));
+}
+
 export function formatSize(bytes: number | null): string {
   if (!bytes) return "";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -125,6 +137,17 @@ export function formatResolution(height: number | null): string {
   if (height >= 480) return "480p";
   if (height >= 360) return "360p";
   return `${height}p`;
+}
+
+/** Quiet Watch-page label for in-flight post-download work. */
+export function watchProcessingLabel(opts: {
+  processing_summary?: boolean;
+  processing_sprites?: boolean;
+}): string | null {
+  const parts: string[] = [];
+  if (opts.processing_summary) parts.push("summary");
+  if (opts.processing_sprites) parts.push("previews");
+  return parts.length ? parts.join(", ") : null;
 }
 
 /** Parse API datetimes; treat timezone-less ISO as UTC (SQLite/FastAPI often omit Z). */

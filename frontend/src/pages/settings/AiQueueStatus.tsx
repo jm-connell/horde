@@ -232,6 +232,13 @@ export default function AiQueueStatus({
                     "tags"
                   )
                 : null,
+              aiStatus.queue_breakdown.summarize
+                ? plural(
+                    aiStatus.queue_breakdown.summarize,
+                    "summary",
+                    "summaries"
+                  )
+                : null,
               aiStatus.queue_breakdown.refresh_categories
                 ? plural(
                     aiStatus.queue_breakdown.refresh_categories,

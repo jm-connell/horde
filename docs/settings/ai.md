@@ -37,7 +37,7 @@ Common embed presets: `nomic-embed-text`, `mxbai-embed-large`, `all-minilm`, or 
 | API key | `openrouter_api_key` | `""` | Stored server-side; UI shows set/cleared, not the raw secret after save |
 | Chat model | `openrouter_model` | `"google/gemini-2.5-flash-lite"` | Presets: Budget / Best |
 | Embed model | `openrouter_embed_model` | `"openai/text-embedding-3-small"` | When scope is `all` |
-| Show costs | `openrouter_show_costs` | `true` | Per-response cost chips on Watch (Settings totals always show) |
+| Show costs | `openrouter_show_costs` | `false` | Per-response cost chips on Watch (Settings totals always show) |
 | Weekly budget (USD) | `openrouter_weekly_budget_usd` | `null` | Soft limit over rolling 7 days; `null` = off (~$0.01–$100000) |
 | Hard limit | `openrouter_budget_hard_limit` | `false` | When true and spend ≥ budget, block further OpenRouter calls |
 
@@ -46,7 +46,7 @@ Common embed presets: `nomic-embed-text`, `mxbai-embed-large`, `all-minilm`, or 
 | Setting | Key | Default | Range / values |
 |---------|-----|---------|----------------|
 | Use subtitles in search indexes | `use_subtitles` | `true` | Include captions in embeds / related / categories |
-| AI video summaries | `ai_summaries` | `true` | On-demand Watch summaries |
+| AI video summaries | `ai_summaries` | `true` | After download when captions exist; regenerate on Watch |
 | AI video chat | `ai_chat` | `true` | Ask-the-video on Watch |
 | Summary length | `summary_length` | `"short"` | `short` \| `medium` \| `long` |
 | Category match strictness | `category_min_score` | `0.55` | 0.2–0.9 |

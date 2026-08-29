@@ -8,7 +8,7 @@ from typing import Any, Optional
 from sqlmodel import Session, col, select
 
 from ...database import engine
-from ...models import OpenRouterUsage, utcnow
+from ...models import OpenRouterUsage, as_utc, utcnow
 from ...services import app_settings
 
 
@@ -126,7 +126,7 @@ def totals() -> dict[str, float]:
         rows = session.exec(select(OpenRouterUsage)).all()
         for row in rows:
             c = float(row.cost or 0.0)
-            created = row.created_at
+            created = as_utc(row.created_at)
             out["all"] += c
             if created is None:
                 continue

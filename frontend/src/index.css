@@ -45,6 +45,36 @@ html::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--accent) / 0.7);
 }
 
+/* Description / chapters: thumb only, on hover, flush to the panel edge */
+.horde-meta-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: auto;
+}
+.horde-meta-scrollbar:hover,
+.horde-meta-scrollbar:focus-visible {
+  scrollbar-color: rgb(var(--accent) / 0.45) transparent;
+}
+.horde-meta-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background: transparent;
+}
+.horde-meta-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.horde-meta-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.horde-meta-scrollbar:hover::-webkit-scrollbar-thumb,
+.horde-meta-scrollbar:focus-visible::-webkit-scrollbar-thumb {
+  background: rgb(var(--accent) / 0.45);
+}
+.horde-meta-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--accent) / 0.7);
+}
+
 /* ─── Default theme (cyan-on-dark) ─── */
 :root {
   color-scheme: dark;
@@ -747,5 +777,20 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
     left: 105%;
     width: 35%;
   }
+}
+
+@keyframes horde-processing-ellipsis {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.horde-processing-ellipsis {
+  display: inline-block;
+  animation: horde-processing-ellipsis 1.2s ease-in-out infinite;
 }
 

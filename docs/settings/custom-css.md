@@ -89,7 +89,7 @@ html[data-page="watch"] [data-horde="nav"] {
 | `feed-card` | Channel-feed card |
 | `custom-css` | The injected `<style>` tag itself |
 
-Semantic classes already used by motion/transparency: `.ui-panel`, `.ui-panel-legible`, `.ui-card`, `.ui-interactive`, `.page-shell`, `.horde-scrollbar`.
+Semantic classes already used by motion/transparency: `.ui-panel`, `.ui-panel-legible`, `.ui-card`, `.ui-interactive`, `.page-shell`, `.horde-scrollbar`, `.horde-meta-scrollbar`.
 
 ## Examples
 

@@ -21,7 +21,7 @@ export default function ChaptersList({
       className={`ui-panel isolate flex flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700 ${className}`}
     >
       <ul
-        className={`horde-scrollbar min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-2 ${maxHeightClass}`}
+        className={`horde-meta-scrollbar min-h-0 flex-1 space-y-0.5 overflow-y-auto py-2 ${maxHeightClass}`}
       >
         {chapters.map((ch) => (
           <li key={`${ch.startSec}-${ch.title}`}>
@@ -34,7 +34,7 @@ export default function ChaptersList({
                   })
                 )
               }
-              className="ui-interactive flex w-full min-w-0 items-center gap-1.5 rounded-lg px-1 py-1 text-left text-sm text-gray-300 hover:bg-ink-800 hover:text-accent"
+              className="ui-interactive flex w-full min-w-0 items-start gap-1.5 rounded-lg px-3 py-1 text-left text-sm text-gray-300 hover:bg-ink-800 hover:text-accent"
             >
               <span
                 className={`shrink-0 font-mono text-[11px] tabular-nums leading-none text-gray-500 ${
@@ -43,7 +43,9 @@ export default function ChaptersList({
               >
                 {formatTimestamp(ch.startSec)}
               </span>
-              <span className="min-w-0 flex-1 truncate">{ch.title}</span>
+              <span className="min-w-0 flex-1 whitespace-normal break-words">
+                {ch.title}
+              </span>
             </button>
           </li>
         ))}

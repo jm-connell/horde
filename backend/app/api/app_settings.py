@@ -27,7 +27,7 @@ class AiSettingsRead(BaseModel):
     openrouter_scope: Literal["specialized", "all"] = "specialized"
     openrouter_embed_model: str = "openai/text-embedding-3-small"
     ollama_prefer_embeddings: bool = False
-    openrouter_show_costs: bool = True
+    openrouter_show_costs: bool = False
     openrouter_weekly_budget_usd: Optional[float] = None
     openrouter_budget_hard_limit: bool = False
     schedule: Literal["on_download", "on_request", "timer", "set_time"] = "on_download"
@@ -144,7 +144,7 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
         filtered.get("ollama_prefer_embeddings")
     )
     filtered["openrouter_show_costs"] = bool(
-        filtered.get("openrouter_show_costs", True)
+        filtered.get("openrouter_show_costs", False)
     )
     filtered["openrouter_weekly_budget_usd"] = (
         app_settings.clamp_weekly_budget_usd(

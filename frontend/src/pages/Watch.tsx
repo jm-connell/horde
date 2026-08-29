@@ -27,6 +27,7 @@ import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import { PRESET_ORDER, presetOptionLabel } from "../presets";
 import type { StreamPreviewMeta, Video } from "../types";
 import {
+  downloadProgressPercent,
   formatDate,
   formatDuration,
   formatResolution,
@@ -34,6 +35,7 @@ import {
   formatViewCount,
   parseChapters,
   stripChapterLines,
+  watchProcessingLabel,
 } from "../utils";
 import {
   clearWatchResume,
@@ -366,7 +368,7 @@ export default function Watch() {
         setAiSummariesEnabled(llmConnected && !!s.ai.ai_summaries);
         setAiChatEnabled(llmConnected && !!s.ai.ai_chat);
         setShowAiCosts(
-          openRouterConnected && s.ai.openrouter_show_costs !== false
+          openRouterConnected && s.ai.openrouter_show_costs === true
         );
       })
       .catch(() => {
@@ -441,14 +443,24 @@ export default function Watch() {
   }, [relatedHasMore, loadMoreRelated]);
 
   useEffect(() => {
-    if (!video?.subtitles_pending) return;
+    if (!video) return;
+    const pending =
+      !!video.subtitles_pending ||
+      !!video.processing_summary ||
+      !!video.processing_sprites;
+    if (!pending) return;
     const timer = window.setInterval(() => {
       api.getVideo(video.id).then((v) => {
         setSource({ kind: "library", video: v });
       }).catch(() => undefined);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [video?.id, video?.subtitles_pending]);
+  }, [
+    video?.id,
+    video?.subtitles_pending,
+    video?.processing_summary,
+    video?.processing_sprites,
+  ]);
 
   useEffect(() => {
     if (!source) return;
@@ -642,8 +654,10 @@ export default function Watch() {
     activeJobId != null
       ? jobs.find((j) => j.id === activeJobId) ?? null
       : null;
-  const downloadPercent = Math.round(
-    Math.min(100, Math.max(0, live?.progress ?? activeJob?.progress ?? 0))
+  const downloadPercent = downloadProgressPercent(
+    live?.progress ?? activeJob?.progress,
+    live?.downloaded_bytes,
+    live?.total_bytes
   );
   const downloadActive =
     activeJob != null && isActiveJob(activeJob, live);
@@ -652,6 +666,9 @@ export default function Watch() {
   const resolution = isLibrary
     ? formatResolution(source.video.height_px)
     : formatResolution(activeStreamQuality);
+  const processingLabel = isLibrary
+    ? watchProcessingLabel(source.video)
+    : null;
 
   const contentClass = showRelatedRight
     ? "mx-auto max-w-[90rem]"
@@ -877,6 +894,18 @@ export default function Watch() {
                   )}
                   {resolution && (
                     <span className="text-xs text-gray-500">{resolution}</span>
+                  )}
+                  {processingLabel && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[11px] text-gray-600"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      processing {processingLabel}
+                      <span className="horde-processing-ellipsis" aria-hidden>
+                        …
+                      </span>
+                    </span>
                   )}
                   {isLibrary &&
                     source.video.frame_rate &&

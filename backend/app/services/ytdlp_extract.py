@@ -22,6 +22,7 @@ from .ytdlp_common import (
     youtube_extractor_args,
 )
 from .ytdlp_formats import (
+    FORMAT_SORT,
     QUALITY_FORMATS,
     _available_presets,
     _has_audio,
@@ -50,29 +51,125 @@ def _purge_members_only_url(url: str) -> None:
     if yt_id:
         _purge_members_only_yt_id(yt_id)
 
-def _format_byte_size(fmt: dict[str, Any]) -> Optional[int]:
-    size = fmt.get("filesize") or fmt.get("filesize_approx")
-    return int(size) if size else None
+
+def _duration_seconds(info: dict[str, Any]) -> Optional[float]:
+    raw = info.get("duration")
+    if raw is None:
+        return None
+    try:
+        duration = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return duration if duration > 0 else None
 
 
-def _estimate_preset_bytes(ydl: Any, info: dict[str, Any], format_spec: str) -> Optional[int]:
+def _bitrate_bytes(fmt: dict[str, Any], duration: Optional[float]) -> Optional[int]:
+    tbr = fmt.get("tbr") or fmt.get("vbr") or fmt.get("abr")
+    dur = duration if duration is not None else fmt.get("duration")
+    if tbr is None or dur is None:
+        return None
+    try:
+        n = int(float(tbr) * 1000 / 8 * float(dur))
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _format_byte_size(
+    fmt: dict[str, Any], duration: Optional[float] = None
+) -> Optional[int]:
+    exact = fmt.get("filesize")
+    if exact:
+        try:
+            n = int(exact)
+        except (TypeError, ValueError):
+            n = 0
+        if n > 0:
+            return n
+    approx = fmt.get("filesize_approx")
+    approx_n: Optional[int] = None
+    if approx:
+        try:
+            parsed = int(approx)
+        except (TypeError, ValueError):
+            parsed = 0
+        if parsed > 0:
+            approx_n = parsed
+    from_tbr = _bitrate_bytes(fmt, duration)
+    # Merged DASH dicts often keep only the audio filesize_approx when the
+    # video leg has no Content-Length; prefer bitrate when it is far larger.
+    if approx_n and from_tbr and approx_n < from_tbr * 0.25:
+        is_video = fmt.get("vcodec") not in (None, "none")
+        if is_video or fmt.get("requested_formats"):
+            return from_tbr
+    return approx_n or from_tbr
+
+
+def _format_parts_bytes(
+    fmt: dict[str, Any], duration: Optional[float]
+) -> Optional[int]:
+    parts = fmt.get("requested_formats")
+    if not isinstance(parts, list) or not parts:
+        return _format_byte_size(fmt, duration)
+    total = 0
+    saw_video = False
+    video_missing = False
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        is_video = part.get("vcodec") not in (None, "none")
+        if is_video:
+            saw_video = True
+        size = _format_byte_size(part, duration)
+        if size is None:
+            if is_video:
+                video_missing = True
+                continue
+            return None
+        total += size
+    if saw_video and video_missing:
+        return None
+    return total if total else None
+
+
+def _format_selector_context(formats: list[Any]) -> dict[str, Any]:
+    return {
+        "formats": formats,
+        "has_merged_format": any(
+            "none" not in (f.get("vcodec"), f.get("acodec"))
+            for f in formats
+            if isinstance(f, dict)
+        ),
+        "incomplete_formats": (
+            all(f.get("vcodec") == "none" for f in formats if isinstance(f, dict))
+            or all(f.get("acodec") == "none" for f in formats if isinstance(f, dict))
+        ),
+    }
+
+
+def _estimate_preset_bytes(
+    ydl: Any, info: dict[str, Any], format_spec: str
+) -> Optional[int]:
     formats = info.get("formats") or []
     if not formats:
         return None
+    duration = _duration_seconds(info)
     try:
         selector = ydl.build_format_selector(format_spec)
-        selected = list(selector({"formats": formats, "incomplete": False}))
+        selected = list(selector(_format_selector_context(formats)))
     except Exception:  # noqa: BLE001
         return None
     if not selected:
         return None
     total = 0
     for fmt in selected:
-        size = _format_byte_size(fmt)
+        if not isinstance(fmt, dict):
+            continue
+        size = _format_parts_bytes(fmt, duration)
         if size is None:
             return None
         total += size
-    return total
+    return total if total else None
 
 
 def _estimate_preset_sizes(
@@ -81,14 +178,29 @@ def _estimate_preset_sizes(
     import yt_dlp
 
     sizes: dict[str, int] = {}
-    opts = apply_cookie_opts({"quiet": True, "no_warnings": True, "skip_download": True})
+    formats = info.get("formats") or []
+    if not formats:
+        return sizes
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "format_sort": FORMAT_SORT,
+        }
+    )
+    work = {**info, "formats": list(formats)}
     with yt_dlp.YoutubeDL(opts) as ydl:
+        try:
+            ydl.sort_formats(work)
+        except Exception:  # noqa: BLE001
+            pass
         for preset in presets:
             format_spec = QUALITY_FORMATS.get(preset)
             if not format_spec:
                 continue
             try:
-                size = _estimate_preset_bytes(ydl, info, format_spec)
+                size = _estimate_preset_bytes(ydl, work, format_spec)
             except Exception:  # noqa: BLE001
                 size = None
             if size:

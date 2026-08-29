@@ -217,24 +217,24 @@ export default function WatchMeta({
             <div
               className={
                 metaSideBySide
-                  ? "ui-panel isolate flex min-h-0 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
-                  : "ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
+                  ? "ui-panel isolate relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
+                  : "ui-panel isolate relative min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
               }
             >
-              <div className="px-4 py-3">
-                {descriptionBody && (
-                  <div className="relative">
-                    <div
-                      className={
-                        boxExpanded
-                          ? metaSideBySide
-                            ? "overflow-visible pr-6"
-                            : "overflow-hidden pr-6 transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] max-h-[80rem]"
-                          : metaSideBySide
-                            ? "horde-scrollbar max-h-48 overflow-y-auto pr-6"
-                            : "overflow-hidden pr-6 transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] max-h-[7.5rem]"
-                      }
-                    >
+              {descriptionBody && (
+                <div className="relative min-h-0">
+                  <div
+                    className={
+                      boxExpanded
+                        ? metaSideBySide
+                          ? "overflow-visible"
+                          : "overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] max-h-[80rem]"
+                        : metaSideBySide
+                          ? "horde-meta-scrollbar max-h-48 overflow-y-auto"
+                          : "overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] max-h-[7.5rem]"
+                    }
+                  >
+                    <div className="px-4 py-3 pr-8">
                       <p
                         className={`text-sm text-gray-300 ${
                           boxExpanded || metaSideBySide
@@ -246,41 +246,45 @@ export default function WatchMeta({
                       </p>
                       {metaSideBySide && extrasBlock}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setBoxExpanded((v) => !v)}
-                      className="absolute bottom-0.5 right-0 z-[1] flex h-5 w-5 items-center justify-center rounded text-gray-500/55 hover:text-accent"
-                      title={
-                        boxExpanded
-                          ? "Collapse description"
-                          : "Expand description"
-                      }
-                      aria-label={
-                        boxExpanded
-                          ? "Collapse description"
-                          : "Expand description"
-                      }
-                      aria-expanded={boxExpanded}
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className={`h-3.5 w-3.5 transition-transform ${
-                          boxExpanded ? "rotate-180" : ""
-                        }`}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </button>
                   </div>
-                )}
-                {(!descriptionBody || !metaSideBySide) && extrasBlock}
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setBoxExpanded((v) => !v)}
+                    className="absolute bottom-2 right-2 z-[1] flex h-5 w-5 items-center justify-center rounded text-gray-500/55 hover:text-accent"
+                    title={
+                      boxExpanded
+                        ? "Collapse description"
+                        : "Expand description"
+                    }
+                    aria-label={
+                      boxExpanded
+                        ? "Collapse description"
+                        : "Expand description"
+                    }
+                    aria-expanded={boxExpanded}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className={`h-3.5 w-3.5 transition-transform ${
+                        boxExpanded ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {(!descriptionBody || !metaSideBySide) && hasExtras && (
+                <div className={descriptionBody ? "px-4 pb-3" : "px-4 py-3"}>
+                  {extrasBlock}
+                </div>
+              )}
             </div>
           )}
           {chapters.length > 0 && (

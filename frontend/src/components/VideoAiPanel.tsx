@@ -59,6 +59,8 @@ export default function VideoAiPanel({
   }, []);
 
   const hasAiSummary = !!(video.ai_summary && video.ai_summary.trim());
+  const waitingOnSummary =
+    summarizing || (!!video.processing_summary && !hasAiSummary);
 
   function setTab(next: AiTab) {
     if (next === settings.aiTab) return;
@@ -194,7 +196,7 @@ export default function VideoAiPanel({
                 )}
                 {hasAiSummary ? (
                   <AiMarkdown text={video.ai_summary || ""} />
-                ) : summarizing ? (
+                ) : waitingOnSummary ? (
                   <div className="flex justify-center py-8">
                     <TypingDots label="Generating summary" />
                   </div>

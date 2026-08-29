@@ -243,7 +243,7 @@ export const DEFAULT_AI: AiSettings = {
   openrouter_scope: "specialized",
   openrouter_embed_model: "openai/text-embedding-3-small",
   ollama_prefer_embeddings: false,
-  openrouter_show_costs: true,
+  openrouter_show_costs: false,
   openrouter_weekly_budget_usd: null,
   openrouter_budget_hard_limit: false,
   schedule: "on_download",

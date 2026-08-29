@@ -11,9 +11,9 @@ from typing import Optional
 from sqlmodel import Session, select
 
 from ...database import engine
-from ...models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, utcnow
+from ...models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc, utcnow
 from .. import app_settings
-from . import embeddings, tasks
+from . import embeddings, tasks, text as ai_text
 from .provider import (
     get_embed_provider,
     get_llm_provider,
@@ -87,7 +87,7 @@ def enqueue_for_video(
     include_tags: bool = True,
     force: bool = False,
 ) -> None:
-    """Queue embed (+ optional tag enrich) for a video per schedule settings."""
+    """Queue embed (+ optional tag enrich and summary) for a video per schedule settings."""
     ai = app_settings.ai_settings()
     if ai.get("paused"):
         return
@@ -107,6 +107,20 @@ def enqueue_for_video(
         enqueue_job(AiJobKind.embed_video, video_id, force=force)
     if include_tags and ai.get("enrich_tags", True) and (ollama_on or or_on):
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)
+    if ai.get("ai_summaries", True) and (ollama_on or or_on):
+        should_summarize = False
+        with Session(engine) as session:
+            video = session.get(Video, video_id)
+            if video is not None and ai_text.has_subtitle_text(video):
+                meta = session.get(VideoAiMeta, video_id)
+                has_summary = bool(
+                    meta is not None
+                    and meta.summary
+                    and str(meta.summary).strip()
+                )
+                should_summarize = not has_summary
+        if should_summarize:
+            enqueue_job(AiJobKind.summarize, video_id, force=force)
 
 
 def _runtime_limits() -> tuple[int, int]:
@@ -209,7 +223,9 @@ def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
             meta = session.get(VideoAiMeta, video.id)
             if meta is not None and meta.tags_locked:
                 continue
-            enriched_at = meta.tags_enriched_at if meta is not None else None
+            enriched_at = (
+                as_utc(meta.tags_enriched_at) if meta is not None else None
+            )
             if enriched_at is None:
                 candidates.append((0, now, video.id))
             elif enriched_at < cutoff:
@@ -386,6 +402,7 @@ def queue_breakdown() -> dict[str, int]:
         "enrich_tags": 0,
         "refresh_categories": 0,
         "embed_catalog_video": 0,
+        "summarize": 0,
         "running": 0,
     }
     with Session(engine) as session:
@@ -454,7 +471,8 @@ def queue_stats() -> dict:
             if job.status == AiJobStatus.running:
                 running += 1
                 continue
-            due = job.run_after is None or job.run_after <= now
+            run_after = as_utc(job.run_after)
+            due = run_after is None or run_after <= now
             if not due:
                 deferred += 1
                 continue
@@ -606,7 +624,11 @@ def clear_failed_jobs(*, keep_days: int = 0) -> int:
             )
         ).all()
         for job in rows:
-            if cutoff is not None and job.updated_at and job.updated_at > cutoff:
+            if (
+                cutoff is not None
+                and job.updated_at
+                and as_utc(job.updated_at) > cutoff
+            ):
                 continue
             session.delete(job)
             deleted += 1
@@ -688,7 +710,7 @@ def _job_runnable(
 ) -> bool:
     if kind in (AiJobKind.embed_video, AiJobKind.embed_catalog_video):
         return embed_ok
-    if kind == AiJobKind.enrich_tags:
+    if kind in (AiJobKind.enrich_tags, AiJobKind.summarize):
         return llm_ok
     if kind == AiJobKind.refresh_categories:
         return embed_ok and llm_ok
@@ -715,7 +737,7 @@ def _stamp_waiting_jobs(reason: str) -> None:
         ).all()
         changed = 0
         for job in rows:
-            created = job.created_at or job.updated_at
+            created = as_utc(job.created_at) or as_utc(job.updated_at)
             if created is None or created > cutoff:
                 continue
             if job.error == note:
@@ -803,6 +825,7 @@ _AI_KIND_LABELS = {
     "refresh_categories": "Refreshing recommendation categories",
     "score_duplicates": "Scoring duplicate candidates",
     "embed_catalog_video": "Embedding catalog video",
+    "summarize": "Summarizing video",
 }
 
 

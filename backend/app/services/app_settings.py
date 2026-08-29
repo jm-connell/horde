@@ -21,7 +21,7 @@ AI_DEFAULTS: dict[str, Any] = {
     # When OpenRouter scope is all, prefer Ollama for embeddings if available.
     "ollama_prefer_embeddings": False,
     # Show per-response cost chips in Watch UI (Settings totals always show).
-    "openrouter_show_costs": True,
+    "openrouter_show_costs": False,
     # Soft/hard weekly OpenRouter spend limit (rolling 7 days). null = off.
     "openrouter_weekly_budget_usd": None,
     # When true and weekly spend >= budget, block further OpenRouter calls.
@@ -172,7 +172,7 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
         merged.get("ollama_prefer_embeddings")
     )
     merged["openrouter_show_costs"] = bool(
-        merged.get("openrouter_show_costs", True)
+        merged.get("openrouter_show_costs", False)
     )
     merged["openrouter_weekly_budget_usd"] = clamp_weekly_budget_usd(
         merged.get("openrouter_weekly_budget_usd")

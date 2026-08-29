@@ -59,6 +59,8 @@ export interface Video {
   embed_status?: string | null;
   embed_error?: string | null;
   tags_enriched_at?: string | null;
+  processing_summary?: boolean;
+  processing_sprites?: boolean;
 }
 
 export interface VideoUpdate {

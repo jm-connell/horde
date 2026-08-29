@@ -29,7 +29,7 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 
 ## Summaries
 
-From a video’s AI panel, generate a short/medium/long summary (length is a setting). Summaries use title, description, and optionally subtitle text depending on configuration.
+When **AI video summaries** is on, a summary is queued after download once captions are on disk. Length is a setting (`short` / `medium` / `long`). Watch still has **Regenerate**, and older videos without a summary can **Generate** from the AI panel. Summaries use title, description, and caption text.
 
 ## Chat
 

@@ -100,3 +100,9 @@ def enqueue_sprite_generation(
 
     threading.Thread(target=run, daemon=True, name=f"sprites-{video_id}").start()
     return "generating"
+
+
+def sprites_in_progress(video_id: int) -> bool:
+    """True while a sprite-sheet worker is running for this video."""
+    with _lock:
+        return video_id in _generating

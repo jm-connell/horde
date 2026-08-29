@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { api } from "../../../api";
 import ThemedSelect from "../../../components/ThemedSelect";
 import Collapse from "../../../components/Collapse";
@@ -63,6 +64,10 @@ export default function ProvidersPane() {
     applyWorkload,
     saveModels,
   } = useSettingsPage();
+
+  const [openRouterTestStatus, setOpenRouterTestStatus] = useState<
+    "ok" | "fail" | null
+  >(null);
 
   const localAiUnused =
     aiDraft.openrouter_enabled &&
@@ -695,26 +700,92 @@ export default function ProvidersPane() {
                       <span className="block text-sm font-medium text-gray-200">
                         API key
                       </span>
-                      <input
-                        type="password"
-                        autoComplete="off"
-                        value={openRouterKeyDraft}
-                        onChange={(e) => setOpenRouterKeyDraft(e.target.value)}
-                        onBlur={async () => {
-                          const trimmed = openRouterKeyDraft.trim();
-                          if (!trimmed) return;
-                          await saveAi({ openrouter_api_key: trimmed });
-                          setOpenRouterKeyDraft("");
-                          showToast("OpenRouter API key saved");
-                        }}
-                        placeholder={
-                          aiDraft.openrouter_api_key_set
-                            ? `Key saved (${aiDraft.openrouter_api_key || "••••"})`
-                            : "sk-or-…"
-                        }
-                        aria-label="OpenRouter API key"
-                        className={INPUT_KEY}
-                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="password"
+                          autoComplete="off"
+                          value={openRouterKeyDraft}
+                          onChange={(e) => setOpenRouterKeyDraft(e.target.value)}
+                          onBlur={async () => {
+                            const trimmed = openRouterKeyDraft.trim();
+                            if (!trimmed) return;
+                            await saveAi({ openrouter_api_key: trimmed });
+                            setOpenRouterKeyDraft("");
+                            showToast("OpenRouter API key saved");
+                          }}
+                          placeholder={
+                            aiDraft.openrouter_api_key_set
+                              ? `Key saved (${aiDraft.openrouter_api_key || "••••"})`
+                              : "sk-or-…"
+                          }
+                          aria-label="OpenRouter API key"
+                          className={INPUT_KEY}
+                        />
+                        <button
+                          type="button"
+                          disabled={openRouterTesting}
+                          onClick={async () => {
+                            setOpenRouterTesting(true);
+                            const result = await api
+                              .testOpenRouterConnection(
+                                openRouterKeyDraft.trim() || undefined
+                              )
+                              .catch(() => null);
+                            setOpenRouterTesting(false);
+                            if (!result) {
+                              setOpenRouterTestStatus("fail");
+                              showToast("OpenRouter test failed");
+                              return;
+                            }
+                            setOpenRouterTestStatus(result.ok ? "ok" : "fail");
+                            showToast(
+                              result.ok
+                                ? result.detail || "Connected"
+                                : result.detail || "Unreachable"
+                            );
+                            if (result.ok && openRouterKeyDraft.trim()) {
+                              await saveAi({
+                                openrouter_api_key: openRouterKeyDraft.trim(),
+                              });
+                              setOpenRouterKeyDraft("");
+                            }
+                            if (result.ok) {
+                              const models = await api
+                                .getOpenRouterModels()
+                                .catch(() => null);
+                              if (models) {
+                                setOpenRouterModels(models.models || []);
+                                setOpenRouterEmbedModels(
+                                  models.embedding_models || []
+                                );
+                              }
+                            }
+                            refreshAiStatus();
+                          }}
+                          className={PANEL_BTN}
+                        >
+                          {openRouterTesting ? "Testing…" : "Test OpenRouter"}
+                        </button>
+                        {(openRouterTestStatus === "ok" ||
+                          (openRouterTestStatus !== "fail" &&
+                            aiStatus?.openrouter_reachable)) && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                            Connected
+                          </span>
+                        )}
+                        {openRouterTestStatus === "fail" && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-300 ring-1 ring-amber-500/30">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                            Unreachable
+                          </span>
+                        )}
+                        {aiStatus?.llm_backend === "openrouter" && (
+                          <span className="text-xs text-gray-500">
+                            LLM tasks use OpenRouter
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {aiDraft.openrouter_api_key_set && (
                       <button
@@ -723,68 +794,13 @@ export default function ProvidersPane() {
                         onClick={async () => {
                           await saveAi({ openrouter_api_key: "" });
                           setOpenRouterKeyDraft("");
+                          setOpenRouterTestStatus(null);
                           showToast("OpenRouter API key cleared");
                         }}
                       >
                         Clear saved key
                       </button>
                     )}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={openRouterTesting}
-                        onClick={async () => {
-                          setOpenRouterTesting(true);
-                          const result = await api
-                            .testOpenRouterConnection(
-                              openRouterKeyDraft.trim() || undefined
-                            )
-                            .catch(() => null);
-                          setOpenRouterTesting(false);
-                          if (!result) {
-                            showToast("OpenRouter test failed");
-                            return;
-                          }
-                          showToast(
-                            result.ok
-                              ? result.detail || "Connected"
-                              : result.detail || "Unreachable"
-                          );
-                          if (result.ok && openRouterKeyDraft.trim()) {
-                            await saveAi({
-                              openrouter_api_key: openRouterKeyDraft.trim(),
-                            });
-                            setOpenRouterKeyDraft("");
-                          }
-                          if (result.ok) {
-                            const models = await api
-                              .getOpenRouterModels()
-                              .catch(() => null);
-                            if (models) {
-                              setOpenRouterModels(models.models || []);
-                              setOpenRouterEmbedModels(
-                                models.embedding_models || []
-                              );
-                            }
-                          }
-                          refreshAiStatus();
-                        }}
-                        className={PANEL_BTN}
-                      >
-                        {openRouterTesting ? "Testing…" : "Test OpenRouter"}
-                      </button>
-                      {aiStatus?.openrouter_reachable && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                          Connected
-                        </span>
-                      )}
-                      {aiStatus?.llm_backend === "openrouter" && (
-                        <span className="text-xs text-gray-500">
-                          LLM tasks use OpenRouter
-                        </span>
-                      )}
-                    </div>
                     <div className="max-w-md space-y-2">
                       <span className="text-sm font-medium text-gray-200">
                         Model

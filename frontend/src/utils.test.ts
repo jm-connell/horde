@@ -9,10 +9,12 @@ import {
   formatResolution,
   formatViewCount,
   formatLikeRatio,
+  downloadProgressPercent,
   parseApiDate,
   parseChapters,
   readClipboardText,
   stripChapterLines,
+  watchProcessingLabel,
   youtubeListThumbnailUrl,
 } from "./utils";
 
@@ -39,6 +41,33 @@ describe("formatSize / formatUsdCost / formatResolution", () => {
     expect(formatResolution(2160)).toBe("4K");
     expect(formatResolution(1080)).toBe("1080p");
     expect(formatResolution(null)).toBe("");
+  });
+});
+
+describe("downloadProgressPercent", () => {
+  it("uses downloaded/total when both are present", () => {
+    expect(downloadProgressPercent(100, 23_000_000, 345_000_000)).toBe(7);
+    expect(downloadProgressPercent(0, 0, 345_000_000)).toBe(0);
+    expect(downloadProgressPercent(50, 345_000_000, 345_000_000)).toBe(100);
+  });
+  it("falls back to the progress field without a total", () => {
+    expect(downloadProgressPercent(42)).toBe(42);
+    expect(downloadProgressPercent(42, 23_000_000, undefined)).toBe(42);
+    expect(downloadProgressPercent(undefined)).toBe(0);
+  });
+});
+
+describe("watchProcessingLabel", () => {
+  it("joins in-flight summary and preview work", () => {
+    expect(watchProcessingLabel({})).toBeNull();
+    expect(watchProcessingLabel({ processing_summary: true })).toBe("summary");
+    expect(watchProcessingLabel({ processing_sprites: true })).toBe("previews");
+    expect(
+      watchProcessingLabel({
+        processing_summary: true,
+        processing_sprites: true,
+      })
+    ).toBe("summary, previews");
   });
 });
 

@@ -45,7 +45,7 @@ export default function FeaturesPane() {
         />
         <SettingRow
           title="AI video summaries"
-          description="On-demand Watch page summaries from captions. Uses OpenRouter when connected; otherwise Ollama (recommend ≥6GB VRAM)."
+          description="Generated after download when captions are available. Uses OpenRouter when connected; otherwise Ollama (recommend ≥6GB VRAM). Regenerate anytime on Watch."
           hidden={
             !!q &&
             !match("summary", "summarize", "captions", "watch")

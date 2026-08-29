@@ -7,7 +7,7 @@ import {
   downloadErrorLabel,
 } from "../downloadErrors";
 import type { ChannelStat, DownloadJob, ProgressEvent } from "../types";
-import { formatSize } from "../utils";
+import { downloadProgressPercent, formatSize } from "../utils";
 import { PRESET_LABELS } from "../presets";
 import ChannelPicker from "./ChannelPicker";
 
@@ -42,11 +42,8 @@ export default function DownloadJobCard({
   const { updateJobOverrides, retryJob, cancelJob, dismissJob } =
     useDownloads();
   const status = jobStatus(job, live);
-  const maxPercentRef = useRef(0);
   const maxBytesRef = useRef(0);
   if (status === "downloading" || status === "processing") {
-    const raw = Math.min(100, live?.progress ?? job.progress);
-    maxPercentRef.current = Math.min(100, Math.max(maxPercentRef.current, raw));
     if (live?.downloaded_bytes) {
       maxBytesRef.current = Math.max(
         maxBytesRef.current,
@@ -54,16 +51,20 @@ export default function DownloadJobCard({
       );
     }
   } else {
-    maxPercentRef.current = 0;
     maxBytesRef.current = 0;
   }
-  const percent = Math.min(
-    100,
-    Math.round(
-      status === "downloading" || status === "processing"
-        ? maxPercentRef.current
-        : (live?.progress ?? job.progress)
-    )
+  const downloaded = Math.max(
+    maxBytesRef.current,
+    live?.downloaded_bytes ?? 0
+  );
+  const liveTotal =
+    status === "downloading" || status === "processing"
+      ? live?.total_bytes
+      : undefined;
+  const percent = downloadProgressPercent(
+    live?.progress ?? job.progress,
+    status === "downloading" || status === "processing" ? downloaded : undefined,
+    liveTotal
   );
   const completed = status === "completed";
   const failed = status === "error";
@@ -216,11 +217,7 @@ export default function DownloadJobCard({
       return bytes ? formatSize(bytes) : "";
     }
     if (status === "downloading" || status === "processing") {
-      const total = live?.total_bytes;
-      const downloaded = Math.max(
-        maxBytesRef.current,
-        live?.downloaded_bytes ?? 0
-      );
+      const total = liveTotal;
       if (total) {
         return `${formatSize(downloaded || null)} / ${formatSize(total)}`;
       }

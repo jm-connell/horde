@@ -16,7 +16,7 @@ URL
     -> library only: FFmpegSubtitlesConvertor -> .vtt, thumbnails + sprites, Video row
     -> SSE progress events -> Download UI
     -> device: browser GET /api/downloads/{id}/file; delete on dismiss
-    -> library: optional AI enqueue (embed / tags)
+    -> library: optional AI enqueue (embed / tags / summary)
 ```
 
 ## Module split
@@ -46,7 +46,8 @@ Download-related code is split for maintainability (façades may still re-export
 
 - Extractor args use yt-dlp’s default YouTube player clients minus `android_vr` (those CDN URLs now 403 after ~60s of range requests). bgutil POT is attached when `YTDLP_POT_BASE_URL` is set; cookies via [YouTube access](../ops/youtube-access.md).
 - Metadata extracts for downloads share the same global extract gate (1 + 1.25s spacing) as preview/feed extracts so concurrent browsing does not stampede YouTube.
-- Progress hooks update an in-memory `progress_store` consumed by SSE.
+- Progress hooks update an in-memory `progress_store` consumed by SSE. Percent is combined downloaded bytes over the combined format size (video+audio), not yt-dlp’s per-chunk `total_bytes`. Intermediate `*.f401.mp4` / `.part` finishes stay in `downloading`; only the merged output flips to `processing`.
+- Preview `preset_sizes` use the same `format_sort` (`res`, `fps`, `vbr`, `abr`) as the downloader and sum each selected format’s components (`filesize` / `filesize_approx` / bitrate×duration), so 4K DASH is not labeled with a progressive mux or audio-only size.
 - Failures set `DownloadJob.error` plus a typed `error_kind` (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `cancelled`, `unknown`) for actionable UI.
 - Retry (`POST /api/downloads/{id}/retry`) resets a failed/cancelled job to `queued`. Extra retries while it is already active return that same job. Creating a download for a URL that is already queued/downloading at the same preset and destination reuses the existing job.
 

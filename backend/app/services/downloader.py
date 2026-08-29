@@ -39,6 +39,7 @@ from .ytdlp_common import (
 )
 
 from .ytdlp_formats import (
+    FORMAT_SORT,
     PRESET_MAX_HEIGHT,
     QUALITY_FORMATS,
     STANDARD_HEIGHTS,
@@ -518,84 +519,185 @@ def _update_job(job_id: int, **fields: Any) -> None:
         session.commit()
 
 
+_STREAM_SWITCH_SLOP = 512 * 1024
+
+
+def _positive_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _progress_stream_total(d: dict[str, Any]) -> Optional[int]:
+    """Whole-file size for the current stream, not the current HTTP Range."""
+    info = _as_info(d.get("info_dict"))
+    hint = _positive_int(info.get("filesize")) or _positive_int(
+        info.get("filesize_approx")
+    )
+    hook = _positive_int(d.get("total_bytes")) or _positive_int(
+        d.get("total_bytes_estimate")
+    )
+    if hint and hook:
+        # YouTube HTTPS uses ~10MB Range chunks; hook total is often the chunk.
+        return max(hint, hook)
+    return hint or hook
+
+
+def _progress_filename(d: dict[str, Any]) -> str:
+    raw = d.get("filename") or ""
+    try:
+        return Path(str(raw)).name
+    except (TypeError, ValueError):
+        return str(raw)
+
+
+class _DownloadProgress:
+    """Turn yt-dlp hook events into UI snapshots with consistent bytes/percent.
+
+    Chunked HTTP and video-then-audio resets make hook `total_bytes` a poor
+    denominator; this accumulates across streams and prefers format filesize.
+    """
+
+    def __init__(self) -> None:
+        self.accumulated_bytes = 0
+        self.last_stream_downloaded = 0
+        self.accumulated_total = 0
+        self.last_stream_total = 0
+        self.max_displayed_bytes = 0
+
+    def _note_stream_switch(self, downloaded: int) -> None:
+        if downloaded < self.last_stream_downloaded - _STREAM_SWITCH_SLOP:
+            self.accumulated_bytes += self.last_stream_downloaded
+            self.accumulated_total += self.last_stream_total
+            self.last_stream_downloaded = 0
+            self.last_stream_total = 0
+
+    def _apply_downloaded(
+        self, downloaded: int, stream_total: Optional[int]
+    ) -> None:
+        self.last_stream_downloaded = max(self.last_stream_downloaded, downloaded)
+        if stream_total:
+            self.last_stream_total = max(self.last_stream_total, stream_total)
+        combined = self.accumulated_bytes + self.last_stream_downloaded
+        self.max_displayed_bytes = max(self.max_displayed_bytes, combined)
+
+    def _combined_total(self) -> Optional[int]:
+        if self.last_stream_total:
+            return self.accumulated_total + self.last_stream_total
+        if self.accumulated_total:
+            return self.accumulated_total + self.last_stream_downloaded
+        return None
+
+    def _ratio(self) -> float:
+        total = self._combined_total()
+        if not total:
+            return 0.0
+        return min(100.0, self.max_displayed_bytes / total * 100)
+
+    def _downloading_snapshot(self, info: dict[str, Any]) -> dict[str, Any]:
+        snap: dict[str, Any] = {
+            "status": "downloading",
+            "progress": round(self._ratio(), 1),
+            "title": info.get("title"),
+            "channel": info.get("uploader") or info.get("channel"),
+            "downloaded_bytes": self.max_displayed_bytes,
+        }
+        total = self._combined_total()
+        if total:
+            snap["total_bytes"] = total
+        return snap
+
+    def _is_final_finished(self, d: dict[str, Any], downloaded: int) -> bool:
+        name = _progress_filename(d)
+        if name and _is_intermediate_media(name):
+            return False
+        info = _as_info(d.get("info_dict"))
+        hint = _positive_int(info.get("filesize")) or _positive_int(
+            info.get("filesize_approx")
+        )
+        if hint and downloaded and downloaded < int(hint * 0.95):
+            return False
+        return bool(name)
+
+    def apply(self, d: dict[str, Any]) -> Optional[dict[str, Any]]:
+        status = d.get("status")
+        info = _as_info(d.get("info_dict"))
+        if status == "downloading":
+            downloaded = int(d.get("downloaded_bytes", 0) or 0)
+            self._note_stream_switch(downloaded)
+            self._apply_downloaded(downloaded, _progress_stream_total(d))
+            return self._downloading_snapshot(info)
+        if status == "finished":
+            downloaded = (
+                _positive_int(d.get("downloaded_bytes"))
+                or self.last_stream_downloaded
+            )
+            if downloaded:
+                self._note_stream_switch(downloaded)
+                self._apply_downloaded(downloaded, _progress_stream_total(d))
+            if not self._is_final_finished(d, downloaded or 0):
+                return self._downloading_snapshot(info)
+            snap: dict[str, Any] = {
+                "status": "processing",
+                "progress": min(100.0, max(self._ratio(), 99.0)),
+                "downloaded_bytes": self.max_displayed_bytes,
+            }
+            total = self._combined_total()
+            if total:
+                snap["total_bytes"] = total
+            title = info.get("title")
+            if title:
+                snap["title"] = title
+            return snap
+        return None
+
+
 def _make_progress_hook(
     job_id: int,
     cancel_event: threading.Event,
     activity_handle: Optional[activity.ActivityHandle] = None,
 ):
-    accumulated_bytes = 0
-    last_stream_downloaded = 0
-    max_displayed_bytes = 0
-    max_percent = 0.0
+    tracker = _DownloadProgress()
     last_activity_at = 0.0
     last_activity_pct = -1.0
 
     def hook(d: dict[str, Any]) -> None:
-        nonlocal accumulated_bytes, last_stream_downloaded
-        nonlocal max_displayed_bytes, max_percent
         nonlocal last_activity_at, last_activity_pct
         if cancel_event.is_set():
             raise DownloadCancelled()
         if not isinstance(d, dict):
             return
         try:
-            status = d.get("status")
-            if status == "downloading":
-                total = d.get("total_bytes") or d.get("total_bytes_estimate")
-                downloaded = d.get("downloaded_bytes", 0) or 0
-                # yt-dlp resets byte counters per stream (video then audio).
-                if downloaded < last_stream_downloaded - 512 * 1024:
-                    accumulated_bytes += last_stream_downloaded
-                    last_stream_downloaded = 0
-                last_stream_downloaded = max(last_stream_downloaded, downloaded)
-                combined = accumulated_bytes + last_stream_downloaded
-                max_displayed_bytes = max(max_displayed_bytes, combined)
-                # Per-stream totals make combined/total exceed 100% across
-                # video+audio; clamp so the UI never shows 800%+.
-                percent = min(100.0, (combined / total * 100) if total else 0.0)
-                max_percent = min(100.0, max(max_percent, percent))
-                info = _as_info(d.get("info_dict"))
-                title = info.get("title")
-                progress_store[job_id] = {
-                    "status": "downloading",
-                    "progress": round(max_percent, 1),
-                    "title": title,
-                    "channel": info.get("uploader") or info.get("channel"),
-                    "total_bytes": total,
-                    "downloaded_bytes": max_displayed_bytes,
-                }
-                if activity_handle is not None:
-                    now = time.time()
-                    pct_i = int(max_percent)
-                    if now - last_activity_at >= 1.0 or pct_i >= last_activity_pct + 5:
-                        last_activity_at = now
-                        last_activity_pct = pct_i
-                        activity_handle.update(
-                            done=pct_i,
-                            total=100,
-                            detail=title or None,
-                        )
-            elif status == "finished":
-                info = _as_info(d.get("info_dict"))
-                size = (
-                    info.get("filesize")
-                    or info.get("filesize_approx")
-                    or last_stream_downloaded
+            snap = tracker.apply(d)
+            if not snap:
+                return
+            progress_store[job_id] = snap
+            if activity_handle is None:
+                return
+            if snap.get("status") == "processing":
+                activity_handle.update(
+                    done=99,
+                    total=100,
+                    detail="Merging streams",
+                    engine="ffmpeg",
                 )
-                if size:
-                    accumulated_bytes += int(size)
-                last_stream_downloaded = 0
-                progress_store[job_id] = {
-                    "status": "processing",
-                    "progress": min(100.0, max(max_percent, 99.0)),
-                }
-                if activity_handle is not None:
-                    activity_handle.update(
-                        done=99,
-                        total=100,
-                        detail="Merging streams",
-                        engine="ffmpeg",
-                    )
+                return
+            now = time.time()
+            pct_i = int(snap.get("progress") or 0)
+            if now - last_activity_at >= 1.0 or pct_i >= last_activity_pct + 5:
+                last_activity_at = now
+                last_activity_pct = pct_i
+                activity_handle.update(
+                    done=pct_i,
+                    total=100,
+                    detail=snap.get("title") or None,
+                )
+        except DownloadCancelled:
+            raise
         except Exception:  # noqa: BLE001 — never fail a download over progress UI
             return
 
@@ -1273,7 +1375,7 @@ def _run_download(
             "merge_output_format": "mp4",
             "ignoreerrors": True,
             "overwrites": True,
-            "format_sort": ["res", "fps", "vbr", "abr"],
+            "format_sort": FORMAT_SORT,
             "file_access_retries": 10,
             "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
             "extractor_args": youtube_extractor_args(),

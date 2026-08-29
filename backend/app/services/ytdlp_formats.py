@@ -50,6 +50,9 @@ PRESET_MAX_HEIGHT: dict[str, Optional[int]] = {
 
 STANDARD_HEIGHTS = (2160, 1440, 1080, 720, 480)
 
+# Must match download YoutubeDL opts so preview sizes pick the same stream.
+FORMAT_SORT = ["res", "fps", "vbr", "abr"]
+
 
 def is_audio_preset(preset: str) -> bool:
     return preset == "audio" or preset.startswith("audio-")

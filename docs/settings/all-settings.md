@@ -48,7 +48,7 @@ Related constants: catalog description limit for newest uploads ≈ 200 (`CHANNE
 | `openrouter_scope` | `"specialized"` | string | `specialized` \| `all` | AI |
 | `openrouter_embed_model` | `"openai/text-embedding-3-small"` | string | | AI |
 | `ollama_prefer_embeddings` | `false` | bool | | AI |
-| `openrouter_show_costs` | `true` | bool | | AI |
+| `openrouter_show_costs` | `false` | bool | | AI |
 | `openrouter_weekly_budget_usd` | `null` | float \| null | ~0.01–100000; null/0 = off | AI |
 | `openrouter_budget_hard_limit` | `false` | bool | | AI |
 | `schedule` | `"on_download"` | string | `on_download` \| `on_request` \| `timer` \| `set_time` | AI |
@@ -59,7 +59,7 @@ Related constants: catalog description limit for newest uploads ≈ 200 (`CHANNE
 | `use_subtitles` | `true` | bool | | AI |
 | `enrich_tags` | `true` | bool | | AI |
 | `tag_rescan_days` | `90` | int | 7–365 | AI |
-| `ai_summaries` | `true` | bool | | AI |
+| `ai_summaries` | `true` | bool | After download when captions exist | AI |
 | `ai_chat` | `true` | bool | | AI |
 | `summary_length` | `"short"` | string | `short` \| `medium` \| `long` | AI |
 | `ai_duplicates` | `true` | bool | On-demand Import LLM | AI |

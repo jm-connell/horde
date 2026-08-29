@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useToast } from "../context/ToastContext";
@@ -91,14 +91,8 @@ export default function Settings() {
   const [openRouterCosts, setOpenRouterCosts] = useState<OpenRouterCosts | null>(
     null
   );
-  const [aiProviderPane, setAiProviderPane] = useState<AiProviderPane>(() => {
-    try {
-      const v = localStorage.getItem("horde.aiProviderPane");
-      return v === "openrouter" ? "openrouter" : "local";
-    } catch {
-      return "local";
-    }
-  });
+  const [aiProviderPane, setAiProviderPane] = useState<AiProviderPane>("local");
+  const aiProviderPaneFromBackendRef = useRef(false);
   const [aiPane, setAiPane] = useState<AiPane>(() => {
     const fromUrl = resolveAiPaneParam(
       new URLSearchParams(window.location.search).get("pane")
@@ -221,6 +215,16 @@ export default function Settings() {
       .catch(() => undefined);
     refreshAiStatus();
   }, []);
+
+  useEffect(() => {
+    if (!appSettings?.ai || aiProviderPaneFromBackendRef.current) return;
+    if (q) return;
+    aiProviderPaneFromBackendRef.current = true;
+    const orInUse =
+      !!appSettings.ai.openrouter_enabled &&
+      !!appSettings.ai.openrouter_api_key_set;
+    setAiProviderPane(orInUse ? "openrouter" : "local");
+  }, [appSettings, q]);
 
   useEffect(() => {
     if (tab !== "ai" && tab !== "system") return;

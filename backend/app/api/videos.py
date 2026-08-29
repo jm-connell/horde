@@ -180,7 +180,7 @@ def get_video(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session)
+    return _to_read(video, session, include_processing=True)
 
 
 @router.get("/videos/{video_id}/related", response_model=list[VideoRead])

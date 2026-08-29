@@ -735,4 +735,14 @@ def dispatch(
     if kind == AiJobKind.refresh_categories:
         run_refresh_categories(session, video_id)
         return None
+    if kind == AiJobKind.summarize:
+        if video_id is None:
+            return "no video"
+        try:
+            run_summarize(session, video_id, force=False)
+        except SummarizeError as exc:
+            if exc.status_code in (400, 404):
+                return str(exc)[:200]
+            raise
+        return None
     raise RuntimeError(f"Unknown AI job kind: {kind}")

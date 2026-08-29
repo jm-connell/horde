@@ -9,6 +9,7 @@ def test_settings_get_defaults_and_patch_roundtrip(client):
     assert "ui" in body
     assert "ai" in body
     assert body["ai"]["openrouter_api_key_set"] is False
+    assert body["ai"]["openrouter_show_costs"] is False
 
     patched = client.patch(
         "/api/settings",
