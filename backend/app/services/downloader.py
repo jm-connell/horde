@@ -188,6 +188,8 @@ def _is_intermediate_media(name: str) -> bool:
         return True
     if ".norm." in low or low.endswith(".norm.mp4"):
         return True
+    if ".compat." in low or low.endswith(".compat.mp4"):
+        return True
     return False
 
 
@@ -969,6 +971,10 @@ def _apply_loudnorm(path: Path) -> Optional[str]:
         "loudnorm=I=-16:TP=-1.5:LRA=11",
         "-c:v",
         "copy",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "+faststart",
         str(tmp),
     ]
     try:
@@ -1073,8 +1079,20 @@ def _complete_download(
     source_url = info.get("webpage_url") or url
 
     volume_warning: Optional[str] = None
+    if final_path.exists():
+        from .mp4_compat import ensure_iphone_mp4
+
+        compat_warning = ensure_iphone_mp4(final_path)
+        if compat_warning:
+            volume_warning = compat_warning
     if normalize_volume and final_path.exists():
-        volume_warning = _apply_loudnorm(final_path)
+        loudnorm_warning = _apply_loudnorm(final_path)
+        if loudnorm_warning:
+            volume_warning = (
+                f"{volume_warning} {loudnorm_warning}".strip()
+                if volume_warning
+                else loudnorm_warning
+            )
 
     if cancel_event is not None and cancel_event.is_set():
         raise DownloadCancelled()

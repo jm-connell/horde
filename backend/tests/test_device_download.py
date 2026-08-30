@@ -17,6 +17,9 @@ def _write_media(path: Path, size: int = 64) -> None:
 
 def test_complete_device_skips_library_row(init_db, monkeypatch):
     monkeypatch.setattr(downloader, "_apply_loudnorm", lambda _p: None)
+    monkeypatch.setattr(
+        "app.services.mp4_compat.ensure_iphone_mp4", lambda _p: None
+    )
     monkeypatch.setattr(downloader, "_check_quality", lambda *_a, **_k: None)
     monkeypatch.setattr(downloader, "probe_duration", lambda _p: 12.0)
     monkeypatch.setattr(downloader, "probe_dimensions", lambda _p: (1280, 720))

@@ -40,7 +40,7 @@ A cancel that crashes before the DB write can requeue once — rare and acceptab
 ## Files not appearing in the library
 
 1. Confirm the file is under `DOWNLOADS_DIR` with a supported extension (`.mp4`, `.mkv`, `.webm`).
-2. Intermediate names (`.part`, `.fNNN.`, `.norm.`) are ignored until the final merge exists.
+2. Intermediate names (`.part`, `.fNNN.`, `.norm.`, `.compat.`) are ignored until the final merge exists.
 3. Wait for the watchdog or the poll interval (`SCAN_INTERVAL_SEC`, default 60s).
 4. Imports may sit in **needs review** — open [Import](../guides/import-review.md).
 5. Permissions: the process UID must read the file ([PUID/PGID](#permissions-puid-pgid)).
@@ -83,6 +83,12 @@ In-app watch-before-download preview resolves progressive or adaptive formats vi
 - Preview API errors include a structured `error_kind` when classification succeeds.
 
 **Preview plays ~40–60s then Shaka error 1001 / “Compatibility-mode preview failed”, and downloads say “Download produced no file”:** YouTube started rejecting `android_vr` googlevideo URLs after the first minute of Range requests (`Upstream returned 403`). Horde no longer forces that client; yt-dlp 2026.8.19+ uses `visionos` instead. Rebuild so the yt-dlp pin updates (`yt_dlp_version` on Settings → System / `/api/health` should be `2026.08.19` or newer), then retry. If 403s continue, treat it as a [bot check / POT](#bot-checks-youtube-blocks) problem.
+
+## Library playback fails on iPhone
+
+Desktop Chrome can play VP9 and Opus remuxed into MP4; **Safari on iPhone cannot** (VP9 is unsupported; Opus-in-MP4 is rejected as corrupt). Horde archives **AV1 + AAC** in MP4 with `faststart`. A17 Pro (iPhone 15 Pro) can decode that AV1; older iPhones may still fail AV1.
+
+**Fix:** re-download with **Change resolution** so the new selectors run. Existing files are not rewritten in place. Do not use Chrome DevTools device mode as a phone stand-in.
 
 ## Stale UI after update
 

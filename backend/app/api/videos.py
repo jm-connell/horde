@@ -738,7 +738,11 @@ def stream_video(
 
     range_header = request.headers.get("range")
     if range_header is None:
-        return FileResponse(path, media_type=content_type)
+        return FileResponse(
+            path,
+            media_type=content_type,
+            headers={"Accept-Ranges": "bytes"},
+        )
 
     match = _RANGE_RE.fullmatch(range_header.strip())
     if match is None:

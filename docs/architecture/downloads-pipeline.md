@@ -12,6 +12,7 @@ URL
     -> yt-dlp download (POT + cookies, quality preset)
     -> library: Channel/YYYY/Title [id].ext
        device:  _device/{job_id}/Title [id].ext (ephemeral)
+    -> AAC + faststart remux (video copy)
     -> optional loudnorm (.norm intermediate)
     -> library only: FFmpegSubtitlesConvertor -> .vtt, thumbnails + sprites, Video row
     -> SSE progress events -> Download UI
@@ -27,7 +28,8 @@ Download-related code is split for maintainability (façades may still re-export
 |--------|------|
 | `downloader.py` | `DownloadQueue`, finalize, playlist import orchestration |
 | `ytdlp_extract.py` | Download-card preview, channel feed fetch, channel search |
-| `ytdlp_formats.py` | Quality preset / format-chain helpers |
+| `ytdlp_formats.py` | Quality preset / format-chain helpers (AV1 + AAC first) |
+| `mp4_compat.py` | Video-copy AAC + faststart remux for iPhone Safari |
 | `stream_preview.py` | In-app progressive + DASH preview caches/manifests |
 | `ytdlp_common.py` | Cookies, POT, extract gate, error classification |
 
@@ -37,7 +39,7 @@ Download-related code is split for maintainability (façades may still re-export
 
 ## yt-dlp
 
-- Format presets: `best`, height caps (`2160p`…`480p`), `audio`.
+- Format presets: `best`, height caps (`2160p`…`480p`), `audio`. Selectors prefer AV1 then AAC; `format_sort` is `res`, `fps`, `hdr:12`, `vcodec:av01`, `acodec:mp4a`, `vbr`, `abr`. There is no H.264 transcode.
 - Output template under `DOWNLOADS_DIR`:
 
   ```text
@@ -47,7 +49,7 @@ Download-related code is split for maintainability (façades may still re-export
 - Extractor args use yt-dlp’s default YouTube player clients minus `android_vr` (those CDN URLs now 403 after ~60s of range requests). bgutil POT is attached when `YTDLP_POT_BASE_URL` is set; cookies via [YouTube access](../ops/youtube-access.md).
 - Metadata extracts for downloads share the same global extract gate (1 + 1.25s spacing) as preview/feed extracts so concurrent browsing does not stampede YouTube.
 - Progress hooks update an in-memory `progress_store` consumed by SSE. Percent is combined downloaded bytes over the combined format size (video+audio), not yt-dlp’s per-chunk `total_bytes`. Intermediate `*.f401.mp4` / `.part` finishes stay in `downloading`; only the merged output flips to `processing`.
-- Preview `preset_sizes` use the same `format_sort` (`res`, `fps`, `vbr`, `abr`) as the downloader and sum each selected format’s components (`filesize` / `filesize_approx` / bitrate×duration), so 4K DASH is not labeled with a progressive mux or audio-only size.
+- Preview `preset_sizes` walk the same `format_chain` + `format_sort` as the downloader and sum each selected format’s components (`filesize` / `filesize_approx` / bitrate×duration), so 4K DASH is not labeled with a progressive mux or audio-only size.
 - Failures set `DownloadJob.error` plus a typed `error_kind` (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `cancelled`, `unknown`) for actionable UI.
 - Retry (`POST /api/downloads/{id}/retry`) resets a failed/cancelled job to `queued`. Extra retries while it is already active return that same job. Creating a download for a URL that is already queued/downloading at the same preset and destination reuses the existing job.
 
@@ -60,7 +62,8 @@ Global queue pause is persisted as `download_queue_paused` in app settings so it
 | Step | Detail |
 |------|--------|
 | **FFmpegSubtitlesConvertor** | yt-dlp postprocessor → WebVTT sidecars |
-| **loudnorm** | Optional EBU-ish loudness (`I=-16:TP=-1.5:LRA=11`) when the job requests normalize |
+| **mp4 compat** | Video-copy remux: AAC audio if needed, `+faststart`. Never transcodes AV1. |
+| **loudnorm** | Optional EBU-ish loudness (`I=-16:TP=-1.5:LRA=11`) when the job requests normalize; keeps AAC + faststart |
 | **Thumbnails** | Cached under `DATA_DIR/thumbnails` |
 | **Sprites** | Seek-preview sheet + JSON under `DATA_DIR/sprites` |
 

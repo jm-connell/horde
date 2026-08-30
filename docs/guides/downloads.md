@@ -6,7 +6,7 @@ The **Download** page (`/download`) is where you paste a URL, pick a quality pre
 
 | Preset | Meaning |
 |--------|---------|
-| **best** | Best combined video+audio yt-dlp can get |
+| **best** | Highest resolution **AV1** (then other codecs) + AAC when YouTube offers it |
 | **2160p** | Cap height ≤ 2160 (4K) |
 | **1440p** | Cap ≤ 1440 |
 | **1080p** | Cap ≤ 1080 |
@@ -17,7 +17,9 @@ The **Download** page (`/download`) is where you paste a URL, pick a quality pre
 
 After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known. Audio bitrate caps that are at or above the source’s best stream are omitted (use **Audio (best)** instead).
 
-Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
+Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. Within a height, Horde prefers **AV1 + AAC** over a higher-bitrate VP9/H.264 stream, then remuxes to MP4 with `faststart` (video is copied, never transcoded). If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
+
+iPhone Safari (including Chrome on iOS) can play AV1 on A17 Pro hardware but rejects **VP9** and **Opus-in-MP4**. Older library files downloaded before this preference may need **Change resolution** to re-fetch. Desktop Chrome’s device emulation is not a substitute for a real phone.
 
 ## Change resolution (library)
 
@@ -72,7 +74,7 @@ Horde creates a playlist and queues downloads for the selected entries. Manage t
 
 ## Loudnorm (optional)
 
-You can enable **volume normalization** (ffmpeg `loudnorm`) on download. When on, Horde runs a post-download loudness pass (I=−16, TP=−1.5, LRA=11) if `ffmpeg` is available. If ffmpeg is missing or the pass fails, the download still succeeds with a warning.
+You can enable **volume normalization** (ffmpeg `loudnorm`) on download. When on, Horde runs a post-download loudness pass (I=−16, TP=−1.5, LRA=11) if `ffmpeg` is available. Video is copied; audio is re-encoded to AAC with `faststart` so the file stays phone-playable. If ffmpeg is missing or the pass fails, the download still succeeds with a warning.
 
 Toggle via the download options / `normalizeVolumeOnDownload` preference when submitting.
 
