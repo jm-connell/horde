@@ -65,3 +65,13 @@ def test_init_db_on_fresh_temp(tmp_dirs):
 
     init_db()
     verify_schema()
+
+
+def test_engine_enables_wal(init_db):
+    from sqlalchemy import text
+
+    from app.database import engine
+
+    with engine.connect() as conn:
+        mode = conn.execute(text("PRAGMA journal_mode")).scalar()
+    assert str(mode).lower() == "wal"

@@ -130,9 +130,10 @@ def embed_video(session: Session, video_id: int) -> bool:
     model = resolve_embed_model(provider)
     use_subs = bool(ai.get("use_subtitles", True))
     digest = ai_text.content_hash(video, use_subtitles=use_subs)
-    meta = _get_or_create_meta(session, video_id)
+    meta = session.get(VideoAiMeta, video_id)
     if (
-        meta.content_hash == digest
+        meta is not None
+        and meta.content_hash == digest
         and meta.embed_status == "ready"
         and _embeddings_match_model(session, video_id, model)
     ):
@@ -144,25 +145,25 @@ def embed_video(session: Session, video_id: int) -> bool:
         return True
 
     docs = ai_text.documents_for_video(video, use_subtitles=use_subs)
-    # Remove old rows for this video.
-    old = session.exec(
-        select(VideoEmbedding).where(VideoEmbedding.video_id == video_id)
-    ).all()
-    for row in old:
-        session.delete(row)
-    session.flush()
+    usable = [(idx, doc) for idx, doc in docs if doc.strip()]
 
+    # OpenRouter records usage on a second Session. An uncommitted DELETE/flush
+    # here holds the SQLite write lock across the HTTP call and deadlocks:
+    # INSERT INTO openrouter_usage → database is locked → job fails.
+    session.commit()
+
+    if not usable:
+        meta = _get_or_create_meta(session, video_id)
+        meta.embed_status = "error"
+        meta.embed_error = "empty_document"
+        meta.content_hash = digest
+        meta.updated_at = utcnow()
+        session.add(meta)
+        session.commit()
+        raise RuntimeError("empty_document: no usable metadata or subtitle text")
+
+    texts = [doc for _, doc in usable]
     try:
-        usable = [(idx, doc) for idx, doc in docs if doc.strip()]
-        if not usable:
-            meta.embed_status = "error"
-            meta.embed_error = "empty_document"
-            meta.content_hash = digest
-            meta.updated_at = utcnow()
-            session.add(meta)
-            session.commit()
-            raise RuntimeError("empty_document: no usable metadata or subtitle text")
-        texts = [doc for _, doc in usable]
         embed_many = getattr(provider, "embed_many", None)
         if callable(embed_many):
             vectors = embed_many(
@@ -175,17 +176,24 @@ def embed_video(session: Session, video_id: int) -> bool:
                 )
                 for doc in texts
             ]
+        old = session.exec(
+            select(VideoEmbedding).where(VideoEmbedding.video_id == video_id)
+        ).all()
+        for row in old:
+            session.delete(row)
         for (chunk_index, _doc), vec in zip(usable, vectors):
-            row = VideoEmbedding(
-                video_id=video_id,
-                chunk_index=chunk_index,
-                model=model,
-                dim=len(vec),
-                vector=pack_vector(vec),
-                content_hash=digest,
-                updated_at=utcnow(),
+            session.add(
+                VideoEmbedding(
+                    video_id=video_id,
+                    chunk_index=chunk_index,
+                    model=model,
+                    dim=len(vec),
+                    vector=pack_vector(vec),
+                    content_hash=digest,
+                    updated_at=utcnow(),
+                )
             )
-            session.add(row)
+        meta = _get_or_create_meta(session, video_id)
         meta.embed_status = "ready"
         meta.embed_error = None
         meta.content_hash = digest

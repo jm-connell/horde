@@ -10,7 +10,7 @@ Back up both volume roots used by Compose (or your local dirs):
 | Host path | In-container | Contents |
 |-----------|--------------|----------|
 | `DOWNLOADS_PATH` | `DOWNLOADS_DIR` (`/downloads`) | Media library, imports, subtitle sidecars |
-| `DATA_PATH` | `DATA_DIR` (`/app/data`) | `horde.db`, settings, caches, user fonts/backgrounds |
+| `DATA_PATH` | `DATA_DIR` (`/app/data`) | `horde.db` (and WAL sidecars `horde.db-wal` / `horde.db-shm`), settings, caches, user fonts/backgrounds |
 
 A consistent snapshot of **both** keeps file paths and DB rows aligned. Backing up only the DB without media leaves broken library entries; media without the DB loses titles, tags, progress, playlists, and AI meta.
 

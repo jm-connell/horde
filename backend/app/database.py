@@ -3,22 +3,51 @@
 Migrations are recorded in ``schema_migrations`` so order is explicit and tests
 can assert idempotency. New columns still use ``ALTER TABLE … ADD COLUMN``;
 destructive one-shots can be added as numbered Python steps later.
+
+The engine uses WAL + a busy timeout so API threads, scanners, and the AI
+worker can overlap. Nested Sessions (OpenRouter cost ledger) still must not
+start a second writer while another Session holds an uncommitted write.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Generator
 from datetime import datetime, timezone
+from typing import Any
 
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
+from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
 from .config import DATABASE_URL
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
+# SQLite busy timeout (seconds) — also set as PRAGMA so pooled reconnects match.
+SQLITE_BUSY_TIMEOUT_MS = 15_000
+SQLITE_CONNECT_ARGS: dict[str, Any] = {
+    "check_same_thread": False,
+    "timeout": SQLITE_BUSY_TIMEOUT_MS / 1000.0,
+}
+
+
+def _apply_sqlite_pragmas(dbapi_conn: Any, _connection_record: Any) -> None:
+    cursor = dbapi_conn.cursor()
+    try:
+        cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+    finally:
+        cursor.close()
+
+
+def create_sqlite_engine(url: str) -> Engine:
+    """File-backed SQLite engine with WAL and a busy timeout."""
+    eng = create_engine(url, connect_args=SQLITE_CONNECT_ARGS)
+    if str(url).startswith("sqlite"):
+        event.listen(eng, "connect", _apply_sqlite_pragmas)
+    return eng
+
+
+engine = create_sqlite_engine(DATABASE_URL)
 
 # Columns added after the initial schema. SQLite lacks rich migrations, so we
 # add any that are missing on startup. Each entry is (column, SQL definition).

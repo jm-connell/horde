@@ -2,18 +2,34 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
+from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
 
 from ...database import engine
 from ...models import OpenRouterUsage, as_utc, utcnow
 from ...services import app_settings
 
+logger = logging.getLogger(__name__)
+
 
 class OpenRouterBudgetExceeded(RuntimeError):
     """Raised when a hard weekly OpenRouter spend limit is exceeded."""
+
+
+def _is_sqlite_lock_error(exc: BaseException) -> bool:
+    cur: BaseException | None = exc
+    for _ in range(6):
+        if cur is None:
+            break
+        msg = str(cur).lower()
+        if "database is locked" in msg or "database is busy" in msg:
+            return True
+        cur = cur.__cause__ or cur.__context__
+    return False
 
 
 def record_cost(
@@ -25,7 +41,11 @@ def record_cost(
     prompt_tokens: Optional[int] = None,
     completion_tokens: Optional[int] = None,
 ) -> Optional[float]:
-    """Store a usage row when cost is a finite non-negative number. Returns cost."""
+    """Store a usage row when cost is a finite non-negative number. Returns cost.
+
+    Ledger failures are logged and swallowed so a locked SQLite file cannot
+    fail the OpenRouter call that already succeeded.
+    """
     if cost is None:
         return None
     try:
@@ -35,19 +55,34 @@ def record_cost(
     if value < 0 or value != value:  # NaN
         return None
     kind_clean = (kind or "other").strip()[:40] or "other"
-    with Session(engine) as session:
-        row = OpenRouterUsage(
-            kind=kind_clean,
-            cost=value,
-            model=(model or "").strip()[:120] or None,
-            video_id=video_id,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            created_at=utcnow(),
-        )
-        session.add(row)
-        session.commit()
-    _maybe_pause_on_hard_budget()
+    persisted = False
+    try:
+        with Session(engine) as session:
+            session.add(
+                OpenRouterUsage(
+                    kind=kind_clean,
+                    cost=value,
+                    model=(model or "").strip()[:120] or None,
+                    video_id=video_id,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    created_at=utcnow(),
+                )
+            )
+            session.commit()
+        persisted = True
+    except OperationalError as exc:
+        if _is_sqlite_lock_error(exc):
+            logger.warning("OpenRouter usage not recorded (database locked)")
+        else:
+            logger.warning("OpenRouter usage not recorded: %s", exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("OpenRouter usage not recorded: %s", exc)
+    if persisted:
+        try:
+            _maybe_pause_on_hard_budget()
+        except Exception:  # noqa: BLE001
+            logger.warning("OpenRouter budget pause check failed", exc_info=True)
     return value
 
 

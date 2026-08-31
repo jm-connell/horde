@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel
 
 # backend/ is the import root (package name: app)
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -71,10 +71,7 @@ def tmp_dirs(tmp_path, monkeypatch):
 
     import app.database as database
 
-    new_engine = create_engine(
-        database_url,
-        connect_args={"check_same_thread": False},
-    )
+    new_engine = database.create_sqlite_engine(database_url)
     monkeypatch.setattr(database, "engine", new_engine)
 
     _rebind_imported_app_modules(

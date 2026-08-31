@@ -73,6 +73,16 @@ Docker entrypoint runs Horde as `PUID`:`PGID` (defaults `1000:1000`) and chowns 
 4. OpenRouter-only setups can run without Ollama when scope covers the tasks you need (embeddings may still want Ollama unless scope is **all** or cloud embeds are configured).
 5. After Ollama returns, jobs should claim without restarting Horde (dead URL cache is invalidated on provider errors).
 
+## AI jobs fail with `database is locked`
+
+**Symptoms:** Settings → AI → Jobs shows every embed (or tag/summary) failed with `(sqlite3.OperationalError) database is locked` on `INSERT INTO openrouter_usage`. OpenRouter itself often succeeded — the job dies while writing the cost ledger.
+
+**Cause:** The AI worker held an uncommitted SQLite write (for example deleting old embedding rows) while a second Session tried to record OpenRouter usage.
+
+**Fix:** update to a build that enables WAL and commits before the OpenRouter call, then **Retry all** failed jobs under Settings → AI → Jobs. Usage rows that failed to insert are skipped; embeddings/tags from a successful retry are stored.
+
+If locks persist after that build: confirm `DATA_PATH` is a local dataset (not NFS), only one Horde container uses `horde.db`, and the UI is not stuck on a hung request.
+
 ## DASH / stream preview issues
 
 In-app watch-before-download preview resolves progressive or adaptive formats via yt-dlp. Failures often share root causes with [bot checks](#bot-checks-youtube-blocks) or expired CDN URLs.

@@ -16,6 +16,14 @@ Postgres or MySQL would add operational surface area without matching the threat
 !!! warning "One instance per database file"
     Do not point multiple Horde containers at the same SQLite file over NFS. Stick to one runtime and a local or properly locked volume.
 
+## WAL and concurrency
+
+The engine enables **WAL** (`PRAGMA journal_mode=WAL`), `synchronous=NORMAL`, and a **15s busy timeout**. That lets the API, scanner, downloads, and the single-flight AI worker overlap reads with a writer.
+
+Nested Sessions still cannot hold two uncommitted **writes** at once. OpenRouter usage is recorded on its own Session after each API call, so job runners commit (or avoid flushing deletes) **before** that HTTP call. Otherwise SQLite raises `database is locked` on `INSERT INTO openrouter_usage` and the AI job fails even though the model call succeeded.
+
+WAL also creates `horde.db-wal` / `horde.db-shm` beside `horde.db`. Copy the whole `DATA_PATH` directory — not just `horde.db` — when backing up a running instance.
+
 ## Additive `ALTER TABLE`
 
 On startup, `init_db()`:

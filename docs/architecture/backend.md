@@ -40,7 +40,7 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 | Module | Role |
 |--------|------|
 | `config.py` | Env-derived paths and constants |
-| `database.py` | Engine, `create_all`, `schema_migrations` ledger, additive `ALTER` columns, `verify_schema` |
+| `database.py` | Engine (WAL + busy timeout), `create_all`, `schema_migrations` ledger, additive `ALTER` columns, `verify_schema` |
 | `models.py` | SQLModel tables |
 
 ## Lifespan order

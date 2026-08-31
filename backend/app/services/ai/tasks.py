@@ -181,9 +181,16 @@ def run_embed_catalog_video(
     doc = channel_catalog.catalog_document(video)
     if not doc.strip():
         return "empty_document"
+    existing_id = existing.id if existing is not None else None
+    # Release the job Session before OpenRouter usage is written on another connection.
+    session.commit()
     vec = provider.embed(doc, model, usage_kind="embed")
-    if existing is None:
+    if existing_id is None:
         existing = ChannelCatalogEmbedding(catalog_video_id=catalog_video_id)
+    else:
+        existing = session.get(ChannelCatalogEmbedding, existing_id)
+        if existing is None:
+            existing = ChannelCatalogEmbedding(catalog_video_id=catalog_video_id)
     existing.model = model
     existing.dim = len(vec)
     existing.vector = embeddings.pack_vector(vec)
@@ -253,6 +260,7 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> Optional[SkipR
 
     existing = library.parse_tags(video.tags)
     prompt = ai_text.tag_enrich_prompt(video, existing)
+    session.commit()
     raw = provider.chat(
         prompt,
         chat_model,
@@ -379,6 +387,7 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
     prompt = ai_text.summary_prompt(video, length=length)
     system = ai_text.summary_system_prompt(length)
     num_predict = ai_text.summary_num_predict(length)
+    session.commit()
     # Longer videos / higher num_predict need more than the default 120s chat timeout.
     _SUMMARIZE_TIMEOUT = 300.0
 
@@ -654,6 +663,8 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     entries = ai_text.bound_category_entries(
         entries, budget=runtime.invent_budget_chars
     )
+    titled_ids = [v.id for v in titled if v.id is not None]
+    session.commit()
 
     raw = llm.chat(
         ai_text.category_prompt(entries),
@@ -670,19 +681,16 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
 
     # Precompute invent-sample centroids for example picking.
     sample_centroids: list[tuple[Video, list[float]]] = []
-    for video in titled:
-        if video.id is None:
+    for video_id in titled_ids:
+        video = session.get(Video, video_id)
+        if video is None:
             continue
-        cent = embeddings.video_centroid(session, video.id)
+        cent = embeddings.video_centroid(session, video_id)
         if cent:
             sample_centroids.append((video, cent))
 
-    existing = session.exec(select(AiCategory)).all()
-    for row in existing:
-        session.delete(row)
-    session.flush()
-
     example_min = 0.28
+    prepared: list[tuple[str, Optional[str], list[float]]] = []
     for name, blurb in cleaned:
         provisional = ai_text.category_embed_text(name, blurb)
         q = embed_provider.embed(provisional, embed_model, usage_kind="embed")
@@ -705,10 +713,16 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
             store_vec = embeddings.l2_normalize(text_vec)
         else:
             store_vec = embeddings.blend_vectors(text_vec, cent, weight_a=0.5)
+        prepared.append((name, blurb or None, store_vec))
+
+    existing = session.exec(select(AiCategory)).all()
+    for row in existing:
+        session.delete(row)
+    for name, blurb, store_vec in prepared:
         session.add(
             AiCategory(
                 name=name,
-                blurb=blurb or None,
+                blurb=blurb,
                 embedding=embeddings.pack_vector(store_vec),
                 dim=len(store_vec),
                 model=embed_model,

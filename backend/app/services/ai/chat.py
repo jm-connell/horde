@@ -205,6 +205,7 @@ def stream_chat(
     context = ai_embeddings.build_chat_context(session, video, user_text)
     system = ai_text.chat_system_prompt() + "\n\n" + context
     history = _history_for_prompt(session, video_id)
+    session.commit()
 
     assistant_parts: list[str] = []
     try:
