@@ -23,11 +23,11 @@ from .ytdlp_common import (
 )
 from .ytdlp_formats import (
     FORMAT_SORT,
-    QUALITY_FORMATS,
     _available_presets,
     _has_audio,
     _height_to_tier,
     _video_heights,
+    format_chain,
 )
 
 
@@ -196,13 +196,14 @@ def _estimate_preset_sizes(
         except Exception:  # noqa: BLE001
             pass
         for preset in presets:
-            format_spec = QUALITY_FORMATS.get(preset)
-            if not format_spec:
-                continue
-            try:
-                size = _estimate_preset_bytes(ydl, work, format_spec)
-            except Exception:  # noqa: BLE001
-                size = None
+            size: Optional[int] = None
+            for format_spec in format_chain(preset):
+                try:
+                    size = _estimate_preset_bytes(ydl, work, format_spec)
+                except Exception:  # noqa: BLE001
+                    size = None
+                if size:
+                    break
             if size:
                 sizes[preset] = size
     return sizes

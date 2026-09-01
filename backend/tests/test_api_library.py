@@ -181,6 +181,20 @@ def test_stream_range_and_missing_file(client, add_video):
     full = client.get(f"/api/videos/{video.id}/stream")
     assert full.status_code == 200
     assert full.content == payload
+    assert full.headers.get("accept-ranges") == "bytes"
+
+    iphone = client.get(
+        f"/api/videos/{video.id}/stream",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 "
+                "Mobile/15E148 Safari/604.1"
+            )
+        },
+    )
+    assert iphone.status_code == 200
+    assert iphone.headers.get("accept-ranges") == "bytes"
 
     ranged = client.get(
         f"/api/videos/{video.id}/stream", headers={"Range": "bytes=10-19"}
@@ -192,6 +206,33 @@ def test_stream_range_and_missing_file(client, add_video):
 
     missing = add_video(title="Ghost", file_path="Alpha/2024/Ghost [bbbbbbbbbb1].mp4")
     assert client.get(f"/api/videos/{missing.id}/stream").status_code == 404
+
+
+def test_stream_iphone_runs_safari_remux(client, add_video, monkeypatch):
+    called = {"n": 0}
+
+    def fake_ensure(path):
+        called["n"] += 1
+        return path
+
+    monkeypatch.setattr("app.api.videos.ensure_safari_mp4", fake_ensure)
+    video = add_video(title="Phone", write_file=True, file_bytes=b"P" * 80)
+    desktop = client.get(f"/api/videos/{video.id}/stream")
+    assert desktop.status_code == 200
+    assert called["n"] == 0
+
+    phone = client.get(
+        f"/api/videos/{video.id}/stream",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 "
+                "Mobile/15E148 Safari/604.1"
+            )
+        },
+    )
+    assert phone.status_code == 200
+    assert called["n"] == 1
 
 
 def test_health_and_system_activity(client, add_video):

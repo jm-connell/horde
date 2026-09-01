@@ -21,6 +21,7 @@ from ..database import engine
 from ..models import DownloadDestination, DownloadJob, JobStatus, Video, VideoStatus
 from . import activity, library, scanner
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
+from .mp4_compat import ensure_safari_mp4
 from .paths import find_video_by_path, to_rel_path
 from .ytdlp_common import (
     ERROR_KIND_CANCELLED,
@@ -187,6 +188,8 @@ def _is_intermediate_media(name: str) -> bool:
     if ".temp." in low or low.endswith(".temp.mp4"):
         return True
     if ".norm." in low or low.endswith(".norm.mp4"):
+        return True
+    if ".compat." in low or low.endswith(".compat.mp4"):
         return True
     return False
 
@@ -969,6 +972,10 @@ def _apply_loudnorm(path: Path) -> Optional[str]:
         "loudnorm=I=-16:TP=-1.5:LRA=11",
         "-c:v",
         "copy",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "+faststart",
         str(tmp),
     ]
     try:
@@ -1071,6 +1078,9 @@ def _complete_download(
 
     info = _as_info(info)
     source_url = info.get("webpage_url") or url
+
+    if final_path.exists():
+        final_path = ensure_safari_mp4(final_path)
 
     volume_warning: Optional[str] = None
     if normalize_volume and final_path.exists():

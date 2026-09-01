@@ -25,6 +25,8 @@ from ..schemas import (
     WatchProgressUpdate,
 )
 from ..services import downloader, library
+from ..services.mp4_compat import apple_webkit_playback, ensure_safari_mp4
+from ..services.paths import to_rel_path
 from ..services.metadata import (
     delete_sprite_files,
     load_sprite_meta,
@@ -731,6 +733,29 @@ def stream_video(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     path = _resolve_media(video)
+    ua = request.headers.get("user-agent") or ""
+    if apple_webkit_playback(ua):
+        remuxed = ensure_safari_mp4(path)
+        try:
+            new_size = remuxed.stat().st_size
+        except OSError:
+            new_size = None
+        changed = remuxed != path
+        if changed:
+            try:
+                video.file_path = to_rel_path(remuxed)
+            except ValueError:
+                pass
+            else:
+                path = remuxed
+        if new_size is not None and video.file_size != new_size:
+            video.file_size = new_size
+            changed = True
+        if changed:
+            session.add(video)
+            session.commit()
+        path = remuxed if remuxed.exists() else path
+
     file_size = path.stat().st_size
 
     suffix = path.suffix.lower()
@@ -738,7 +763,11 @@ def stream_video(
 
     range_header = request.headers.get("range")
     if range_header is None:
-        return FileResponse(path, media_type=content_type)
+        return FileResponse(
+            path,
+            media_type=content_type,
+            headers={"Accept-Ranges": "bytes"},
+        )
 
     match = _RANGE_RE.fullmatch(range_header.strip())
     if match is None:

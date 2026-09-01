@@ -31,7 +31,7 @@ Moving the same DOM node keeps the media element alive: **no reload, no seek res
 
 ## Shaka DASH for stream preview
 
-**Downloaded library files** play as progressive media from Horde’s static/range endpoints.
+**Downloaded library files** play as progressive media from Horde’s static/range endpoints. After download, Horde remuxes to **MP4 + AAC + faststart** while **copying** the video bitstream (AV1 stays AV1). That is what iPhone Safari needs; it is not an H.264 transcode.
 
 **In-app YouTube stream preview** (watch before download) uses a different path: the backend exposes preview APIs (`stream_preview` + `api/preview.py`), and the client loads **Shaka Player** via `useShakaDash` for adaptive **DASH** when available. If DASH is unsupported or fails critically, playback falls back to a progressive (≤720p-class) proxy URL. Preview → library download handoff remounts the player (and the `<video>` element) so the file URL is never applied to an element that still has Shaka’s MediaSource attached.
 

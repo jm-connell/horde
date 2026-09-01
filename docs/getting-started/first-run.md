@@ -47,7 +47,7 @@ Sidecar metadata and thumbnails are stored with the app under `DATA_PATH` (`/app
 
 ## Browse the library
 
-After the job finishes, the video should appear in the [Library](../guides/library.md): channel sidebar, search, tags, and sorting. Click through to play in the built-in player (no transcoding — the browser streams the original file with HTTP range requests).
+After the job finishes, the video should appear in the [Library](../guides/library.md): channel sidebar, search, tags, and sorting. Click through to play in the built-in player (no live video transcode — the browser streams the archived AV1+AAC MP4 with HTTP range requests).
 
 ## Optional: drop files for import
 
