@@ -36,6 +36,8 @@ const CONTROLS_HIDE_DELAY_MS = 2500;
 const HOLD_DELAY_MS = 250;
 const MIN_MINI_WIDTH = 160;
 const MAX_MINI_WIDTH = 960;
+/** Mobile fires waiting/stalled during normal play; don't flash the overlay. */
+const BUFFERING_INDICATOR_DELAY_MS = 400;
 
 function snapRateToStep(r: number): number {
   if (SPEED_STEPS.includes(r)) return r;
@@ -223,6 +225,29 @@ export default function VideoPlayer({
   const isSeekingRef = useRef(false);
   const pendingSeekRef = useRef(initialPosition);
   const [buffering, setBuffering] = useState(true);
+  const bufferingShowTimer = useRef<number | null>(null);
+
+  const hideBuffering = useCallback(() => {
+    if (bufferingShowTimer.current != null) {
+      window.clearTimeout(bufferingShowTimer.current);
+      bufferingShowTimer.current = null;
+    }
+    setBuffering(false);
+  }, []);
+
+  const scheduleBuffering = useCallback(() => {
+    const el = videoRef.current;
+    if (!el || el.paused || el.ended || isSeekingRef.current) return;
+    if (el.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) return;
+    if (bufferingShowTimer.current != null) return;
+    bufferingShowTimer.current = window.setTimeout(() => {
+      bufferingShowTimer.current = null;
+      const v = videoRef.current;
+      if (!v || v.paused || v.ended || isSeekingRef.current) return;
+      if (v.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) return;
+      setBuffering(true);
+    }, BUFFERING_INDICATOR_DELAY_MS);
+  }, []);
   const suppressedSegmentsRef = useRef(new Set<string>());
   const [ccNotice, setCcNotice] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -309,6 +334,10 @@ export default function VideoPlayer({
     setSkipNotice(null);
     setCcNotice(null);
     setMediaError(null);
+    if (bufferingShowTimer.current != null) {
+      window.clearTimeout(bufferingShowTimer.current);
+      bufferingShowTimer.current = null;
+    }
     setBuffering(true);
     setCompatMode(false);
     setShakaReady(false);
@@ -319,6 +348,14 @@ export default function VideoPlayer({
     // Seed from the setting once per src; in-player changes stay session-scoped.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
   }, [src]);
+
+  useEffect(() => {
+    return () => {
+      if (bufferingShowTimer.current != null) {
+        window.clearTimeout(bufferingShowTimer.current);
+      }
+    };
+  }, []);
 
   useShakaDashLoad({
     src,
@@ -1657,6 +1694,9 @@ export default function VideoPlayer({
             prevTimeRef.current = t;
             setCurrent(t);
             onProgress?.(t);
+            if (t > prev + 0.02 && !e.currentTarget.paused) {
+              hideBuffering();
+            }
             // SponsorBlock: auto-skip on forward playback; seeking back into a
             // segment suppresses it for the rest of this source.
             // Skip while a programmatic/user seek is in flight so distant
@@ -1707,15 +1747,14 @@ export default function VideoPlayer({
           }}
           onSeeked={() => {
             isSeekingRef.current = false;
-            setBuffering(false);
+            hideBuffering();
           }}
           onSeeking={() => {
             isSeekingRef.current = true;
           }}
-          onWaiting={() => setBuffering(true)}
-          onStalled={() => setBuffering(true)}
-          onPlaying={() => setBuffering(false)}
-          onCanPlay={() => setBuffering(false)}
+          onWaiting={scheduleBuffering}
+          onPlaying={hideBuffering}
+          onCanPlay={hideBuffering}
           onLoadedMetadata={(e) => {
             const el = e.currentTarget;
             setDuration(el.duration);
@@ -1733,7 +1772,7 @@ export default function VideoPlayer({
           }}
           onEnded={onEnded}
           onError={() => {
-            setBuffering(false);
+            hideBuffering();
             if (effectiveStreamType === "dash") {
               if (enterCompatMode()) return;
               setMediaError(

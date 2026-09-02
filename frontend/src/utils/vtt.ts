@@ -19,6 +19,10 @@ const CUE_TIMING_RE =
 const WORD_TAG_RE =
   /<(\d{1,2}:\d{2}:\d{2}\.\d{3})><c>([^<]*)<\/c>/g;
 const MIN_CUE_DURATION_SEC = 0.05;
+/** Close typical YouTube inter-cue holes so the overlay doesn't blink off. */
+export const CUE_GAP_FILL_SEC = 0.5;
+/** Keep the last line visible this long after it ends, unless the next cue starts. */
+export const CUE_HOLD_SEC = 0.85;
 
 export function parseVttTimestamp(ts: string): number {
   const m = TS_RE.exec(ts.trim());
@@ -188,19 +192,25 @@ export function parseVttLines(text: string): CaptionLine[] {
     raw.push({ startSec, endSec, words, text: lineText });
   }
 
-  // Dedupe consecutive identical plain text (rollup can emit duplicates).
+  // Dedupe consecutive identical plain text (rollup can emit duplicates),
+  // keeping the union of their time ranges so coverage doesn't go hollow.
   const deduped: CaptionLine[] = [];
   for (const line of raw) {
     const prev = deduped[deduped.length - 1];
-    if (prev && prev.text === line.text) continue;
+    if (prev && prev.text === line.text) {
+      prev.endSec = Math.max(prev.endSec, line.endSec);
+      continue;
+    }
     deduped.push(line);
   }
 
-  // Rollup cues abut (next starts as prior ends). Stretch endSec to the next
-  // start when they're nearly contiguous so word reveal never gaps.
+  // Fill small forward gaps so word reveal doesn't drop out between cues.
+  // Never shorten: overlapping rollup cues must keep their full span.
   for (let i = 0; i < deduped.length; i++) {
     const next = deduped[i + 1];
-    if (next && next.startSec - deduped[i].endSec < 0.12) {
+    if (!next) continue;
+    const gap = next.startSec - deduped[i].endSec;
+    if (gap > 0 && gap < CUE_GAP_FILL_SEC) {
       deduped[i] = { ...deduped[i], endSec: next.startSec };
     }
   }
@@ -208,7 +218,7 @@ export function parseVttLines(text: string): CaptionLine[] {
   return deduped;
 }
 
-/** Active line at time t, or -1 if none. */
+/** Active line at time t, or -1 if none. Prefers the latest still-covering cue. */
 export function findCaptionLineIndex(
   lines: CaptionLine[],
   t: number
@@ -225,9 +235,32 @@ export function findCaptionLineIndex(
       hi = mid - 1;
     }
   }
-  if (ans < 0) return -1;
-  if (t >= lines[ans].endSec) return -1;
-  return ans;
+  while (ans >= 0) {
+    const line = lines[ans];
+    if (t >= line.startSec && t < line.endSec) return ans;
+    ans -= 1;
+  }
+  return -1;
+}
+
+/**
+ * True when playback is in a short hole after `prevIdx` and we should keep
+ * showing that line instead of clearing (avoids a blink at cue boundaries).
+ */
+export function shouldHoldCaption(
+  lines: CaptionLine[],
+  prevIdx: number,
+  t: number
+): boolean {
+  if (prevIdx < 0 || prevIdx >= lines.length) return false;
+  const prev = lines[prevIdx];
+  if (t < prev.startSec) return false;
+  const nextStart =
+    prevIdx + 1 < lines.length
+      ? lines[prevIdx + 1].startSec
+      : Number.POSITIVE_INFINITY;
+  const holdUntil = Math.min(prev.endSec + CUE_HOLD_SEC, nextStart);
+  return t < holdUntil;
 }
 
 export function revealedWordCount(line: CaptionLine, t: number): number {
@@ -236,5 +269,8 @@ export function revealedWordCount(line: CaptionLine, t: number): number {
     if (w.startSec <= t) n += 1;
     else break;
   }
+  // Karaoke tags often timestamp the first word slightly after cue start.
+  // Showing an empty boxed line for those few ms reads as a flicker.
+  if (n === 0 && line.words.length > 0 && t >= line.startSec) return 1;
   return n;
 }

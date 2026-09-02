@@ -6,6 +6,7 @@ Download queue / playlist-import orchestration stays in downloader.py.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from typing import Any, Optional
@@ -337,45 +338,104 @@ _feed_cache: dict[tuple[str, int, int, int], tuple[float, dict[str, Any]]] = {}
 _feed_cache_lock = threading.Lock()
 
 
+_YOUTUBE_ID_RE = re.compile(r"^[\w-]{11}$")
+_YTIMG_ID_RE = re.compile(r"ytimg\.com/vi(?:_webp)?/([\w-]{11})/", re.I)
+_LIST_THUMB_TARGET_W = 320
+_WIDESCREEN = 16 / 9
+
+
+def _abs_thumb_url(url: str) -> str:
+    s = url.strip()
+    if s.startswith("//"):
+        return f"https:{s}"
+    return s
+
+
+def _youtube_thumb_id(
+    info: dict[str, Any], vid: Optional[str] = None, extra_url: Optional[str] = None
+) -> Optional[str]:
+    for candidate in (vid, info.get("id"), extra_url, info.get("thumbnail")):
+        if not isinstance(candidate, str) or not candidate:
+            continue
+        raw = candidate.strip()
+        if _YOUTUBE_ID_RE.match(raw):
+            return raw
+        found = _YTIMG_ID_RE.search(raw)
+        if found:
+            return found.group(1)
+    return None
+
+
+def _iter_sized_thumbs(info: dict[str, Any]):
+    thumbs = info.get("thumbnails")
+    if not isinstance(thumbs, list):
+        return
+    for item in thumbs:
+        if not isinstance(item, dict):
+            continue
+        url = item.get("url")
+        if not url:
+            continue
+        ident = str(item.get("id") or "").lower()
+        url_s = str(url)
+        if "storyboard" in ident or "storyboard" in url_s.lower():
+            continue
+        w = item.get("width") or 0
+        h = item.get("height") or 0
+        try:
+            width = int(w)
+            height = int(h)
+        except (TypeError, ValueError):
+            width, height = 0, 0
+        yield width, height, url_s
+
+
 def _best_thumbnail_url(
     info: dict[str, Any], vid: Optional[str] = None
 ) -> Optional[str]:
     """Pick the highest-res thumbnail from yt-dlp info, or a YouTube CDN URL."""
-    thumbs = info.get("thumbnails")
     best_url: Optional[str] = None
     best_area = -1
-    if isinstance(thumbs, list):
-        for item in thumbs:
-            if not isinstance(item, dict):
-                continue
-            url = item.get("url")
-            if not url:
-                continue
-            w = item.get("width") or 0
-            h = item.get("height") or 0
-            try:
-                area = int(w) * int(h)
-            except (TypeError, ValueError):
-                area = 0
-            if area >= best_area:
-                best_area = area
-                best_url = str(url).strip()
+    for width, height, url_s in _iter_sized_thumbs(info):
+        area = width * height
+        if area >= best_area:
+            best_area = area
+            best_url = url_s.strip()
     if best_url:
-        if best_url.startswith("//"):
-            return f"https:{best_url}"
-        return best_url
+        return _abs_thumb_url(best_url)
     thumb = info.get("thumbnail")
     if thumb:
         s = str(thumb).strip()
-        if s.startswith("//"):
-            return f"https:{s}"
-        if s.startswith("http"):
-            return s
-    video_id = vid or info.get("id")
-    if isinstance(video_id, str) and video_id:
+        if s.startswith("//") or s.startswith("http"):
+            return _abs_thumb_url(s)
+    video_id = _youtube_thumb_id(info, vid)
+    if video_id:
         # hqdefault is reliably available; maxresdefault 404s for some videos.
         return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     return None
+
+
+def _list_thumbnail_url(
+    info: dict[str, Any], vid: Optional[str] = None
+) -> Optional[str]:
+    """Pick a ~320px-wide 16:9 thumb for list tiles, or YouTube mqdefault."""
+    widescreen: list[tuple[int, str]] = []
+    any_sized: list[tuple[int, str]] = []
+    for width, height, url_s in _iter_sized_thumbs(info):
+        dist = abs(width - _LIST_THUMB_TARGET_W) if width else 10_000
+        any_sized.append((dist, url_s))
+        if width > 0 and height > 0 and abs((width / height) - _WIDESCREEN) <= 0.12:
+            widescreen.append((dist, url_s))
+    if widescreen:
+        widescreen.sort(key=lambda t: t[0])
+        return _abs_thumb_url(widescreen[0][1])
+    yt_id = _youtube_thumb_id(info, vid)
+    if yt_id:
+        return f"https://i.ytimg.com/vi/{yt_id}/mqdefault.jpg"
+    if any_sized:
+        any_sized.sort(key=lambda t: t[0])
+        return _abs_thumb_url(any_sized[0][1])
+    return _best_thumbnail_url(info, vid)
 
 
 def _entry_thumbnail_url(entry: dict[str, Any], vid: Optional[str]) -> Optional[str]:

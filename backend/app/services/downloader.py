@@ -11,12 +11,11 @@ from pathlib import Path
 from typing import Any, Optional
 from xml.sax.saxutils import escape as xml_escape
 
-import httpx
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 
-from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, THUMBNAILS_DIR, VIDEO_EXTENSIONS
+from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
 from ..database import engine
 from ..models import DownloadDestination, DownloadJob, JobStatus, Video, VideoStatus
 from . import activity, library, scanner
@@ -50,7 +49,9 @@ from .ytdlp_formats import (
     _height_to_tier,
     format_chain,
 )
+from .thumbnails import save_from_url as _save_thumbnail, unlink_for_video
 from .ytdlp_extract import (
+    _list_thumbnail_url,
     estimate_playlist_sizes,
     extract_playlist,
     extract_playlist_entries,
@@ -707,20 +708,6 @@ def _make_progress_hook(
     return hook
 
 
-def _save_thumbnail(url: Optional[str], video_id: int) -> Optional[str]:
-    if not url:
-        return None
-    dest = THUMBNAILS_DIR / f"{video_id}.jpg"
-    try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            dest.write_bytes(resp.content)
-        return str(dest)
-    except (httpx.HTTPError, OSError):
-        return None
-
-
 def _collect_tags(info: dict[str, Any]) -> list[str]:
     info = _as_info(info)
     collected: list[str] = []
@@ -857,8 +844,7 @@ def _remove_review_duplicates(
     for row in rows:
         if row.id == keep_id or token not in row.file_path:
             continue
-        if row.thumbnail_path:
-            Path(row.thumbnail_path).unlink(missing_ok=True)
+        unlink_for_video(row.id, row.thumbnail_path)
         session.delete(row)
     session.commit()
 
@@ -1004,6 +990,7 @@ def _finalize_in_background(
     final_path: Path,
     source_url: str,
     thumbnail_url: Optional[str],
+    list_thumbnail_url: Optional[str] = None,
 ) -> None:
     """Fetch subtitles and thumbnail without blocking watchability."""
 
@@ -1025,7 +1012,9 @@ def _finalize_in_background(
             thumb: Optional[str] = None
             try:
                 tracks = download_subtitles(final_path, source_url)
-                thumb = _save_thumbnail(thumbnail_url, video_id)
+                thumb = _save_thumbnail(
+                    thumbnail_url, video_id, list_url=list_thumbnail_url
+                )
             except Exception:  # noqa: BLE001
                 pass
             with Session(engine) as session:
@@ -1266,7 +1255,11 @@ def _complete_download(
         pass
 
     _finalize_in_background(
-        video_id, final_path, source_url, info.get("thumbnail")
+        video_id,
+        final_path,
+        source_url,
+        info.get("thumbnail"),
+        _list_thumbnail_url(info, info.get("id")),
     )
 
     snapshot = {

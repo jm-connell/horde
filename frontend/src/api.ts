@@ -876,6 +876,11 @@ export function thumbnailUrl(video: Video): string | null {
   return video.has_thumbnail ? `/api/thumbnails/${video.id}` : null;
 }
 
+/** ~320px JPEG for download-list tiles; falls back to full size if missing. */
+export function listThumbnailUrl(videoId: number): string {
+  return `/api/thumbnails/${videoId}?size=sm`;
+}
+
 export function spritesMetaUrl(id: number): string {
   return `/api/videos/${id}/sprites/meta`;
 }

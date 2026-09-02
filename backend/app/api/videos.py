@@ -26,7 +26,13 @@ from ..schemas import (
 )
 from ..services import downloader, library
 from ..services.mp4_compat import apple_webkit_playback, ensure_safari_mp4
-from ..services.paths import to_rel_path
+from ..services.thumbnails import (
+    copy_full,
+    ensure_list_thumbnail,
+    save_from_url,
+    unlink_for_video,
+    write_full_bytes,
+)
 from ..services.metadata import (
     delete_sprite_files,
     load_sprite_meta,
@@ -37,6 +43,7 @@ from ..services.paths import (
     is_manual_import,
     manual_import_rel_path,
     rename_video_file,
+    to_rel_path,
 )
 from ..services.sprites import enqueue_sprite_generation
 
@@ -152,8 +159,7 @@ def bulk_delete_videos(
             continue
         if payload.delete_files:
             _delete_media_files(video)
-        if video.thumbnail_path:
-            Path(video.thumbnail_path).unlink(missing_ok=True)
+        unlink_for_video(video.id, video.thumbnail_path)
         if video.id is not None:
             delete_sprite_files(SPRITES_DIR, video.id)
         session.delete(video)
@@ -338,8 +344,7 @@ def delete_video(
         raise HTTPException(status_code=404, detail="Video not found")
     if delete_file:
         _delete_media_files(video)
-    if video.thumbnail_path:
-        Path(video.thumbnail_path).unlink(missing_ok=True)
+    unlink_for_video(video.id, video.thumbnail_path)
     if video.id is not None:
         delete_sprite_files(SPRITES_DIR, video.id)
     session.delete(video)
@@ -401,15 +406,16 @@ def redownload_video(
 
 
 def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
-    dest = THUMBNAILS_DIR / f"{video.id}.jpg"
-    try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            dest.write_bytes(resp.content)
-        video.thumbnail_path = str(dest)
-    except (httpx.HTTPError, OSError) as exc:
-        raise HTTPException(status_code=400, detail=f"Could not fetch thumbnail: {exc}")
+    from ..services.ytdlp_extract import _list_thumbnail_url
+
+    if video.id is None:
+        raise HTTPException(status_code=400, detail="Could not fetch thumbnail")
+    dest = save_from_url(
+        url, video.id, list_url=_list_thumbnail_url({"thumbnail": url})
+    )
+    if dest is None:
+        raise HTTPException(status_code=400, detail="Could not fetch thumbnail")
+    video.thumbnail_path = dest
 
 
 @router.post("/videos/refresh-metadata", response_model=MetadataRefreshResult)
@@ -561,9 +567,8 @@ async def upload_thumbnail(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    dest = THUMBNAILS_DIR / f"{video_id}.jpg"
-    dest.write_bytes(await file.read())
-    video.thumbnail_path = str(dest)
+    dest = write_full_bytes(video_id, await file.read())
+    video.thumbnail_path = dest
     session.add(video)
     session.commit()
     session.refresh(video)
@@ -639,8 +644,6 @@ def select_thumbnail_candidate(
     session: Session = Depends(get_session),
 ):
     """Promote a generated candidate frame to the video's thumbnail."""
-    import shutil
-
     from ..services.metadata import candidate_thumb_path
 
     video = session.get(Video, video_id)
@@ -649,9 +652,8 @@ def select_thumbnail_candidate(
     src = candidate_thumb_path(THUMBNAILS_DIR, video_id, index)
     if not src.exists():
         raise HTTPException(status_code=404, detail="Candidate not found")
-    dest = THUMBNAILS_DIR / f"{video_id}.jpg"
-    shutil.copy2(src, dest)
-    video.thumbnail_path = str(dest)
+    dest = copy_full(src, video_id)
+    video.thumbnail_path = dest
     session.add(video)
     session.commit()
     session.refresh(video)
@@ -659,13 +661,23 @@ def select_thumbnail_candidate(
 
 
 @router.get("/thumbnails/{video_id}")
-def get_thumbnail(video_id: int, session: Session = Depends(get_session)):
+def get_thumbnail(
+    video_id: int,
+    size: Optional[str] = Query(None),
+    session: Session = Depends(get_session),
+):
     video = session.get(Video, video_id)
     if video is None or not video.thumbnail_path:
         raise HTTPException(status_code=404, detail="No thumbnail")
     path = Path(video.thumbnail_path)
     if not path.exists():
         raise HTTPException(status_code=404, detail="No thumbnail")
+    if size == "sm":
+        sm = ensure_list_thumbnail(video_id, path)
+        if sm is not None:
+            path = sm
+    elif size not in (None, ""):
+        raise HTTPException(status_code=400, detail="Unknown thumbnail size")
     return FileResponse(path, media_type="image/jpeg")
 
 

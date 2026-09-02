@@ -11,6 +11,7 @@ import {
   findCaptionLineIndex,
   parseVttLines,
   revealedWordCount,
+  shouldHoldCaption,
   type CaptionLine,
 } from "../utils/vtt";
 
@@ -57,6 +58,7 @@ export default function SubtitleOverlay({
   const lineIndexRef = useRef(-1);
   const wordCountRef = useRef(0);
   const slidingRef = useRef(false);
+  const slideGenRef = useRef(0);
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -93,6 +95,8 @@ export default function SubtitleOverlay({
   useLayoutEffect(() => {
     lineIndexRef.current = -1;
     wordCountRef.current = 0;
+    slidingRef.current = false;
+    slideGenRef.current += 1;
     setView([]);
     const stack = stackRef.current;
     if (stack) {
@@ -101,8 +105,74 @@ export default function SubtitleOverlay({
     }
   }, [src]);
 
+  // Drive rollup from committed DOM: 3 rows → slide, then 2 rows → snap
+  // transform in the same layout pass so the old pair never flashes back.
+  useLayoutEffect(() => {
+    const stack = stackRef.current;
+    if (!stack) return;
+
+    if (view.length <= 2) {
+      if (slidingRef.current) {
+        stack.style.transition = "none";
+        stack.style.transform = "translateY(0)";
+        slidingRef.current = false;
+      }
+      return;
+    }
+
+    const lineEl = stack.querySelector(
+      ".subtitle-overlay-line"
+    ) as HTMLElement | null;
+    const lineH = lineEl?.offsetHeight ?? 0;
+    if (lineH <= 0) {
+      slidingRef.current = false;
+      setView((prev) => (prev.length > 2 ? prev.slice(-2) : prev));
+      return;
+    }
+
+    slidingRef.current = true;
+    stack.style.transition = "none";
+    stack.style.transform = "translateY(0)";
+    void stack.offsetHeight;
+
+    const gen = ++slideGenRef.current;
+    const el = stack;
+    let timer = 0;
+    let raf = 0;
+    let finished = false;
+    const onEnd = (ev: TransitionEvent) => {
+      if (ev.propertyName !== "transform") return;
+      finish();
+    };
+    function finish() {
+      if (finished || gen !== slideGenRef.current) return;
+      finished = true;
+      el.removeEventListener("transitionend", onEnd);
+      window.clearTimeout(timer);
+      setView((prev) => prev.slice(-2));
+    }
+
+    raf = requestAnimationFrame(() => {
+      if (gen !== slideGenRef.current) return;
+      el.style.transition = `transform ${SLIDE_MS}ms ease-out`;
+      el.style.transform = `translateY(-${lineH}px)`;
+      el.addEventListener("transitionend", onEnd);
+      timer = window.setTimeout(finish, SLIDE_MS + 40);
+    });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+      el.removeEventListener("transitionend", onEnd);
+      slideGenRef.current += 1;
+    };
+  }, [view]);
+
   useEffect(() => {
-    if (!active || lines.length === 0) return;
+    if (!active || lines.length === 0) {
+      slidingRef.current = false;
+      return;
+    }
     let raf = 0;
 
     const snapStack = () => {
@@ -110,38 +180,6 @@ export default function SubtitleOverlay({
       if (!stack) return;
       stack.style.transition = "none";
       stack.style.transform = "translateY(0)";
-    };
-
-    const slideUp = () => {
-      const stack = stackRef.current;
-      if (!stack || slidingRef.current) return;
-      const lineEl = stack.querySelector(
-        ".subtitle-overlay-line"
-      ) as HTMLElement | null;
-      const lineH = lineEl?.offsetHeight ?? 0;
-      if (lineH <= 0) return;
-      slidingRef.current = true;
-      stack.style.transition = "none";
-      stack.style.transform = "translateY(0)";
-      void stack.offsetHeight;
-      requestAnimationFrame(() => {
-        const el = stackRef.current;
-        if (!el) {
-          slidingRef.current = false;
-          return;
-        }
-        el.style.transition = `transform ${SLIDE_MS}ms ease-out`;
-        el.style.transform = `translateY(-${lineH}px)`;
-        window.setTimeout(() => {
-          // After the slide, drop the top line and reset transform.
-          setView((prev) => {
-            if (prev.length <= 2) return prev;
-            return prev.slice(prev.length - 2);
-          });
-          snapStack();
-          slidingRef.current = false;
-        }, SLIDE_MS);
-      });
     };
 
     const tick = () => {
@@ -152,15 +190,19 @@ export default function SubtitleOverlay({
         const words = idx >= 0 ? revealedWordCount(lines[idx], t) : 0;
         const prevIdx = lineIndexRef.current;
 
-        if (idx !== prevIdx) {
+        if (idx < 0) {
+          if (prevIdx !== -1 && !shouldHoldCaption(lines, prevIdx, t)) {
+            lineIndexRef.current = -1;
+            wordCountRef.current = 0;
+            setView([]);
+            snapStack();
+          }
+        } else if (idx !== prevIdx) {
           const jumped = prevIdx < 0 || idx < prevIdx || idx - prevIdx > 1;
           lineIndexRef.current = idx;
           wordCountRef.current = words;
 
-          if (idx < 0) {
-            setView([]);
-            snapStack();
-          } else if (jumped || prevIdx < 0) {
+          if (jumped || prevIdx < 0) {
             // Seek / first cue — snap to previous + current.
             const nextView: ViewLine[] = [];
             if (idx > 0) {
@@ -197,7 +239,7 @@ export default function SubtitleOverlay({
                     }
                   : row
               );
-              return [
+              const next = [
                 ...finalized,
                 {
                   key: idx,
@@ -205,17 +247,11 @@ export default function SubtitleOverlay({
                   words: revealed,
                 },
               ];
+              return shouldSlide ? next : next.slice(-2);
             });
-            requestAnimationFrame(() => {
-              if (shouldSlide) {
-                slideUp();
-              } else {
-                setView((prev) => prev.slice(-2));
-                snapStack();
-              }
-            });
+            if (!shouldSlide) snapStack();
           }
-        } else if (idx >= 0 && words !== wordCountRef.current) {
+        } else if (words !== wordCountRef.current) {
           wordCountRef.current = words;
           const revealed = lines[idx].words.slice(0, words).map((w) => w.text);
           setView((prev) => {

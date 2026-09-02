@@ -1,13 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, deviceDownloadFileUrl, triggerBrowserDownload } from "../api";
+import {
+  api,
+  deviceDownloadFileUrl,
+  listThumbnailUrl,
+  triggerBrowserDownload,
+} from "../api";
 import { useDownloads, jobStatus } from "../context/DownloadContext";
 import {
   downloadErrorHint,
   downloadErrorLabel,
 } from "../downloadErrors";
 import type { ChannelStat, DownloadJob, ProgressEvent } from "../types";
-import { downloadProgressPercent, formatSize } from "../utils";
+import {
+  downloadProgressPercent,
+  formatSize,
+  youtubeListThumbnailUrl,
+} from "../utils";
 import { PRESET_LABELS } from "../presets";
 import ChannelPicker from "./ChannelPicker";
 
@@ -89,7 +98,11 @@ export default function DownloadJobCard({
   const [dismissConfirm, setDismissConfirm] = useState(false);
   const [dontAskAgain, setDontAskAgain] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
   const retryingRef = useRef(false);
+  const editingTitleRef = useRef(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  editingTitleRef.current = editingTitle;
 
   const savedTitle = useRef(resolveTitle());
   const savedChannel = useRef(resolveChannel());
@@ -98,18 +111,35 @@ export default function DownloadJobCard({
     const t = resolveTitle();
     const c = resolveChannel();
     const n = job.notes_pending ?? "";
-    setTitle(t);
+    if (!editingTitleRef.current) {
+      setTitle(t);
+      savedTitle.current = t;
+    }
     setChannel(c);
     setNote(n);
-    savedTitle.current = t;
     savedChannel.current = c;
   }, [job, live?.title, live?.channel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!editingTitle) return;
+    const el = titleInputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [editingTitle]);
 
   const isDirty = title !== savedTitle.current || channel !== savedChannel.current;
 
   const flashSaved = () => {
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1500);
+  };
+
+  const canEditTitle = !cancelled && !videoGone;
+
+  const startTitleEdit = () => {
+    if (!canEditTitle) return;
+    setEditingTitle(true);
   };
 
   const save = async () => {
@@ -128,6 +158,19 @@ export default function DownloadJobCard({
       flashSaved();
     } catch {
       // leave fields as-is on failure
+    }
+  };
+
+  const finishTitleEdit = async (commit: boolean) => {
+    editingTitleRef.current = false;
+    if (!commit) {
+      setTitle(savedTitle.current);
+      setEditingTitle(false);
+      return;
+    }
+    setEditingTitle(false);
+    if (title !== savedTitle.current) {
+      await save();
     }
   };
 
@@ -200,11 +243,14 @@ export default function DownloadJobCard({
               : "Queued"
             : `${percent}%`;
 
-  const thumbSrc = job.thumbnail_url
-    ? job.thumbnail_url
-    : completed && videoId
-      ? `/api/thumbnails/${videoId}`
-      : null;
+  const remoteList = youtubeListThumbnailUrl(job.url, job.thumbnail_url);
+  const thumbFallbacks = [
+    completed && videoId ? listThumbnailUrl(videoId) : null,
+    remoteList,
+    completed && videoId ? `/api/thumbnails/${videoId}` : null,
+    job.thumbnail_url,
+  ].filter((u, i, arr): u is string => !!u && arr.indexOf(u) === i);
+  const thumbSrc = thumbFallbacks[0] ?? null;
 
   const errorKind = failed ? live?.error_kind ?? job.error_kind ?? null : null;
   const errorMsg =
@@ -233,31 +279,137 @@ export default function DownloadJobCard({
         active ? "border-l-4 border-l-accent pl-[calc(1.25rem-2px)]" : ""
       }${videoGone ? " opacity-60" : ""}`}
     >
-      <div className="flex gap-4">
+      <div className="mb-3 flex items-start justify-between gap-3 text-sm">
+        <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
+          {completed && !videoGone && (
+            <span className="shrink-0 text-accent">✓</span>
+          )}
+          {failed && <span className="shrink-0 text-red-400">✗</span>}
+          {editingTitle ? (
+            <input
+              ref={titleInputRef}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={() => {
+                if (!editingTitleRef.current) return;
+                void finishTitleEdit(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void finishTitleEdit(true);
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  void finishTitleEdit(false);
+                }
+              }}
+              placeholder="Title"
+              className="min-w-0 flex-1 rounded-md border border-ink-600 bg-ink-950 px-2 py-1 text-sm font-medium text-gray-100 outline-none focus:border-accent"
+            />
+          ) : (
+            <>
+              <span
+                className={`min-w-0 truncate${
+                  videoGone ? " text-gray-500 line-through" : ""
+                }${canEditTitle ? " cursor-text" : ""}`}
+                onClick={startTitleEdit}
+                title={title || undefined}
+              >
+                {title || "Working…"}
+              </span>
+              {canEditTitle && (
+                <button
+                  type="button"
+                  onClick={startTitleEdit}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:text-accent"
+                  title="Edit title"
+                  aria-label="Edit title"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                </button>
+              )}
+            </>
+          )}
+          {job.superseded && (
+            <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+              Replaced
+            </span>
+          )}
+          {job.video_missing && !job.superseded && (
+            <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+              Removed
+            </span>
+          )}
+          {isReplacing && (
+            <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+              Replacing
+            </span>
+          )}
+          {isDeviceJob && (
+            <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+              This device
+            </span>
+          )}
+        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {!completed && (
+            <span
+              className={`${failed ? "text-red-400" : "text-gray-400"}`}
+            >
+              {statusLabel}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-300 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-400"
+            title={
+              completed || failed || cancelled
+                ? "Remove from list"
+                : "Cancel download"
+            }
+            aria-label={
+              completed || failed || cancelled
+                ? "Remove from list"
+                : "Cancel download"
+            }
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-start gap-4">
         <div
-          className={`hidden h-20 w-36 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block${
+          className={`hidden h-[6.75rem] w-52 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block${
             videoGone ? " grayscale" : ""
           }`}
         >
           {thumbSrc ? (
             <img
+              key={`${job.id}-${thumbSrc}`}
               src={thumbSrc}
               alt=""
+              decoding="async"
               className="h-full w-full object-cover"
               onError={(e) => {
                 const el = e.currentTarget;
-                if (el.dataset.fallbackTried) return;
-                const local =
-                  completed && videoId ? `/api/thumbnails/${videoId}` : null;
-                const remote = job.thumbnail_url ?? null;
-                const next =
-                  remote && !el.currentSrc.includes(remote)
-                    ? remote
-                    : local && !el.currentSrc.includes(String(videoId))
-                      ? local
-                      : null;
+                const nextIdx = Number(el.dataset.fallbackIdx || "0") + 1;
+                const next = thumbFallbacks[nextIdx];
                 if (!next) return;
-                el.dataset.fallbackTried = "1";
+                el.dataset.fallbackIdx = String(nextIdx);
                 el.src = next;
               }}
             />
@@ -269,68 +421,6 @@ export default function DownloadJobCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="mb-3 flex items-start justify-between gap-3 overflow-hidden text-sm">
-            <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
-              {completed && !videoGone && (
-                <span className="shrink-0 text-accent">✓</span>
-              )}
-              {failed && <span className="shrink-0 text-red-400">✗</span>}
-              <span
-                className={`min-w-0 truncate${
-                  videoGone ? " text-gray-500 line-through" : ""
-                }`}
-              >
-                {title || "Working…"}
-              </span>
-              {job.superseded && (
-                <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
-                  Replaced
-                </span>
-              )}
-              {job.video_missing && !job.superseded && (
-                <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
-                  Removed
-                </span>
-              )}
-              {isReplacing && (
-                <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-                  Replacing
-                </span>
-              )}
-              {isDeviceJob && (
-                <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-                  This device
-                </span>
-              )}
-            </span>
-            <div className="flex shrink-0 items-center gap-2">
-              {!completed && (
-                <span
-                  className={`${failed ? "text-red-400" : "text-gray-400"}`}
-                >
-                  {statusLabel}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={onDismiss}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-300 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-400"
-                title={
-                  completed || failed || cancelled
-                    ? "Remove from list"
-                    : "Cancel download"
-                }
-                aria-label={
-                  completed || failed || cancelled
-                    ? "Remove from list"
-                    : "Cancel download"
-                }
-              >
-                ×
-              </button>
-            </div>
-          </div>
-
           {!completed && !failed && !cancelled && (
             <div className="mb-4 h-2.5 w-full overflow-hidden rounded-full bg-ink-700">
               <div
@@ -350,24 +440,14 @@ export default function DownloadJobCard({
           )}
 
           {!cancelled && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={labelClass}>Title</label>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Channel</label>
-                <ChannelPicker
-                  value={channel}
-                  onChange={setChannel}
-                  channels={channels}
-                  placeholder="Channel"
-                />
-              </div>
+            <div className="w-full sm:max-w-md">
+              <label className={labelClass}>Channel</label>
+              <ChannelPicker
+                value={channel}
+                onChange={setChannel}
+                channels={channels}
+                placeholder="Channel"
+              />
             </div>
           )}
 

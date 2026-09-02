@@ -8,6 +8,7 @@ import {
   streamUrl,
   subtitleUrl,
   thumbnailUrl,
+  listThumbnailUrl,
 } from "./api";
 import type { Video } from "./types";
 
@@ -35,5 +36,6 @@ describe("media URL helpers", () => {
     expect(
       thumbnailUrl({ id: 1, has_thumbnail: true } as Video)
     ).toBe("/api/thumbnails/1");
+    expect(listThumbnailUrl(1)).toBe("/api/thumbnails/1?size=sm");
   });
 });

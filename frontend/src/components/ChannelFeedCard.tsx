@@ -132,7 +132,7 @@ function FeedThumbnail({
   showDuration?: boolean;
 }) {
   return (
-    <div className={`relative overflow-hidden bg-ink-800 ${className}`}>
+    <div className={`relative overflow-hidden ${className}`}>
       {thumbSrc ? (
         <img
           src={thumbSrc}

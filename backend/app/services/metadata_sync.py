@@ -8,11 +8,13 @@ from typing import Any, Literal, Optional
 
 from sqlmodel import Session, select
 
-from ..config import DOWNLOADS_DIR, THUMBNAILS_DIR
+from ..config import DOWNLOADS_DIR
 from ..database import engine
 from ..models import Video
 from . import activity, library
+from .thumbnails import save_from_url
 from .ytdlp_common import apply_cookie_opts, youtube_extractor_args
+from .ytdlp_extract import _list_thumbnail_url
 
 SyncField = Literal["views", "thumbnails", "captions", "titles_descriptions", "all"]
 
@@ -56,22 +58,6 @@ def _extract_metadata(url: str) -> dict[str, Any]:
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
     return info or {}
-
-
-def _save_thumbnail(url: Optional[str], video_id: int) -> Optional[str]:
-    if not url:
-        return None
-    import httpx
-
-    dest = THUMBNAILS_DIR / f"{video_id}.jpg"
-    try:
-        with httpx.Client(timeout=30, follow_redirects=True) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            dest.write_bytes(resp.content)
-        return str(dest)
-    except (httpx.HTTPError, OSError):
-        return None
 
 
 def _normalize_fields(fields: Optional[list[str]]) -> set[str]:
@@ -145,8 +131,12 @@ def refresh_video_metadata(
             if channel_name and not video.channel:
                 video.channel = channel_name
 
-        if "thumbnails" in want:
-            thumb_path = _save_thumbnail(info.get("thumbnail"), video.id)
+        if "thumbnails" in want and video.id is not None:
+            thumb_path = save_from_url(
+                info.get("thumbnail"),
+                video.id,
+                list_url=_list_thumbnail_url(info, info.get("id")),
+            )
             if thumb_path:
                 video.thumbnail_path = thumb_path
 

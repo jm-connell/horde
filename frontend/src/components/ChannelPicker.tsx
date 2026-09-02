@@ -100,7 +100,7 @@ function SelectPicker({
           onChange(e.target.value);
         }
       }}
-      className={inputClass}
+      className={`${inputClass} ui-select-chevron`}
     >
       <option value="">{placeholder ?? "Auto-detected"}</option>
       {showCurrent && <option value={value}>{value}</option>}

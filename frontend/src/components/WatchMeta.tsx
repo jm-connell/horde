@@ -1,10 +1,33 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type Ref } from "react";
 import { Link } from "react-router-dom";
 import ChaptersList from "./ChaptersList";
 import Collapse from "./Collapse";
 import LinkifiedText from "./LinkifiedText";
+import OverlayScrollThumb from "./OverlayScrollThumb";
 import { useSettings } from "../hooks/useSettings";
 import type { Chapter } from "../utils";
+
+const BOX_DURATION_MS = 400;
+const BOX_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+function collapsedClipPx(sideBySide: boolean): number {
+  const rootPx =
+    parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  return (sideBySide ? 12 : 7.5) * rootPx;
+}
+
+/** Jump back so the description box sits just under the sticky nav. */
+function scrollToBoxTop(box: HTMLElement) {
+  const nav = document.querySelector("[data-horde='nav']");
+  const navH =
+    nav instanceof HTMLElement ? nav.getBoundingClientRect().height : 80;
+  const top = box.getBoundingClientRect().top;
+  if (top >= navH + 8) return;
+  window.scrollTo({
+    top: Math.max(0, window.scrollY + top - navH - 8),
+    behavior: "auto",
+  });
+}
 
 export type WatchMetaProps = {
   description: string | null | undefined;
@@ -22,11 +45,53 @@ export type WatchMetaProps = {
   onTagError?: (message: string) => void;
 };
 
+function DescriptionBoxToggle({
+  expanded,
+  onToggle,
+  corner,
+  buttonRef,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  corner: "top" | "bottom";
+  buttonRef?: Ref<HTMLButtonElement>;
+}) {
+  const label = expanded ? "Collapse description" : "Expand description";
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      ref={buttonRef}
+      className={`absolute right-3 z-[2] flex h-7 w-7 items-center justify-center text-gray-500/55 hover:text-accent ${
+        corner === "top" ? "top-0" : "bottom-0"
+      }`}
+      title={label}
+      aria-label={label}
+      aria-expanded={expanded}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className={`h-3.5 w-3.5 transition-transform duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          expanded ? "rotate-180" : ""
+        }`}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </button>
+  );
+}
+
 /**
  * Shared description + chapters chrome for library and streamed watch pages.
  * Description text is clipped until the corner expand control; tags/notes
- * sit at the end of that text. Side-by-side, chapters fill the description
- * height and only scroll if they still overflow.
+ * sit at the end of that text. Chapters size to their own content (with a
+ * max height) and do not stretch to match an expanded description.
  */
 export default function WatchMeta({
   description,
@@ -55,6 +120,93 @@ export default function WatchMeta({
     chapters.length > 0 && showDescriptionPanel && !queueVisible;
   const hasExtras = !!(notes || hasTags || onAddTag);
   const extrasLabel = hasTags || onAddTag ? "tags" : "notes";
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  const clipRef = useRef<HTMLDivElement>(null);
+  const topToggleRef = useRef<HTMLButtonElement>(null);
+  const prevExpandedRef = useRef<boolean | null>(null);
+
+  useLayoutEffect(() => {
+    const clip = clipRef.current;
+    if (!clip) {
+      prevExpandedRef.current = null;
+      return;
+    }
+
+    const collapsedMax = collapsedClipPx(metaSideBySide);
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    const target = boxExpanded
+      ? clip.scrollHeight
+      : Math.min(clip.scrollHeight, collapsedMax);
+
+    const applyResting = () => {
+      clip.style.transition = "none";
+      if (boxExpanded) {
+        clip.style.height = "auto";
+        clip.style.overflow = "visible";
+      } else {
+        clip.style.height = `${target}px`;
+        clip.style.overflow = "auto";
+      }
+    };
+
+    const prev = prevExpandedRef.current;
+    prevExpandedRef.current = boxExpanded;
+
+    // First layout, or a content/layout change that isn't an expand toggle.
+    if (prev === null || prev === boxExpanded) {
+      applyResting();
+      return;
+    }
+
+    const from = clip.getBoundingClientRect().height;
+    if (reduceMotion || Math.abs(from - target) < 1) {
+      applyResting();
+      return;
+    }
+
+    clip.style.overflow = "hidden";
+    clip.style.transition = "none";
+    clip.style.height = `${from}px`;
+    void clip.offsetHeight;
+    clip.style.transition = `height ${BOX_DURATION_MS}ms ${BOX_EASING}`;
+    clip.style.height = `${target}px`;
+
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      clip.style.transition = "";
+      if (boxExpanded) {
+        clip.style.height = "auto";
+        clip.style.overflow = "visible";
+      } else {
+        clip.style.overflow = "auto";
+      }
+    };
+    const onEnd = (event: TransitionEvent) => {
+      if (event.target !== clip || event.propertyName !== "height") return;
+      settle();
+    };
+    clip.addEventListener("transitionend", onEnd);
+    const fallback = window.setTimeout(settle, BOX_DURATION_MS + 50);
+    return () => {
+      clip.removeEventListener("transitionend", onEnd);
+      window.clearTimeout(fallback);
+    };
+  }, [boxExpanded, metaSideBySide, descriptionBody]);
+
+  const toggleBox = (next: boolean) => {
+    if (!next) {
+      if (panelRef.current) scrollToBoxTop(panelRef.current);
+      topToggleRef.current?.focus({ preventScroll: true });
+    } else if (clipRef.current) {
+      clipRef.current.scrollTop = 0;
+    }
+    setBoxExpanded(next);
+  };
 
   if (!showDescriptionPanel && chapters.length === 0) {
     if (!settings.showDescription && notes) {
@@ -209,106 +361,70 @@ export default function WatchMeta({
         <div
           className={
             metaSideBySide
-              ? "grid gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(12rem,0.85fr)] lg:items-stretch"
+              ? "grid gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(12rem,0.85fr)] lg:items-start"
               : undefined
           }
         >
           {showDescriptionPanel && (
             <div
+              ref={panelRef}
               className={
                 metaSideBySide
-                  ? "ui-panel isolate relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
-                  : "ui-panel isolate relative min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700"
+                  ? "ui-panel group isolate relative flex min-h-0 scroll-mt-20 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700 [overflow-anchor:none]"
+                  : "ui-panel group isolate relative min-h-0 scroll-mt-20 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700 [overflow-anchor:none]"
               }
             >
               {descriptionBody && (
                 <div className="relative min-h-0">
                   <div
-                    className={
-                      boxExpanded
-                        ? metaSideBySide
-                          ? "overflow-visible"
-                          : "overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] max-h-[80rem]"
-                        : metaSideBySide
-                          ? "horde-meta-scrollbar max-h-48 overflow-y-auto"
-                          : "overflow-hidden transition-[max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] max-h-[7.5rem]"
-                    }
+                    ref={clipRef}
+                    className="horde-meta-scrollbar min-h-0"
                   >
-                    <div className="px-4 py-3 pr-8">
-                      <p
-                        className={`text-sm text-gray-300 ${
-                          boxExpanded || metaSideBySide
-                            ? "whitespace-pre-wrap"
-                            : "line-clamp-5 whitespace-normal"
-                        }`}
-                      >
+                    <div className="px-4 py-3 pr-10">
+                      <p className="whitespace-pre-wrap text-sm text-gray-300">
                         <LinkifiedText text={descriptionBody} />
                       </p>
                       {metaSideBySide && extrasBlock}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setBoxExpanded((v) => !v)}
-                    className="absolute bottom-2 right-2 z-[1] flex h-5 w-5 items-center justify-center rounded text-gray-500/55 hover:text-accent"
-                    title={
-                      boxExpanded
-                        ? "Collapse description"
-                        : "Expand description"
-                    }
-                    aria-label={
-                      boxExpanded
-                        ? "Collapse description"
-                        : "Expand description"
-                    }
-                    aria-expanded={boxExpanded}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      className={`h-3.5 w-3.5 transition-transform ${
-                        boxExpanded ? "rotate-180" : ""
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
+                  <OverlayScrollThumb
+                    scrollRef={clipRef}
+                    revision={`${boxExpanded}-${descriptionBody}`}
+                  />
                 </div>
               )}
               {(!descriptionBody || !metaSideBySide) && hasExtras && (
-                <div className={descriptionBody ? "px-4 pb-3" : "px-4 py-3"}>
+                <div
+                  className={
+                    descriptionBody
+                      ? `px-4 pb-3 ${boxExpanded ? "pr-10" : ""}`
+                      : "px-4 py-3"
+                  }
+                >
                   {extrasBlock}
                 </div>
+              )}
+              {descriptionBody && (
+                <>
+                  <DescriptionBoxToggle
+                    expanded={boxExpanded}
+                    onToggle={() => toggleBox(!boxExpanded)}
+                    corner="top"
+                    buttonRef={topToggleRef}
+                  />
+                  {boxExpanded && (
+                    <DescriptionBoxToggle
+                      expanded
+                      onToggle={() => toggleBox(false)}
+                      corner="bottom"
+                    />
+                  )}
+                </>
               )}
             </div>
           )}
           {chapters.length > 0 && (
-            <div
-              className={
-                metaSideBySide ? "relative min-h-0 lg:min-h-0" : undefined
-              }
-            >
-              <div
-                className={
-                  metaSideBySide ? "lg:absolute lg:inset-0" : undefined
-                }
-              >
-                <ChaptersList
-                  chapters={chapters}
-                  className={metaSideBySide ? "lg:h-full" : undefined}
-                  maxHeightClass={
-                    metaSideBySide
-                      ? "max-h-48 lg:h-full lg:max-h-none"
-                      : "max-h-48"
-                  }
-                />
-              </div>
-            </div>
+            <ChaptersList chapters={chapters} maxHeightClass="max-h-48" />
           )}
         </div>
   );

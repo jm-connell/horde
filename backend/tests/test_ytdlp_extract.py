@@ -1,8 +1,10 @@
 """Preset size estimates from yt-dlp format metadata (no network)."""
 
 from app.services.ytdlp_extract import (
+    _best_thumbnail_url,
     _estimate_preset_sizes,
     _format_parts_bytes,
+    _list_thumbnail_url,
 )
 
 
@@ -186,3 +188,70 @@ def test_estimate_falls_back_when_no_av1():
     }
     sizes = _estimate_preset_sizes(info, ["1080p"])
     assert sizes.get("1080p") == 62_500_000 + 1_600_000
+
+
+def _yt_thumbs(vid: str = "dQw4w9WgXcQ") -> dict:
+    return {
+        "id": vid,
+        "thumbnails": [
+            {
+                "url": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+                "width": 480,
+                "height": 360,
+            },
+            {
+                "url": f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg",
+                "width": 320,
+                "height": 180,
+            },
+            {
+                "url": f"https://i.ytimg.com/vi/{vid}/maxresdefault.jpg",
+                "width": 1280,
+                "height": 720,
+            },
+        ],
+    }
+
+
+def test_list_thumbnail_prefers_mq_not_maxres_or_letterboxed_hq():
+    info = _yt_thumbs()
+    assert _list_thumbnail_url(info) == (
+        "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg"
+    )
+    assert "maxresdefault" in (_best_thumbnail_url(info) or "")
+
+
+def test_list_thumbnail_uses_mqdefault_when_only_letterboxed_hq_exists():
+    vid = "dQw4w9WgXcQ"
+    info = {
+        "id": vid,
+        "thumbnails": [
+            {
+                "url": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+                "width": 480,
+                "height": 360,
+            }
+        ],
+    }
+    assert _list_thumbnail_url(info) == f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
+
+
+def test_list_thumbnail_rewrites_ytimg_webp_url():
+    info = {
+        "thumbnail": "https://i.ytimg.com/vi_webp/pgW-BapPWHM/maxresdefault.webp"
+    }
+    assert _list_thumbnail_url(info) == (
+        "https://i.ytimg.com/vi/pgW-BapPWHM/mqdefault.jpg"
+    )
+
+
+def test_list_thumbnail_non_youtube_picks_closest_widescreen():
+    info = {
+        "id": "clip-1",
+        "thumbnails": [
+            {"url": "https://cdn.example/small.jpg", "width": 120, "height": 90},
+            {"url": "https://cdn.example/mid.jpg", "width": 640, "height": 360},
+            {"url": "https://cdn.example/big.jpg", "width": 1920, "height": 1080},
+        ],
+    }
+    assert _list_thumbnail_url(info) == "https://cdn.example/mid.jpg"

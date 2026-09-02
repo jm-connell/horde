@@ -16,6 +16,7 @@ import {
   stripChapterLines,
   watchProcessingLabel,
   youtubeListThumbnailUrl,
+  youtubeVideoIdFromUrl,
 } from "./utils";
 
 describe("formatTimestamp", () => {
@@ -194,6 +195,33 @@ describe("youtubeListThumbnailUrl", () => {
     ).toBe("https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg");
   });
 
+  it("rewrites vi_webp maxres URLs", () => {
+    expect(
+      youtubeListThumbnailUrl(
+        null,
+        "https://i.ytimg.com/vi_webp/pgW-BapPWHM/maxresdefault.webp"
+      )
+    ).toBe("https://i.ytimg.com/vi/pgW-BapPWHM/mqdefault.jpg");
+  });
+
+  it("rewrites a maxres ytimg URL when no id is passed", () => {
+    expect(
+      youtubeListThumbnailUrl(
+        null,
+        "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+      )
+    ).toBe("https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg");
+  });
+
+  it("rewrites a watch URL to mqdefault", () => {
+    expect(
+      youtubeListThumbnailUrl(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
+      )
+    ).toBe("https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg");
+  });
+
   it("falls back to the provided URL when id is not a YouTube video id", () => {
     expect(
       youtubeListThumbnailUrl(
@@ -201,5 +229,19 @@ describe("youtubeListThumbnailUrl", () => {
         "https://cdn.example/thumb.jpg"
       )
     ).toBe("https://cdn.example/thumb.jpg");
+  });
+});
+
+describe("youtubeVideoIdFromUrl", () => {
+  it("parses watch, short, and ytimg URLs", () => {
+    expect(youtubeVideoIdFromUrl("dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
+    expect(
+      youtubeVideoIdFromUrl("https://youtu.be/dQw4w9WgXcQ?t=12")
+    ).toBe("dQw4w9WgXcQ");
+    expect(
+      youtubeVideoIdFromUrl(
+        "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+      )
+    ).toBe("dQw4w9WgXcQ");
   });
 });

@@ -193,6 +193,42 @@ export function formatLikeRatio(
   return `${Math.round((likes / total) * 100)}%`;
 }
 
+const YOUTUBE_VIDEO_ID_RE = /^[\w-]{11}$/;
+const YTIMG_ID_RE = /ytimg\.com\/vi(?:_webp)?\/([\w-]{11})\//i;
+
+/** Extract an 11-char YouTube video id from a watch URL, ytimg URL, or raw id. */
+export function youtubeVideoIdFromUrl(url?: string | null): string | null {
+  const raw = url?.trim() ?? "";
+  if (!raw) return null;
+  if (YOUTUBE_VIDEO_ID_RE.test(raw)) return raw;
+  const img = raw.match(YTIMG_ID_RE);
+  if (img) return img[1];
+  try {
+    const href = raw.startsWith("//") ? `https:${raw}` : raw;
+    const parsed = new URL(href);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      const id = parsed.pathname.split("/").filter(Boolean)[0] ?? "";
+      return YOUTUBE_VIDEO_ID_RE.test(id) ? id : null;
+    }
+    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+      const v = parsed.searchParams.get("v");
+      if (v && YOUTUBE_VIDEO_ID_RE.test(v)) return v;
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (
+        parts.length >= 2 &&
+        ["embed", "shorts", "live", "v"].includes(parts[0]) &&
+        YOUTUBE_VIDEO_ID_RE.test(parts[1])
+      ) {
+        return parts[1];
+      }
+    }
+  } catch {
+    /* not a URL */
+  }
+  return null;
+}
+
 export function youtubeThumbnailUrl(
   videoId: string | null,
   thumbnailUrl?: string | null
@@ -202,21 +238,19 @@ export function youtubeThumbnailUrl(
     if (raw.startsWith("//")) return `https:${raw}`;
     if (raw.startsWith("http")) return raw;
   }
-  if (videoId) return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+  const id = youtubeVideoIdFromUrl(videoId);
+  if (id) return `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
   return null;
 }
-
-const YOUTUBE_VIDEO_ID_RE = /^[\w-]{11}$/;
 
 /** Medium CDN thumb (~320×180) for small list tiles — avoids downscaling maxres. */
 export function youtubeListThumbnailUrl(
   videoId: string | null,
   thumbnailUrl?: string | null
 ): string | null {
-  const id = videoId?.trim() ?? "";
-  if (YOUTUBE_VIDEO_ID_RE.test(id)) {
-    return `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
-  }
+  const id =
+    youtubeVideoIdFromUrl(videoId) ?? youtubeVideoIdFromUrl(thumbnailUrl);
+  if (id) return `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
   return youtubeThumbnailUrl(videoId, thumbnailUrl);
 }
 

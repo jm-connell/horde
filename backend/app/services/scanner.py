@@ -25,6 +25,7 @@ from .metadata import (
     probe_is_playable,
 )
 from .paths import find_video_by_path, to_rel_path
+from .thumbnails import unlink_for_video, write_list_thumbnail
 
 _scan_lock = threading.Lock()
 
@@ -163,6 +164,8 @@ def ingest_media_file(
         thumb_path = THUMBNAILS_DIR / f"{video.id}.jpg"
         if grab_frame(path, thumb_path):
             video.thumbnail_path = str(thumb_path)
+            if video.id is not None:
+                write_list_thumbnail(video.id, thumb_path)
             session.add(video)
             session.commit()
 
@@ -227,8 +230,7 @@ def cleanup_orphans() -> int:
         for video in rows:
             if (DOWNLOADS_DIR / video.file_path).exists():
                 continue
-            if video.thumbnail_path:
-                Path(video.thumbnail_path).unlink(missing_ok=True)
+            unlink_for_video(video.id, video.thumbnail_path)
             session.delete(video)
             removed += 1
         if removed:

@@ -15,6 +15,9 @@ function watchProgress(video: Video): number | undefined {
   return Math.min(1, video.last_position_sec / video.duration_sec);
 }
 
+const arrowClass =
+  "ui-panel ui-interactive absolute top-1/2 z-10 -translate-y-1/2 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:pointer-events-none";
+
 export default function ContinueWatchingRow({
   videos,
   showProgress = true,
@@ -23,13 +26,12 @@ export default function ContinueWatchingRow({
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollingRef = useRef(false);
-  const [scrolling, setScrolling] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
   const updateScrollState = useCallback(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || scrollingRef.current) return;
     const maxScroll = el.scrollWidth - el.clientWidth;
     setCanScrollLeft(el.scrollLeft > 4);
     setCanScrollRight(maxScroll > 4 && el.scrollLeft < maxScroll - 4);
@@ -51,28 +53,31 @@ export default function ContinueWatchingRow({
   const scrollByDir = (dir: -1 | 1) => {
     const el = scrollRef.current;
     if (!el || scrollingRef.current) return;
-    const card = el.querySelector<HTMLElement>(":scope > div > div");
-    const gap = 16;
+    const row = el.querySelector<HTMLElement>(":scope > div");
+    const card = row?.querySelector<HTMLElement>(":scope > div");
+    const gap = row
+      ? Number.parseFloat(getComputedStyle(row).columnGap) || 16
+      : 16;
     const step = card ? card.offsetWidth + gap : el.clientWidth * 0.75;
     if (step <= 0) return;
-    const idx = Math.round(el.scrollLeft / step);
+    const visibleCount = Math.max(1, Math.floor(el.clientWidth / step));
+    const page = Math.max(1, visibleCount - 1);
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const target = Math.max(
+      0,
+      Math.min(maxScroll, el.scrollLeft + dir * page * step),
+    );
+    if (Math.abs(target - el.scrollLeft) < 4) return;
+
     scrollingRef.current = true;
-    setScrolling(true);
-    el.scrollTo({ left: (idx + dir) * step, behavior: "smooth" });
+    el.scrollTo({ left: target, behavior: "smooth" });
     const done = () => {
+      if (!scrollingRef.current) return;
       scrollingRef.current = false;
-      setScrolling(false);
       updateScrollState();
     };
-    const onEnd = () => {
-      el.removeEventListener("scrollend", onEnd);
-      done();
-    };
-    if (typeof (window as Window & { onscrollend?: unknown }).onscrollend !== "undefined") {
-      el.addEventListener("scrollend", onEnd, { once: true });
-    } else {
-      globalThis.setTimeout(done, 350);
-    }
+    el.addEventListener("scrollend", done, { once: true });
+    globalThis.setTimeout(done, 500);
   };
 
   if (videos.length === 0) return null;
@@ -92,28 +97,26 @@ export default function ContinueWatchingRow({
       </div>
 
       <div className="relative px-1 sm:px-2">
-        {canScrollLeft && (
-          <button
-            type="button"
-            onClick={() => scrollByDir(-1)}
-            disabled={scrolling}
-            className="absolute -left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-ink-800 text-sm text-gray-300 shadow-md ring-1 ring-ink-600 hover:text-accent hover:ring-accent/60 disabled:pointer-events-none disabled:opacity-40"
-            aria-label="Scroll left"
-          >
-            ‹
-          </button>
-        )}
-        {canScrollRight && (
-          <button
-            type="button"
-            onClick={() => scrollByDir(1)}
-            disabled={scrolling}
-            className="absolute -right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-ink-800 text-sm text-gray-300 shadow-md ring-1 ring-ink-600 hover:text-accent hover:ring-accent/60 disabled:pointer-events-none disabled:opacity-40"
-            aria-label="Scroll right"
-          >
-            ›
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => scrollByDir(-1)}
+          disabled={!canScrollLeft}
+          aria-hidden={!canScrollLeft}
+          aria-label="Scroll left"
+          className={`${arrowClass} -left-3 ${canScrollLeft ? "" : "invisible"}`}
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          onClick={() => scrollByDir(1)}
+          disabled={!canScrollRight}
+          aria-hidden={!canScrollRight}
+          aria-label="Scroll right"
+          className={`${arrowClass} -right-3 ${canScrollRight ? "" : "invisible"}`}
+        >
+          ›
+        </button>
 
         <div
           ref={scrollRef}

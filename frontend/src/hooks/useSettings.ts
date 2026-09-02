@@ -836,15 +836,13 @@ export function applyMotionPrefs(settings: Settings): void {
       ? "on"
       : "off";
   // Strength → panel fill alpha (lower = more see-through) and blur.
-  // High strength keeps blur low so particle effects stay visible.
+  // 100% is nearly clear with no frost so background effects stay visible.
   const s = settings.translucentPanelStrength;
-  const fill = (0.78 - s * 0.55).toFixed(3); // 0.15→0.70, 1→0.23
-  const headerFill = (0.85 - s * 0.5).toFixed(3);
-  const cardFill = (0.82 - s * 0.5).toFixed(3);
-  const blur = Math.max(0, Math.round(14 - s * 12)); // 0.15→12px, 1→2px
+  const fill = (0.82 - s * 0.77).toFixed(3); // 0.15→0.70, 1→0.05
+  const headerFill = (0.90 - s * 0.78).toFixed(3); // 0.15→0.78, 1→0.12
+  const blur = Math.max(0, Math.round((1 - s) * 14)); // 0.15→12px, 1→0
   root.style.setProperty("--ui-panel-alpha", fill);
   root.style.setProperty("--ui-panel-header-alpha", headerFill);
-  root.style.setProperty("--ui-panel-card-alpha", cardFill);
   root.style.setProperty("--ui-panel-blur", `${blur}px`);
 
   const scale = FONT_SIZE_SCALE[settings.fontSize] ?? 1;
