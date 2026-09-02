@@ -60,6 +60,11 @@ def _set_runtime(**kwargs: Any) -> None:
         _runtime.update(kwargs)
 
 
+def should_stop() -> bool:
+    """True when the catalog worker has been asked to shut down."""
+    return _stop.is_set()
+
+
 def get_runtime_status() -> dict[str, Any]:
     with _state_lock:
         runtime = dict(_runtime)
@@ -277,6 +282,8 @@ def refresh_all_library_channels() -> dict[str, Any]:
             and indexed > 0
         ):
             try:
+                from .index import sync_feed_head
+
                 sync_feed_head(url, channel_name=name, limit=50)
                 refreshed += 1
             except Exception:  # noqa: BLE001

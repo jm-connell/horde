@@ -10,7 +10,7 @@ from typing import Any, Optional
 from sqlmodel import Session, select
 
 from ...models import AiCategory, AiJobKind, ChannelCatalogEmbedding, ChannelCatalogVideo, Video, VideoAiMeta, utcnow
-from .. import app_settings, channel_catalog, library
+from .. import app_settings, library
 from . import embeddings, text as ai_text
 from .provider import (
     OpenRouterProvider,
@@ -170,6 +170,8 @@ def run_embed_catalog_video(
     if provider is None:
         raise RuntimeError("No embed provider available (enable Ollama or OpenRouter All)")
     model = resolve_embed_model(provider)
+    from .. import channel_catalog
+
     digest = channel_catalog.catalog_content_hash(video)
     existing = session.exec(
         select(ChannelCatalogEmbedding).where(

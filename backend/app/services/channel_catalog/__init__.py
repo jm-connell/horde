@@ -1,14 +1,6 @@
 """Channel catalog package — public API matches the former module."""
 
 from .documents import catalog_content_hash, catalog_document
-from .index import schedule_feed_head_sync, sync_feed_head
-from .query import (
-    catalog_feed_page,
-    catalog_progress,
-    search_all_catalogs,
-    search_catalog,
-    update_catalog_view_counts,
-)
 from .runtime import (
     enqueue_all_library_channels,
     enqueue_channel,
@@ -27,6 +19,14 @@ from .skips import (
     purge_members_only_by_yt_id,
     record_members_only_skip,
     skipped_yt_ids,
+)
+from .index import schedule_feed_head_sync, sync_feed_head
+from .query import (
+    catalog_feed_page,
+    catalog_progress,
+    search_all_catalogs,
+    search_catalog,
+    update_catalog_view_counts,
 )
 
 __all__ = [

@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Literal, Optional
 
+from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import Session
 
 from ..config import DOWNLOADS_DIR, SPRITE_CONCURRENCY, SPRITES_DIR
 from ..database import engine
 from ..models import Video
 from . import activity
-from .metadata import generate_sprite_sheet, sprites_exist
+from .metadata import delete_sprite_files, generate_sprite_sheet, sprites_exist
+
+logger = logging.getLogger(__name__)
 
 SpriteStatus = Literal["ready", "generating"]
 
@@ -66,30 +70,52 @@ def enqueue_sprite_generation(
                 engine="ffmpeg",
                 detail=title,
                 video_id=video_id,
-            ):
+            ) as handle:
+                duration: Optional[float] = None
                 with Session(engine) as session:
                     video = session.get(Video, video_id)
                     if video is None:
+                        handle.discard()
                         return
                     path = (DOWNLOADS_DIR / video.file_path).resolve()
                     if DOWNLOADS_DIR not in path.parents and path != DOWNLOADS_DIR:
+                        handle.discard()
                         return
                     if not path.is_file():
+                        handle.discard()
                         return
                     if sprites_exist(SPRITES_DIR, video_id):
+                        handle.discard()
                         return
-                    sprite = generate_sprite_sheet(
-                        path,
-                        SPRITES_DIR,
-                        video_id,
-                        duration=video.duration_sec,
-                    )
-                    if sprite:
-                        video.sprite_path = sprite
-                        session.add(video)
+                    duration = video.duration_sec
+
+                # ffmpeg can take minutes — do not hold a SQLite transaction open.
+                sprite = generate_sprite_sheet(
+                    path,
+                    SPRITES_DIR,
+                    video_id,
+                    duration=duration,
+                )
+                if not sprite:
+                    return
+
+                with Session(engine) as session:
+                    video = session.get(Video, video_id)
+                    if video is None:
+                        delete_sprite_files(SPRITES_DIR, video_id)
+                        handle.discard()
+                        return
+                    if video.sprite_path == sprite:
+                        return
+                    video.sprite_path = sprite
+                    session.add(video)
+                    try:
                         session.commit()
+                    except StaleDataError:
+                        session.rollback()
+                        handle.discard()
         except Exception:  # noqa: BLE001
-            pass
+            logger.exception("Sprite generation failed for video %s", video_id)
         finally:
             if waiting:
                 activity.note_queued("sprites", -1)

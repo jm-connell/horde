@@ -64,6 +64,25 @@ def record_members_only_skip(
         session.commit()
 
 
+def delete_catalog_video_row(session: Session, row: ChannelCatalogVideo) -> None:
+    """Delete a catalog video plus embedding and AI jobs. Does not record a skip."""
+    video_id = row.id
+    if video_id is None:
+        return
+    emb = session.exec(
+        select(ChannelCatalogEmbedding).where(
+            ChannelCatalogEmbedding.catalog_video_id == video_id
+        )
+    ).first()
+    if emb is not None:
+        session.delete(emb)
+    for job in session.exec(
+        select(AiJob).where(AiJob.catalog_video_id == video_id)
+    ).all():
+        session.delete(job)
+    session.delete(row)
+
+
 def purge_catalog_video(
     session: Session,
     row: ChannelCatalogVideo,
@@ -74,21 +93,8 @@ def purge_catalog_video(
     """Delete catalog video + embedding + AI jobs, drop feed cache, record skip."""
     catalog_id = row.catalog_id
     yt_id = row.yt_id
-    video_id = row.id
 
-    if video_id is not None:
-        emb = session.exec(
-            select(ChannelCatalogEmbedding).where(
-                ChannelCatalogEmbedding.catalog_video_id == video_id
-            )
-        ).first()
-        if emb is not None:
-            session.delete(emb)
-        for job in session.exec(
-            select(AiJob).where(AiJob.catalog_video_id == video_id)
-        ).all():
-            session.delete(job)
-        session.delete(row)
+    delete_catalog_video_row(session, row)
 
     record_members_only_skip(session, catalog_id, yt_id)
     _ = reason

@@ -8,11 +8,10 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlmodel import Session, col, func, select
+from sqlmodel import Session, func, select
 
 from ...database import engine
 from ...models import (
-    AiJob,
     ChannelCatalog,
     ChannelCatalogStatus,
     ChannelCatalogVideo,
@@ -38,11 +37,12 @@ from .runtime import (
     _max_videos,
     _normalize_channel_url,
     _set_runtime,
-    _stop,
     get_catalog_by_url,
+    should_stop,
 )
 from .skips import (
     _reject_members_or_skipped,
+    delete_catalog_video_row,
     purge_catalog_video,
     record_members_only_skip,
     skipped_yt_ids,
@@ -118,14 +118,7 @@ def _trim_beyond_cap(session: Session, catalog: ChannelCatalog) -> None:
     keep_ids = {r.id for r in rows[: catalog.max_videos] if r.id is not None}
     for row in rows:
         if row.id is not None and row.id not in keep_ids:
-            emb = session.exec(
-                select(ChannelCatalogEmbedding).where(
-                    ChannelCatalogEmbedding.catalog_video_id == row.id
-                )
-            ).first()
-            if emb is not None:
-                session.delete(emb)
-            session.delete(row)
+            delete_catalog_video_row(session, row)
     session.commit()
 
 
@@ -313,7 +306,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
     total = len(rows)
     _set_runtime(done=0, total=total)
     for i, row in enumerate(rows):
-        if _stop.is_set():
+        if should_stop():
             return
         if is_members_only_entry({"title": row.title}):
             purge_catalog_video(session, row)
@@ -410,7 +403,7 @@ def index_catalog(catalog_id: int) -> None:
         position = 0
         reached_end = False
         channel_total: Optional[int] = None
-        while position < max_videos and not _stop.is_set():
+        while position < max_videos and not should_stop():
             limit = min(_PAGE_SIZE, max_videos - position)
             data = _fetch_flat_page(channel_url, offset=offset, limit=limit)
             entries = data.get("entries") or []
