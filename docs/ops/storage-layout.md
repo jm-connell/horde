@@ -56,6 +56,7 @@ Temporary output for **Download to this device** jobs. Not indexed into the libr
 | `*.part` | In-progress yt-dlp download |
 | `.fNNN.*` | Per-format fragments before merge (e.g. `.f401.mp4`) |
 | `.norm.*` / `*.norm.mp4` | Intermediate loudnorm output |
+| `.compat.*` / `*.compat.mp4` | Intermediate AAC/faststart remux |
 
 The scanner and cleanup logic ignore intermediate fragments so partial downloads do not appear as library videos.
 

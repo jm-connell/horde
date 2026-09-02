@@ -1748,7 +1748,7 @@ export default function VideoPlayer({
               return;
             }
             setMediaError(
-              "This video could not be played. The file may be incomplete or corrupt."
+              "This video could not be played. iPhone Safari needs AV1 (or H.264) with AAC audio in MP4."
             );
           }}
           onPointerDown={isMini ? undefined : onVideoPointerDown}

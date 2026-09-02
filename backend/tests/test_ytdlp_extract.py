@@ -84,3 +84,105 @@ def test_estimate_2160p_uses_dash_tbr_not_progressive_mux():
     assert sizes["2160p"] != 300_000_000
     if "720p" in sizes:
         assert sizes["720p"] < sizes["2160p"]
+
+
+def _fmt(**kwargs):
+    base = {
+        "url": "https://example.com/x",
+        "protocol": "https",
+        "ext": "mp4",
+        "fps": 30,
+    }
+    base.update(kwargs)
+    return base
+
+
+def test_estimate_1080p_prefers_av1_aac_over_higher_vbr_vp9():
+    info = {
+        "duration": 100,
+        "formats": [
+            _fmt(
+                format_id="399",
+                height=1080,
+                width=1920,
+                vcodec="av01.0.08M.08",
+                acodec="none",
+                tbr=2000,
+                vbr=2000,
+                filesize=25_000_000,
+            ),
+            _fmt(
+                format_id="303",
+                ext="webm",
+                height=1080,
+                width=1920,
+                vcodec="vp9",
+                acodec="none",
+                tbr=5000,
+                vbr=5000,
+                filesize=62_500_000,
+            ),
+            _fmt(
+                format_id="137",
+                height=1080,
+                width=1920,
+                vcodec="avc1.640028",
+                acodec="none",
+                tbr=4000,
+                vbr=4000,
+                filesize=50_000_000,
+            ),
+            _fmt(
+                format_id="140",
+                ext="m4a",
+                vcodec="none",
+                acodec="mp4a.40.2",
+                abr=128,
+                tbr=128,
+                filesize=1_600_000,
+            ),
+            _fmt(
+                format_id="251",
+                ext="webm",
+                vcodec="none",
+                acodec="opus",
+                abr=160,
+                tbr=160,
+                filesize=2_000_000,
+            ),
+        ],
+    }
+    sizes = _estimate_preset_sizes(info, ["1080p", "best"])
+    expected = 25_000_000 + 1_600_000
+    assert sizes.get("1080p") == expected
+    assert sizes.get("best") == expected
+
+
+def test_estimate_falls_back_when_no_av1():
+    info = {
+        "duration": 100,
+        "formats": [
+            _fmt(
+                format_id="303",
+                ext="webm",
+                height=1080,
+                width=1920,
+                vcodec="vp9",
+                acodec="none",
+                tbr=5000,
+                vbr=5000,
+                filesize=62_500_000,
+            ),
+            _fmt(
+                format_id="140",
+                ext="m4a",
+                vcodec="none",
+                acodec="mp4a.40.2",
+                abr=128,
+                tbr=128,
+                filesize=1_600_000,
+            ),
+        ],
+    }
+    sizes = _estimate_preset_sizes(info, ["1080p"])
+    assert sizes.get("1080p") == 62_500_000 + 1_600_000

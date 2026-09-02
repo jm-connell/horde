@@ -12,16 +12,34 @@ def test_format_chain_height_capped_no_unbounded_best():
     # Must not fall back to unrestricted best/best for capped presets.
     assert "best[ext=mp4]/best" not in chain
     assert not any(c == "best" for c in chain)
+    assert any("vcodec^=av01" in c for c in chain)
 
 
 def test_format_chain_best_and_audio():
     best = downloader._format_chain("best")
-    assert "best[ext=mp4]/best" in best
+    assert any("vcodec^=av01" in c for c in best)
+    assert any("best[ext=mp4]" in c for c in best)
     audio = downloader._format_chain("audio")
-    assert "bestaudio/best" in audio
+    assert any("bestaudio/best" in c for c in audio)
+    assert "mp4a" in audio[0] or "aac" in audio[0]
     capped = downloader._format_chain("audio-128")
-    assert capped[0].startswith("ba[abr<=128]")
-    assert "bestaudio/best" in capped
+    assert "abr<=128" in capped[0]
+    assert "mp4a" in capped[0] or "aac" in capped[0]
+    assert any("bestaudio/best" in c for c in capped)
+
+
+def test_quality_formats_prefer_av1_and_aac():
+    from app.services.ytdlp_formats import FORMAT_SORT, QUALITY_FORMATS
+
+    assert "vcodec:av01" in FORMAT_SORT
+    assert "acodec:mp4a" in FORMAT_SORT
+    assert "vcodec:h264" not in FORMAT_SORT
+    for preset in ("best", "2160p", "1080p", "720p"):
+        spec = QUALITY_FORMATS[preset]
+        assert "av01" in spec
+        assert "mp4a" in spec
+        assert "h264" not in spec
+    assert QUALITY_FORMATS["best"].startswith("bv*[vcodec~='^(av01|av1)']+ba")
 
 
 def test_available_presets_audio_bitrate_tiers():
@@ -55,6 +73,8 @@ def test_is_intermediate_media():
     assert downloader._is_intermediate_media("video.f137.mp4")
     assert downloader._is_intermediate_media("video.part")
     assert downloader._is_intermediate_media("video.norm.mp4")
+    assert downloader._is_intermediate_media("video.compat.mp4")
+    assert downloader._is_intermediate_media("video.compat.123.mp4")
     assert downloader._is_intermediate_media("video.temp.mp4")
     assert not downloader._is_intermediate_media("video.mp4")
 
