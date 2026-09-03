@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import OverlayScrollThumb from "../../components/OverlayScrollThumb";
 import type { ActivityTask, SystemActivity } from "../../types";
 
 const RECENT_MAX = 50;
@@ -149,6 +150,7 @@ export default function BackgroundActivity({
 }: {
   activity: SystemActivity | null;
 }) {
+  const recentScrollRef = useRef<HTMLUListElement>(null);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -221,14 +223,23 @@ export default function BackgroundActivity({
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
             Recent activity
           </p>
-          <ul
-            className="horde-scrollbar max-h-[calc(8*2.75rem)] divide-y divide-ink-800/80 overflow-y-auto overscroll-contain pr-1"
-            aria-label="Recent activity"
-          >
-            {recent.map((task) => (
-              <RecentRow key={`${task.id}-${task.finished_at}`} task={task} />
-            ))}
-          </ul>
+          <div className="group isolate relative">
+            <ul
+              ref={recentScrollRef}
+              className="horde-meta-scrollbar max-h-[calc(8*2.75rem)] divide-y divide-ink-800/80 overflow-y-auto overscroll-contain"
+              aria-label="Recent activity"
+            >
+              {recent.map((task) => (
+                <RecentRow key={`${task.id}-${task.finished_at}`} task={task} />
+              ))}
+            </ul>
+            <OverlayScrollThumb
+              scrollRef={recentScrollRef}
+              revision={recent
+                .map((task) => `${task.id}-${task.finished_at}`)
+                .join(",")}
+            />
+          </div>
         </div>
       )}
     </div>

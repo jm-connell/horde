@@ -286,6 +286,11 @@ class OpenRouterCostsRead(BaseModel):
     d30: float = 0.0
     y1: float = 0.0
     all: float = 0.0
+    h24_calls: int = 0
+    d7_calls: int = 0
+    d30_calls: int = 0
+    y1_calls: int = 0
+    all_calls: int = 0
     weekly_budget_usd: Optional[float] = None
     hard_limit: bool = False
     over_budget: bool = False
@@ -294,16 +299,22 @@ class OpenRouterCostsRead(BaseModel):
 
 @router.get("/openrouter/costs", response_model=OpenRouterCostsRead)
 def ai_openrouter_costs():
-    from ..services.ai.cost_ledger import budget_status, totals
+    from ..services.ai.cost_ledger import budget_status, window_analytics
 
-    data = totals()
-    budget = budget_status(window_totals=data)
+    stats = window_analytics()
+    costs = {k: float(v["cost"]) for k, v in stats.items()}
+    budget = budget_status(window_totals=costs)
     return OpenRouterCostsRead(
-        h24=float(data.get("h24") or 0.0),
-        d7=float(data.get("d7") or 0.0),
-        d30=float(data.get("d30") or 0.0),
-        y1=float(data.get("y1") or 0.0),
-        all=float(data.get("all") or 0.0),
+        h24=float(costs.get("h24") or 0.0),
+        d7=float(costs.get("d7") or 0.0),
+        d30=float(costs.get("d30") or 0.0),
+        y1=float(costs.get("y1") or 0.0),
+        all=float(costs.get("all") or 0.0),
+        h24_calls=int(stats.get("h24", {}).get("calls") or 0),
+        d7_calls=int(stats.get("d7", {}).get("calls") or 0),
+        d30_calls=int(stats.get("d30", {}).get("calls") or 0),
+        y1_calls=int(stats.get("y1", {}).get("calls") or 0),
+        all_calls=int(stats.get("all", {}).get("calls") or 0),
         weekly_budget_usd=budget.get("weekly_budget_usd"),
         hard_limit=bool(budget.get("hard_limit")),
         over_budget=bool(budget.get("over_budget")),

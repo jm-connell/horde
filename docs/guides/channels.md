@@ -42,12 +42,13 @@ The channel header search box looks across **indexed uploads** (titles, and desc
 - Multi-word queries require **all keywords** as whole words (stopwords like *the* / *to* / *his* are ignored). `paint fix` matches *I painted his House to Fix his WiFi*; `car` does not match *graphics card*. Home library search uses the same matcher.
 - Natural-language phrasing also uses catalog and library search indexes when those embeddings are ready (including captions on downloads).
 - While a query runs, the feed shows **Searching indexed catalog…** then **Finding related matches…**. If indexing is still in progress, results may be incomplete.
+- With **Direct YouTube search** on (Settings → Library, or the per-channel toggle), Horde also queries YouTube for extra matches. Local and YouTube cards are then sorted together by **Recent / Popular** (and the ↑/↓ direction) at the top of the page. A quiet **Loading YouTube results…** line appears until that call finishes.
 
-This is local catalog/library search — not a live YouTube “search this channel” request. See [Search](search.md).
+See [Search](search.md).
 
 ### Show undownloaded
 
-Toggle **Show undownloaded** on the channel page (also available under [Playback / Library settings](../settings/playback.md) as `showUndownloadedOnChannel`). When on, catalog-only uploads appear so you can download or preview them without leaving the feed.
+Toggle **Show undownloaded** on the channel page (also available under [Playback / Library settings](../settings/playback.md) as `showUndownloadedOnChannel`). When on, catalog-only uploads appear so you can download or preview them without leaving the feed. Cards show views when Horde has them. Publish time is a calendar day only when yt-dlp has a real upload date; otherwise the card keeps YouTube’s wording (`3 years ago`) or a year (`2013`) — Horde does not invent a month and day from that.
 
 ### Feed layout
 
@@ -60,6 +61,8 @@ From a channel page you can open the download panel to queue undownloaded items 
 ## Catalog indexing
 
 Catalog indexing is **YouTube only**. When you open a YouTube channel feed or download from a YouTube channel, Horde indexes that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time. Non-YouTube sources skip catalog indexing.
+
+Progress shows in the channel header (for example **Fully indexed**). **Index channel** appears only when this catalog is missing, incomplete, or failed — a complete catalog does not need a manual re-walk.
 
 ### Phases
 

@@ -307,6 +307,44 @@ export const api = {
     return request<ChannelCatalogStatus>("/api/channels/catalog/status");
   },
 
+  searchChannelYoutube(params: {
+    q: string;
+    channel?: string;
+    url?: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }): Promise<ChannelFeedPage> {
+    const qs = new URLSearchParams();
+    qs.set("q", params.q);
+    if (params.channel) qs.set("channel", params.channel);
+    if (params.url) qs.set("url", params.url);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    return request<ChannelFeedPage>(
+      `/api/channels/youtube-search?${qs.toString()}`,
+      params.signal ? { signal: params.signal } : undefined
+    );
+  },
+
+  updateChannelYoutubeSearch(params: {
+    channel?: string;
+    url?: string;
+    direct_youtube_search: boolean | null;
+  }): Promise<{
+    channel_url: string;
+    direct_youtube_search: boolean | null;
+    direct_youtube_search_effective: boolean;
+  }> {
+    return request("/api/channels/catalog/youtube-search", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: params.channel ?? null,
+        url: params.url ?? null,
+        direct_youtube_search: params.direct_youtube_search,
+      }),
+    });
+  },
+
   indexChannelCatalog(params: {
     channel?: string;
     url?: string;

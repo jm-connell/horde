@@ -5,6 +5,7 @@ import Collapse from "../../../components/Collapse";
 import HelpTip from "../../../components/HelpTip";
 import { formatUsdCost } from "../../../utils";
 import type { AiSettings } from "../../../types";
+import { ollamaIsUsed } from "../aiOllamaUsage";
 import { useSettingsPage } from "../context";
 import { Section, SettingRow, Toggle } from "../ui";
 import {
@@ -74,6 +75,7 @@ export default function ProvidersPane() {
     aiDraft.openrouter_api_key_set &&
     aiDraft.openrouter_scope === "all" &&
     !aiDraft.ollama_prefer_embeddings;
+  const showOllamaGpu = ollamaIsUsed(aiDraft);
 
   return (
     <>
@@ -364,7 +366,8 @@ export default function ProvidersPane() {
               </p>
               <div
                 className={
-                  !!q && !match("vram", "gpu", "ollama")
+                  !showOllamaGpu ||
+                  (!!q && !match("vram", "gpu", "ollama"))
                     ? "hidden"
                     : "space-y-2"
                 }

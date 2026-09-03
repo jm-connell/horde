@@ -1,5 +1,16 @@
-import type { AiCurrentJob, AiStatus, SystemStats } from "../../types";
+import type {
+  AiCurrentJob,
+  AiStatus,
+  OpenRouterCosts,
+  SystemStats,
+} from "../../types";
 import { formatSize } from "../../utils";
+import {
+  formatOpenRouterModelLine,
+  formatOpenRouterSpendLine,
+  ollamaIsUsed,
+  openrouterIsUsed,
+} from "./aiOllamaUsage";
 import { plural } from "./helpers";
 
 function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
@@ -72,6 +83,7 @@ function queueSummary(aiStatus: AiStatus): string {
 export default function AiQueueStatus({
   aiStatus,
   systemStats,
+  openRouterCosts = null,
   compact = false,
   onPause,
   onResume,
@@ -80,6 +92,7 @@ export default function AiQueueStatus({
 }: {
   aiStatus: AiStatus;
   systemStats: SystemStats | null;
+  openRouterCosts?: OpenRouterCosts | null;
   compact?: boolean;
   onPause?: () => void | Promise<void>;
   onResume?: () => void | Promise<void>;
@@ -101,6 +114,14 @@ export default function AiQueueStatus({
     Boolean(aiStatus.blocked_reason) &&
     aiStatus.queue_depth > 0 &&
     !aiStatus.current_job;
+  const showOllamaGpu = ollamaIsUsed(aiStatus);
+  const showOpenRouter = openrouterIsUsed(aiStatus);
+  const openRouterModelLine = showOpenRouter
+    ? formatOpenRouterModelLine(aiStatus)
+    : "";
+  const openRouterSpendLine = showOpenRouter
+    ? formatOpenRouterSpendLine(openRouterCosts)
+    : "";
 
   const statusLabel = !aiStatus.enabled
     ? "Disabled"
@@ -165,12 +186,14 @@ export default function AiQueueStatus({
               {statusLabel}
             </dd>
           </div>
-          <div className="flex justify-between gap-3">
-            <dt className="text-gray-400">URL</dt>
-            <dd className="truncate text-right font-mono text-xs text-gray-300">
-              {aiStatus.base_url || "—"}
-            </dd>
-          </div>
+          {showOllamaGpu && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-gray-400">URL</dt>
+              <dd className="truncate text-right font-mono text-xs text-gray-300">
+                {aiStatus.base_url || "—"}
+              </dd>
+            </div>
+          )}
         </>
       )}
       <div className="flex justify-between gap-3">
@@ -188,29 +211,53 @@ export default function AiQueueStatus({
         <p className="text-xs text-amber-400/90">{aiStatus.blocked_reason}</p>
       )}
       {aiStatus.current_job && <CurrentAiJob job={aiStatus.current_job} />}
-      {(aiStatus.gpu_name || aiStatus.vram_total_bytes != null) && (
+      {showOpenRouter && openRouterModelLine && (
         <div className="flex justify-between gap-3">
-          <dt className="text-gray-400">Ollama GPU</dt>
-          <dd className="text-right text-gray-200">
-            {[
-              aiStatus.gpu_name,
-              aiStatus.vram_total_bytes != null
-                ? formatSize(aiStatus.vram_total_bytes)
-                : null,
-              aiStatus.gpu_source === "override"
-                ? "override"
-                : aiStatus.gpu_source === "ollama"
-                  ? "from Ollama"
-                  : aiStatus.gpu_source === "local"
-                    ? "local"
-                    : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+          <dt className="text-gray-400">OpenRouter</dt>
+          <dd className="truncate text-right text-gray-200">
+            {openRouterModelLine}
           </dd>
         </div>
       )}
-      {systemStats?.gpu &&
+      {showOpenRouter && openRouterSpendLine && (
+        <div className="flex justify-between gap-3">
+          <dt className="text-gray-400">Spend</dt>
+          <dd
+            className={
+              openRouterCosts?.over_budget
+                ? "text-right text-amber-200"
+                : "text-right text-gray-200"
+            }
+          >
+            {openRouterSpendLine}
+          </dd>
+        </div>
+      )}
+      {showOllamaGpu &&
+        (aiStatus.gpu_name || aiStatus.vram_total_bytes != null) && (
+          <div className="flex justify-between gap-3">
+            <dt className="text-gray-400">Ollama GPU</dt>
+            <dd className="text-right text-gray-200">
+              {[
+                aiStatus.gpu_name,
+                aiStatus.vram_total_bytes != null
+                  ? formatSize(aiStatus.vram_total_bytes)
+                  : null,
+                aiStatus.gpu_source === "override"
+                  ? "override"
+                  : aiStatus.gpu_source === "ollama"
+                    ? "from Ollama"
+                    : aiStatus.gpu_source === "local"
+                      ? "local"
+                      : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </dd>
+          </div>
+        )}
+      {showOllamaGpu &&
+        systemStats?.gpu &&
         (systemStats.gpu.util_percent != null ||
           systemStats.gpu.temp_c != null) && (
           <div className="flex justify-between gap-3">

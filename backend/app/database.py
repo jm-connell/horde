@@ -121,6 +121,7 @@ _CHANNEL_CATALOG_COLUMNS = [
     ("phase", "VARCHAR"),
     ("channel_total", "INTEGER"),
     ("complete", "BOOLEAN DEFAULT 0"),
+    ("direct_youtube_search", "BOOLEAN"),
 ]
 
 _AI_CATEGORY_COLUMNS = [

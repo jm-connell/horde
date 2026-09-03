@@ -4,6 +4,7 @@ import {
   CATALOG_INDEX_TIP,
   CATALOG_MAX_TIP,
   CHANNEL_SORT_OPTIONS,
+  DIRECT_YOUTUBE_SEARCH_TIP,
   INPUT_COMPACT,
   METADATA_INTERVAL_TIP,
   PANEL_BTN,
@@ -269,7 +270,8 @@ export default function LibraryTab() {
             "index",
             "refresh interval",
             "youtube only",
-            "youtube"
+            "youtube",
+            "direct youtube search"
           )
         }
       >
@@ -286,6 +288,25 @@ export default function LibraryTab() {
                     void saveCatalogSettings({
                       channel_catalog_enabled: !(
                         appSettings?.channel_catalog_enabled ?? true
+                      ),
+                    })
+                  }
+                />
+              </div>
+            }
+          />
+          <SettingRow
+            title="Direct YouTube search"
+            description="Channel search also queries YouTube for older uploads. Search text is sent to YouTube. Each YouTube channel can override this."
+            control={
+              <div className="flex items-center gap-2">
+                <HelpTip text={DIRECT_YOUTUBE_SEARCH_TIP} />
+                <Toggle
+                  checked={appSettings?.direct_youtube_search ?? true}
+                  onChange={() =>
+                    void saveCatalogSettings({
+                      direct_youtube_search: !(
+                        appSettings?.direct_youtube_search ?? true
                       ),
                     })
                   }

@@ -4,7 +4,7 @@ import { api } from "../api";
 import { maxPresetLabel } from "../presets";
 import type { ChannelFeedEntry } from "../types";
 import {
-  formatDate,
+  formatPublishedAt,
   formatDuration,
   formatLikeRatio,
   formatResolution,
@@ -75,7 +75,7 @@ function FeedMetaRow({
   downloading?: boolean;
   onDownload: () => void;
 }) {
-  const dateLabel = entry.published_at ? formatDate(entry.published_at) : "";
+  const dateLabel = formatPublishedAt(entry.published_at, entry.published_label);
 
   return (
     <div className="flex items-center justify-between gap-2">
@@ -201,7 +201,7 @@ export default function ChannelFeedCard({
     return maxResCache.get(entry.url) ?? "";
   });
   const viewCount = entry.view_count;
-  const dateLabel = entry.published_at ? formatDate(entry.published_at) : "";
+  const dateLabel = formatPublishedAt(entry.published_at, entry.published_label);
   const href = watchHref(
     {
       ...entry,

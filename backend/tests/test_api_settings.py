@@ -6,6 +6,7 @@ def test_settings_get_defaults_and_patch_roundtrip(client):
     assert first.status_code == 200
     body = first.json()
     assert body["progress_expiry_days"] == 14
+    assert body["direct_youtube_search"] is True
     assert "ui" in body
     assert "ai" in body
     assert body["ai"]["openrouter_api_key_set"] is False
@@ -33,6 +34,16 @@ def test_settings_get_defaults_and_patch_roundtrip(client):
     assert again["progress_expiry_days"] == 21
     assert again["ui"]["theme"] == "oled"
     assert again["ai"]["enabled"] is False
+
+
+def test_settings_direct_youtube_search_roundtrip(client):
+    patched = client.patch(
+        "/api/settings", json={"direct_youtube_search": False}
+    )
+    assert patched.status_code == 200
+    assert patched.json()["direct_youtube_search"] is False
+    again = client.get("/api/settings").json()
+    assert again["direct_youtube_search"] is False
 
 
 def test_settings_masks_openrouter_key(client):

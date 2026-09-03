@@ -30,7 +30,7 @@ You can trigger related catalog freshness via channel catalog settings; the sync
 
 ## Catalog reindex
 
-Channel catalogs index YouTube channels in phases (`flat` → `descriptions` → `embed`), one catalog at a time. From Settings / Channels UI you can re-queue a catalog if the index is incomplete, errored, or you raised the max-video cap.
+Channel catalogs index YouTube channels in phases (`flat` → `descriptions` → `embed`), one catalog at a time. Opening a channel feed queues indexing automatically. The channel page’s **Index channel** button is only for a missing, incomplete, or failed catalog. To catch new uploads or re-walk everything, use Settings → System → **Refresh catalogs** / **Full reindex** (including after raising the max-video cap).
 
 See [Channels](../guides/channels.md) and [Workers](../architecture/workers.md).
 

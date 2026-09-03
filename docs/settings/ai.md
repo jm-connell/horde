@@ -18,7 +18,7 @@ All AI preferences live in the top-level **`ai`** object in `app_settings.json` 
 | Base URL | `base_url` | `""` | Empty = default discovery / same-host; set for remote Ollama |
 | Test connection | — | — | UI action against the configured base URL |
 | Workload | `workload_profile` | `"normal"` | `light` \| `normal` \| `heavy` — how hard Horde works (sample sizes, batches), not which GPU |
-| VRAM override (GiB) | `vram_gb` | `null` | Optional; clamp ~0.5–256. Blank = autodetect on Ollama host |
+| VRAM override (GiB) | `vram_gb` | `null` | Optional; clamp ~0.5–256. Blank = autodetect on Ollama host. Hidden when Local AI is unused (disabled, or OpenRouter Tasks = All without an embeddings override) |
 | Auto-pull models | `auto_pull_models` | `true` | Pull missing embed/chat models when needed |
 | Embed model | `embed_model` | `"nomic-embed-text"` | Semantic search, related, categories |
 | Chat model | `chat_model` | `"llama3.2:3b"` | Used when OpenRouter is off (tags, categories, local fallback) |
@@ -70,6 +70,7 @@ Live queue status appears here and on System:
 - **Blocked** state + reason when jobs cannot run (provider down, paused, budget hard limit)
 - Current job (with attempt number when retrying)
 - **Failed jobs** list with Retry, Retry all, Clear failed
+- When OpenRouter is active: **OpenRouter** model/scope and **Spend** (24h / 7-day totals from the local usage ledger, weekly budget if set, 24h call count)
 
 ### Automatic schedule
 

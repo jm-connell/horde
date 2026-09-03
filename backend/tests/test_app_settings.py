@@ -46,6 +46,15 @@ def test_clamp_catalog_max_videos():
     assert settings_svc.clamp_catalog_max_videos(99999) == 5000
 
 
+def test_direct_youtube_search_effective():
+    assert settings_svc.direct_youtube_search_effective(None, True) is True
+    assert settings_svc.direct_youtube_search_effective(None, False) is False
+    assert settings_svc.direct_youtube_search_effective(True, False) is True
+    assert settings_svc.direct_youtube_search_effective(False, True) is False
+    assert settings_svc.direct_youtube_search_effective(0, True) is False
+    assert settings_svc.direct_youtube_search_effective(1, False) is True
+
+
 def test_normalize_helpers():
     assert settings_svc.normalize_summary_length("long") == "long"
     assert settings_svc.normalize_summary_length("nope") == "short"

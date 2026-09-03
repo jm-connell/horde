@@ -8,8 +8,13 @@ import { useSettings } from "../hooks/useSettings";
 import {
   feedSearchStatusLabel,
   formatSearchMatchCount,
+  YOUTUBE_SEARCH_LOADING_LABEL,
   type FeedSearchPhase,
 } from "../pages/libraryCatalogProgress";
+import {
+  applyChannelFeedSort,
+  mergeYoutubeFeedEntries,
+} from "./channelFeedYoutubeSearch";
 import type { ChannelFeedEntry, ChannelStat, SearchMatchReason, Video } from "../types";
 
 type FeedSort = "recent" | "popular";
@@ -54,6 +59,7 @@ const MATCH_REASON_RANK: Record<string, number> = {
   description: 3,
   tags: 3,
   notes: 3,
+  youtube: 2,
   related: 1,
   title: 0,
 };
@@ -100,6 +106,10 @@ function mergeFeedWithLibrary(
         video_id: lib.video_id ?? existing.video_id,
         library_height_px:
           lib.library_height_px ?? existing.library_height_px,
+        published_at: lib.published_at || existing.published_at,
+        published_label: lib.published_at ? null : existing.published_label,
+        view_count: existing.view_count ?? lib.view_count,
+        duration: existing.duration ?? lib.duration,
         match_reason: pickMatchReason(existing.match_reason, lib.match_reason),
       };
       continue;
@@ -124,6 +134,7 @@ export default function ChannelFeed({
   showUndownloaded,
   catalogIndexing = false,
   queueDockedBottom = false,
+  directYoutubeSearch = false,
 }: {
   channel: string;
   channelUrl: string | null;
@@ -135,6 +146,7 @@ export default function ChannelFeed({
   showUndownloaded: boolean;
   catalogIndexing?: boolean;
   queueDockedBottom?: boolean;
+  directYoutubeSearch?: boolean;
 }) {
   const [settings] = useSettings();
   const [entries, setEntries] = useState<ChannelFeedEntry[]>([]);
@@ -151,6 +163,8 @@ export default function ChannelFeed({
   const [searchPhase, setSearchPhase] = useState<FeedSearchPhase>("idle");
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchIndexing, setSearchIndexing] = useState(false);
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [youtubeEntries, setYoutubeEntries] = useState<ChannelFeedEntry[]>([]);
   const [fromCatalog, setFromCatalog] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -234,7 +248,8 @@ export default function ChannelFeed({
             fresh.view_count === e.view_count &&
             fresh.like_count === e.like_count &&
             fresh.dislike_count === e.dislike_count &&
-            fresh.published_at === e.published_at
+            fresh.published_at === e.published_at &&
+            fresh.published_label === e.published_label
           ) {
             return e;
           }
@@ -245,6 +260,10 @@ export default function ChannelFeed({
             like_count: fresh.like_count ?? e.like_count,
             dislike_count: fresh.dislike_count ?? e.dislike_count,
             published_at: fresh.published_at ?? e.published_at,
+            published_label:
+              fresh.published_at || fresh.published_label
+                ? (fresh.published_label ?? null)
+                : e.published_label,
           };
         });
         return changed ? next : prev;
@@ -321,6 +340,8 @@ export default function ChannelFeed({
     setEntries([]);
     setSearchEntries(null);
     setLibrarySearchEntries(null);
+    setYoutubeEntries([]);
+    setYoutubeLoading(false);
     setSearchPhase("idle");
     setSearchError(null);
     setHasMore(false);
@@ -342,6 +363,8 @@ export default function ChannelFeed({
     if (!q) {
       setSearchEntries(null);
       setLibrarySearchEntries(null);
+      setYoutubeEntries([]);
+      setYoutubeLoading(false);
       setSearchPhase("idle");
       setSearchError(null);
       setSearchIndexing(false);
@@ -352,6 +375,8 @@ export default function ChannelFeed({
     setSearchError(null);
     setSearchEntries(null);
     setLibrarySearchEntries(null);
+    setYoutubeEntries([]);
+    setYoutubeLoading(false);
 
     searchTimer.current = setTimeout(() => {
       const ac = new AbortController();
@@ -391,6 +416,31 @@ export default function ChannelFeed({
             signal,
           })
         : Promise.resolve(null);
+
+      const runYoutube =
+        directYoutubeSearch && q.length >= 2 && Boolean(channelUrl);
+      if (runYoutube) {
+        setYoutubeLoading(true);
+        void api
+          .searchChannelYoutube({
+            q,
+            channel,
+            url: channelUrl ?? undefined,
+            limit: 20,
+            signal,
+          })
+          .then((page) => {
+            if (signal.aborted) return;
+            setYoutubeEntries(page.entries ?? []);
+          })
+          .catch((err) => {
+            if (isAbortError(err) || signal.aborted) return;
+            setYoutubeEntries([]);
+          })
+          .finally(() => {
+            if (!signal.aborted) setYoutubeLoading(false);
+          });
+      }
 
       void (async () => {
         try {
@@ -446,7 +496,7 @@ export default function ChannelFeed({
       if (searchTimer.current) clearTimeout(searchTimer.current);
       searchAbort.current?.abort();
     };
-  }, [feedSearch, channel, channelUrl]);
+  }, [feedSearch, channel, channelUrl, directYoutubeSearch]);
 
   const filteredEntries = useMemo(() => {
     const q = feedSearch.trim();
@@ -461,26 +511,30 @@ export default function ChannelFeed({
     } else {
       list = [];
     }
+    if (
+      q &&
+      youtubeEntries.length &&
+      (searchEntries != null || librarySearchEntries != null)
+    ) {
+      list = mergeYoutubeFeedEntries(list, youtubeEntries);
+    }
     if (!showUndownloaded) {
       list = list.filter(
         (e) => e.in_library || e.video_id != null || resolveVideoId(e) != null
       );
     }
-    if (feedSort === "popular") {
-      list = [...list].sort((a, b) => {
-        const av = a.view_count ?? -1;
-        const bv = b.view_count ?? -1;
-        return feedOrder === "desc" ? bv - av : av - bv;
-      });
-    } else if (feedOrder === "asc") {
-      list = [...list].reverse();
-    }
-    return list;
+    return applyChannelFeedSort(
+      list,
+      feedSort,
+      feedOrder,
+      q ? "search" : "browse"
+    );
   }, [
     entries,
     libraryEntries,
     librarySearchEntries,
     searchEntries,
+    youtubeEntries,
     feedSearch,
     feedSort,
     feedOrder,
@@ -515,14 +569,18 @@ export default function ChannelFeed({
   const searchBusy =
     q.length > 0 && (searchPhase === "keywords" || searchPhase === "related");
   const searchStatusLabel = feedSearchStatusLabel(searchPhase);
-  const waitingForFirstHits = searchBusy && filteredEntries.length === 0;
+  const waitingForFirstHits =
+    q.length > 0 &&
+    filteredEntries.length === 0 &&
+    (searchBusy || youtubeLoading);
   const indexIncomplete = q.length > 0 && (catalogIndexing || searchIndexing);
   const showFeedLoading = Boolean(loading && channelUrl && !q);
   const showSearchBanner =
     q.length > 0 &&
     !waitingForFirstHits &&
     (searchBusy ||
-      (searchPhase === "done" && filteredEntries.length > 0) ||
+      youtubeLoading ||
+      filteredEntries.length > 0 ||
       indexIncomplete);
 
   if (!channelUrl && libraryEntries.length === 0 && !loading) {
@@ -564,8 +622,11 @@ export default function ChannelFeed({
               labelVisible
             />
           )}
-          {searchPhase === "done" && (
+          {filteredEntries.length > 0 && (
             <span>{formatSearchMatchCount(filteredEntries.length)}</span>
+          )}
+          {youtubeLoading && filteredEntries.length > 0 && (
+            <span>{YOUTUBE_SEARCH_LOADING_LABEL}</span>
           )}
           {indexIncomplete && (
             <span>Index still running — results may be incomplete.</span>
@@ -575,7 +636,11 @@ export default function ChannelFeed({
 
       {waitingForFirstHits ? (
         <LoadingIndicator
-          label={searchStatusLabel || "Searching indexed catalog…"}
+          label={
+            searchBusy
+              ? searchStatusLabel || "Searching indexed catalog…"
+              : YOUTUBE_SEARCH_LOADING_LABEL
+          }
           labelVisible
         />
       ) : showFeedLoading ? (

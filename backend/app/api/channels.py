@@ -14,6 +14,8 @@ from ..schemas import (
     ChannelCatalogIndexRequest,
     ChannelCatalogIndexResult,
     ChannelCatalogStatusResponse,
+    ChannelCatalogYoutubeSearchPref,
+    ChannelCatalogYoutubeSearchUpdate,
     ChannelFeedEntry,
     ChannelFeedPage,
     ChannelRename,
@@ -24,6 +26,7 @@ from ..schemas import (
 from ..services import channel_catalog, downloader, feed_meta_cache, library
 from ..services import app_settings as app_settings_svc
 from ..services.ytdlp_common import is_members_only_entry
+from ..services.ytdlp_extract import search_youtube_channel_videos
 from .video_serialize import to_read
 
 router = APIRouter(prefix="/api", tags=["channels"])
@@ -121,6 +124,213 @@ def channel_catalog_index(
     )
 
 
+def _published_fields(
+    raw: dict[str, Any],
+    cached: Optional[dict[str, Any]],
+    library_iso: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Return (sort ISO, display label). Library dates are real calendar days."""
+    label = raw.get("published_label")
+    if not label and cached and not raw.get("published_at"):
+        label = cached.get("published_label")
+    if isinstance(label, str):
+        label = label.strip() or None
+    else:
+        label = None
+    iso = feed_meta_cache.parse_upload_date(raw.get("published_at"))
+    if iso is None and cached:
+        iso = feed_meta_cache.parse_upload_date(cached.get("published_at"))
+    if iso is None and label:
+        iso = feed_meta_cache.parse_upload_date(label)
+    if library_iso:
+        return library_iso, None
+    return iso, label
+
+
+def _feed_entries_from_raw(
+    session: Session,
+    raw_entries: list[dict[str, Any]],
+    *,
+    channel_name: Optional[str],
+    channel_url: Optional[str] = None,
+    global_search: bool = False,
+) -> list[ChannelFeedEntry]:
+    lib_map = library.youtube_library_map(
+        session, channel=None if global_search else channel_name
+    )
+    yt_ids = [str(e["id"]) for e in raw_entries if e.get("id")]
+    meta_cache = feed_meta_cache.get_many(yt_ids)
+    entries: list[ChannelFeedEntry] = []
+    to_cache: list[dict[str, Any]] = []
+    catalog_updates: list[dict[str, Any]] = []
+    for raw in raw_entries:
+        if is_members_only_entry(raw):
+            continue
+        yt_id = raw.get("id")
+        lib = lib_map.get(yt_id) if yt_id else None
+        video_id = lib[0] if lib else None
+        library_height = lib[1] if lib else None
+        in_library = video_id is not None
+        if global_search and in_library:
+            continue
+        cached = meta_cache.get(str(yt_id)) if yt_id else None
+        view_count = raw.get("view_count")
+        if view_count is None and cached:
+            view_count = cached.get("view_count")
+        if view_count is None and lib:
+            view_count = lib[2]
+        like_count = cached.get("like_count") if cached else None
+        dislike_count = cached.get("dislike_count") if cached else None
+        published_at, published_label = _published_fields(
+            raw, cached, lib[3] if lib else None
+        )
+        duration = raw.get("duration")
+        if duration is None and cached:
+            duration = cached.get("duration")
+        thumbnail_url = raw.get("thumbnail_url") or (
+            cached.get("thumbnail_url") if cached else None
+        )
+        if yt_id and (
+            raw.get("published_at")
+            or raw.get("published_label")
+            or raw.get("view_count") is not None
+            or raw.get("duration") is not None
+            or raw.get("thumbnail_url")
+        ):
+            to_cache.append(
+                {
+                    "id": str(yt_id),
+                    "view_count": raw.get("view_count"),
+                    "published_at": published_at or raw.get("published_at"),
+                    "published_label": published_label,
+                    "duration": raw.get("duration"),
+                    "thumbnail_url": raw.get("thumbnail_url"),
+                    "title": raw.get("title"),
+                }
+            )
+        if yt_id and (published_at or view_count is not None):
+            catalog_updates.append(
+                {
+                    "id": str(yt_id),
+                    "published_at": None if published_label else published_at,
+                    "published_label": published_label,
+                    "view_count": view_count,
+                    "duration": duration,
+                    "thumbnail_url": thumbnail_url,
+                }
+            )
+        entries.append(
+            ChannelFeedEntry(
+                id=yt_id,
+                url=raw["url"],
+                title=raw.get("title"),
+                duration=duration,
+                thumbnail_url=thumbnail_url,
+                view_count=view_count,
+                like_count=int(like_count) if like_count is not None else None,
+                dislike_count=(
+                    int(dislike_count) if dislike_count is not None else None
+                ),
+                published_at=published_at,
+                published_label=published_label,
+                channel=raw.get("channel") or channel_name,
+                in_library=in_library,
+                video_id=video_id,
+                library_height_px=library_height,
+                match_reason=raw.get("match_reason"),
+            )
+        )
+    if to_cache:
+        feed_meta_cache.upsert_many(to_cache)
+    if channel_url and catalog_updates:
+        try:
+            channel_catalog.update_catalog_video_fields(
+                channel_url, catalog_updates
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    return entries
+
+
+@router.patch(
+    "/channels/catalog/youtube-search",
+    response_model=ChannelCatalogYoutubeSearchPref,
+)
+def channel_youtube_search_pref(
+    payload: ChannelCatalogYoutubeSearchUpdate,
+    session: Session = Depends(get_session),
+):
+    """Set per-channel Direct YouTube search override (null = inherit)."""
+    channel_url = (payload.url or "").strip() or None
+    channel_name = (payload.channel or "").strip() or None
+    if not channel_url and channel_name:
+        channel_url = library.resolve_channel_url(session, channel_name)
+    if not channel_url:
+        raise HTTPException(
+            status_code=400,
+            detail="No YouTube channel URL known for this channel",
+        )
+    result = channel_catalog.set_direct_youtube_search(
+        channel_url,
+        payload.direct_youtube_search,
+        channel_name=channel_name,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Direct YouTube search is only available for YouTube channels",
+        )
+    return ChannelCatalogYoutubeSearchPref(**result)
+
+
+@router.get("/channels/youtube-search", response_model=ChannelFeedPage)
+def channel_youtube_search(
+    q: str = Query(..., min_length=2),
+    channel: Optional[str] = None,
+    url: Optional[str] = None,
+    limit: int = Query(20, ge=1, le=40),
+    session: Session = Depends(get_session),
+):
+    channel_url = (url or "").strip() or None
+    channel_name = (channel or "").strip() or None
+    if not channel_url and channel_name:
+        channel_url = library.resolve_channel_url(session, channel_name)
+    empty = ChannelFeedPage(
+        channel=channel_name,
+        channel_url=channel_url,
+        entries=[],
+        has_more=False,
+        from_catalog=False,
+        direct_youtube_search_effective=False,
+    )
+    if not channel_url or not channel_catalog.is_youtube_channel_url(channel_url):
+        return empty
+    pref = channel_catalog.youtube_search_pref(
+        session, channel_url, channel_name=channel_name
+    )
+    effective = bool(pref.get("direct_youtube_search_effective"))
+    empty.direct_youtube_search_effective = effective
+    if not effective:
+        return empty
+    raw_entries = search_youtube_channel_videos(
+        channel_url, q, limit=limit
+    )
+    entries = _feed_entries_from_raw(
+        session,
+        raw_entries,
+        channel_name=channel_name,
+        channel_url=channel_url,
+    )
+    return ChannelFeedPage(
+        channel=channel_name,
+        channel_url=channel_url,
+        entries=entries,
+        has_more=False,
+        from_catalog=False,
+        direct_youtube_search_effective=True,
+    )
+
+
 @router.get("/channels/catalog/search", response_model=ChannelFeedPage)
 def channel_catalog_search(
     q: str = Query(..., min_length=1),
@@ -140,56 +350,20 @@ def channel_catalog_search(
         raw_entries = channel_catalog.search_all_catalogs(
             session, q, limit=limit, semantic=semantic
         )
-        lib_map = library.youtube_library_map(session, channel=None)
         progress: dict[str, Any] = {}
     else:
         raw_entries = channel_catalog.search_catalog(
             session, channel_url, q, limit=limit, semantic=semantic
         )
-        lib_map = library.youtube_library_map(session, channel=channel_name)
         progress = channel_catalog.catalog_progress(session, channel_url)
 
-    yt_ids = [str(e["id"]) for e in raw_entries if e.get("id")]
-    meta_cache = feed_meta_cache.get_many(yt_ids)
-    entries: list[ChannelFeedEntry] = []
-    for raw in raw_entries:
-        if is_members_only_entry(raw):
-            continue
-        yt_id = raw.get("id")
-        lib = lib_map.get(yt_id) if yt_id else None
-        video_id = lib[0] if lib else None
-        library_height = lib[1] if lib else None
-        in_library = video_id is not None
-        # Global search is for streamable hits; library matches appear in the
-        # primary library results section on the frontend.
-        if global_search and in_library:
-            continue
-        cached = meta_cache.get(str(yt_id)) if yt_id else None
-        view_count = raw.get("view_count")
-        if view_count is None and cached:
-            view_count = cached.get("view_count")
-        like_count = cached.get("like_count") if cached else None
-        dislike_count = cached.get("dislike_count") if cached else None
-        entries.append(
-            ChannelFeedEntry(
-                id=yt_id,
-                url=raw["url"],
-                title=raw.get("title"),
-                duration=raw.get("duration"),
-                thumbnail_url=raw.get("thumbnail_url"),
-                view_count=view_count,
-                like_count=int(like_count) if like_count is not None else None,
-                dislike_count=(
-                    int(dislike_count) if dislike_count is not None else None
-                ),
-                published_at=raw.get("published_at"),
-                channel=raw.get("channel") or channel_name,
-                in_library=in_library,
-                video_id=video_id,
-                library_height_px=library_height,
-                match_reason=raw.get("match_reason"),
-            )
-        )
+    entries = _feed_entries_from_raw(
+        session,
+        raw_entries,
+        channel_name=channel_name,
+        channel_url=channel_url,
+        global_search=global_search,
+    )
     return ChannelFeedPage(
         channel=channel_name,
         channel_url=channel_url,
@@ -320,8 +494,8 @@ def channel_feed(
             view_count = library_views
         like_count = cached.get("like_count") if cached else None
         dislike_count = cached.get("dislike_count") if cached else None
-        published_at = raw.get("published_at") or (
-            cached.get("published_at") if cached else None
+        published_at, published_label = _published_fields(
+            raw, cached, lib[3] if lib else None
         )
         duration = raw.get("duration")
         if duration is None and cached:
@@ -333,6 +507,7 @@ def channel_feed(
         if yt_id and (
             feed_views is not None
             or raw.get("published_at")
+            or raw.get("published_label")
             or raw.get("duration")
             or raw.get("thumbnail_url")
         ):
@@ -340,7 +515,8 @@ def channel_feed(
                 {
                     "id": yt_id,
                     "view_count": feed_views,
-                    "published_at": raw.get("published_at"),
+                    "published_at": published_at or raw.get("published_at"),
+                    "published_label": published_label,
                     "duration": raw.get("duration"),
                     "thumbnail_url": raw.get("thumbnail_url"),
                     "title": raw.get("title"),
@@ -360,6 +536,7 @@ def channel_feed(
                     int(dislike_count) if dislike_count is not None else None
                 ),
                 published_at=published_at,
+                published_label=published_label,
                 in_library=video_id is not None,
                 video_id=video_id,
                 library_height_px=library_height,
@@ -368,6 +545,26 @@ def channel_feed(
         )
     if to_cache:
         feed_meta_cache.upsert_many(to_cache)
+    if channel_url:
+        catalog_updates = [
+            {
+                "id": e.id,
+                "published_at": None if e.published_label else e.published_at,
+                "published_label": e.published_label,
+                "view_count": e.view_count,
+                "duration": e.duration,
+                "thumbnail_url": e.thumbnail_url,
+            }
+            for e in entries
+            if e.id and (e.published_at or e.view_count is not None)
+        ]
+        if catalog_updates:
+            try:
+                channel_catalog.update_catalog_video_fields(
+                    channel_url, catalog_updates
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     # Background-fill missing views / dates / votes (catalog + live).
     missing_meta = [
@@ -399,7 +596,7 @@ def channel_feed(
                 done=0,
             ) as handle:
                 updates: list[dict] = []
-                catalog_view_updates: list[tuple[str, int]] = []
+                catalog_field_updates: list[dict] = []
                 done = 0
                 for yt_id, entry_url in meta_rows:
                     try:
@@ -415,18 +612,14 @@ def channel_feed(
                     row: dict = {"id": yt_id}
                     if preview.get("view_count") is not None:
                         row["view_count"] = preview["view_count"]
-                        try:
-                            catalog_view_updates.append(
-                                (yt_id, int(preview["view_count"]))
-                            )
-                        except (TypeError, ValueError):
-                            pass
                     if preview.get("thumbnail_url"):
                         row["thumbnail_url"] = preview["thumbnail_url"]
-                    if preview.get("published_at"):
-                        row["published_at"] = preview["published_at"]
+                    if preview.get("published_at") or preview.get("published_label"):
+                        row["published_at"] = preview.get("published_at")
+                        row["published_label"] = preview.get("published_label")
                     if len(row) > 1:
                         updates.append(row)
+                        catalog_field_updates.append(row)
                     done += 1
                     handle.update(done=done, detail=f"{done}/{total}")
                 for yt_id in vote_ids:
@@ -443,10 +636,10 @@ def channel_feed(
                     handle.update(done=done, detail=f"{done}/{total}")
                 if updates:
                     feed_meta_cache.upsert_many(updates)
-                if catalog_url and catalog_view_updates:
+                if catalog_url and catalog_field_updates:
                     try:
-                        channel_catalog.update_catalog_view_counts(
-                            catalog_url, catalog_view_updates
+                        channel_catalog.update_catalog_video_fields(
+                            catalog_url, catalog_field_updates
                         )
                     except Exception:  # noqa: BLE001
                         pass

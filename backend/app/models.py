@@ -180,6 +180,8 @@ class ChannelCatalog(SQLModel, table=True):
     # True when indexing reached the end of the channel (not stopped by max cap).
     complete: bool = Field(default=False)
     max_videos: int = 1000
+    # None = inherit system direct_youtube_search; True/False = per-channel override.
+    direct_youtube_search: Optional[bool] = None
     phase: Optional[str] = None  # flat | descriptions | embed
     last_error: Optional[str] = None
     started_at: Optional[datetime] = None

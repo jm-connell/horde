@@ -262,7 +262,7 @@ export default function Settings() {
   }, [tab, aiDraft.openrouter_enabled, aiDraft.openrouter_api_key_set]);
 
   useEffect(() => {
-    if (tab !== "ai") return;
+    if (tab !== "ai" && tab !== "system") return;
     let cancelled = false;
     const load = () => {
       api
@@ -488,6 +488,7 @@ export default function Settings() {
         | "channel_catalog_enabled"
         | "channel_catalog_max_videos"
         | "metadata_sync_interval_hours"
+        | "direct_youtube_search"
       >
     >
   ) => {

@@ -41,7 +41,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "library",
     keywords:
-      "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval youtube only youtube",
+      "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval youtube only youtube direct youtube search",
   },
   {
     tab: "library",

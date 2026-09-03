@@ -282,6 +282,8 @@ def youtube_extractor_args() -> dict[str, Any]:
     # to visionos, which still serves https adaptive URLs without a PO token.
     args: dict[str, Any] = {
         "youtube": {"player_client": ["default", "-android_vr"]},
+        # Channel/search tabs omit upload_date; this turns "3 years ago" into a timestamp.
+        "youtubetab": {"approximate_date": ["true"]},
     }
     if YTDLP_POT_BASE_URL:
         args["youtubepot-bgutilhttp"] = {"base_url": [YTDLP_POT_BASE_URL]}

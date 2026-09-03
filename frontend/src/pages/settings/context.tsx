@@ -62,7 +62,7 @@ export type SettingsPageContextValue = {
   setCatalogMaxInput: Dispatch<SetStateAction<string>>;
   syncIntervalInput: string;
   setSyncIntervalInput: Dispatch<SetStateAction<string>>;
-  saveCatalogSettings: (patch: Partial<Pick<AppSettings, "channel_catalog_enabled" | "channel_catalog_max_videos" | "metadata_sync_interval_hours">>) => Promise<void>;
+  saveCatalogSettings: (patch: Partial<Pick<AppSettings, "channel_catalog_enabled" | "channel_catalog_max_videos" | "metadata_sync_interval_hours" | "direct_youtube_search">>) => Promise<void>;
   metadataSyncFields: string[];
   toggleSyncField: (field: string) => void;
   resyncAllMetadata: () => Promise<void>;

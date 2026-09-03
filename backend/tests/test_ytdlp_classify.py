@@ -97,6 +97,7 @@ def test_youtube_extractor_args_excludes_android_vr(monkeypatch):
     assert "default" in clients
     assert "-android_vr" in clients
     assert "android_vr" not in clients
+    assert args["youtubetab"]["approximate_date"] == ["true"]
     assert "youtubepot-bgutilhttp" not in args
 
 

@@ -173,6 +173,26 @@ export function formatDate(iso: string | null): string {
   });
 }
 
+const RELATIVE_AGO_RE =
+  /^(?:just now|\d+\s+(?:second|minute|hour|day|week|month|year)s?\s+ago)$/i;
+const YEAR_ONLY_RE = /^\d{4}$/;
+const YEAR_MONTH_RE = /^[A-Za-z]{3,9}\s+\d{4}$/;
+
+/** Calendar date when known; otherwise YouTube-style '3 years ago' or a year. */
+export function formatPublishedAt(
+  iso: string | null | undefined,
+  label?: string | null
+): string {
+  const trimmedLabel = label?.trim();
+  if (trimmedLabel) return trimmedLabel;
+  if (!iso) return "";
+  const s = iso.trim();
+  if (YEAR_ONLY_RE.test(s) || RELATIVE_AGO_RE.test(s) || YEAR_MONTH_RE.test(s)) {
+    return s;
+  }
+  return formatDate(s);
+}
+
 export function formatViewCount(count: number | null): string {
   if (count === null || count < 0) return "";
   if (count >= 1_000_000_000) return `${(count / 1_000_000_000).toFixed(1)}B views`;

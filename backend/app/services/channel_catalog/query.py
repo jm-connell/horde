@@ -13,6 +13,7 @@ from ...models import (
     ChannelCatalogStatus,
     ChannelCatalogVideo,
 )
+from ..feed_meta_cache import parse_upload_date
 from ..search_text import (
     explain_match,
     keyword_match_clause,
@@ -52,35 +53,73 @@ def catalog_progress(
     }
 
 
-def update_catalog_view_counts(
-    channel_url: str, updates: list[tuple[str, int]]
+def update_catalog_video_fields(
+    channel_url: str, updates: list[dict[str, Any]]
 ) -> None:
-    """Persist enriched view counts onto catalog rows when present."""
+    """Persist enriched metadata onto existing catalog rows (no inserts)."""
     if not updates:
+        return
+    by_id: dict[str, dict[str, Any]] = {}
+    for item in updates:
+        yt_id = item.get("id")
+        if not yt_id or not isinstance(yt_id, str):
+            continue
+        by_id[yt_id] = item
+    if not by_id:
         return
     url = _normalize_channel_url(channel_url)
     with Session(engine) as session:
         catalog = get_catalog_by_url(session, url)
         if catalog is None or catalog.id is None:
             return
-        by_id = {yt_id: views for yt_id, views in updates}
         rows = session.exec(
             select(ChannelCatalogVideo).where(
                 ChannelCatalogVideo.catalog_id == catalog.id,
                 col(ChannelCatalogVideo.yt_id).in_(list(by_id.keys())),
             )
         ).all()
-        changed = False
+        any_changed = False
         for row in rows:
-            views = by_id.get(row.yt_id)
-            if views is None:
+            item = by_id.get(row.yt_id)
+            if not item:
                 continue
-            if row.view_count != views:
-                row.view_count = views
+            row_changed = False
+            views = item.get("view_count")
+            if views is not None:
+                try:
+                    views_i = int(views)
+                except (TypeError, ValueError):
+                    views_i = None
+                if views_i is not None and row.view_count != views_i:
+                    row.view_count = views_i
+                    row_changed = True
+            published = parse_upload_date(item.get("published_at"))
+            if published and not row.published_at and not item.get("published_label"):
+                row.published_at = published
+                row_changed = True
+            duration = item.get("duration")
+            if duration is not None and row.duration is None:
+                row.duration = duration
+                row_changed = True
+            thumb = item.get("thumbnail_url")
+            if thumb and not row.thumbnail_url:
+                row.thumbnail_url = str(thumb)
+                row_changed = True
+            if row_changed:
                 session.add(row)
-                changed = True
-        if changed:
+                any_changed = True
+        if any_changed:
             session.commit()
+
+
+def update_catalog_view_counts(
+    channel_url: str, updates: list[tuple[str, int]]
+) -> None:
+    """Persist enriched view counts onto catalog rows when present."""
+    update_catalog_video_fields(
+        channel_url,
+        [{"id": yt_id, "view_count": views} for yt_id, views in updates],
+    )
 
 
 def catalog_feed_page(

@@ -129,6 +129,7 @@ DEFAULTS: dict[str, Any] = {
     "metadata_sync_interval_hours": 24,
     "channel_catalog_enabled": True,
     "channel_catalog_max_videos": 1000,
+    "direct_youtube_search": True,
     "download_queue_paused": False,
     "ui": {},
     "ai": dict(AI_DEFAULTS),
@@ -145,6 +146,26 @@ def clamp_catalog_max_videos(value: Any) -> int:
     except (TypeError, ValueError):
         n = int(DEFAULTS["channel_catalog_max_videos"])
     return max(CHANNEL_CATALOG_MAX_MIN, min(CHANNEL_CATALOG_MAX_MAX, n))
+
+
+def direct_youtube_search_system(data: dict[str, Any] | None = None) -> bool:
+    raw = (data if data is not None else load()).get("direct_youtube_search", True)
+    return bool(raw)
+
+
+def direct_youtube_search_effective(override: Any, system: Any = None) -> bool:
+    """Per-channel override wins; None/unknown inherits the system default."""
+    if override is True:
+        return True
+    if override is False:
+        return False
+    if override in (1, "1", "true", "True"):
+        return True
+    if override in (0, "0", "false", "False"):
+        return False
+    if system is None:
+        system = direct_youtube_search_system()
+    return bool(system)
 
 
 def _path() -> Path:

@@ -196,3 +196,22 @@ def test_rename_channel(session, add_video):
         for v in library.query_videos(session, needs_review=False)
     }
     assert names == {"New", "Keep"}
+
+
+def test_youtube_library_map_includes_published_at(session, add_video):
+    published = datetime(2020, 5, 1, tzinfo=timezone.utc)
+    video = add_video(
+        title="Dated",
+        channel="LTT",
+        source_url="https://www.youtube.com/watch?v=abcdefghijk",
+        published_at=published,
+        view_count=12,
+        height_px=1080,
+        yt_id="abcdefghijk",
+    )
+    mapping = library.youtube_library_map(session, channel="LTT")
+    lib_id, height, views, iso = mapping["abcdefghijk"]
+    assert lib_id == video.id
+    assert height == 1080
+    assert views == 12
+    assert iso and iso.startswith("2020-05-01")

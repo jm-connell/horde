@@ -146,8 +146,8 @@ def sum_since(cutoff: datetime) -> float:
     return round(total, 8)
 
 
-def totals() -> dict[str, float]:
-    """Sum costs for rolling windows (UTC-ish via stored timestamps)."""
+def window_analytics() -> dict[str, dict[str, float | int]]:
+    """Cost and call counts for rolling windows (UTC-ish via stored timestamps)."""
     now = utcnow()
     windows = {
         "h24": now - timedelta(hours=24),
@@ -156,21 +156,34 @@ def totals() -> dict[str, float]:
         "y1": now - timedelta(days=365),
         "all": None,
     }
-    out: dict[str, float] = {k: 0.0 for k in windows}
+    out: dict[str, dict[str, float | int]] = {
+        k: {"cost": 0.0, "calls": 0} for k in windows
+    }
     with Session(engine) as session:
         rows = session.exec(select(OpenRouterUsage)).all()
         for row in rows:
             c = float(row.cost or 0.0)
             created = as_utc(row.created_at)
-            out["all"] += c
+            out["all"]["cost"] = float(out["all"]["cost"]) + c
+            out["all"]["calls"] = int(out["all"]["calls"]) + 1
             if created is None:
                 continue
             for key, cutoff in windows.items():
                 if key == "all" or cutoff is None:
                     continue
                 if created >= cutoff:
-                    out[key] += c
-    return {k: round(v, 8) for k, v in out.items()}
+                    out[key]["cost"] = float(out[key]["cost"]) + c
+                    out[key]["calls"] = int(out[key]["calls"]) + 1
+    return {
+        k: {"cost": round(float(v["cost"]), 8), "calls": int(v["calls"])}
+        for k, v in out.items()
+    }
+
+
+def totals() -> dict[str, float]:
+    """Sum costs for rolling windows (UTC-ish via stored timestamps)."""
+    stats = window_analytics()
+    return {k: float(v["cost"]) for k, v in stats.items()}
 
 
 def budget_status(

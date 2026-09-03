@@ -254,21 +254,40 @@ def find_video_by_youtube_id(session: Session, yt_id: str) -> Optional[Video]:
     return None
 
 
+def _iso_published(value: Optional[datetime]) -> Optional[str]:
+    if value is None:
+        return None
+    dt = value if getattr(value, "tzinfo", None) else value.replace(tzinfo=timezone.utc)
+    return dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
+
+
 def youtube_library_map(
     session: Session, channel: Optional[str] = None
-) -> dict[str, tuple[int, Optional[int], Optional[int]]]:
-    """Map YouTube video IDs to local library video IDs, heights, and view counts."""
+) -> dict[str, tuple[int, Optional[int], Optional[int], Optional[str]]]:
+    """Map YouTube IDs to (library_id, height_px, view_count, published_at ISO)."""
     from urllib.parse import urlparse
 
     from .url_clean import _youtube_video_id
 
     statement = select(
-        Video.id, Video.source_url, Video.height_px, Video.view_count, Video.file_path
+        Video.id,
+        Video.source_url,
+        Video.height_px,
+        Video.view_count,
+        Video.file_path,
+        Video.published_at,
     )
     if channel:
         statement = statement.where(Video.channel == channel)
-    mapping: dict[str, tuple[int, Optional[int], Optional[int]]] = {}
-    for video_id, source_url, height_px, views, file_path in session.exec(statement).all():
+    mapping: dict[str, tuple[int, Optional[int], Optional[int], Optional[str]]] = {}
+    for (
+        video_id,
+        source_url,
+        height_px,
+        views,
+        file_path,
+        published_at,
+    ) in session.exec(statement).all():
         yt_id = None
         if source_url:
             try:
@@ -285,6 +304,7 @@ def youtube_library_map(
                 int(video_id),
                 int(height_px) if height_px else None,
                 int(views) if views is not None else None,
+                _iso_published(published_at),
             )
     return mapping
 

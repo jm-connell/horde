@@ -18,8 +18,7 @@ from ...models import (
     utcnow,
 )
 from .. import activity, app_settings
-from .. import feed_meta_cache
-from ..feed_meta_cache import parse_upload_date
+from ..feed_meta_cache import parse_upload_date, published_meta_from_entry
 from ..ytdlp_common import (
     MembersOnlyError,
     QuietYtdlpLogger,
@@ -82,9 +81,9 @@ def _upsert_flat_entries(
                 ChannelCatalogVideo.yt_id == str(yt_id),
             )
         ).first()
-        published = raw.get("published_at")
-        if published is not None and not isinstance(published, str):
-            published = parse_upload_date(published)
+        published = parse_upload_date(raw.get("published_at"))
+        if raw.get("published_label"):
+            published = None
         if existing is None:
             existing = ChannelCatalogVideo(
                 catalog_id=catalog.id,  # type: ignore[arg-type]
@@ -181,9 +180,9 @@ def sync_feed_head(
             yt_id = str(raw["id"])
             live_ids.append(yt_id)
             row = by_yt.get(yt_id)
-            published = raw.get("published_at")
-            if published is not None and not isinstance(published, str):
-                published = parse_upload_date(published)
+            published = parse_upload_date(raw.get("published_at"))
+            if raw.get("published_label"):
+                published = None
             if row is None:
                 row = ChannelCatalogVideo(
                     catalog_id=catalog.id,  # type: ignore[arg-type]
@@ -266,7 +265,8 @@ def schedule_feed_head_sync(
     threading.Thread(target=_run, daemon=True, name="catalog-feed-head").start()
 
 
-def _fetch_description(url: str) -> Optional[str]:
+def _fetch_description(url: str) -> tuple[Optional[str], Optional[str]]:
+    """Full extract for description; also returns published_at when yt-dlp has it."""
     opts = apply_cookie_opts(
         {
             "quiet": True,
@@ -281,13 +281,17 @@ def _fetch_description(url: str) -> Optional[str]:
     except Exception as exc:  # noqa: BLE001
         if is_members_only_error(exc):
             raise MembersOnlyError(str(exc)) from exc
-        return None
+        return None, None
     if is_members_only_entry(info):
         raise MembersOnlyError("members-only")
     desc = info.get("description")
     if not isinstance(desc, str) or not desc.strip():
-        return None
-    return desc[:_MAX_DESC_CHARS]
+        desc_out = None
+    else:
+        desc_out = desc[:_MAX_DESC_CHARS]
+    meta = published_meta_from_entry(info)
+    published = meta.iso if meta.precision == "day" else None
+    return desc_out, published
 
 
 def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
@@ -316,13 +320,19 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
             _set_runtime(done=i + 1)
             continue
         try:
-            desc = _fetch_description(row.url)
+            desc, published = _fetch_description(row.url)
         except MembersOnlyError:
             purge_catalog_video(session, row)
             _set_runtime(done=i + 1)
             continue
+        changed = False
         if desc:
             row.description = desc
+            changed = True
+        if published and not row.published_at:
+            row.published_at = published
+            changed = True
+        if changed:
             row.indexed_at = utcnow()
             session.add(row)
             session.commit()

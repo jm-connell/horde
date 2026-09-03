@@ -12,7 +12,9 @@ class SubtitleTrack(BaseModel):
 
 
 class SearchMatchReason(BaseModel):
-    source: Literal["title", "description", "tags", "notes", "captions", "related"]
+    source: Literal[
+        "title", "description", "tags", "notes", "captions", "related", "youtube"
+    ]
     snippet: Optional[str] = None
 
 
@@ -196,6 +198,8 @@ class ChannelFeedEntry(BaseModel):
     like_count: Optional[int] = None
     dislike_count: Optional[int] = None
     published_at: Optional[str] = None
+    # Honest UI string when the calendar day is unknown ("3 years ago", "2013").
+    published_label: Optional[str] = None
     # Channel display name (set for global catalog search).
     channel: Optional[str] = None
     in_library: bool = False
@@ -216,6 +220,7 @@ class ChannelFeedPage(BaseModel):
     catalog_total: Optional[int] = None
     catalog_complete: bool = False
     catalog_status: Optional[str] = None
+    direct_youtube_search_effective: Optional[bool] = None
 
 
 class ChannelCatalogStatusItem(BaseModel):
@@ -232,6 +237,9 @@ class ChannelCatalogStatusItem(BaseModel):
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     updated_at: Optional[str] = None
+    # None = inherit system default.
+    direct_youtube_search: Optional[bool] = None
+    direct_youtube_search_effective: bool = True
 
 
 class ChannelCatalogStatusResponse(BaseModel):
@@ -245,6 +253,7 @@ class ChannelCatalogStatusResponse(BaseModel):
     catalog_id: Optional[int] = None
     queue_depth: int = 0
     catalogs: list[ChannelCatalogStatusItem] = []
+    direct_youtube_search: bool = True
 
 
 class ChannelCatalogIndexRequest(BaseModel):
@@ -260,6 +269,19 @@ class ChannelCatalogIndexResult(BaseModel):
     refreshed: int = 0
     catalog_id: Optional[int] = None
     detail: str = ""
+
+
+class ChannelCatalogYoutubeSearchUpdate(BaseModel):
+    channel: Optional[str] = None
+    url: Optional[str] = None
+    # null = inherit the system Direct YouTube search default.
+    direct_youtube_search: Optional[bool] = None
+
+
+class ChannelCatalogYoutubeSearchPref(BaseModel):
+    channel_url: str
+    direct_youtube_search: Optional[bool] = None
+    direct_youtube_search_effective: bool = True
 
 
 class TagStat(BaseModel):

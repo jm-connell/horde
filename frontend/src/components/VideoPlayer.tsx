@@ -22,6 +22,10 @@ import type {
 
 import type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
 import {
+  scrubPositionFromClientX,
+  shouldPassthroughSeek,
+} from "./playerSeek";
+import {
   abrRestrictions,
   qualityMenuLabel,
   streamQualityToChoice,
@@ -581,29 +585,6 @@ export default function VideoPlayer({
     };
   }, [isMini, videoId]);
 
-  const updateScrubHover = useCallback(
-    (clientX: number) => {
-      const el = scrubberRef.current;
-      if (!el || duration <= 0) return;
-      const rect = el.getBoundingClientRect();
-      if (rect.width <= 0) return;
-      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-      setScrubHover({ time: ratio * duration, pct: ratio * 100 });
-    },
-    [duration]
-  );
-
-  const onScrubPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      updateScrubHover(e.clientX);
-    },
-    [updateScrubHover]
-  );
-
-  const onScrubPointerLeave = useCallback(() => {
-    setScrubHover(null);
-  }, []);
-
   const undoSkip = useCallback(() => {
     const seg = skippedSegment;
     const v = videoRef.current;
@@ -1081,6 +1062,90 @@ export default function VideoPlayer({
     controlsInteracting.current = false;
     scheduleHideControls();
   }, [scheduleHideControls]);
+
+  const scrubFromClientX = useCallback(
+    (clientX: number, hoverOnly = false) => {
+      const el = scrubberRef.current;
+      if (!el) return;
+      const pos = scrubPositionFromClientX(
+        clientX,
+        el.getBoundingClientRect(),
+        duration
+      );
+      if (!pos) return;
+      setScrubHover(pos);
+      if (!hoverOnly) seekTo(pos.time);
+    },
+    [duration, seekTo]
+  );
+
+  const onScrubPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      onControlsInteractionStart();
+      scrubFromClientX(e.clientX);
+    },
+    [onControlsInteractionStart, scrubFromClientX]
+  );
+
+  const onScrubPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const dragging = e.currentTarget.hasPointerCapture(e.pointerId);
+      scrubFromClientX(e.clientX, !dragging);
+    },
+    [scrubFromClientX]
+  );
+
+  const onScrubPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      onControlsInteractionEnd();
+    },
+    [onControlsInteractionEnd]
+  );
+
+  const onScrubPointerLeave = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      setScrubHover(null);
+    },
+    []
+  );
+
+  const isScrubPassthroughPoint = useCallback(
+    (clientX: number, clientY: number) =>
+      shouldPassthroughSeek(
+        clientX,
+        clientY,
+        scrubberRef.current?.getBoundingClientRect() ?? null,
+        controlsVisible
+      ),
+    [controlsVisible]
+  );
+
+  const onScrubPassthroughDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      onControlsInteractionStart();
+      scrubFromClientX(e.clientX);
+    },
+    [onControlsInteractionStart, scrubFromClientX]
+  );
+
+  const onScrubPassthroughMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      scrubFromClientX(e.clientX);
+    },
+    [scrubFromClientX]
+  );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1818,6 +1883,10 @@ export default function VideoPlayer({
             offset={subtitleOffset}
             active
             onPositionChange={onSubtitlePositionChange}
+            isPassthroughPoint={isScrubPassthroughPoint}
+            onPassthroughPointerDown={onScrubPassthroughDown}
+            onPassthroughPointerMove={onScrubPassthroughMove}
+            onPassthroughPointerUp={onScrubPointerUp}
           />
         )}
 
@@ -1907,8 +1976,11 @@ export default function VideoPlayer({
           >
             <div
               ref={scrubberRef}
-              className="relative"
+              className="relative -my-1.5 flex h-4 cursor-pointer touch-none items-center"
+              onPointerDown={onScrubPointerDown}
               onPointerMove={onScrubPointerMove}
+              onPointerUp={onScrubPointerUp}
+              onPointerCancel={onScrubPointerUp}
               onPointerLeave={onScrubPointerLeave}
             >
             {scrubPreview && (
@@ -1951,10 +2023,8 @@ export default function VideoPlayer({
               step={0.1}
               value={current}
               onChange={onSeek}
-              onPointerDown={onControlsInteractionStart}
-              onPointerUp={onControlsInteractionEnd}
-              onPointerCancel={onControlsInteractionEnd}
-              className="accent-scrubber w-full"
+              className="pointer-events-none accent-scrubber w-full"
+              aria-label="Seek"
               style={{
                 background: `linear-gradient(to right, rgb(var(--accent)) ${progressPct}%, rgb(var(--ink-600)) ${progressPct}%)`,
               }}

@@ -1,6 +1,6 @@
 """Channel catalog keyword search: multi-term AND and semantic scoping."""
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models import (
     ChannelCatalog,
@@ -9,7 +9,11 @@ from app.models import (
     ChannelCatalogVideo,
 )
 from app.services.ai.embeddings import pack_vector
-from app.services.channel_catalog.query import search_all_catalogs, search_catalog
+from app.services.channel_catalog.query import (
+    search_all_catalogs,
+    search_catalog,
+    update_catalog_video_fields,
+)
 
 
 LTT = "https://youtube.com/@linustechtips"
@@ -232,3 +236,61 @@ def test_semantic_hits_are_scoped_to_catalog(session, monkeypatch):
     assert "semother111" not in ids
     reason = next(r["match_reason"] for r in hits if r["id"] == "semltt11111")
     assert reason["source"] == "related"
+
+
+def test_update_catalog_video_fields_fills_dates_without_insert(session):
+    catalog = _add_catalog(session, url=LTT, name="Linus Tech Tips")
+    row = _add_video(session, catalog, yt_id="paintfix11", title=LINUS_TITLE, position=0)
+    assert row.published_at is None
+
+    update_catalog_video_fields(
+        LTT,
+        [
+            {
+                "id": "paintfix11",
+                "published_at": "20240901",
+                "view_count": 123,
+            },
+            {
+                "id": "notindexed1",
+                "published_at": "20140101",
+                "view_count": 9,
+            },
+        ],
+    )
+    session.refresh(row)
+    assert row.published_at.startswith("2024-09-01")
+    assert row.view_count == 123
+    leftover = session.exec(
+        select(ChannelCatalogVideo).where(ChannelCatalogVideo.yt_id == "notindexed1")
+    ).all()
+    assert leftover == []
+
+    update_catalog_video_fields(
+        LTT,
+        [{"id": "paintfix11", "published_at": "20140101", "view_count": 50}],
+    )
+    session.refresh(row)
+    assert row.published_at.startswith("2024-09-01")
+    assert row.view_count == 50
+
+
+def test_update_catalog_video_fields_skips_approximate_dates(session):
+    catalog = _add_catalog(session, url=LTT, name="Linus Tech Tips")
+    row = _add_video(session, catalog, yt_id="oldpaint111", title=LINUS_TITLE, position=0)
+    assert row.published_at is None
+
+    update_catalog_video_fields(
+        LTT,
+        [
+            {
+                "id": "oldpaint111",
+                "published_at": "2014-01-01T00:00:00+00:00",
+                "published_label": "12 years ago",
+                "view_count": 100,
+            }
+        ],
+    )
+    session.refresh(row)
+    assert row.published_at is None
+    assert row.view_count == 100

@@ -41,8 +41,11 @@ import {
   FEED_INDEX_TIP,
   FEED_SEARCH_TIP,
   formatCatalogProgress,
+  showChannelIndexButton,
   type CatalogProgress,
 } from "./libraryCatalogProgress";
+import { DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP } from "./settings/constants";
+import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
 import {
   loadChannelUrlMap,
   loadFeedLayout,
@@ -508,7 +511,7 @@ export default function Library() {
             u
               .replace(/\/+$/, "")
               .replace(
-                /\/(videos|shorts|streams|playlists|featured|about)$/i,
+                /\/(videos|shorts|streams|playlists|featured|about|search)$/i,
                 ""
               )
               .toLowerCase();
@@ -521,6 +524,7 @@ export default function Library() {
             norm(status.current_channel_url) === target;
           const maxVideos = hit?.max_videos || 1000;
           if (!hit) {
+            const system = status.direct_youtube_search ?? true;
             setCatalogProgress({
               indexed: isCurrentJob ? status.done : 0,
               total: null,
@@ -528,6 +532,9 @@ export default function Library() {
               complete: false,
               status: null,
               indexing: isCurrentJob,
+              youtubeSearchOverride: null,
+              youtubeSearchEffective: system,
+              youtubeSearchSystem: system,
             });
             return;
           }
@@ -549,6 +556,11 @@ export default function Library() {
             complete: hit.complete && !indexing,
             status: hit.status,
             indexing,
+            youtubeSearchOverride: hit.direct_youtube_search ?? null,
+            youtubeSearchEffective:
+              hit.direct_youtube_search_effective ??
+              (status.direct_youtube_search ?? true),
+            youtubeSearchSystem: status.direct_youtube_search ?? true,
           });
         })
         .catch(() => undefined);
@@ -584,7 +596,7 @@ export default function Library() {
             u
               .replace(/\/+$/, "")
               .replace(
-                /\/(videos|shorts|streams|playlists|featured|about)$/i,
+                /\/(videos|shorts|streams|playlists|featured|about|search)$/i,
                 ""
               )
               .toLowerCase();
@@ -592,14 +604,22 @@ export default function Library() {
           const hit = status.catalogs.find(
             (c) => norm(c.channel_url) === target
           );
-          setCatalogProgress({
+          setCatalogProgress((prev) => ({
             indexed: hit?.indexed_count ?? 0,
             total: hit?.channel_total ?? null,
             maxVideos: hit?.max_videos || 1000,
             complete: false,
             status: hit?.status ?? "queued",
             indexing: true,
-          });
+            youtubeSearchOverride:
+              hit?.direct_youtube_search ?? prev?.youtubeSearchOverride ?? null,
+            youtubeSearchEffective:
+              hit?.direct_youtube_search_effective ??
+              prev?.youtubeSearchEffective ??
+              true,
+            youtubeSearchSystem:
+              status.direct_youtube_search ?? prev?.youtubeSearchSystem ?? true,
+          }));
         })
         .catch(() => undefined);
     } catch (err) {
@@ -610,6 +630,37 @@ export default function Library() {
       );
     } finally {
       setIndexingChannel(false);
+    }
+  };
+
+  const [youtubePrefSaving, setYoutubePrefSaving] = useState(false);
+
+  const setChannelYoutubeSearch = async (value: boolean | null) => {
+    if (!activeChannelUrl || youtubePrefSaving) return;
+    setYoutubePrefSaving(true);
+    try {
+      const result = await api.updateChannelYoutubeSearch({
+        channel: activeChannel ?? undefined,
+        url: activeChannelUrl,
+        direct_youtube_search: value,
+      });
+      setCatalogProgress((prev) =>
+        prev
+          ? {
+              ...prev,
+              youtubeSearchOverride: result.direct_youtube_search,
+              youtubeSearchEffective: result.direct_youtube_search_effective,
+            }
+          : prev
+      );
+    } catch (err) {
+      showToast(
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not update YouTube search"
+      );
+    } finally {
+      setYoutubePrefSaving(false);
     }
   };
 
@@ -1034,15 +1085,51 @@ export default function Library() {
                   />
                   <HelpTip text={FEED_SEARCH_TIP} placement="bottom" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void triggerChannelIndex()}
-                  disabled={indexingChannel || !activeChannelUrl}
-                  className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-                  title="Index this channel’s uploads for search"
-                >
-                  {indexingChannel ? "Queuing…" : "Index channel"}
-                </button>
+                {isYoutubeChannelUrl(activeChannelUrl) &&
+                  (indexingChannel ||
+                    showChannelIndexButton(catalogProgress)) && (
+                  <button
+                    type="button"
+                    onClick={() => void triggerChannelIndex()}
+                    disabled={indexingChannel || !activeChannelUrl}
+                    className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Index this channel’s uploads for search"
+                  >
+                    {indexingChannel ? "Queuing…" : "Index channel"}
+                  </button>
+                )}
+                {isYoutubeChannelUrl(activeChannelUrl) && (
+                  <div className="inline-flex shrink-0 items-center gap-1.5">
+                    <span className="hidden text-sm text-gray-300 xl:inline">
+                      YouTube search
+                    </span>
+                    <HelpTip
+                      text={DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP}
+                      placement="bottom"
+                    />
+                    <Toggle
+                      checked={
+                        catalogProgress?.youtubeSearchEffective ?? true
+                      }
+                      disabled={youtubePrefSaving || !activeChannelUrl}
+                      onChange={() =>
+                        void setChannelYoutubeSearch(
+                          !(catalogProgress?.youtubeSearchEffective ?? true)
+                        )
+                      }
+                    />
+                    {catalogProgress?.youtubeSearchOverride != null && (
+                      <button
+                        type="button"
+                        onClick={() => void setChannelYoutubeSearch(null)}
+                        disabled={youtubePrefSaving}
+                        className="hidden text-xs text-gray-500 hover:text-gray-300 sm:inline"
+                      >
+                        Use default
+                      </button>
+                    )}
+                  </div>
+                )}
                 <select
                   value={feedSort}
                   onChange={(e) =>
@@ -1251,6 +1338,9 @@ export default function Library() {
             showUndownloaded={settings.showUndownloadedOnChannel}
             catalogIndexing={Boolean(catalogProgress?.indexing)}
             queueDockedBottom={showQueuePanel && queueDockedBottom}
+            directYoutubeSearch={
+              catalogProgress?.youtubeSearchEffective ?? true
+            }
           />
         ) : onRecommendedTab && !debouncedSearch ? (
           <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />

@@ -27,6 +27,7 @@ describe("settings search routing", () => {
     expect(firstMatchingAiPane("summary")).toBe("features");
     expect(firstMatchingAiPane("index missing")).toBe("jobs");
     expect(firstMatchingTab("index missing")).toBe("ai");
+    expect(firstMatchingTab("direct youtube search")).toBe("library");
   });
   it("resolves AI pane params", () => {
     expect(resolveAiPaneParam("jobs")).toBe("jobs");

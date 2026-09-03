@@ -28,6 +28,11 @@ def test_totals_compares_naive_and_aware_created_at(session):
     assert data["h24"] == 0.02
     assert data["y1"] == 0.02
 
+    stats = cost_ledger.window_analytics()
+    assert stats["all"]["calls"] == 2
+    assert stats["h24"]["calls"] == 1
+    assert stats["h24"]["cost"] == 0.02
+
 
 def test_record_cost_swallows_database_locked(init_db, monkeypatch):
     import sqlite3

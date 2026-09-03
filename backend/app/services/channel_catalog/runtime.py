@@ -49,6 +49,7 @@ _TAB_SUFFIXES = (
     "/playlists",
     "/featured",
     "/about",
+    "/search",
 )
 
 
@@ -299,6 +300,7 @@ def get_runtime_status() -> dict[str, Any]:
         catalogs = session.exec(
             select(ChannelCatalog).order_by(ChannelCatalog.updated_at.desc()).limit(40)
         ).all()
+        system_yt = app_settings.direct_youtube_search_system()
         items = [
             {
                 "id": c.id,
@@ -314,6 +316,12 @@ def get_runtime_status() -> dict[str, Any]:
                 "started_at": c.started_at.isoformat() if c.started_at else None,
                 "finished_at": c.finished_at.isoformat() if c.finished_at else None,
                 "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+                "direct_youtube_search": c.direct_youtube_search,
+                "direct_youtube_search_effective": (
+                    app_settings.direct_youtube_search_effective(
+                        c.direct_youtube_search, system_yt
+                    )
+                ),
             }
             for c in catalogs
         ]
@@ -322,6 +330,7 @@ def get_runtime_status() -> dict[str, Any]:
         "enabled": _enabled(),
         "queue_depth": int(queued or 0),
         "catalogs": items,
+        "direct_youtube_search": system_yt,
     }
 
 
@@ -340,6 +349,77 @@ def get_catalog_by_url(
     if not matches:
         return None
     return max(matches, key=_catalog_keeper_rank)
+
+
+def is_youtube_channel_url(channel_url: str) -> bool:
+    url = (channel_url or "").strip()
+    if not url:
+        return False
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    host = (parsed.netloc or "").lower().replace("www.", "")
+    return "youtube.com" in host or host == "youtu.be"
+
+
+def youtube_search_pref(
+    session: Session,
+    channel_url: str,
+    *,
+    channel_name: Optional[str] = None,
+    system: Optional[bool] = None,
+) -> dict[str, Any]:
+    """Override + effective Direct YouTube search for a channel URL."""
+    if system is None:
+        system = app_settings.direct_youtube_search_system()
+    catalog = get_catalog_by_url(
+        session, channel_url, channel_name=channel_name
+    )
+    override = catalog.direct_youtube_search if catalog is not None else None
+    return {
+        "channel_url": (
+            catalog.channel_url if catalog is not None else _normalize_channel_url(channel_url)
+        ),
+        "direct_youtube_search": override,
+        "direct_youtube_search_effective": app_settings.direct_youtube_search_effective(
+            override, system
+        ),
+    }
+
+
+def set_direct_youtube_search(
+    channel_url: str,
+    value: Optional[bool],
+    *,
+    channel_name: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    """Set per-channel override (None = inherit). Creates a catalog row if needed."""
+    url = _normalize_channel_url(channel_url)
+    if not url or not is_youtube_channel_url(url):
+        return None
+    with Session(engine) as session:
+        reconcile_duplicate_catalogs(session)
+        catalog = get_catalog_by_url(
+            session, url, channel_name=channel_name
+        )
+        if catalog is None:
+            catalog = ChannelCatalog(
+                channel_url=url,
+                channel_name=channel_name,
+                status=ChannelCatalogStatus.idle,
+                max_videos=_max_videos(),
+                updated_at=utcnow(),
+            )
+            session.add(catalog)
+            session.commit()
+            session.refresh(catalog)
+        catalog.direct_youtube_search = value
+        if channel_name and not catalog.channel_name:
+            catalog.channel_name = channel_name
+        catalog.updated_at = utcnow()
+        session.add(catalog)
+        session.commit()
+        return youtube_search_pref(
+            session, catalog.channel_url, channel_name=catalog.channel_name
+        )
 
 
 def enqueue_channel(

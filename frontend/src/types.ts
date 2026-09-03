@@ -14,10 +14,17 @@ export interface SubtitleTrack {
   auto: boolean;
 }
 
-export interface SearchMatchReason {
-  source: "title" | "description" | "tags" | "notes" | "captions" | "related";
+export type SearchMatchReason = {
+  source:
+    | "title"
+    | "description"
+    | "tags"
+    | "notes"
+    | "captions"
+    | "related"
+    | "youtube";
   snippet?: string | null;
-}
+};
 
 export interface Video {
   id: number;
@@ -102,6 +109,8 @@ export interface ChannelFeedEntry {
   like_count: number | null;
   dislike_count: number | null;
   published_at: string | null;
+  /** Relative or year-only text when a calendar day is not known. */
+  published_label?: string | null;
   /** Present on global catalog search results. */
   channel?: string | null;
   in_library: boolean;
@@ -122,6 +131,7 @@ export interface ChannelFeedPage {
   catalog_total?: number | null;
   catalog_complete?: boolean;
   catalog_status?: string | null;
+  direct_youtube_search_effective?: boolean | null;
 }
 
 export interface ChannelCatalogStatusItem {
@@ -138,6 +148,8 @@ export interface ChannelCatalogStatusItem {
   started_at: string | null;
   finished_at: string | null;
   updated_at: string | null;
+  direct_youtube_search?: boolean | null;
+  direct_youtube_search_effective?: boolean;
 }
 
 export interface ChannelCatalogStatus {
@@ -151,6 +163,7 @@ export interface ChannelCatalogStatus {
   catalog_id: number | null;
   queue_depth: number;
   catalogs: ChannelCatalogStatusItem[];
+  direct_youtube_search?: boolean;
 }
 
 export type JobStatus =
@@ -318,6 +331,11 @@ export interface OpenRouterCosts {
   d30: number;
   y1: number;
   all: number;
+  h24_calls?: number;
+  d7_calls?: number;
+  d30_calls?: number;
+  y1_calls?: number;
+  all_calls?: number;
   weekly_budget_usd?: number | null;
   hard_limit?: boolean;
   over_budget?: boolean;
@@ -329,6 +347,7 @@ export interface AppSettings {
   metadata_sync_interval_hours: number;
   channel_catalog_enabled: boolean;
   channel_catalog_max_videos: number;
+  direct_youtube_search: boolean;
   ui: Record<string, unknown>;
   ai: AiSettings;
 }

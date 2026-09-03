@@ -10,6 +10,8 @@ import {
   formatViewCount,
   formatLikeRatio,
   downloadProgressPercent,
+  formatDate,
+  formatPublishedAt,
   parseApiDate,
   parseChapters,
   readClipboardText,
@@ -97,6 +99,20 @@ describe("misc helpers", () => {
   it("parses timezone-less API dates as UTC", () => {
     const d = parseApiDate("2024-01-15T12:00:00");
     expect(d.toISOString()).toBe("2024-01-15T12:00:00.000Z");
+  });
+  it("shows YouTube-style labels instead of invented calendar days", () => {
+    expect(formatPublishedAt("2014-01-01T00:00:00Z", "12 years ago")).toBe(
+      "12 years ago"
+    );
+    expect(formatPublishedAt("2013-01-01T00:00:00Z", "2013")).toBe("2013");
+    expect(formatPublishedAt("2013-09-01T00:00:00Z", "Sep 2013")).toBe(
+      "Sep 2013"
+    );
+    expect(formatPublishedAt("3 years ago")).toBe("3 years ago");
+    expect(formatDate("2024-09-01T00:00:00Z")).toMatch(/2024/);
+    expect(formatPublishedAt("2024-09-01T00:00:00Z")).toBe(
+      formatDate("2024-09-01T00:00:00Z")
+    );
   });
   it("formats view count and like ratio", () => {
     expect(formatViewCount(1500)).toBe("1.5K views");

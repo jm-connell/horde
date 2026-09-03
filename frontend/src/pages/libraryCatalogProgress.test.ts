@@ -5,7 +5,9 @@ import {
   formatCatalogProgress,
   formatMatchReasonTip,
   formatSearchMatchCount,
+  showChannelIndexButton,
   visibleMatchReasonTip,
+  YOUTUBE_SEARCH_LOADING_LABEL,
   type CatalogProgress,
 } from "./libraryCatalogProgress";
 
@@ -51,9 +53,55 @@ describe("formatCatalogProgress", () => {
         ...base,
         indexed: 1000,
         total: 5000,
+        complete: false,
+      })
+    ).toBe("Fully indexed (1000)");
+    expect(
+      formatCatalogProgress({
+        ...base,
+        indexed: 1000,
+        total: 5000,
         complete: true,
       })
-    ).toBe("1000/1000 indexed");
+    ).toBe("Fully indexed (1000)");
+  });
+});
+
+describe("showChannelIndexButton", () => {
+  it("hides when the catalog is complete, at the cap, or already indexing", () => {
+    expect(showChannelIndexButton(null)).toBe(false);
+    expect(
+      showChannelIndexButton({ ...base, complete: true, indexed: 80, total: 80 })
+    ).toBe(false);
+    expect(
+      showChannelIndexButton({
+        ...base,
+        indexed: 1000,
+        total: 5000,
+        complete: false,
+      })
+    ).toBe(false);
+    expect(
+      showChannelIndexButton({ ...base, indexing: true, indexed: 12 })
+    ).toBe(false);
+  });
+
+  it("shows when the catalog is missing, incomplete, or failed", () => {
+    expect(showChannelIndexButton(base)).toBe(true);
+    expect(
+      showChannelIndexButton({ ...base, indexed: 40, total: 80, status: "idle" })
+    ).toBe(true);
+    expect(
+      showChannelIndexButton({ ...base, indexed: 12, status: "error" })
+    ).toBe(true);
+    expect(
+      showChannelIndexButton({
+        ...base,
+        indexed: 400,
+        total: 5000,
+        complete: false,
+      })
+    ).toBe(true);
   });
 });
 
@@ -65,6 +113,7 @@ describe("feed search status copy", () => {
     );
     expect(feedSearchStatusLabel("related")).toBe("Finding related matches…");
     expect(feedSearchStatusLabel("done")).toBeNull();
+    expect(YOUTUBE_SEARCH_LOADING_LABEL).toBe("Loading YouTube results…");
     expect(formatSearchMatchCount(0)).toBe("0 matches");
     expect(formatSearchMatchCount(1)).toBe("1 match");
     expect(formatSearchMatchCount(12)).toBe("12 matches");
@@ -88,6 +137,9 @@ describe("formatMatchReasonTip", () => {
     expect(formatMatchReasonTip({ source: "related" }, "wifi")).toBe(
       "Related by search index from the title and description."
     );
+    expect(formatMatchReasonTip({ source: "youtube" }, "paint")).toBe(
+      "Found on YouTube (not in the local catalog)."
+    );
   });
 
   it("hides the badge for title hits and keeps other sources", () => {
@@ -101,5 +153,8 @@ describe("formatMatchReasonTip", () => {
       )
     ).toBe('Matched “wifi” in the description: “wifi hotspot”');
     expect(visibleMatchReasonTip(null, "wifi")).toBeNull();
+    expect(visibleMatchReasonTip({ source: "youtube" }, "paint")).toBe(
+      "Found on YouTube (not in the local catalog)."
+    );
   });
 });

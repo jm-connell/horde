@@ -37,6 +37,10 @@ export const CATALOG_INDEX_TIP =
   "YouTube channels only. When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Non-YouTube sources are skipped. Settings → System → Refresh catalogs catches new channels and new uploads on ready catalogs; Full reindex re-walks every channel.";
 export const CATALOG_MAX_TIP =
   "Maximum YouTube uploads to keep per channel. Values above 1000 can take a long time and may slow other YouTube work while indexing.";
+export const DIRECT_YOUTUBE_SEARCH_TIP =
+  "When on, channel search also queries YouTube for uploads that are not already in the results. Search text is sent to YouTube. YouTube-linked channels only; each channel can override this default.";
+export const DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP =
+  "Also search YouTube for this channel. Search text is sent to YouTube. Overrides the Library default; Use default restores it.";
 export const METADATA_INTERVAL_TIP =
   "How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.";
 

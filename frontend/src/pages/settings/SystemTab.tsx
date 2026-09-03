@@ -53,6 +53,7 @@ export default function SystemTab() {
     refreshCatalogStatus,
     aiStatus,
     systemStats,
+    openRouterCosts,
     saveAi,
     runAiProcess,
     aiProcessingAction,
@@ -544,6 +545,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
               <AiQueueStatus
                 aiStatus={aiStatus}
                 systemStats={systemStats}
+                openRouterCosts={openRouterCosts}
                 compact
                 onPause={async () => {
                   await api.pauseAi().catch(() => undefined);

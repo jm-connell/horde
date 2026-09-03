@@ -466,6 +466,8 @@ video.sub-large::cue {
   z-index: 4;
   max-width: 76%;
   box-sizing: border-box;
+  /* Player chrome uses leading-none; don't inherit that or glyphs clip. */
+  line-height: 1.35;
 }
 
 .subtitle-overlay-draggable {
@@ -484,14 +486,13 @@ video.sub-large::cue {
   overflow: hidden;
   width: max-content;
   max-width: 100%;
-  /* Two lines visible; third line peeks in during slide-up. */
-  height: 2.4em;
 }
 
 .subtitle-overlay-stack {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  gap: 0;
   width: max-content;
   max-width: 100%;
   will-change: transform;
@@ -500,9 +501,7 @@ video.sub-large::cue {
 .subtitle-overlay-line {
   display: flex;
   justify-content: flex-start;
-  height: 1.2em;
-  min-height: 1.2em;
-  line-height: 1.2;
+  line-height: 1.35;
   text-align: left;
 }
 
@@ -510,18 +509,19 @@ video.sub-large::cue {
   position: relative;
   display: inline-block;
   max-width: 100%;
-  height: 1.2em;
   color: #fff;
   text-align: left;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
   white-space: pre-wrap;
 }
 
+/* inline-block so vertical padding is in the row box; inline padding does
+   not, which lets the absolute paint overlap the next cue. */
 .subtitle-overlay-measure {
   visibility: hidden;
   display: inline-block;
-  padding: 0 0.35em;
-  line-height: 1.2;
+  padding: 0.12em 0.4em;
+  line-height: 1.35;
   white-space: pre-wrap;
 }
 
@@ -530,13 +530,11 @@ video.sub-large::cue {
   left: 0;
   top: 0;
   box-sizing: border-box;
-  height: 1.2em;
-  display: flex;
-  align-items: center;
+  line-height: 1.35;
   text-align: left;
   white-space: pre-wrap;
   background: rgba(0, 0, 0, 0.7);
-  padding: 0 0.35em;
+  padding: 0.12em 0.4em;
   border-radius: 2px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;

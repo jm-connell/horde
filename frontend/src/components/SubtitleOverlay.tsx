@@ -25,6 +25,11 @@ interface Props {
   offset: number;
   active: boolean;
   onPositionChange?: (left: number, offset: number) => void;
+  /** When true, skip drag and let the parent treat this pointer as a seek. */
+  isPassthroughPoint?: (clientX: number, clientY: number) => boolean;
+  onPassthroughPointerDown?: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  onPassthroughPointerMove?: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  onPassthroughPointerUp?: (e: ReactPointerEvent<HTMLDivElement>) => void;
 }
 
 const SLIDE_MS = 250;
@@ -49,11 +54,16 @@ export default function SubtitleOverlay({
   offset,
   active,
   onPositionChange,
+  isPassthroughPoint,
+  onPassthroughPointerDown,
+  onPassthroughPointerMove,
+  onPassthroughPointerUp,
 }: Props) {
   const [lines, setLines] = useState<CaptionLine[]>([]);
   const [view, setView] = useState<ViewLine[]>([]);
   const [dragging, setDragging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const clipRef = useRef<HTMLDivElement>(null);
   const stackRef = useRef<HTMLDivElement>(null);
   const lineIndexRef = useRef(-1);
   const wordCountRef = useRef(0);
@@ -67,6 +77,7 @@ export default function SubtitleOverlay({
     parentW: number;
     parentH: number;
   } | null>(null);
+  const passingRef = useRef(false);
 
   useEffect(() => {
     if (!active || !src) {
@@ -103,15 +114,34 @@ export default function SubtitleOverlay({
       stack.style.transition = "none";
       stack.style.transform = "translateY(0)";
     }
+    const clip = clipRef.current;
+    if (clip) clip.style.height = "";
   }, [src]);
+
+  const rollupSig = view.map((row) => row.key).join("\0");
 
   // Drive rollup from committed DOM: 3 rows → slide, then 2 rows → snap
   // transform in the same layout pass so the old pair never flashes back.
+  // Cue keys only — word-reveal updates must not restart the slide.
   useLayoutEffect(() => {
     const stack = stackRef.current;
+    const clip = clipRef.current;
     if (!stack) return;
 
+    const rowEls = stack.querySelectorAll(".subtitle-overlay-line");
+    const rowAt = (index: number) =>
+      rowEls[index] as HTMLElement | undefined;
+    const rowHeight = (index: number) => rowAt(index)?.offsetHeight ?? 0;
+    const rowStep = (index: number) => {
+      const a = rowAt(index);
+      const b = rowAt(index + 1);
+      if (!a) return 0;
+      if (!b) return a.offsetHeight;
+      return b.offsetTop - a.offsetTop;
+    };
+
     if (view.length <= 2) {
+      if (clip) clip.style.height = "";
       if (slidingRef.current) {
         stack.style.transition = "none";
         stack.style.transform = "translateY(0)";
@@ -120,14 +150,16 @@ export default function SubtitleOverlay({
       return;
     }
 
-    const lineEl = stack.querySelector(
-      ".subtitle-overlay-line"
-    ) as HTMLElement | null;
-    const lineH = lineEl?.offsetHeight ?? 0;
-    if (lineH <= 0) {
+    const step = rowStep(0);
+    if (step <= 0) {
       slidingRef.current = false;
       setView((prev) => (prev.length > 2 ? prev.slice(-2) : prev));
       return;
+    }
+
+    if (clip) {
+      const windowH = step + rowHeight(1);
+      if (windowH > 0) clip.style.height = `${windowH}px`;
     }
 
     slidingRef.current = true;
@@ -155,7 +187,7 @@ export default function SubtitleOverlay({
     raf = requestAnimationFrame(() => {
       if (gen !== slideGenRef.current) return;
       el.style.transition = `transform ${SLIDE_MS}ms ease-out`;
-      el.style.transform = `translateY(-${lineH}px)`;
+      el.style.transform = `translateY(-${step}px)`;
       el.addEventListener("transitionend", onEnd);
       timer = window.setTimeout(finish, SLIDE_MS + 40);
     });
@@ -166,7 +198,8 @@ export default function SubtitleOverlay({
       el.removeEventListener("transitionend", onEnd);
       slideGenRef.current += 1;
     };
-  }, [view]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rollupSig is the cue identity
+  }, [view.length, rollupSig]);
 
   useEffect(() => {
     if (!active || lines.length === 0) {
@@ -275,10 +308,7 @@ export default function SubtitleOverlay({
     return () => cancelAnimationFrame(raf);
   }, [active, lines, videoRef]);
 
-  const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return;
-    dragRef.current = null;
-    setDragging(false);
+  const releasePointer = (e: ReactPointerEvent<HTMLDivElement>) => {
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
@@ -286,8 +316,37 @@ export default function SubtitleOverlay({
     }
   };
 
+  const endPassthrough = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!passingRef.current) return false;
+    passingRef.current = false;
+    onPassthroughPointerUp?.(e);
+    releasePointer(e);
+    return true;
+  };
+
+  const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (endPassthrough(e)) return;
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setDragging(false);
+    releasePointer(e);
+  };
+
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!onPositionChange || e.button !== 0) return;
+    if (e.button !== 0) return;
+    if (isPassthroughPoint?.(e.clientX, e.clientY)) {
+      passingRef.current = true;
+      e.stopPropagation();
+      e.preventDefault();
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      onPassthroughPointerDown?.(e);
+      return;
+    }
+    if (!onPositionChange) return;
     e.stopPropagation();
     e.preventDefault();
     const root = rootRef.current;
@@ -308,6 +367,11 @@ export default function SubtitleOverlay({
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (passingRef.current) {
+      e.stopPropagation();
+      onPassthroughPointerMove?.(e);
+      return;
+    }
     const drag = dragRef.current;
     if (!drag || !onPositionChange) return;
     e.stopPropagation();
@@ -333,6 +397,7 @@ export default function SubtitleOverlay({
   if (!active || view.length === 0) return null;
 
   const canDrag = Boolean(onPositionChange);
+  const handlePointer = canDrag || Boolean(isPassthroughPoint);
 
   return (
     <div
@@ -345,12 +410,12 @@ export default function SubtitleOverlay({
         bottom: `${clamp(offset, 0, 85)}%`,
       }}
       aria-hidden
-      onPointerDown={canDrag ? onPointerDown : undefined}
-      onPointerMove={canDrag ? onPointerMove : undefined}
-      onPointerUp={canDrag ? endDrag : undefined}
-      onPointerCancel={canDrag ? endDrag : undefined}
+      onPointerDown={handlePointer ? onPointerDown : undefined}
+      onPointerMove={handlePointer ? onPointerMove : undefined}
+      onPointerUp={handlePointer ? endDrag : undefined}
+      onPointerCancel={handlePointer ? endDrag : undefined}
     >
-      <div className="subtitle-overlay-clip">
+      <div ref={clipRef} className="subtitle-overlay-clip">
         <div ref={stackRef} className="subtitle-overlay-stack">
           {view.map((row) => {
             const visible =

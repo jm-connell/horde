@@ -16,6 +16,7 @@ export default function JobsPane() {
     saveAi,
     aiStatus,
     systemStats,
+    openRouterCosts,
     showToast,
     aiProcessingAction,
     runAiProcess,
@@ -41,6 +42,7 @@ export default function JobsPane() {
           <AiQueueStatus
             aiStatus={aiStatus}
             systemStats={systemStats}
+            openRouterCosts={openRouterCosts}
             onPause={async () => {
               await api.pauseAi().catch(() => undefined);
               await saveAi({ paused: true });

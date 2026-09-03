@@ -256,13 +256,9 @@ def extract_preview(url: str) -> dict[str, Any]:
             view_count = int(view_count)
         except (TypeError, ValueError):
             view_count = None
-    from .feed_meta_cache import parse_upload_date
+    from .feed_meta_cache import published_meta_from_entry
 
-    published_at = parse_upload_date(
-        info.get("upload_date")
-        or info.get("release_timestamp")
-        or info.get("timestamp")
-    )
+    meta = published_meta_from_entry(info)
     return {
         "is_playlist": False,
         "id": info.get("id"),
@@ -272,7 +268,8 @@ def extract_preview(url: str) -> dict[str, Any]:
         "thumbnail_url": _best_thumbnail_url(info),
         "entry_count": None,
         "view_count": view_count,
-        "published_at": published_at,
+        "published_at": meta.iso,
+        "published_label": meta.label,
         "available_presets": available,
         "preset_sizes": _estimate_preset_sizes(info, available),
     }
@@ -443,6 +440,85 @@ def _entry_thumbnail_url(entry: dict[str, Any], vid: Optional[str]) -> Optional[
     return _best_thumbnail_url(entry, vid)
 
 
+_YT_VIDEO_ID_RE = re.compile(r"^[\w-]{11}$")
+_SHORTS_TITLE_RE = re.compile(r"#\s*shorts\b", re.I)
+# YouTube Shorts launched in 2021; older sub-minute videos are regular uploads.
+_SHORTS_ERA_TS = 1609459200  # 2021-01-01 UTC
+
+
+def is_youtube_playlist_entry(entry: dict[str, Any]) -> bool:
+    """True for playlist/tab lockups mixed into channel search results."""
+    url = str(entry.get("url") or entry.get("webpage_url") or "").lower()
+    if "list=" in url or "/playlist" in url:
+        return True
+    ie = str(entry.get("ie_key") or "")
+    if ie in ("YoutubeTab", "YoutubePlaylist"):
+        return True
+    vid = entry.get("id")
+    return isinstance(vid, str) and not _YT_VIDEO_ID_RE.fullmatch(vid)
+
+
+def is_youtube_short_entry(entry: dict[str, Any]) -> bool:
+    """True for Shorts (watch or /shorts/ URLs) in channel search results."""
+    url = str(entry.get("url") or entry.get("webpage_url") or "").lower()
+    if "/shorts/" in url:
+        return True
+    title = str(entry.get("title") or "")
+    if _SHORTS_TITLE_RE.search(title):
+        return True
+    duration = entry.get("duration")
+    try:
+        dur = float(duration) if duration is not None else None
+    except (TypeError, ValueError):
+        dur = None
+    if dur is None or dur <= 0 or dur > 60:
+        return False
+    ts = entry.get("timestamp") or entry.get("release_timestamp")
+    try:
+        ts_n = float(ts) if ts is not None else None
+    except (TypeError, ValueError):
+        ts_n = None
+    return ts_n is None or ts_n >= _SHORTS_ERA_TS
+
+
+def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Normalize a flat yt-dlp playlist entry into catalog/feed fields."""
+    if not isinstance(entry, dict):
+        return None
+    if is_members_only_entry(entry) or is_youtube_playlist_entry(entry):
+        return None
+    entry_url = entry.get("url") or entry.get("webpage_url")
+    vid = entry.get("id")
+    if entry_url and not str(entry_url).startswith("http"):
+        entry_url = None
+    if not entry_url and vid:
+        entry_url = f"https://www.youtube.com/watch?v={vid}"
+    if not entry_url:
+        return None
+    if "/shorts/" in str(entry_url).lower():
+        return None
+    view_count = entry.get("view_count")
+    if view_count is not None:
+        try:
+            view_count = int(view_count)
+        except (TypeError, ValueError):
+            view_count = None
+    from .feed_meta_cache import published_meta_from_entry
+
+    meta = published_meta_from_entry(entry)
+    return {
+        "id": vid,
+        "url": entry_url,
+        "title": entry.get("title"),
+        "duration": entry.get("duration"),
+        "thumbnail_url": _entry_thumbnail_url(entry, vid),
+        "view_count": view_count,
+        "published_at": meta.iso,
+        "published_label": meta.label,
+        "availability": entry.get("availability"),
+    }
+
+
 def _playlist_count(info: dict[str, Any]) -> Optional[int]:
     raw = info.get("playlist_count") or info.get("n_entries")
     if raw is None:
@@ -458,10 +534,32 @@ def _channel_videos_url(channel_url: str) -> str:
     url = channel_url.strip().rstrip("/")
     if url.endswith("/videos"):
         return url
-    for suffix in ("/shorts", "/streams", "/playlists", "/featured", "/about"):
+    for suffix in ("/shorts", "/streams", "/playlists", "/featured", "/about", "/search"):
         if url.endswith(suffix):
             return url[: -len(suffix)] + "/videos"
     return f"{url}/videos"
+
+
+def is_youtube_url(url: str) -> bool:
+    from urllib.parse import urlparse
+
+    raw = (url or "").strip()
+    if not raw:
+        return False
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    host = (parsed.netloc or "").lower().replace("www.", "")
+    return "youtube.com" in host or host == "youtu.be"
+
+
+def channel_search_url(channel_url: str, query: str) -> str:
+    """YouTube in-channel search tab: /@handle/search?query=…"""
+    import urllib.parse
+
+    base = _channel_videos_url(channel_url)
+    if base.endswith("/videos"):
+        base = base[: -len("/videos")]
+    q = urllib.parse.quote((query or "").strip())
+    return f"{base}/search?query={q}"
 
 
 def fetch_channel_feed(
@@ -496,42 +594,10 @@ def fetch_channel_feed(
 
     entries: list[dict[str, Any]] = []
     for entry in info.get("entries") or []:
-        if not isinstance(entry, dict):
+        mapped = _map_flat_video_entry(entry)
+        if mapped is None:
             continue
-        if is_members_only_entry(entry):
-            continue
-        entry_url = entry.get("url") or entry.get("webpage_url")
-        vid = entry.get("id")
-        if entry_url and not str(entry_url).startswith("http"):
-            entry_url = None
-        if not entry_url and vid:
-            entry_url = f"https://www.youtube.com/watch?v={vid}"
-        if not entry_url:
-            continue
-        view_count = entry.get("view_count")
-        if view_count is not None:
-            try:
-                view_count = int(view_count)
-            except (TypeError, ValueError):
-                view_count = None
-        from .feed_meta_cache import parse_upload_date
-
-        published_at = parse_upload_date(
-            entry.get("upload_date") or entry.get("release_timestamp") or entry.get("timestamp")
-        )
-        availability = entry.get("availability")
-        entries.append(
-            {
-                "id": vid,
-                "url": entry_url,
-                "title": entry.get("title"),
-                "duration": entry.get("duration"),
-                "thumbnail_url": _entry_thumbnail_url(entry, vid),
-                "view_count": view_count,
-                "published_at": published_at,
-                "availability": availability,
-            }
-        )
+        entries.append(mapped)
 
     result = {
         "channel": info.get("uploader") or info.get("channel"),
@@ -587,6 +653,54 @@ def extract_playlist(url: str) -> tuple[str, list[str]]:
         elif vid:
             entries.append(f"https://www.youtube.com/watch?v={vid}")
     return title, entries
+
+
+def search_youtube_channel_videos(
+    channel_url: str, query: str, *, limit: int = 20
+) -> list[dict[str, Any]]:
+    """Flat extract of a channel's YouTube search tab (titles, thumbs, dates)."""
+    q = (query or "").strip()
+    if len(q) < 2 or not is_youtube_url(channel_url):
+        return []
+    limit = max(1, min(int(limit or 20), 40))
+    search_url = channel_search_url(channel_url, q)
+    # Over-fetch: channel search interleaves Shorts and playlists with videos.
+    fetch_n = min(80, max(limit * 4, 40))
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": "in_playlist",
+            "skip_download": True,
+            "playlistend": fetch_n,
+            "logger": QuietYtdlpLogger(),
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
+    try:
+        info = _as_info(
+            extract_info_gated(
+                search_url, opts, cache_key=f"channel-search:v2:{search_url}:{fetch_n}"
+            )
+        )
+    except Exception:  # noqa: BLE001
+        logger.debug("channel youtube search failed for %s", search_url, exc_info=True)
+        return []
+
+    channel_name = info.get("uploader") or info.get("channel")
+    entries: list[dict[str, Any]] = []
+    for raw in info.get("entries") or []:
+        if not isinstance(raw, dict) or is_youtube_short_entry(raw):
+            continue
+        mapped = _map_flat_video_entry(raw)
+        if mapped is None:
+            continue
+        mapped["channel"] = channel_name
+        mapped["match_reason"] = {"source": "youtube", "snippet": None}
+        entries.append(mapped)
+        if len(entries) >= limit:
+            break
+    return entries
 
 
 def search_youtube_channels(query: str, *, limit: int = 8) -> list[dict[str, Any]]:

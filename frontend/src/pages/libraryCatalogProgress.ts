@@ -7,6 +7,9 @@ export type CatalogProgress = {
   complete: boolean;
   status: string | null;
   indexing: boolean;
+  youtubeSearchOverride?: boolean | null;
+  youtubeSearchEffective?: boolean;
+  youtubeSearchSystem?: boolean;
 };
 
 /** Denominator for UI: real library size if under the cap, else the cap. */
@@ -29,6 +32,8 @@ export function feedSearchStatusLabel(phase: FeedSearchPhase): string | null {
   return null;
 }
 
+export const YOUTUBE_SEARCH_LOADING_LABEL = "Loading YouTube results…";
+
 const MATCH_SOURCE_LABEL: Record<string, string> = {
   description: "description",
   tags: "tags",
@@ -50,6 +55,9 @@ export function formatMatchReasonTip(
   if (reason.source === "related") {
     return "Related by search index from the title and description.";
   }
+  if (reason.source === "youtube") {
+    return "Found on YouTube (not in the local catalog).";
+  }
   const field = MATCH_SOURCE_LABEL[reason.source] ?? reason.source;
   const term = query.trim();
   const head = term
@@ -70,19 +78,21 @@ export function visibleMatchReasonTip(
   return formatMatchReasonTip(reason, query);
 }
 
+/** Indexed to the real library size or the max-videos cap — not still running. */
+export function isCatalogFullyIndexed(p: CatalogProgress): boolean {
+  if (p.indexing || p.indexed <= 0) return false;
+  return p.complete || p.indexed >= catalogDenominator(p);
+}
+
 export function formatCatalogProgress(p: CatalogProgress): string {
-  const { indexed, total, complete, indexing } = p;
+  const { indexed, indexing } = p;
   const denom = catalogDenominator(p);
-  const capped = total != null && total > p.maxVideos;
 
   if (indexing) {
     return `Indexing… ${indexed}/${denom}`;
   }
-  if (complete && indexed > 0) {
-    if (!capped && (total == null || indexed >= total || indexed >= denom)) {
-      return `Fully indexed (${indexed})`;
-    }
-    return `${indexed}/${denom} indexed`;
+  if (isCatalogFullyIndexed(p)) {
+    return `Fully indexed (${indexed})`;
   }
   if (indexed > 0) {
     return `${indexed}/${denom} indexed`;
@@ -90,8 +100,14 @@ export function formatCatalogProgress(p: CatalogProgress): string {
   return "Not indexed";
 }
 
+/** Header control is only for kick-starting a missing, incomplete, or failed index. */
+export function showChannelIndexButton(p: CatalogProgress | null): boolean {
+  if (p == null || p.indexing) return false;
+  return !isCatalogFullyIndexed(p);
+}
+
 export const FEED_SEARCH_TIP =
-  "Search this channel’s indexed uploads and your downloads. Also uses search indexes when they’re ready, including captions on downloaded videos.";
+  "Search this channel’s indexed uploads and your downloads. Also uses search indexes when they’re ready, including captions on downloaded videos. When Direct YouTube search is on, Horde also queries YouTube for extra matches. Results follow the Recent / Popular sort at the top of the page.";
 
 export const FEED_INDEX_TIP =
   "Horde indexes this channel’s uploads (descriptions+captions for 200 recent, titles for up to 1000) so search uses as much as possible. Indexing runs in the background and respects your max-videos setting.";
