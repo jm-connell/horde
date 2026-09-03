@@ -81,7 +81,7 @@ Live queue status appears here and on System:
 
 | Schedule value | Behavior |
 |----------------|----------|
-| `on_download` | Embed and enrich tags when a download finishes |
+| `on_download` | Embed and enrich tags when a download finishes; also queues missing search indexes when the GPU job queue is idle |
 | `on_request` | No automatic work — use Run now / process actions |
 | `timer` | Periodically index videos missing search indexes |
 | `set_time` | Run once per day at `schedule_time` |

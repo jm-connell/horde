@@ -81,9 +81,9 @@ def list_videos(
     if continue_watching or watched_only:
         library.expire_stale_progress(session)
     if q and not continue_watching and not watched_only:
-        from ..services.ai.search import hybrid_search
+        from ..services.ai.search import explain_library_video, hybrid_search
 
-        videos = hybrid_search(
+        videos, chunks = hybrid_search(
             session,
             q,
             channel=channel,
@@ -93,19 +93,28 @@ def list_videos(
             needs_review=False,
             seed=seed,
         )
-    else:
-        videos = library.query_videos(
-            session,
-            q=q,
-            channel=channel,
-            tag=tag,
-            sort=sort,
-            order=order,
-            needs_review=False,
-            continue_watching=continue_watching,
-            watched_only=watched_only,
-            seed=seed,
-        )
+        return [
+            _to_read(
+                v,
+                session,
+                match_reason=explain_library_video(
+                    v, q, chunk_index=chunks.get(v.id) if v.id is not None else None
+                ),
+            )
+            for v in videos
+        ]
+    videos = library.query_videos(
+        session,
+        q=q,
+        channel=channel,
+        tag=tag,
+        sort=sort,
+        order=order,
+        needs_review=False,
+        continue_watching=continue_watching,
+        watched_only=watched_only,
+        seed=seed,
+    )
     return [_to_read(v, session) for v in videos]
 
 

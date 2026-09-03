@@ -75,16 +75,28 @@ export default function AiQueueStatus({
   compact = false,
   onPause,
   onResume,
+  onIndexMissing,
+  indexBusy = false,
 }: {
   aiStatus: AiStatus;
   systemStats: SystemStats | null;
   compact?: boolean;
   onPause?: () => void | Promise<void>;
   onResume?: () => void | Promise<void>;
+  onIndexMissing?: () => void | Promise<void>;
+  indexBusy?: boolean;
 }) {
   const showPauseControls =
     typeof onPause === "function" && typeof onResume === "function";
   const summary = queueSummary(aiStatus);
+  const indexGap = Math.max(
+    0,
+    (aiStatus.total_videos ?? 0) - (aiStatus.indexed_videos ?? 0)
+  );
+  const queueIdle =
+    !aiStatus.current_job &&
+    aiStatus.queue_depth === 0 &&
+    aiStatus.pulling.length === 0;
   const blocked =
     Boolean(aiStatus.blocked_reason) &&
     aiStatus.queue_depth > 0 &&
@@ -116,9 +128,7 @@ export default function AiQueueStatus({
               >
                 Resume
               </button>
-            ) : aiStatus.current_job ||
-              aiStatus.queue_depth > 0 ||
-              aiStatus.pulling.length > 0 ? (
+            ) : !queueIdle ? (
               <button
                 type="button"
                 onClick={() => void onPause()}
@@ -126,8 +136,17 @@ export default function AiQueueStatus({
               >
                 Pause
               </button>
+            ) : indexGap > 0 && typeof onIndexMissing === "function" ? (
+              <button
+                type="button"
+                disabled={indexBusy}
+                onClick={() => void onIndexMissing()}
+                className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-2.5 py-1 text-xs text-accent hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {indexBusy ? "Queuing…" : "Index missing"}
+              </button>
             ) : (
-              <span className="text-xs text-gray-500">Inactive</span>
+              <span className="text-xs text-gray-500">Idle</span>
             )}
           </dd>
         </div>
@@ -158,7 +177,11 @@ export default function AiQueueStatus({
         <dt className="text-gray-400">Indexed</dt>
         <dd className="text-right text-gray-200">
           {aiStatus.indexed_videos} / {aiStatus.total_videos}
-          {summary ? ` · ${summary}` : ""}
+          {summary
+            ? ` · ${summary}`
+            : indexGap > 0
+              ? ` · ${indexGap} not indexed`
+              : ""}
         </dd>
       </div>
       {blocked && aiStatus.blocked_reason && (

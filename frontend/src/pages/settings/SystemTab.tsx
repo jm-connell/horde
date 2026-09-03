@@ -1,14 +1,40 @@
+import type { ReactNode } from "react";
 import { useSettingsPage } from "./context";
 import { Section } from "./ui";
-import { PANEL_BTN } from "./constants";
+import { PANEL_BTN, STATUS_TIPS } from "./constants";
 import { saveDismissedUpdateSha } from "./helpers";
 import { api } from "../../api";
 import { downloadErrorLabel } from "../../downloadErrors";
 import { formatSize } from "../../utils";
 import LoadingIndicator from "../../components/LoadingIndicator";
+import HelpTip from "../../components/HelpTip";
 import AiQueueStatus from "./AiQueueStatus";
 import BackgroundActivity from "./BackgroundActivity";
 import SystemStatsSnippet from "./SystemStatsSnippet";
+
+function StatusRow({
+  label,
+  tip,
+  children,
+  ddClassName = "text-right text-gray-200",
+}: {
+  label: string;
+  tip: string;
+  children: ReactNode;
+  ddClassName?: string;
+}) {
+  return (
+    <HelpTip
+      as="div"
+      text={tip}
+      placement="bottom"
+      className="flex w-full cursor-help justify-between gap-4"
+    >
+      <dt className="text-gray-400">{label}</dt>
+      <dd className={ddClassName}>{children}</dd>
+    </HelpTip>
+  );
+}
 
 export default function SystemTab() {
   const {
@@ -28,6 +54,8 @@ export default function SystemTab() {
     aiStatus,
     systemStats,
     saveAi,
+    runAiProcess,
+    aiProcessingAction,
     appSettings,
     systemActivity,
     metadataSyncStatus,
@@ -186,163 +214,150 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
             "github",
             "git pull",
             "docker",
-            "rebuild"
+            "rebuild",
+            "po token",
+            "cookies",
+            "openrouter"
           )
         }
       >
         {health ? (
           <dl className="space-y-2 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-gray-400">Horde</dt>
-              <dd className="text-right font-mono text-gray-200">
-                {health.horde_version ?? "unknown"}
-                {updateCheck && !updateCheck.error ? (
-                  <span className="ml-2 font-sans text-gray-500">
-                    {updateCheck.update_available
-                      ? "· update available"
-                      : health.horde_version &&
-                          health.horde_version !== "unknown"
-                        ? "· up to date"
-                        : ""}
-                  </span>
-                ) : null}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">yt-dlp</dt>
-              <dd className="font-mono text-gray-200">
-                {health.yt_dlp_version}
-              </dd>
-            </div>
+            <StatusRow
+              label="Horde"
+              tip={STATUS_TIPS.horde}
+              ddClassName="text-right font-mono text-gray-200"
+            >
+              {health.horde_version ?? "unknown"}
+              {updateCheck && !updateCheck.error ? (
+                <span className="ml-2 font-sans text-gray-500">
+                  {updateCheck.update_available
+                    ? "· update available"
+                    : health.horde_version &&
+                        health.horde_version !== "unknown"
+                      ? "· up to date"
+                      : ""}
+                </span>
+              ) : null}
+            </StatusRow>
+            <StatusRow
+              label="yt-dlp"
+              tip={STATUS_TIPS.ytdlp}
+              ddClassName="text-right font-mono text-gray-200"
+            >
+              {health.yt_dlp_version}
+            </StatusRow>
             {health.pot_provider && (
-              <div className="flex justify-between">
-                <dt className="text-gray-400">PO token provider</dt>
-                <dd className="text-gray-200">
-                  {health.pot_provider.status === "ok" ? (
-                    <>
-                      Connected
-                      {health.pot_provider.version
-                        ? ` (v${health.pot_provider.version})`
-                        : ""}
-                    </>
-                  ) : (
-                    <span className="text-red-400">
-                      {health.pot_provider.detail ?? "Unavailable"}
-                    </span>
-                  )}
-                </dd>
-              </div>
+              <StatusRow label="PO token provider" tip={STATUS_TIPS.pot}>
+                {health.pot_provider.status === "ok" ? (
+                  <>
+                    Connected
+                    {health.pot_provider.version
+                      ? ` (v${health.pot_provider.version})`
+                      : ""}
+                  </>
+                ) : (
+                  <span className="text-red-400">
+                    {health.pot_provider.detail ?? "Unavailable"}
+                  </span>
+                )}
+              </StatusRow>
             )}
             {health.ollama && (
-              <div className="flex justify-between gap-4">
-                <dt className="text-gray-400">Ollama</dt>
-                <dd className="text-right text-gray-200">
-                  {!health.ollama.enabled
-                    ? "Disabled"
-                    : health.ollama.ready
-                      ? "Ready"
-                      : health.ollama.reachable
-                        ? "Connected"
-                        : "Offline"}
-                  {!health.ollama.enabled || health.ollama.ready
-                    ? null
-                    : health.ollama.last_error ? (
-                        <div className="mt-0.5 max-w-xs text-xs text-red-400">
-                          {health.ollama.last_error}
-                        </div>
-                      ) : null}
-                </dd>
-              </div>
+              <StatusRow label="Ollama" tip={STATUS_TIPS.ollama}>
+                {!health.ollama.enabled
+                  ? "Disabled"
+                  : health.ollama.ready
+                    ? "Ready"
+                    : health.ollama.reachable
+                      ? "Connected"
+                      : "Offline"}
+                {!health.ollama.enabled || health.ollama.ready
+                  ? null
+                  : health.ollama.last_error ? (
+                      <div className="mt-0.5 max-w-xs text-xs text-red-400">
+                        {health.ollama.last_error}
+                      </div>
+                    ) : null}
+              </StatusRow>
             )}
             {health.openrouter && (
-              <div className="flex justify-between">
-                <dt className="text-gray-400">OpenRouter</dt>
-                <dd className="text-gray-200">
-                  {!health.openrouter.enabled
-                    ? "Disabled"
-                    : health.openrouter.configured ||
-                        health.openrouter.reachable
-                      ? "Configured"
-                      : "No API key"}
-                </dd>
-              </div>
+              <StatusRow label="OpenRouter" tip={STATUS_TIPS.openrouter}>
+                {!health.openrouter.enabled
+                  ? "Disabled"
+                  : health.openrouter.configured ||
+                      health.openrouter.reachable
+                    ? "Configured"
+                    : "No API key"}
+              </StatusRow>
             )}
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Cookies</dt>
-              <dd className="text-gray-200">
-                {health.youtube?.cookies_configured
-                  ? "Configured"
-                  : "Not configured"}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Library</dt>
-              <dd className="text-gray-200">
-                {health.library_video_count} videos
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Pending import</dt>
-              <dd className="text-gray-200">{health.review_pending_count}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Active downloads</dt>
-              <dd className="text-gray-200">
-                {health.downloads?.active ?? health.active_downloads}
-                {health.downloads?.paused ? " · paused" : ""}
-              </dd>
-            </div>
+            <StatusRow label="Cookies" tip={STATUS_TIPS.cookies}>
+              {health.youtube?.cookies_configured
+                ? "Configured"
+                : "Not configured"}
+            </StatusRow>
+            <StatusRow label="Library" tip={STATUS_TIPS.library}>
+              {storage
+                ? `${storage.video_count} video${
+                    storage.video_count === 1 ? "" : "s"
+                  } - ${formatSize(storage.total_bytes) || "0 B"}`
+                : `${health.library_video_count} video${
+                    health.library_video_count === 1 ? "" : "s"
+                  }`}
+            </StatusRow>
+            <StatusRow label="Pending import" tip={STATUS_TIPS.pendingImport}>
+              {health.review_pending_count}
+            </StatusRow>
+            <StatusRow label="Active downloads" tip={STATUS_TIPS.downloads}>
+              {health.downloads?.active ?? health.active_downloads}
+              {health.downloads?.paused ? " · paused" : ""}
+            </StatusRow>
             {health.workers && (
               <>
-                <div className="flex justify-between">
-                  <dt className="text-gray-400">AI queue</dt>
-                  <dd className="text-right text-gray-200">
-                    {health.workers.ai_queue_depth}
-                    {health.workers.ai_running
-                      ? ` · ${health.workers.ai_running} running`
-                      : ""}
-                    {(health.workers.ai_error_count ?? 0) > 0
-                      ? ` · ${health.workers.ai_error_count} failed`
-                      : ""}
-                    {health.workers.ai_blocked_reason ? (
-                      <span className="mt-0.5 block text-xs text-amber-400/90">
-                        {health.workers.ai_blocked_reason}
-                      </span>
-                    ) : null}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-400">Catalog queue</dt>
-                  <dd className="text-gray-200">
-                    {health.workers.catalog_queue_depth}
-                    {health.workers.catalog_indexing ? " · indexing" : ""}
-                  </dd>
-                </div>
+                <StatusRow label="AI queue" tip={STATUS_TIPS.aiQueue}>
+                  {health.workers.ai_queue_depth}
+                  {health.workers.ai_running
+                    ? ` · ${health.workers.ai_running} running`
+                    : ""}
+                  {(health.workers.ai_error_count ?? 0) > 0
+                    ? ` · ${health.workers.ai_error_count} failed`
+                    : ""}
+                  {health.workers.ai_blocked_reason ? (
+                    <span className="mt-0.5 block text-xs text-amber-400/90">
+                      {health.workers.ai_blocked_reason}
+                    </span>
+                  ) : null}
+                </StatusRow>
+                <StatusRow
+                  label="Catalog queue"
+                  tip={STATUS_TIPS.catalogQueue}
+                >
+                  {health.workers.catalog_queue_depth}
+                  {health.workers.catalog_indexing ? " · indexing" : ""}
+                </StatusRow>
               </>
             )}
             {health.youtube?.last_extract_failure && (
-              <div className="flex justify-between gap-4">
-                <dt className="text-gray-400">Last extract failure</dt>
-                <dd className="max-w-xs text-right text-gray-200">
-                  <span className="text-red-400">
-                    {downloadErrorLabel(
-                      health.youtube.last_extract_failure.kind
-                    )}
-                  </span>
-                  <div className="mt-0.5 text-xs text-gray-500">
-                    {health.youtube.last_extract_failure.message}
-                  </div>
-                </dd>
-              </div>
+              <StatusRow
+                label="Last extract failure"
+                tip={STATUS_TIPS.extractFailure}
+                ddClassName="max-w-xs text-right text-gray-200"
+              >
+                <span className="text-red-400">
+                  {downloadErrorLabel(
+                    health.youtube.last_extract_failure.kind
+                  )}
+                </span>
+                <div className="mt-0.5 text-xs text-gray-500">
+                  {health.youtube.last_extract_failure.message}
+                </div>
+              </StatusRow>
             )}
             {health.disk && (
-              <div className="flex justify-between">
-                <dt className="text-gray-400">Disk free</dt>
-                <dd className="text-gray-200">
-                  {formatSize(health.disk.free_bytes)} /{" "}
-                  {formatSize(health.disk.total_bytes)}
-                </dd>
-              </div>
+              <StatusRow label="Disk free" tip={STATUS_TIPS.disk}>
+                {formatSize(health.disk.free_bytes)} /{" "}
+                {formatSize(health.disk.total_bytes)}
+              </StatusRow>
             )}
           </dl>
         ) : (
@@ -373,7 +388,9 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
             "ai process",
             "metadata sync",
             "refresh catalogs",
-            "full reindex"
+            "full reindex",
+            "gpu jobs",
+            "index missing"
           )
         }
       >
@@ -538,6 +555,8 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                   await saveAi({ paused: false });
                   showToast("AI queue resumed");
                 }}
+                onIndexMissing={() => runAiProcess("embeds")}
+                indexBusy={aiProcessingAction === "embeds"}
               />
             </div>
           )}

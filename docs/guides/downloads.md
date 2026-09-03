@@ -84,6 +84,8 @@ The queue panel shows status, percentage, and errors. Failures carry a typed **`
 
 Failed jobs can be retried from the card. Retry **requeues the same job** (it does not create a second queue entry), so extra clicks while it is already queued or downloading are ignored. Active download paths are marked so the [import scanner](import-review.md) does not race the same files.
 
+Completed library cards stay in Recent downloads after you delete the video from the library (**Removed**). Those cards cannot edit notes (the library row is gone). **Redownload** queues a **new** library copy from the saved URL and preset, keeping leftover title, channel, and any note that was still on the job. Notes saved after the original download, tags, and watch progress are not restored. Replaced (superseded) cards and failed jobs do not show Redownload — failed jobs keep **Retry**.
+
 See [Troubleshooting — error kinds](../ops/troubleshooting.md#download-error_kind-values) and [YouTube access](../ops/youtube-access.md).
 
 ## Related

@@ -27,6 +27,7 @@ export default function JobsPane() {
     setReindexPrompt,
     refreshAiStatus,
   } = useSettingsPage();
+  const stepsOpen = individualStepsOpen || Boolean(q);
 
   return (
     <>
@@ -34,7 +35,7 @@ export default function JobsPane() {
         first
         title="Queue"
         description="Live AI job status and pause/resume."
-        hidden={!match("queue", "indexed", "pause", "resume", "process", "gpu jobs")}
+        hidden={!match("queue", "indexed", "pause", "resume", "process", "gpu jobs", "index missing")}
       >
         {aiStatus ? (
           <AiQueueStatus
@@ -50,6 +51,8 @@ export default function JobsPane() {
               await saveAi({ paused: false });
               showToast("AI queue resumed");
             }}
+            onIndexMissing={() => runAiProcess("embeds")}
+            indexBusy={aiProcessingAction === "embeds"}
           />
         ) : (
           <p className="text-sm text-gray-500">Loading…</p>
@@ -315,13 +318,28 @@ export default function JobsPane() {
             <button
               type="button"
               onClick={() => setIndividualStepsOpen((o) => !o)}
-              className="mb-2 text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-300"
+              aria-expanded={stepsOpen}
+              className="mb-2 inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-300"
             >
-              {individualStepsOpen || Boolean(q)
+              <svg
+                viewBox="0 0 24 24"
+                className={`h-3 w-3 shrink-0 transition-transform duration-200 ease-out ${
+                  stepsOpen ? "" : "-rotate-90"
+                }`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+              {stepsOpen
                 ? "Hide individual steps"
                 : "Show individual steps"}
             </button>
-            <Collapse open={individualStepsOpen || Boolean(q)}>
+            <Collapse open={stepsOpen}>
               <div className="space-y-4">
                 <div>
                   <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">

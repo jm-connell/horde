@@ -5,12 +5,21 @@ import ChannelFeedCard from "./ChannelFeedCard";
 import LoadingIndicator from "./LoadingIndicator";
 import { useChannelDownloadQueue } from "../hooks/useChannelDownloadQueue";
 import { useSettings } from "../hooks/useSettings";
-import type { ChannelFeedEntry, ChannelStat, Video } from "../types";
+import {
+  feedSearchStatusLabel,
+  formatSearchMatchCount,
+  type FeedSearchPhase,
+} from "../pages/libraryCatalogProgress";
+import type { ChannelFeedEntry, ChannelStat, SearchMatchReason, Video } from "../types";
 
 type FeedSort = "recent" | "popular";
 type FeedLayout = "grid" | "list";
 
 const PAGE_SIZE = 30;
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
 
 function extractYoutubeId(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -36,7 +45,28 @@ function videoToFeedEntry(v: Video): ChannelFeedEntry {
     max_height: null,
     like_count: null,
     dislike_count: null,
+    match_reason: v.match_reason ?? null,
   };
+}
+
+const MATCH_REASON_RANK: Record<string, number> = {
+  captions: 4,
+  description: 3,
+  tags: 3,
+  notes: 3,
+  related: 1,
+  title: 0,
+};
+
+function pickMatchReason(
+  a: SearchMatchReason | null | undefined,
+  b: SearchMatchReason | null | undefined
+): SearchMatchReason | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return (MATCH_REASON_RANK[b.source] ?? 0) > (MATCH_REASON_RANK[a.source] ?? 0)
+    ? b
+    : a;
 }
 
 /** Union by youtube id then title; feed entries win for metadata. */
@@ -70,6 +100,7 @@ function mergeFeedWithLibrary(
         video_id: lib.video_id ?? existing.video_id,
         library_height_px:
           lib.library_height_px ?? existing.library_height_px,
+        match_reason: pickMatchReason(existing.match_reason, lib.match_reason),
       };
       continue;
     }
@@ -91,6 +122,7 @@ export default function ChannelFeed({
   feedOrder,
   feedLayout,
   showUndownloaded,
+  catalogIndexing = false,
   queueDockedBottom = false,
 }: {
   channel: string;
@@ -101,6 +133,7 @@ export default function ChannelFeed({
   feedOrder: "asc" | "desc";
   feedLayout: FeedLayout;
   showUndownloaded: boolean;
+  catalogIndexing?: boolean;
   queueDockedBottom?: boolean;
 }) {
   const [settings] = useSettings();
@@ -109,14 +142,20 @@ export default function ChannelFeed({
   const [searchEntries, setSearchEntries] = useState<ChannelFeedEntry[] | null>(
     null
   );
+  const [librarySearchEntries, setLibrarySearchEntries] = useState<
+    ChannelFeedEntry[] | null
+  >(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchPhase, setSearchPhase] = useState<FeedSearchPhase>("idle");
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchIndexing, setSearchIndexing] = useState(false);
   const [fromCatalog, setFromCatalog] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbort = useRef<AbortController | null>(null);
   const liveRefreshGen = useRef(0);
 
   const {
@@ -281,6 +320,9 @@ export default function ChannelFeed({
   useEffect(() => {
     setEntries([]);
     setSearchEntries(null);
+    setLibrarySearchEntries(null);
+    setSearchPhase("idle");
+    setSearchError(null);
     setHasMore(false);
     setFromCatalog(false);
     liveRefreshGen.current += 1;
@@ -294,48 +336,131 @@ export default function ChannelFeed({
   useEffect(() => {
     const q = feedSearch.trim();
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!q || !channelUrl) {
+    searchAbort.current?.abort();
+    searchAbort.current = null;
+
+    if (!q) {
       setSearchEntries(null);
-      setSearchLoading(false);
+      setLibrarySearchEntries(null);
+      setSearchPhase("idle");
+      setSearchError(null);
+      setSearchIndexing(false);
       return;
     }
-    setSearchLoading(true);
+
+    setSearchPhase("keywords");
+    setSearchError(null);
+    setSearchEntries(null);
+    setLibrarySearchEntries(null);
+
     searchTimer.current = setTimeout(() => {
-      api
-        .searchChannelCatalog({
-          q,
-          channel,
-          url: channelUrl,
-          limit: 80,
+      const ac = new AbortController();
+      searchAbort.current = ac;
+      const { signal } = ac;
+
+      const keywordP = channelUrl
+        ? api.searchChannelCatalog({
+            q,
+            channel,
+            url: channelUrl,
+            limit: 80,
+            semantic: false,
+            signal,
+          })
+        : Promise.resolve(null);
+
+      const libraryP = api
+        .listVideos({ channel, q, signal })
+        .then((videos) => videos.map(videoToFeedEntry));
+      void libraryP
+        .then((lib) => {
+          if (!signal.aborted) setLibrarySearchEntries(lib);
         })
-        .then((page) => {
-          setSearchEntries(page.entries);
-        })
-        .catch(() => {
-          setSearchEntries(null);
-        })
-        .finally(() => setSearchLoading(false));
+        .catch((err) => {
+          if (isAbortError(err) || signal.aborted) return;
+          setLibrarySearchEntries([]);
+        });
+
+      const semanticP = channelUrl
+        ? api.searchChannelCatalog({
+            q,
+            channel,
+            url: channelUrl,
+            limit: 80,
+            semantic: true,
+            signal,
+          })
+        : Promise.resolve(null);
+
+      void (async () => {
+        try {
+          try {
+            const keywordPage = await keywordP;
+            if (signal.aborted) return;
+            if (keywordPage) {
+              setSearchEntries(keywordPage.entries);
+              setSearchIndexing(Boolean(keywordPage.indexing));
+            } else {
+              setSearchEntries([]);
+            }
+          } catch (err) {
+            if (isAbortError(err) || signal.aborted) return;
+            setSearchError(
+              err instanceof Error ? err.message : "Search failed"
+            );
+            setSearchEntries([]);
+          }
+          if (signal.aborted) return;
+          setSearchPhase("related");
+
+          try {
+            const semanticPage = await semanticP;
+            if (signal.aborted) return;
+            if (semanticPage) {
+              setSearchEntries(semanticPage.entries);
+              setSearchIndexing(Boolean(semanticPage.indexing));
+            }
+          } catch (err) {
+            if (isAbortError(err) || signal.aborted) return;
+          }
+
+          try {
+            await libraryP;
+          } catch {
+            /* handled above */
+          }
+          if (signal.aborted) return;
+          setSearchPhase("done");
+        } catch (err) {
+          if (isAbortError(err) || signal.aborted) return;
+          setSearchError(
+            err instanceof Error ? err.message : "Search failed"
+          );
+          setSearchEntries([]);
+          setSearchPhase("done");
+        }
+      })();
     }, 250);
+
     return () => {
       if (searchTimer.current) clearTimeout(searchTimer.current);
+      searchAbort.current?.abort();
     };
   }, [feedSearch, channel, channelUrl]);
 
   const filteredEntries = useMemo(() => {
-    const q = feedSearch.trim().toLowerCase();
-    const libraryForQuery = q
-      ? libraryEntries.filter((e) =>
-          (e.title ?? "").toLowerCase().includes(q)
-        )
-      : libraryEntries;
-    let list =
-      q && searchEntries != null
-        ? mergeFeedWithLibrary(searchEntries, libraryForQuery)
-        : q
-          ? mergeFeedWithLibrary(entries, libraryEntries).filter((e) =>
-              (e.title ?? "").toLowerCase().includes(q)
-            )
-          : mergeFeedWithLibrary(entries, libraryEntries);
+    const q = feedSearch.trim();
+    let list: ChannelFeedEntry[];
+    if (!q) {
+      list = mergeFeedWithLibrary(entries, libraryEntries);
+    } else if (searchEntries != null || librarySearchEntries != null) {
+      list = mergeFeedWithLibrary(
+        searchEntries ?? [],
+        librarySearchEntries ?? []
+      );
+    } else {
+      list = [];
+    }
     if (!showUndownloaded) {
       list = list.filter(
         (e) => e.in_library || e.video_id != null || resolveVideoId(e) != null
@@ -354,6 +479,7 @@ export default function ChannelFeed({
   }, [
     entries,
     libraryEntries,
+    librarySearchEntries,
     searchEntries,
     feedSearch,
     feedSort,
@@ -385,6 +511,20 @@ export default function ChannelFeed({
     [pending]
   );
 
+  const q = feedSearch.trim();
+  const searchBusy =
+    q.length > 0 && (searchPhase === "keywords" || searchPhase === "related");
+  const searchStatusLabel = feedSearchStatusLabel(searchPhase);
+  const waitingForFirstHits = searchBusy && filteredEntries.length === 0;
+  const indexIncomplete = q.length > 0 && (catalogIndexing || searchIndexing);
+  const showFeedLoading = Boolean(loading && channelUrl && !q);
+  const showSearchBanner =
+    q.length > 0 &&
+    !waitingForFirstHits &&
+    (searchBusy ||
+      (searchPhase === "done" && filteredEntries.length > 0) ||
+      indexIncomplete);
+
   if (!channelUrl && libraryEntries.length === 0 && !loading) {
     return (
       <div className="py-20 text-center text-gray-500">
@@ -405,13 +545,40 @@ export default function ChannelFeed({
         </p>
       )}
 
-      {(searchLoading) && (
-        <p className="mb-3 text-xs text-gray-500">
-          Searching indexed catalog…
+      {searchError && (
+        <p className="mb-4 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {searchError}
         </p>
       )}
 
-      {loading && channelUrl ? (
+      {showSearchBanner && (
+        <div
+          className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500"
+          role="status"
+          aria-live="polite"
+        >
+          {searchBusy && searchStatusLabel && (
+            <LoadingIndicator
+              className="py-0"
+              label={searchStatusLabel}
+              labelVisible
+            />
+          )}
+          {searchPhase === "done" && (
+            <span>{formatSearchMatchCount(filteredEntries.length)}</span>
+          )}
+          {indexIncomplete && (
+            <span>Index still running — results may be incomplete.</span>
+          )}
+        </div>
+      )}
+
+      {waitingForFirstHits ? (
+        <LoadingIndicator
+          label={searchStatusLabel || "Searching indexed catalog…"}
+          labelVisible
+        />
+      ) : showFeedLoading ? (
         <LoadingIndicator label="Loading channel feed" />
       ) : filteredEntries.length === 0 ? (
         <div className="py-20 text-center text-gray-500">
@@ -449,6 +616,7 @@ export default function ChannelFeed({
                   downloading={pendingUrls.has(entry.url)}
                   onDownload={() => queueDownload(entry)}
                   skipRemotePreview={fromCatalog}
+                  searchQuery={feedSearch}
                 />
               );
             })}

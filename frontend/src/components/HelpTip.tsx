@@ -6,19 +6,30 @@ import {
   useState,
   type MouseEvent,
   type ReactNode,
+  type Ref,
 } from "react";
 import { createPortal } from "react-dom";
+
+const TIP_WIDTH = 288; // tailwind w-72
+const VIEW_MARGIN = 8;
+const CURSOR_GAP_X = 12;
+const CURSOR_GAP_Y = 14;
 
 /** Hover/focus/click popover tip — more reliable than native title on Windows. */
 export default function HelpTip({
   text,
   placement = "top",
   children,
+  className,
+  as: Tag = "span",
 }: {
   text: string;
   /** Prefer "bottom" near the top of the viewport so the tip stays visible. */
   placement?: "top" | "bottom";
   children?: ReactNode;
+  className?: string;
+  /** Use "div" when wrapping a dl row (dt/dd must not sit inside a span). */
+  as?: "span" | "div";
 }) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{
@@ -27,27 +38,57 @@ export default function HelpTip({
     place: "top" | "bottom";
   } | null>(null);
   const tipId = useId();
-  const anchorRef = useRef<HTMLSpanElement>(null);
+  const anchorRef = useRef<HTMLElement>(null);
+  const pointerOpen = useRef(false);
+  const rafRef = useRef<number | null>(null);
+  const pendingPtr = useRef<{ x: number; y: number } | null>(null);
+  const placementRef = useRef(placement);
+  placementRef.current = placement;
 
-  useLayoutEffect(() => {
-    if (!open || !anchorRef.current) {
-      setCoords(null);
-      return;
+  const placeAt = (x: number, y: number) => {
+    const preferred = placementRef.current;
+    let place = preferred;
+    if (place === "top" && y < 96) place = "bottom";
+    if (place === "bottom" && window.innerHeight - y < 120) place = "top";
+
+    let left = x + CURSOR_GAP_X;
+    if (left + TIP_WIDTH > window.innerWidth - VIEW_MARGIN) {
+      left = x - CURSOR_GAP_X - TIP_WIDTH;
     }
-    const rect = anchorRef.current.getBoundingClientRect();
-    const gap = 8;
-    let place = placement;
-    // Prefer requested placement; flip if there isn't room.
-    if (place === "top" && rect.top < 96) place = "bottom";
-    if (place === "bottom" && window.innerHeight - rect.bottom < 96) {
-      place = "top";
-    }
-    setCoords({
-      top: place === "bottom" ? rect.bottom + gap : rect.top - gap,
-      left: rect.left + rect.width / 2,
-      place,
+    left = Math.min(
+      Math.max(left, VIEW_MARGIN),
+      window.innerWidth - TIP_WIDTH - VIEW_MARGIN
+    );
+
+    const top = place === "bottom" ? y + CURSOR_GAP_Y : y - CURSOR_GAP_Y;
+    setCoords((prev) => {
+      if (prev && prev.top === top && prev.left === left && prev.place === place) {
+        return prev;
+      }
+      return { top, left, place };
     });
-  }, [open, placement, text]);
+  };
+
+  const placeAtAnchor = () => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = rect.left + Math.min(Math.max(rect.width / 2, 8), 24);
+    const y = placementRef.current === "bottom" ? rect.bottom : rect.top;
+    placeAt(x, y);
+  };
+
+  // Keyboard / no-pointer open: sit next to the control, not the row center.
+  useLayoutEffect(() => {
+    if (!open || pointerOpen.current) return;
+    placeAtAnchor();
+  }, [open, text]);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   // Close on outside click (click-to-open / touch).
   useEffect(() => {
@@ -55,38 +96,81 @@ export default function HelpTip({
     const onPointerDown = (e: PointerEvent) => {
       const el = anchorRef.current;
       if (el && !el.contains(e.target as Node)) {
+        pointerOpen.current = false;
         setOpen(false);
+        setCoords(null);
       }
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
-  const show = () => setOpen(true);
-  const hide = () => setOpen(false);
-  const showOnClick = (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const showFromPointer = (e: MouseEvent) => {
+    pointerOpen.current = true;
+    placeAt(e.clientX, e.clientY);
     setOpen(true);
   };
 
+  const hide = () => {
+    pointerOpen.current = false;
+    pendingPtr.current = null;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    setOpen(false);
+    setCoords(null);
+  };
+
+  const followPointer = (e: MouseEvent) => {
+    if (!pointerOpen.current) return;
+    pendingPtr.current = { x: e.clientX, y: e.clientY };
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const p = pendingPtr.current;
+      if (p) placeAt(p.x, p.y);
+    });
+  };
+
+  const showOnClick = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showFromPointer(e);
+  };
+
+  const tooltip =
+    open && coords
+      ? createPortal(
+          <span
+            id={tipId}
+            role="tooltip"
+            className="ui-panel ui-panel-legible pointer-events-none fixed z-[200] w-72 max-w-[calc(100vw-1.5rem)] rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-left text-xs leading-relaxed text-gray-300 shadow-xl ring-1 ring-ink-700"
+            style={{
+              top: coords.top,
+              left: coords.left,
+              transform:
+                coords.place === "bottom" ? undefined : "translateY(-100%)",
+            }}
+          >
+            {text}
+          </span>,
+          document.body
+        )
+      : null;
+
   return (
-    <span
-      ref={anchorRef}
-      className="relative inline-flex"
-      onMouseEnter={show}
+    <Tag
+      ref={anchorRef as Ref<HTMLDivElement>}
+      className={`relative ${className ?? "inline-flex"}`}
+      aria-describedby={children && open ? tipId : undefined}
+      onMouseEnter={showFromPointer}
+      onMouseMove={followPointer}
       onMouseLeave={hide}
+      onClick={children ? showOnClick : undefined}
     >
       {children ? (
-        <span
-          className="inline-flex"
-          aria-describedby={open ? tipId : undefined}
-          onFocus={show}
-          onBlur={hide}
-          onClick={showOnClick}
-        >
-          {children}
-        </span>
+        children
       ) : (
         <button
           type="button"
@@ -94,36 +178,17 @@ export default function HelpTip({
           aria-label="More info"
           aria-describedby={open ? tipId : undefined}
           aria-expanded={open}
-          onFocus={show}
+          onFocus={() => {
+            pointerOpen.current = false;
+            setOpen(true);
+          }}
           onBlur={hide}
           onClick={showOnClick}
         >
           (?)
         </button>
       )}
-      {open &&
-        coords &&
-        createPortal(
-          <span
-            id={tipId}
-            role="tooltip"
-            className="ui-panel ui-panel-legible pointer-events-none fixed z-[200] w-64 -translate-x-1/2 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-left text-xs leading-relaxed text-gray-300 shadow-xl ring-1 ring-ink-700"
-            style={{
-              top: coords.top,
-              left: Math.min(
-                Math.max(coords.left, 128),
-                window.innerWidth - 128
-              ),
-              transform:
-                coords.place === "bottom"
-                  ? "translate(-50%, 0)"
-                  : "translate(-50%, -100%)",
-            }}
-          >
-            {text}
-          </span>,
-          document.body
-        )}
-    </span>
+      {tooltip}
+    </Tag>
   );
 }

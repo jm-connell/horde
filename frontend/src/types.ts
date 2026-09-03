@@ -14,6 +14,11 @@ export interface SubtitleTrack {
   auto: boolean;
 }
 
+export interface SearchMatchReason {
+  source: "title" | "description" | "tags" | "notes" | "captions" | "related";
+  snippet?: string | null;
+}
+
 export interface Video {
   id: number;
   title: string;
@@ -61,6 +66,7 @@ export interface Video {
   tags_enriched_at?: string | null;
   processing_summary?: boolean;
   processing_sprites?: boolean;
+  match_reason?: SearchMatchReason | null;
 }
 
 export interface VideoUpdate {
@@ -102,6 +108,7 @@ export interface ChannelFeedEntry {
   video_id: number | null;
   library_height_px: number | null;
   max_height: number | null;
+  match_reason?: SearchMatchReason | null;
 }
 
 export interface ChannelFeedPage {

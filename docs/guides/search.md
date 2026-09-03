@@ -1,10 +1,12 @@
 # Search
 
-Horde uses a **single search box** on the Library page. There is no separate Search screen and no UI toggle for “semantic” vs “keyword” mode — hybrid ranking runs on the backend whenever AI search indexes are available.
+Horde uses a **single search box** on the Library home page, plus a separate **channel-page search** when a channel is open. There is no separate Search screen and no UI toggle for “semantic” vs “keyword” mode — hybrid ranking runs on the backend whenever AI search indexes are available.
 
 ## Where to search
 
 Open the [Library](library.md) (`/`) and type in the search field in the toolbar (desktop) or the mobile search control. Results update as you type (debounced).
+
+On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos** (not a live YouTube video search).
 
 ## Result sections
 
@@ -25,7 +27,19 @@ Catalog rows come from background [channel catalog indexing](channels.md). You c
 
 When embeddings are ready, the API runs **hybrid** search: keyword matching combined with embedding similarity. The UI does not expose a semantic-only switch; one query drives both.
 
-Without an embed provider / indexes, search falls back to keyword-style matching over library metadata.
+Keyword matching splits the query into tokens (ignoring small stopwords) and requires **each** token to appear as a **whole word** in the metadata — so `paint fix` matches *I painted his House to Fix his WiFi*, not only the contiguous phrase `paint fix`, but `car` does not match *graphics card* or *carriers*. Light stemming still treats `paint` / `painted` / `painting` as the same token (short words only add a plural, so `car` can match `cars`). Library home search and channel-page search share this matcher. Queries whose longest token is under 4 letters stay keyword-only (embeddings for `car` / `gpu` are too vague). Without an embed provider / indexes, search falls back to this keyword-style matching.
+
+### Channel page search
+
+The channel header search:
+
+1. Matches tokens against indexed titles and descriptions (SQL, fast).
+2. Merges downloaded videos for that channel via the same library hybrid path (captions included when search indexes exist).
+3. Then looks for **related** catalog embeddings so natural-language phrasing can surface uploads that don’t share the same words.
+
+Status copy shows **Searching indexed catalog…**, then **Finding related matches…** while embeddings run, plus a match count when results settle. If the catalog is still indexing, the feed notes that results may be incomplete.
+
+When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, or “related by search index.” Undownloaded catalog rows cannot cite captions (indexes are title + description only). This shows on **library search cards** and **channel-page search** (not on title-only matches).
 
 ### What gets indexed
 

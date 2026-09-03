@@ -17,6 +17,59 @@ export function catalogDenominator(p: CatalogProgress): number {
   return Math.max(1, p.maxVideos);
 }
 
+export type FeedSearchPhase = "idle" | "keywords" | "related" | "done";
+
+export function formatSearchMatchCount(n: number): string {
+  return n === 1 ? "1 match" : `${n} matches`;
+}
+
+export function feedSearchStatusLabel(phase: FeedSearchPhase): string | null {
+  if (phase === "keywords") return "Searching indexed catalog…";
+  if (phase === "related") return "Finding related matches…";
+  return null;
+}
+
+const MATCH_SOURCE_LABEL: Record<string, string> = {
+  description: "description",
+  tags: "tags",
+  notes: "notes",
+};
+
+export function formatMatchReasonTip(
+  reason: {
+    source: string;
+    snippet?: string | null;
+  },
+  query: string
+): string {
+  const snippet = reason.snippet?.trim();
+  const quoted = snippet ? `“${snippet}”` : "";
+  if (reason.source === "captions") {
+    return quoted ? `In captions: ${quoted}` : "In captions.";
+  }
+  if (reason.source === "related") {
+    return "Related by search index from the title and description.";
+  }
+  const field = MATCH_SOURCE_LABEL[reason.source] ?? reason.source;
+  const term = query.trim();
+  const head = term
+    ? `Matched “${term}” in the ${field}`
+    : `Matched in the ${field}`;
+  return quoted ? `${head}: ${quoted}` : `${head}.`;
+}
+
+/** Tooltip copy when the match is not already obvious from the title. */
+export function visibleMatchReasonTip(
+  reason: {
+    source: string;
+    snippet?: string | null;
+  } | null | undefined,
+  query = ""
+): string | null {
+  if (!reason || reason.source === "title") return null;
+  return formatMatchReasonTip(reason, query);
+}
+
 export function formatCatalogProgress(p: CatalogProgress): string {
   const { indexed, total, complete, indexing } = p;
   const denom = catalogDenominator(p);
@@ -38,7 +91,7 @@ export function formatCatalogProgress(p: CatalogProgress): string {
 }
 
 export const FEED_SEARCH_TIP =
-  "Horde indexes this channel’s library in the background so you can search beyond what’s loaded on the page.";
+  "Search this channel’s indexed uploads and your downloads. Also uses search indexes when they’re ready, including captions on downloaded videos.";
 
 export const FEED_INDEX_TIP =
-  "Horde indexes this channel’s uploads (titles, and descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Indexing runs in the background and respects your max-videos setting.";
+  "Horde indexes this channel’s uploads (descriptions+captions for 200 recent, titles for up to 1000) so search uses as much as possible. Indexing runs in the background and respects your max-videos setting.";

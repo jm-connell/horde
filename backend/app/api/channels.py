@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -127,6 +127,7 @@ def channel_catalog_search(
     channel: Optional[str] = None,
     url: Optional[str] = None,
     limit: int = Query(60, ge=1, le=200),
+    semantic: bool = Query(True),
     session: Session = Depends(get_session),
 ):
     channel_url = (url or "").strip() or None
@@ -136,13 +137,17 @@ def channel_catalog_search(
 
     global_search = not channel_url
     if global_search:
-        raw_entries = channel_catalog.search_all_catalogs(session, q, limit=limit)
+        raw_entries = channel_catalog.search_all_catalogs(
+            session, q, limit=limit, semantic=semantic
+        )
         lib_map = library.youtube_library_map(session, channel=None)
+        progress: dict[str, Any] = {}
     else:
         raw_entries = channel_catalog.search_catalog(
-            session, channel_url, q, limit=limit
+            session, channel_url, q, limit=limit, semantic=semantic
         )
         lib_map = library.youtube_library_map(session, channel=channel_name)
+        progress = channel_catalog.catalog_progress(session, channel_url)
 
     yt_ids = [str(e["id"]) for e in raw_entries if e.get("id")]
     meta_cache = feed_meta_cache.get_many(yt_ids)
@@ -182,6 +187,7 @@ def channel_catalog_search(
                 in_library=in_library,
                 video_id=video_id,
                 library_height_px=library_height,
+                match_reason=raw.get("match_reason"),
             )
         )
     return ChannelFeedPage(
@@ -190,6 +196,11 @@ def channel_catalog_search(
         entries=entries,
         has_more=False,
         from_catalog=True,
+        indexing=bool(progress.get("indexing")),
+        catalog_indexed=int(progress.get("catalog_indexed") or 0),
+        catalog_total=progress.get("catalog_total"),
+        catalog_complete=bool(progress.get("catalog_complete")),
+        catalog_status=progress.get("catalog_status"),
     )
 
 

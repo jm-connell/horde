@@ -44,7 +44,7 @@ Each cycle:
 | Kinds | `embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize` |
 | Retries | Up to **3** attempts; backoff `run_after` ≈ **2 × attempts** minutes |
 | Pause | Settings `ai.paused` or OpenRouter hard budget stop |
-| Schedule | `on_download` enqueue vs timed sweeps |
+| Schedule | `on_download` enqueue (plus idle catch-up of missing search indexes) vs timed sweeps |
 
 Design note: [Single-flight AI](../design/single-flight-ai.md).
 

@@ -140,7 +140,7 @@ def sync_feed_head(
     live_name = data.get("channel") or channel_name
 
     with Session(engine) as session:
-        catalog = get_catalog_by_url(session, url)
+        catalog = get_catalog_by_url(session, url, channel_name=live_name)
         if catalog is None:
             if not _enabled():
                 return data

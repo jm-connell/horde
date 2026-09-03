@@ -55,6 +55,26 @@ def test_query_channel_and_tag_and_text(session, add_video):
     assert [v.id for v in by_q] == [match.id]
 
 
+def test_query_token_and_matches_split_title_terms(session, add_video):
+    hit = add_video(title="I painted his House to Fix his WiFi", channel="LTT")
+    add_video(title="I painted a mural", channel="LTT")
+    add_video(title="How to fix a router", channel="LTT")
+    rows = library.query_videos(session, q="paint fix", needs_review=False)
+    assert [v.id for v in rows] == [hit.id]
+
+
+def test_query_whole_word_not_substring(session, add_video):
+    car = add_video(title="I bought a cheap used car", channel="LTT")
+    add_video(title="The RTX 4090 graphics card", channel="LTT")
+    add_video(
+        title="Upgrade your home WiFi",
+        channel="LTT",
+        description="Switch carriers and save on your phone plan.",
+    )
+    rows = library.query_videos(session, q="car", needs_review=False)
+    assert [v.id for v in rows] == [car.id]
+
+
 def test_query_sort_title_and_file_size(session, add_video):
     add_video(title="B", file_size=10)
     add_video(title="A", file_size=30)

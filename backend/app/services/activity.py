@@ -31,7 +31,8 @@ KIND_GROUPS: dict[str, str] = {
     "feed_enrich": "index",
 }
 
-_RECENT_MAX = 40
+# Settings → System recent-activity list (scrollable; UI shows ~8 rows).
+_RECENT_MAX = 50
 
 
 @dataclass

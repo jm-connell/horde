@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Optional
 
-from sqlmodel import Session, col, func, or_, select
+from sqlmodel import Session, col, func, select
 
 from ...database import engine
 from ...models import (
@@ -14,16 +13,18 @@ from ...models import (
     ChannelCatalogStatus,
     ChannelCatalogVideo,
 )
-from .. import feed_meta_cache
+from ..search_text import (
+    explain_match,
+    keyword_match_clause,
+    keyword_rank_key,
+    query_allows_semantic,
+)
 from ..ytdlp_common import is_members_only_entry
 from .runtime import (
     _normalize_channel_url,
     get_catalog_by_url,
-    get_runtime_status,
 )
 from .skips import skipped_yt_ids
-
-logger = logging.getLogger(__name__)
 
 
 def catalog_progress(
@@ -146,6 +147,8 @@ def catalog_feed_page(
 
 
 _EMBED_SEARCH_ROW_CEILING = 20_000
+_CATALOG_EMBED_MIN_SCORE = 0.35
+_KEYWORD_FETCH_CAP = 500
 
 
 def _catalog_entry_dict(
@@ -165,12 +168,178 @@ def _catalog_entry_dict(
     }
 
 
+def _keyword_fetch_limit(limit: int) -> int:
+    return min(max(limit * 4, 200), _KEYWORD_FETCH_CAP)
+
+
+def _is_hidden_catalog_video(video: ChannelCatalogVideo, skipped: set[str]) -> bool:
+    return video.yt_id in skipped or is_members_only_entry({"title": video.title})
+
+
+def _keyword_catalog_rows(
+    session: Session,
+    query: str,
+    *,
+    catalog_id: Optional[int] = None,
+    limit: int,
+) -> list[tuple[ChannelCatalogVideo, Optional[str]]]:
+    clause = keyword_match_clause(
+        query,
+        col(ChannelCatalogVideo.title),
+        col(ChannelCatalogVideo.description),
+    )
+    if clause is None:
+        return []
+    fetch_n = _keyword_fetch_limit(limit)
+    if catalog_id is not None:
+        rows = session.exec(
+            select(ChannelCatalogVideo)
+            .where(ChannelCatalogVideo.catalog_id == catalog_id)
+            .where(clause)
+            .order_by(ChannelCatalogVideo.position.asc())
+            .limit(fetch_n)
+        ).all()
+        ranked = sorted(
+            rows,
+            key=lambda r: keyword_rank_key(
+                r.title, r.description, query, r.position
+            ),
+        )
+        return [(r, None) for r in ranked[:limit]]
+
+    rows = session.exec(
+        select(ChannelCatalogVideo, ChannelCatalog)
+        .join(
+            ChannelCatalog,
+            ChannelCatalogVideo.catalog_id == ChannelCatalog.id,  # type: ignore[arg-type]
+        )
+        .where(clause)
+        .order_by(ChannelCatalogVideo.position.asc())
+        .limit(fetch_n)
+    ).all()
+    paired: list[tuple[ChannelCatalogVideo, Optional[str]]] = []
+    for row in rows:
+        video, catalog = row[0], row[1]
+        paired.append((video, getattr(catalog, "channel_name", None)))
+    paired.sort(
+        key=lambda item: keyword_rank_key(
+            item[0].title, item[0].description, query, item[0].position
+        )
+    )
+    return paired[:limit]
+
+
+def _semantic_catalog_hits(
+    session: Session,
+    query: str,
+    *,
+    catalog_id: Optional[int] = None,
+    limit: int,
+) -> list[tuple[float, ChannelCatalogVideo, Optional[str]]]:
+    try:
+        from ..ai import embeddings as emb_mod
+
+        query_vec = emb_mod.embed_query(query)
+        if query_vec is None:
+            return []
+        if catalog_id is None:
+            emb_count = session.exec(
+                select(func.count()).select_from(ChannelCatalogEmbedding)  # type: ignore[arg-type]
+            ).one()
+            if int(emb_count or 0) > _EMBED_SEARCH_ROW_CEILING:
+                return []
+        stmt = (
+            select(ChannelCatalogEmbedding, ChannelCatalogVideo, ChannelCatalog)
+            .join(
+                ChannelCatalogVideo,
+                ChannelCatalogEmbedding.catalog_video_id == ChannelCatalogVideo.id,  # type: ignore[arg-type]
+            )
+            .join(
+                ChannelCatalog,
+                ChannelCatalogVideo.catalog_id == ChannelCatalog.id,  # type: ignore[arg-type]
+            )
+        )
+        if catalog_id is not None:
+            stmt = stmt.where(ChannelCatalogVideo.catalog_id == catalog_id)
+        scored: list[tuple[float, ChannelCatalogVideo, Optional[str]]] = []
+        for row in session.exec(stmt).all():
+            emb, video, catalog = row[0], row[1], row[2]
+            vec = emb_mod.unpack_vector(emb.vector, emb.dim)
+            score = emb_mod.cosine(query_vec, vec)
+            if score >= _CATALOG_EMBED_MIN_SCORE:
+                scored.append(
+                    (
+                        score,
+                        video,
+                        catalog.channel_name if catalog else None,
+                    )
+                )
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return scored[:limit]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _fuse_catalog_hits(
+    keyword_hits: list[tuple[ChannelCatalogVideo, Optional[str]]],
+    semantic_hits: list[tuple[float, ChannelCatalogVideo, Optional[str]]],
+    *,
+    skipped: set[str],
+    skip_by_catalog: Optional[dict[int, set[str]]] = None,
+    limit: int,
+    keyword_ids: Optional[set[str]] = None,
+    query: str = "",
+) -> list[dict[str, Any]]:
+    by_id: dict[str, tuple[ChannelCatalogVideo, Optional[str]]] = {}
+    scores: dict[str, float] = {}
+
+    def hidden(video: ChannelCatalogVideo) -> bool:
+        if skip_by_catalog is not None:
+            cat_skips = skip_by_catalog.get(video.catalog_id)
+            if cat_skips is None:
+                cat_skips = skipped
+            return _is_hidden_catalog_video(video, cat_skips)
+        return _is_hidden_catalog_video(video, skipped)
+
+    for score, video, channel_name in semantic_hits:
+        if hidden(video):
+            continue
+        by_id[video.yt_id] = (video, channel_name)
+        scores[video.yt_id] = float(score)
+
+    for i, (video, channel_name) in enumerate(keyword_hits):
+        if hidden(video):
+            continue
+        by_id[video.yt_id] = (video, channel_name)
+        boost = 1.0 - (i * 0.002)
+        scores[video.yt_id] = max(scores.get(video.yt_id, 0.0), 0.55) + boost
+
+    ranked_ids = sorted(scores.keys(), key=lambda i: scores[i], reverse=True)
+    kw_ids = keyword_ids or set()
+    out: list[dict[str, Any]] = []
+    for yt_id in ranked_ids:
+        video, channel_name = by_id[yt_id]
+        entry = _catalog_entry_dict(video, channel_name=channel_name)
+        if query:
+            entry["match_reason"] = explain_match(
+                query,
+                title=video.title,
+                description=video.description,
+                allow_related=yt_id not in kw_ids,
+            )
+        out.append(entry)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def search_catalog(
     session: Session,
     channel_url: str,
     query: str,
     *,
     limit: int = 60,
+    semantic: bool = True,
 ) -> list[dict[str, Any]]:
     catalog = get_catalog_by_url(session, channel_url)
     if catalog is None or catalog.id is None:
@@ -178,60 +347,29 @@ def search_catalog(
     q = query.strip()
     if not q:
         return []
-    pattern = f"%{q}%"
-    rows = session.exec(
-        select(ChannelCatalogVideo)
-        .where(ChannelCatalogVideo.catalog_id == catalog.id)
-        .where(
-            or_(
-                col(ChannelCatalogVideo.title).ilike(pattern),
-                col(ChannelCatalogVideo.description).ilike(pattern),
-            )
+    keyword_hits = [
+        (video, catalog.channel_name)
+        for video, _ in _keyword_catalog_rows(
+            session, q, catalog_id=catalog.id, limit=limit
         )
-        .order_by(ChannelCatalogVideo.position.asc())
-        .limit(limit)
-    ).all()
-
-    # Hybrid: boost with embedding similarity when available.
-    semantic_extra: list[ChannelCatalogVideo] = []
-    try:
-        from ..ai import embeddings as emb_mod
-        from ..ai.provider import get_embed_provider, resolve_embed_model
-
-        provider = get_embed_provider()
-        if provider is not None:
-            model = resolve_embed_model(provider)
-            query_vec = provider.embed(q, model)
-            emb_rows = session.exec(select(ChannelCatalogEmbedding)).all()
-            scored: list[tuple[float, ChannelCatalogVideo]] = []
-            for emb in emb_rows:
-                video = session.get(ChannelCatalogVideo, emb.catalog_video_id)
-                if video is None or video.catalog_id != catalog.id:
-                    continue
-                vec = emb_mod.unpack_vector(emb.vector, emb.dim)
-                score = emb_mod.cosine(query_vec, vec)
-                if score >= 0.35:
-                    scored.append((score, video))
-            scored.sort(key=lambda x: x[0], reverse=True)
-            semantic_extra = [v for _, v in scored[:limit]]
-    except Exception:  # noqa: BLE001
-        semantic_extra = []
-
-    # Preserve keyword order first, then semantic extras.
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    channel_name = catalog.channel_name
+    ]
     skipped = skipped_yt_ids(session, catalog.id)
-    for r in list(rows) + semantic_extra:
-        if r.yt_id in seen:
-            continue
-        if r.yt_id in skipped or is_members_only_entry({"title": r.title}):
-            continue
-        seen.add(r.yt_id)
-        out.append(_catalog_entry_dict(r, channel_name=channel_name))
-        if len(out) >= limit:
-            break
-    return out
+    semantic_hits: list[tuple[float, ChannelCatalogVideo, Optional[str]]] = []
+    if semantic and query_allows_semantic(q):
+        semantic_hits = [
+            (score, video, catalog.channel_name)
+            for score, video, _ in _semantic_catalog_hits(
+                session, q, catalog_id=catalog.id, limit=limit
+            )
+        ]
+    return _fuse_catalog_hits(
+        keyword_hits,
+        semantic_hits,
+        skipped=skipped,
+        limit=limit,
+        keyword_ids={v.yt_id for v, _ in keyword_hits},
+        query=q,
+    )
 
 
 def search_all_catalogs(
@@ -239,88 +377,35 @@ def search_all_catalogs(
     query: str,
     *,
     limit: int = 40,
+    semantic: bool = True,
 ) -> list[dict[str, Any]]:
     """Search indexed channel catalogs across all channels (keyword + optional embeddings)."""
     q = query.strip()
     if not q:
         return []
-    pattern = f"%{q}%"
-    rows = session.exec(
-        select(ChannelCatalogVideo, ChannelCatalog)
-        .join(
-            ChannelCatalog,
-            ChannelCatalogVideo.catalog_id == ChannelCatalog.id,  # type: ignore[arg-type]
-        )
-        .where(
-            or_(
-                col(ChannelCatalogVideo.title).ilike(pattern),
-                col(ChannelCatalogVideo.description).ilike(pattern),
-            )
-        )
-        .order_by(ChannelCatalogVideo.position.asc())
-        .limit(limit)
-    ).all()
-
-    keyword_hits: list[tuple[ChannelCatalogVideo, Optional[str]]] = []
-    for row in rows:
-        if isinstance(row, tuple) and len(row) >= 2:
-            video, catalog = row[0], row[1]
-            keyword_hits.append((video, getattr(catalog, "channel_name", None)))
-        else:
-            keyword_hits.append((row, None))  # type: ignore[arg-type]
-
-    semantic_extra: list[tuple[ChannelCatalogVideo, Optional[str]]] = []
-    try:
-        emb_count = session.exec(
-            select(func.count()).select_from(ChannelCatalogEmbedding)  # type: ignore[arg-type]
-        ).one()
-        if int(emb_count or 0) <= _EMBED_SEARCH_ROW_CEILING:
-            from ..ai import embeddings as emb_mod
-            from ..ai.provider import get_embed_provider, resolve_embed_model
-
-            provider = get_embed_provider()
-            if provider is not None:
-                model = resolve_embed_model(provider)
-                query_vec = provider.embed(q, model)
-                emb_rows = session.exec(select(ChannelCatalogEmbedding)).all()
-                scored: list[tuple[float, ChannelCatalogVideo, Optional[str]]] = []
-                for emb in emb_rows:
-                    video = session.get(ChannelCatalogVideo, emb.catalog_video_id)
-                    if video is None:
-                        continue
-                    catalog = session.get(ChannelCatalog, video.catalog_id)
-                    vec = emb_mod.unpack_vector(emb.vector, emb.dim)
-                    score = emb_mod.cosine(query_vec, vec)
-                    if score >= 0.35:
-                        scored.append(
-                            (
-                                score,
-                                video,
-                                catalog.channel_name if catalog else None,
-                            )
-                        )
-                scored.sort(key=lambda x: x[0], reverse=True)
-                semantic_extra = [(v, ch) for _, v, ch in scored[:limit]]
-    except Exception:  # noqa: BLE001
-        semantic_extra = []
-
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    # Preload skips for catalogs we might hit.
+    keyword_hits = _keyword_catalog_rows(session, q, limit=limit)
+    semantic_hits: list[tuple[float, ChannelCatalogVideo, Optional[str]]] = []
+    if semantic and query_allows_semantic(q):
+        semantic_hits = _semantic_catalog_hits(session, q, limit=limit)
     skip_by_catalog: dict[int, set[str]] = {}
-    for video, channel_name in keyword_hits + semantic_extra:
-        if video.yt_id in seen:
-            continue
-        cat_skips = skip_by_catalog.get(video.catalog_id)
-        if cat_skips is None:
-            cat_skips = skipped_yt_ids(session, video.catalog_id)
-            skip_by_catalog[video.catalog_id] = cat_skips
-        if video.yt_id in cat_skips or is_members_only_entry({"title": video.title}):
-            continue
-        seen.add(video.yt_id)
-        out.append(_catalog_entry_dict(video, channel_name=channel_name))
-        if len(out) >= limit:
-            break
-    return out
+    for video, _ in keyword_hits:
+        if video.catalog_id not in skip_by_catalog:
+            skip_by_catalog[video.catalog_id] = skipped_yt_ids(
+                session, video.catalog_id
+            )
+    for _, video, _ in semantic_hits:
+        if video.catalog_id not in skip_by_catalog:
+            skip_by_catalog[video.catalog_id] = skipped_yt_ids(
+                session, video.catalog_id
+            )
+    return _fuse_catalog_hits(
+        keyword_hits,
+        semantic_hits,
+        skipped=set(),
+        skip_by_catalog=skip_by_catalog,
+        limit=limit,
+        keyword_ids={v.yt_id for v, _ in keyword_hits},
+        query=q,
+    )
 
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { ActivityTask, SystemActivity } from "../../types";
 
+const RECENT_MAX = 50;
+
 const GROUP_LABELS: Record<string, string> = {
   media: "Media",
   download: "Download",
@@ -158,7 +160,7 @@ export default function BackgroundActivity({
   }
 
   const running = activity.running ?? [];
-  const recent = (activity.recent ?? []).slice(0, 20);
+  const recent = (activity.recent ?? []).slice(0, RECENT_MAX);
   const queued = activity.queued ?? {};
   const queuedEntries = Object.entries(queued).filter(([, n]) => n > 0);
   const cpu =
@@ -219,7 +221,10 @@ export default function BackgroundActivity({
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
             Recent activity
           </p>
-          <ul className="divide-y divide-ink-800/80">
+          <ul
+            className="horde-scrollbar max-h-[calc(8*2.75rem)] divide-y divide-ink-800/80 overflow-y-auto overscroll-contain pr-1"
+            aria-label="Recent activity"
+          >
             {recent.map((task) => (
               <RecentRow key={`${task.id}-${task.finished_at}`} task={task} />
             ))}

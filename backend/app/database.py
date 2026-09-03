@@ -11,6 +11,7 @@ start a second writer while another Session holds an uncommitted write.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Generator
 from datetime import datetime, timezone
 from typing import Any
@@ -29,7 +30,17 @@ SQLITE_CONNECT_ARGS: dict[str, Any] = {
 }
 
 
-def _apply_sqlite_pragmas(dbapi_conn: Any, _connection_record: Any) -> None:
+def _sqlite_regexp(pattern: Any, value: Any) -> int:
+    """SQLite ``X REGEXP Y`` callback (pattern is Y, value is X)."""
+    if pattern is None or value is None:
+        return 0
+    try:
+        return 1 if re.search(str(pattern), str(value)) is not None else 0
+    except re.error:
+        return 0
+
+
+def _configure_sqlite_connection(dbapi_conn: Any, _connection_record: Any) -> None:
     cursor = dbapi_conn.cursor()
     try:
         cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
@@ -37,13 +48,14 @@ def _apply_sqlite_pragmas(dbapi_conn: Any, _connection_record: Any) -> None:
         cursor.execute("PRAGMA synchronous=NORMAL")
     finally:
         cursor.close()
+    dbapi_conn.create_function("REGEXP", 2, _sqlite_regexp, deterministic=True)
 
 
 def create_sqlite_engine(url: str) -> Engine:
     """File-backed SQLite engine with WAL and a busy timeout."""
     eng = create_engine(url, connect_args=SQLITE_CONNECT_ARGS)
     if str(url).startswith("sqlite"):
-        event.listen(eng, "connect", _apply_sqlite_pragmas)
+        event.listen(eng, "connect", _configure_sqlite_connection)
     return eng
 
 

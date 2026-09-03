@@ -19,6 +19,11 @@ import {
 } from "../utils";
 import { PRESET_LABELS } from "../presets";
 import ChannelPicker from "./ChannelPicker";
+import {
+  canEditDownloadJobNotes,
+  canRedownloadRemovedJob,
+  isLibraryVideoGone,
+} from "./downloadJobCardState";
 
 interface Props {
   job: DownloadJob;
@@ -48,7 +53,7 @@ export default function DownloadJobCard({
   channels,
   active = false,
 }: Props) {
-  const { updateJobOverrides, retryJob, cancelJob, dismissJob } =
+  const { updateJobOverrides, retryJob, cancelJob, dismissJob, submitDownload } =
     useDownloads();
   const status = jobStatus(job, live);
   const maxBytesRef = useRef(0);
@@ -81,8 +86,23 @@ export default function DownloadJobCard({
   const videoId = live?.video_id ?? job.video_id;
   const isDeviceJob =
     (live?.destination ?? job.destination) === "device";
-  const videoGone = Boolean(
-    !isDeviceJob && (job.video_missing || job.superseded)
+  const videoGone = isLibraryVideoGone(
+    isDeviceJob,
+    job.video_missing,
+    job.superseded
+  );
+  const canEditNotes = canEditDownloadJobNotes(
+    isDeviceJob,
+    failed,
+    cancelled,
+    videoGone
+  );
+  const canRedownload = canRedownloadRemovedJob(
+    completed,
+    isDeviceJob,
+    failed,
+    job.video_missing,
+    job.superseded
   );
   const isReplacing =
     active && Boolean(job.replace_video_id) && !completed && !failed && !cancelled;
@@ -98,8 +118,10 @@ export default function DownloadJobCard({
   const [dismissConfirm, setDismissConfirm] = useState(false);
   const [dontAskAgain, setDontAskAgain] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [redownloading, setRedownloading] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const retryingRef = useRef(false);
+  const redownloadingRef = useRef(false);
   const editingTitleRef = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   editingTitleRef.current = editingTitle;
@@ -143,6 +165,7 @@ export default function DownloadJobCard({
   };
 
   const save = async () => {
+    if (videoGone) return;
     try {
       if (completed && videoId) {
         await api.updateVideo(videoId, {
@@ -175,6 +198,7 @@ export default function DownloadJobCard({
   };
 
   const saveNote = async () => {
+    if (!canEditNotes) return;
     try {
       if (completed && videoId) {
         await api.updateVideo(videoId, { notes: note.trim() || null });
@@ -226,6 +250,23 @@ export default function DownloadJobCard({
     } catch {
       retryingRef.current = false;
       setRetrying(false);
+    }
+  };
+
+  const onRedownload = async () => {
+    if (redownloadingRef.current || !job.url) return;
+    redownloadingRef.current = true;
+    setRedownloading(true);
+    try {
+      await submitDownload(job.url, job.quality_preset || "best", {
+        title: title.trim() || undefined,
+        channel: channel.trim() || undefined,
+        notes: note.trim() || undefined,
+        destination: "library",
+      });
+    } finally {
+      redownloadingRef.current = false;
+      setRedownloading(false);
     }
   };
 
@@ -451,7 +492,7 @@ export default function DownloadJobCard({
             </div>
           )}
 
-          {(showNote || note) && !cancelled && (
+          {canEditNotes && (showNote || note) && (
             <div className="mt-3">
               <div className="mb-1 flex items-baseline justify-between gap-2">
                 <label className={labelClass + " mb-0"}>Note</label>
@@ -486,6 +527,16 @@ export default function DownloadJobCard({
                 Watch now →
               </Link>
             )}
+            {canRedownload && (
+              <button
+                type="button"
+                onClick={onRedownload}
+                disabled={redownloading || !job.url}
+                className="rounded-lg bg-accent/15 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {redownloading ? "Starting…" : "Redownload"}
+              </button>
+            )}
             {completed && !isDeviceJob && videoGone && (
               <span className="text-xs text-gray-500">
                 {job.video_missing
@@ -503,7 +554,7 @@ export default function DownloadJobCard({
                 {retrying ? "Retrying…" : "Retry"}
               </button>
             )}
-            {!failed && !cancelled && isDirty && (
+            {!failed && !cancelled && !videoGone && isDirty && (
               <button
                 onClick={save}
                 className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
@@ -511,7 +562,7 @@ export default function DownloadJobCard({
                 Save changes
               </button>
             )}
-            {!isDeviceJob && !failed && !cancelled && (
+            {canEditNotes && (
               <button
                 onClick={() => setShowNote((v) => !v)}
                 className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
@@ -519,7 +570,7 @@ export default function DownloadJobCard({
                 {showNote ? "Hide note" : "Add note"}
               </button>
             )}
-            {!isDeviceJob && showNote && !cancelled && (
+            {canEditNotes && showNote && (
               <button
                 onClick={saveNote}
                 className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"

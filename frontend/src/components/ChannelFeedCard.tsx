@@ -12,6 +12,8 @@ import {
   youtubeThumbnailUrl,
 } from "../utils";
 import { enqueueYtPreview } from "../utils/ytPreviewQueue";
+import MatchReasonBadge from "./MatchReasonBadge";
+import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 
 const maxResCache = new Map<string, string>();
 
@@ -125,36 +127,41 @@ function FeedThumbnail({
   duration,
   className,
   showDuration = true,
+  matchTip,
 }: {
   thumbSrc: string | null;
   duration: string;
   className: string;
   showDuration?: boolean;
+  matchTip?: string | null;
 }) {
   return (
-    <div className={`relative overflow-hidden ${className}`}>
-      {thumbSrc ? (
-        <img
-          src={thumbSrc}
-          alt=""
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-ink-600">
-          <span className="text-4xl">▶</span>
+    <div className={`relative ${className}`}>
+      <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
+        {thumbSrc ? (
+          <img
+            src={thumbSrc}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-ink-600">
+            <span className="text-4xl">▶</span>
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-gray-100 ring-1 ring-white/20">
+            ▶
+          </span>
         </div>
-      )}
-      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-        <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-gray-100 ring-1 ring-white/20">
-          ▶
-        </span>
+        {showDuration && duration && (
+          <span className="pointer-events-none absolute bottom-2 right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
+            {duration}
+          </span>
+        )}
       </div>
-      {showDuration && duration && (
-        <span className="pointer-events-none absolute bottom-2 right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
-          {duration}
-        </span>
-      )}
+      <MatchReasonBadge text={matchTip} />
     </div>
   );
 }
@@ -168,6 +175,7 @@ export default function ChannelFeedCard({
   onDownload,
   downloading,
   skipRemotePreview = false,
+  searchQuery = "",
 }: {
   entry: ChannelFeedEntry;
   channelName: string;
@@ -178,6 +186,7 @@ export default function ChannelFeedCard({
   downloading?: boolean;
   /** Skip yt-dlp max-res probes (catalog feeds already feel fast without them). */
   skipRemotePreview?: boolean;
+  searchQuery?: string;
 }) {
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
@@ -201,6 +210,7 @@ export default function ChannelFeedCard({
     },
     channelName
   );
+  const matchTip = visibleMatchReasonTip(entry.match_reason, searchQuery);
 
   useEffect(() => {
     if (entry.library_height_px) {
@@ -259,6 +269,7 @@ export default function ChannelFeedCard({
           duration={duration}
           showDuration={false}
           className="h-[4.5rem] w-32 shrink-0 rounded-lg"
+          matchTip={matchTip}
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-24">
@@ -326,6 +337,7 @@ export default function ChannelFeedCard({
           thumbSrc={thumbSrc}
           duration={duration}
           className="aspect-video w-full"
+          matchTip={matchTip}
         />
         <div className="flex flex-col gap-1 p-3">
           <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 group-hover:text-accent">

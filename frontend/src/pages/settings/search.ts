@@ -115,7 +115,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "ai",
     pane: "jobs",
     keywords:
-      "when to run schedule process run all recent full embeds index rebuild reindex tags categories timer automatic catch up run now queue pause resume individual steps whole library",
+      "when to run schedule process run all recent full embeds index rebuild reindex tags categories timer automatic catch up run now queue pause resume individual steps whole library gpu jobs indexed idle index missing",
   },
   {
     tab: "ai",
@@ -134,12 +134,12 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "system",
     keywords:
-      "background tasks background activity channel catalog index queue ai process metadata sync ffmpeg sprites seek previews thumbnails cpu usage scanner loudness normalization yt-dlp activity refresh catalogs full reindex",
+      "background tasks background activity channel catalog index queue ai process metadata sync ffmpeg sprites seek previews thumbnails cpu usage scanner loudness normalization yt-dlp activity refresh catalogs full reindex gpu jobs indexed idle index missing",
   },
   {
     tab: "system",
     keywords:
-      "health yt-dlp ollama disk import review downloads gpu system status horde version",
+      "health yt-dlp ollama disk import review downloads gpu system status horde version po token cookies openrouter catalog queue ai queue",
   },
   {
     tab: "system",

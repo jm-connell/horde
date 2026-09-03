@@ -11,6 +11,11 @@ class SubtitleTrack(BaseModel):
     auto: bool = False
 
 
+class SearchMatchReason(BaseModel):
+    source: Literal["title", "description", "tags", "notes", "captions", "related"]
+    snippet: Optional[str] = None
+
+
 class VideoRead(BaseModel):
     id: int
     title: str
@@ -55,6 +60,7 @@ class VideoRead(BaseModel):
     tags_enriched_at: Optional[datetime] = None
     processing_summary: bool = False
     processing_sprites: bool = False
+    match_reason: Optional[SearchMatchReason] = None
 
 
 class VideoUpdate(BaseModel):
@@ -196,6 +202,7 @@ class ChannelFeedEntry(BaseModel):
     video_id: Optional[int] = None
     library_height_px: Optional[int] = None
     max_height: Optional[int] = None
+    match_reason: Optional[SearchMatchReason] = None
 
 
 class ChannelFeedPage(BaseModel):

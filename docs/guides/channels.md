@@ -35,6 +35,16 @@ Open a channel from the sidebar to see its **feed**:
 - Videos already in your library for that channel
 - Optionally **undownloaded** catalog entries (titles from the remote channel index)
 
+### Feed search
+
+The channel header search box looks across **indexed uploads** (titles, and descriptions for the newest ~200) and **downloaded videos** for that channel.
+
+- Multi-word queries require **all keywords** as whole words (stopwords like *the* / *to* / *his* are ignored). `paint fix` matches *I painted his House to Fix his WiFi*; `car` does not match *graphics card*. Home library search uses the same matcher.
+- Natural-language phrasing also uses catalog and library search indexes when those embeddings are ready (including captions on downloads).
+- While a query runs, the feed shows **Searching indexed catalog…** then **Finding related matches…**. If indexing is still in progress, results may be incomplete.
+
+This is local catalog/library search — not a live YouTube “search this channel” request. See [Search](search.md).
+
 ### Show undownloaded
 
 Toggle **Show undownloaded** on the channel page (also available under [Playback / Library settings](../settings/playback.md) as `showUndownloadedOnChannel`). When on, catalog-only uploads appear so you can download or preview them without leaving the feed.

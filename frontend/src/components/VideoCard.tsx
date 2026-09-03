@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { thumbnailUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
 import { useSettings } from "../hooks/useSettings";
+import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 import type { Video } from "../types";
 import {
   formatDate,
@@ -9,6 +10,7 @@ import {
   formatResolution,
   formatViewCount,
 } from "../utils";
+import MatchReasonBadge from "./MatchReasonBadge";
 
 export default function VideoCard({
   video,
@@ -18,6 +20,7 @@ export default function VideoCard({
   selectable,
   selected,
   onSelect,
+  searchQuery = "",
 }: {
   video: Video;
   progress?: number;
@@ -26,6 +29,7 @@ export default function VideoCard({
   selectable?: boolean;
   selected?: boolean;
   onSelect?: (id: number, e: React.MouseEvent) => void;
+  searchQuery?: string;
 }) {
   const navigate = useNavigate();
   const { addToQueue } = usePlayback();
@@ -37,6 +41,7 @@ export default function VideoCard({
     settings.showCardDates && video.published_at
       ? formatDate(video.published_at)
       : "";
+  const matchTip = visibleMatchReasonTip(video.match_reason, searchQuery);
 
   const handleClick = (e: React.MouseEvent) => {
     if (selectable) {
@@ -112,7 +117,7 @@ export default function VideoCard({
               addToQueue(video);
             }}
             title="Add to queue"
-            className={`absolute right-2 top-2 rounded bg-black/70 px-2 py-1 text-xs font-medium text-gray-100 transition-opacity hover:bg-accent hover:text-ink-950 ${
+            className={`absolute right-2 top-2 z-20 rounded bg-black/70 px-2 py-1 text-xs font-medium text-gray-100 transition-opacity hover:bg-accent hover:text-ink-950 ${
               hideQueueButton
                 ? "hidden"
                 : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100"
@@ -121,6 +126,14 @@ export default function VideoCard({
             + Queue
           </button>
         )}
+        <MatchReasonBadge
+          text={matchTip}
+          className={
+            selectable
+              ? "absolute top-1.5 right-1.5 z-30"
+              : "absolute top-1.5 left-1.5 z-30"
+          }
+        />
       </div>
       <div className="relative flex flex-col gap-1 p-3">
         <h3 className="line-clamp-2 min-h-[2.5rem] overflow-hidden break-words pr-10 text-sm font-semibold text-gray-100 group-hover:text-accent">

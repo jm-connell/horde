@@ -75,3 +75,23 @@ def test_engine_enables_wal(init_db):
     with engine.connect() as conn:
         mode = conn.execute(text("PRAGMA journal_mode")).scalar()
     assert str(mode).lower() == "wal"
+
+
+def test_engine_registers_regexp(init_db):
+    from sqlalchemy import text
+
+    from app.database import engine
+
+    with engine.connect() as conn:
+        hit = conn.execute(
+            text(
+                "SELECT 'a used car' REGEXP '(?i)(?<![a-z0-9])car(?![a-z0-9])'"
+            )
+        ).scalar()
+        miss = conn.execute(
+            text(
+                "SELECT 'graphics card' REGEXP '(?i)(?<![a-z0-9])car(?![a-z0-9])'"
+            )
+        ).scalar()
+    assert hit == 1
+    assert miss == 0

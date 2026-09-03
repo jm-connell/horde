@@ -40,6 +40,33 @@ export const CATALOG_MAX_TIP =
 export const METADATA_INTERVAL_TIP =
   "How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.";
 
+export const STATUS_TIPS = {
+  horde:
+    "This Horde install’s version (short git SHA). Compared to GitHub so you can see if an update is available.",
+  ytdlp:
+    "The downloader Horde uses to fetch metadata and video files from YouTube and other sites. Keep it current — extractors break when sites change.",
+  pot: "YouTube issues Proof-of-Origin (PO) tokens to tell real players from bots. Horde’s bgutil-pot sidecar mints them for yt-dlp. If this is down, downloads and previews often fail with bot-check errors.",
+  ollama:
+    "Local LLM used for summaries, tags, chat, and embeddings. Configure it under AI → Providers.",
+  openrouter:
+    "Optional cloud LLM for models you don’t run locally. Needs an API key under AI → Providers.",
+  cookies:
+    "Browser or Netscape cookies passed to yt-dlp. Needed for age gates, members-only videos you’re entitled to, or stubborn bot checks that PO tokens don’t clear. Public videos often work without them. This makes downloads significantly less anonymous — YouTube sees the logged-in account.",
+  library:
+    "How many videos Horde has in its database and how much space they use — downloads and imports, including any still waiting in the import queue.",
+  pendingImport:
+    "Files in the Import queue that still need a title and channel before they join the library (dropped or scanned media).",
+  downloads:
+    "Download jobs that are queued or in progress. “Paused” means the download queue is stopped.",
+  aiQueue:
+    "Background AI work (embeddings, tags, summaries). Depth is waiting jobs; running/failed show worker progress. A blocked reason means the provider isn’t usable.",
+  catalogQueue:
+    "Channel catalog indexing — walking YouTube upload lists so feed search works beyond the visible page.",
+  extractFailure:
+    "The most recent yt-dlp metadata error (bot check, cookies, PO token, and similar). Useful for diagnosing YouTube access problems.",
+  disk: "Free space on the downloads volume versus total size. Downloads and imports will fail if this runs out.",
+} as const;
+
 export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "small", label: "Small" },
   { value: "medium", label: "Medium" },
@@ -164,7 +191,8 @@ export const AI_SCHEDULE_OPTIONS: { value: AiSchedule; label: string; descriptio
   {
     value: "on_download",
     label: "On download",
-    description: "Embed and enrich tags when a video finishes downloading",
+    description:
+      "Embed and enrich tags when a video finishes downloading, and queue missing search indexes when the GPU job queue is idle",
   },
   {
     value: "timer",

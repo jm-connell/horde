@@ -249,6 +249,33 @@ def video_centroid(session: Session, video_id: int) -> Optional[list[float]]:
     return [x / n for x in acc]
 
 
+def similar_video_hits(
+    session: Session,
+    query_vec: list[float],
+    *,
+    limit: int = 24,
+    exclude_ids: Optional[set[int]] = None,
+    min_score: float = 0.15,
+) -> list[tuple[int, float, int]]:
+    """Return (video_id, score, chunk_index) by best-matching chunk."""
+    exclude_ids = exclude_ids or set()
+    rows = session.exec(select(VideoEmbedding)).all()
+    best: dict[int, tuple[float, int]] = {}
+    for row in rows:
+        if row.video_id in exclude_ids:
+            continue
+        vec = unpack_vector(row.vector, row.dim)
+        score = cosine(query_vec, vec)
+        if score < min_score:
+            continue
+        prev = best.get(row.video_id)
+        if prev is None or score > prev[0]:
+            best[row.video_id] = (score, int(row.chunk_index))
+
+    ranked = sorted(best.items(), key=lambda kv: kv[1][0], reverse=True)
+    return [(vid, sc, chunk) for vid, (sc, chunk) in ranked[:limit]]
+
+
 def similar_video_ids(
     session: Session,
     query_vec: list[float],
@@ -261,22 +288,16 @@ def similar_video_ids(
 
     Scores videos by their best-matching chunk (max over chunks).
     """
-    exclude_ids = exclude_ids or set()
-    rows = session.exec(select(VideoEmbedding)).all()
-    best: dict[int, float] = {}
-    for row in rows:
-        if row.video_id in exclude_ids:
-            continue
-        vec = unpack_vector(row.vector, row.dim)
-        score = cosine(query_vec, vec)
-        if score < min_score:
-            continue
-        prev = best.get(row.video_id)
-        if prev is None or score > prev:
-            best[row.video_id] = score
-
-    ranked = sorted(best.items(), key=lambda kv: kv[1], reverse=True)
-    return ranked[:limit]
+    return [
+        (vid, score)
+        for vid, score, _chunk in similar_video_hits(
+            session,
+            query_vec,
+            limit=limit,
+            exclude_ids=exclude_ids,
+            min_score=min_score,
+        )
+    ]
 
 
 def retrieve_video_chunks(
@@ -383,19 +404,34 @@ def indexed_count(session: Session) -> tuple[int, int]:
     return ready, total
 
 
-def videos_needing_embed(session: Session, *, limit: int = 500) -> list[int]:
+def videos_needing_embed(
+    session: Session,
+    *,
+    limit: int = 500,
+    exclude_ids: Optional[set[int]] = None,
+    skip_empty_document: bool = False,
+) -> list[int]:
     ai = app_settings.ai_settings()
     use_subs = bool(ai.get("use_subtitles", True))
     model = resolve_embed_model()
+    skip_ids = exclude_ids or set()
     videos = session.exec(
         select(Video).where(Video.needs_review == False)  # noqa: E712
     ).all()
     need: list[int] = []
     for video in videos:
-        if video.id is None:
+        if video.id is None or video.id in skip_ids:
             continue
         meta = session.get(VideoAiMeta, video.id)
         digest = ai_text.content_hash(video, use_subtitles=use_subs)
+        if (
+            skip_empty_document
+            and meta is not None
+            and meta.embed_status == "error"
+            and (meta.embed_error or "").startswith("empty_document")
+            and meta.content_hash == digest
+        ):
+            continue
         stale_content = (
             meta is None
             or meta.embed_status != "ready"

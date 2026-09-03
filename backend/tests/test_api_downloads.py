@@ -177,6 +177,37 @@ def test_retry_completed_and_missing(client, init_db):
     assert client.post("/api/downloads/99999/retry", json={}).status_code == 404
 
 
+def test_list_jobs_marks_video_missing_after_delete(client, init_db, add_video):
+    from sqlmodel import Session
+
+    from app.models import DownloadJob, JobStatus
+
+    video = add_video(title="Keep me", yt_id="dQw4w9WgXcQ")
+    with Session(init_db["engine"]) as session:
+        job = DownloadJob(
+            url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            quality_preset="720p",
+            status=JobStatus.completed,
+            title="Keep me",
+            video_id=video.id,
+        )
+        session.add(job)
+        session.commit()
+        job_id = job.id
+
+    row = next(r for r in client.get("/api/downloads").json() if r["id"] == job_id)
+    assert row["video_missing"] is False
+    assert row["superseded"] is False
+
+    assert client.delete(f"/api/videos/{video.id}").status_code == 204
+
+    row = next(r for r in client.get("/api/downloads").json() if r["id"] == job_id)
+    assert row["video_missing"] is True
+    assert row["superseded"] is False
+    assert row["url"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    assert row["quality_preset"] == "720p"
+
+
 def test_create_download_reuses_active_job(client, monkeypatch):
     from app.services import downloader
 

@@ -2,14 +2,56 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from sqlmodel import Session
 
 from ...models import Video
-from .. import library
-from . import embeddings
+from .. import app_settings, library
+from ..search_text import explain_match, query_allows_semantic
+from . import embeddings, text as ai_text
 from .provider import get_embed_provider
+
+
+def _caption_chunk_text(video: Video, chunk_index: int) -> Optional[str]:
+    if chunk_index < 0:
+        return None
+    use_subs = bool(app_settings.ai_settings().get("use_subtitles", True))
+    for idx, text in ai_text.documents_for_video(video, use_subtitles=use_subs):
+        if idx == chunk_index:
+            return text
+    return None
+
+
+def explain_library_video(
+    video: Video,
+    query: str,
+    *,
+    chunk_index: Optional[int] = None,
+) -> Optional[dict[str, Any]]:
+    tags = library.parse_tags(video.tags)
+    keyword = explain_match(
+        query,
+        title=video.title,
+        description=video.description,
+        tags=tags,
+        notes=video.notes,
+        allow_related=False,
+    )
+    if keyword:
+        return keyword
+    caption = None
+    if chunk_index is not None and chunk_index >= 0:
+        caption = _caption_chunk_text(video, chunk_index)
+    return explain_match(
+        query,
+        title=video.title,
+        description=video.description,
+        tags=tags,
+        notes=video.notes,
+        caption_chunk=caption,
+        allow_related=chunk_index is not None,
+    )
 
 
 def hybrid_search(
@@ -22,10 +64,12 @@ def hybrid_search(
     order: str = "desc",
     needs_review: Optional[bool] = False,
     seed: Optional[int] = None,
-) -> list[Video]:
-    """Merge ILIKE keyword hits with embedding nearest neighbors.
+) -> tuple[list[Video], dict[int, int]]:
+    """Merge whole-word keyword hits with embedding nearest neighbors.
 
-    When Ollama/embeddings are unavailable, falls back to keyword-only search.
+    Returns (videos, chunk_index_by_video_id) for match-reason snippets.
+    When Ollama/embeddings are unavailable, or the query is too short to
+    embed usefully, falls back to keyword-only search.
     """
     keyword = library.query_videos(
         session,
@@ -37,20 +81,24 @@ def hybrid_search(
         needs_review=needs_review,
         seed=seed,
     )
+    chunks: dict[int, int] = {}
 
-    if get_embed_provider() is None or not q.strip():
-        return keyword
+    if (
+        get_embed_provider() is None
+        or not q.strip()
+        or not query_allows_semantic(q)
+    ):
+        return keyword, chunks
 
     query_vec = embeddings.embed_query(q)
     if query_vec is None:
-        return keyword
+        return keyword, chunks
 
-    # Restrict semantic candidates by channel/tag filters when present.
-    semantic_hits = embeddings.similar_video_ids(
+    semantic_hits = embeddings.similar_video_hits(
         session, query_vec, limit=80, min_score=0.22
     )
     if not semantic_hits:
-        return keyword
+        return keyword, chunks
 
     by_id: dict[int, Video] = {}
     for video in library.query_videos(
@@ -65,10 +113,11 @@ def hybrid_search(
             by_id[video.id] = video
 
     scores: dict[int, float] = {}
-    for vid, score in semantic_hits:
+    for vid, score, chunk_index in semantic_hits:
         if vid not in by_id:
             continue
         scores[vid] = float(score)
+        chunks[vid] = chunk_index
 
     # Boost exact keyword matches so title hits stay on top.
     for i, video in enumerate(keyword):
@@ -86,4 +135,4 @@ def hybrid_search(
         if video.id not in seen:
             results.append(video)
             seen.add(video.id)
-    return results
+    return results, chunks

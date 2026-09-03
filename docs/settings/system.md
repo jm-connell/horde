@@ -36,7 +36,7 @@ Health snapshot from `GET /api/health`:
 | Ollama | Disabled / Ready / Connected / Offline — shows `ollama.last_error` when not Ready |
 | OpenRouter | Disabled / Configured / No API key |
 | Cookies | Configured / Not configured (`youtube.cookies_configured`) |
-| Library | Video count |
+| Library | Video count and library size (same figures as Storage above) |
 | Pending import | Review queue depth |
 | Active downloads | Count + **paused** when the download queue is paused |
 | AI queue | Depth (+ running / failed counts, blocked reason) from `workers` |
@@ -69,12 +69,14 @@ Horde **host** CPU, RAM, and GPU (NVIDIA / AMD / Intel when detectable).
 
 ## Background activity
 
-Live progress for:
+Live and recent jobs (ffmpeg, downloads, AI, catalog indexing, folder scans). **Recent activity** keeps about eight rows visible and scrolls through the last 50 finished jobs.
+
+Also shown:
 
 1. **Channel catalog** — queue depth, current channel/phase, errors. Actions:
     - **Refresh catalogs** — incremental: new channels + new uploads on ready catalogs
     - **Full reindex…** — re-walk every channel up to `channel_catalog_max_videos` (can take a long time)
-2. **AI** — compact queue status with pause/resume (`ai.paused`)
+2. **AI** — compact queue status with pause/resume (`ai.paused`). **Index missing** appears when search-index coverage is incomplete and the queue is idle.
 3. **Metadata sync** — shown while a Library resync is running (done/failed/total + current title)
 
 Catalog indexing only appears when `channel_catalog_enabled` is on ([Library](library.md#channel-catalog)).

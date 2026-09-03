@@ -83,6 +83,7 @@ export interface LibraryQuery {
   continue_watching?: boolean;
   watched_only?: boolean;
   seed?: number;
+  signal?: AbortSignal;
 }
 
 export interface ChannelQuery {
@@ -101,11 +102,15 @@ export interface ChannelFeedQuery {
 
 export const api = {
   listVideos(params: LibraryQuery = {}): Promise<Video[]> {
+    const { signal, ...query } = params;
     const qs = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
+    Object.entries(query).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
     });
-    return request<Video[]>(`/api/videos?${qs.toString()}`);
+    return request<Video[]>(
+      `/api/videos?${qs.toString()}`,
+      signal ? { signal } : undefined
+    );
   },
 
   saveProgress(id: number, positionSec: number): Promise<void> {
@@ -283,14 +288,18 @@ export const api = {
     channel?: string;
     url?: string;
     limit?: number;
+    semantic?: boolean;
+    signal?: AbortSignal;
   }): Promise<ChannelFeedPage> {
     const qs = new URLSearchParams();
     qs.set("q", params.q);
     if (params.channel) qs.set("channel", params.channel);
     if (params.url) qs.set("url", params.url);
     if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.semantic === false) qs.set("semantic", "false");
     return request<ChannelFeedPage>(
-      `/api/channels/catalog/search?${qs.toString()}`
+      `/api/channels/catalog/search?${qs.toString()}`,
+      params.signal ? { signal: params.signal } : undefined
     );
   },
 

@@ -1029,7 +1029,7 @@ export default function Library() {
                     data-header-search
                     value={feedSearch}
                     onChange={(e) => setFeedSearch(e.target.value)}
-                    placeholder="Search"
+                    placeholder="Search this channel"
                     className="ui-panel ui-interactive min-w-0 max-w-64 flex-1 basis-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:px-4 md:basis-40"
                   />
                   <HelpTip text={FEED_SEARCH_TIP} placement="bottom" />
@@ -1249,6 +1249,7 @@ export default function Library() {
             feedOrder={feedOrder}
             feedLayout={feedLayout}
             showUndownloaded={settings.showUndownloadedOnChannel}
+            catalogIndexing={Boolean(catalogProgress?.indexing)}
             queueDockedBottom={showQueuePanel && queueDockedBottom}
           />
         ) : onRecommendedTab && !debouncedSearch ? (
@@ -1293,6 +1294,7 @@ export default function Library() {
                   <VideoCard
                     key={v.id}
                     video={v}
+                    searchQuery={debouncedSearch}
                     showViewCount={sort === "view_count"}
                     progress={settings.showProgressOnAllVideos ? videoProgress(v) : undefined}
                     selectable={selectMode}
@@ -1330,6 +1332,7 @@ export default function Library() {
                         channelName={channelName}
                         layout="grid"
                         inLibrary={false}
+                        searchQuery={debouncedSearch}
                         onDownload={() => {
                           if (!entry.url || streamDownloading.has(entry.url))
                             return;
@@ -1389,6 +1392,7 @@ export default function Library() {
                     <VideoCard
                       key={v.id}
                       video={v}
+                      searchQuery={debouncedSearch}
                       showViewCount={sort === "view_count"}
                       progress={
                         settings.showProgressOnAllVideos

@@ -9,6 +9,7 @@ from sqlalchemy import func, nullsfirst, nullslast
 from sqlmodel import Session, select
 
 from ..models import Video
+from .search_text import keyword_match_clause
 
 PROGRESS_EXPIRY_DAYS = 14
 CONTINUE_WATCHING_DAYS = 7
@@ -126,14 +127,16 @@ def query_videos(
     if channel:
         statement = statement.where(Video.channel == channel)
     if q:
-        like = f"%{q}%"
-        statement = statement.where(
-            Video.title.ilike(like)
-            | Video.description.ilike(like)
-            | Video.channel.ilike(like)
-            | Video.notes.ilike(like)
-            | Video.tags.ilike(like)
+        clause = keyword_match_clause(
+            q,
+            Video.title,
+            Video.description,
+            Video.channel,
+            Video.notes,
+            Video.tags,
         )
+        if clause is not None:
+            statement = statement.where(clause)
     if tag:
         # Tags are stored as a JSON list string; match the quoted token.
         statement = statement.where(Video.tags.ilike(f'%"{tag}"%'))

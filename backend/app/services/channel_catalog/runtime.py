@@ -12,7 +12,13 @@ from urllib.parse import urlparse
 from sqlmodel import Session, col, func, select
 
 from ...database import engine
-from ...models import ChannelCatalog, ChannelCatalogStatus, ChannelCatalogVideo, utcnow
+from ...models import (
+    ChannelCatalog,
+    ChannelCatalogSkip,
+    ChannelCatalogStatus,
+    ChannelCatalogVideo,
+    utcnow,
+)
 from .. import app_settings
 
 logger = logging.getLogger(__name__)
@@ -36,13 +42,226 @@ _runtime: dict[str, Any] = {
 }
 
 
+_TAB_SUFFIXES = (
+    "/videos",
+    "/shorts",
+    "/streams",
+    "/playlists",
+    "/featured",
+    "/about",
+)
+
+
 def _normalize_channel_url(channel_url: str) -> str:
-    url = channel_url.strip().rstrip("/")
-    for suffix in ("/videos", "/shorts", "/streams", "/playlists", "/featured", "/about"):
-        if url.endswith(suffix):
-            url = url[: -len(suffix)]
+    raw = (channel_url or "").strip()
+    if not raw:
+        return raw
+    parsed = urlparse(raw)
+    host = (parsed.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    path = (parsed.path or "").rstrip("/")
+    for suffix in _TAB_SUFFIXES:
+        if path.endswith(suffix):
+            path = path[: -len(suffix)]
             break
-    return url.rstrip("/")
+    path = path.rstrip("/")
+    parts = path.split("/")
+    if len(parts) >= 2 and parts[1].startswith("@"):
+        parts[1] = parts[1].lower()
+        path = "/".join(parts)
+    if not host:
+        return path or raw.rstrip("/")
+    scheme = (parsed.scheme or "https").lower()
+    return f"{scheme}://{host}{path}"
+
+
+def _channel_identity_keys(channel_url: str) -> frozenset[str]:
+    """Comparable keys for a YouTube channel URL (normalized url, handle, UC id)."""
+    norm = _normalize_channel_url(channel_url)
+    if not norm:
+        return frozenset()
+    keys = {f"url:{norm.casefold()}"}
+    parsed = urlparse(norm if "://" in norm else f"https://{norm}")
+    parts = [p for p in (parsed.path or "").split("/") if p]
+    if not parts:
+        return frozenset(keys)
+    if parts[0].startswith("@"):
+        keys.add(f"handle:{parts[0].casefold()}")
+    elif parts[0] == "channel" and len(parts) >= 2:
+        keys.add(f"id:{parts[1]}")
+    elif parts[0] in ("c", "user") and len(parts) >= 2:
+        keys.add(f"{parts[0]}:{parts[1].casefold()}")
+    return frozenset(keys)
+
+
+def _identity_conflict(a: frozenset[str], b: frozenset[str]) -> bool:
+    a_handles = {k for k in a if k.startswith("handle:")}
+    b_handles = {k for k in b if k.startswith("handle:")}
+    a_ids = {k for k in a if k.startswith("id:")}
+    b_ids = {k for k in b if k.startswith("id:")}
+    if a_handles and b_handles and a_handles != b_handles:
+        return True
+    if a_ids and b_ids and a_ids != b_ids:
+        return True
+    return False
+
+
+def _compatible_url_shapes(a: frozenset[str], b: frozenset[str]) -> bool:
+    """True when one URL is /@handle and the other is /channel/UC… (aliases)."""
+    a_handle = any(k.startswith("handle:") for k in a)
+    b_handle = any(k.startswith("handle:") for k in b)
+    a_id = any(k.startswith("id:") for k in a)
+    b_id = any(k.startswith("id:") for k in b)
+    return (a_handle and b_id) or (a_id and b_handle)
+
+
+def _same_channel_catalog(
+    row: ChannelCatalog,
+    channel_url: str,
+    *,
+    channel_name: Optional[str] = None,
+) -> bool:
+    row_keys = _channel_identity_keys(row.channel_url)
+    req_keys = _channel_identity_keys(channel_url)
+    if row_keys & req_keys:
+        return True
+    if _identity_conflict(row_keys, req_keys):
+        return False
+    name = (channel_name or "").strip().casefold()
+    row_name = (row.channel_name or "").strip().casefold()
+    if not name or name != row_name:
+        return False
+    return _compatible_url_shapes(row_keys, req_keys)
+
+
+def _catalogs_are_aliases(left: ChannelCatalog, right: ChannelCatalog) -> bool:
+    left_keys = _channel_identity_keys(left.channel_url)
+    right_keys = _channel_identity_keys(right.channel_url)
+    if left_keys & right_keys:
+        return True
+    if _identity_conflict(left_keys, right_keys):
+        return False
+    left_name = (left.channel_name or "").strip().casefold()
+    right_name = (right.channel_name or "").strip().casefold()
+    if not left_name or left_name != right_name:
+        return False
+    return _compatible_url_shapes(left_keys, right_keys)
+
+
+def _catalog_keeper_rank(catalog: ChannelCatalog) -> tuple:
+    keys = _channel_identity_keys(catalog.channel_url)
+    handle = any(k.startswith("handle:") for k in keys)
+    ready = catalog.status == ChannelCatalogStatus.ready
+    not_error = catalog.status != ChannelCatalogStatus.error
+    return (
+        int(catalog.indexed_count or 0),
+        int(ready),
+        int(not_error),
+        int(handle),
+        -(catalog.id or 0),
+    )
+
+
+def _prefer_channel_url(urls: list[str]) -> str:
+    def quality(url: str) -> tuple:
+        keys = _channel_identity_keys(url)
+        handle = any(k.startswith("handle:") for k in keys)
+        channel_id = any(k.startswith("id:") for k in keys)
+        return (int(handle), int(channel_id), -len(url))
+
+    return max(urls, key=quality)
+
+
+def _delete_catalog_tree(session: Session, catalog: ChannelCatalog) -> None:
+    from .skips import delete_catalog_video_row
+
+    videos = session.exec(
+        select(ChannelCatalogVideo).where(
+            ChannelCatalogVideo.catalog_id == catalog.id
+        )
+    ).all()
+    for row in videos:
+        delete_catalog_video_row(session, row)
+    skips = session.exec(
+        select(ChannelCatalogSkip).where(ChannelCatalogSkip.catalog_id == catalog.id)
+    ).all()
+    for skip in skips:
+        session.delete(skip)
+    session.flush()
+    session.delete(catalog)
+
+
+def reconcile_duplicate_catalogs(session: Session) -> int:
+    """Merge catalogs that are the same YouTube channel. Returns rows removed."""
+    rows = session.exec(select(ChannelCatalog)).all()
+    if len(rows) < 2:
+        return 0
+
+    parent = {c.id: c.id for c in rows if c.id is not None}
+
+    def find(cid: int) -> int:
+        while parent[cid] != cid:
+            parent[cid] = parent[parent[cid]]
+            cid = parent[cid]
+        return cid
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for i, left in enumerate(rows):
+        if left.id is None:
+            continue
+        for right in rows[i + 1 :]:
+            if right.id is None:
+                continue
+            if _catalogs_are_aliases(left, right):
+                union(left.id, right.id)
+
+    groups: dict[int, list[ChannelCatalog]] = {}
+    by_id = {c.id: c for c in rows if c.id is not None}
+    for cid in parent:
+        groups.setdefault(find(cid), []).append(by_id[cid])
+
+    removed = 0
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        keeper = max(group, key=_catalog_keeper_rank)
+        losers = [c for c in group if c.id != keeper.id]
+        preferred = _prefer_channel_url(
+            [keeper.channel_url] + [c.channel_url for c in losers]
+        )
+        sibling_ready = any(c.status == ChannelCatalogStatus.ready for c in group)
+        for loser in losers:
+            logger.info(
+                "Merging duplicate catalog %s (%s) into %s (%s)",
+                loser.id,
+                loser.channel_url,
+                keeper.id,
+                keeper.channel_url,
+            )
+            _delete_catalog_tree(session, loser)
+            removed += 1
+        if preferred and preferred != keeper.channel_url:
+            keeper.channel_url = preferred
+        if (
+            sibling_ready
+            and keeper.status
+            not in (ChannelCatalogStatus.queued, ChannelCatalogStatus.indexing)
+        ):
+            keeper.status = ChannelCatalogStatus.ready
+            keeper.last_error = None
+        if not keeper.channel_name:
+            for c in group:
+                if c.channel_name:
+                    keeper.channel_name = c.channel_name
+                    break
+        session.add(keeper)
+        session.commit()
+    return removed
 
 
 def _enabled() -> bool:
@@ -69,6 +288,7 @@ def get_runtime_status() -> dict[str, Any]:
     with _state_lock:
         runtime = dict(_runtime)
     with Session(engine) as session:
+        reconcile_duplicate_catalogs(session)
         queued = session.exec(
             select(func.count(ChannelCatalog.id)).where(
                 ChannelCatalog.status.in_(  # type: ignore[attr-defined]
@@ -106,14 +326,20 @@ def get_runtime_status() -> dict[str, Any]:
 
 
 def get_catalog_by_url(
-    session: Session, channel_url: str
+    session: Session,
+    channel_url: str,
+    *,
+    channel_name: Optional[str] = None,
 ) -> Optional[ChannelCatalog]:
-    norm = _normalize_channel_url(channel_url)
     rows = session.exec(select(ChannelCatalog)).all()
-    for row in rows:
-        if _normalize_channel_url(row.channel_url) == norm:
-            return row
-    return None
+    matches = [
+        row
+        for row in rows
+        if _same_channel_catalog(row, channel_url, channel_name=channel_name)
+    ]
+    if not matches:
+        return None
+    return max(matches, key=_catalog_keeper_rank)
 
 
 def enqueue_channel(
@@ -134,7 +360,10 @@ def enqueue_channel(
 
     max_videos = _max_videos()
     with Session(engine) as session:
-        catalog = get_catalog_by_url(session, url)
+        reconcile_duplicate_catalogs(session)
+        catalog = get_catalog_by_url(
+            session, url, channel_name=channel_name
+        )
         if catalog is None:
             catalog = ChannelCatalog(
                 channel_url=url,
@@ -148,19 +377,31 @@ def enqueue_channel(
             session.refresh(catalog)
             catalog_id = catalog.id
         else:
+            dirty = False
             if channel_name and not catalog.channel_name:
                 catalog.channel_name = channel_name
+                dirty = True
+            preferred = _prefer_channel_url([catalog.channel_url, url])
+            if preferred != catalog.channel_url:
+                catalog.channel_url = preferred
+                dirty = True
             active = catalog.status in (
                 ChannelCatalogStatus.queued,
                 ChannelCatalogStatus.indexing,
             )
             if active and not force:
+                if dirty:
+                    session.add(catalog)
+                    session.commit()
                 return catalog.id
             if (
                 catalog.status == ChannelCatalogStatus.ready
                 and not force
                 and catalog.indexed_count > 0
             ):
+                if dirty:
+                    session.add(catalog)
+                    session.commit()
                 # Already indexed; periodic refresh handles updates.
                 return catalog.id
             catalog.status = ChannelCatalogStatus.queued
@@ -191,7 +432,9 @@ def maybe_enqueue_for_feed(
     cutoff = datetime.now(timezone.utc) - timedelta(hours=max(1, interval))
 
     with Session(engine) as session:
-        catalog = get_catalog_by_url(session, channel_url)
+        catalog = get_catalog_by_url(
+            session, channel_url, channel_name=channel_name
+        )
         if catalog is None:
             enqueue_channel(channel_url, channel_name=channel_name)
             return
@@ -266,7 +509,8 @@ def refresh_all_library_channels() -> dict[str, Any]:
     refreshed = 0
     for name, url in _library_channel_targets():
         with Session(engine) as session:
-            catalog = get_catalog_by_url(session, url)
+            reconcile_duplicate_catalogs(session)
+            catalog = get_catalog_by_url(session, url, channel_name=name)
             status = catalog.status if catalog else None
             indexed = int(catalog.indexed_count or 0) if catalog else 0
 
@@ -383,6 +627,11 @@ def start_catalog_worker() -> None:
     global _thread
     if _thread is not None and _thread.is_alive():
         return
+    try:
+        with Session(engine) as session:
+            reconcile_duplicate_catalogs(session)
+    except Exception:  # noqa: BLE001
+        logger.debug("catalog duplicate reconcile skipped", exc_info=True)
     _stop.clear()
     _thread = threading.Thread(
         target=_worker_loop, daemon=True, name="horde-channel-catalog"

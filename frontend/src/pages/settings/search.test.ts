@@ -22,8 +22,11 @@ describe("settings search routing", () => {
     expect(firstMatchingTab("enable custom css")).toBe("appearance");
     expect(firstMatchingTab("jellyfin")).toBe("appearance");
     expect(firstMatchingTab("ollama")).toBe("ai");
+    expect(firstMatchingTab("po token")).toBe("system");
     expect(firstMatchingAiPane("ollama")).toBe("providers");
     expect(firstMatchingAiPane("summary")).toBe("features");
+    expect(firstMatchingAiPane("index missing")).toBe("jobs");
+    expect(firstMatchingTab("index missing")).toBe("ai");
   });
   it("resolves AI pane params", () => {
     expect(resolveAiPaneParam("jobs")).toBe("jobs");

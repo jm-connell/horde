@@ -85,7 +85,7 @@ The left sidebar lists channels from your library. Sort order is controlled in [
 
 ## Search from the library
 
-The single search box on the library page searches your collection (and more). Results group into sections such as **In your library**, **Other videos**, and **Available to stream**. Full behavior is documented in [Search](search.md).
+The search box on the library **home** page searches your collection (and streamable catalog hits). Results group into sections such as **In your library**, **Other videos**, and **Available to stream**. On a **channel page**, the header searches that channel’s indexed uploads and downloads instead. Full behavior is documented in [Search](search.md).
 
 ## Related settings
 

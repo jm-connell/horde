@@ -27,6 +27,7 @@ def to_read(
     session: Optional[Session] = None,
     *,
     include_processing: bool = False,
+    match_reason: Optional[dict] = None,
 ) -> VideoRead:
     ai_tags: list[str] = []
     user_tags: list[str] = []
@@ -121,6 +122,7 @@ def to_read(
         tags_enriched_at=tags_enriched_at,
         processing_summary=processing_summary,
         processing_sprites=processing_sprites,
+        match_reason=match_reason,
     )
 
 

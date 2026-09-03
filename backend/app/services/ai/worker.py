@@ -131,7 +131,23 @@ def _runtime_limits() -> tuple[int, int]:
     return runtime.enqueue_embed_limit, runtime.enqueue_tag_limit
 
 
-def enqueue_missing_embeds(*, limit: Optional[int] = None) -> dict:
+def _failed_video_ids(session: Session, kind: AiJobKind) -> set[int]:
+    rows = session.exec(
+        select(AiJob.video_id).where(
+            AiJob.kind == kind,
+            AiJob.status == AiJobStatus.error,
+            AiJob.video_id.is_not(None),  # type: ignore[attr-defined]
+        )
+    ).all()
+    return {vid for vid in rows if vid is not None}
+
+
+def enqueue_missing_embeds(
+    *,
+    limit: Optional[int] = None,
+    skip_failed: bool = False,
+    skip_empty_document: bool = False,
+) -> dict:
     """Queue embeds for videos needing index; loops until drained or cap iterations."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
@@ -146,7 +162,17 @@ def enqueue_missing_embeds(*, limit: Optional[int] = None) -> dict:
     # Multiple passes so large libraries don't stop after one batch.
     for _ in range(50):
         with Session(engine) as session:
-            need = embeddings.videos_needing_embed(session, limit=batch_limit)
+            exclude = (
+                _failed_video_ids(session, AiJobKind.embed_video)
+                if skip_failed
+                else set()
+            )
+            need = embeddings.videos_needing_embed(
+                session,
+                limit=batch_limit,
+                exclude_ids=exclude,
+                skip_empty_document=skip_empty_document,
+            )
         if not need:
             break
         added = 0
@@ -157,6 +183,23 @@ def enqueue_missing_embeds(*, limit: Optional[int] = None) -> dict:
         if added == 0 or len(need) < batch_limit:
             break
     return _result(breakdown, empty="No missing embeds")
+
+
+def maybe_enqueue_index_catchup() -> dict:
+    """Queue missing search indexes under the default on-download schedule.
+
+    Per-video enqueue only runs when a download (or review) finishes, so
+    imported/scanned library videos and missed jobs would otherwise sit
+    unindexed forever with an idle GPU queue. Timer / set-time already sweep;
+    on_request stays manual.
+    """
+    breakdown = {"embed": 0, "tags": 0, "categories": 0}
+    ai = app_settings.ai_settings()
+    if ai.get("paused"):
+        return _result(breakdown, empty="AI queue is paused")
+    if str(ai.get("schedule") or "on_download") != "on_download":
+        return _result(breakdown, empty="Schedule does not auto-index")
+    return enqueue_missing_embeds(skip_failed=True, skip_empty_document=True)
 
 
 def enqueue_reindex_embeds(*, limit: Optional[int] = None) -> dict:
@@ -335,7 +378,9 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
                 meta = session.get(VideoAiMeta, vid)
                 if meta is not None and meta.tags_locked:
                     continue
-                enriched_at = meta.tags_enriched_at if meta is not None else None
+                enriched_at = (
+                    as_utc(meta.tags_enriched_at) if meta is not None else None
+                )
                 if enriched_at is None:
                     tag_candidates.append((0, now, vid))
                 elif enriched_at < tag_cutoff:
@@ -1022,6 +1067,8 @@ def _timer_loop() -> None:
                     continue
                 if schedule == "set_time":
                     _maybe_run_daily()
+                if schedule == "on_download":
+                    maybe_enqueue_index_catchup()
             # Poll frequently for set_time / schedule changes
             for _ in range(12):
                 if _stop.is_set():
