@@ -35,15 +35,24 @@ export const CSS_VARIABLES: CssHookRow[] = [
   { selector: "--font-sans", meaning: "UI typeface stack" },
   {
     selector: "--ui-panel-alpha",
-    meaning: "Translucent panel fill (when enabled)",
+    meaning: "Translucent panel fill",
   },
   { selector: "--ui-panel-blur", meaning: "Translucent panel blur" },
+  { selector: "--ui-panel-tint", meaning: "Panel tint color (RGB triple)" },
+  {
+    selector: "--ui-panel-tint-mix",
+    meaning: "Panel tint mix amount (percentage)",
+  },
 ];
 
 export const CSS_SELECTORS: CssHookRow[] = [
   {
     selector: "html[data-theme]",
     meaning: "Active palette: oled, light, custom, …",
+  },
+  {
+    selector: 'html[data-panel-tint="on"]',
+    meaning: "Panel tint mix is active",
   },
   {
     selector: 'html[data-page="home"]',

@@ -103,8 +103,11 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `pauseBackgroundWhileWatching` | `false` | bool | | UI blob |
 | `navIndicator` | `"liquid"` | string | `none` \| `liquid` \| `underline` \| `fade` | UI blob |
 | `hoverMotion` | `"subtle"` | string | `off` \| `subtle` \| `lift` \| `glow` | UI blob |
-| `translucentPanels` | `false` | bool | | UI blob |
-| `translucentPanelStrength` | `0.65` | number | 0.15–1 | UI blob |
+| `translucentPanelStrength` | `0.5` | number | 0–1 (higher = more see-through) | UI blob |
+| `translucentPanelBlur` | `0.5` | number | 0–1 (higher = stronger frost) | UI blob |
+| `translucentPanelTintEnabled` | `false` | bool | | UI blob |
+| `translucentPanelTint` | `"#ffffff"` | string | Hex | UI blob |
+| `translucentPanelTintStrength` | `0.35` | number | 0–1 | UI blob |
 | `translucentPanelLegibility` | `true` | bool | | UI blob |
 | `loadingStyle` | `"dots"` | string | `dots` \| `spinner` \| `bar` | UI blob |
 | `fontSize` | `"medium"` | string | `small` \| `medium` \| `large` \| `xl` | UI blob |

@@ -1,20 +1,16 @@
-import { useLayoutEffect, useRef, useState, type Ref } from "react";
+import { useRef, useState, type Ref } from "react";
 import { Link } from "react-router-dom";
 import ChaptersList from "./ChaptersList";
 import Collapse from "./Collapse";
 import LinkifiedText from "./LinkifiedText";
 import OverlayScrollThumb from "./OverlayScrollThumb";
+import { useAnimatedClipHeight } from "../hooks/useAnimatedClipHeight";
 import { useSettings } from "../hooks/useSettings";
 import type { Chapter } from "../utils";
 
-const BOX_DURATION_MS = 400;
-const BOX_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
-
-function collapsedClipPx(sideBySide: boolean): number {
-  const rootPx =
-    parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  return (sideBySide ? 12 : 7.5) * rootPx;
-}
+const COLLAPSED_REM_SIDE = 12;
+const COLLAPSED_REM_STACKED = 7.5;
+const TOGGLE_INSET = "pr-24";
 
 /** Jump back so the description box sits just under the sticky nav. */
 function scrollToBoxTop(box: HTMLElement) {
@@ -50,11 +46,14 @@ function DescriptionBoxToggle({
   onToggle,
   corner,
   buttonRef,
+  caption,
 }: {
   expanded: boolean;
   onToggle: () => void;
   corner: "top" | "bottom";
   buttonRef?: Ref<HTMLButtonElement>;
+  /** Visible label; omit to leave the arrow alone. */
+  caption?: "expand" | "collapse";
 }) {
   const label = expanded ? "Collapse description" : "Expand description";
   return (
@@ -62,16 +61,20 @@ function DescriptionBoxToggle({
       type="button"
       onClick={onToggle}
       ref={buttonRef}
-      className={`absolute right-3 z-[2] flex h-7 w-7 items-center justify-center text-gray-500/55 hover:text-accent ${
+      className={`absolute right-3 z-[2] flex h-7 min-w-7 items-center justify-end gap-1 text-gray-500/55 hover:text-accent ${
         corner === "top" ? "top-0" : "bottom-0"
       }`}
-      title={label}
       aria-label={label}
       aria-expanded={expanded}
     >
+      {caption ? (
+        <span className="select-none whitespace-nowrap text-[10px] font-medium leading-none tracking-wide">
+          {caption}
+        </span>
+      ) : null}
       <svg
         viewBox="0 0 24 24"
-        className={`h-3.5 w-3.5 transition-transform duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`h-3.5 w-3.5 shrink-0 transition-transform duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
           expanded ? "rotate-180" : ""
         }`}
         fill="none"
@@ -90,8 +93,9 @@ function DescriptionBoxToggle({
 /**
  * Shared description + chapters chrome for library and streamed watch pages.
  * Description text is clipped until the corner expand control; tags/notes
- * sit at the end of that text. Chapters size to their own content (with a
- * max height) and do not stretch to match an expanded description.
+ * sit at the end of that text. The chapters panel follows the same expanded
+ * state and grows to its own content height (it does not stretch to the
+ * description).
  */
 export default function WatchMeta({
   description,
@@ -108,6 +112,7 @@ export default function WatchMeta({
   const [settings, updateSettings] = useSettings();
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [boxExpanded, setBoxExpanded] = useState(false);
+  const [collapseCaption, setCollapseCaption] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
 
   const descriptionBody = (description ?? "").trim() ? description : null;
@@ -124,86 +129,27 @@ export default function WatchMeta({
   const panelRef = useRef<HTMLDivElement>(null);
   const clipRef = useRef<HTMLDivElement>(null);
   const topToggleRef = useRef<HTMLButtonElement>(null);
-  const prevExpandedRef = useRef<boolean | null>(null);
+  const collapsedRem = metaSideBySide
+    ? COLLAPSED_REM_SIDE
+    : COLLAPSED_REM_STACKED;
 
-  useLayoutEffect(() => {
-    const clip = clipRef.current;
-    if (!clip) {
-      prevExpandedRef.current = null;
-      return;
+  useAnimatedClipHeight(
+    clipRef,
+    boxExpanded,
+    collapsedRem,
+    descriptionBody,
+    (open) => {
+      if (!open) setCollapseCaption(false);
     }
-
-    const collapsedMax = collapsedClipPx(metaSideBySide);
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-    const target = boxExpanded
-      ? clip.scrollHeight
-      : Math.min(clip.scrollHeight, collapsedMax);
-
-    const applyResting = () => {
-      clip.style.transition = "none";
-      if (boxExpanded) {
-        clip.style.height = "auto";
-        clip.style.overflow = "visible";
-      } else {
-        clip.style.height = `${target}px`;
-        clip.style.overflow = "auto";
-      }
-    };
-
-    const prev = prevExpandedRef.current;
-    prevExpandedRef.current = boxExpanded;
-
-    // First layout, or a content/layout change that isn't an expand toggle.
-    if (prev === null || prev === boxExpanded) {
-      applyResting();
-      return;
-    }
-
-    const from = clip.getBoundingClientRect().height;
-    if (reduceMotion || Math.abs(from - target) < 1) {
-      applyResting();
-      return;
-    }
-
-    clip.style.overflow = "hidden";
-    clip.style.transition = "none";
-    clip.style.height = `${from}px`;
-    void clip.offsetHeight;
-    clip.style.transition = `height ${BOX_DURATION_MS}ms ${BOX_EASING}`;
-    clip.style.height = `${target}px`;
-
-    let settled = false;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      clip.style.transition = "";
-      if (boxExpanded) {
-        clip.style.height = "auto";
-        clip.style.overflow = "visible";
-      } else {
-        clip.style.overflow = "auto";
-      }
-    };
-    const onEnd = (event: TransitionEvent) => {
-      if (event.target !== clip || event.propertyName !== "height") return;
-      settle();
-    };
-    clip.addEventListener("transitionend", onEnd);
-    const fallback = window.setTimeout(settle, BOX_DURATION_MS + 50);
-    return () => {
-      clip.removeEventListener("transitionend", onEnd);
-      window.clearTimeout(fallback);
-    };
-  }, [boxExpanded, metaSideBySide, descriptionBody]);
+  );
 
   const toggleBox = (next: boolean) => {
     if (!next) {
       if (panelRef.current) scrollToBoxTop(panelRef.current);
       topToggleRef.current?.focus({ preventScroll: true });
-    } else if (clipRef.current) {
-      clipRef.current.scrollTop = 0;
+    } else {
+      if (clipRef.current) clipRef.current.scrollTop = 0;
+      setCollapseCaption(true);
     }
     setBoxExpanded(next);
   };
@@ -361,7 +307,7 @@ export default function WatchMeta({
         <div
           className={
             metaSideBySide
-              ? "grid gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(12rem,0.85fr)] lg:items-start"
+              ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(12rem,0.85fr)]"
               : undefined
           }
         >
@@ -380,7 +326,7 @@ export default function WatchMeta({
                     ref={clipRef}
                     className="horde-meta-scrollbar min-h-0"
                   >
-                    <div className="px-4 py-3 pr-10">
+                    <div className={`px-4 py-3 ${TOGGLE_INSET}`}>
                       <p className="whitespace-pre-wrap text-sm text-gray-300">
                         <LinkifiedText text={descriptionBody} />
                       </p>
@@ -397,7 +343,7 @@ export default function WatchMeta({
                 <div
                   className={
                     descriptionBody
-                      ? `px-4 pb-3 ${boxExpanded ? "pr-10" : ""}`
+                      ? `px-4 pb-3 ${collapseCaption ? TOGGLE_INSET : ""}`
                       : "px-4 py-3"
                   }
                 >
@@ -411,12 +357,14 @@ export default function WatchMeta({
                     onToggle={() => toggleBox(!boxExpanded)}
                     corner="top"
                     buttonRef={topToggleRef}
+                    caption={collapseCaption ? undefined : "expand"}
                   />
-                  {boxExpanded && (
+                  {collapseCaption && (
                     <DescriptionBoxToggle
                       expanded
                       onToggle={() => toggleBox(false)}
                       corner="bottom"
+                      caption="collapse"
                     />
                   )}
                 </>
@@ -424,7 +372,11 @@ export default function WatchMeta({
             </div>
           )}
           {chapters.length > 0 && (
-            <ChaptersList chapters={chapters} maxHeightClass="max-h-48" />
+            <ChaptersList
+              chapters={chapters}
+              expanded={boxExpanded}
+              collapsedRem={collapsedRem}
+            />
           )}
         </div>
   );

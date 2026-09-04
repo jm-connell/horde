@@ -844,6 +844,11 @@ export default function AppearanceTab() {
             "hover motion",
             "translucent panels",
             "panel transparency",
+            "panels",
+            "blur",
+            "frost",
+            "glass",
+            "tint",
             "legibility",
             "loading animation",
             "dots",
@@ -959,67 +964,143 @@ export default function AppearanceTab() {
 
           <div
             className={
-              match("translucent panels", "panel transparency", "legibility")
+              match(
+                "translucent panels",
+                "panel transparency",
+                "panels",
+                "blur",
+                "frost",
+                "glass",
+                "tint",
+                "legibility"
+              )
                 ? undefined
                 : q
                   ? "hidden"
                   : undefined
             }
           >
-            <SettingRow
-              title="Translucent panels"
-              description="Let background effects show through cards and chrome."
-              control={
-                <Toggle
-                  checked={settings.translucentPanels}
-                  onChange={() =>
+            <p className="mb-1 text-sm font-medium text-gray-200">Panels</p>
+            <p className="mb-3 text-xs text-gray-500">
+              Let background effects show through cards and chrome.
+            </p>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
+                  <span>Transparency</span>
+                  <span className="tabular-nums text-gray-500">
+                    {Math.round(settings.translucentPanelStrength * 100)}%
+                  </span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  aria-label="Panel transparency"
+                  value={settings.translucentPanelStrength}
+                  onChange={(e) =>
                     update({
-                      translucentPanels: !settings.translucentPanels,
+                      translucentPanelStrength: Number(e.target.value),
                     })
                   }
+                  className="accent-scrubber w-full"
                 />
-              }
-            />
-            <Collapse open={settings.translucentPanels}>
-              <div className="mt-3 space-y-3">
-                <label className="block">
-                  <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
-                    <span>Transparency</span>
-                    <span className="tabular-nums text-gray-500">
-                      {Math.round(settings.translucentPanelStrength * 100)}%
-                    </span>
+              </label>
+              <label className="block">
+                <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
+                  <span>Blur</span>
+                  <span className="tabular-nums text-gray-500">
+                    {Math.round(settings.translucentPanelBlur * 100)}%
                   </span>
-                  <input
-                    type="range"
-                    min={0.15}
-                    max={1}
-                    step={0.05}
-                    value={settings.translucentPanelStrength}
-                    onChange={(e) =>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  aria-label="Panel blur"
+                  value={settings.translucentPanelBlur}
+                  onChange={(e) =>
+                    update({
+                      translucentPanelBlur: Number(e.target.value),
+                    })
+                  }
+                  className="accent-scrubber w-full"
+                />
+              </label>
+              <SettingRow
+                title="Tint"
+                description="Mix a color into cards and chrome. Turn off to use the theme fill only."
+                control={
+                  <Toggle
+                    checked={settings.translucentPanelTintEnabled}
+                    onChange={() =>
                       update({
-                        translucentPanelStrength: Number(e.target.value),
+                        translucentPanelTintEnabled:
+                          !settings.translucentPanelTintEnabled,
                       })
                     }
-                    className="accent-scrubber w-full"
                   />
-                </label>
-                <SettingRow
-                  title="Improve legibility"
-                  description="Raise opacity on panels that need readable text."
-                  control={
-                    <Toggle
-                      checked={settings.translucentPanelLegibility}
-                      onChange={() =>
+                }
+              />
+              <Collapse open={settings.translucentPanelTintEnabled}>
+                <div className="flex flex-wrap items-end gap-4 pt-1 pb-3">
+                  <label className="flex items-center gap-3">
+                    <span className="text-sm text-gray-300">Color</span>
+                    <input
+                      type="color"
+                      aria-label="Panel tint color"
+                      value={settings.translucentPanelTint}
+                      onChange={(e) =>
+                        update({ translucentPanelTint: e.target.value })
+                      }
+                      className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                    />
+                  </label>
+                  <label className="block min-w-[12rem] flex-1">
+                    <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
+                      <span>Strength</span>
+                      <span className="tabular-nums text-gray-500">
+                        {Math.round(
+                          settings.translucentPanelTintStrength * 100
+                        )}
+                        %
+                      </span>
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      aria-label="Panel tint strength"
+                      value={settings.translucentPanelTintStrength}
+                      onChange={(e) =>
                         update({
-                          translucentPanelLegibility:
-                            !settings.translucentPanelLegibility,
+                          translucentPanelTintStrength: Number(e.target.value),
                         })
                       }
+                      className="accent-scrubber w-full"
                     />
-                  }
-                />
-              </div>
-            </Collapse>
+                  </label>
+                </div>
+              </Collapse>
+              <SettingRow
+                title="Improve legibility"
+                description="Raise opacity on panels that need readable text."
+                control={
+                  <Toggle
+                    checked={settings.translucentPanelLegibility}
+                    onChange={() =>
+                      update({
+                        translucentPanelLegibility:
+                          !settings.translucentPanelLegibility,
+                      })
+                    }
+                  />
+                }
+              />
+            </div>
           </div>
 
           <div

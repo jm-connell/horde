@@ -165,13 +165,20 @@ Legacy boolean `liquidNav` migrates to `liquid` / `none`.
 | `lift` | Cards rise with soft shadow |
 | `glow` | Accent glow around hovered surfaces |
 
-### Translucent panels
+### Panel transparency
+
+Sliders are always visible. First install defaults to **50%** transparency and **50%** blur. Existing installs that had the old “Translucent panels” toggle **off** migrate to 0% / 0% (opaque).
 
 | Key | Default | Notes |
 |-----|---------|--------|
-| `translucentPanels` | `false` | Enable see-through panels |
-| `translucentPanelStrength` | `0.65` | 0.15–1 (higher = more see-through) |
+| `translucentPanelStrength` | `0.5` | 0–1 (higher = more see-through; 0% is fully opaque) |
+| `translucentPanelBlur` | `0.5` | 0–1 (higher = stronger backdrop blur on `.ui-panel` / `.ui-card`) |
+| `translucentPanelTintEnabled` | `false` | Mix a color into panel fills |
+| `translucentPanelTint` | `#ffffff` | Hex color used when tint is on |
+| `translucentPanelTintStrength` | `0.35` | 0–1 mix toward the tint color |
 | `translucentPanelLegibility` | `true` | Raise opacity on `.ui-panel-legible` panels |
+
+Legacy `translucentPanels` (bool) is still read: `false` → both sliders 0%; `true` keeps the saved strength and converts the old coupled blur.
 
 ### Loading style (`loadingStyle`)
 

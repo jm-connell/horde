@@ -50,7 +50,7 @@ Colors are **space-separated RGB** (no commas) so Tailwind utilities can do `rgb
 }
 ```
 
-When translucent panels are on, `--ui-panel-alpha` and `--ui-panel-blur` also apply.
+When panel transparency is above 0%, `--ui-panel-alpha` and `--ui-panel-blur` also apply. With panel tint enabled, `--ui-panel-tint` and `--ui-panel-tint-mix` mix a color into those fills.
 
 ## `data-page` values
 

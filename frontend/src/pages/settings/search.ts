@@ -20,7 +20,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "appearance",
     keywords:
-      "interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency legibility loading animation dots spinner bar",
+      "interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency blur frost glass tint legibility loading animation dots spinner bar",
   },
   {
     tab: "appearance",

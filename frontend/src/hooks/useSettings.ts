@@ -106,8 +106,11 @@ export interface CustomThemePreset {
   pauseBackgroundWhileWatching: boolean;
   navIndicator: NavIndicator;
   hoverMotion: HoverMotion;
-  translucentPanels: boolean;
   translucentPanelStrength: number;
+  translucentPanelBlur: number;
+  translucentPanelTintEnabled: boolean;
+  translucentPanelTint: string;
+  translucentPanelTintStrength: number;
   translucentPanelLegibility: boolean;
   loadingStyle: LoadingStyle;
   fontSize: FontSize;
@@ -149,9 +152,16 @@ export interface Settings {
   pauseBackgroundWhileWatching: boolean;
   navIndicator: NavIndicator;
   hoverMotion: HoverMotion;
-  translucentPanels: boolean;
-  /** 0.15–1 when panels are translucent; higher = more see-through. */
+  /** 0–1; higher = more see-through. 0 is fully opaque. */
   translucentPanelStrength: number;
+  /** 0–1; higher = stronger backdrop blur on translucent panels. */
+  translucentPanelBlur: number;
+  /** Mix a user-picked color into panel fills. */
+  translucentPanelTintEnabled: boolean;
+  /** Hex tint mixed into `.ui-panel` / `.ui-card` when enabled. */
+  translucentPanelTint: string;
+  /** 0–1 mix toward `translucentPanelTint`. */
+  translucentPanelTintStrength: number;
   /** Raise opacity / tint on panels marked .ui-panel-legible. */
   translucentPanelLegibility: boolean;
   loadingStyle: LoadingStyle;
@@ -227,8 +237,11 @@ const DEFAULTS: Settings = {
   pauseBackgroundWhileWatching: false,
   navIndicator: "liquid",
   hoverMotion: "subtle",
-  translucentPanels: false,
-  translucentPanelStrength: 0.65,
+  translucentPanelStrength: 0.5,
+  translucentPanelBlur: 0.5,
+  translucentPanelTintEnabled: false,
+  translucentPanelTint: "#ffffff",
+  translucentPanelTintStrength: 0.35,
   translucentPanelLegibility: true,
   loadingStyle: "dots",
   fontSize: "medium",
@@ -288,8 +301,11 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "pauseBackgroundWhileWatching",
   "navIndicator",
   "hoverMotion",
-  "translucentPanels",
   "translucentPanelStrength",
+  "translucentPanelBlur",
+  "translucentPanelTintEnabled",
+  "translucentPanelTint",
+  "translucentPanelTintStrength",
   "translucentPanelLegibility",
   "loadingStyle",
   "fontSize",
@@ -494,10 +510,65 @@ function normalizeBackgroundSize(value: unknown): number {
   return Math.min(2, Math.max(0.5, n));
 }
 
-function normalizeTranslucentStrength(value: unknown): number {
+/** Backdrop blur at 100% on the panel blur slider. */
+const PANEL_BLUR_MAX_PX = 24;
+
+function normalizeUnitInterval(value: unknown, fallback: number): number {
   const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return DEFAULTS.translucentPanelStrength;
-  return Math.min(1, Math.max(0.15, n));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(1, Math.max(0, n));
+}
+
+type LegacyPanelFields = {
+  translucentPanels?: unknown;
+  translucentPanelStrength?: unknown;
+  translucentPanelBlur?: unknown;
+};
+
+/** Map saved panel fields onto independent transparency + blur sliders. */
+function migratePanelTranslucency(
+  raw: LegacyPanelFields
+): Pick<Settings, "translucentPanelStrength" | "translucentPanelBlur"> {
+  const blurN =
+    typeof raw.translucentPanelBlur === "number"
+      ? raw.translucentPanelBlur
+      : Number(raw.translucentPanelBlur);
+  const hasBlur =
+    raw.translucentPanelBlur != null &&
+    raw.translucentPanelBlur !== "" &&
+    Number.isFinite(blurN);
+
+  if (hasBlur) {
+    return {
+      translucentPanelStrength: normalizeUnitInterval(
+        raw.translucentPanelStrength,
+        DEFAULTS.translucentPanelStrength
+      ),
+      translucentPanelBlur: normalizeUnitInterval(
+        raw.translucentPanelBlur,
+        DEFAULTS.translucentPanelBlur
+      ),
+    };
+  }
+
+  // Legacy toggle: off → opaque; on → keep strength and un-couple the old blur.
+  if (raw.translucentPanels === true) {
+    const s = normalizeUnitInterval(raw.translucentPanelStrength, 0.65);
+    const legacyBlurPx = Math.max(0, (1 - s) * 14);
+    return {
+      translucentPanelStrength: s,
+      translucentPanelBlur: Math.min(1, legacyBlurPx / PANEL_BLUR_MAX_PX),
+    };
+  }
+
+  if (raw.translucentPanels === false) {
+    return { translucentPanelStrength: 0, translucentPanelBlur: 0 };
+  }
+
+  return {
+    translucentPanelStrength: DEFAULTS.translucentPanelStrength,
+    translucentPanelBlur: DEFAULTS.translucentPanelBlur,
+  };
 }
 
 function normalizeBackgroundColorMode(
@@ -506,15 +577,18 @@ function normalizeBackgroundColorMode(
   return value === "custom" ? "custom" : "accent";
 }
 
-function normalizeBackgroundColor(value: unknown): string {
-  if (typeof value !== "string") return DEFAULTS.backgroundEffectColor;
+function normalizeBackgroundColor(
+  value: unknown,
+  fallback: string = DEFAULTS.backgroundEffectColor
+): string {
+  if (typeof value !== "string") return fallback;
   const hex = value.trim();
   if (/^#[0-9a-fA-F]{6}$/.test(hex)) return hex.toLowerCase();
   if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
     const raw = hex.slice(1);
     return `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`.toLowerCase();
   }
-  return DEFAULTS.backgroundEffectColor;
+  return fallback;
 }
 
 function normalizeHoverMotion(value: unknown): HoverMotion {
@@ -586,6 +660,21 @@ export function serverUiToSettingsPatch(
   if (ui.custom_colors && typeof ui.custom_colors === "object") {
     patch.customColors = ui.custom_colors;
   }
+
+  // Old blobs stored a toggle instead of an independent blur slider.
+  if (
+    !Object.prototype.hasOwnProperty.call(ui, "translucent_panel_blur") &&
+    Object.prototype.hasOwnProperty.call(ui, "translucent_panels")
+  ) {
+    const migrated = migratePanelTranslucency({
+      translucentPanels: ui.translucent_panels,
+      translucentPanelStrength:
+        patch.translucentPanelStrength ?? ui.translucent_panel_strength,
+    });
+    patch.translucentPanelStrength = migrated.translucentPanelStrength;
+    patch.translucentPanelBlur = migrated.translucentPanelBlur;
+  }
+
   return patch as Partial<Settings>;
 }
 
@@ -680,12 +769,18 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
       ),
       navIndicator: normalizeNavIndicator(r.navIndicator),
       hoverMotion: normalizeHoverMotion(r.hoverMotion),
-      translucentPanels: normalizeBool(
-        r.translucentPanels,
-        DEFAULTS.translucentPanels
+      ...migratePanelTranslucency(r as LegacyPanelFields),
+      translucentPanelTintEnabled: normalizeBool(
+        r.translucentPanelTintEnabled,
+        DEFAULTS.translucentPanelTintEnabled
       ),
-      translucentPanelStrength: normalizeTranslucentStrength(
-        r.translucentPanelStrength
+      translucentPanelTint: normalizeBackgroundColor(
+        r.translucentPanelTint,
+        DEFAULTS.translucentPanelTint
+      ),
+      translucentPanelTintStrength: normalizeUnitInterval(
+        r.translucentPanelTintStrength,
+        DEFAULTS.translucentPanelTintStrength
       ),
       translucentPanelLegibility: normalizeBool(
         r.translucentPanelLegibility,
@@ -714,10 +809,22 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
   return out.slice(0, 40);
 }
 
-function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }): Settings {
+function normalizeSettings(
+  parsed: Partial<Settings> & {
+    liquidNav?: boolean;
+    translucentPanels?: boolean;
+    uiScale?: unknown;
+  }
+): Settings {
+  const rest = { ...parsed };
+  delete rest.liquidNav;
+  delete rest.translucentPanels;
+  delete rest.uiScale;
+  const panel = migratePanelTranslucency(parsed);
+
   return {
     ...DEFAULTS,
-    ...parsed,
+    ...rest,
     theme: normalizeTheme(parsed.theme),
     customColors: normalizeCustomColors(parsed.customColors),
     customThemes: normalizeCustomThemes(parsed.customThemes),
@@ -760,12 +867,19 @@ function normalizeSettings(parsed: Partial<Settings> & { liquidNav?: boolean }):
       (parsed as { liquidNav?: boolean }).liquidNav
     ),
     hoverMotion: normalizeHoverMotion(parsed.hoverMotion),
-    translucentPanels: normalizeBool(
-      parsed.translucentPanels,
-      DEFAULTS.translucentPanels
+    translucentPanelStrength: panel.translucentPanelStrength,
+    translucentPanelBlur: panel.translucentPanelBlur,
+    translucentPanelTintEnabled: normalizeBool(
+      parsed.translucentPanelTintEnabled,
+      DEFAULTS.translucentPanelTintEnabled
     ),
-    translucentPanelStrength: normalizeTranslucentStrength(
-      parsed.translucentPanelStrength
+    translucentPanelTint: normalizeBackgroundColor(
+      parsed.translucentPanelTint,
+      DEFAULTS.translucentPanelTint
+    ),
+    translucentPanelTintStrength: normalizeUnitInterval(
+      parsed.translucentPanelTintStrength,
+      DEFAULTS.translucentPanelTintStrength
     ),
     translucentPanelLegibility: normalizeBool(
       parsed.translucentPanelLegibility,
@@ -830,20 +944,31 @@ export function applyMotionPrefs(settings: Settings): void {
   root.dataset.hoverMotion = reduced ? "off" : settings.hoverMotion;
   root.dataset.buttonPress = reduced ? "off" : "on";
   root.dataset.pageFade = reduced ? "off" : "on";
-  root.dataset.translucentPanels = settings.translucentPanels ? "on" : "off";
-  root.dataset.panelLegibility =
-    settings.translucentPanels && settings.translucentPanelLegibility
-      ? "on"
-      : "off";
-  // Strength → panel fill alpha (lower = more see-through) and blur.
-  // 100% is nearly clear with no frost so background effects stay visible.
   const s = settings.translucentPanelStrength;
-  const fill = (0.82 - s * 0.77).toFixed(3); // 0.15→0.70, 1→0.05
-  const headerFill = (0.90 - s * 0.78).toFixed(3); // 0.15→0.78, 1→0.12
-  const blur = Math.max(0, Math.round((1 - s) * 14)); // 0.15→12px, 1→0
+  const b = settings.translucentPanelBlur;
+  // 0% transparency keeps Tailwind fills; any amount above enables the sliders.
+  root.dataset.translucentPanels = s > 0 ? "on" : "off";
+  root.dataset.panelLegibility =
+    s > 0 && settings.translucentPanelLegibility ? "on" : "off";
+  // Strength → panel fill alpha (lower = more see-through). Blur is independent.
+  const fill = (1 - s * 0.95).toFixed(3); // 0→1.00, 0.5→0.525, 1→0.05
+  const headerFill = (1 - s * 0.88).toFixed(3); // 0→1.00, 0.5→0.56, 1→0.12
+  const blurPx = Math.round(Math.min(1, Math.max(0, b)) * PANEL_BLUR_MAX_PX);
+  const tintOn =
+    settings.translucentPanelTintEnabled &&
+    settings.translucentPanelTintStrength > 0;
+  root.dataset.panelTint = tintOn ? "on" : "off";
+  const tintMix = Math.round(
+    Math.min(1, Math.max(0, settings.translucentPanelTintStrength)) * 100
+  );
   root.style.setProperty("--ui-panel-alpha", fill);
   root.style.setProperty("--ui-panel-header-alpha", headerFill);
-  root.style.setProperty("--ui-panel-blur", `${blur}px`);
+  root.style.setProperty("--ui-panel-blur", `${blurPx}px`);
+  root.style.setProperty(
+    "--ui-panel-tint",
+    rgbString(parseHex(settings.translucentPanelTint))
+  );
+  root.style.setProperty("--ui-panel-tint-mix", `${tintMix}%`);
 
   const scale = FONT_SIZE_SCALE[settings.fontSize] ?? 1;
   root.style.fontSize = `${16 * scale}px`;
@@ -1012,8 +1137,11 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   }, [
     settings.navIndicator,
     settings.hoverMotion,
-    settings.translucentPanels,
     settings.translucentPanelStrength,
+    settings.translucentPanelBlur,
+    settings.translucentPanelTintEnabled,
+    settings.translucentPanelTint,
+    settings.translucentPanelTintStrength,
     settings.translucentPanelLegibility,
     settings.fontSize,
   ]);

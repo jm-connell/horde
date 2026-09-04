@@ -1683,7 +1683,7 @@ export default function VideoPlayer({
       : null;
 
   const wrapperClass = isMini
-    ? `relative w-full overflow-hidden bg-black leading-none${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
+    ? `player-mini relative w-full overflow-hidden bg-black leading-none${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
     : isNativeFullscreen
       ? "relative flex h-full w-full items-center justify-center overflow-hidden bg-black leading-none"
       : mode === "windowed"

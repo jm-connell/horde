@@ -552,6 +552,24 @@ video.sub-large::cue {
   font-size: clamp(1.5rem, 3.75vmin, 2.5rem);
 }
 
+/* Mini player: size captions from the video box, not the viewport.
+   container-type:size is safe here because width + aspect-ratio define height. */
+.player-mini {
+  container-type: size;
+}
+
+.player-mini .subtitle-overlay-small {
+  font-size: clamp(0.75rem, 3.6cqmin, 1.55rem);
+}
+
+.player-mini .subtitle-overlay-medium {
+  font-size: clamp(0.9375rem, 4.5cqmin, 2rem);
+}
+
+.player-mini .subtitle-overlay-large {
+  font-size: clamp(1.125rem, 5.625cqmin, 2.5rem);
+}
+
 /* Native player fullscreen — hide site chrome on mobile. */
 :fullscreen {
   display: flex;
@@ -582,14 +600,14 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
 }
 
 /* Translucent panels — let background effects show through.
-   Alpha/blur come from --ui-panel-* set by applyMotionPrefs (strength slider). */
+   Alpha/blur come from --ui-panel-* set by applyMotionPrefs (transparency + blur sliders). */
 html[data-translucent-panels="on"] .ui-panel,
 html[data-translucent-panels="on"] .ui-card {
   background-color: rgb(
     var(--ink-900) / var(--ui-panel-alpha, 0.32)
   ) !important;
-  backdrop-filter: blur(var(--ui-panel-blur, 4px));
-  -webkit-backdrop-filter: blur(var(--ui-panel-blur, 4px));
+  backdrop-filter: blur(var(--ui-panel-blur, 12px));
+  -webkit-backdrop-filter: blur(var(--ui-panel-blur, 12px));
 }
 
 html[data-translucent-panels="on"] header.ui-panel {
@@ -606,8 +624,44 @@ html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-panel-legible
     rgb(var(--ink-900) / 0.88) 82%,
     rgb(var(--accent) / 0.22) 18%
   ) !important;
-  backdrop-filter: blur(calc(var(--ui-panel-blur, 4px) + 4px));
-  -webkit-backdrop-filter: blur(calc(var(--ui-panel-blur, 4px) + 4px));
+  backdrop-filter: blur(var(--ui-panel-blur, 12px));
+  -webkit-backdrop-filter: blur(var(--ui-panel-blur, 12px));
+}
+
+/* Optional user tint — mixed into the same fills, including when panels are opaque. */
+html[data-panel-tint="on"] .ui-panel,
+html[data-panel-tint="on"] .ui-card {
+  background-color: color-mix(
+    in srgb,
+    rgb(var(--ui-panel-tint) / var(--ui-panel-alpha, 1))
+      var(--ui-panel-tint-mix, 0%),
+    rgb(var(--ink-900) / var(--ui-panel-alpha, 1))
+      calc(100% - var(--ui-panel-tint-mix, 0%))
+  ) !important;
+}
+
+html[data-panel-tint="on"] header.ui-panel {
+  background-color: color-mix(
+    in srgb,
+    rgb(var(--ui-panel-tint) / var(--ui-panel-header-alpha, 1))
+      var(--ui-panel-tint-mix, 0%),
+    rgb(var(--ink-950) / var(--ui-panel-header-alpha, 1))
+      calc(100% - var(--ui-panel-tint-mix, 0%))
+  ) !important;
+}
+
+html[data-translucent-panels="on"][data-panel-legibility="on"][data-panel-tint="on"]
+  .ui-panel-legible {
+  background-color: color-mix(
+    in srgb,
+    rgb(var(--ui-panel-tint) / 0.88) var(--ui-panel-tint-mix, 0%),
+    color-mix(
+      in srgb,
+      rgb(var(--ink-900) / 0.88) 82%,
+      rgb(var(--accent) / 0.22) 18%
+    )
+      calc(100% - var(--ui-panel-tint-mix, 0%))
+  ) !important;
 }
 
 /* Up-next overlay: dim the ended video; follow translucent + legibility. */
