@@ -79,8 +79,10 @@ export default function Import() {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [scanning, setScanning] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadingRef = useRef(false);
+  const scanningRef = useRef(false);
 
   const visibleGroups = useMemo(
     () => groups.filter((g) => !dismissedDupes.has(duplicateGroupKey(g))),
@@ -120,8 +122,8 @@ export default function Import() {
     }
   };
 
-  const load = useCallback(() => {
-    setLoading(true);
+  const load = useCallback((opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     Promise.all([
       api.listImport().catch(() => [] as Video[]),
       api.listDuplicateGroups().catch(() => [] as DuplicateGroup[]),
@@ -131,8 +133,31 @@ export default function Import() {
         setGroups(dupes);
         notifyImportQueueChanged(review.length);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!opts?.silent) setLoading(false);
+      });
   }, []);
+
+  const scanForNewFiles = async () => {
+    if (scanningRef.current) return;
+    scanningRef.current = true;
+    setScanning(true);
+    try {
+      const result = await api.scanImport();
+      const n = result.added + result.requeued;
+      showToast(
+        n === 0
+          ? "No new files found"
+          : `Added ${n} file${n === 1 ? "" : "s"} to the import queue`
+      );
+      load({ silent: true });
+    } catch {
+      showToast("Could not scan for new files");
+    } finally {
+      scanningRef.current = false;
+      setScanning(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -211,11 +236,25 @@ export default function Import() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="mb-1 text-2xl font-bold text-gray-100">Import</h1>
-      <p className="mb-6 text-sm text-gray-400">
-        Drop videos here or into your media folder. Add a title and channel to
-        move them into the library.
-      </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="mb-1 text-2xl font-bold text-gray-100">Import</h1>
+          <p className="text-sm text-gray-400">
+            Drop videos here or into your media folder. Add a title and channel
+            to move them into the library.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={scanning}
+          aria-busy={scanning || undefined}
+          onClick={() => void scanForNewFiles()}
+          className="ui-panel ui-interactive shrink-0 rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
+          title="Rescan the media folder for videos that are not in the library"
+        >
+          {scanning ? "Scanning…" : "Scan for New Files"}
+        </button>
+      </div>
 
       <div
         onDragEnter={(e) => {
@@ -323,7 +362,9 @@ export default function Import() {
       ) : items.length === 0 && visibleGroups.length === 0 ? (
         <div className="py-12 text-center text-gray-500">
           <p className="text-lg">Nothing to import.</p>
-          <p className="mt-1 text-sm">Drop files above to get started.</p>
+          <p className="mt-1 text-sm">
+            Drop files above or scan the media folder.
+          </p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -335,7 +376,7 @@ export default function Import() {
                     video={v}
                     requireChannel
                     saveLabel="Save & approve"
-                    onSaved={load}
+                    onSaved={() => load()}
                   />
                   <div className="flex gap-2">
                     <button
@@ -344,7 +385,7 @@ export default function Import() {
                         load();
                       }}
                       className="ui-panel ui-interactive rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
-                      title="Keep in library without a channel"
+                      title="Remove from the queue without importing. Scan for New Files can pick it up again."
                     >
                       Skip
                     </button>

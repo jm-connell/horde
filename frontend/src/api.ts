@@ -12,6 +12,7 @@ import type {
   DownloadPreview,
   DownloadQueueStatus,
   DuplicateGroup,
+  ImportScanResult,
   OpenRouterCosts,
   Playlist,
   PlaylistDetail,
@@ -689,6 +690,10 @@ export const api = {
 
   listImport(): Promise<Video[]> {
     return request<Video[]>("/api/review");
+  },
+
+  scanImport(): Promise<ImportScanResult> {
+    return request<ImportScanResult>("/api/review/scan", { method: "POST" });
   },
 
   skipReview(id: number): Promise<Video> {

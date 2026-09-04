@@ -25,6 +25,10 @@ Unsupported types are rejected with a toast.
 
 Files that appear under the configured media/import paths (watchdog + poll scanner) are picked up automatically and appear in the same review queue. Active download outputs are ignored so the downloader and scanner don’t fight over the same path. See [Storage layout](../ops/storage-layout.md) and [Review queue design](../design/review-queue.md).
 
+### Scan for New Files
+
+**Scan for New Files** walks the media folder immediately instead of waiting for the watchdog or poll interval. It queues any video that is not already in the library, including files that were in the import queue and then **Skip**ped (or otherwise removed) without being approved into Horde. Library videos with a channel are left alone. The background poller does not undo Skip — only this button does.
+
 ## Review queue
 
 Each pending item needs metadata before it becomes a first-class library video.
@@ -35,7 +39,7 @@ Each pending item needs metadata before it becomes a first-class library video.
 
 ### Skip
 
-**Skip** keeps the file associated with the library flow **without** assigning a channel (use when you want to park an item). Prefer approve with a real channel for normal browsing.
+**Skip** removes the item from the import queue **without** assigning a channel. The file stays on disk. Prefer approve with a real channel for normal browsing. **Scan for New Files** puts skipped items back in the queue.
 
 ### Delete
 

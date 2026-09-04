@@ -131,16 +131,23 @@ export function Chip({
   onPointerDown,
   children,
   className = "",
+  title,
+  "aria-label": ariaLabel,
 }: {
   active: boolean;
   onClick?: () => void;
   onPointerDown?: () => void;
   children: React.ReactNode;
   className?: string;
+  title?: string;
+  "aria-label"?: string;
 }) {
   return (
     <button
       type="button"
+      title={title}
+      aria-label={ariaLabel}
+      aria-pressed={active}
       onClick={onClick}
       onPointerDown={
         onPointerDown

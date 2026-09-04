@@ -13,7 +13,7 @@ Python package under `backend/app/`. FastAPI app entry: `main.py`.
 | `video_serialize.py` | Shared `VideoRead` serialization + media path resolution |
 | `downloads.py` | Queue jobs, presets, progress SSE, pause/resume |
 | `preview.py` | Watch-before-download / DASH proxy (uses `stream_preview`) |
-| `review.py` | Import queue, approve/reject, duplicate groups (on-demand AI score) |
+| `review.py` | Import queue, folder scan, approve/reject, duplicate groups (on-demand AI score) |
 | `playlists.py` | User + imported playlists |
 | `app_settings.py` | GET/PATCH settings |
 | `ai.py` | Status, chat stream, recommend, maintenance enqueue, OpenRouter costs |

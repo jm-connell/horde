@@ -15,7 +15,7 @@ from ..config import (
     VIDEO_EXTENSIONS,
 )
 from ..database import engine
-from ..models import Video, VideoStatus
+from ..models import Video, VideoStatus, utcnow
 from . import activity
 from .metadata import (
     grab_frame,
@@ -24,7 +24,7 @@ from .metadata import (
     probe_frame_rate,
     probe_is_playable,
 )
-from .paths import find_video_by_path, to_rel_path
+from .paths import find_video_by_path, is_manual_import, to_rel_path
 from .thumbnails import unlink_for_video, write_list_thumbnail
 
 _scan_lock = threading.Lock()
@@ -188,16 +188,59 @@ def _ingest_file(session: Session, path: Path) -> bool:
     return ingest_media_file(session, path, require_stable=True) is not None
 
 
-def scan_once() -> int:
-    """Walk the downloads tree once, ingesting any unseen media files."""
-    if not _scan_lock.acquire(blocking=False):
-        return 0
+def _has_library_channel(video: Video) -> bool:
+    return bool((video.channel or "").strip())
+
+
+def _requeue_unimported(session: Session) -> int:
+    """Put skipped manual imports back in the review queue.
+
+    Skip dismisses a review item without assigning a channel, so the row is
+    still in the database and the automatic poller will not re-ingest it.
+    A manual scan treats those as not yet imported.
+    """
+    rows = session.exec(
+        select(Video).where(Video.needs_review == False)  # noqa: E712
+    ).all()
+    count = 0
+    now = utcnow()
+    for video in rows:
+        if _has_library_channel(video):
+            continue
+        if not is_manual_import(video):
+            continue
+        if not (DOWNLOADS_DIR / video.file_path).exists():
+            continue
+        video.needs_review = True
+        video.added_at = now
+        session.add(video)
+        count += 1
+    if count:
+        session.commit()
+    return count
+
+
+def scan_once(
+    *,
+    blocking: bool = False,
+    requeue_skipped: bool = False,
+    record_empty: bool = False,
+    reason: str = "Looking for new or dropped media files",
+) -> tuple[int, int]:
+    """Walk the downloads tree once, ingesting any unseen media files.
+
+    Returns ``(added, requeued)``. When the scan lock is already held and
+    ``blocking`` is false, returns ``(0, 0)`` without walking the tree.
+    """
+    if not _scan_lock.acquire(blocking=blocking):
+        return 0, 0
     added = 0
+    requeued = 0
     try:
         handle = activity.start(
             "scan",
             "Scanning downloads folder",
-            reason="Looking for new or dropped media files",
+            reason=reason,
         )
         try:
             with Session(engine) as session:
@@ -205,8 +248,18 @@ def scan_once() -> int:
                     if _is_media(path) and _ingest_file(session, path):
                         added += 1
                         handle.update(done=added, detail=f"{added} new file(s)")
-            if added:
-                handle.finish(detail=f"{added} new file(s)")
+                if requeue_skipped:
+                    requeued = _requeue_unimported(session)
+                    if requeued:
+                        handle.update(
+                            done=added + requeued,
+                            detail=f"{added} new, {requeued} requeued",
+                        )
+            total = added + requeued
+            if total:
+                handle.finish(detail=f"{total} file(s)")
+            elif record_empty:
+                handle.finish(detail="No new files")
             else:
                 # Idle polls every SCAN_INTERVAL_SEC — don't spam recent history.
                 handle.discard()
@@ -215,7 +268,17 @@ def scan_once() -> int:
             raise
     finally:
         _scan_lock.release()
-    return added
+    return added, requeued
+
+
+def scan_for_new_files() -> tuple[int, int]:
+    """User-triggered scan from the Import page. Waits for any in-flight walk."""
+    return scan_once(
+        blocking=True,
+        requeue_skipped=True,
+        record_empty=True,
+        reason="Manual scan from the Import page",
+    )
 
 
 def cleanup_orphans() -> int:

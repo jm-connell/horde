@@ -14,7 +14,12 @@ from ..schemas import VideoRead
 from ..services import library
 from ..services.metadata import probe_is_playable
 from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
-from ..services.scanner import ingest_media_file, mark_active, unmark_active
+from ..services.scanner import (
+    ingest_media_file,
+    mark_active,
+    scan_for_new_files,
+    unmark_active,
+)
 from .video_serialize import to_read as _to_read
 
 logger = logging.getLogger(__name__)
@@ -34,10 +39,26 @@ class DuplicateGroupRead(BaseModel):
     ai_error: Optional[str] = None
 
 
+class ScanResult(BaseModel):
+    added: int
+    requeued: int
+
+
 @router.get("", response_model=list[VideoRead])
 def review_queue(session: Session = Depends(get_session)):
     videos = library.query_videos(session, needs_review=True, sort="added_at", order="desc")
     return [_to_read(v, session) for v in videos]
+
+
+@router.post("/scan", response_model=ScanResult)
+def scan_import_folder():
+    """Rescan the media folder and queue videos that are not in the library.
+
+    Also returns skipped manual imports (removed from the queue without a
+    channel) to review. The background poller does not undo Skip.
+    """
+    added, requeued = scan_for_new_files()
+    return ScanResult(added=added, requeued=requeued)
 
 
 @router.post("/upload", response_model=VideoRead)

@@ -514,6 +514,11 @@ export interface DuplicateGroup {
   ai_error?: string | null;
 }
 
+export interface ImportScanResult {
+  added: number;
+  requeued: number;
+}
+
 export interface HealthStats {
   status: string;
   horde_sha?: string;
