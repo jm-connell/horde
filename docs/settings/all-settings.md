@@ -109,7 +109,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `translucentPanelTint` | `"#ffffff"` | string | Hex | UI blob |
 | `translucentPanelTintStrength` | `0.35` | number | 0–1 | UI blob |
 | `translucentPanelLegibility` | `true` | bool | | UI blob |
-| `loadingStyle` | `"dots"` | string | `dots` \| `spinner` \| `bar` | UI blob |
+| `loadingStyle` | `"dots"` | string | `dots` \| `spinner` \| `bar` \| `orbit` \| `pulse` \| `wave` \| `comet` \| `tiles` \| `petal` \| `blob` \| `atom` \| `cube` \| `helix` \| `spiral` \| `swarm` \| `leapfrog` \| `plus` \| `split` \| `ringwalk` \| `newton` \| `bouncebox` \| `pong` \| `goo` | UI blob |
 | `fontSize` | `"medium"` | string | `small` \| `medium` \| `large` \| `xl` | UI blob |
 | `uiFont` | `"default"` | string | Builtin id or saved custom id | UI blob |
 | `customFonts` | `[]` | array | Saved URL/file fonts | UI blob |

@@ -16,12 +16,18 @@ import {
   normalizeCustomCss,
 } from "../customCss";
 import {
+  isLoadingStyle,
+  type LoadingStyle,
+} from "../loadingStyles";
+import {
   DEFAULT_SPONSOR_BLOCK_CATEGORIES,
   normalizeSponsorBlockCategories,
   normalizeSponsorBlockSkipMode,
   type SponsorBlockCategoryMap,
   type SponsorBlockSkipMode,
 } from "../sponsorBlock";
+
+export type { LoadingStyle };
 
 export type { SponsorBlockCategoryMap, SponsorBlockSkipMode };
 
@@ -92,7 +98,6 @@ export type FlowingGradientPreset =
 
 export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator = "none" | "liquid" | "underline" | "fade";
-export type LoadingStyle = "dots" | "spinner" | "bar";
 /** App text size (rem root). Replaces the old multi-step UI scale. */
 export type FontSize = "small" | "medium" | "large" | "xl";
 
@@ -801,12 +806,9 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
         r.translucentPanelLegibility,
         DEFAULTS.translucentPanelLegibility
       ),
-      loadingStyle:
-        r.loadingStyle === "dots" ||
-        r.loadingStyle === "spinner" ||
-        r.loadingStyle === "bar"
-          ? r.loadingStyle
-          : DEFAULTS.loadingStyle,
+      loadingStyle: isLoadingStyle(r.loadingStyle)
+        ? r.loadingStyle
+        : DEFAULTS.loadingStyle,
       fontSize: normalizeFontSize(r.fontSize),
       uiFont:
         typeof r.uiFont === "string" &&

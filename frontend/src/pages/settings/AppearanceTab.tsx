@@ -3,9 +3,11 @@ import { loadSettings } from "../../hooks/useSettings";
 import type { BackgroundEffect, FlowingGradientPreset, UiFont } from "../../hooks/useSettings";
 import { fontSelectOptions, labelFromFilename } from "../../fonts";
 import { BACKGROUND_EFFECT_OPTIONS, FLOWING_PRESET_OPTIONS } from "../../effects";
-import LiquidNav from "../../components/LiquidNav";
-import ThemedSelect from "../../components/ThemedSelect";
+import { LOADING_STYLE_OPTIONS, LOADING_STYLE_SEARCH_KEYWORDS } from "../../loadingStyles";
 import Collapse from "../../components/Collapse";
+import LiquidNav from "../../components/LiquidNav";
+import { LoadingMark } from "../../components/LoadingIndicator";
+import ThemedSelect from "../../components/ThemedSelect";
 import {
   FONT_SIZE_OPTIONS,
   HOVER_MOTION_OPTIONS,
@@ -45,6 +47,10 @@ export default function AppearanceTab() {
     navPreview,
     setNavPreview,
   } = useSettingsPage();
+
+  const selectedLoading = LOADING_STYLE_OPTIONS.find(
+    (o) => o.value === settings.loadingStyle
+  );
 
   return (
     <>
@@ -851,9 +857,7 @@ export default function AppearanceTab() {
             "tint",
             "legibility",
             "loading animation",
-            "dots",
-            "spinner",
-            "bar"
+            LOADING_STYLE_SEARCH_KEYWORDS
           )
         }
       >
@@ -1105,7 +1109,7 @@ export default function AppearanceTab() {
 
           <div
             className={
-              match("loading animation", "dots", "spinner", "bar")
+              match("loading animation", LOADING_STYLE_SEARCH_KEYWORDS)
                 ? undefined
                 : q
                   ? "hidden"
@@ -1115,24 +1119,29 @@ export default function AppearanceTab() {
             <span className="mb-2 block text-sm font-medium text-gray-200">
               Loading animation
             </span>
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  { value: "dots", label: "Dots" },
-                  { value: "spinner", label: "Spinner" },
-                  { value: "bar", label: "Bar" },
-                ] as const
-              ).map((opt) => (
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="Loading animation"
+            >
+              {LOADING_STYLE_OPTIONS.map((opt) => (
                 <Chip
                   key={opt.value}
                   active={settings.loadingStyle === opt.value}
                   onClick={() => update({ loadingStyle: opt.value })}
-                  className="!py-1.5"
+                  title={`${opt.label} — ${opt.description}`}
+                  aria-label={opt.label}
+                  className="flex h-20 w-20 shrink-0 items-center justify-center overflow-visible !px-1.5 !py-1.5"
                 >
-                  {opt.label}
+                  <LoadingMark style={opt.value} compact />
                 </Chip>
               ))}
             </div>
+            <p className="mt-2 text-xs text-gray-500">
+              {selectedLoading
+                ? `${selectedLoading.label} — ${selectedLoading.description}`
+                : null}
+            </p>
           </div>
         </div>
       </Section>

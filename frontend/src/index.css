@@ -827,6 +827,854 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   }
 }
 
+@keyframes horde-load-pulse {
+  0% {
+    transform: scale(0.3);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes horde-load-wave {
+  0%,
+  100% {
+    transform: scaleY(0.28);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes horde-load-tile {
+  0%,
+  40%,
+  100% {
+    opacity: 0.22;
+    transform: scale(0.82);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes horde-load-petal {
+  0%,
+  80%,
+  100% {
+    opacity: 0.28;
+    transform: scale(0.55);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes horde-load-blob {
+  0%,
+  100% {
+    border-radius: 42% 58% 58% 42% / 42% 42% 58% 58%;
+    transform: rotate(0deg) scale(0.92);
+  }
+  33% {
+    border-radius: 58% 42% 38% 62% / 58% 58% 42% 42%;
+    transform: rotate(120deg) scale(1);
+  }
+  66% {
+    border-radius: 48% 52% 38% 62% / 38% 62% 48% 52%;
+    transform: rotate(240deg) scale(0.86);
+  }
+}
+
+.horde-load-comet {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 52%,
+    rgb(var(--accent) / 0.2) 72%,
+    rgb(var(--accent)) 100%
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent 62%, #000 63%);
+  mask: radial-gradient(farthest-side, transparent 62%, #000 63%);
+  animation: horde-load-spin 0.85s linear infinite;
+  filter: drop-shadow(0 0 6px rgb(var(--accent) / 0.45));
+}
+
+.horde-load-atom {
+  position: relative;
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  perspective: 54px;
+}
+.horde-load-atom-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: 0.38rem;
+  height: 0.38rem;
+  margin: -0.19rem 0 0 -0.19rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 8px rgb(var(--accent) / 0.65);
+}
+.horde-load-atom-tilt {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+.horde-load-atom-ring {
+  position: absolute;
+  inset: 2px;
+  border: 1px solid rgb(var(--accent) / 0.34);
+  border-radius: 9999px;
+  transform-style: preserve-3d;
+  animation-name: horde-load-spin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.horde-load-atom-electron {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 6px rgb(var(--accent) / 0.8);
+}
+
+.horde-load-cube-scene {
+  display: flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  perspective: 42px;
+}
+.horde-load-cube {
+  position: relative;
+  width: 0.95rem;
+  height: 0.95rem;
+  transform-style: preserve-3d;
+  animation: horde-load-cube 5s linear infinite;
+}
+.horde-load-cube-face {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgb(var(--accent));
+  border-radius: 1px;
+  background: rgb(var(--accent) / 0.1);
+}
+.horde-load-cube-face--front {
+  transform: translateZ(0.475rem);
+}
+.horde-load-cube-face--back {
+  transform: rotateY(180deg) translateZ(0.475rem);
+}
+.horde-load-cube-face--right {
+  transform: rotateY(90deg) translateZ(0.475rem);
+}
+.horde-load-cube-face--left {
+  transform: rotateY(-90deg) translateZ(0.475rem);
+}
+.horde-load-cube-face--top {
+  transform: rotateX(90deg) translateZ(0.475rem);
+}
+.horde-load-cube-face--bottom {
+  transform: rotateX(-90deg) translateZ(0.475rem);
+}
+@keyframes horde-load-cube {
+  from {
+    transform: rotateX(-22deg) rotateY(28deg) rotateZ(0deg);
+  }
+  to {
+    transform: rotateX(338deg) rotateY(388deg) rotateZ(360deg);
+  }
+}
+
+.horde-load-helix {
+  display: flex;
+  width: 1.75rem;
+  height: 2rem;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.horde-load-helix-row {
+  position: relative;
+  height: 0.28rem;
+}
+.horde-load-helix-a,
+.horde-load-helix-b {
+  position: absolute;
+  top: 0;
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 6px rgb(var(--accent) / 0.4);
+  animation-duration: 2.2s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.horde-load-helix-a {
+  animation-name: horde-load-helix-a;
+}
+.horde-load-helix-b {
+  animation-name: horde-load-helix-b;
+}
+.horde-load-helix-rung {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 1px;
+  width: 100%;
+  background: rgb(var(--accent) / 0.4);
+  animation: horde-load-helix-rung 2.2s ease-in-out infinite;
+}
+@keyframes horde-load-helix-a {
+  0%,
+  100% {
+    left: 0;
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    left: calc(100% - 0.28rem);
+    transform: scale(0.62);
+    opacity: 0.45;
+  }
+}
+@keyframes horde-load-helix-b {
+  0%,
+  100% {
+    left: calc(100% - 0.28rem);
+    transform: scale(0.62);
+    opacity: 0.45;
+  }
+  50% {
+    left: 0;
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes horde-load-helix-rung {
+  0%,
+  50%,
+  100% {
+    transform: translate(-50%, -50%) scaleX(1);
+    opacity: 0.4;
+  }
+  25%,
+  75% {
+    transform: translate(-50%, -50%) scaleX(0.22);
+    opacity: 0.12;
+  }
+}
+
+.horde-load-spiral {
+  position: relative;
+  display: block;
+  width: 2rem;
+  height: 2rem;
+}
+.horde-load-spiral-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.34rem;
+  height: 0.34rem;
+  margin: -0.17rem 0 0 -0.17rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 6px rgb(var(--accent) / 0.45);
+  animation: horde-load-spiral 1.8s linear infinite;
+}
+@keyframes horde-load-spiral {
+  0% {
+    transform: rotate(0deg) translateY(-14px) scale(1);
+    opacity: 1;
+  }
+  92% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: rotate(360deg) translateY(0) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.horde-load-swarm {
+  position: relative;
+  display: block;
+  width: 2rem;
+  height: 2rem;
+}
+.horde-load-swarm-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.32rem;
+  height: 0.32rem;
+  margin: -0.16rem 0 0 -0.16rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 6px rgb(var(--accent) / 0.5);
+}
+.horde-load-swarm-dot--0 {
+  animation: horde-load-swarm-0 2.1s ease-in-out infinite;
+}
+.horde-load-swarm-dot--1 {
+  animation: horde-load-swarm-1 2.4s ease-in-out infinite;
+}
+.horde-load-swarm-dot--2 {
+  animation: horde-load-swarm-2 1.85s ease-in-out infinite;
+}
+.horde-load-swarm-dot--3 {
+  animation: horde-load-swarm-3 2.25s ease-in-out infinite;
+}
+.horde-load-swarm-dot--4 {
+  animation: horde-load-swarm-4 1.7s ease-in-out infinite;
+}
+.horde-load-swarm-dot--5 {
+  animation: horde-load-swarm-5 2.55s ease-in-out infinite;
+}
+@keyframes horde-load-swarm-0 {
+  0%,
+  100% {
+    transform: translate(-7px, -3px) scale(1);
+  }
+  35% {
+    transform: translate(9px, -8px) scale(0.7);
+  }
+  70% {
+    transform: translate(3px, 8px) scale(1.1);
+  }
+}
+@keyframes horde-load-swarm-1 {
+  0%,
+  100% {
+    transform: translate(8px, 2px) scale(0.85);
+  }
+  40% {
+    transform: translate(-6px, 9px) scale(1.15);
+  }
+  75% {
+    transform: translate(-9px, -6px) scale(0.7);
+  }
+}
+@keyframes horde-load-swarm-2 {
+  0%,
+  100% {
+    transform: translate(-2px, 9px) scale(1);
+  }
+  30% {
+    transform: translate(10px, 4px) scale(0.65);
+  }
+  65% {
+    transform: translate(-8px, -4px) scale(1.05);
+  }
+}
+@keyframes horde-load-swarm-3 {
+  0%,
+  100% {
+    transform: translate(6px, -9px) scale(0.75);
+  }
+  45% {
+    transform: translate(-9px, 1px) scale(1.2);
+  }
+  80% {
+    transform: translate(4px, 7px) scale(0.8);
+  }
+}
+@keyframes horde-load-swarm-4 {
+  0%,
+  100% {
+    transform: translate(1px, -1px) scale(0.9);
+  }
+  25% {
+    transform: translate(-10px, -8px) scale(1.1);
+  }
+  60% {
+    transform: translate(8px, 6px) scale(0.6);
+  }
+}
+@keyframes horde-load-swarm-5 {
+  0%,
+  100% {
+    transform: translate(-8px, 5px) scale(1.05);
+  }
+  38% {
+    transform: translate(5px, -10px) scale(0.7);
+  }
+  72% {
+    transform: translate(9px, 3px) scale(1);
+  }
+}
+
+.horde-load-leapfrog {
+  position: relative;
+  display: grid;
+  width: 2rem;
+  height: 0.5rem;
+}
+.horde-load-leapfrog-pad,
+.horde-load-leapfrog-hop {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 8px rgb(var(--accent) / 0.4);
+}
+.horde-load-leapfrog-pad {
+  position: absolute;
+  top: 0;
+  opacity: 0.82;
+}
+.horde-load-leapfrog-pad--l {
+  left: 0;
+}
+.horde-load-leapfrog-pad--r {
+  right: 0;
+}
+.horde-load-leapfrog-hop {
+  grid-area: 1 / 1;
+  margin: auto;
+  animation: horde-load-leapfrog 1.4s linear infinite;
+}
+.horde-load-leapfrog-hop--a {
+  transform-origin: -100% 50%;
+  --horde-leap: 1;
+}
+.horde-load-leapfrog-hop--b {
+  transform-origin: 200% 50%;
+  --horde-leap: -1;
+  animation-delay: -0.7s;
+}
+@keyframes horde-load-leapfrog {
+  58%,
+  100% {
+    transform: rotate(calc(var(--horde-leap, 1) * 1turn));
+  }
+}
+
+.horde-load-plus {
+  position: relative;
+  width: 2rem;
+  height: 2rem;
+  animation: horde-load-plus-spin 2s ease-in-out infinite;
+}
+.horde-load-plus-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin: -0.21rem 0 0 -0.21rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 8px rgb(var(--accent) / 0.45);
+}
+.horde-load-plus-arm {
+  position: absolute;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  animation-duration: 2s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.horde-load-plus-arm--n,
+.horde-load-plus-arm--s {
+  left: 50%;
+  width: 0.26rem;
+  height: 0.52rem;
+  margin-left: -0.13rem;
+}
+.horde-load-plus-arm--e,
+.horde-load-plus-arm--w {
+  top: 50%;
+  width: 0.52rem;
+  height: 0.26rem;
+  margin-top: -0.13rem;
+}
+.horde-load-plus-arm--n {
+  top: 0.12rem;
+  animation-name: horde-load-plus-n;
+}
+.horde-load-plus-arm--s {
+  bottom: 0.12rem;
+  animation-name: horde-load-plus-s;
+}
+.horde-load-plus-arm--e {
+  right: 0.12rem;
+  animation-name: horde-load-plus-e;
+}
+.horde-load-plus-arm--w {
+  left: 0.12rem;
+  animation-name: horde-load-plus-w;
+}
+@keyframes horde-load-plus-spin {
+  0%,
+  40% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(90deg);
+  }
+}
+@keyframes horde-load-plus-n {
+  0%,
+  28%,
+  100% {
+    transform: translateY(0);
+  }
+  42%,
+  68% {
+    transform: translateY(0.38rem);
+  }
+}
+@keyframes horde-load-plus-s {
+  0%,
+  28%,
+  100% {
+    transform: translateY(0);
+  }
+  42%,
+  68% {
+    transform: translateY(-0.38rem);
+  }
+}
+@keyframes horde-load-plus-e {
+  0%,
+  28%,
+  100% {
+    transform: translateX(0);
+  }
+  42%,
+  68% {
+    transform: translateX(-0.38rem);
+  }
+}
+@keyframes horde-load-plus-w {
+  0%,
+  28%,
+  100% {
+    transform: translateX(0);
+  }
+  42%,
+  68% {
+    transform: translateX(0.38rem);
+  }
+}
+
+.horde-load-split {
+  position: relative;
+  width: 1.4rem;
+  height: 1.4rem;
+  transform-origin: center;
+  animation: horde-load-split-expand 2.2s ease-in-out infinite;
+}
+.horde-load-split-cell {
+  position: absolute;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 2px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 6px rgb(var(--accent) / 0.28);
+  left: calc(var(--gx) * 0.5rem);
+  top: calc(var(--gy) * 0.5rem);
+  animation: horde-load-split-step 2.2s ease-in-out infinite;
+}
+.horde-load-split-cell--center {
+  left: 0.5rem;
+  top: 0.5rem;
+  animation: none;
+  opacity: 0.95;
+}
+@keyframes horde-load-split-expand {
+  0%,
+  100% {
+    transform: scale(0.86);
+  }
+  35%,
+  65% {
+    transform: scale(1.06);
+  }
+}
+@keyframes horde-load-split-step {
+  0%,
+  40% {
+    left: calc(var(--gx) * 0.5rem);
+    top: calc(var(--gy) * 0.5rem);
+  }
+  60%,
+  100% {
+    left: calc(var(--nx) * 0.5rem);
+    top: calc(var(--ny) * 0.5rem);
+  }
+}
+
+.horde-load-ringwalk {
+  display: inline-grid;
+  width: 2rem;
+  aspect-ratio: 1;
+  transform: rotate(90deg);
+  animation: horde-load-ringwalk 0.8s linear infinite;
+}
+.horde-load-ringwalk-ring,
+.horde-load-ringwalk-pent {
+  grid-area: 1 / 1;
+}
+.horde-load-ringwalk-ring {
+  background: rgb(var(--accent) / 0.45);
+  clip-path: polygon(
+    100% 50%,
+    90.45% 79.39%,
+    65.45% 97.55%,
+    34.55% 97.55%,
+    9.55% 79.39%,
+    0% 50%,
+    9.55% 20.61%,
+    34.55% 2.45%,
+    65.45% 2.45%,
+    90.45% 20.61%,
+    100% 50%,
+    85.6% 24.14%,
+    63.6% 8.15%,
+    36.4% 8.15%,
+    14.4% 24.14%,
+    6% 50%,
+    14.4% 75.86%,
+    36.4% 91.85%,
+    63.6% 91.85%,
+    85.6% 75.86%,
+    94% 50%,
+    85.6% 24.14%
+  );
+}
+.horde-load-ringwalk-pent {
+  margin: 23%;
+  background: rgb(var(--accent));
+  clip-path: polygon(
+    100% 50%,
+    65.45% 97.55%,
+    9.55% 79.39%,
+    9.55% 20.61%,
+    65.45% 2.45%
+  );
+  translate: -143% 0;
+  transform-origin: right;
+  animation: inherit;
+  animation-name: horde-load-ringwalk-pent;
+}
+@keyframes horde-load-ringwalk {
+  0% {
+    rotate: 18deg;
+  }
+  to {
+    rotate: -18deg;
+  }
+}
+@keyframes horde-load-ringwalk-pent {
+  0% {
+    rotate: -54deg;
+  }
+  to {
+    rotate: 54deg;
+  }
+}
+
+.horde-load-newton {
+  display: flex;
+  width: 3rem;
+  height: 1.85rem;
+  animation: horde-load-newton-flip 2s infinite linear;
+}
+.horde-load-newton-rest {
+  display: flex;
+  flex: 4;
+  justify-content: flex-end;
+}
+.horde-load-newton-swing {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: top center;
+  animation: horde-load-newton-swing 1s cubic-bezier(0, 20, 1, 20) infinite;
+}
+.horde-load-newton-bob {
+  display: flex;
+  width: 0.42rem;
+  flex-direction: column;
+  align-items: center;
+}
+.horde-load-newton-string {
+  width: 1px;
+  height: 1.1rem;
+  background: rgb(var(--accent) / 0.45);
+}
+.horde-load-newton-bead {
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-top: -1px;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  box-shadow: 0 0 6px rgb(var(--accent) / 0.35);
+}
+@keyframes horde-load-newton-flip {
+  0%,
+  49.9% {
+    transform: scaleX(1);
+  }
+  50%,
+  100% {
+    transform: scaleX(-1);
+  }
+}
+@keyframes horde-load-newton-swing {
+  100% {
+    transform: rotate(-2deg);
+  }
+}
+
+.horde-load-bouncebox {
+  position: relative;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid rgb(var(--accent) / 0.55);
+}
+.horde-load-bouncebox-ball {
+  position: absolute;
+  width: 20%;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+}
+.horde-load-bouncebox-ball--a {
+  animation:
+    horde-load-bouncebox-y 0.57s infinite alternate linear -0.13s,
+    horde-load-bouncebox-x 0.35s infinite alternate linear -0.23s;
+}
+.horde-load-bouncebox-ball--b {
+  opacity: 0.7;
+  animation:
+    horde-load-bouncebox-y 0.29s infinite alternate linear -0.11s,
+    horde-load-bouncebox-x 0.51s infinite alternate linear -0.34s;
+}
+@keyframes horde-load-bouncebox-y {
+  0%,
+  5% {
+    bottom: 0%;
+  }
+  95%,
+  to {
+    bottom: 80%;
+  }
+}
+@keyframes horde-load-bouncebox-x {
+  0%,
+  5% {
+    left: 0%;
+  }
+  95%,
+  to {
+    left: 80%;
+  }
+}
+
+.horde-load-pong {
+  position: relative;
+  height: 1.7rem;
+  aspect-ratio: 2;
+}
+.horde-load-pong-paddle {
+  position: absolute;
+  inset: 100% 75% -3px 0;
+  background: rgb(var(--accent) / 0.7);
+  animation: horde-load-pong-paddle 1s linear infinite alternate;
+}
+.horde-load-pong-ball {
+  position: absolute;
+  inset: auto 42.5% 0;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  animation:
+    horde-load-pong-pop 1s cubic-bezier(0, 700, 1, 700) infinite alternate,
+    horde-load-pong-x 1s linear infinite alternate;
+}
+@keyframes horde-load-pong-paddle {
+  0%,
+  30% {
+    translate: 0% -2px;
+    rotate: 20deg;
+  }
+  70%,
+  to {
+    translate: 300% -2px;
+    rotate: -20deg;
+  }
+}
+@keyframes horde-load-pong-pop {
+  0%,
+  2% {
+    bottom: 0%;
+  }
+  98%,
+  to {
+    bottom: 0.1%;
+  }
+}
+@keyframes horde-load-pong-x {
+  0% {
+    translate: -220%;
+  }
+  to {
+    translate: 220%;
+  }
+}
+
+.horde-load-goo {
+  width: 2rem;
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  border: 4px solid #0000;
+  background:
+    radial-gradient(farthest-side, rgb(var(--accent)) 98%, #0000) 0 0 / 8px 8px,
+    radial-gradient(farthest-side, rgb(var(--accent)) 98%, #0000) 100% 0 / 8px
+      8px,
+    radial-gradient(farthest-side, rgb(var(--accent)) 98%, #0000) 100% 100% / 8px
+      8px,
+    radial-gradient(farthest-side, rgb(var(--accent)) 98%, #0000) 0 100% / 8px
+      8px,
+    linear-gradient(rgb(var(--accent)) 0 0) 50% / 16px 16px,
+    rgb(var(--ink-950));
+  background-repeat: no-repeat;
+  filter: blur(4px) contrast(10);
+  animation: horde-load-goo 0.8s infinite;
+}
+@keyframes horde-load-goo {
+  100% {
+    background-position:
+      100% 0,
+      100% 100%,
+      0 100%,
+      0 0,
+      center;
+  }
+}
+
 @keyframes horde-processing-ellipsis {
   0%,
   100% {

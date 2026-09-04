@@ -1,3 +1,4 @@
+import { LOADING_STYLE_SEARCH_KEYWORDS } from "../../loadingStyles";
 import { TABS } from "./constants";
 import type { AiPane, SettingsTab } from "./types";
 
@@ -20,7 +21,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "appearance",
     keywords:
-      "interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency blur frost glass tint legibility loading animation dots spinner bar",
+      `interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency blur frost glass tint legibility ${LOADING_STYLE_SEARCH_KEYWORDS}`,
   },
   {
     tab: "appearance",
