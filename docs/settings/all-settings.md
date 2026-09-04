@@ -144,7 +144,9 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `subtitleLeft` | `20` | number | % from left (player drag) | UI blob |
 | `subtitleOffset` | `12` | number | % from bottom (player drag) | UI blob |
 | `sponsorBlockEnabled` | `true` | bool | YouTube only | UI blob |
-| `sponsorBlockShowNotice` | `true` | bool | | UI blob |
+| `sponsorBlockShowNotice` | `true` | bool | Auto-skip toast + undo | UI blob |
+| `sponsorBlockSkipMode` | `"auto"` | string | `auto` \| `prompt` | UI blob |
+| `sponsorBlockCategories` | see playback.md | object | Per-category booleans | UI blob |
 | `defaultPlaybackRate` | `1` | number | 0.25–3 step list | UI blob |
 | `playbackMode` | `"standard"` | string | Player view mode | UI blob |
 

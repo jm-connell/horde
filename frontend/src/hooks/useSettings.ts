@@ -15,6 +15,15 @@ import {
   isCustomCssEnabled,
   normalizeCustomCss,
 } from "../customCss";
+import {
+  DEFAULT_SPONSOR_BLOCK_CATEGORIES,
+  normalizeSponsorBlockCategories,
+  normalizeSponsorBlockSkipMode,
+  type SponsorBlockCategoryMap,
+  type SponsorBlockSkipMode,
+} from "../sponsorBlock";
+
+export type { SponsorBlockCategoryMap, SponsorBlockSkipMode };
 
 export type { SavedCustomFont, UiFont };
 
@@ -195,6 +204,8 @@ export interface Settings {
   progressExpiryDays: number;
   sponsorBlockEnabled: boolean;
   sponsorBlockShowNotice: boolean;
+  sponsorBlockSkipMode: SponsorBlockSkipMode;
+  sponsorBlockCategories: SponsorBlockCategoryMap;
   sidebarCollapsed: boolean;
   chaptersExpanded: boolean;
   descriptionExpanded: boolean;
@@ -268,6 +279,8 @@ const DEFAULTS: Settings = {
   progressExpiryDays: 14,
   sponsorBlockEnabled: true,
   sponsorBlockShowNotice: true,
+  sponsorBlockSkipMode: "auto",
+  sponsorBlockCategories: { ...DEFAULT_SPONSOR_BLOCK_CATEGORIES },
   sidebarCollapsed: false,
   chaptersExpanded: true,
   descriptionExpanded: true,
@@ -329,6 +342,8 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "showCardDates",
   "sponsorBlockEnabled",
   "sponsorBlockShowNotice",
+  "sponsorBlockSkipMode",
+  "sponsorBlockCategories",
   "sidebarCollapsed",
   "chaptersExpanded",
   "descriptionExpanded",
@@ -890,6 +905,12 @@ function normalizeSettings(
       (parsed as { uiScale?: unknown }).uiScale
     ),
     holdPlaybackRate: normalizeHoldPlaybackRate(parsed.holdPlaybackRate),
+    sponsorBlockSkipMode: normalizeSponsorBlockSkipMode(
+      parsed.sponsorBlockSkipMode
+    ),
+    sponsorBlockCategories: normalizeSponsorBlockCategories(
+      parsed.sponsorBlockCategories
+    ),
     ...normalizeFontSettings(parsed),
   };
 }

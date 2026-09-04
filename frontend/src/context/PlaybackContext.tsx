@@ -21,6 +21,7 @@ import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSponsorBlock } from "../hooks/useSponsorBlock";
+import { enabledSponsorBlockCategories } from "../sponsorBlock";
 import {
   dedupeSubtitleTracks,
   parseChapters,
@@ -543,7 +544,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const sponsorSegments = useSponsorBlock(
     current?.source_url ?? null,
     current?.file_path ?? "",
-    settings.sponsorBlockEnabled && !stream
+    settings.sponsorBlockEnabled && !stream,
+    enabledSponsorBlockCategories(settings.sponsorBlockCategories)
   );
 
   const refreshCurrentVideo = useCallback(() => {
@@ -623,6 +625,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         chapters={libraryChapters}
         sponsorSegments={sponsorSegments}
         sponsorShowNotice={settings.sponsorBlockShowNotice}
+        sponsorSkipMode={settings.sponsorBlockSkipMode}
         subtitlesPending={current.subtitles_pending}
         onSubtitlesRefresh={refreshCurrentVideo}
         miniWidth={miniWidth}

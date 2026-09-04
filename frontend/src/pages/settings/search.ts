@@ -80,7 +80,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "playback",
-    keywords: "sponsorblock sponsor skip ad ads advertising commercial youtube only youtube",
+    keywords:
+      "sponsorblock sponsor skip ad ads advertising commercial youtube only youtube autoskip auto skip ask to skip prompt selfpromo self promo intro outro interaction filler tangent preview recap music offtopic non-music",
   },
   {
     tab: "playback",

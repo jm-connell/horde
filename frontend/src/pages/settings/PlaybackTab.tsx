@@ -9,6 +9,7 @@ import {
 } from "./constants";
 import { Chip, Section, SettingRow, Toggle } from "./ui";
 import { useSettingsPage } from "./context";
+import SponsorBlockSection from "./SponsorBlockSection";
 
 export default function PlaybackTab() {
   const { q, match, settings, update } = useSettingsPage();
@@ -158,57 +159,7 @@ export default function PlaybackTab() {
         </div>
       </Section>
 
-      <Section
-        title="SponsorBlock"
-        description="Automatically skip sponsored segments and other non-content during playback of YouTube videos. Has no effect on other sources."
-        hidden={
-          !match(
-            "sponsorblock",
-            "sponsor",
-            "skip",
-            "ad",
-            "ads",
-            "advertising",
-            "commercial",
-            "youtube only",
-            "youtube"
-          )
-        }
-      >
-        <div className="space-y-4">
-          <SettingRow
-            title="Enable SponsorBlock"
-            description="YouTube only — skip sponsors, self-promotion, and intros automatically. Non-YouTube videos ignore this setting."
-            control={
-              <Toggle
-                checked={settings.sponsorBlockEnabled}
-                onChange={() =>
-                  update({
-                    sponsorBlockEnabled: !settings.sponsorBlockEnabled,
-                  })
-                }
-              />
-            }
-          />
-          {settings.sponsorBlockEnabled && (
-            <SettingRow
-              title="Show skip notice"
-              description="Brief on-screen notification when a segment is skipped."
-              control={
-                <Toggle
-                  checked={settings.sponsorBlockShowNotice}
-                  onChange={() =>
-                    update({
-                      sponsorBlockShowNotice:
-                        !settings.sponsorBlockShowNotice,
-                    })
-                  }
-                />
-              }
-            />
-          )}
-        </div>
-      </Section>
+      <SponsorBlockSection />
 
       <Section
         title="Default playback speed"

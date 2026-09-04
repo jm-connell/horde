@@ -18,6 +18,9 @@ describe("matchesQuery", () => {
 describe("settings search routing", () => {
   it("finds tabs and AI panes", () => {
     expect(firstMatchingTab("sponsorblock")).toBe("playback");
+    expect(firstMatchingTab("self promo")).toBe("playback");
+    expect(firstMatchingTab("filler")).toBe("playback");
+    expect(firstMatchingTab("ask to skip")).toBe("playback");
     expect(firstMatchingTab("custom css")).toBe("appearance");
     expect(firstMatchingTab("enable custom css")).toBe("appearance");
     expect(firstMatchingTab("jellyfin")).toBe("appearance");

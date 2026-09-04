@@ -44,8 +44,36 @@ Those two are not separate Settings rows; they sync with the `ui` blob when the 
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
-| SponsorBlock enabled | `sponsorBlockEnabled` | `true` | **YouTube only** — skip sponsored / non-content segments; no-op for other sources |
-| Show skip notice | `sponsorBlockShowNotice` | `true` | Toast/notice when a segment is skipped |
+| SponsorBlock enabled | `sponsorBlockEnabled` | `true` | **YouTube only** — skip (or prompt to skip) non-content segments; no-op for other sources |
+| Skip behavior | `sponsorBlockSkipMode` | `auto` | `auto` jumps to the end of a segment; `prompt` shows a notice with a Skip button |
+| Show skip notice | `sponsorBlockShowNotice` | `true` | After an auto-skip, toast with **Go back**. Hidden when skip mode is **Ask to skip** (the prompt *is* the notice) |
+| Categories | `sponsorBlockCategories` | see below | Per-category on/off; extra categories are collapsed in Settings |
+
+Playback-only — files on disk are unchanged. Skips can be undone from the skip notification.
+
+### Skip modes
+
+| Value | Behavior |
+|-------|----------|
+| `auto` | Seek to the end of a matching segment on forward playback |
+| `prompt` | Keep playing and show **Skip** until you click it or the segment ends |
+
+### Categories
+
+| Id | Label | Default | Group |
+|----|-------|---------|--------|
+| `sponsor` | Sponsor | on | Common |
+| `selfpromo` | Self-promo | on | Common |
+| `interaction` | Interaction | on | Common |
+| `intro` | Intro | on | Common |
+| `outro` | Outro | on | Common |
+| `preview` | Preview / recap | off | Extra |
+| `filler` | Filler / tangents | off | Extra |
+| `music_offtopic` | Non-music | off | Extra |
+
+Common categories are always listed. Extra categories sit behind **More categories** (with explanation tooltips). Settings search for an extra name expands that list.
+
+Missing keys in an old `ui` blob keep these defaults (existing installs keep the original five categories on).
 
 ## Default playback rate
 

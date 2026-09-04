@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { SponsorBlockCategory } from "../sponsorBlock";
 
 export interface SponsorSegment {
   startSec: number;
@@ -20,17 +21,20 @@ export function extractYouTubeId(
   return null;
 }
 
-const CATEGORIES = ["sponsor", "selfpromo", "interaction", "intro", "outro"];
-
 export function useSponsorBlock(
   sourceUrl: string | null,
   filePath: string,
-  enabled: boolean
+  enabled: boolean,
+  categories: readonly SponsorBlockCategory[]
 ): SponsorSegment[] {
   const [segments, setSegments] = useState<SponsorSegment[]>([]);
+  const catsKey = categories.join(",");
 
   useEffect(() => {
-    if (!enabled) {
+    const cats = catsKey
+      ? (catsKey.split(",") as SponsorBlockCategory[])
+      : [];
+    if (!enabled || cats.length === 0) {
       setSegments([]);
       return;
     }
@@ -41,9 +45,10 @@ export function useSponsorBlock(
     }
 
     let cancelled = false;
-    const cats = encodeURIComponent(JSON.stringify(CATEGORIES));
+    const allowed = new Set(cats);
+    const encoded = encodeURIComponent(JSON.stringify(cats));
     fetch(
-      `https://sponsor.ajay.app/api/skipSegments?videoID=${ytId}&categories=${cats}`
+      `https://sponsor.ajay.app/api/skipSegments?videoID=${ytId}&categories=${encoded}`
     )
       .then((r) => (r.ok ? r.json() : []))
       .then(
@@ -55,11 +60,13 @@ export function useSponsorBlock(
         ) => {
           if (cancelled || !Array.isArray(data)) return;
           setSegments(
-            data.map((s) => ({
-              startSec: s.segment[0],
-              endSec: s.segment[1],
-              category: s.category,
-            }))
+            data
+              .filter((s) => allowed.has(s.category as SponsorBlockCategory))
+              .map((s) => ({
+                startSec: s.segment[0],
+                endSec: s.segment[1],
+                category: s.category,
+              }))
           );
         }
       )
@@ -70,7 +77,7 @@ export function useSponsorBlock(
     return () => {
       cancelled = true;
     };
-  }, [sourceUrl, filePath, enabled]);
+  }, [sourceUrl, filePath, enabled, catsKey]);
 
   return segments;
 }

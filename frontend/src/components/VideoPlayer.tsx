@@ -13,6 +13,10 @@ import {
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useApplyShakaQuality, useShakaDashLoad } from "../hooks/useShakaDash";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
+import {
+  sponsorBlockSegmentLabel,
+  type SponsorBlockSkipMode,
+} from "../sponsorBlock";
 import type { SpriteMeta } from "../types";
 import { formatDuration, formatTimestamp, type Chapter } from "../utils";
 import { trackQuality } from "../utils/decodeCapability";
@@ -102,6 +106,7 @@ interface Props {
   chapters?: Chapter[];
   sponsorSegments?: SponsorSegment[];
   sponsorShowNotice?: boolean;
+  sponsorSkipMode?: SponsorBlockSkipMode;
   subtitlesPending?: boolean;
   onSubtitlesRefresh?: () => void;
   miniWidth?: number | null;
@@ -149,6 +154,7 @@ export default function VideoPlayer({
   chapters = [],
   sponsorSegments = [],
   sponsorShowNotice = true,
+  sponsorSkipMode = "auto",
   subtitlesPending = false,
   onSubtitlesRefresh,
   miniWidth = null,
@@ -219,12 +225,17 @@ export default function VideoPlayer({
 
   // SponsorBlock skip notice
   const [skipNotice, setSkipNotice] = useState<string | null>(null);
+  const [skipNoticeKind, setSkipNoticeKind] = useState<
+    "prompt" | "skipped" | null
+  >(null);
   const [skippedSegment, setSkippedSegment] = useState<{
     startSec: number;
     endSec: number;
     label: string;
   } | null>(null);
   const skipNoticeTimer = useRef<number | null>(null);
+  const skipNoticeKindRef = useRef<"prompt" | "skipped" | null>(null);
+  const promptKeyRef = useRef<string | null>(null);
   const prevTimeRef = useRef(0);
   const isSeekingRef = useRef(false);
   const pendingSeekRef = useRef(initialPosition);
@@ -334,8 +345,11 @@ export default function VideoPlayer({
   useEffect(() => {
     suppressedSegmentsRef.current.clear();
     prevTimeRef.current = 0;
+    promptKeyRef.current = null;
+    skipNoticeKindRef.current = null;
     setSkippedSegment(null);
     setSkipNotice(null);
+    setSkipNoticeKind(null);
     setCcNotice(null);
     setMediaError(null);
     if (bufferingShowTimer.current != null) {
@@ -585,27 +599,62 @@ export default function VideoPlayer({
     };
   }, [isMini, videoId]);
 
+  const clearSkipNotice = useCallback(() => {
+    promptKeyRef.current = null;
+    skipNoticeKindRef.current = null;
+    setSkipNotice(null);
+    setSkipNoticeKind(null);
+    setSkippedSegment(null);
+    if (skipNoticeTimer.current !== null) {
+      clearTimeout(skipNoticeTimer.current);
+      skipNoticeTimer.current = null;
+    }
+  }, []);
+
+  const showSkippedNotice = useCallback(
+    (
+      seg: { startSec: number; endSec: number; label: string },
+      timed: boolean
+    ) => {
+      promptKeyRef.current = null;
+      skipNoticeKindRef.current = "skipped";
+      setSkipNoticeKind("skipped");
+      setSkippedSegment(seg);
+      setSkipNotice(`Skipped: ${seg.label}`);
+      if (skipNoticeTimer.current !== null) {
+        clearTimeout(skipNoticeTimer.current);
+        skipNoticeTimer.current = null;
+      }
+      if (timed) {
+        skipNoticeTimer.current = window.setTimeout(() => {
+          setSkipNotice(null);
+          setSkippedSegment(null);
+          skipNoticeKindRef.current = null;
+          setSkipNoticeKind(null);
+          skipNoticeTimer.current = null;
+        }, 4000);
+      }
+    },
+    []
+  );
+
   const undoSkip = useCallback(() => {
     const seg = skippedSegment;
     const v = videoRef.current;
     if (!seg || !v) return;
     suppressedSegmentsRef.current.add(`${seg.startSec}-${seg.endSec}`);
     v.currentTime = seg.startSec;
-    setSkipNotice(null);
-    setSkippedSegment(null);
-    if (skipNoticeTimer.current !== null) {
-      clearTimeout(skipNoticeTimer.current);
-      skipNoticeTimer.current = null;
-    }
-  }, [skippedSegment]);
+    clearSkipNotice();
+  }, [skippedSegment, clearSkipNotice]);
 
-  const segmentLabel = useCallback((category: string) => {
-    if (category === "sponsor") return "Sponsor";
-    if (category === "selfpromo") return "Self-promo";
-    if (category === "intro") return "Intro";
-    if (category === "outro") return "Outro";
-    return "Segment";
-  }, []);
+  const skipPromptedSegment = useCallback(() => {
+    const seg = skippedSegment;
+    const v = videoRef.current;
+    if (!seg || !v) return;
+    v.currentTime = seg.endSec;
+    prevTimeRef.current = seg.endSec;
+    showSkippedNotice(seg, true);
+  }, [skippedSegment, showSkippedNotice]);
 
   useEffect(() => {
     chromecast.setOnSessionEnd((position) => {
@@ -1769,12 +1818,15 @@ export default function VideoPlayer({
             if (sponsorSegments.length > 0 && !isSeekingRef.current) {
               const movingForward = t >= prev - 0.05;
               const seekingBack = t < prev - 0.05;
+              const promptMode = sponsorSkipMode === "prompt";
+              let insidePrompt: SponsorSegment | null = null;
               for (const seg of sponsorSegments) {
                 const key = `${seg.startSec}-${seg.endSec}`;
                 if (suppressedSegmentsRef.current.has(key)) {
                   continue;
                 }
                 if (
+                  !promptMode &&
                   seekingBack &&
                   t >= seg.startSec &&
                   t < seg.endSec
@@ -1787,26 +1839,59 @@ export default function VideoPlayer({
                   t >= seg.startSec &&
                   t < seg.endSec - 0.3
                 ) {
+                  if (promptMode) {
+                    insidePrompt = seg;
+                    break;
+                  }
                   e.currentTarget.currentTime = seg.endSec;
                   prevTimeRef.current = seg.endSec;
-                  const label = segmentLabel(seg.category);
                   if (sponsorShowNotice) {
-                    setSkippedSegment({
-                      startSec: seg.startSec,
-                      endSec: seg.endSec,
-                      label,
-                    });
-                    setSkipNotice(`Skipped: ${label}`);
-                    if (skipNoticeTimer.current !== null)
-                      clearTimeout(skipNoticeTimer.current);
-                    skipNoticeTimer.current = window.setTimeout(() => {
-                      setSkipNotice(null);
-                      setSkippedSegment(null);
-                      skipNoticeTimer.current = null;
-                    }, 4000);
+                    showSkippedNotice(
+                      {
+                        startSec: seg.startSec,
+                        endSec: seg.endSec,
+                        label: sponsorBlockSegmentLabel(seg.category),
+                      },
+                      true
+                    );
                   }
                   break;
                 }
+              }
+              if (promptMode) {
+                if (insidePrompt) {
+                  const key = `${insidePrompt.startSec}-${insidePrompt.endSec}`;
+                  if (promptKeyRef.current !== key) {
+                    promptKeyRef.current = key;
+                    if (skipNoticeTimer.current !== null) {
+                      clearTimeout(skipNoticeTimer.current);
+                      skipNoticeTimer.current = null;
+                    }
+                    const label = sponsorBlockSegmentLabel(
+                      insidePrompt.category
+                    );
+                    skipNoticeKindRef.current = "prompt";
+                    setSkipNoticeKind("prompt");
+                    setSkippedSegment({
+                      startSec: insidePrompt.startSec,
+                      endSec: insidePrompt.endSec,
+                      label,
+                    });
+                    setSkipNotice(label);
+                  }
+                } else if (skipNoticeKindRef.current === "prompt") {
+                  promptKeyRef.current = null;
+                  skipNoticeKindRef.current = null;
+                  setSkipNoticeKind(null);
+                  setSkipNotice(null);
+                  setSkippedSegment(null);
+                }
+              } else if (skipNoticeKindRef.current === "prompt") {
+                promptKeyRef.current = null;
+                skipNoticeKindRef.current = null;
+                setSkipNoticeKind(null);
+                setSkipNotice(null);
+                setSkippedSegment(null);
               }
             }
           }}
@@ -2067,27 +2152,6 @@ export default function VideoPlayer({
               </div>
             )}
             </div>
-            {/* SponsorBlock skip notice */}
-            {skipNotice && (
-              <div className="absolute right-4 top-4 flex items-center gap-2 rounded-lg bg-black/80 px-3 py-1.5 text-xs text-accent">
-                <Link
-                  to="/settings?tab=playback"
-                  className="underline decoration-accent/50 underline-offset-2 hover:text-accent/90"
-                  title="Open SponsorBlock settings"
-                >
-                  {skipNotice}
-                </Link>
-                {skippedSegment && (
-                  <button
-                    type="button"
-                    onClick={undoSkip}
-                    className="rounded bg-ink-700 px-2 py-0.5 text-gray-200 hover:bg-ink-600"
-                  >
-                    Go back
-                  </button>
-                )}
-              </div>
-            )}
             {ccNotice && (
               <div className="absolute left-4 top-4 rounded-lg bg-black/70 px-3 py-1.5 text-xs text-gray-300">
                 {ccNotice}
@@ -2425,6 +2489,45 @@ export default function VideoPlayer({
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {skipNotice && (
+          <div
+            className={`ui-panel ui-panel-legible pointer-events-auto absolute right-3 z-[8] flex cursor-auto items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 shadow-lg ring-1 ring-ink-600 transition-[bottom] duration-300 ease-out ${
+              isMini
+                ? "bottom-2"
+                : controlsVisible
+                  ? "bottom-[4.5rem]"
+                  : "bottom-3"
+            }`}
+            role="status"
+          >
+            <Link
+              to="/settings?tab=playback"
+              className="text-xs font-medium text-gray-200 hover:text-accent"
+              title="Open SponsorBlock settings"
+            >
+              {skipNotice}
+            </Link>
+            {skipNoticeKind === "prompt" && skippedSegment && (
+              <button
+                type="button"
+                onClick={skipPromptedSegment}
+                className="rounded-md bg-accent px-2 py-0.5 text-[11px] font-semibold text-ink-950 hover:bg-accent-soft"
+              >
+                Skip
+              </button>
+            )}
+            {skipNoticeKind === "skipped" && skippedSegment && (
+              <button
+                type="button"
+                onClick={undoSkip}
+                className="rounded-md border border-ink-600 bg-ink-800 px-2 py-0.5 text-[11px] font-medium text-gray-200 hover:border-accent hover:text-accent"
+              >
+                Go back
+              </button>
+            )}
           </div>
         )}
 
