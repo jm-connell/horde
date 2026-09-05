@@ -157,7 +157,7 @@ export default function DownloadJobCard({
   const redownloadingRef = useRef(false);
   const editingTitleRef = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const actionRowRef = useRef<HTMLDivElement>(null);
+  const actionRowRef = useRef<HTMLDivElement | null>(null);
   const collapseRoRef = useRef<ResizeObserver | null>(null);
   const previewFetchedFor = useRef<number | null>(null);
   editingTitleRef.current = editingTitle;
