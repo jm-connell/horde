@@ -148,6 +148,7 @@ class DownloadJobRead(BaseModel):
     video_id: Optional[int]
     replace_video_id: Optional[int] = None
     file_size: Optional[int]
+    height_px: Optional[int] = None
     created_at: datetime
     video_missing: bool = False
     superseded: bool = False

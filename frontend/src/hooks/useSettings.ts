@@ -216,8 +216,6 @@ export interface Settings {
   descriptionExpanded: boolean;
   /** Watch-page AI panel open/closed (persists across videos and restarts). */
   aiExpanded: boolean;
-  /** Last selected AI panel tab when both summary and chat are available. */
-  aiTab: "summary" | "chat";
   showRelatedVideos: boolean;
   /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
   autoplayRelated: boolean;
@@ -296,7 +294,6 @@ const DEFAULTS: Settings = {
   chaptersExpanded: true,
   descriptionExpanded: true,
   aiExpanded: true,
-  aiTab: "summary",
   showRelatedVideos: true,
   autoplayRelated: true,
   previewOnHover: true,
@@ -362,7 +359,6 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "chaptersExpanded",
   "descriptionExpanded",
   "aiExpanded",
-  "aiTab",
   "showRelatedVideos",
   "autoplayRelated",
   "previewOnHover",
@@ -845,12 +841,14 @@ function normalizeSettings(
     liquidNav?: boolean;
     translucentPanels?: boolean;
     uiScale?: unknown;
+    aiTab?: unknown;
   }
 ): Settings {
   const rest = { ...parsed };
   delete rest.liquidNav;
   delete rest.translucentPanels;
   delete rest.uiScale;
+  delete rest.aiTab;
   const panel = migratePanelTranslucency(parsed);
 
   return {

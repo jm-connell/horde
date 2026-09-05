@@ -44,6 +44,68 @@ export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
 
 
 const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+const PLAYER_CHROME_BTN =
+  "ui-player-chrome rounded px-1.5 py-1 text-xs font-medium text-gray-200 hover:text-accent";
+const PLAYER_CHROME_BTN_ACTIVE =
+  "ui-player-chrome rounded px-1.5 py-1 text-xs font-medium text-accent";
+const PLAYER_MENU_ITEM =
+  "rounded px-2 py-1.5 text-[11px] font-medium text-gray-200 hover:bg-ink-700/50 hover:text-accent";
+const PLAYER_MENU_ITEM_ACTIVE =
+  "rounded px-2 py-1.5 text-[11px] font-medium text-accent";
+
+function playerChromeBtn(active: boolean): string {
+  return active ? PLAYER_CHROME_BTN_ACTIVE : PLAYER_CHROME_BTN;
+}
+
+function playerMenuItem(active: boolean): string {
+  return active ? PLAYER_MENU_ITEM_ACTIVE : PLAYER_MENU_ITEM;
+}
+
+function FullscreenGlyph({ exit }: { exit: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="square"
+      strokeLinejoin="miter"
+      aria-hidden
+    >
+      {exit ? (
+        <path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6" />
+      ) : (
+        <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" />
+      )}
+    </svg>
+  );
+}
+
+function FullscreenButton({
+  active,
+  onClick,
+}: {
+  active: boolean;
+  onClick: () => void;
+}) {
+  const label = active ? "Exit fullscreen" : "Fullscreen";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`ui-nav-icon ui-player-chrome flex h-7 w-7 items-center justify-center bg-transparent p-0 ${
+        active ? "text-accent" : "text-gray-200 hover:text-accent"
+      }`}
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+    >
+      <FullscreenGlyph exit={active} />
+    </button>
+  );
+}
+
 const CONTROLS_HIDE_DELAY_MS = 2500;
 const HOLD_DELAY_MS = 250;
 const MIN_MINI_WIDTH = 160;
@@ -2207,8 +2269,9 @@ export default function VideoPlayer({
             )}
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-gray-100">
               <button
+                type="button"
                 onClick={togglePlay}
-                className="text-xl leading-none hover:text-accent"
+                className="ui-player-chrome text-xl leading-none hover:text-accent"
               >
                 {playing ? "❚❚" : "►"}
               </button>
@@ -2217,7 +2280,7 @@ export default function VideoPlayer({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={toggleMute}
-                    className="flex items-center justify-center hover:text-accent"
+                    className="ui-nav-icon ui-player-chrome flex items-center justify-center hover:text-accent"
                     title={muted || volume === 0 ? "Unmute" : "Mute"}
                     aria-label={muted || volume === 0 ? "Unmute" : "Mute"}
                   >
@@ -2279,7 +2342,7 @@ export default function VideoPlayer({
                 })()}
               </span>
 
-              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
                 {effectiveStreamType === "dash" &&
                   availableHeights.length > 0 && (
                     <div className="relative">
@@ -2289,11 +2352,9 @@ export default function VideoPlayer({
                           setShowSpeed(false);
                           setShowQuality((s) => !s);
                         }}
-                        className={`rounded px-2 py-1 text-xs font-medium tabular-nums ${
-                          qualityChoice !== "auto"
-                            ? "bg-accent text-ink-950"
-                            : "bg-ink-700 text-gray-200 hover:text-accent"
-                        }`}
+                        className={`${playerChromeBtn(
+                          qualityChoice !== "auto" || showQuality
+                        )} tabular-nums`}
                         title="Stream quality"
                       >
                         {qualityChoice === "auto" && activeQuality
@@ -2301,19 +2362,17 @@ export default function VideoPlayer({
                           : qualityMenuLabel(qualityChoice)}
                       </button>
                       {showQuality && (
-                        <div className="absolute bottom-9 right-0 z-10 w-32 rounded-lg bg-ink-800 p-2 ring-1 ring-ink-600">
-                          <div className="flex flex-col gap-1">
+                        <div className="ui-panel absolute bottom-9 right-0 z-10 w-32 rounded-lg bg-ink-800 p-2 ring-1 ring-ink-600">
+                          <div className="flex flex-col gap-0.5">
                             <button
                               type="button"
                               onClick={() => {
                                 pickQuality("auto");
                                 setShowQuality(false);
                               }}
-                              className={`rounded px-2 py-1.5 text-left text-[11px] font-medium ${
+                              className={`${playerMenuItem(
                                 qualityChoice === "auto"
-                                  ? "bg-accent text-ink-950"
-                                  : "bg-ink-700 text-gray-200 hover:text-accent"
-                              }`}
+                              )} text-left`}
                             >
                               Auto
                               {activeQuality && qualityChoice === "auto"
@@ -2328,11 +2387,9 @@ export default function VideoPlayer({
                                   pickQuality(h);
                                   setShowQuality(false);
                                 }}
-                                className={`rounded px-2 py-1.5 text-left text-[11px] font-medium tabular-nums ${
+                                className={`${playerMenuItem(
                                   qualityChoice === h
-                                    ? "bg-accent text-ink-950"
-                                    : "bg-ink-700 text-gray-200 hover:text-accent"
-                                }`}
+                                )} text-left tabular-nums`}
                               >
                                 {qualityMenuLabel(h)}
                               </button>
@@ -2344,31 +2401,27 @@ export default function VideoPlayer({
                   )}
                 <div className="relative">
                   <button
+                    type="button"
                     onClick={() => {
                       setShowQuality(false);
                       setShowSpeed((s) => !s);
                     }}
-                    className={`rounded px-2 py-1 text-xs font-medium tabular-nums ${
-                      rate !== 1
-                        ? "bg-accent text-ink-950"
-                        : "bg-ink-700 text-gray-200 hover:text-accent"
-                    }`}
+                    className={`${playerChromeBtn(
+                      rate !== 1 || showSpeed
+                    )} tabular-nums`}
                     title="Playback speed"
                   >
                     {rate}x
                   </button>
                   {showSpeed && (
-                    <div className="absolute bottom-9 right-0 z-10 w-40 rounded-lg bg-ink-800 p-3 ring-1 ring-ink-600">
+                    <div className="ui-panel absolute bottom-9 right-0 z-10 w-40 rounded-lg bg-ink-800 p-3 ring-1 ring-ink-600">
                       <div className="mb-2 grid grid-cols-3 gap-1">
                         {SPEED_STEPS.map((s) => (
                           <button
+                            type="button"
                             key={s}
                             onClick={() => setRate(s)}
-                            className={`rounded px-1.5 py-1 text-[11px] font-medium tabular-nums ${
-                              rate === s
-                                ? "bg-accent text-ink-950"
-                                : "bg-ink-700 text-gray-200 hover:text-accent"
-                            }`}
+                            className={`${playerMenuItem(rate === s)} tabular-nums`}
                           >
                             {s}x
                           </button>
@@ -2388,12 +2441,9 @@ export default function VideoPlayer({
                 </div>
                 {(tracks.length > 0 || subtitlesPending) && (
                   <button
+                    type="button"
                     onClick={cycleCaptions}
-                    className={`rounded px-2 py-1 text-xs font-medium ${
-                      captionLang
-                        ? "bg-accent text-ink-950"
-                        : "bg-ink-700 text-gray-200 hover:text-accent"
-                    }`}
+                    className={playerChromeBtn(Boolean(captionLang))}
                     title={
                       subtitlesPending && tracks.length === 0
                         ? "Subtitles loading"
@@ -2405,12 +2455,9 @@ export default function VideoPlayer({
                 )}
                 {castAvailable && (
                   <button
+                    type="button"
                     onClick={onCastClick}
-                    className={`rounded px-2 py-1 text-xs font-medium ${
-                      casting
-                        ? "bg-accent text-ink-950"
-                        : "bg-ink-700 text-gray-200 hover:text-accent"
-                    }`}
+                    className={playerChromeBtn(casting)}
                     title={
                       casting
                         ? `Casting to ${castDeviceName ?? "TV"}`
@@ -2421,118 +2468,41 @@ export default function VideoPlayer({
                   </button>
                 )}
                 {isMobile && (
-                  <button
+                  <FullscreenButton
+                    active={isNativeFullscreen}
                     onClick={toggleNativeFullscreen}
-                    className={`flex items-center justify-center rounded px-2 py-1 text-xs font-medium ${
-                      isNativeFullscreen
-                        ? "bg-accent text-ink-950"
-                        : "bg-ink-700 text-gray-200 hover:text-accent"
-                    }`}
-                    title={
-                      isNativeFullscreen ? "Exit fullscreen" : "Fullscreen"
-                    }
-                    aria-label={
-                      isNativeFullscreen ? "Exit fullscreen" : "Fullscreen"
-                    }
-                  >
-                    {isNativeFullscreen ? (
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-3.5 w-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        aria-hidden
-                      >
-                        <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" />
-                      </svg>
-                    ) : (
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-3.5 w-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        aria-hidden
-                      >
-                        <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
-                      </svg>
-                    )}
-                  </button>
+                  />
                 )}
                 {!isMobile && (
                   <>
                     <button
+                      type="button"
                       onClick={requestPiP}
-                      className="rounded bg-ink-700 px-2 py-1 text-xs font-medium text-gray-200 hover:text-accent"
+                      className={playerChromeBtn(false)}
                       title="Picture in picture"
                     >
                       PiP
                     </button>
                     <button
+                      type="button"
                       onClick={toggleTheater}
-                      className={`rounded px-2 py-1 text-xs font-medium ${
-                        mode === "theater"
-                          ? "bg-accent text-ink-950"
-                          : "bg-ink-700 text-gray-200 hover:text-accent"
-                      }`}
+                      className={playerChromeBtn(mode === "theater")}
                       title="Theater mode (t)"
                     >
                       Theater
                     </button>
                     <button
+                      type="button"
                       onClick={toggleWindowed}
-                      className={`rounded px-2 py-1 text-xs font-medium ${
-                        mode === "windowed"
-                          ? "bg-accent text-ink-950"
-                          : "bg-ink-700 text-gray-200 hover:text-accent"
-                      }`}
+                      className={playerChromeBtn(mode === "windowed")}
                       title="Fit window (f)"
                     >
-                      {mode === "windowed" ? "Exit Fit" : "Fit Window"}
+                      Fit
                     </button>
-                    <button
+                    <FullscreenButton
+                      active={isNativeFullscreen}
                       onClick={toggleNativeFullscreen}
-                      className={`flex items-center justify-center rounded px-2 py-1 text-xs font-medium ${
-                        isNativeFullscreen
-                          ? "bg-accent text-ink-950"
-                          : "bg-ink-700 text-gray-200 hover:text-accent"
-                      }`}
-                      title={
-                        isNativeFullscreen
-                          ? "Exit fullscreen"
-                          : "Fullscreen"
-                      }
-                      aria-label={
-                        isNativeFullscreen
-                          ? "Exit fullscreen"
-                          : "Fullscreen"
-                      }
-                    >
-                      {isNativeFullscreen ? (
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="h-3.5 w-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          aria-hidden
-                        >
-                          <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4" />
-                        </svg>
-                      ) : (
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="h-3.5 w-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          aria-hidden
-                        >
-                          <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
-                        </svg>
-                      )}
-                    </button>
+                    />
                   </>
                 )}
               </div>

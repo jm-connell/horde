@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   canChangeJobQuality,
   canEditDownloadJobNotes,
+  canManageCompletedLibraryVideo,
   canRedownloadRemovedJob,
+  collapseOverflowKeys,
   isLibraryVideoGone,
 } from "./downloadJobCardState";
 
@@ -21,8 +23,16 @@ describe("isLibraryVideoGone", () => {
 });
 
 describe("canEditDownloadJobNotes", () => {
-  it("allows notes on an active or finished library job", () => {
-    expect(canEditDownloadJobNotes(false, false, false, false)).toBe(true);
+  it("allows notes on an in-progress library job", () => {
+    expect(canEditDownloadJobNotes(false, false, false, false, false)).toBe(
+      true
+    );
+  });
+
+  it("blocks notes after the download completes", () => {
+    expect(canEditDownloadJobNotes(false, false, false, false, true)).toBe(
+      false
+    );
   });
 
   it("blocks notes when the library video is gone", () => {
@@ -33,6 +43,21 @@ describe("canEditDownloadJobNotes", () => {
     expect(canEditDownloadJobNotes(true, false, false, false)).toBe(false);
     expect(canEditDownloadJobNotes(false, true, false, false)).toBe(false);
     expect(canEditDownloadJobNotes(false, false, true, false)).toBe(false);
+  });
+});
+
+describe("canManageCompletedLibraryVideo", () => {
+  it("allows watch, delete, and playlist on a finished library video", () => {
+    expect(canManageCompletedLibraryVideo(true, false, false, 12)).toBe(true);
+  });
+
+  it("hides those actions for device, missing, or in-progress jobs", () => {
+    expect(canManageCompletedLibraryVideo(true, true, false, 12)).toBe(false);
+    expect(canManageCompletedLibraryVideo(true, false, true, 12)).toBe(false);
+    expect(canManageCompletedLibraryVideo(false, false, false, 12)).toBe(false);
+    expect(canManageCompletedLibraryVideo(true, false, false, null)).toBe(
+      false
+    );
   });
 });
 
@@ -61,5 +86,31 @@ describe("canChangeJobQuality", () => {
     expect(canChangeJobQuality("completed", false, false, true)).toBe(false);
     expect(canChangeJobQuality("error", true, false, false)).toBe(false);
     expect(canChangeJobQuality("cancelled", false, true, false)).toBe(false);
+  });
+});
+
+describe("collapseOverflowKeys", () => {
+  it("hides done, then res, then size, then playlist", () => {
+    const optional = { done: 50, res: 50, size: 50, playlist: 50 };
+    const fixed = [100];
+    expect([...collapseOverflowKeys(300, 0, fixed, optional)]).toEqual([]);
+    expect([...collapseOverflowKeys(250, 0, fixed, optional)]).toEqual([
+      "done",
+    ]);
+    expect([...collapseOverflowKeys(200, 0, fixed, optional)]).toEqual([
+      "done",
+      "res",
+    ]);
+    expect([...collapseOverflowKeys(150, 0, fixed, optional)]).toEqual([
+      "done",
+      "res",
+      "size",
+    ]);
+    expect([...collapseOverflowKeys(100, 0, fixed, optional)]).toEqual([
+      "done",
+      "res",
+      "size",
+      "playlist",
+    ]);
   });
 });

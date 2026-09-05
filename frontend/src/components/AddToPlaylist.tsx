@@ -3,7 +3,20 @@ import { api } from "../api";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 import type { Playlist } from "../types";
 
-export default function AddToPlaylist({ videoId }: { videoId: number }) {
+const defaultButtonClass =
+  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700";
+
+export default function AddToPlaylist({
+  videoId,
+  label = "+ Playlist",
+  buttonClassName = defaultButtonClass,
+  onOpenChange,
+}: {
+  videoId: number;
+  label?: string;
+  buttonClassName?: string;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -11,11 +24,16 @@ export default function AddToPlaylist({ videoId }: { videoId: number }) {
   const { flip, anchorRef } = useFlipMenu(open, 320);
 
   useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
+
+  useEffect(() => {
     if (!open) return;
     api.listPlaylists().then(setPlaylists).catch(() => undefined);
   }, [open]);
 
   useEffect(() => {
+    if (!open) return;
     const onClick = (e: MouseEvent) => {
       if (anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -23,7 +41,7 @@ export default function AddToPlaylist({ videoId }: { videoId: number }) {
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
-  }, [anchorRef]);
+  }, [open, anchorRef]);
 
   const add = async (playlistId: number, name: string) => {
     try {
@@ -48,12 +66,13 @@ export default function AddToPlaylist({ videoId }: { videoId: number }) {
   };
 
   return (
-    <div className="relative" ref={anchorRef}>
+    <div className="relative shrink-0" ref={anchorRef}>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+        className={buttonClassName}
       >
-        + Playlist
+        {label}
       </button>
       {status && !open && (
         <span className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap text-xs text-accent">

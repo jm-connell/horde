@@ -1,4 +1,4 @@
-import { formatSize } from "./utils";
+import { formatResolution, formatSize } from "./utils";
 
 export const PRESET_ORDER = [
   "best",
@@ -77,6 +77,21 @@ export function resolveQualityPreset(preset: string, available: string[]): strin
     if (isAudioPreset(p) && available.includes(p)) return p;
   }
   return "best";
+}
+
+/** Finished file label: probed height, never "Best available". */
+export function finishedQualityLabel(
+  preset: string | null | undefined,
+  heightPx?: number | null,
+  available: string[] = []
+): string {
+  const p = preset || "best";
+  if (isAudioPreset(p)) return PRESET_LABELS[p] ?? "Audio";
+  const fromFile = formatResolution(heightPx ?? null);
+  if (fromFile) return fromFile;
+  const resolved = resolveQualityPreset(p, available);
+  if (resolved === "best") return "";
+  return PRESET_LABELS[resolved] ?? resolved;
 }
 
 export function jobQualityOptions(

@@ -73,12 +73,16 @@ def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobR
         if vid is not None
     }
     existing: set[int] = set()
+    height_by_video: dict[int, Optional[int]] = {}
     if video_ids:
-        existing = set(
-            session.exec(
-                select(Video.id).where(Video.id.in_(list(video_ids)))  # type: ignore[attr-defined]
-            ).all()
-        )
+        videos = session.exec(
+            select(Video).where(Video.id.in_(list(video_ids)))  # type: ignore[attr-defined]
+        ).all()
+        for video in videos:
+            if video.id is None:
+                continue
+            existing.add(video.id)
+            height_by_video[video.id] = video.height_px
 
     # Newest completed job wins per video_id and per URL.
     latest_by_video: dict[int, int] = {}
@@ -113,6 +117,13 @@ def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobR
                     "superseded": superseded,
                     "available_presets": decode_available_presets(
                         j.available_presets_json
+                    ),
+                    "height_px": j.height_px
+                    if j.height_px
+                    else (
+                        height_by_video.get(j.video_id)
+                        if j.video_id is not None
+                        else None
                     ),
                 }
             )

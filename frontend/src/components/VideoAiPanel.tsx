@@ -27,20 +27,15 @@ export default function VideoAiPanel({
   showToast,
 }: Props) {
   const [settings, updateSettings] = useSettings();
+  const [tab, setTab] = useState<AiTab>("summary");
   const [summarizing, setSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const summarizeAbortRef = useRef<AbortController | null>(null);
 
   const expanded = settings.aiExpanded;
   const showToggle = canSummarize && canChat;
-  const preferredTab: AiTab =
-    settings.aiTab === "chat" && canChat
-      ? "chat"
-      : canSummarize
-        ? "summary"
-        : "chat";
   const activeTab: AiTab = showToggle
-    ? preferredTab
+    ? tab
     : canSummarize
       ? "summary"
       : "chat";
@@ -50,6 +45,7 @@ export default function VideoAiPanel({
     summarizeAbortRef.current?.abort();
     summarizeAbortRef.current = null;
     setSummarizing(false);
+    setTab("summary");
   }, [video.id]);
 
   useEffect(() => {
@@ -62,11 +58,6 @@ export default function VideoAiPanel({
   const waitingOnSummary =
     summarizing || (!!video.processing_summary && !hasAiSummary);
 
-  function setTab(next: AiTab) {
-    if (next === settings.aiTab) return;
-    updateSettings({ aiTab: next });
-  }
-
   const runSummarize = useCallback(
     async (force: boolean) => {
       if (!canSummarize) return;
@@ -76,7 +67,8 @@ export default function VideoAiPanel({
         return;
       }
       setSummarizing(true);
-      updateSettings({ aiExpanded: true, aiTab: "summary" });
+      updateSettings({ aiExpanded: true });
+      setTab("summary");
       setSummaryError(null);
       const ac = new AbortController();
       summarizeAbortRef.current = ac;

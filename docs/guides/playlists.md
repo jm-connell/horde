@@ -19,7 +19,7 @@ Bulk-add is the fastest path for large sets:
 3. Click cards to toggle; **Shift**-click to select a **range**.
 4. Open **Add to playlist** in the bulk bar and choose the target list.
 
-You can also add from individual video edit / detail flows where the UI exposes playlist membership.
+You can also add a single video from **Recent downloads** on the [Download](downloads.md) page (**+ Playlist**), or from individual video edit / detail flows where the UI exposes playlist membership.
 
 ## Import from YouTube
 

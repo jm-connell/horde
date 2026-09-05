@@ -33,7 +33,7 @@ When **AI video summaries** is on, a summary is queued after download once capti
 
 ## Chat
 
-Per-video chat lets you ask about content, chapters, or themes. Context is built from metadata and captions when available. Requires a working chat provider.
+Per-video chat lets you ask about content, chapters, or themes. Context is built from metadata and captions when available. Requires a working chat provider. The watch-page AI panel always opens on **Summary**; switching to Chat is not remembered across videos or reloads.
 
 ## Enrich tags
 

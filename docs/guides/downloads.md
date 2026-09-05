@@ -17,7 +17,7 @@ The **Download** page (`/download`) is where you paste a URL, pick a quality pre
 
 After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known. Audio bitrate caps that are at or above the source’s best stream are omitted (use **Audio (best)** instead).
 
-When you queue with **Best available** (the channel download panel default), Horde still fetches the highest source tier, but the download queue stores and shows that **actual resolution** (for example **4K**) instead of the “best” label.
+When you queue with **Best available** (the channel download panel default), Horde still fetches the highest source tier, but the download queue stores and shows that **actual resolution** (for example **4K**) instead of the “best” label. Finished cards use the probed file height, never **Best available**.
 
 Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. Within a height, Horde prefers **AV1 + AAC** over a higher-bitrate VP9/H.264 stream, then remuxes to MP4 with `faststart` (video is **copied**, never transcoded to H.264). If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
 
@@ -90,7 +90,18 @@ The queue panel shows status, percentage, and errors. Failures carry a typed **`
 
 Failed jobs can be retried from the card. Retry **requeues the same job** (it does not create a second queue entry), so extra clicks while it is already queued or downloading are ignored. Active download paths are marked so the [import scanner](import-review.md) does not race the same files.
 
-Completed library cards stay in Recent downloads after you delete the video from the library (**Removed**). Those cards cannot edit notes (the library row is gone). **Redownload** queues a **new** library copy from the saved URL and preset, keeping leftover title, channel, and any note that was still on the job. Notes saved after the original download, tags, and watch progress are not restored. Replaced (superseded) cards and failed jobs do not show Redownload — failed jobs keep **Retry**.
+Completed jobs stay in **Recent downloads**.
+
+| Control | What it does |
+|---------|----------------|
+| **Watch →** | Open the library video |
+| **Delete** | Removes the video **and file** from the library. The card stays so you can **Redownload**. |
+| **×** | Hides the card only. The video stays in the library. |
+| **+ Playlist** | Add the finished video to a local playlist |
+
+You can still attach a note while a download is queued or in progress. After it finishes, edit notes from the watch page.
+
+Completed library cards stay in Recent downloads after you delete the video from the library (**Removed**). **Redownload** queues a **new** library copy from the saved URL and preset, keeping leftover title, channel, and any note that was still on the job. Notes saved after the original download, tags, and watch progress are not restored. Replaced (superseded) cards and failed jobs do not show Redownload — failed jobs keep **Retry**.
 
 See [Troubleshooting — error kinds](../ops/troubleshooting.md#download-error_kind-values) and [YouTube access](../ops/youtube-access.md).
 

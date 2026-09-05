@@ -52,7 +52,7 @@ Download-related code is split for maintainability (façades may still re-export
 - Failures set `DownloadJob.error` plus a typed `error_kind` (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `cancelled`, `unknown`) for actionable UI.
 - Retry (`POST /api/downloads/{id}/retry`) resets a failed/cancelled job to `queued`. Extra retries while it is already active return that same job. Creating a download for a URL that is already queued/downloading at the same preset and destination reuses the existing job.
 - Enqueue with `quality_preset: "best"` resolves to the highest concrete source tier (e.g. `2160p`) when preview metadata is available, so the queue badge shows the real height. `POST /api/downloads/{id}/quality` changes preset on a queued/downloading job; in-flight work is cancelled, partials deleted, and the same job is re-queued (no cancelled toast).
-- List responses flag `video_missing` (linked library row deleted) and `superseded` (a newer completed job has the same `video_id` or URL). The Download UI offers **Redownload** only for missing library videos; that creates a new job rather than mutating the history row.
+- List responses flag `video_missing` (linked library row deleted) and `superseded` (a newer completed job has the same `video_id` or URL), and include `height_px` from the job or linked library file so finished cards can show 4K/1080p instead of “Best available”. The Download UI offers **Redownload** only for missing library videos; that creates a new job rather than mutating the history row.
 
 Members-only detection aborts/skips rather than looping forever.
 

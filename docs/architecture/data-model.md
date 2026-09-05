@@ -9,7 +9,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | Table | Purpose |
 |-------|---------|
 | `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags |
-| `download_jobs` | Queue rows: URL, quality, progress, pause, loudnorm, optional replace target, `error` + typed `error_kind` |
+| `download_jobs` | Queue rows: URL, quality, probed `height_px`, progress, pause, loudnorm, optional replace target, `error` + typed `error_kind` |
 | `playlists` | User or YouTube-imported playlists |
 | `playlist_items` | Ordered video membership |
 

@@ -160,7 +160,6 @@ These are updated from the shell/player rather than dedicated Settings rows, but
 | `chaptersExpanded` | `true` | bool | Watch chapters panel | UI blob |
 | `descriptionExpanded` | `true` | bool | Watch description panel | UI blob |
 | `aiExpanded` | `true` | bool | Watch AI panel open/closed | UI blob |
-| `aiTab` | `"summary"` | string | `summary` \| `chat` | UI blob |
 
 ---
 

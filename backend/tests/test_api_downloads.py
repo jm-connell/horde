@@ -182,7 +182,7 @@ def test_list_jobs_marks_video_missing_after_delete(client, init_db, add_video):
 
     from app.models import DownloadJob, JobStatus
 
-    video = add_video(title="Keep me", yt_id="dQw4w9WgXcQ")
+    video = add_video(title="Keep me", yt_id="dQw4w9WgXcQ", height_px=2160)
     with Session(init_db["engine"]) as session:
         job = DownloadJob(
             url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -198,6 +198,7 @@ def test_list_jobs_marks_video_missing_after_delete(client, init_db, add_video):
     row = next(r for r in client.get("/api/downloads").json() if r["id"] == job_id)
     assert row["video_missing"] is False
     assert row["superseded"] is False
+    assert row["height_px"] == 2160
 
     assert client.delete(f"/api/videos/{video.id}").status_code == 204
 

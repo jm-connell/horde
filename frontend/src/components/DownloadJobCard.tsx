@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -7,6 +7,7 @@ import {
   triggerBrowserDownload,
 } from "../api";
 import { useDownloads, jobStatus } from "../context/DownloadContext";
+import { useToast } from "../context/ToastContext";
 import {
   downloadErrorHint,
   downloadErrorLabel,
@@ -17,11 +18,14 @@ import {
   formatSize,
   youtubeListThumbnailUrl,
 } from "../utils";
-import { PRESET_LABELS, PRESET_ORDER, jobQualityOptions, resolveQualityPreset } from "../presets";
+import { PRESET_LABELS, PRESET_ORDER, finishedQualityLabel, jobQualityOptions, resolveQualityPreset } from "../presets";
+import AddToPlaylist from "./AddToPlaylist";
 import ChannelPicker from "./ChannelPicker";
 import {
+  applyActionRowCollapse,
   canChangeJobQuality,
   canEditDownloadJobNotes,
+  canManageCompletedLibraryVideo,
   canRedownloadRemovedJob,
   isLibraryVideoGone,
 } from "./downloadJobCardState";
@@ -54,8 +58,16 @@ export default function DownloadJobCard({
   channels,
   active = false,
 }: Props) {
-  const { updateJobOverrides, retryJob, cancelJob, dismissJob, submitDownload, changeJobQuality } =
-    useDownloads();
+  const {
+    updateJobOverrides,
+    retryJob,
+    cancelJob,
+    dismissJob,
+    submitDownload,
+    changeJobQuality,
+    refreshJobs,
+  } = useDownloads();
+  const { showToast } = useToast();
   const status = jobStatus(job, live);
   const maxBytesRef = useRef(0);
   if (status === "downloading" || status === "processing") {
@@ -102,7 +114,14 @@ export default function DownloadJobCard({
     isDeviceJob,
     failed,
     cancelled,
-    videoGone
+    videoGone,
+    completed
+  );
+  const inLibrary = canManageCompletedLibraryVideo(
+    completed,
+    isDeviceJob,
+    videoGone,
+    videoId
   );
   const canRedownload = canRedownloadRemovedJob(
     completed,
@@ -123,6 +142,9 @@ export default function DownloadJobCard({
   const [saved, setSaved] = useState(false);
   const [showNote, setShowNote] = useState(Boolean(job.notes_pending));
   const [dismissConfirm, setDismissConfirm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [playlistOpen, setPlaylistOpen] = useState(false);
   const [dontAskAgain, setDontAskAgain] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [redownloading, setRedownloading] = useState(false);
@@ -135,6 +157,8 @@ export default function DownloadJobCard({
   const redownloadingRef = useRef(false);
   const editingTitleRef = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const actionRowRef = useRef<HTMLDivElement>(null);
+  const collapseRoRef = useRef<ResizeObserver | null>(null);
   const previewFetchedFor = useRef<number | null>(null);
   editingTitleRef.current = editingTitle;
 
@@ -193,6 +217,34 @@ export default function DownloadJobCard({
     job.quality_preset || "best",
     sourcePresets
   );
+  const finishedRes = completed
+    ? finishedQualityLabel(
+        job.quality_preset,
+        job.height_px,
+        sourcePresets
+      )
+    : "";
+  const inFlightRes =
+    !completed && job.quality_preset
+      ? PRESET_LABELS[displayPreset] ?? displayPreset
+      : "";
+  const resLabel = completed ? finishedRes : inFlightRes;
+
+  const setActionRow = useCallback((node: HTMLDivElement | null) => {
+    collapseRoRef.current?.disconnect();
+    collapseRoRef.current = null;
+    actionRowRef.current = node;
+    if (!node) return;
+    applyActionRowCollapse(node);
+    const ro = new ResizeObserver(() => applyActionRowCollapse(node));
+    ro.observe(node);
+    collapseRoRef.current = ro;
+  }, []);
+
+  useLayoutEffect(() => {
+    const row = actionRowRef.current;
+    if (row) applyActionRowCollapse(row);
+  });
 
   const isDirty = title !== savedTitle.current || channel !== savedChannel.current;
 
@@ -279,6 +331,22 @@ export default function DownloadJobCard({
     }
     if (!confirm("Cancel this download?")) return;
     await cancelJob(job.id);
+  };
+
+  const confirmDeleteFromLibrary = async () => {
+    if (!videoId || deleting) return;
+    setDeleting(true);
+    try {
+      await api.deleteVideo(videoId, true);
+      setDeleteConfirm(false);
+      refreshJobs();
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Could not delete video"
+      );
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const onRetry = async () => {
@@ -373,9 +441,9 @@ export default function DownloadJobCard({
   return (
     <>
     <div
-      className={`ui-panel relative overflow-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700 ${
-        active ? "border-l-4 border-l-accent pl-[calc(1.25rem-2px)]" : ""
-      }${videoGone ? " opacity-60" : ""}`}
+      className={`ui-panel relative rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700 ${
+        active ? "overflow-hidden border-l-4 border-l-accent pl-[calc(1.25rem-2px)]" : ""
+      }${videoGone ? " opacity-60" : ""}${playlistOpen ? " z-30" : ""}`}
     >
       <div className="mb-3 flex items-start justify-between gap-3 text-sm">
         <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
@@ -472,10 +540,14 @@ export default function DownloadJobCard({
           <button
             type="button"
             onClick={onDismiss}
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-300 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-400"
+            className={
+              completed || failed || cancelled
+                ? "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-400 hover:border-ink-500 hover:bg-ink-700 hover:text-gray-200"
+                : "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-300 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-400"
+            }
             title={
               completed || failed || cancelled
-                ? "Remove from list"
+                ? "Remove from list (video stays in library)"
                 : "Cancel download"
             }
             aria-label={
@@ -564,38 +636,59 @@ export default function DownloadJobCard({
             </div>
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div
+            ref={setActionRow}
+            className="mt-3 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-hidden sm:gap-2"
+          >
             {completed && isDeviceJob && (
               <button
                 type="button"
                 onClick={() =>
                   triggerBrowserDownload(deviceDownloadFileUrl(job.id))
                 }
-                className="inline-block rounded-lg bg-accent/15 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/25"
+                className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
               >
                 Save again
               </button>
             )}
-            {completed && !isDeviceJob && videoId && !videoGone && (
-              <Link
-                to={`/watch/${videoId}`}
-                className="inline-block rounded-lg bg-accent/15 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/25"
-              >
-                Watch now →
-              </Link>
+            {inLibrary && videoId != null && (
+              <>
+                <Link
+                  to={`/watch/${videoId}`}
+                  className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
+                >
+                  Watch →
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(true)}
+                  disabled={deleting}
+                  title="Delete this video from your library"
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Delete
+                </button>
+                <div data-collapse="playlist" className="shrink-0">
+                  <AddToPlaylist
+                    videoId={videoId}
+                    buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
+                    onOpenChange={setPlaylistOpen}
+                  />
+                </div>
+              </>
             )}
             {canRedownload && (
               <button
                 type="button"
                 onClick={onRedownload}
                 disabled={redownloading || !job.url}
-                className="rounded-lg bg-accent/15 px-4 py-2 text-sm font-medium text-accent hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
+                className="shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {redownloading ? "Starting…" : "Redownload"}
               </button>
             )}
             {completed && !isDeviceJob && videoGone && (
-              <span className="text-xs text-gray-500">
+              <span className="shrink-0 whitespace-nowrap text-xs text-gray-500">
                 {job.video_missing
                   ? "Video no longer in library"
                   : "Superseded by a newer download"}
@@ -606,7 +699,7 @@ export default function DownloadJobCard({
                 type="button"
                 onClick={onRetry}
                 disabled={retrying}
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {retrying ? "Retrying…" : "Retry"}
               </button>
@@ -614,7 +707,7 @@ export default function DownloadJobCard({
             {!failed && !cancelled && !videoGone && isDirty && (
               <button
                 onClick={save}
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+                className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
               >
                 Save changes
               </button>
@@ -622,7 +715,7 @@ export default function DownloadJobCard({
             {canEditNotes && (
               <button
                 onClick={() => setShowNote((v) => !v)}
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+                className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
               >
                 {showNote ? "Hide note" : "Add note"}
               </button>
@@ -630,38 +723,51 @@ export default function DownloadJobCard({
             {canEditNotes && showNote && (
               <button
                 onClick={saveNote}
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+                className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
               >
                 Save note
               </button>
             )}
-            {saved && <span className="text-xs text-accent">Saved</span>}
-            {(sizeLabel || completed || job.quality_preset) && (
-              <span className="ml-auto flex items-center gap-2 text-xs text-gray-500">
-                {sizeLabel && <span>{sizeLabel}</span>}
-                {job.quality_preset && canChangeQuality ? (
-                  <select
-                    value={displayPreset}
-                    disabled={changingQuality}
-                    onChange={(e) => void onChangeQuality(e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label="Download resolution"
-                    className="cursor-pointer rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400 outline-none focus:ring-1 focus:ring-accent disabled:opacity-60"
-                  >
-                    {qualityOptions.map((p) => (
-                      <option key={p} value={p}>
-                        {PRESET_LABELS[p] ?? p}
-                      </option>
-                    ))}
-                  </select>
-                ) : job.quality_preset ? (
-                  <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400">
-                    {PRESET_LABELS[displayPreset] ?? displayPreset}
-                  </span>
-                ) : null}
-                {completed && (!videoGone || isDeviceJob) && (
-                  <span className="text-gray-400">Done</span>
-                )}
+            {saved && <span className="shrink-0 text-xs text-accent">Saved</span>}
+            <span className="min-w-0 flex-1" data-collapse-ignore aria-hidden />
+            {sizeLabel ? (
+              <span
+                data-collapse="size"
+                className="shrink-0 whitespace-nowrap text-xs text-gray-500"
+              >
+                {sizeLabel}
+              </span>
+            ) : null}
+            {canChangeQuality ? (
+              <select
+                data-collapse="res"
+                value={displayPreset}
+                disabled={changingQuality}
+                onChange={(e) => void onChangeQuality(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Download resolution"
+                className="shrink-0 cursor-pointer rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400 outline-none focus:ring-1 focus:ring-accent disabled:opacity-60"
+              >
+                {qualityOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {PRESET_LABELS[p] ?? p}
+                  </option>
+                ))}
+              </select>
+            ) : resLabel ? (
+              <span
+                data-collapse="res"
+                className="shrink-0 whitespace-nowrap rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400"
+              >
+                {resLabel}
+              </span>
+            ) : null}
+            {completed && (!videoGone || isDeviceJob) && (
+              <span
+                data-collapse="done"
+                className="shrink-0 whitespace-nowrap text-xs text-gray-400"
+              >
+                Done
               </span>
             )}
           </div>
@@ -674,7 +780,7 @@ export default function DownloadJobCard({
           <p className="text-sm text-gray-200">
             {isDeviceJob
               ? "Remove this card? The temporary file on the server will be deleted."
-              : "Remove this card from the list? The video stays in your library."}
+              : "Remove this card from the list? The video stays in your library. To delete the file, use Delete."}
           </p>
           <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-gray-400">
             <input
@@ -699,6 +805,35 @@ export default function DownloadJobCard({
               className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft"
             >
               Remove
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {deleteConfirm && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+        <div className="ui-panel w-full max-w-sm rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600">
+          <p className="text-sm text-gray-200">
+            Delete this video from your library? The file will be removed. This
+            card stays so you can redownload. Use × if you only want to hide the
+            card.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setDeleteConfirm(false)}
+              disabled={deleting}
+              className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-300 hover:bg-ink-700 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmDeleteFromLibrary()}
+              disabled={deleting}
+              className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-400 disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Delete from library"}
             </button>
           </div>
         </div>

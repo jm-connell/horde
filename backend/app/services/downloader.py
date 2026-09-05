@@ -1166,6 +1166,7 @@ def _complete_download(
             title=effective_title,
             device_file_path=rel_path,
             file_size=file_size,
+            height_px=height,
             video_id=None,
             error=None,
             error_kind=None,
@@ -1317,6 +1318,7 @@ def _complete_download(
         title=info.get("title"),
         video_id=video_id,
         file_size=file_size,
+        height_px=height,
         error=None,
         error_kind=None,
     )

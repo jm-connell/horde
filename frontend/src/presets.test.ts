@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  finishedQualityLabel,
   maxPresetLabel,
   mergePinnedPreset,
   presetOptionLabel,
@@ -47,5 +48,14 @@ describe("presets", () => {
     expect(resolveQualityPreset("best", ["audio"])).toBe("audio");
     expect(resolveQualityPreset("1080p", ["2160p", "1080p"])).toBe("1080p");
     expect(resolveQualityPreset("best", [])).toBe("best");
+  });
+
+  it("labels a finished file from probed height instead of Best available", () => {
+    expect(finishedQualityLabel("best", 2160)).toBe("4K");
+    expect(finishedQualityLabel("best", 1080)).toBe("1080p");
+    expect(finishedQualityLabel("best", null, [])).toBe("");
+    expect(finishedQualityLabel("best", null, ["1440p", "720p"])).toBe("1440p");
+    expect(finishedQualityLabel("audio", 1080)).toBe("Audio (best)");
+    expect(finishedQualityLabel("720p", 720)).toBe("720p");
   });
 });

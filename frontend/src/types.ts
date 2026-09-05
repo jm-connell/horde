@@ -196,6 +196,7 @@ export interface DownloadJob {
   video_id: number | null;
   replace_video_id?: number | null;
   file_size: number | null;
+  height_px?: number | null;
   created_at: string;
   video_missing?: boolean;
   superseded?: boolean;
