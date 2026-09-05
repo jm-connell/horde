@@ -125,6 +125,11 @@ interface Props {
   onAutoplayRelatedChange?: (enabled: boolean) => void;
   /** Fires when the live DASH track quality changes (YouTube ladder height). */
   onActiveQualityChange?: (quality: number | null) => void;
+  /**
+   * Unload live media (abort DASH fetches) while keeping the player shell.
+   * Used so a newly clicked preview can load without waiting on the current one.
+   */
+  mediaSuspended?: boolean;
 }
 
 export default function VideoPlayer({
@@ -167,6 +172,7 @@ export default function VideoPlayer({
   autoplayRelated = true,
   onAutoplayRelatedChange,
   onActiveQualityChange,
+  mediaSuspended = false,
 }: Props) {
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
@@ -241,8 +247,11 @@ export default function VideoPlayer({
   const pendingSeekRef = useRef(initialPosition);
   const [buffering, setBuffering] = useState(true);
   const bufferingShowTimer = useRef<number | null>(null);
+  const mediaSuspendedRef = useRef(mediaSuspended);
+  mediaSuspendedRef.current = mediaSuspended;
 
   const hideBuffering = useCallback(() => {
+    if (mediaSuspendedRef.current) return;
     if (bufferingShowTimer.current != null) {
       window.clearTimeout(bufferingShowTimer.current);
       bufferingShowTimer.current = null;
@@ -303,6 +312,7 @@ export default function VideoPlayer({
     // metadata — seeking/playing on it hangs after preview → library handoff.
     if (el.srcObject) return;
     if (effectiveStreamType === "dash") return;
+    if (mediaSuspended) return;
     if (el.readyState >= 1 && Number.isFinite(el.duration) && initialPosition < el.duration) {
       if (Math.abs(el.currentTime - initialPosition) > 1.25) {
         el.currentTime = initialPosition;
@@ -312,7 +322,7 @@ export default function VideoPlayer({
         el.play().catch(() => undefined);
       }
     }
-  }, [initialPosition, src, chromecast.casting, effectiveStreamType]);
+  }, [initialPosition, src, chromecast.casting, effectiveStreamType, mediaSuspended]);
 
   const showQualityNotice = useCallback((msg: string) => {
     setQualityNotice(msg);
@@ -368,6 +378,13 @@ export default function VideoPlayer({
   }, [src]);
 
   useEffect(() => {
+    if (!mediaSuspended) return;
+    setBuffering(true);
+    setPlaying(false);
+    videoRef.current?.pause();
+  }, [mediaSuspended]);
+
+  useEffect(() => {
     return () => {
       if (bufferingShowTimer.current != null) {
         window.clearTimeout(bufferingShowTimer.current);
@@ -379,6 +396,7 @@ export default function VideoPlayer({
     src,
     effectiveStreamType,
     dashReloadToken,
+    mediaSuspended,
     videoRef,
     shakaPlayerRef,
     qualityChoiceRef,
@@ -891,9 +909,9 @@ export default function VideoPlayer({
   }, [src]);
 
   useEffect(() => {
-    if (chromecast.casting) return;
+    if (chromecast.casting || mediaSuspended) return;
     videoRef.current?.play().catch(() => undefined);
-  }, [src, chromecast.casting]);
+  }, [src, chromecast.casting, mediaSuspended]);
 
   const cycleCaptions = useCallback(() => {
     if (tracks.length === 0) {
@@ -1916,7 +1934,7 @@ export default function VideoPlayer({
               el.currentTime = seekTarget;
             }
             pendingSeekRef.current = 0;
-            if (!chromecast.casting) {
+            if (!chromecast.casting && !mediaSuspended) {
               el.play().catch(() => undefined);
             }
           }}

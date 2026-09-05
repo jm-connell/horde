@@ -137,6 +137,7 @@ export default function Watch() {
     getCurrentPosition,
     getStreamPosition,
     activeStreamQuality,
+    suspendPlaybackMedia,
   } = usePlayback();
 
   const dockRef = useRef<HTMLDivElement>(null);
@@ -145,6 +146,7 @@ export default function Watch() {
   useEffect(() => {
     if (!Number.isFinite(libraryId) || libraryId <= 0) return;
     let cancelled = false;
+    suspendPlaybackMedia({ videoId: libraryId });
     setLoading(true);
     setError(null);
     const fromHandoff = peekWatchResume(libraryId);
@@ -172,7 +174,7 @@ export default function Watch() {
         if (!cancelled) setLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional handoff once
-  }, [libraryId, playVideo]);
+  }, [libraryId, playVideo, suspendPlaybackMedia]);
 
   // --- Load stream meta ---
   useEffect(() => {
@@ -183,6 +185,7 @@ export default function Watch() {
       return;
     }
     let cancelled = false;
+    suspendPlaybackMedia({ streamUrl: streamUrlParam });
     setLoading(true);
     setError(null);
     setSource(null);
@@ -213,7 +216,7 @@ export default function Watch() {
     return () => {
       cancelled = true;
     };
-  }, [streamUrlParam, libraryId, navigate]);
+  }, [streamUrlParam, libraryId, navigate, suspendPlaybackMedia]);
 
   // Start stream playback
   useEffect(() => {

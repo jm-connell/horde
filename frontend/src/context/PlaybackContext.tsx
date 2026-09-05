@@ -27,6 +27,7 @@ import {
   parseChapters,
   type Chapter,
 } from "../utils";
+import { shouldSuspendPlaybackForWatch } from "../utils/watchHandoff";
 import type { SubtitleTrack, Video } from "../types";
 
 export interface StreamSession {
@@ -68,6 +69,14 @@ interface PlaybackValue {
   reorderQueue: (from: number, to: number) => void;
   clearQueue: () => void;
   close: () => void;
+  /**
+   * Abort the live media session when Watch is loading a different video
+   * so the new preview can fetch without waiting on the current stream.
+   */
+  suspendPlaybackMedia: (next: {
+    streamUrl?: string | null;
+    videoId?: number | null;
+  }) => void;
   registerDock: (el: HTMLElement | null) => void;
   /** True when the floating mini-player is showing (browsing away from Watch). */
   miniPlayerActive: boolean;
@@ -161,12 +170,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const streamPosRef = useRef(0);
   const libraryPosRef = useRef(0);
   const recentWatchedRef = useRef<number[]>([]);
+  const currentRef = useRef<Video | null>(null);
+  const streamRef = useRef<StreamSession | null>(null);
+  currentRef.current = current;
+  streamRef.current = stream;
   const [miniPlayerRect, setMiniPlayerRect] = useState<MiniPlayerRect | null>(
     null
   );
   const [activeStreamQuality, setActiveStreamQuality] = useState<number | null>(
     null
   );
+  const [mediaSuspended, setMediaSuspended] = useState(false);
 
   useEffect(() => {
     try {
@@ -358,6 +372,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const playVideo = useCallback(
     (video: Video, opts?: { queue?: Video[] }) => {
+      setMediaSuspended(false);
       setCurrent((prev) => {
         if (prev?.id != null && prev.id !== video.id) {
           recentWatchedRef.current = [
@@ -382,6 +397,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const playStream = useCallback((session: StreamSession) => {
     setCurrent(null);
+    setMediaSuspended(false);
     setActiveStreamQuality(null);
     streamPosRef.current = 0;
     libraryPosRef.current = 0;
@@ -426,12 +442,30 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const close = useCallback(() => {
     setCurrent(null);
     setStream(null);
+    setMediaSuspended(false);
     setActiveStreamQuality(null);
     streamPosRef.current = 0;
     libraryPosRef.current = 0;
     setDock(null);
     setMiniPos(null);
   }, [setMiniPos]);
+
+  const suspendPlaybackMedia = useCallback(
+    (next: { streamUrl?: string | null; videoId?: number | null }) => {
+      if (
+        !shouldSuspendPlaybackForWatch({
+          playingStreamUrl: streamRef.current?.url,
+          playingVideoId: currentRef.current?.id,
+          nextStreamUrl: next.streamUrl,
+          nextVideoId: next.videoId,
+        })
+      ) {
+        return;
+      }
+      setMediaSuspended(true);
+    },
+    []
+  );
 
   const queueRef = useRef(queue);
   queueRef.current = queue;
@@ -462,6 +496,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     (video: Video) => {
       clearUpNext();
       setStream(null);
+      setMediaSuspended(false);
       libraryPosRef.current = 0;
       setCurrent(video);
       setQueue((q) => q.filter((v) => v.id !== video.id));
@@ -497,6 +532,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       if (q.length === 0) return q;
       const [next, ...rest] = q;
       setStream(null);
+      setMediaSuspended(false);
       setCurrent(next);
       navigate(`/watch/${next.id}`);
       return rest;
@@ -575,6 +611,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     reorderQueue,
     clearQueue,
     close,
+    suspendPlaybackMedia,
     registerDock,
     miniPlayerActive,
     miniPlayerRect,
@@ -586,9 +623,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       ? `${streamUrl(current.id)}?s=${current.file_size ?? 0}&h=${current.height_px ?? 0}`
       : "";
 
-  // Distinct keys so preview DASH (Shaka/MSE) does not reuse the same
-  // VideoPlayer instance as library progressive playback. Updating src in
-  // place leaves MediaSource attached and hangs on a black spinner.
+  // Distinct keys so DASH (Shaka/MSE) does not reuse the same VideoPlayer
+  // instance as library progressive playback, or as a different preview URL.
+  // Updating src in place leaves MediaSource attached and hangs on a spinner.
   const playerPortal =
     current != null ? (
       <VideoPlayer
@@ -671,10 +708,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           updateSettings({ autoplayRelated: enabled })
         }
         onActiveQualityChange={setActiveStreamQuality}
+        mediaSuspended={mediaSuspended}
       />
     ) : stream != null ? (
       <VideoPlayer
-        key="stream"
+        key={`stream:${stream.url}`}
         src={previewManifestUrl(stream.url)}
         streamType="dash"
         progressiveFallbackSrc={previewStreamUrl(stream.url)}
@@ -731,6 +769,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           }
         }}
         onActiveQualityChange={setActiveStreamQuality}
+        mediaSuspended={mediaSuspended}
       />
     ) : null;
 

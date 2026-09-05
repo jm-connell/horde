@@ -5,6 +5,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   type Dispatch,
   type MutableRefObject,
   type RefObject,
@@ -33,6 +34,8 @@ export interface UseShakaDashArgs {
   src: string;
   effectiveStreamType: StreamType;
   dashReloadToken: number;
+  /** Drop the live DASH session without unmounting the player chrome. */
+  mediaSuspended?: boolean;
   videoRef: RefObject<HTMLVideoElement | null>;
   shakaPlayerRef: MutableRefObject<ShakaPlayer | null>;
   qualityChoiceRef: MutableRefObject<QualityChoice>;
@@ -57,6 +60,7 @@ export function useShakaDashLoad({
   src,
   effectiveStreamType,
   dashReloadToken,
+  mediaSuspended = false,
   videoRef,
   shakaPlayerRef,
   qualityChoiceRef,
@@ -70,26 +74,50 @@ export function useShakaDashLoad({
   setMediaError,
   setBuffering,
 }: UseShakaDashArgs): void {
+  const destroyQueueRef = useRef(Promise.resolve());
+
   useEffect(() => {
-    if (effectiveStreamType !== "dash") {
+    let cancelled = false;
+    let created: ShakaPlayer | null = null;
+
+    const enqueueDestroy = (player: ShakaPlayer | null) => {
+      if (!player) return;
+      destroyQueueRef.current = destroyQueueRef.current
+        .then(() => player.destroy())
+        .catch(() => undefined);
+    };
+
+    if (mediaSuspended) {
       const existing = shakaPlayerRef.current;
       shakaPlayerRef.current = null;
       setShakaReady(false);
-      if (existing) {
-        void existing.destroy().catch(() => undefined);
-      }
-      return;
+      setBuffering(true);
+      enqueueDestroy(existing);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (effectiveStreamType !== "dash" || !src) {
+      const existing = shakaPlayerRef.current;
+      shakaPlayerRef.current = null;
+      setShakaReady(false);
+      enqueueDestroy(existing);
+      return () => {
+        cancelled = true;
+      };
     }
 
     const video = videoRef.current;
-    if (!video || !src) return;
+    if (!video) return;
 
-    let cancelled = false;
-    let player: ShakaPlayer | null = null;
     let criticalHits = 0;
 
     const loadDash = async () => {
       try {
+        await destroyQueueRef.current;
+        if (cancelled || !videoRef.current) return;
+
         const mod = await import("shaka-player/dist/shaka-player.dash.js");
         const shaka = mod as unknown as ShakaNamespace;
         if (cancelled || !videoRef.current) return;
@@ -133,11 +161,9 @@ export function useShakaDashLoad({
 
         shaka.polyfill.installAll();
         const p = new shaka.Player();
+        created = p;
         await p.attach(videoRef.current);
-        if (cancelled) {
-          await p.destroy().catch(() => undefined);
-          return;
-        }
+        if (cancelled) return;
 
         const abrEnabled = initialChoice === "auto";
         const videoEl = videoRef.current;
@@ -204,12 +230,8 @@ export function useShakaDashLoad({
         }) as EventListener);
 
         await p.load(src);
-        if (cancelled) {
-          await p.destroy().catch(() => undefined);
-          return;
-        }
+        if (cancelled) return;
 
-        player = p;
         shakaPlayerRef.current = p;
         const variants = p.getVariantTracks() ?? [];
         variantTracksRef.current = variants;
@@ -266,15 +288,19 @@ export function useShakaDashLoad({
     return () => {
       cancelled = true;
       setShakaReady(false);
-      const active = player ?? shakaPlayerRef.current;
+      const active = created ?? shakaPlayerRef.current;
       shakaPlayerRef.current = null;
-      if (active) {
-        void active.destroy().catch(() => undefined);
-      }
+      enqueueDestroy(active);
     };
     // Intentionally omit casting — only checked at load time for autoplay.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, effectiveStreamType, dashReloadToken, enterCompatMode]);
+  }, [
+    src,
+    effectiveStreamType,
+    dashReloadToken,
+    mediaSuspended,
+    enterCompatMode,
+  ]);
 }
 
 export function useApplyShakaQuality(
