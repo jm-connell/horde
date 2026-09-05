@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, streamUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
@@ -134,10 +134,8 @@ function FeedThumbnail({
   showDuration = true,
   matchTip,
   previewSrc,
-  previewEnabled,
-  previewBlocked,
   previewVideoId,
-  onPreviewActive,
+  previewActive,
 }: {
   thumbSrc: string | null;
   duration: string;
@@ -145,24 +143,13 @@ function FeedThumbnail({
   showDuration?: boolean;
   matchTip?: string | null;
   previewSrc?: string | null;
-  previewEnabled?: boolean;
-  previewBlocked?: boolean;
   previewVideoId?: number | null;
-  onPreviewActive?: (active: boolean) => void;
+  previewActive: boolean;
 }) {
-  const { ref: previewRef, active: previewActive } = useCardPreview({
-    enabled: Boolean(previewEnabled && previewSrc),
-    blocked: Boolean(previewBlocked),
-  });
   const previewing = previewActive && Boolean(previewSrc);
 
-  useEffect(() => {
-    onPreviewActive?.(previewActive);
-    return () => onPreviewActive?.(false);
-  }, [previewActive, onPreviewActive]);
-
   return (
-    <div ref={previewRef} className={`relative ${className}`}>
+    <div className={`relative ${className}`}>
       <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
         <div
           className={`relative h-full w-full transition-[transform,filter] duration-200 sm:group-hover:scale-105 ${
@@ -236,11 +223,22 @@ export default function ChannelFeedCard({
 }) {
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const { current } = usePlayback();
   const libraryVideoId = videoId ?? entry.video_id ?? null;
   const previewSrc =
     inLibrary && libraryVideoId != null ? streamUrl(libraryVideoId) : null;
+  const { ref: previewRef, active: previewActive } = useCardPreview({
+    enabled: Boolean(previewSrc),
+    blocked: libraryVideoId != null && current?.id === libraryVideoId,
+  });
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      cardRef.current = node;
+      previewRef(node);
+    },
+    [previewRef]
+  );
   const [maxRes, setMaxRes] = useState(() => {
     if (entry.library_height_px) {
       return formatResolution(entry.library_height_px);
@@ -261,7 +259,6 @@ export default function ChannelFeedCard({
     channelName
   );
   const matchTip = visibleMatchReasonTip(entry.match_reason, searchQuery);
-  const [previewActive, setPreviewActive] = useState(false);
 
   useEffect(() => {
     if (entry.library_height_px) {
@@ -322,12 +319,8 @@ export default function ChannelFeedCard({
           className="h-[4.5rem] w-32 shrink-0 rounded-lg"
           matchTip={matchTip}
           previewSrc={previewSrc}
-          previewEnabled={Boolean(previewSrc)}
-          previewBlocked={
-            libraryVideoId != null && current?.id === libraryVideoId
-          }
           previewVideoId={libraryVideoId}
-          onPreviewActive={setPreviewActive}
+          previewActive={previewActive}
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-24">
@@ -397,12 +390,8 @@ export default function ChannelFeedCard({
           className="aspect-video w-full"
           matchTip={matchTip}
           previewSrc={previewSrc}
-          previewEnabled={Boolean(previewSrc)}
-          previewBlocked={
-            libraryVideoId != null && current?.id === libraryVideoId
-          }
           previewVideoId={libraryVideoId}
-          onPreviewActive={setPreviewActive}
+          previewActive={previewActive}
         />
         <div
           className={`flex flex-col gap-1 p-3 transition-colors duration-200 ${
@@ -426,7 +415,7 @@ export default function ChannelFeedCard({
 
   return (
     <div
-      ref={cardRef}
+      ref={setRootRef}
       data-horde="feed-card"
       data-preview-active={previewActive ? "true" : undefined}
       className={

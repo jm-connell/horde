@@ -89,11 +89,9 @@ export default function VideoCard({
       className={cardClass}
       data-horde="video-card"
       data-preview-active={previewActive ? "true" : undefined}
+      ref={previewRef}
     >
-      <div
-        ref={previewRef}
-        className="relative aspect-video w-full overflow-hidden"
-      >
+      <div className="relative aspect-video w-full overflow-hidden">
         {thumb ? (
           <img
             src={thumb}
