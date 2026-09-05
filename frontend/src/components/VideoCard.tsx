@@ -25,6 +25,7 @@ export default function VideoCard({
   selected,
   onSelect,
   searchQuery = "",
+  layout = "card",
 }: {
   video: Video;
   progress?: number;
@@ -34,6 +35,8 @@ export default function VideoCard({
   selected?: boolean;
   onSelect?: (id: number, e: React.MouseEvent) => void;
   searchQuery?: string;
+  /** `feed` drops the card chrome on small screens (YouTube-style home). */
+  layout?: "card" | "feed";
 }) {
   const navigate = useNavigate();
   const { addToQueue, current } = usePlayback();
@@ -66,14 +69,26 @@ export default function VideoCard({
     if (resumeAt != null) setWatchResume(video.id, resumeAt);
   };
 
+  const feed = layout === "feed";
+  const cardClass = feed
+    ? [
+        "ui-card video-card--feed group flex flex-col overflow-hidden transition-colors",
+        "max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0",
+        "max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0",
+        "sm:rounded-xl sm:bg-ink-900 sm:ring-1",
+        selected ? "sm:ring-accent" : "sm:ring-ink-700 sm:hover:ring-accent/60",
+      ].join(" ")
+    : `ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-colors ${
+        selected ? "ring-accent" : "hover:ring-accent/60"
+      }`;
+
   return (
     <Link
       to={`/watch/${video.id}`}
       onClick={handleClick}
-      className={`ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-colors ${
-        selected ? "ring-accent" : "hover:ring-accent/60"
-      }`}
+      className={cardClass}
       data-horde="video-card"
+      data-preview-active={previewActive ? "true" : undefined}
     >
       <div
         ref={previewRef}
@@ -162,8 +177,18 @@ export default function VideoCard({
           }
         />
       </div>
-      <div className="relative flex flex-col gap-1 p-3">
-        <h3 className="line-clamp-2 min-h-[2.5rem] overflow-hidden break-words pr-10 text-sm font-semibold text-gray-100 group-hover:text-accent">
+      <div
+        className={`relative flex flex-col gap-1 p-3 transition-colors duration-200 ${
+          previewActive ? "max-sm:bg-accent/10" : ""
+        }`}
+      >
+        <h3
+          className={`line-clamp-2 overflow-hidden break-words text-sm font-semibold text-gray-100 group-hover:text-accent ${
+            feed
+              ? "max-sm:min-h-0 max-sm:pr-0 sm:min-h-[2.5rem] sm:pr-10"
+              : "min-h-[2.5rem] pr-10"
+          }`}
+        >
           {video.title}
         </h3>
         <div className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 ${resolution ? "pr-10" : ""}`}>

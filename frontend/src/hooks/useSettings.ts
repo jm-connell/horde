@@ -225,6 +225,8 @@ export interface Settings {
   previewOnHover: boolean;
   /** Muted thumbnail preview when a card is uniquely centered (touch / phones). */
   previewWhenCentered: boolean;
+  /** Thumbnail preview audio muted. Synced, not shown in Settings. */
+  previewMuted: boolean;
   /** On a channel page, include uploads that are not yet in the library. */
   showUndownloadedOnChannel: boolean;
   /** Default quality for adaptive stream playback (Auto = ABR within device cap). */
@@ -299,6 +301,7 @@ const DEFAULTS: Settings = {
   autoplayRelated: true,
   previewOnHover: true,
   previewWhenCentered: true,
+  previewMuted: false,
   showUndownloadedOnChannel: true,
   defaultStreamQuality: "auto",
 };
@@ -364,11 +367,14 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "autoplayRelated",
   "previewOnHover",
   "previewWhenCentered",
+  "previewMuted",
   "showUndownloadedOnChannel",
   "defaultStreamQuality",
 ];
 
 const STORAGE_KEY = "horde.settings";
+/** Pre-sync thumbnail mute flag; folded into `previewMuted` on load. */
+const LEGACY_PREVIEW_MUTE_KEY = "horde.previewMuted";
 
 const THEME_CSS_VARS = [
   "--ink-950",
@@ -929,6 +935,7 @@ function normalizeSettings(
       parsed.previewWhenCentered,
       DEFAULTS.previewWhenCentered
     ),
+    previewMuted: normalizeBool(parsed.previewMuted, DEFAULTS.previewMuted),
     ...normalizeFontSettings(parsed),
   };
 }
@@ -1016,8 +1023,18 @@ export function applyMotionPrefs(settings: Settings): void {
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<Settings> & { liquidNav?: boolean };
+    const parsed = (
+      raw ? JSON.parse(raw) : {}
+    ) as Partial<Settings> & { liquidNav?: boolean };
+    if (parsed.previewMuted === undefined) {
+      try {
+        const legacy = localStorage.getItem(LEGACY_PREVIEW_MUTE_KEY);
+        if (legacy === "1" || legacy === "true") parsed.previewMuted = true;
+        else if (legacy === "0" || legacy === "false") parsed.previewMuted = false;
+      } catch {
+        // private mode
+      }
+    }
     return normalizeSettings(parsed);
   } catch {
     return DEFAULTS;
@@ -1026,6 +1043,11 @@ export function loadSettings(): Settings {
 
 function persistLocal(settings: Settings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  try {
+    localStorage.removeItem(LEGACY_PREVIEW_MUTE_KEY);
+  } catch {
+    // ignore
+  }
   window.dispatchEvent(new Event(EVENT));
 }
 
@@ -1074,6 +1096,9 @@ function ensureServerHydration(): Promise<void> {
           progressExpiryDays: remote.progress_expiry_days,
         });
         persistLocal(next);
+        if (!Object.prototype.hasOwnProperty.call(ui, "preview_muted")) {
+          scheduleServerSync(next);
+        }
       } else {
         // Migrate local → server
         const uiPayload = settingsToServerUi(local);

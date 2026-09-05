@@ -137,6 +137,7 @@ function FeedThumbnail({
   previewEnabled,
   previewBlocked,
   previewVideoId,
+  onPreviewActive,
 }: {
   thumbSrc: string | null;
   duration: string;
@@ -147,6 +148,7 @@ function FeedThumbnail({
   previewEnabled?: boolean;
   previewBlocked?: boolean;
   previewVideoId?: number | null;
+  onPreviewActive?: (active: boolean) => void;
 }) {
   const { ref: previewRef, active: previewActive } = useCardPreview({
     enabled: Boolean(previewEnabled && previewSrc),
@@ -154,10 +156,19 @@ function FeedThumbnail({
   });
   const previewing = previewActive && Boolean(previewSrc);
 
+  useEffect(() => {
+    onPreviewActive?.(previewActive);
+    return () => onPreviewActive?.(false);
+  }, [previewActive, onPreviewActive]);
+
   return (
     <div ref={previewRef} className={`relative ${className}`}>
       <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
-        <div className="relative h-full w-full transition-transform duration-200 group-hover:scale-105">
+        <div
+          className={`relative h-full w-full transition-[transform,filter] duration-200 sm:group-hover:scale-105 ${
+            previewing ? "" : "group-hover:brightness-[0.6]"
+          }`}
+        >
           {thumbSrc ? (
             <img
               src={thumbSrc}
@@ -180,7 +191,7 @@ function FeedThumbnail({
           ) : null}
         </div>
         <div
-          className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/40 transition-opacity ${
+          className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center transition-opacity ${
             previewing
               ? "opacity-0"
               : "opacity-0 group-hover:opacity-100"
@@ -250,6 +261,7 @@ export default function ChannelFeedCard({
     channelName
   );
   const matchTip = visibleMatchReasonTip(entry.match_reason, searchQuery);
+  const [previewActive, setPreviewActive] = useState(false);
 
   useEffect(() => {
     if (entry.library_height_px) {
@@ -315,6 +327,7 @@ export default function ChannelFeedCard({
             libraryVideoId != null && current?.id === libraryVideoId
           }
           previewVideoId={libraryVideoId}
+          onPreviewActive={setPreviewActive}
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-24">
@@ -377,7 +390,7 @@ export default function ChannelFeedCard({
         </div>
       </div>
     ) : (
-      <div className="ui-card group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700">
+      <div className="ui-card video-card--feed group flex flex-col overflow-hidden max-sm:rounded-none max-sm:bg-transparent max-sm:ring-0 sm:rounded-xl sm:bg-ink-900 sm:ring-1 sm:ring-ink-700">
         <FeedThumbnail
           thumbSrc={thumbSrc}
           duration={duration}
@@ -389,9 +402,14 @@ export default function ChannelFeedCard({
             libraryVideoId != null && current?.id === libraryVideoId
           }
           previewVideoId={libraryVideoId}
+          onPreviewActive={setPreviewActive}
         />
-        <div className="flex flex-col gap-1 p-3">
-          <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 group-hover:text-accent">
+        <div
+          className={`flex flex-col gap-1 p-3 transition-colors duration-200 ${
+            previewActive ? "max-sm:bg-accent/10" : ""
+          }`}
+        >
+          <h3 className="line-clamp-2 min-h-0 text-sm font-semibold text-gray-100 group-hover:text-accent sm:min-h-[2.5rem]">
             {entry.title || "Untitled"}
           </h3>
           <FeedMetaRow
@@ -407,7 +425,16 @@ export default function ChannelFeedCard({
     );
 
   return (
-    <div ref={cardRef} data-horde="feed-card">
+    <div
+      ref={cardRef}
+      data-horde="feed-card"
+      data-preview-active={previewActive ? "true" : undefined}
+      className={
+        layout === "grid"
+          ? "max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0"
+          : undefined
+      }
+    >
       {href ? (
         <Link
           to={href}

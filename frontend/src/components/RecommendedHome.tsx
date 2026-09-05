@@ -35,7 +35,7 @@ export default function RecommendedHome({
         : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
     }`;
 
-  const gridClass = `grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+  const gridClass = `grid grid-cols-1 gap-4 max-sm:gap-0 max-sm:-mx-3 sm:grid-cols-2 md:grid-cols-3 ${
     sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
   }`;
 
@@ -257,7 +257,7 @@ export default function RecommendedHome({
         <>
           <div className={gridClass}>
             {feedVideos.map((v) => (
-              <VideoCard key={v.id} video={v} />
+              <VideoCard key={v.id} video={v} layout="feed" />
             ))}
           </div>
           <div ref={sentinelRef} className="h-4" />

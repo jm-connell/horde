@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
-import { loadSettings } from "../hooks/useSettings";
-import {
-  PREVIEW_MUTE_EVENT,
-  PREVIEW_UNLOAD_DELAY_MS,
-  readPreviewMuted,
-  reportPreviewTime,
-  writePreviewMuted,
-} from "../utils/cardPreview";
+import { loadSettings, useSettings } from "../hooks/useSettings";
+import { PREVIEW_UNLOAD_DELAY_MS, reportPreviewTime } from "../utils/cardPreview";
 
 function MuteGlyph({ muted }: { muted: boolean }) {
   if (muted) {
@@ -55,11 +49,14 @@ export default function CardPreviewVideo({
   startSec: number;
   active: boolean;
 }) {
+  const [settings, update] = useSettings();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const wantMutedRef = useRef(readPreviewMuted());
+  const wantMutedRef = useRef(settings.previewMuted);
+  const prefMutedRef = useRef(settings.previewMuted);
   const [mounted, setMounted] = useState(active);
   const [ready, setReady] = useState(false);
-  const [playingMuted, setPlayingMuted] = useState(true);
+  const [playingMuted, setPlayingMuted] = useState(settings.previewMuted);
+  wantMutedRef.current = settings.previewMuted;
 
   useEffect(() => {
     if (active) {
@@ -74,23 +71,19 @@ export default function CardPreviewVideo({
   }, [active]);
 
   useEffect(() => {
-    const sync = () => {
-      const muted = readPreviewMuted();
-      wantMutedRef.current = muted;
-      const el = videoRef.current;
-      if (el) {
-        el.muted = muted;
-        el.defaultMuted = muted;
-      }
-      setPlayingMuted(muted || Boolean(el?.muted));
-    };
-    window.addEventListener(PREVIEW_MUTE_EVENT, sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(PREVIEW_MUTE_EVENT, sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
+    if (prefMutedRef.current === settings.previewMuted) return;
+    prefMutedRef.current = settings.previewMuted;
+    wantMutedRef.current = settings.previewMuted;
+    const el = videoRef.current;
+    if (!el) {
+      setPlayingMuted(settings.previewMuted);
+      return;
+    }
+    el.muted = settings.previewMuted;
+    el.defaultMuted = settings.previewMuted;
+    setPlayingMuted(settings.previewMuted);
+    if (!settings.previewMuted) void el.play().catch(() => undefined);
+  }, [settings.previewMuted]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -163,7 +156,8 @@ export default function CardPreviewVideo({
     const el = videoRef.current;
     const next = !(el?.muted ?? playingMuted);
     wantMutedRef.current = next;
-    writePreviewMuted(next);
+    prefMutedRef.current = next;
+    update({ previewMuted: next });
     if (el) {
       el.muted = next;
       el.defaultMuted = next;

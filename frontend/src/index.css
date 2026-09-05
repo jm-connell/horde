@@ -807,6 +807,31 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   transition-duration: 80ms;
 }
 
+/* Mobile feed cards: full-width thumbs, no boxed chrome (beats panel tint). */
+@media (max-width: 639px) {
+  html .ui-card.video-card--feed,
+  html[data-translucent-panels="on"] .ui-card.video-card--feed,
+  html[data-panel-tint="on"] .ui-card.video-card--feed {
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 0;
+    box-shadow: none !important;
+  }
+
+  html[data-hover-motion="subtle"] .ui-card.video-card--feed:hover,
+  html[data-hover-motion="lift"] .ui-card.video-card--feed:hover,
+  html[data-hover-motion="glow"] .ui-card.video-card--feed:hover {
+    transform: none;
+    filter: none;
+    box-shadow: none;
+  }
+
+  html[data-button-press="on"] a.ui-card.video-card--feed:active {
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html[data-page-fade="on"] .page-shell {
     animation: none;

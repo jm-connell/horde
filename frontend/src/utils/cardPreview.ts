@@ -57,34 +57,6 @@ export function shouldHandoffPreview(
   return currentTime - startSec > minWatched;
 }
 
-const PREVIEW_MUTE_KEY = "horde.previewMuted";
-export const PREVIEW_MUTE_EVENT = "horde:preview-muted";
-
-/** Default unmuted. Only an explicit thumbnail mute click persists. */
-export function readPreviewMuted(): boolean {
-  try {
-    const raw = localStorage.getItem(PREVIEW_MUTE_KEY);
-    if (raw === "1") return true;
-    if (raw === "0") return false;
-  } catch {
-    // private mode / SSR
-  }
-  return false;
-}
-
-export function writePreviewMuted(muted: boolean): void {
-  try {
-    localStorage.setItem(PREVIEW_MUTE_KEY, muted ? "1" : "0");
-  } catch {
-    // ignore quota / private mode
-  }
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent(PREVIEW_MUTE_EVENT, { detail: muted })
-    );
-  }
-}
-
 type LivePreview = {
   videoId: number;
   startSec: number;

@@ -661,7 +661,7 @@ export default function ChannelFeed({
           <div
             className={
               feedLayout === "grid"
-                ? `grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+                ? `grid grid-cols-1 gap-4 max-sm:gap-0 max-sm:-mx-3 sm:grid-cols-2 md:grid-cols-3 ${
                     settings.sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
                   }`
                 : "mx-auto flex w-full max-w-3xl flex-col gap-2"

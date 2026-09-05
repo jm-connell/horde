@@ -1380,7 +1380,7 @@ export default function Library() {
             )}
             {videos.length > 0 && (
               <div
-                className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+                className={`grid grid-cols-1 gap-4 max-sm:gap-0 max-sm:-mx-3 sm:grid-cols-2 md:grid-cols-3 ${
                   settings.sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
                 }`}
               >
@@ -1388,6 +1388,7 @@ export default function Library() {
                   <VideoCard
                     key={v.id}
                     video={v}
+                    layout="feed"
                     searchQuery={debouncedSearch}
                     showViewCount={sort === "view_count"}
                     progress={settings.showProgressOnAllVideos ? videoProgress(v) : undefined}
@@ -1411,7 +1412,7 @@ export default function Library() {
                   <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
                 </div>
                 <div
-                  className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+                  className={`grid grid-cols-1 gap-4 max-sm:gap-0 max-sm:-mx-3 sm:grid-cols-2 md:grid-cols-3 ${
                     settings.sidebarCollapsed
                       ? "xl:grid-cols-5"
                       : "xl:grid-cols-4"
@@ -1476,7 +1477,7 @@ export default function Library() {
                   <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
                 </div>
                 <div
-                  className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 ${
+                  className={`grid grid-cols-1 gap-4 max-sm:gap-0 max-sm:-mx-3 sm:grid-cols-2 md:grid-cols-3 ${
                     settings.sidebarCollapsed
                       ? "xl:grid-cols-5"
                       : "xl:grid-cols-4"
@@ -1486,6 +1487,7 @@ export default function Library() {
                     <VideoCard
                       key={v.id}
                       video={v}
+                      layout="feed"
                       searchQuery={debouncedSearch}
                       showViewCount={sort === "view_count"}
                       progress={
