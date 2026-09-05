@@ -15,8 +15,8 @@ export const PRESET_ORDER = [
 
 export const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
-  "2160p": "4K (2160p)",
-  "1440p": "1440p (2K)",
+  "2160p": "4K",
+  "1440p": "1440p",
   "1080p": "1080p",
   "720p": "720p",
   "480p": "480p",
@@ -63,4 +63,27 @@ export function maxPresetLabel(presets: string[]): string {
   }
   if (presets.includes("best")) return "Best";
   return "";
+}
+
+/** Map a requested "best" preset to the highest concrete tier in `available`. */
+export function resolveQualityPreset(preset: string, available: string[]): string {
+  if (preset !== "best") return preset;
+  for (const p of PRESET_ORDER) {
+    if (p === "best" || isAudioPreset(p)) continue;
+    if (available.includes(p)) return p;
+  }
+  if (available.includes("audio")) return "audio";
+  for (const p of PRESET_ORDER) {
+    if (isAudioPreset(p) && available.includes(p)) return p;
+  }
+  return "best";
+}
+
+export function jobQualityOptions(
+  available: string[] | undefined,
+  current: string,
+  fallback: string[]
+): string[] {
+  const list = available && available.length > 0 ? available : fallback;
+  return mergePinnedPreset(list, current);
 }

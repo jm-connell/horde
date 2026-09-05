@@ -95,4 +95,30 @@ export function queueDockAlignClass(rect: MiniPlayerRect | null): string {
   return miniOnRight ? "mr-auto" : "ml-auto";
 }
 
+export type MiniPlayerBox = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+/**
+ * North-west resize: change width (height follows aspect) while keeping the
+ * bottom-right corner fixed. Used by the mini player's top-left handle.
+ */
+export function miniFrameFromNorthWestResize(
+  start: MiniPlayerBox,
+  nextWidth: number
+): MiniPlayerBox {
+  const width = nextWidth;
+  const height =
+    start.width > 0 ? (start.height * nextWidth) / start.width : start.height;
+  return {
+    width,
+    height,
+    left: start.left + start.width - width,
+    top: start.top + start.height - height,
+  };
+}
+
 export { QUEUE_W };

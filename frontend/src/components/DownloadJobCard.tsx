@@ -17,9 +17,10 @@ import {
   formatSize,
   youtubeListThumbnailUrl,
 } from "../utils";
-import { PRESET_LABELS } from "../presets";
+import { PRESET_LABELS, PRESET_ORDER, jobQualityOptions, resolveQualityPreset } from "../presets";
 import ChannelPicker from "./ChannelPicker";
 import {
+  canChangeJobQuality,
   canEditDownloadJobNotes,
   canRedownloadRemovedJob,
   isLibraryVideoGone,
@@ -53,7 +54,7 @@ export default function DownloadJobCard({
   channels,
   active = false,
 }: Props) {
-  const { updateJobOverrides, retryJob, cancelJob, dismissJob, submitDownload } =
+  const { updateJobOverrides, retryJob, cancelJob, dismissJob, submitDownload, changeJobQuality } =
     useDownloads();
   const status = jobStatus(job, live);
   const maxBytesRef = useRef(0);
@@ -83,6 +84,12 @@ export default function DownloadJobCard({
   const completed = status === "completed";
   const failed = status === "error";
   const cancelled = status === "cancelled";
+  const canChangeQuality = canChangeJobQuality(
+    status,
+    failed,
+    cancelled,
+    completed
+  );
   const videoId = live?.video_id ?? job.video_id;
   const isDeviceJob =
     (live?.destination ?? job.destination) === "device";
@@ -119,11 +126,16 @@ export default function DownloadJobCard({
   const [dontAskAgain, setDontAskAgain] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [redownloading, setRedownloading] = useState(false);
+  const [changingQuality, setChangingQuality] = useState(false);
+  const [sourcePresets, setSourcePresets] = useState<string[]>(
+    () => job.available_presets ?? []
+  );
   const [editingTitle, setEditingTitle] = useState(false);
   const retryingRef = useRef(false);
   const redownloadingRef = useRef(false);
   const editingTitleRef = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const previewFetchedFor = useRef<number | null>(null);
   editingTitleRef.current = editingTitle;
 
   const savedTitle = useRef(resolveTitle());
@@ -149,6 +161,38 @@ export default function DownloadJobCard({
     el.focus();
     el.select();
   }, [editingTitle]);
+
+  const storedPresets = job.available_presets;
+  useEffect(() => {
+    if (storedPresets && storedPresets.length > 0) {
+      setSourcePresets(storedPresets);
+      return;
+    }
+    if (!canChangeQuality || !job.url) return;
+    if (previewFetchedFor.current === job.id) return;
+    let cancelledFetch = false;
+    api
+      .previewDownload(job.url)
+      .then((p) => {
+        if (cancelledFetch || p.is_playlist) return;
+        previewFetchedFor.current = job.id;
+        setSourcePresets(p.available_presets);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelledFetch = true;
+    };
+  }, [job.id, job.url, storedPresets, canChangeQuality]);
+
+  const qualityOptions = jobQualityOptions(
+    sourcePresets,
+    job.quality_preset,
+    [...PRESET_ORDER]
+  );
+  const displayPreset = resolveQualityPreset(
+    job.quality_preset || "best",
+    sourcePresets
+  );
 
   const isDirty = title !== savedTitle.current || channel !== savedChannel.current;
 
@@ -267,6 +311,19 @@ export default function DownloadJobCard({
     } finally {
       redownloadingRef.current = false;
       setRedownloading(false);
+    }
+  };
+
+  const onChangeQuality = async (preset: string) => {
+    if (!canChangeQuality || changingQuality) return;
+    if (preset === displayPreset) return;
+    setChangingQuality(true);
+    try {
+      await changeJobQuality(job.id, preset);
+    } catch {
+      // job refresh in context restores the previous preset
+    } finally {
+      setChangingQuality(false);
     }
   };
 
@@ -582,11 +639,26 @@ export default function DownloadJobCard({
             {(sizeLabel || completed || job.quality_preset) && (
               <span className="ml-auto flex items-center gap-2 text-xs text-gray-500">
                 {sizeLabel && <span>{sizeLabel}</span>}
-                {job.quality_preset && (
+                {job.quality_preset && canChangeQuality ? (
+                  <select
+                    value={displayPreset}
+                    disabled={changingQuality}
+                    onChange={(e) => void onChangeQuality(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Download resolution"
+                    className="cursor-pointer rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400 outline-none focus:ring-1 focus:ring-accent disabled:opacity-60"
+                  >
+                    {qualityOptions.map((p) => (
+                      <option key={p} value={p}>
+                        {PRESET_LABELS[p] ?? p}
+                      </option>
+                    ))}
+                  </select>
+                ) : job.quality_preset ? (
                   <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400">
-                    {PRESET_LABELS[job.quality_preset] ?? job.quality_preset}
+                    {PRESET_LABELS[displayPreset] ?? displayPreset}
                   </span>
-                )}
+                ) : null}
                 {completed && (!videoGone || isDeviceJob) && (
                   <span className="text-gray-400">Done</span>
                 )}

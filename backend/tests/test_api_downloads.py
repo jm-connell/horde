@@ -259,3 +259,170 @@ def test_create_download_after_failure_is_new_job(client, init_db, monkeypatch):
     assert created.json()["id"] != failed_id
     listed = client.get("/api/downloads").json()
     assert len(listed) == 2
+
+
+def test_create_download_resolves_best_to_available_height(client, monkeypatch):
+    from app.services import downloader
+
+    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(
+        downloader,
+        "extract_preview",
+        lambda url: {
+            "id": "dQw4w9WgXcQ",
+            "title": "Preview Title",
+            "channel": "Preview Chan",
+            "is_playlist": False,
+            "available_presets": ["2160p", "1080p", "720p", "audio"],
+        },
+    )
+    created = client.post(
+        "/api/downloads",
+        json={
+            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "quality_preset": "best",
+        },
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert body["quality_preset"] == "2160p"
+    assert body["available_presets"][0] == "2160p"
+
+
+def test_change_quality_on_queued_job(client, monkeypatch):
+    from app.services import downloader
+
+    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(
+        downloader,
+        "extract_preview",
+        lambda url: {
+            "id": "dQw4w9WgXcQ",
+            "title": "Preview Title",
+            "channel": "Preview Chan",
+            "is_playlist": False,
+            "available_presets": ["2160p", "1080p", "720p"],
+        },
+    )
+    created = client.post(
+        "/api/downloads",
+        json={
+            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "quality_preset": "720p",
+        },
+    )
+    job_id = created.json()["id"]
+    changed = client.post(
+        f"/api/downloads/{job_id}/quality",
+        json={"quality_preset": "1080p"},
+    )
+    assert changed.status_code == 200
+    body = changed.json()
+    assert body["id"] == job_id
+    assert body["quality_preset"] == "1080p"
+    assert body["status"] == "queued"
+
+    same = client.post(
+        f"/api/downloads/{job_id}/quality",
+        json={"quality_preset": "1080p"},
+    )
+    assert same.status_code == 200
+    assert same.json()["quality_preset"] == "1080p"
+
+
+def test_change_quality_rejects_finished_and_unknown(client, init_db, monkeypatch):
+    from app.models import JobStatus
+
+    job_id = _failed_job(init_db, status=JobStatus.completed, error=None, error_kind=None)
+    assert (
+        client.post(
+            f"/api/downloads/{job_id}/quality", json={"quality_preset": "720p"}
+        ).status_code
+        == 409
+    )
+    assert (
+        client.post(
+            "/api/downloads/99999/quality", json={"quality_preset": "720p"}
+        ).status_code
+        == 404
+    )
+
+    from app.services import downloader
+
+    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(
+        downloader,
+        "extract_preview",
+        lambda url: {"id": "dQw4w9WgXcQ", "is_playlist": False},
+    )
+    created = client.post(
+        "/api/downloads",
+        json={
+            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "quality_preset": "720p",
+        },
+    )
+    job_id = created.json()["id"]
+    bad = client.post(
+        f"/api/downloads/{job_id}/quality", json={"quality_preset": "8k"}
+    )
+    assert bad.status_code == 400
+
+
+def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
+    from sqlmodel import Session
+
+    from app.models import DownloadJob, JobStatus
+    from app.services import downloader
+
+    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(
+        downloader,
+        "extract_preview",
+        lambda url: {
+            "id": "dQw4w9WgXcQ",
+            "title": "Preview Title",
+            "is_playlist": False,
+            "available_presets": ["1080p", "720p"],
+        },
+    )
+    created = client.post(
+        "/api/downloads",
+        json={
+            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "quality_preset": "1080p",
+        },
+    )
+    job_id = created.json()["id"]
+    with Session(init_db["engine"]) as session:
+        job = session.get(DownloadJob, job_id)
+        job.status = JobStatus.downloading
+        job.progress = 40.0
+        session.add(job)
+        session.commit()
+
+    monkeypatch.setattr(
+        downloader.DownloadQueue, "is_running", lambda self, jid: jid == job_id
+    )
+
+    def fake_wait(jid, timeout=30.0):
+        with Session(init_db["engine"]) as session:
+            job = session.get(DownloadJob, jid)
+            job.status = JobStatus.queued
+            job.progress = 0.0
+            session.add(job)
+            session.commit()
+        return True
+
+    monkeypatch.setattr(downloader, "wait_until_job_not_running", fake_wait)
+
+    changed = client.post(
+        f"/api/downloads/{job_id}/quality",
+        json={"quality_preset": "720p"},
+    )
+    assert changed.status_code == 200
+    body = changed.json()
+    assert body["quality_preset"] == "720p"
+    assert body["status"] == "queued"
+    assert body["progress"] == 0.0
+    assert downloader.progress_store[job_id]["status"] == "queued"

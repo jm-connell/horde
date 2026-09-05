@@ -131,6 +131,7 @@ class DownloadJobRead(BaseModel):
     id: int
     url: str
     quality_preset: str
+    available_presets: list[str] = []
     status: JobStatus
     progress: float
     title: Optional[str]
@@ -156,6 +157,10 @@ class DownloadJobUpdate(BaseModel):
     title_override: Optional[str] = None
     channel_override: Optional[str] = None
     notes_pending: Optional[str] = None
+
+
+class DownloadQualityUpdate(BaseModel):
+    quality_preset: str
 
 
 class DownloadQueueStatus(BaseModel):

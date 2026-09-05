@@ -39,6 +39,7 @@ interface DownloadContextValue {
     jobId: number,
     overrides?: SubmitOverrides
   ) => Promise<DownloadJob>;
+  changeJobQuality: (jobId: number, preset: string) => Promise<DownloadJob>;
   updateJobOverrides: (
     jobId: number,
     overrides: SubmitOverrides & { notes?: string }
@@ -82,6 +83,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const sources = useRef<Map<number, () => void>>(new Map());
   const toastedErrors = useRef<Set<number>>(new Set());
   const deviceSaved = useRef<Set<number>>(new Set());
+  const restartingJobs = useRef<Set<number>>(new Set());
   const completionListeners = useRef<
     Set<(videoId: number | null, event?: ProgressEvent) => void>
   >(new Set());
@@ -125,6 +127,14 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     (jobId: number) => {
       if (sources.current.has(jobId)) return;
       const close = subscribeToJob(jobId, (event) => {
+        if (
+          restartingJobs.current.has(jobId) &&
+          event.status === "cancelled"
+        ) {
+          sources.current.get(jobId)?.();
+          sources.current.delete(jobId);
+          return;
+        }
         setProgress((prev) => ({ ...prev, [jobId]: event }));
         if (TERMINAL.has(event.status)) {
           sources.current.get(jobId)?.();
@@ -138,6 +148,9 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
               showToast(event.quality_warning);
             }
           } else if (event.status === "error" && !toastedErrors.current.has(jobId)) {
+            if (restartingJobs.current.has(jobId)) {
+              return;
+            }
             toastedErrors.current.add(jobId);
             showToast(downloadErrorToast(event.error_kind, event.error));
           }
@@ -246,6 +259,48 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     [refreshJob, subscribe, syncQueue]
   );
 
+  const changeJobQuality = useCallback(
+    async (jobId: number, preset: string) => {
+      restartingJobs.current.add(jobId);
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === jobId
+            ? {
+                ...j,
+                quality_preset: preset,
+                progress: 0,
+                status: j.status === "downloading" ? "queued" : j.status,
+              }
+            : j
+        )
+      );
+      setProgress((prev) => ({
+        ...prev,
+        [jobId]: {
+          ...prev[jobId],
+          status: "queued",
+          progress: 0,
+        },
+      }));
+      try {
+        const job = await api.changeJobQuality(jobId, preset);
+        setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
+        sources.current.get(jobId)?.();
+        sources.current.delete(jobId);
+        subscribe(job.id);
+        syncQueue();
+        return job;
+      } catch (err) {
+        restartingJobs.current.delete(jobId);
+        refreshJob(jobId);
+        throw err;
+      } finally {
+        window.setTimeout(() => restartingJobs.current.delete(jobId), 10000);
+      }
+    },
+    [refreshJob, subscribe, syncQueue]
+  );
+
   const updateJobOverrides = useCallback(
     async (
       jobId: number,
@@ -337,6 +392,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     queuePaused,
     submitDownload,
     retryJob,
+    changeJobQuality,
     updateJobOverrides,
     cancelJob,
     dismissJob,

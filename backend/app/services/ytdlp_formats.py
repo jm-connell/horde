@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 # Audio-only bitrate caps (kbps). Shown as labeled presets when the source has audio.
@@ -163,6 +164,59 @@ def available_presets(info: dict[str, Any]) -> list[str]:
                     continue
                 presets.append(f"audio-{abr}")
     return presets
+
+
+def resolve_quality_preset(preset: str, available: list[str]) -> str:
+    """Map ``best`` to the highest concrete video (or audio) tier in ``available``.
+
+    Channel/download UI may request ``best``; the queue stores the resolved
+    height so cards show ``4K`` rather than ``Best available``.
+    """
+    if preset != "best":
+        return preset
+    if not available:
+        return "best"
+    present = set(available)
+    for tier in STANDARD_HEIGHTS:
+        name = f"{tier}p"
+        if name in present:
+            return name
+    if "audio" in present:
+        return "audio"
+    for abr in AUDIO_ABR_TIERS:
+        name = f"audio-{abr}"
+        if name in present:
+            return name
+    return "best"
+
+
+def encode_available_presets(presets: list[str] | None) -> str | None:
+    if not presets:
+        return None
+    return json.dumps([str(p) for p in presets])
+
+
+def decode_available_presets(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(p) for p in data if p]
+
+
+def quality_from_preview(requested: str, preview: dict[str, Any] | None) -> tuple[str, str | None]:
+    """Return (resolved_preset, encoded available_presets) from a preview dict."""
+    available: list[str] = []
+    if isinstance(preview, dict):
+        raw = preview.get("available_presets") or []
+        if isinstance(raw, list):
+            available = [str(p) for p in raw if p]
+    resolved = resolve_quality_preset(requested or "best", available)
+    return resolved, encode_available_presets(available)
 
 
 # Underscore aliases for existing call sites / tests.

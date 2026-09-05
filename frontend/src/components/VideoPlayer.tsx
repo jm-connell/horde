@@ -20,6 +20,10 @@ import {
 import type { SpriteMeta } from "../types";
 import { formatDuration, formatTimestamp, type Chapter } from "../utils";
 import { trackQuality } from "../utils/decodeCapability";
+import {
+  miniFrameFromNorthWestResize,
+  type MiniPlayerBox,
+} from "../utils/miniPlayerLayout";
 import type {
   ShakaPlayer,
 } from "shaka-player/dist/shaka-player.dash.js";
@@ -110,7 +114,10 @@ interface Props {
   subtitlesPending?: boolean;
   onSubtitlesRefresh?: () => void;
   miniWidth?: number | null;
-  onMiniResize?: (width: number) => void;
+  onMiniResize?: (
+    width: number,
+    origin: { left: number; top: number; height: number }
+  ) => void;
   onMiniMove?: (left: number, top: number) => void;
   onMiniMoveEnd?: () => void;
   upNext?: {
@@ -218,9 +225,11 @@ export default function VideoPlayer({
   const [miniControlsVisible, setMiniControlsVisible] = useState(true);
   const [videoAspect, setVideoAspect] = useState<number | null>(null);
   const miniHideTimer = useRef<number | null>(null);
-  const miniResizeDrag = useRef<{ startX: number; startWidth: number } | null>(
-    null
-  );
+  const miniResizeDrag = useRef<{
+    startX: number;
+    startWidth: number;
+    startBox: MiniPlayerBox;
+  } | null>(null);
   const heldRate = useRef<number | null>(null);
   const holdTimer = useRef<number | null>(null);
   const holdActive = useRef(false);
@@ -1580,16 +1589,37 @@ export default function VideoPlayer({
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
-      const startWidth =
-        miniWidth ??
-        playerRootRef.current?.getBoundingClientRect().width ??
-        (isMobile ? 224 : 704);
-      miniResizeDrag.current = { startX: e.clientX, startWidth };
+      const rect = playerRootRef.current?.getBoundingClientRect();
+      const startWidth = rect?.width ?? miniWidth ?? (isMobile ? 224 : 704);
+      const startBox: MiniPlayerBox = rect
+        ? {
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+          }
+        : {
+            left: 0,
+            top: 0,
+            width: startWidth,
+            height: startWidth * (9 / 16),
+          };
+      miniResizeDrag.current = {
+        startX: e.clientX,
+        startWidth,
+        startBox,
+      };
 
       const onMove = (ev: PointerEvent) => {
         if (!miniResizeDrag.current || !onMiniResize) return;
-        const { startX, startWidth: sw } = miniResizeDrag.current;
-        onMiniResize(clampMiniWidth(sw + (startX - ev.clientX)));
+        const { startX, startWidth: sw, startBox: box } = miniResizeDrag.current;
+        const nextWidth = clampMiniWidth(sw + (startX - ev.clientX));
+        const frame = miniFrameFromNorthWestResize(box, nextWidth);
+        onMiniResize(frame.width, {
+          left: frame.left,
+          top: frame.top,
+          height: frame.height,
+        });
       };
       const onEnd = () => {
         miniResizeDrag.current = null;

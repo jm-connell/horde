@@ -94,6 +94,8 @@ class DownloadJob(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     url: str
     quality_preset: str = "best"
+    # JSON list of source presets from preview (e.g. ["2160p","1080p","audio"]).
+    available_presets_json: Optional[str] = None
     status: JobStatus = Field(default=JobStatus.queued)
     progress: float = 0.0
     title: Optional[str] = None

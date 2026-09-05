@@ -23,7 +23,7 @@ import { usePlayback } from "../context/PlaybackContext";
 import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
-import { PRESET_ORDER, presetOptionLabel } from "../presets";
+import { PRESET_ORDER, presetOptionLabel, resolveQualityPreset } from "../presets";
 import type { StreamPreviewMeta, Video } from "../types";
 import {
   downloadProgressPercent,
@@ -50,8 +50,8 @@ const STAY_DOWNLOAD_TOAST =
 
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
-  "2160p": "4K (2160p)",
-  "1440p": "1440p (2K)",
+  "2160p": "4K",
+  "1440p": "1440p",
   "1080p": "1080p",
   "720p": "720p",
   "480p": "480p",
@@ -70,12 +70,7 @@ function downloadButtonLabel(preset: string): string {
 }
 
 function bestAvailablePreset(presets: string[]): string {
-  for (const p of PRESET_ORDER) {
-    if (p === "best" || p === "audio") continue;
-    if (presets.includes(p)) return p;
-  }
-  if (presets.includes("audio")) return "audio";
-  return "best";
+  return resolveQualityPreset("best", presets);
 }
 
 function orderPresets(presets: string[]): string[] {
@@ -124,7 +119,7 @@ export default function Watch() {
   activeJobIdRef.current = activeJobId;
 
   const { showToast } = useToast();
-  const { onJobCompleted, refreshJobs, submitDownload, progress, jobs } =
+  const { onJobCompleted, refreshJobs, submitDownload, changeJobQuality, progress, jobs } =
     useDownloads();
   const redownloadPending = useRef(false);
   const isMobile = useIsMobile();
@@ -602,10 +597,35 @@ export default function Watch() {
     }
   }
 
+  async function handleChangeDownloadQuality(preset: string) {
+    if (activeJobId == null || preset === selectedPreset) return;
+    userPickedPresetRef.current = true;
+    setSelectedPreset(preset);
+    try {
+      await changeJobQuality(activeJobId, preset);
+    } catch (err: unknown) {
+      if (activeJob?.quality_preset) {
+        setSelectedPreset(
+          resolveQualityPreset(
+            activeJob.quality_preset,
+            activeJob.available_presets ?? availablePresets
+          )
+        );
+      }
+      showToast(
+        err instanceof Error ? err.message : "Could not change resolution"
+      );
+    }
+  }
+
   const presetOptions = useMemo(() => {
     if (availablePresets.length > 0) return availablePresets;
+    const job =
+      activeJobId != null ? jobs.find((j) => j.id === activeJobId) : undefined;
+    const fromJob = job?.available_presets ?? [];
+    if (fromJob.length > 0) return orderPresets(fromJob);
     return ["best"];
-  }, [availablePresets]);
+  }, [availablePresets, activeJobId, jobs]);
 
   if (loading) {
     return (
@@ -1009,6 +1029,25 @@ export default function Watch() {
                             ? ` / ${formatSize(live.total_bytes)}`
                             : ""}
                         </span>
+                      )}
+                      {presetOptions.length > 0 && (
+                        <select
+                          value={resolveQualityPreset(
+                            activeJob?.quality_preset || selectedPreset,
+                            activeJob?.available_presets ?? availablePresets
+                          )}
+                          onChange={(e) =>
+                            void handleChangeDownloadQuality(e.target.value)
+                          }
+                          aria-label="Download resolution"
+                          className="cursor-pointer rounded bg-ink-800 px-1.5 py-0.5 text-[11px] font-medium text-gray-300 outline-none focus:ring-1 focus:ring-accent"
+                        >
+                          {presetOptions.map((p) => (
+                            <option key={p} value={p}>
+                              {presetOptionLabel(p, presetSizes)}
+                            </option>
+                          ))}
+                        </select>
                       )}
                     </span>
                   )}

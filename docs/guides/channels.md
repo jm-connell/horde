@@ -56,7 +56,7 @@ Switch between **grid** and **list** layouts for the channel feed. The preferenc
 
 ### Channel download panel
 
-From a channel page you can open the download panel to queue undownloaded items (quality preset, selection, etc.), similar in spirit to the [Downloads](downloads.md) page but scoped to that channel’s feed. Queued items count down a few seconds so you can edit or cancel; leaving the page (for example opening Downloads) **confirms** anything still counting down instead of dropping it.
+From a channel page you can open the download panel to queue undownloaded items (quality preset, selection, etc.), similar in spirit to the [Downloads](downloads.md) page but scoped to that channel’s feed. Queued items count down a few seconds so you can edit or cancel; leaving the page (for example opening Downloads) **confirms** anything still counting down instead of dropping it. The panel’s **Best available** default still fetches the highest source tier; once the job is in the download queue it is labeled with that actual resolution (for example 4K), which you can change mid-download.
 
 ## Catalog indexing
 

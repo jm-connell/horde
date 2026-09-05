@@ -83,7 +83,7 @@ export const STREAM_QUALITY_OPTIONS: {
   label: string;
 }[] = [
   { value: "auto", label: "Auto" },
-  { value: "2160", label: "4K (2160p)" },
+  { value: "2160", label: "4K" },
   { value: "1440", label: "1440p" },
   { value: "1080", label: "1080p" },
   { value: "720", label: "720p" },

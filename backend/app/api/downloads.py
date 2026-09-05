@@ -16,6 +16,7 @@ from ..schemas import (
     DownloadJobRead,
     DownloadJobUpdate,
     DownloadPreview,
+    DownloadQualityUpdate,
     DownloadQueueStatus,
 )
 from ..services import downloader, library
@@ -32,6 +33,7 @@ from ..services.ytdlp_common import (
     http_detail_for_error,
     record_extract_failure,
 )
+from ..services.ytdlp_formats import decode_available_presets, quality_from_preview
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +111,9 @@ def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobR
                 update={
                     "video_missing": video_missing,
                     "superseded": superseded,
+                    "available_presets": decode_available_presets(
+                        j.available_presets_json
+                    ),
                 }
             )
         )
@@ -203,16 +208,21 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
             if existing is not None:
                 replace_video_id = existing.id
 
+    quality_preset, presets_json = quality_from_preview(
+        payload.quality_preset, preview if isinstance(preview, dict) else {}
+    )
+
     with downloader.job_mutate_lock:
         active = downloader.find_active_job(
-            session, url, destination, payload.quality_preset
+            session, url, destination, quality_preset
         )
         if active is not None:
             return _enrich_jobs(session, [active])[0]
 
         job = DownloadJob(
             url=url,
-            quality_preset=payload.quality_preset,
+            quality_preset=quality_preset,
+            available_presets_json=presets_json,
             status=JobStatus.queued,
             title=preview.get("title"),
             channel=preview.get("channel"),
@@ -302,6 +312,28 @@ def retry_job(
         session.refresh(job)
 
     downloader.enqueue_download(job.id)
+    return _enrich_jobs(session, [job])[0]
+
+
+@router.post("/{job_id}/quality", response_model=DownloadJobRead)
+def change_job_quality(
+    job_id: int,
+    payload: DownloadQualityUpdate,
+    session: Session = Depends(get_session),
+):
+    """Change resolution on an active job. In-flight work is discarded and restarted."""
+    try:
+        job = downloader.change_job_quality(session, job_id, payload.quality_preset)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Job not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except TimeoutError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _enrich_jobs(session, [job])[0]
 
 

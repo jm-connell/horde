@@ -32,3 +32,16 @@ export function canRedownloadRemovedJob(
     !superseded
   );
 }
+
+/** Active queue cards can switch resolution (queued / downloading / processing). */
+export function canChangeJobQuality(
+  status: string,
+  failed: boolean,
+  cancelled: boolean,
+  completed: boolean
+): boolean {
+  if (completed || failed || cancelled) return false;
+  return (
+    status === "queued" || status === "downloading" || status === "processing"
+  );
+}

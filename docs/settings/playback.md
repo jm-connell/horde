@@ -17,7 +17,7 @@ Controls under **Settings → Playback** (`?tab=playback`). All of these keys sy
 | Value | Label |
 |-------|--------|
 | `auto` | Auto (ABR within device cap) |
-| `2160` | 4K (2160p) |
+| `2160` | 4K |
 | `1440` | 1440p |
 | `1080` | 1080p |
 | `720` | 720p |

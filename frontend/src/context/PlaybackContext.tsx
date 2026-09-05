@@ -298,8 +298,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.style.right = "";
       host.style.bottom = "";
       const height = host.getBoundingClientRect().height || width * (9 / 16);
-      if (miniPos) {
-        const clamped = clampMiniPos(miniPos.left, miniPos.top, width, height);
+      const pos = miniPosLiveRef.current ?? miniPos;
+      if (pos) {
+        const clamped = clampMiniPos(pos.left, pos.top, width, height);
         host.style.left = `${clamped.left}px`;
         host.style.top = `${clamped.top}px`;
       } else {
@@ -618,6 +619,60 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     activeStreamQuality,
   };
 
+  const handleMiniResize = useCallback(
+    (width: number, origin: { left: number; top: number; height: number }) => {
+      const host = hostRef.current;
+      const height = origin.height || width * (9 / 16);
+      const clamped = clampMiniPos(origin.left, origin.top, width, height);
+      if (host) {
+        host.style.width = `${width}px`;
+        host.style.left = `${clamped.left}px`;
+        host.style.top = `${clamped.top}px`;
+      }
+      miniPosLiveRef.current = clamped;
+      setMiniWidth(width);
+      setMiniPos(clamped);
+      setMiniPlayerRect({
+        left: clamped.left,
+        top: clamped.top,
+        width,
+        height,
+        right: clamped.left + width,
+        bottom: clamped.top + height,
+      });
+    },
+    [setMiniWidth, setMiniPos]
+  );
+
+  const handleMiniMove = useCallback(
+    (left: number, top: number) => {
+      const host = hostRef.current;
+      if (!host) return;
+      const width =
+        host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
+      const height = host.offsetHeight || width * (9 / 16);
+      const clamped = clampMiniPos(left, top, width, height);
+      host.style.left = `${clamped.left}px`;
+      host.style.top = `${clamped.top}px`;
+      miniPosLiveRef.current = clamped;
+      setMiniPlayerRect({
+        left: clamped.left,
+        top: clamped.top,
+        width,
+        height,
+        right: clamped.left + width,
+        bottom: clamped.top + height,
+      });
+    },
+    [miniWidth]
+  );
+
+  const handleMiniMoveEnd = useCallback(() => {
+    if (miniPosLiveRef.current) {
+      setMiniPos(miniPosLiveRef.current);
+    }
+  }, [setMiniPos]);
+
   const streamSrc =
     current != null
       ? `${streamUrl(current.id)}?s=${current.file_size ?? 0}&h=${current.height_px ?? 0}`
@@ -666,31 +721,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         subtitlesPending={current.subtitles_pending}
         onSubtitlesRefresh={refreshCurrentVideo}
         miniWidth={miniWidth}
-        onMiniResize={setMiniWidth}
-        onMiniMove={(left, top) => {
-          const host = hostRef.current;
-          if (!host) return;
-          const width =
-            host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
-          const height = host.offsetHeight || width * (9 / 16);
-          const clamped = clampMiniPos(left, top, width, height);
-          host.style.left = `${clamped.left}px`;
-          host.style.top = `${clamped.top}px`;
-          miniPosLiveRef.current = clamped;
-          setMiniPlayerRect({
-            left: clamped.left,
-            top: clamped.top,
-            width,
-            height,
-            right: clamped.left + width,
-            bottom: clamped.top + height,
-          });
-        }}
-        onMiniMoveEnd={() => {
-          if (miniPosLiveRef.current) {
-            setMiniPos(miniPosLiveRef.current);
-          }
-        }}
+        onMiniResize={handleMiniResize}
+        onMiniMove={handleMiniMove}
+        onMiniMoveEnd={handleMiniMoveEnd}
         upNext={
           upNext
             ? {
@@ -743,31 +776,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         }}
         chapters={stream.chapters}
         miniWidth={miniWidth}
-        onMiniResize={setMiniWidth}
-        onMiniMove={(left, top) => {
-          const host = hostRef.current;
-          if (!host) return;
-          const width =
-            host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
-          const height = host.offsetHeight || width * (9 / 16);
-          const clamped = clampMiniPos(left, top, width, height);
-          host.style.left = `${clamped.left}px`;
-          host.style.top = `${clamped.top}px`;
-          miniPosLiveRef.current = clamped;
-          setMiniPlayerRect({
-            left: clamped.left,
-            top: clamped.top,
-            width,
-            height,
-            right: clamped.left + width,
-            bottom: clamped.top + height,
-          });
-        }}
-        onMiniMoveEnd={() => {
-          if (miniPosLiveRef.current) {
-            setMiniPos(miniPosLiveRef.current);
-          }
-        }}
+        onMiniResize={handleMiniResize}
+        onMiniMove={handleMiniMove}
+        onMiniMoveEnd={handleMiniMoveEnd}
         onActiveQualityChange={setActiveStreamQuality}
         mediaSuspended={mediaSuspended}
       />

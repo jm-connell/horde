@@ -17,9 +17,15 @@ The **Download** page (`/download`) is where you paste a URL, pick a quality pre
 
 After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known. Audio bitrate caps that are at or above the source’s best stream are omitted (use **Audio (best)** instead).
 
+When you queue with **Best available** (the channel download panel default), Horde still fetches the highest source tier, but the download queue stores and shows that **actual resolution** (for example **4K**) instead of the “best” label.
+
 Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. Within a height, Horde prefers **AV1 + AAC** over a higher-bitrate VP9/H.264 stream, then remuxes to MP4 with `faststart` (video is **copied**, never transcoded to H.264). If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
 
 iPhone Safari (including Brave/Chrome on iOS) can play **AV1 in MP4** on A17 Pro hardware (iPhone 15 Pro / Pro Max) but rejects **Opus-in-MP4**. Horde keeps the AV1 bitstream and only re-encodes audio to AAC. Desktop Chrome’s device emulation is not a substitute for a real phone.
+
+## Change resolution (in-progress)
+
+On an **active** queue card (or the stream-watch download indicator), pick a different resolution from the quality menu. Horde **discards partial files** and restarts that job at the new preset — no extra confirmation. Queued jobs just switch preset and keep their place.
 
 ## Change resolution (library)
 

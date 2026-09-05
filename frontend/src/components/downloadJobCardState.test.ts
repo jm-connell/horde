@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canChangeJobQuality,
   canEditDownloadJobNotes,
   canRedownloadRemovedJob,
   isLibraryVideoGone,
@@ -46,5 +47,19 @@ describe("canRedownloadRemovedJob", () => {
     expect(canRedownloadRemovedJob(true, true, false, true, false)).toBe(false);
     expect(canRedownloadRemovedJob(false, false, false, true, false)).toBe(false);
     expect(canRedownloadRemovedJob(true, false, false, false, false)).toBe(false);
+  });
+});
+
+describe("canChangeJobQuality", () => {
+  it("allows changing resolution on queued and in-flight jobs", () => {
+    expect(canChangeJobQuality("queued", false, false, false)).toBe(true);
+    expect(canChangeJobQuality("downloading", false, false, false)).toBe(true);
+    expect(canChangeJobQuality("processing", false, false, false)).toBe(true);
+  });
+
+  it("blocks changes on finished jobs", () => {
+    expect(canChangeJobQuality("completed", false, false, true)).toBe(false);
+    expect(canChangeJobQuality("error", true, false, false)).toBe(false);
+    expect(canChangeJobQuality("cancelled", false, true, false)).toBe(false);
   });
 });

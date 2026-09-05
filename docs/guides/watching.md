@@ -54,7 +54,7 @@ On library videos, **•••** includes edit, notes, **Change resolution**, no
 
 ## Stream → library handoff
 
-While watching a **stream preview** (`/watch?url=…`), you can start a download at the chosen quality. When the download **completes**, Horde hands off to the new library item so playback continues from the local file (keeping your place where possible) instead of the temporary stream. The player remounts for that switch so Shaka’s DASH MediaSource is not reused on the file URL.
+While watching a **stream preview** (`/watch?url=…`), you can start a download at the chosen quality. You can change that resolution while the download is still queued or in progress (progress is discarded and the job restarts). When the download **completes**, Horde hands off to the new library item so playback continues from the local file (keeping your place where possible) instead of the temporary stream. The player remounts for that switch so Shaka’s DASH MediaSource is not reused on the file URL.
 
 On the watch page you’ll also see messaging about downloading at the selected resolution and preserving title, notes, and other metadata.
 

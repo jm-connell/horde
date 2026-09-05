@@ -116,3 +116,23 @@ def test_has_audio_and_available_presets():
 def test_height_to_tier():
     assert downloader._height_to_tier(2160) >= downloader._height_to_tier(720)
     assert downloader._height_to_tier(480) > 0
+
+
+def test_resolve_quality_preset_best_to_highest_tier():
+    from app.services.ytdlp_formats import (
+        quality_from_preview,
+        resolve_quality_preset,
+    )
+
+    assert resolve_quality_preset("best", ["720p", "2160p", "1080p"]) == "2160p"
+    assert resolve_quality_preset("best", ["audio", "720p"]) == "720p"
+    assert resolve_quality_preset("best", ["audio"]) == "audio"
+    assert resolve_quality_preset("1080p", ["2160p"]) == "1080p"
+    assert resolve_quality_preset("best", []) == "best"
+
+    resolved, encoded = quality_from_preview(
+        "best", {"available_presets": ["1440p", "720p", "audio"]}
+    )
+    assert resolved == "1440p"
+    assert encoded is not None
+    assert "1440p" in encoded

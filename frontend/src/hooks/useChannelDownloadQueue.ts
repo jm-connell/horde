@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { isActiveJob, useDownloads } from "../context/DownloadContext";
-import { PRESET_ORDER } from "../presets";
+import { PRESET_ORDER, resolveQualityPreset } from "../presets";
 import type { ChannelFeedEntry, DownloadPreview } from "../types";
 
 const CONFIRM_SECONDS = 5;
@@ -131,7 +131,11 @@ export function useChannelDownloadQueue(channelName: string) {
         const detectedChannel = channelName.trim();
         const title = latest.title.trim();
         const channel = latest.channel.trim();
-        await submitDownload(latest.entry.url, latest.preset, {
+        const resolved = resolveQualityPreset(
+          latest.preset,
+          latest.preview?.available_presets ?? []
+        );
+        await submitDownload(latest.entry.url, resolved, {
           title: title && title !== detectedTitle ? title : undefined,
           channel: channel && channel !== detectedChannel ? channel : undefined,
           notes: latest.notes.trim() || undefined,

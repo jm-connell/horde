@@ -801,6 +801,14 @@ export const api = {
     });
   },
 
+  changeJobQuality(jobId: number, quality_preset: string): Promise<DownloadJob> {
+    return request<DownloadJob>(`/api/downloads/${jobId}/quality`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quality_preset }),
+    });
+  },
+
   dismissJob(jobId: number): Promise<void> {
     return request<void>(`/api/downloads/${jobId}`, { method: "DELETE" });
   },

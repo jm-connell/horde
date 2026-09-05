@@ -3,6 +3,7 @@ import {
   maxPresetLabel,
   mergePinnedPreset,
   presetOptionLabel,
+  resolveQualityPreset,
 } from "./presets";
 
 describe("presets", () => {
@@ -26,10 +27,25 @@ describe("presets", () => {
     expect(presetOptionLabel("audio-128", undefined)).toBe("Audio · 128 kbps");
   });
 
+  it("labels 4K and 1440p without extra parentheticals", () => {
+    expect(presetOptionLabel("2160p", undefined)).toBe("4K");
+    expect(presetOptionLabel("1440p", undefined)).toBe("1440p");
+  });
+
   it("picks max preset label", () => {
     expect(maxPresetLabel(["720p", "1080p"])).toBe("1080p");
     expect(maxPresetLabel(["2160p"])).toBe("4K");
     expect(maxPresetLabel(["audio"])).toBe("Audio");
     expect(maxPresetLabel(["audio-64", "audio-128"])).toBe("Audio");
+  });
+
+  it("resolves best to the highest concrete tier", () => {
+    expect(resolveQualityPreset("best", ["720p", "2160p", "1080p"])).toBe(
+      "2160p"
+    );
+    expect(resolveQualityPreset("best", ["audio", "720p"])).toBe("720p");
+    expect(resolveQualityPreset("best", ["audio"])).toBe("audio");
+    expect(resolveQualityPreset("1080p", ["2160p", "1080p"])).toBe("1080p");
+    expect(resolveQualityPreset("best", [])).toBe("best");
   });
 });

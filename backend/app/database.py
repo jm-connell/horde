@@ -96,6 +96,7 @@ _DOWNLOAD_JOB_COLUMNS = [
     ("replace_video_id", "INTEGER"),
     ("file_size", "INTEGER"),
     ("error_kind", "VARCHAR"),
+    ("available_presets_json", "VARCHAR"),
 ]
 
 _VIDEO_AI_META_COLUMNS = [

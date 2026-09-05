@@ -47,7 +47,10 @@ from .ytdlp_formats import (
     _format_chain,
     _has_audio,
     _height_to_tier,
+    decode_available_presets,
     format_chain,
+    quality_from_preview,
+    resolve_quality_preset,
 )
 from .thumbnails import save_from_url as _save_thumbnail, unlink_for_video
 from .ytdlp_extract import (
@@ -303,6 +306,9 @@ class DownloadQueue:
         self._global_paused = False
         self._running: set[int] = set()
         self._cancel_events: dict[int, threading.Event] = {}
+        # Quality-change restart: skip dispatch until the API releases the job.
+        self._held: set[int] = set()
+        self._restart_ids: set[int] = set()
 
     def is_paused(self) -> bool:
         with self._lock:
@@ -437,6 +443,31 @@ class DownloadQueue:
             # downloading — hook will mark cancelled when thread exits
             return True
 
+    def is_running(self, job_id: int) -> bool:
+        with self._lock:
+            return job_id in self._running
+
+    def request_quality_restart(self, job_id: int) -> None:
+        """Abort the current attempt and keep the job from dispatching until released."""
+        with self._lock:
+            self._held.add(job_id)
+            self._restart_ids.add(job_id)
+            event = self._cancel_events.get(job_id)
+        if event is not None:
+            event.set()
+
+    def take_quality_restart(self, job_id: int) -> bool:
+        with self._lock:
+            if job_id not in self._restart_ids:
+                return False
+            self._restart_ids.discard(job_id)
+            return True
+
+    def release_job(self, job_id: int) -> None:
+        with self._lock:
+            self._held.discard(job_id)
+            self._restart_ids.discard(job_id)
+
     def active_count(self) -> int:
         with Session(engine) as session:
             return len(
@@ -491,7 +522,11 @@ class DownloadQueue:
                 .order_by(DownloadJob.created_at.asc())
             ).all()
             for job in jobs:
-                if job.id is not None and job.id not in self._running:
+                if (
+                    job.id is not None
+                    and job.id not in self._running
+                    and job.id not in self._held
+                ):
                     return job.id
             return None
 
@@ -1336,6 +1371,9 @@ def _run_download(
             / "%(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s"
         )
 
+    if cancel.is_set():
+        raise DownloadCancelled()
+
     _update_job(
         job_id,
         status=JobStatus.downloading,
@@ -1348,6 +1386,8 @@ def _run_download(
         "progress": 0.0,
         "destination": destination,
     }
+    if cancel.is_set():
+        raise DownloadCancelled()
 
     active_paths: set[str] = set()
     info: dict[str, Any] = {}
@@ -1523,17 +1563,19 @@ def _run_download(
             if job is None:
                 act.finish(status="cancelled")
                 return None
-            if download_queue.is_paused():
+            restarting = download_queue.take_quality_restart(job_id)
+            pausing = download_queue.is_paused()
+            if restarting or pausing:
                 job.status = JobStatus.queued
-                job.paused = True
+                job.paused = pausing
                 job.progress = 0.0
                 job.error = None
                 job.error_kind = None
                 progress_store[job_id] = {
                     "status": "queued",
                     "progress": 0.0,
-                    "title": job.title,
-                    "channel": job.channel,
+                    "title": job.title_override or job.title,
+                    "channel": job.channel_override or job.channel,
                     "destination": destination,
                 }
                 act.discard()
@@ -1683,6 +1725,120 @@ def prepare_job_retry(job: DownloadJob) -> None:
         }
 
 
+def wait_until_job_not_running(job_id: int, timeout: float = 30.0) -> bool:
+    """Block until the worker thread for job_id has exited."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not download_queue.is_running(job_id):
+            return True
+        time.sleep(0.1)
+    return not download_queue.is_running(job_id)
+
+
+def change_job_quality(session: Session, job_id: int, requested_preset: str) -> DownloadJob:
+    """Change quality on a queued/downloading job. Restarts in-flight work silently."""
+    preset = (requested_preset or "").strip()
+    if preset not in QUALITY_FORMATS:
+        raise ValueError("Unknown quality preset")
+
+    with job_mutate_lock:
+        job = session.get(DownloadJob, job_id)
+        if job is None:
+            raise KeyError("Job not found")
+        if job.status not in (JobStatus.queued, JobStatus.downloading):
+            raise PermissionError("Job already finished")
+
+        available = decode_available_presets(job.available_presets_json)
+        resolved = resolve_quality_preset(preset, available)
+        if resolved == job.quality_preset:
+            return job
+
+        other = find_active_job(
+            session,
+            job.url,
+            job.destination or DownloadDestination.library.value,
+            resolved,
+        )
+        if other is not None and other.id != job.id:
+            raise FileExistsError("Another download at that quality is already active")
+
+        previous_preset = job.quality_preset
+        running = download_queue.is_running(job.id) if job.id is not None else False
+        needs_restart = running or job.status == JobStatus.downloading
+
+        if not needs_restart:
+            job.quality_preset = resolved
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+            return job
+
+        assert job.id is not None
+        download_queue.request_quality_restart(job.id)
+        job.quality_preset = resolved
+        job.progress = 0.0
+        job.error = None
+        job.error_kind = None
+        session.add(job)
+        session.commit()
+        progress_store[job.id] = {
+            "status": "queued",
+            "progress": 0.0,
+            "title": job.title_override or job.title,
+            "channel": job.channel_override or job.channel,
+            "destination": job.destination,
+        }
+
+    stopped = wait_until_job_not_running(job_id)
+    if not stopped:
+        with job_mutate_lock:
+            session.expire_all()
+            job = session.get(DownloadJob, job_id)
+            if job is not None and job.status == JobStatus.downloading:
+                job.quality_preset = previous_preset
+                session.add(job)
+                session.commit()
+                session.refresh(job)
+            download_queue.release_job(job_id)
+        raise TimeoutError("Could not restart download")
+
+    with job_mutate_lock:
+        session.expire_all()
+        job = session.get(DownloadJob, job_id)
+        if job is None:
+            download_queue.release_job(job_id)
+            raise KeyError("Job not found")
+        try:
+            if job.status == JobStatus.completed:
+                job.quality_preset = previous_preset
+                session.add(job)
+                session.commit()
+                session.refresh(job)
+                return job
+            if job.status == JobStatus.cancelled:
+                job.quality_preset = resolved
+                prepare_job_retry(job)
+                session.add(job)
+                session.commit()
+                session.refresh(job)
+            elif job.status == JobStatus.error:
+                job.quality_preset = resolved
+                prepare_job_retry(job)
+                session.add(job)
+                session.commit()
+                session.refresh(job)
+            else:
+                job.quality_preset = resolved
+                job.progress = 0.0
+                session.add(job)
+                session.commit()
+                session.refresh(job)
+        finally:
+            download_queue.release_job(job_id)
+        enqueue_download(job.id)
+        return job
+
+
 def start_download(
     job_id: int,
     url: str,
@@ -1717,9 +1873,11 @@ def _run_playlist_import(
                     preview = extract_preview(entry_url)
                 except Exception:  # noqa: BLE001
                     pass
+                resolved, presets_json = quality_from_preview(quality_preset, preview)
                 job = DownloadJob(
                     url=entry_url,
-                    quality_preset=quality_preset,
+                    quality_preset=resolved,
+                    available_presets_json=presets_json,
                     status=JobStatus.queued,
                     title=preview.get("title"),
                     channel=preview.get("channel"),

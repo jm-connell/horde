@@ -179,6 +179,7 @@ export interface DownloadJob {
   id: number;
   url: string;
   quality_preset: string;
+  available_presets?: string[];
   status: JobStatus;
   progress: number;
   title: string | null;
