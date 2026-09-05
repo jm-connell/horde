@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api";
+import { api, streamUrl } from "../api";
+import { usePlayback } from "../context/PlaybackContext";
+import { useCardPreview } from "../hooks/useCardPreview";
 import { maxPresetLabel } from "../presets";
 import type { ChannelFeedEntry } from "../types";
 import {
@@ -12,6 +14,9 @@ import {
   youtubeThumbnailUrl,
 } from "../utils";
 import { enqueueYtPreview } from "../utils/ytPreviewQueue";
+import { previewResumeFor } from "../utils/cardPreview";
+import { setWatchResume } from "../utils/watchHandoff";
+import CardPreviewVideo from "./CardPreviewVideo";
 import MatchReasonBadge from "./MatchReasonBadge";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 
@@ -128,29 +133,59 @@ function FeedThumbnail({
   className,
   showDuration = true,
   matchTip,
+  previewSrc,
+  previewEnabled,
+  previewBlocked,
+  previewVideoId,
 }: {
   thumbSrc: string | null;
   duration: string;
   className: string;
   showDuration?: boolean;
   matchTip?: string | null;
+  previewSrc?: string | null;
+  previewEnabled?: boolean;
+  previewBlocked?: boolean;
+  previewVideoId?: number | null;
 }) {
+  const { ref: previewRef, active: previewActive } = useCardPreview({
+    enabled: Boolean(previewEnabled && previewSrc),
+    blocked: Boolean(previewBlocked),
+  });
+  const previewing = previewActive && Boolean(previewSrc);
+
   return (
-    <div className={`relative ${className}`}>
+    <div ref={previewRef} className={`relative ${className}`}>
       <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
-        {thumbSrc ? (
-          <img
-            src={thumbSrc}
-            alt=""
-            loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-ink-600">
-            <span className="text-4xl">▶</span>
-          </div>
-        )}
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="relative h-full w-full transition-transform duration-200 group-hover:scale-105">
+          {thumbSrc ? (
+            <img
+              src={thumbSrc}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-ink-600">
+              <span className="text-4xl">▶</span>
+            </div>
+          )}
+          {previewSrc && previewVideoId != null ? (
+            <CardPreviewVideo
+              videoId={previewVideoId}
+              src={previewSrc}
+              startSec={0}
+              active={previewActive}
+            />
+          ) : null}
+        </div>
+        <div
+          className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/40 transition-opacity ${
+            previewing
+              ? "opacity-0"
+              : "opacity-0 group-hover:opacity-100"
+          }`}
+        >
           <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-gray-100 ring-1 ring-white/20">
             ▶
           </span>
@@ -191,6 +226,10 @@ export default function ChannelFeedCard({
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
   const cardRef = useRef<HTMLDivElement>(null);
+  const { current } = usePlayback();
+  const libraryVideoId = videoId ?? entry.video_id ?? null;
+  const previewSrc =
+    inLibrary && libraryVideoId != null ? streamUrl(libraryVideoId) : null;
   const [maxRes, setMaxRes] = useState(() => {
     if (entry.library_height_px) {
       return formatResolution(entry.library_height_px);
@@ -270,6 +309,12 @@ export default function ChannelFeedCard({
           showDuration={false}
           className="h-[4.5rem] w-32 shrink-0 rounded-lg"
           matchTip={matchTip}
+          previewSrc={previewSrc}
+          previewEnabled={Boolean(previewSrc)}
+          previewBlocked={
+            libraryVideoId != null && current?.id === libraryVideoId
+          }
+          previewVideoId={libraryVideoId}
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-24">
@@ -338,6 +383,12 @@ export default function ChannelFeedCard({
           duration={duration}
           className="aspect-video w-full"
           matchTip={matchTip}
+          previewSrc={previewSrc}
+          previewEnabled={Boolean(previewSrc)}
+          previewBlocked={
+            libraryVideoId != null && current?.id === libraryVideoId
+          }
+          previewVideoId={libraryVideoId}
         />
         <div className="flex flex-col gap-1 p-3">
           <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-gray-100 group-hover:text-accent">
@@ -358,7 +409,15 @@ export default function ChannelFeedCard({
   return (
     <div ref={cardRef} data-horde="feed-card">
       {href ? (
-        <Link to={href} className="block">
+        <Link
+          to={href}
+          className="block"
+          onClick={() => {
+            if (libraryVideoId == null) return;
+            const resumeAt = previewResumeFor(libraryVideoId);
+            if (resumeAt != null) setWatchResume(libraryVideoId, resumeAt);
+          }}
+        >
           {cardInner}
         </Link>
       ) : (

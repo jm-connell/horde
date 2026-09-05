@@ -142,6 +142,70 @@ export default function PlaybackTab() {
       </Section>
 
       <Section
+        title="Thumbnail previews"
+        description="In-place playback on video cards. Does not affect the watch page player."
+        hidden={
+          !match(
+            "thumbnail previews",
+            "hover preview",
+            "preview on hover",
+            "centered",
+            "autoplay thumbnail",
+            "card preview"
+          )
+        }
+      >
+        <div className="space-y-4">
+          <SettingRow
+            title="Preview on hover"
+            description="On desktop, play a preview when you hover a video."
+            hidden={
+              !!q &&
+              !match(
+                "preview on hover",
+                "hover preview",
+                "desktop",
+                "mouse"
+              )
+            }
+            control={
+              <Toggle
+                checked={settings.previewOnHover}
+                onChange={() =>
+                  update({
+                    previewOnHover: !settings.previewOnHover,
+                  })
+                }
+              />
+            }
+          />
+          <SettingRow
+            title="Preview when centered"
+            description="On phones, play a preview when a video is centered on screen."
+            hidden={
+              !!q &&
+              !match(
+                "preview when centered",
+                "centered",
+                "mobile",
+                "phone"
+              )
+            }
+            control={
+              <Toggle
+                checked={settings.previewWhenCentered}
+                onChange={() =>
+                  update({
+                    previewWhenCentered: !settings.previewWhenCentered,
+                  })
+                }
+              />
+            }
+          />
+        </div>
+      </Section>
+
+      <Section
         title="Subtitles"
         description="Caption size. Drag subtitles on the player to reposition; placement is remembered across videos."
         hidden={!match("subtitles", "caption", "size")}

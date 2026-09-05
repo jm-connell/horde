@@ -221,6 +221,10 @@ export interface Settings {
   showRelatedVideos: boolean;
   /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
   autoplayRelated: boolean;
+  /** Muted thumbnail preview on mouse hover (desktop / fine pointer). */
+  previewOnHover: boolean;
+  /** Muted thumbnail preview when a card is uniquely centered (touch / phones). */
+  previewWhenCentered: boolean;
   /** On a channel page, include uploads that are not yet in the library. */
   showUndownloadedOnChannel: boolean;
   /** Default quality for adaptive stream playback (Auto = ABR within device cap). */
@@ -293,6 +297,8 @@ const DEFAULTS: Settings = {
   aiTab: "summary",
   showRelatedVideos: true,
   autoplayRelated: true,
+  previewOnHover: true,
+  previewWhenCentered: true,
   showUndownloadedOnChannel: true,
   defaultStreamQuality: "auto",
 };
@@ -356,6 +362,8 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "aiTab",
   "showRelatedVideos",
   "autoplayRelated",
+  "previewOnHover",
+  "previewWhenCentered",
   "showUndownloadedOnChannel",
   "defaultStreamQuality",
 ];
@@ -912,6 +920,14 @@ function normalizeSettings(
     ),
     sponsorBlockCategories: normalizeSponsorBlockCategories(
       parsed.sponsorBlockCategories
+    ),
+    previewOnHover: normalizeBool(
+      parsed.previewOnHover,
+      DEFAULTS.previewOnHover
+    ),
+    previewWhenCentered: normalizeBool(
+      parsed.previewWhenCentered,
+      DEFAULTS.previewWhenCentered
     ),
     ...normalizeFontSettings(parsed),
   };

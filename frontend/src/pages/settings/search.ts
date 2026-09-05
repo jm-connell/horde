@@ -69,6 +69,11 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "playback",
     keywords:
+      "thumbnail previews hover preview preview on hover preview when centered autoplay thumbnail card preview mute audio sound desktop mobile phone",
+  },
+  {
+    tab: "playback",
+    keywords:
       "undownloaded channel feed show undownloaded library downloads",
   },
   {

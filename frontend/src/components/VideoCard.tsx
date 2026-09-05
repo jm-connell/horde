@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
-import { thumbnailUrl } from "../api";
+import { streamUrl, thumbnailUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
+import { useCardPreview } from "../hooks/useCardPreview";
 import { useSettings } from "../hooks/useSettings";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 import type { Video } from "../types";
@@ -10,6 +11,9 @@ import {
   formatResolution,
   formatViewCount,
 } from "../utils";
+import { previewResumeFor, previewStartSec } from "../utils/cardPreview";
+import { setWatchResume } from "../utils/watchHandoff";
+import CardPreviewVideo from "./CardPreviewVideo";
 import MatchReasonBadge from "./MatchReasonBadge";
 
 export default function VideoCard({
@@ -32,11 +36,20 @@ export default function VideoCard({
   searchQuery?: string;
 }) {
   const navigate = useNavigate();
-  const { addToQueue } = usePlayback();
+  const { addToQueue, current } = usePlayback();
   const [settings] = useSettings();
   const thumb = thumbnailUrl(video);
   const duration = formatDuration(video.duration_sec);
   const resolution = formatResolution(video.height_px);
+  const canPreview = video.status === "ready";
+  const { ref: previewRef, active: previewActive } = useCardPreview({
+    enabled: canPreview,
+    blocked: current?.id === video.id,
+  });
+  const clipStart = previewStartSec(
+    video.last_position_sec,
+    video.duration_sec
+  );
   const dateLabel =
     settings.showCardDates && video.published_at
       ? formatDate(video.published_at)
@@ -47,7 +60,10 @@ export default function VideoCard({
     if (selectable) {
       e.preventDefault();
       onSelect?.(video.id, e);
+      return;
     }
+    const resumeAt = previewResumeFor(video.id);
+    if (resumeAt != null) setWatchResume(video.id, resumeAt);
   };
 
   return (
@@ -59,7 +75,10 @@ export default function VideoCard({
       }`}
       data-horde="video-card"
     >
-      <div className="relative aspect-video w-full overflow-hidden">
+      <div
+        ref={previewRef}
+        className="relative aspect-video w-full overflow-hidden"
+      >
         {thumb ? (
           <img
             src={thumb}
@@ -72,13 +91,21 @@ export default function VideoCard({
             <span className="text-4xl">▶</span>
           </div>
         )}
+        {canPreview ? (
+          <CardPreviewVideo
+            videoId={video.id}
+            src={streamUrl(video.id)}
+            startSec={clipStart}
+            active={previewActive}
+          />
+        ) : null}
         {duration && (
-          <span className="absolute bottom-2 right-2 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
+          <span className="pointer-events-none absolute bottom-2 right-2 z-10 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
             {duration}
           </span>
         )}
         {progress !== undefined && progress > 0 && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-1 bg-black/50">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-1 bg-black/50">
             <div
               className="h-full bg-accent"
               style={{ width: `${Math.min(100, progress * 100)}%` }}
