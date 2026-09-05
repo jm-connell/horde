@@ -103,7 +103,7 @@ export default function ContinueWatchingRow({
           disabled={!canScrollLeft}
           aria-hidden={!canScrollLeft}
           aria-label="Scroll left"
-          className={`${arrowClass} -left-3 ${canScrollLeft ? "" : "invisible"}`}
+          className={`${arrowClass} -left-3 hidden sm:block ${canScrollLeft ? "" : "invisible"}`}
         >
           ‹
         </button>
@@ -113,7 +113,7 @@ export default function ContinueWatchingRow({
           disabled={!canScrollRight}
           aria-hidden={!canScrollRight}
           aria-label="Scroll right"
-          className={`${arrowClass} -right-3 ${canScrollRight ? "" : "invisible"}`}
+          className={`${arrowClass} -right-3 hidden sm:block ${canScrollRight ? "" : "invisible"}`}
         >
           ›
         </button>

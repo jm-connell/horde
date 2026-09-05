@@ -281,7 +281,7 @@ export default function VideoAiChat({
             <p className="text-xs text-gray-500">
               Ask this video anything
               {!hasSubtitles
-                ? " — captions not downloaded, answers will use title and description only."
+                ? " — captions not available, answers will use title and description only."
                 : "."}
             </p>
           )}

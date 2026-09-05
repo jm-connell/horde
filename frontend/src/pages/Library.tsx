@@ -134,6 +134,10 @@ export default function Library() {
     saveHomeTab(tab);
   }, []);
 
+  useEffect(() => {
+    if (search.trim()) setHomeTab("library");
+  }, [search, setHomeTab]);
+
   const setFeedLayout = useCallback((layout: "grid" | "list") => {
     setFeedLayoutState(layout);
     saveFeedLayout(layout);
@@ -952,7 +956,7 @@ export default function Library() {
       <div ref={mainContentRef} className="min-w-0 flex-1">
         <div
           ref={headerRowRef}
-          className={`mb-5 flex min-w-0 items-center gap-2 sm:gap-3 ${
+          className={`mb-5 flex min-w-0 items-center gap-x-2 gap-y-3 sm:gap-x-3 ${
             isHome ? "max-md:flex-wrap md:flex-nowrap" : "flex-wrap"
           }`}
         >
@@ -1071,7 +1075,7 @@ export default function Library() {
 
           <div
             data-header-filters
-            className="ml-auto flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-1.5 sm:gap-2"
+            className="ml-auto flex min-w-0 w-full basis-full flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:w-auto md:flex-1 md:basis-auto md:flex-nowrap"
           >
             {onChannelPage ? (
               <>
@@ -1208,7 +1212,7 @@ export default function Library() {
                 <select
                   value={sort}
                   onChange={(e) => handleSortChange(e.target.value)}
-                  className="w-[min(12.5rem,100%)] min-w-[9.5rem] shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-2 py-2 text-sm text-gray-100 outline-none focus:border-accent sm:min-w-[12.5rem] sm:px-3"
+                  className="min-w-0 w-[min(12.5rem,100%)] max-md:flex-1 rounded-lg border border-ink-700 bg-ink-950 px-2 py-2 text-sm text-gray-100 outline-none focus:border-accent md:min-w-[12.5rem] md:shrink-0 sm:px-3"
                 >
                   {LIBRARY_SORT_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>

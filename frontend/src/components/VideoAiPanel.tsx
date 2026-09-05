@@ -115,7 +115,7 @@ export default function VideoAiPanel({
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
         <button
           type="button"
           onClick={() => updateSettings({ aiExpanded: !expanded })}

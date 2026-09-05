@@ -931,9 +931,9 @@ export default function Settings() {
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-6 text-2xl font-bold text-gray-100">Settings</h1>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <LiquidNav
-          className="ui-panel inline-flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700"
+          className="ui-panel flex w-full min-w-0 max-w-full flex-wrap gap-1 rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700 sm:inline-flex sm:w-fit sm:flex-nowrap sm:overflow-x-auto"
           pillClassName="bg-ink-800"
           dependency={tab}
         >
@@ -966,7 +966,7 @@ export default function Settings() {
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search…"
           aria-label="Search settings"
-          className="ui-panel ml-auto w-36 shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-accent sm:w-44"
+          className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-accent sm:ml-auto sm:w-44 sm:shrink-0"
         />
       </div>
 

@@ -2157,7 +2157,7 @@ export default function VideoPlayer({
                 {ccNotice}
               </div>
             )}
-            <div className="mt-2 flex items-center gap-3 text-gray-100">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-gray-100">
               <button
                 onClick={togglePlay}
                 className="text-xl leading-none hover:text-accent"
@@ -2231,7 +2231,7 @@ export default function VideoPlayer({
                 })()}
               </span>
 
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
                 {effectiveStreamType === "dash" &&
                   availableHeights.length > 0 && (
                     <div className="relative">
