@@ -3,6 +3,7 @@ import { streamUrl, thumbnailUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
 import { useCardPreview } from "../hooks/useCardPreview";
 import { useSettings } from "../hooks/useSettings";
+import { useCardCopyLayout } from "../hooks/useCardCopyLayout";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 import type { Video } from "../types";
 import {
@@ -15,6 +16,29 @@ import { previewResumeFor, previewStartSec } from "../utils/cardPreview";
 import { setWatchResume } from "../utils/watchHandoff";
 import CardPreviewVideo from "./CardPreviewVideo";
 import MatchReasonBadge from "./MatchReasonBadge";
+
+function CardChannelName({
+  channel,
+  className,
+}: {
+  channel: string;
+  className: string;
+}) {
+  const navigate = useNavigate();
+  return (
+    <span
+      role="link"
+      tabIndex={0}
+      onClick={(e) => {
+        e.preventDefault();
+        navigate(`/?channel=${encodeURIComponent(channel)}`);
+      }}
+      className={className}
+    >
+      {channel}
+    </span>
+  );
+}
 
 export default function VideoCard({
   video,
@@ -38,7 +62,6 @@ export default function VideoCard({
   /** `feed` drops the card chrome on small screens (YouTube-style home). */
   layout?: "card" | "feed";
 }) {
-  const navigate = useNavigate();
   const { addToQueue, current } = usePlayback();
   const [settings] = useSettings();
   const thumb = thumbnailUrl(video);
@@ -58,6 +81,13 @@ export default function VideoCard({
       ? formatDate(video.published_at)
       : "";
   const matchTip = visibleMatchReasonTip(video.match_reason, searchQuery);
+  const viewLabel =
+    showViewCount && video.view_count !== null
+      ? formatViewCount(video.view_count)
+      : "";
+  const hasSecondaryMeta = Boolean(dateLabel || viewLabel);
+  const { detailsRef, sizerRef, combinedSizerRef, stacked, titleLines } =
+    useCardCopyLayout(video.title, Boolean(video.channel && hasSecondaryMeta));
 
   const handleClick = (e: React.MouseEvent) => {
     if (selectable) {
@@ -176,47 +206,102 @@ export default function VideoCard({
         />
       </div>
       <div
-        className={`relative flex flex-col gap-1 p-3 transition-colors duration-200 ${
+        ref={detailsRef}
+        className={`relative flex min-h-0 flex-1 flex-col gap-1 p-3 transition-colors duration-200 ${
           previewActive ? "max-sm:bg-accent/10" : ""
         }`}
       >
+        <span
+          ref={sizerRef}
+          aria-hidden
+          className="pointer-events-none invisible absolute inset-x-3 top-3 -z-10 break-words text-sm font-semibold leading-5"
+        >
+          {video.title}
+        </span>
+        <span
+          ref={combinedSizerRef}
+          aria-hidden
+          className="pointer-events-none invisible absolute left-3 top-3 -z-10 flex w-max items-center gap-x-2 text-xs leading-4"
+        >
+          {video.channel ? (
+            <span className="shrink-0 whitespace-nowrap">{video.channel}</span>
+          ) : null}
+          {dateLabel ? (
+            <span className="shrink-0 whitespace-nowrap">{dateLabel}</span>
+          ) : null}
+          {viewLabel ? (
+            <span className="shrink-0 whitespace-nowrap">{viewLabel}</span>
+          ) : null}
+          {resolution ? (
+            <span className="shrink-0 whitespace-nowrap text-[10px] font-medium">
+              {resolution}
+            </span>
+          ) : null}
+        </span>
         <h3
-          className={`line-clamp-2 overflow-hidden break-words text-sm font-semibold text-gray-100 group-hover:text-accent ${
-            feed
-              ? "max-sm:min-h-0 max-sm:pr-0 sm:min-h-[2.5rem] sm:pr-10"
-              : "min-h-[2.5rem] pr-10"
-          }`}
+          className="min-h-0 flex-1 overflow-hidden break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
+          style={{
+            display: "-webkit-box",
+            WebkitBoxOrient: "vertical",
+            WebkitLineClamp: titleLines,
+            minHeight: titleLines <= 1 ? "1.25rem" : "2.5rem",
+          }}
         >
           {video.title}
         </h3>
-        <div className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 ${resolution ? "pr-10" : ""}`}>
-          {video.channel && (
-            <span
-              role="link"
-              tabIndex={0}
-              onClick={(e) => {
-                e.preventDefault();
-                navigate(`/?channel=${encodeURIComponent(video.channel!)}`);
-              }}
-              className="max-w-full truncate text-xs text-gray-400 hover:text-accent"
-            >
-              {video.channel}
-            </span>
-          )}
-          {dateLabel && (
-            <span className="text-xs text-gray-500">{dateLabel}</span>
-          )}
-          {showViewCount && video.view_count !== null && (
-            <span className="text-xs text-gray-500">
-              {formatViewCount(video.view_count)}
-            </span>
+        <div className="flex shrink-0 flex-col gap-1">
+          {stacked ? (
+            <>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2">
+                {dateLabel ? (
+                  <span className="shrink-0 text-xs leading-4 text-gray-500">
+                    {dateLabel}
+                  </span>
+                ) : null}
+                {viewLabel ? (
+                  <span className="shrink-0 text-xs leading-4 text-gray-500">
+                    {viewLabel}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex min-w-0 items-start gap-2">
+                <CardChannelName
+                  channel={video.channel!}
+                  className="min-w-0 break-words text-xs leading-4 text-gray-400 hover:text-accent"
+                />
+                {resolution ? (
+                  <span className="ml-auto shrink-0 pt-0.5 text-[10px] font-medium text-gray-500">
+                    {resolution}
+                  </span>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <div className="flex min-w-0 items-center gap-x-2">
+              {video.channel ? (
+                <CardChannelName
+                  channel={video.channel}
+                  className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-400 hover:text-accent"
+                />
+              ) : null}
+              {dateLabel ? (
+                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-500">
+                  {dateLabel}
+                </span>
+              ) : null}
+              {viewLabel ? (
+                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-500">
+                  {viewLabel}
+                </span>
+              ) : null}
+              {resolution ? (
+                <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] font-medium text-gray-500">
+                  {resolution}
+                </span>
+              ) : null}
+            </div>
           )}
         </div>
-        {resolution && (
-          <span className="absolute bottom-3 right-3 text-[10px] font-medium text-gray-500">
-            {resolution}
-          </span>
-        )}
       </div>
     </Link>
   );

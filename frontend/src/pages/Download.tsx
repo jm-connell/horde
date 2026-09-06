@@ -698,10 +698,6 @@ export default function Download() {
               )}
             </div>
           </div>
-          <p className="mb-3 text-xs text-gray-400">
-            {activeCount} active -
-            Pause all stops every download; nothing new starts until you resume.
-          </p>
           <Collapse open={!activeCollapsed}>
             <div className="space-y-4">
               {activeJobs.map((job) => (

@@ -175,6 +175,25 @@ def test_bulk_delete_and_notes(client, add_video):
     assert client.get(f"/api/videos/{c.id}").status_code == 200
 
 
+def test_bulk_delete_removes_files(client, add_video, init_db):
+    a = add_video(title="Gone A", write_file=True)
+    b = add_video(title="Gone B", write_file=True)
+    path_a = init_db["downloads"] / a.file_path
+    path_b = init_db["downloads"] / b.file_path
+    assert path_a.exists()
+    assert path_b.exists()
+
+    deleted = client.post(
+        "/api/videos/bulk-delete",
+        json={"video_ids": [a.id, b.id], "delete_files": True},
+    )
+    assert deleted.status_code == 204
+    assert not path_a.exists()
+    assert not path_b.exists()
+    assert client.get(f"/api/videos/{a.id}").status_code == 404
+    assert client.get(f"/api/videos/{b.id}").status_code == 404
+
+
 def test_stream_range_and_missing_file(client, add_video):
     payload = b"ABCDEFGHIJ" * 20  # 200 bytes
     video = add_video(title="Stream me", write_file=True, file_bytes=payload)

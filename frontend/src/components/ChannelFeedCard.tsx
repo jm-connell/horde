@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, streamUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
 import { useCardPreview } from "../hooks/useCardPreview";
+import { useCardCopyLayout } from "../hooks/useCardCopyLayout";
 import { maxPresetLabel } from "../presets";
 import type { ChannelFeedEntry } from "../types";
 import {
@@ -71,6 +72,7 @@ function FeedMetaRow({
   maxRes,
   inLibrary,
   downloading,
+  stacked,
   onDownload,
 }: {
   channelName: string;
@@ -78,51 +80,84 @@ function FeedMetaRow({
   maxRes: string;
   inLibrary: boolean;
   downloading?: boolean;
+  stacked: boolean;
   onDownload: () => void;
 }) {
   const dateLabel = formatPublishedAt(entry.published_at, entry.published_label);
+  const secondary = (
+    <>
+      {dateLabel ? (
+        <span className="shrink-0 text-xs leading-4 text-gray-500">{dateLabel}</span>
+      ) : null}
+      {entry.view_count != null ? (
+        <span className="shrink-0 text-xs leading-4 text-gray-500">
+          {formatViewCount(entry.view_count)}
+        </span>
+      ) : null}
+      <LikeRatioBadge
+        likes={entry.like_count}
+        dislikes={entry.dislike_count}
+      />
+      {inLibrary ? (
+        <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/40">
+          Downloaded
+        </span>
+      ) : null}
+    </>
+  );
+  const hasSecondary = Boolean(
+    dateLabel ||
+      entry.view_count != null ||
+      (entry.like_count != null && entry.dislike_count != null) ||
+      inLibrary
+  );
+  const actions = (
+    <div className="flex shrink-0 items-center gap-2">
+      {maxRes ? (
+        <span className="text-[10px] font-medium text-gray-500">{maxRes}</span>
+      ) : null}
+      {!inLibrary ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDownload();
+          }}
+          disabled={downloading}
+          className="rounded bg-accent px-2 py-0.5 text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+        >
+          {downloading ? "Queued…" : "Download"}
+        </button>
+      ) : null}
+    </div>
+  );
+
+  if (stacked && hasSecondary) {
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-nowrap items-center gap-x-2">
+          {secondary}
+        </div>
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <span className="break-words text-xs leading-4 text-gray-400">
+            {channelName}
+          </span>
+          {actions}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-        <span className="truncate text-xs text-gray-400">{channelName}</span>
-        {dateLabel && (
-          <span className="shrink-0 text-xs text-gray-500">{dateLabel}</span>
-        )}
-        {entry.view_count != null && (
-          <span className="shrink-0 text-xs text-gray-500">
-            {formatViewCount(entry.view_count)}
-          </span>
-        )}
-        <LikeRatioBadge
-          likes={entry.like_count}
-          dislikes={entry.dislike_count}
-        />
-        {inLibrary && (
-          <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/40">
-            Downloaded
-          </span>
-        )}
+    <div className="flex min-w-0 items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-x-2">
+        <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-400">
+          {channelName}
+        </span>
+        {secondary}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {maxRes && (
-          <span className="text-[10px] font-medium text-gray-500">{maxRes}</span>
-        )}
-        {!inLibrary && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDownload();
-            }}
-            disabled={downloading}
-            className="rounded bg-accent px-2 py-0.5 text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
-          >
-            {downloading ? "Queued…" : "Download"}
-          </button>
-        )}
-      </div>
+      {actions}
     </div>
   );
 }
@@ -259,6 +294,16 @@ export default function ChannelFeedCard({
     channelName
   );
   const matchTip = visibleMatchReasonTip(entry.match_reason, searchQuery);
+  const titleText = entry.title || "Untitled";
+  const likeLabel = formatLikeRatio(entry.like_count, entry.dislike_count);
+  const hasSecondaryMeta = Boolean(
+    dateLabel ||
+      viewCount != null ||
+      (entry.like_count != null && entry.dislike_count != null) ||
+      inLibrary
+  );
+  const { detailsRef, sizerRef, combinedSizerRef, stacked, titleLines } =
+    useCardCopyLayout(titleText, hasSecondaryMeta, layout === "grid");
 
   useEffect(() => {
     if (entry.library_height_px) {
@@ -324,10 +369,10 @@ export default function ChannelFeedCard({
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-24">
-            <h3 className="line-clamp-2 text-sm font-semibold text-gray-100 group-hover:text-accent">
-              {entry.title || "Untitled"}
+            <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent">
+              {titleText}
             </h3>
-            <span className="truncate text-xs text-gray-400">{channelName}</span>
+            <span className="break-words text-xs text-gray-400">{channelName}</span>
             <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
               {duration && <span>{duration}</span>}
               {duration && dateLabel && (
@@ -383,7 +428,7 @@ export default function ChannelFeedCard({
         </div>
       </div>
     ) : (
-      <div className="ui-card video-card--feed group flex flex-col overflow-hidden max-sm:rounded-none max-sm:bg-transparent max-sm:ring-0 sm:rounded-xl sm:bg-ink-900 sm:ring-1 sm:ring-ink-700">
+      <div className="ui-card video-card--feed group flex h-full flex-col overflow-hidden max-sm:rounded-none max-sm:bg-transparent max-sm:ring-0 sm:rounded-xl sm:bg-ink-900 sm:ring-1 sm:ring-ink-700">
         <FeedThumbnail
           thumbSrc={thumbSrc}
           duration={duration}
@@ -394,21 +439,71 @@ export default function ChannelFeedCard({
           previewActive={previewActive}
         />
         <div
-          className={`flex flex-col gap-1 p-3 transition-colors duration-200 ${
+          ref={detailsRef}
+          className={`relative flex min-h-0 flex-1 flex-col gap-1 p-3 transition-colors duration-200 ${
             previewActive ? "max-sm:bg-accent/10" : ""
           }`}
         >
-          <h3 className="line-clamp-2 min-h-0 text-sm font-semibold text-gray-100 group-hover:text-accent sm:min-h-[2.5rem]">
-            {entry.title || "Untitled"}
+          <span
+            ref={sizerRef}
+            aria-hidden
+            className="pointer-events-none invisible absolute inset-x-3 top-3 -z-10 break-words text-sm font-semibold leading-5"
+          >
+            {titleText}
+          </span>
+          <span
+            ref={combinedSizerRef}
+            aria-hidden
+            className="pointer-events-none invisible absolute left-3 top-3 -z-10 flex w-max items-center gap-x-2 text-xs leading-4"
+          >
+            <span className="shrink-0 whitespace-nowrap">{channelName}</span>
+            {dateLabel ? (
+              <span className="shrink-0 whitespace-nowrap">{dateLabel}</span>
+            ) : null}
+            {viewCount != null ? (
+              <span className="shrink-0 whitespace-nowrap">
+                {formatViewCount(viewCount)}
+              </span>
+            ) : null}
+            {likeLabel ? (
+              <span className="shrink-0 whitespace-nowrap">{likeLabel}</span>
+            ) : null}
+            {inLibrary ? (
+              <span className="shrink-0 whitespace-nowrap">Downloaded</span>
+            ) : null}
+            {maxRes ? (
+              <span className="shrink-0 whitespace-nowrap text-[10px] font-medium">
+                {maxRes}
+              </span>
+            ) : null}
+            {!inLibrary ? (
+              <span className="shrink-0 whitespace-nowrap">
+                {downloading ? "Queued…" : "Download"}
+              </span>
+            ) : null}
+          </span>
+          <h3
+            className="min-h-0 flex-1 overflow-hidden break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
+            style={{
+              display: "-webkit-box",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: titleLines,
+              minHeight: titleLines <= 1 ? "1.25rem" : "2.5rem",
+            }}
+          >
+            {titleText}
           </h3>
-          <FeedMetaRow
-            channelName={channelName}
-            entry={entry}
-            maxRes={maxRes}
-            inLibrary={inLibrary}
-            downloading={downloading}
-            onDownload={onDownload}
-          />
+          <div className="shrink-0">
+            <FeedMetaRow
+              channelName={channelName}
+              entry={entry}
+              maxRes={maxRes}
+              inLibrary={inLibrary}
+              downloading={downloading}
+              stacked={stacked}
+              onDownload={onDownload}
+            />
+          </div>
         </div>
       </div>
     );
@@ -420,14 +515,14 @@ export default function ChannelFeedCard({
       data-preview-active={previewActive ? "true" : undefined}
       className={
         layout === "grid"
-          ? "max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0"
+          ? "h-full max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0"
           : undefined
       }
     >
       {href ? (
         <Link
           to={href}
-          className="block"
+          className="block h-full"
           onClick={() => {
             if (libraryVideoId == null) return;
             const resumeAt = previewResumeFor(libraryVideoId);

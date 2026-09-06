@@ -756,14 +756,14 @@ export default function Library() {
 
   const bulkDelete = async () => {
     if (!selectedIds.size) return;
-    if (!confirm(`Delete ${selectedIds.size} video(s) from your library? Files will not be removed.`)) return;
     try {
-      await api.bulkDeleteVideos([...selectedIds]);
-      exitSelectMode();
-      setRefreshKey((k) => k + 1);
+      await api.bulkDeleteVideos([...selectedIds], true);
     } catch {
       showToast("Could not delete selected videos");
+      throw new Error("Could not delete selected videos");
     }
+    exitSelectMode();
+    setRefreshKey((k) => k + 1);
   };
 
   const bulkSaveNote = async () => {
