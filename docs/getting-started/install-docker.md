@@ -85,6 +85,8 @@ docker compose --profile ai up -d
 
 For remote Ollama on another machine, leave the `ai` profile off and set `OLLAMA_BASE_URL` (or configure it under [Settings → AI](../settings/index.md)). Details: [AI setup](../ops/ai-setup.md).
 
+GPU passthrough for the `horde` service is commented out by default. Settings → System shows **GPU** / **None detected** until you uncomment the NVIDIA or `/dev/dri` block. Horde does not need a GPU for normal use. See [GPU](../ops/environment.md#gpu).
+
 ## Verify the install
 
 ```bash

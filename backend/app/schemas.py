@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from .models import DownloadDestination, JobStatus, PlaylistSource, VideoStatus
 
@@ -94,6 +94,7 @@ class DownloadCreate(BaseModel):
     notes_pending: Optional[str] = None
     normalize_volume: bool = False
     destination: DownloadDestination = DownloadDestination.library
+    video_codec: Optional[str] = None
 
 
 class DownloadPreview(BaseModel):
@@ -149,9 +150,20 @@ class DownloadJobRead(BaseModel):
     replace_video_id: Optional[int] = None
     file_size: Optional[int]
     height_px: Optional[int] = None
+    video_codec: str = "av1"
     created_at: datetime
     video_missing: bool = False
     superseded: bool = False
+
+    @field_validator("video_codec", mode="before")
+    @classmethod
+    def _normalize_video_codec(cls, value: object) -> str:
+        raw = str(value or "av1").strip().lower().replace("-", "")
+        if raw in {"h264", "avc", "avc1"}:
+            return "h264"
+        if raw in {"h265", "hevc", "hev1", "hvc1"}:
+            return "h265"
+        return "av1"
 
 
 class DownloadJobUpdate(BaseModel):
@@ -173,6 +185,7 @@ class DownloadQueueStatus(BaseModel):
 class VideoRedownload(BaseModel):
     quality_preset: str = "best"
     normalize_volume: bool = False
+    video_codec: Optional[str] = None
 
 
 class ChannelStat(BaseModel):

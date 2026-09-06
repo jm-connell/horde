@@ -19,8 +19,10 @@ from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
 from ..database import engine
 from ..models import DownloadDestination, DownloadJob, JobStatus, Video, VideoStatus
 from . import activity, library, scanner
+from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
-from .mp4_compat import ensure_safari_mp4
+from .mp4_compat import ensure_safari_mp4, probe_media
+from .video_transcode import encode_target, transcode_video
 from .paths import find_video_by_path, to_rel_path
 from .ytdlp_common import (
     ERROR_KIND_CANCELLED,
@@ -39,7 +41,6 @@ from .ytdlp_common import (
 )
 
 from .ytdlp_formats import (
-    FORMAT_SORT,
     PRESET_MAX_HEIGHT,
     QUALITY_FORMATS,
     STANDARD_HEIGHTS,
@@ -48,7 +49,10 @@ from .ytdlp_formats import (
     _has_audio,
     _height_to_tier,
     decode_available_presets,
-    format_chain,
+    default_download_video_codec,
+    format_sort_for,
+    is_audio_preset,
+    normalize_video_codec,
     quality_from_preview,
     resolve_quality_preset,
 )
@@ -194,6 +198,8 @@ def _is_intermediate_media(name: str) -> bool:
     if ".norm." in low or low.endswith(".norm.mp4"):
         return True
     if ".compat." in low or low.endswith(".compat.mp4"):
+        return True
+    if ".xcode." in low or low.endswith(".xcode.mp4"):
         return True
     return False
 
@@ -975,7 +981,7 @@ def _replace_with_retries(src: Path, dest: Path, retries: int = 8) -> None:
 
 def _apply_loudnorm(path: Path) -> Optional[str]:
     """Normalize loudness via ffmpeg; returns warning if skipped."""
-    if not shutil.which("ffmpeg"):
+    if not ffmpeg_available():
         return "Volume normalization skipped: ffmpeg not found"
     # Unique sidecar so concurrent workers / scanner never share one .norm.mp4.
     tmp = path.with_name(
@@ -985,7 +991,7 @@ def _apply_loudnorm(path: Path) -> Optional[str]:
     if tmp_rel:
         scanner.mark_active(tmp_rel)
     cmd = [
-        "ffmpeg",
+        ffmpeg_bin(),
         "-y",
         "-i",
         str(path),
@@ -1096,15 +1102,33 @@ def _complete_download(
     notes_pending: Optional[str],
     cancel_event: Optional[threading.Event] = None,
     destination: str = DownloadDestination.library.value,
+    video_codec: str = "av1",
 ) -> Optional[int]:
     if cancel_event is not None and cancel_event.is_set():
         raise DownloadCancelled()
 
+    video_codec = normalize_video_codec(video_codec)
     info = _as_info(info)
     source_url = info.get("webpage_url") or url
 
     if final_path.exists():
         final_path = ensure_safari_mp4(final_path)
+
+    if video_codec != "av1" and final_path.exists() and not is_audio_preset(quality_preset):
+        probe = probe_media(final_path)
+        dims = probe_dimensions(final_path)
+        height_now = dims[1] if dims else None
+        if height_now is None:
+            raw_h = info.get("height")
+            height_now = int(raw_h) if raw_h else None
+        target = encode_target(
+            video_codec,
+            probe.video_codec if probe else None,
+            height_now,
+            preset=quality_preset,
+        )
+        if target:
+            final_path = transcode_video(final_path, target)
 
     volume_warning: Optional[str] = None
     if normalize_volume and final_path.exists():
@@ -1361,6 +1385,7 @@ def _run_download(
         replace_video_id = job.replace_video_id
         notes_pending = job.notes_pending
         destination = job.destination or DownloadDestination.library.value
+        video_codec = job.video_codec or "av1"
 
     if destination == DownloadDestination.device.value:
         # Never overwrite a library row from an ephemeral device job.
@@ -1420,7 +1445,7 @@ def _run_download(
             "merge_output_format": "mp4",
             "ignoreerrors": True,
             "overwrites": True,
-            "format_sort": FORMAT_SORT,
+            "format_sort": format_sort_for(quality_preset, video_codec),
             "file_access_retries": 10,
             "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
             "extractor_args": youtube_extractor_args(),
@@ -1428,7 +1453,7 @@ def _run_download(
     )
 
     try:
-        for fmt in _format_chain(quality_preset):
+        for fmt in _format_chain(quality_preset, video_codec):
             attempt_paths: set[str] = set()
             ydl_opts = {**base_ydl_opts, "format": fmt}
             try:
@@ -1552,6 +1577,7 @@ def _run_download(
             notes_pending,
             cancel_event=cancel,
             destination=destination,
+            video_codec=video_codec,
         )
         act.finish(detail=detail)
         return video_id
@@ -1625,6 +1651,7 @@ def _run_download(
                     notes_pending,
                     cancel_event=cancel,
                     destination=destination,
+                    video_codec=video_codec,
                 )
                 act.finish(detail=detail)
                 return video_id
@@ -1884,6 +1911,7 @@ def _run_playlist_import(
                     title=preview.get("title"),
                     channel=preview.get("channel"),
                     thumbnail_url=preview.get("thumbnail_url"),
+                    video_codec=default_download_video_codec(),
                 )
                 session.add(job)
                 session.commit()

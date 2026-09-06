@@ -197,6 +197,7 @@ export interface DownloadJob {
   replace_video_id?: number | null;
   file_size: number | null;
   height_px?: number | null;
+  video_codec?: string | null;
   created_at: string;
   video_missing?: boolean;
   superseded?: boolean;
@@ -251,6 +252,7 @@ export interface DownloadOverrides {
   channel_override?: string;
   notes_pending?: string;
   normalize_volume?: boolean;
+  video_codec?: string;
   destination?: DownloadDestination;
 }
 
@@ -473,6 +475,16 @@ export interface SystemStats {
     total_bytes: number;
     used_bytes: number;
     free_bytes: number;
+  } | null;
+  encode?: {
+    hw_h264: boolean;
+    hw_hevc: boolean;
+    ffmpeg_has_hw_encoder: boolean;
+    gpu_name?: string | null;
+    gpu_vendor?: string | null;
+    encoder_h264?: string | null;
+    encoder_hevc?: string | null;
+    ffmpeg_bin?: string | null;
   } | null;
 }
 

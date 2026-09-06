@@ -3,13 +3,15 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from .ffmpeg_bin import ffmpeg_bin, ffprobe_bin
+
 
 def probe_duration(path: Path) -> Optional[float]:
     """Return media duration in seconds via ffprobe, or None on failure."""
     try:
         result = subprocess.run(
             [
-                "ffprobe",
+                ffprobe_bin(),
                 "-v",
                 "error",
                 "-show_entries",
@@ -38,7 +40,7 @@ def probe_is_playable(path: Path) -> bool:
     try:
         result = subprocess.run(
             [
-                "ffprobe",
+                ffprobe_bin(),
                 "-v",
                 "error",
                 "-select_streams",
@@ -81,7 +83,7 @@ def probe_dimensions(path: Path) -> Optional[tuple[int, int]]:
     try:
         result = subprocess.run(
             [
-                "ffprobe",
+                ffprobe_bin(),
                 "-v",
                 "error",
                 "-select_streams",
@@ -115,7 +117,7 @@ def probe_frame_rate(path: Path) -> Optional[float]:
     try:
         result = subprocess.run(
             [
-                "ffprobe",
+                ffprobe_bin(),
                 "-v",
                 "error",
                 "-select_streams",
@@ -158,7 +160,7 @@ def grab_frame(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
             [
-                "ffmpeg",
+                ffmpeg_bin(),
                 "-y",
                 "-ss",
                 str(at_seconds),
@@ -313,7 +315,7 @@ def _sprite_via_ffmpeg_tile(
         image_path.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
             [
-                "ffmpeg",
+                ffmpeg_bin(),
                 "-y",
                 "-i",
                 str(video_path),

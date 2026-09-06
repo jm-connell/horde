@@ -23,12 +23,13 @@ from .ytdlp_common import (
     youtube_extractor_args,
 )
 from .ytdlp_formats import (
-    FORMAT_SORT,
     _available_presets,
     _has_audio,
     _height_to_tier,
     _video_heights,
+    default_download_video_codec,
     format_chain,
+    format_sort_for,
 )
 
 
@@ -182,12 +183,13 @@ def _estimate_preset_sizes(
     formats = info.get("formats") or []
     if not formats:
         return sizes
+    codec = default_download_video_codec()
     opts = apply_cookie_opts(
         {
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
-            "format_sort": FORMAT_SORT,
+            "format_sort": format_sort_for("best", codec),
         }
     )
     work = {**info, "formats": list(formats)}
@@ -198,7 +200,7 @@ def _estimate_preset_sizes(
             pass
         for preset in presets:
             size: Optional[int] = None
-            for format_spec in format_chain(preset):
+            for format_spec in format_chain(preset, codec):
                 try:
                     size = _estimate_preset_bytes(ydl, work, format_spec)
                 except Exception:  # noqa: BLE001

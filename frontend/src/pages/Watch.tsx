@@ -516,7 +516,8 @@ export default function Watch() {
       await api.redownloadVideo(
         video.id,
         redownloadPreset,
-        settings.normalizeVolumeOnDownload
+        settings.normalizeVolumeOnDownload,
+        settings.downloadVideoCodec
       );
       showToast("Download started — check the Download page for progress.");
       refreshJobs();
@@ -548,7 +549,12 @@ export default function Watch() {
     setRedownloading(true);
     try {
       redownloadPending.current = true;
-      await api.redownloadVideo(video.id, preset, true);
+      await api.redownloadVideo(
+        video.id,
+        preset,
+        true,
+        settings.downloadVideoCodec
+      );
       showToast(
         "Normalizing via redownload — check the Download page for progress."
       );

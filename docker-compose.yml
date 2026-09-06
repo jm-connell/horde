@@ -74,3 +74,26 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # GPU for archive transcode (H.264/H.265). Uncomment the block that matches
+    # the host. This is separate from Ollama passthrough above.
+    #
+    # NVIDIA (requires nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    #
+    # AMD / Intel VAAPI or AMD AMF:
+    # devices:
+    #   - /dev/dri
+    # group_add:
+    #   - video
+    #   - render
+    #
+    # AMD ROCm extra (if using AMF via /dev/kfd):
+    # devices:
+    #   - /dev/kfd
+    #   - /dev/dri

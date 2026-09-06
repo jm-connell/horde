@@ -836,12 +836,13 @@ export const api = {
   redownloadVideo(
     id: number,
     quality_preset: string,
-    normalize_volume = false
+    normalize_volume = false,
+    video_codec?: string
   ): Promise<Video> {
     return request<Video>(`/api/videos/${id}/redownload`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quality_preset, normalize_volume }),
+      body: JSON.stringify({ quality_preset, normalize_volume, video_codec }),
     });
   },
 

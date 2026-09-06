@@ -106,6 +106,8 @@ class DownloadJob(SQLModel, table=True):
     notes_pending: Optional[str] = None
     paused: bool = Field(default=False)
     normalize_volume: bool = Field(default=False)
+    # Archive video codec: av1 (copy) | h264 | h265. Stamped from Settings.
+    video_codec: str = Field(default="av1")
     # "library" archives to the server; "device" is ephemeral browser save.
     destination: str = Field(default=DownloadDestination.library.value)
     # Relative path under DOWNLOADS_DIR for device jobs (serve + cleanup).

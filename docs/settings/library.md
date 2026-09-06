@@ -54,6 +54,11 @@ Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Librar
 |---------|-----|---------|--------|
 | Show active download count in navigation | `showDownloadNavBadge` | `true` | Badge on Download while jobs are queued/running |
 | Normalize volume on download | `normalizeVolumeOnDownload` | `true` | Loudness normalization via ffmpeg on new downloads |
+| Archive video codec (beta) | `downloadVideoCodec` | `"av1"` | `av1` \| `h264` \| `h265`. Stamped onto every new download. Default is AV1. |
+
+**AV1** (default) is YouTube’s high-res codec: smallest files, best quality, no video encode, weaker device support. **H.264** is the largest files and the widest playback; 1440p/4K must be converted from AV1 because YouTube has no H.264 there. **H.265** is smaller 1440p/4K than H.264 after that same conversion. The server GPU (passed into the Horde process, not Ollama) speeds 1440p/4K encodes; without it, software transcode is very slow. Full tradeoffs: [Compatibility codecs (beta)](../guides/downloads.md#compatibility-codecs).
+
+Settings → Library shows a **Recommended** hint from ffmpeg in the Horde process (NVENC/QSV/VAAPI), not from Ollama VRAM. Settings → System **GPU** / **None detected** is the same probe’s device visibility. If the GPU is visible but Horde cannot encode, pass the device into the **horde** container (see [GPU](../ops/environment.md#gpu) and [Compatibility codecs (beta)](../guides/downloads.md#compatibility-codecs)). Existing library files are unchanged until you redownload / change resolution.
 
 ## Metadata and catalog
 

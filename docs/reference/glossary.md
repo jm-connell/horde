@@ -10,6 +10,10 @@ A channel’s **remote listing** of videos (metadata from YouTube / yt-dlp) used
 
 A numeric vector representing text (title, description, notes, tags, subtitle chunks) for **semantic search**, related videos, and recommendation shelves. Usually produced by a local Ollama embed model; optionally by OpenRouter when scope is `all`. See [Local vs cloud AI](../design/local-vs-cloud-ai.md).
 
+## GPU
+
+Settings → System → Resources **GPU** is the card visible to the **`horde` container** (not Ollama). **None detected** is normal with stock compose. Horde does not need a GPU to download, browse, or play the library. See [GPU](../ops/environment.md#gpu).
+
 ## POT
 
 **Proof of Origin Token** support for YouTube access via yt-dlp’s bgutil HTTP provider. When `YTDLP_POT_BASE_URL` points at a running [bgutil](#bgutil) POT server, Horde configures yt-dlp to use it, which can reduce bot-check failures. Health exposes POT provider status, cookie readiness, and the last classified extract failure.

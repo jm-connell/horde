@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 import subprocess
 import threading
 import time
@@ -23,6 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import activity, scanner
+from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin, ffprobe_bin
 from .paths import to_rel_path
 
 logger = logging.getLogger(__name__)
@@ -159,7 +159,7 @@ def ffmpeg_compat_cmd(
     has_audio: bool,
     video_codec: Optional[str] = None,
 ) -> list[str]:
-    cmd = ["ffmpeg", "-y", "-i", str(src)]
+    cmd = [ffmpeg_bin(), "-y", "-i", str(src)]
     if has_video:
         cmd.extend(["-map", "0:v:0", "-c:v", "copy"])
         tag = mp4_video_tag(video_codec)
@@ -182,12 +182,10 @@ def ffmpeg_compat_cmd(
 def probe_media(path: Path) -> Optional[MediaProbe]:
     if not path.exists() or path.stat().st_size <= 0:
         return None
-    if not shutil.which("ffprobe"):
-        return None
     try:
         result = subprocess.run(
             [
-                "ffprobe",
+                ffprobe_bin(),
                 "-v",
                 "error",
                 "-show_entries",
@@ -291,7 +289,7 @@ def ensure_safari_mp4(path: Path) -> Path:
 def _ensure_safari_mp4_locked(path: Path) -> Path:
     if not path.exists():
         return path
-    if not shutil.which("ffmpeg"):
+    if not ffmpeg_available():
         logger.warning("Safari MP4 remux skipped (no ffmpeg): %s", path.name)
         return path
     probe = probe_media(path)

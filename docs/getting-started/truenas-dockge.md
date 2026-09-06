@@ -88,6 +88,12 @@ docker compose --profile ai up -d
 
 Or point Horde at Ollama on a GPU PC via `OLLAMA_BASE_URL` / Settings → AI. See [AI setup](../ops/ai-setup.md).
 
+### GPU (optional)
+
+Stock compose leaves GPU passthrough commented out, so Settings → System → Resources **GPU** shows **None detected**. That is expected. Horde does not need a GPU for default AV1 archives or 1080p H.264.
+
+To pass a host NVIDIA / Intel / AMD device into the **`horde`** container (for 1440p/4K H.264/H.265 encode), uncomment the matching block in `docker-compose.yml` and recreate the stack. Do not isolate the GPU to another TrueNAS app. Full steps and whether you need it: [GPU](../ops/environment.md#gpu).
+
 ## 5. Updating on TrueNAS
 
 !!! warning "Update on the host shell — not Dockge Bash"
@@ -128,6 +134,7 @@ More detail: [Storage layout](../ops/storage-layout.md).
 - [ ] Stack up; UI loads at `http://<truenas-ip>:8686`
 - [ ] Optional SMB share for manual drops
 - [ ] Know to run `bash update.sh` on the **host**, not in Dockge Bash
+- [ ] GPU optional — **None detected** is normal until you [pass a device in](../ops/environment.md#gpu)
 
 ## Next steps
 

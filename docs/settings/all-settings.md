@@ -127,6 +127,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `channelOrder` | `"desc"` | string | `asc` \| `desc` | UI blob |
 | `showDownloadNavBadge` | `true` | bool | | UI blob |
 | `normalizeVolumeOnDownload` | `true` | bool | | UI blob |
+| `downloadVideoCodec` | `"av1"` | string | `av1` \| `h264` \| `h265` (beta; default AV1) | UI blob |
 
 !!! note "`progressExpiryDays`"
     Present on the client `Settings` object (default `14`) but **not** in `SERVER_UI_KEYS`. Canonical store is top-level `progress_expiry_days`.

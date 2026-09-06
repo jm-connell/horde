@@ -17,6 +17,8 @@ That starts the `ollama` service (profile `ai`) with models under `OLLAMA_DATA_P
 
 Compose comments include passthrough snippets for NVIDIA (`deploy.resources`), AMD ROCm (`/dev/kfd`, `/dev/dri`), and Intel (`/dev/dri`). Uncomment the block that matches your host. For a GPU on another machine, leave the local `ollama` service off and point Horde at that host.
 
+Horde’s **download transcode** GPU (beta) is a separate pass-through on the `horde` service. Settings → System → **GPU** / **None detected** is that container, not Ollama. See [GPU](environment.md#gpu).
+
 ## `OLLAMA_BASE_URL`
 
 | Value | Behavior |

@@ -137,6 +137,13 @@ _nvidia_gpu = host_gpu
 def system_stats():
     cpu_ram = _cpu_ram()
     gpu = host_gpu()
+    encode = None
+    try:
+        from ..services.encode_probe import probe_encode_capabilities
+
+        encode = probe_encode_capabilities().to_dict()
+    except Exception:  # noqa: BLE001
+        encode = None
     disk = None
     try:
         from ..config import DOWNLOADS_DIR
@@ -158,6 +165,7 @@ def system_stats():
         "ram_percent": cpu_ram["ram_percent"],
         "gpu": gpu,
         "disk": disk,
+        "encode": encode,
     }
 
 

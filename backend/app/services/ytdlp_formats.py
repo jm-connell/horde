@@ -11,15 +11,40 @@ AUDIO_ABR_TIERS: tuple[int, ...] = (160, 128, 64)
 # Prefer AV1 + AAC so archives stay 4K/HDR and remux to a Safari-playable MP4
 # without an H.264 transcode. VP9 often wins on raw vbr otherwise.
 _AV1 = "[vcodec~='^(av01|av1)']"
+_H264 = "[vcodec~='^(avc1|avc|h264)']"
 _AAC = "[acodec~='^(mp4a|aac)']"
 
+VIDEO_CODECS = ("av1", "h264", "h265")
+FORMAT_SORT_H264 = ["res", "fps", "hdr:12", "vcodec:h264", "acodec:mp4a", "vbr", "abr"]
 
-def _pair(height_filter: str) -> str:
-    """Video+audio selector: AV1+AAC first, then AV1, then any at this height."""
+
+def normalize_video_codec(value: Any) -> str:
+    raw = str(value or "av1").strip().lower().replace("-", "").replace(".", "")
+    if raw in {"h264", "avc", "avc1", "avc3"}:
+        return "h264"
+    if raw in {"h265", "hevc", "hev1", "hvc1"}:
+        return "h265"
+    return "av1"
+
+
+def default_download_video_codec() -> str:
+    """UI-blob default for API clients that omit video_codec."""
+    try:
+        from .app_settings import load
+
+        ui = (load() or {}).get("ui") or {}
+        return normalize_video_codec(ui.get("download_video_codec"))
+    except Exception:  # noqa: BLE001
+        return "av1"
+
+
+def _pair(height_filter: str, *, h264: bool = False) -> str:
+    """Video+audio selector: preferred codec + AAC, then that codec, then any."""
     h = height_filter
+    pref = _H264 if h264 else _AV1
     return (
-        f"bv*{h}{_AV1}+ba{_AAC}/"
-        f"bv*{h}{_AV1}+ba/"
+        f"bv*{h}{pref}+ba{_AAC}/"
+        f"bv*{h}{pref}+ba/"
         f"bv*{h}+ba{_AAC}/"
         f"bv*{h}+ba/"
         f"b{h}"
@@ -66,21 +91,54 @@ def is_audio_preset(preset: str) -> bool:
     return preset == "audio" or preset.startswith("audio-")
 
 
-def format_chain(preset: str) -> list[str]:
+def uses_native_h264(preset: str, codec: str) -> bool:
+    """True when we should grab YouTube avc1 (≤1080p) instead of AV1-for-transcode."""
+    if is_audio_preset(preset):
+        return False
+    if normalize_video_codec(codec) == "av1":
+        return False
+    max_h = PRESET_MAX_HEIGHT.get(preset)
+    if max_h is None:
+        return False
+    return max_h <= 1080
+
+
+def format_sort_for(preset: str, codec: str = "av1") -> list[str]:
+    if uses_native_h264(preset, codec):
+        return list(FORMAT_SORT_H264)
+    return list(FORMAT_SORT)
+
+
+def _primary_spec(preset: str, *, h264: bool) -> str:
+    pair = lambda filt: _pair(filt, h264=h264)
+    audio = QUALITY_FORMATS.get(preset) if is_audio_preset(preset) else None
+    if audio:
+        return audio
+    if preset == "best":
+        return pair("")
+    max_h = PRESET_MAX_HEIGHT.get(preset)
+    if max_h:
+        return pair(f"[height={max_h}]") + "/" + pair(f"[height<={max_h}]")
+    return pair("")
+
+
+def format_chain(preset: str, codec: str = "av1") -> list[str]:
     """Build yt-dlp format selectors. Height-capped presets never fall back to unbounded best."""
-    primary = QUALITY_FORMATS.get(preset, QUALITY_FORMATS["best"])
+    native = uses_native_h264(preset, codec)
+    primary = _primary_spec(preset, h264=native)
     max_h = PRESET_MAX_HEIGHT.get(preset)
     chain = [primary]
+    vpref = "avc" if native else "av01"
     if max_h:
         chain.append(
-            f"best[vcodec^=av01][height<={max_h}]/"
+            f"best[vcodec^={vpref}][height<={max_h}]/"
             f"best[ext=mp4][height<={max_h}]/"
             f"best[height<={max_h}]"
         )
-    elif preset == "best":
-        chain.append("best[vcodec^=av01]/best[ext=mp4]/best")
     elif is_audio_preset(preset):
         chain.append("bestaudio[acodec~='^(mp4a|aac)']/bestaudio/best")
+    elif preset == "best":
+        chain.append(f"best[vcodec^={vpref}]/best[ext=mp4]/best")
     unique: list[str] = []
     seen: set[str] = set()
     for fmt in chain:

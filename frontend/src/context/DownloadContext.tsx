@@ -209,6 +209,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         channel_override: overrides.channel?.trim() || undefined,
         notes_pending: overrides.notes?.trim() || undefined,
         normalize_volume: settings.normalizeVolumeOnDownload,
+        video_codec: settings.downloadVideoCodec,
         destination: overrides.destination ?? "library",
       });
       setJobs((prev) => [job, ...prev.filter((j) => j.id !== job.id)]);
@@ -219,7 +220,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       }
       return job;
     },
-    [subscribe, updateSettings, settings.normalizeVolumeOnDownload, syncQueue]
+    [subscribe, updateSettings, settings.normalizeVolumeOnDownload, settings.downloadVideoCodec, syncQueue]
   );
 
   const retryJob = useCallback(

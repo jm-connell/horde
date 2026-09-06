@@ -62,7 +62,9 @@ Deep link from Settings: `/wiki/ops/backup-restore/` when the wiki is bundled. F
 
 ## Resources
 
-Horde **host** CPU, RAM, and GPU (NVIDIA / AMD / Intel when detectable).
+CPU, RAM, disk, and **GPU** as seen from this Horde process (NVIDIA / AMD / Intel when the container can probe them).
+
+The **GPU** card is always shown. **None detected** means the `horde` container has no card — Horde still runs. Deep link: `/wiki/ops/environment/#gpu`. How to pass a device in, and when you actually need one: [GPU](../ops/environment.md#gpu).
 
 !!! tip
     AI workload sizing uses the **Ollama** machine instead — configure VRAM under [AI → Providers](ai.md#local-ollama).
@@ -76,7 +78,7 @@ Also shown:
 1. **Channel catalog** — queue depth, current channel/phase, errors. Actions:
     - **Refresh catalogs** — incremental: new channels + new uploads on ready catalogs
     - **Full reindex…** — re-walk every channel up to `channel_catalog_max_videos` (can take a long time)
-2. **AI** — compact queue status with pause/resume (`ai.paused`). **Index missing** appears when search-index coverage is incomplete and the queue is idle. **Ollama GPU** (and Horde host GPU util/temp) only appear when local Ollama is actually in use. When OpenRouter is the active backend, those rows are replaced by **OpenRouter** (model + LLM vs all-tasks) and **Spend** (24h / 7-day totals, weekly budget if set, 24h call count).
+2. **AI** — compact queue status with pause/resume (`ai.paused`). **Index missing** appears when search-index coverage is incomplete and the queue is idle. **Ollama GPU** (and host GPU util/temp) only appear when local Ollama is actually in use. When OpenRouter is the active backend, those rows are replaced by **OpenRouter** (model + LLM vs all-tasks) and **Spend** (24h / 7-day totals, weekly budget if set, 24h call count).
 3. **Metadata sync** — shown while a Library resync is running (done/failed/total + current title)
 
 Catalog indexing only appears when `channel_catalog_enabled` is on ([Library](library.md#channel-catalog)).

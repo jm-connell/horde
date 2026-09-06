@@ -192,8 +192,8 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
         }
       >
         <p className="mb-3 max-w-2xl text-xs text-gray-500">
-          Horde host CPU, RAM, and GPU. AI workload sizing uses the Ollama
-          machine instead (see AI → Providers).
+          CPU, RAM, and GPU as seen from this Horde process. AI workload sizing
+          uses the Ollama machine instead (see AI → Providers).
         </p>
         <SystemStatsSnippet stats={systemStats} />
       </Section>

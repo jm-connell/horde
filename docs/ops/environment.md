@@ -57,6 +57,73 @@ These are **Compose / host** variables used when mounting volumes — not read b
 !!! warning "Permissions"
     Set `PUID`/`PGID` to the user that owns your media dataset (common on TrueNAS). Wrong IDs cause downloads that the host cannot read, or a scanner that cannot write. See [Troubleshooting](troubleshooting.md).
 
+## GPU { #gpu }
+
+Settings → System → Resources shows a **GPU** card from what the **`horde` container** can see (`nvidia-smi`, ROCm, or `/dev/dri`). **None detected** means that process has no card — usually the GPU snippets in `docker-compose.yml` are still commented out, TrueNAS isolated the device to another app, or the host has no GPU. Horde still runs.
+
+This is **not** the Ollama GPU. Passing a device into `ollama` (or running Ollama on another PC) does not fill the System GPU card.
+
+### Do you need one?
+
+Horde does **not** require a GPU to download, browse, or play the library. Playback is the stored file; there is no live transcode while you watch.
+
+| What you do | GPU? |
+|-------------|------|
+| Default **AV1** archives | No — bitstream is copied |
+| **H.264** at 1080p and below | No — YouTube already has H.264 |
+| **H.264 / H.265** at 1440p/4K | Optional: hardware encode is much faster; otherwise software can take a long time |
+| Local **Ollama** (tags, chat, search) | On the **Ollama** machine — or skip Ollama and use OpenRouter |
+| Everything else | No |
+
+Keep **Archive video codec → AV1** if you do not want encode work. Codec tradeoffs: [Compatibility codecs (beta)](../guides/downloads.md#compatibility-codecs).
+
+### Pass the GPU into Horde
+
+The GPU snippets on the **`horde`** service in `docker-compose.yml` start commented out. Uncomment the block that matches the host, then recreate the stack (`docker compose up --build -d` or Dockge deploy).
+
+**NVIDIA** (needs nvidia-container-toolkit on the host):
+
+```yaml
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+```
+
+On TrueNAS: install NVIDIA drivers in the TrueNAS UI, and do **not** isolate the GPU to another app (Plex, Jellyfin, official Apps). An isolated GPU is invisible to Dockge.
+
+**Intel QSV / AMD VAAPI:**
+
+```yaml
+    devices:
+      - /dev/dri
+    group_add:
+      - video
+      - render
+```
+
+**AMD ROCm extra** (if using AMF via `/dev/kfd`): also mount `/dev/kfd` as in the compose comments.
+
+`git pull` / `update.sh` overwrites tracked `docker-compose.yml`. Re-apply uncommented GPU lines after an update. Keep media paths in `.env`; device passthrough has to live in compose.
+
+Ollama passthrough is a **separate** uncomment on the `ollama` service. See [AI setup](ai-setup.md).
+
+### Archive transcode (beta) { #horde-encode-gpu }
+
+H.264/H.265 conversion runs **inside the Horde container**, once per download — not while someone is watching, and not on the Ollama machine if that GPU lives elsewhere. The image installs **jellyfin-ffmpeg** when the Jellyfin repo is available so NVENC/QSV/VAAPI encoders exist; Debian ffmpeg is the fallback (software `libx264`/`libx265` only).
+
+What you should see after passthrough:
+
+- Settings → System → Resources **GPU** shows name / util / VRAM (**None detected** is gone)
+- Settings → Library **Rec** / amber warnings come from ffmpeg in this process (`/api/system/stats` → `encode.hw_hevc`, `hw_h264`, `ffmpeg_has_hw_encoder`)
+- If **GPU** is filled but Library still warns that encode cannot use it, ffmpeg in this image cannot load NVENC/QSV/VAAPI
+- Ollama VRAM under AI is a different probe and may be a GPU on another PC
+
+AV1 archives never use the encode GPU. 1080p H.264 copies YouTube’s stream. Only 1440p/4K (and 1080p AV1/VP9 that must become H.264) hit the encoder.
+
 ## Example Compose fragment
 
 ```yaml
@@ -80,4 +147,5 @@ volumes:
 
 - [Storage layout](storage-layout.md)
 - [AI setup](ai-setup.md)
+- [TrueNAS / Dockge](../getting-started/truenas-dockge.md)
 - [Install with Docker](../getting-started/install-docker.md)

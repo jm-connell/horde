@@ -23,7 +23,7 @@
 | `members` | Members-only |
 | `rate_limit` | HTTP 429 / temporary block |
 | `unavailable` | Removed, geo, no formats |
-| `postprocess` | Merge / subtitles / ffmpeg salvage failed |
+| `postprocess` | Merge / subtitles / ffmpeg salvage or H.264/H.265 transcode failed |
 | `cancelled` | User cancel |
 | `unknown` | Unclassified yt-dlp message |
 
@@ -98,9 +98,9 @@ In-app watch-before-download preview resolves progressive or adaptive formats vi
 
 Desktop Chrome can play **AV1/VP9 + Opus** remuxed into MP4. **Safari on iPhone cannot** — it needs AAC audio in MP4, and the `moov` atom at the start of the file. iPhone 15 Pro / Pro Max (A17) **can decode AV1**; the usual failure is Opus-in-MP4, not the video codec.
 
-Horde archives **AV1 + AAC** in MP4 with `faststart` (video copied, not transcoded to 1080p H.264). Playing a library file on the phone remuxes an older Opus file in place the first time.
+Horde’s default archive is **AV1 + AAC** in MP4 with `faststart` (video copied). Playing a library file on the phone remuxes an older Opus file in place the first time. For devices that cannot decode AV1, set Settings → Library → **Archive video codec** (beta) to H.264 or H.265 and redownload. See [Compatibility codecs (beta)](../guides/downloads.md#compatibility-codecs).
 
-**If it still fails:** the source may only offer VP9 (Safari has no VP9-in-MP4). Re-download after this build so the AV1 selector runs. DevTools device mode still uses the desktop decoder and cannot reproduce this.
+**If it still fails:** the source may only offer VP9 (Safari has no VP9-in-MP4). Re-download so the AV1 (or H.264) selector runs. DevTools device mode still uses the desktop decoder and cannot reproduce this.
 
 ## Stale UI after update
 
@@ -130,6 +130,16 @@ Typical causes:
 4. Hard-refresh the browser. Appearance may still be in `localStorage`; AI/library settings only return if the original `DATA_PATH` is mounted again.
 
 If the old data directory still exists on disk, set `DATA_PATH` / `DOWNLOADS_PATH` back to it — files were not deleted, only unmounted.
+
+## GPU: none detected
+
+**Symptoms:** Settings → System → Resources **GPU** says **None detected**.
+
+That means the `horde` container cannot probe a card. Horde still runs. Usual causes: GPU snippets in `docker-compose.yml` still commented out; TrueNAS isolated the GPU to another app; NVIDIA toolkit / `/dev/dri` missing; no GPU on the host.
+
+Horde does not need a GPU for default AV1 or 1080p H.264. See [GPU](environment.md#gpu) for when you need one and how to pass the device in.
+
+If the GPU **name** appears but Library still warns that 1440p/4K will software-transcode, ffmpeg in this image cannot use NVENC/QSV/VAAPI — that is [archive transcode](environment.md#horde-encode-gpu), not a missing device.
 
 ## Wiki missing in local development
 

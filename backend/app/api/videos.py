@@ -25,6 +25,7 @@ from ..schemas import (
     WatchProgressUpdate,
 )
 from ..services import downloader, library
+from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
 from ..services.mp4_compat import apple_webkit_playback, ensure_safari_mp4
 from ..services.thumbnails import (
     copy_full,
@@ -404,6 +405,9 @@ def redownload_video(
         title_override=video.title,
         channel_override=video.channel,
         normalize_volume=payload.normalize_volume,
+        video_codec=normalize_video_codec(
+            payload.video_codec or default_download_video_codec()
+        ),
         replace_video_id=video_id,
     )
     session.add(job)

@@ -33,7 +33,12 @@ from ..services.ytdlp_common import (
     http_detail_for_error,
     record_extract_failure,
 )
-from ..services.ytdlp_formats import decode_available_presets, quality_from_preview
+from ..services.ytdlp_formats import (
+    decode_available_presets,
+    default_download_video_codec,
+    normalize_video_codec,
+    quality_from_preview,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +247,9 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
             channel_override=(payload.channel_override or "").strip() or None,
             notes_pending=(payload.notes_pending or "").strip() or None,
             normalize_volume=payload.normalize_volume,
+            video_codec=normalize_video_codec(
+                payload.video_codec or default_download_video_codec()
+            ),
             destination=destination,
             replace_video_id=replace_video_id,
         )

@@ -143,6 +143,8 @@ export type StreamQuality =
   | "720"
   | "480";
 
+export type DownloadVideoCodec = "av1" | "h264" | "h265";
+
 export interface Settings {
   theme: Theme;
   customColors: CustomColors;
@@ -200,6 +202,7 @@ export interface Settings {
   showContinueWatching: boolean;
   showDownloadNavBadge: boolean;
   normalizeVolumeOnDownload: boolean;
+  downloadVideoCodec: DownloadVideoCodec;
   channelSort: ChannelSort;
   channelOrder: "asc" | "desc";
   defaultLibrarySort: LibrarySort;
@@ -279,6 +282,7 @@ const DEFAULTS: Settings = {
   showContinueWatching: true,
   showDownloadNavBadge: true,
   normalizeVolumeOnDownload: true,
+  downloadVideoCodec: "av1",
   channelSort: "recent_download",
   channelOrder: "desc",
   defaultLibrarySort: "added_at",
@@ -345,6 +349,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "showContinueWatching",
   "showDownloadNavBadge",
   "normalizeVolumeOnDownload",
+  "downloadVideoCodec",
   "channelSort",
   "channelOrder",
   "defaultLibrarySort",
@@ -646,6 +651,18 @@ function normalizeBool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function normalizeDownloadVideoCodec(value: unknown): DownloadVideoCodec {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[-.]/g, "");
+  if (raw === "h264" || raw === "avc" || raw === "avc1") return "h264";
+  if (raw === "h265" || raw === "hevc" || raw === "hvc1" || raw === "hev1") {
+    return "h265";
+  }
+  return "av1";
+}
+
 function normalizeCustomColors(value: unknown): CustomColors {
   if (!value || typeof value !== "object") return DEFAULT_CUSTOM_COLORS;
   const v = value as Partial<CustomColors>;
@@ -934,6 +951,7 @@ function normalizeSettings(
       DEFAULTS.previewWhenCentered
     ),
     previewMuted: normalizeBool(parsed.previewMuted, DEFAULTS.previewMuted),
+    downloadVideoCodec: normalizeDownloadVideoCodec(parsed.downloadVideoCodec),
     ...normalizeFontSettings(parsed),
   };
 }

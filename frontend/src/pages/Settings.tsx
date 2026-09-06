@@ -388,6 +388,10 @@ export default function Settings() {
       .catch(() => setSystemStats(null));
 
   useEffect(() => {
+    if (tab === "library") {
+      refreshSystemStats();
+      return;
+    }
     if (tab !== "system" && tab !== "ai") return;
     refreshSystemStats();
     const id = setInterval(refreshSystemStats, 3000);

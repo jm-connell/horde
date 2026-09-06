@@ -146,7 +146,7 @@ MkDocs Material.
 
 ## Notes
 
-- No transcoding. Playback depends on the browser (`.mp4` / `.webm` are safest).
+- Optional H.264/H.265 transcode after download (beta) when Settings → Library archive codec is not AV1 (the default). Playback still depends on the browser for the stored file.
 - Channel catalogs (index remote uploads for feed search and stream preview)
   are YouTube-only. Non-YouTube yt-dlp URLs still download.
 - Health: `GET /api/health` (version, yt-dlp, POT, wiki, library count).

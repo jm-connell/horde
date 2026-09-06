@@ -56,44 +56,45 @@ export default function SystemStatsSnippet({
     });
   }
 
-  if (stats.gpu) {
-    const g = stats.gpu;
-    const lines: string[] = [];
-    if (g.util_percent != null) lines.push(`${Math.round(g.util_percent)}%`);
-    if (g.temp_c != null) lines.push(`${Math.round(g.temp_c)}°C`);
-    const vram =
-      g.vram_used_bytes != null && g.vram_total_bytes != null
-        ? `${formatSize(g.vram_used_bytes)} / ${formatSize(g.vram_total_bytes)}`
-        : g.vram_total_bytes != null
-          ? formatSize(g.vram_total_bytes)
-          : null;
-    const vendorLabel =
-      g.vendor === "nvidia"
-        ? "NVIDIA"
-        : g.vendor === "amd"
-          ? "AMD"
-          : g.vendor === "intel"
-            ? "Intel"
-            : null;
-    if (g.name || lines.length || vram) {
-      cards.push({
-        label: vendorLabel ? `Horde host GPU (${vendorLabel})` : "Horde host GPU",
-        value: (
-          <>
-            {g.name && (
-              <span className="block text-xs text-gray-400">{g.name}</span>
-            )}
-            {lines.length > 0 && (
-              <span className="block">{lines.join(" · ")}</span>
-            )}
-            {vram && (
-              <span className="block text-xs text-gray-500">VRAM {vram}</span>
-            )}
-          </>
-        ),
-      });
-    }
+  const gpu = stats.gpu;
+  const gpuLines: string[] = [];
+  if (gpu?.util_percent != null) {
+    gpuLines.push(`${Math.round(gpu.util_percent)}%`);
   }
+  if (gpu?.temp_c != null) gpuLines.push(`${Math.round(gpu.temp_c)}°C`);
+  const gpuVram =
+    gpu?.vram_used_bytes != null && gpu.vram_total_bytes != null
+      ? `${formatSize(gpu.vram_used_bytes)} / ${formatSize(gpu.vram_total_bytes)}`
+      : gpu?.vram_total_bytes != null
+        ? formatSize(gpu.vram_total_bytes)
+        : null;
+  const gpuDetected = Boolean(gpu && (gpu.name || gpuLines.length || gpuVram));
+  cards.push({
+    label: "GPU",
+    value: gpuDetected ? (
+      <>
+        {gpu?.name && (
+          <span className="block text-xs text-gray-400">{gpu.name}</span>
+        )}
+        {gpuLines.length > 0 && (
+          <span className="block">{gpuLines.join(" · ")}</span>
+        )}
+        {gpuVram && (
+          <span className="block text-xs text-gray-500">VRAM {gpuVram}</span>
+        )}
+      </>
+    ) : (
+      <>
+        <span className="block text-gray-400">None detected</span>
+        <a
+          href="/wiki/ops/environment/#gpu"
+          className="mt-1 block text-xs text-accent hover:underline"
+        >
+            Why?
+        </a>
+      </>
+    ),
+  });
 
   if (stats.disk) {
     cards.push({

@@ -28,6 +28,28 @@ def test_format_chain_best_and_audio():
     assert any("bestaudio/best" in c for c in capped)
 
 
+def test_format_chain_h264_1080_prefers_avc():
+    from app.services.ytdlp_formats import format_chain, format_sort_for, uses_native_h264
+
+    assert uses_native_h264("1080p", "h264")
+    assert uses_native_h264("720p", "h265")
+    assert not uses_native_h264("2160p", "h264")
+    assert not uses_native_h264("2160p", "h265")
+    assert not uses_native_h264("best", "h264")
+    chain = format_chain("1080p", "h264")
+    assert any("avc1" in c or "h264" in c for c in chain)
+    assert "vcodec:h264" in format_sort_for("1080p", "h264")
+
+
+def test_format_chain_4k_compat_still_prefers_av1_source():
+    from app.services.ytdlp_formats import format_chain, format_sort_for
+
+    for codec in ("h264", "h265"):
+        chain = format_chain("2160p", codec)
+        assert any("av01" in c for c in chain)
+        assert "vcodec:av01" in format_sort_for("2160p", codec)
+
+
 def test_quality_formats_prefer_av1_and_aac():
     from app.services.ytdlp_formats import FORMAT_SORT, QUALITY_FORMATS
 
@@ -75,7 +97,8 @@ def test_is_intermediate_media():
     assert downloader._is_intermediate_media("video.norm.mp4")
     assert downloader._is_intermediate_media("video.compat.mp4")
     assert downloader._is_intermediate_media("video.compat.123.mp4")
-    assert downloader._is_intermediate_media("video.temp.mp4")
+    assert downloader._is_intermediate_media("video.xcode.mp4")
+    assert downloader._is_intermediate_media("video.xcode.123.mp4")
     assert not downloader._is_intermediate_media("video.mp4")
 
 

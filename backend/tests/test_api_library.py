@@ -280,7 +280,9 @@ def test_health_and_system_activity(client, add_video):
 
     stats = client.get("/api/system/stats")
     assert stats.status_code == 200
-    assert "cpu_percent" in stats.json() or "ram_percent" in stats.json()
+    body = stats.json()
+    assert "cpu_percent" in body or "ram_percent" in body
+    assert "encode" in body
 
 
 def test_review_upload_rejects_non_video(client):

@@ -13,6 +13,7 @@ URL
     -> library: Channel/YYYY/Title [id].ext
        device:  _device/{job_id}/Title [id].ext (ephemeral)
     -> optional loudnorm (.norm intermediate)
+    -> optional H.264/H.265 transcode (.xcode intermediate) when Settings codec (beta) requires it
     -> library only: FFmpegSubtitlesConvertor -> .vtt, thumbnails + sprites, Video row
     -> SSE progress events -> Download UI
     -> device: browser GET /api/downloads/{id}/file; delete on dismiss
@@ -27,8 +28,10 @@ Download-related code is split for maintainability (façades may still re-export
 |--------|------|
 | `downloader.py` | `DownloadQueue`, finalize, playlist import orchestration |
 | `ytdlp_extract.py` | Download-card preview, channel feed fetch, channel search |
-| `ytdlp_formats.py` | Quality preset / format-chain helpers (AV1 + AAC first) |
+| `ytdlp_formats.py` | Quality preset / format-chain helpers (AV1 or H.264 native) |
 | `mp4_compat.py` | Copy-video remux to MP4: AAC audio + `faststart` for Safari |
+| `encode_probe.py` | ffmpeg encoder inventory in the Horde process |
+| `video_transcode.py` | Optional GPU/software H.264/H.265 encode after remux |
 | `stream_preview.py` | In-app progressive + DASH preview caches/manifests |
 | `ytdlp_common.py` | Cookies, POT, extract gate, error classification |
 
@@ -38,7 +41,7 @@ Download-related code is split for maintainability (façades may still re-export
 
 ## yt-dlp
 
-- Format presets: `best`, height caps (`2160p`…`480p`), `audio`. Selectors prefer AV1 then AAC; `format_sort` is `res`, `fps`, `hdr:12`, `vcodec:av01`, `acodec:mp4a`, `vbr`, `abr`. Video is never transcoded to H.264.
+- Format presets: `best`, height caps (`2160p`…`480p`), `audio`. Default selectors prefer AV1 then AAC; `format_sort` is `res`, `fps`, `hdr:12`, `vcodec:av01`, `acodec:mp4a`, `vbr`, `abr`. A Settings **archive video codec** (beta) of H.264/H.265 uses YouTube `avc1` at ≤1080p and still prefers AV1 as the source at 1440p/4K, then transcodes.
 - Output template under `DOWNLOADS_DIR`:
 
   ```text
@@ -63,7 +66,8 @@ Global queue pause is persisted as `download_queue_paused` in app settings so it
 | Step | Detail |
 |------|--------|
 | **FFmpegSubtitlesConvertor** | yt-dlp postprocessor → WebVTT sidecars |
-| **mp4 compat** | Video-copy remux: AAC audio if needed, `+faststart`. Keeps AV1/4K. |
+| **mp4 compat** | Video-copy remux: AAC audio if needed, `+faststart`. Keeps AV1/4K on the AV1 setting. |
+| **compat transcode** | When the job’s `video_codec` is h264/h265 and the file is not already that codec (H.265 skips encode at ≤1080p H.264). GPU NVENC/QSV/VAAPI when the Horde process can use it; otherwise software. |
 | **loudnorm** | Optional EBU-ish loudness (`I=-16:TP=-1.5:LRA=11`) when the job requests normalize; keeps AAC + faststart |
 | **Thumbnails** | Cached under `DATA_DIR/thumbnails` |
 | **Sprites** | Seek-preview sheet + JSON under `DATA_DIR/sprites` |

@@ -143,7 +143,7 @@ def test_ffmpeg_cmd_copies_video_never_libx264():
         has_audio=True,
         video_codec="av1",
     )
-    assert cmd[:4] == ["ffmpeg", "-y", "-i", "in.mp4"]
+    assert cmd[1:4] == ["-y", "-i", "in.mp4"]
     assert "-c:v" in cmd and cmd[cmd.index("-c:v") + 1] == "copy"
     assert "libx264" not in cmd
     assert "libsvtav1" not in cmd

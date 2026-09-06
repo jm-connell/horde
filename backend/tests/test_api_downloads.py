@@ -46,6 +46,7 @@ def test_enqueue_cancel_and_pause(client, monkeypatch, add_video):
     assert job["title"] == "Preview Title"
     assert job["title_override"] == "My Title"
     assert job["quality_preset"] == "720p"
+    assert job.get("video_codec") in ("av1", "h264", "h265")
     job_id = job["id"]
 
     listed = client.get("/api/downloads").json()
@@ -96,6 +97,31 @@ def test_enqueue_sets_replace_video_id_for_existing_youtube(client, monkeypatch,
 def test_create_download_requires_url(client):
     resp = client.post("/api/downloads", json={"url": "  "})
     assert resp.status_code == 400
+
+
+def test_enqueue_stamps_video_codec(client, monkeypatch):
+    from app.services import downloader
+
+    monkeypatch.setattr(
+        downloader,
+        "extract_preview",
+        lambda url: {
+            "id": "dQw4w9WgXcQ",
+            "title": "Codec",
+            "channel": "Chan",
+            "is_playlist": False,
+        },
+    )
+    created = client.post(
+        "/api/downloads",
+        json={
+            "url": "https://youtu.be/dQw4w9WgXcQ",
+            "quality_preset": "1080p",
+            "video_codec": "h265",
+        },
+    )
+    assert created.status_code == 200
+    assert created.json()["video_codec"] == "h265"
 
 
 def _failed_job(init_db, **fields):
