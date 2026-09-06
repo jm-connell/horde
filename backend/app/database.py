@@ -81,6 +81,7 @@ _VIDEO_COLUMNS = [
     ("description_is_custom", "BOOLEAN DEFAULT 0"),
     ("subtitles_pending", "BOOLEAN DEFAULT 0"),
     ("sprite_path", "VARCHAR"),
+    ("source_chapters", "VARCHAR DEFAULT '[]'"),
 ]
 
 _DOWNLOAD_JOB_COLUMNS = [
@@ -109,6 +110,8 @@ _VIDEO_AI_META_COLUMNS = [
     ("summary_cost", "FLOAT"),
     ("summary_model", "VARCHAR"),
     ("embed_error", "VARCHAR"),
+    ("chapters", "VARCHAR"),
+    ("chapters_skip_reason", "VARCHAR"),
 ]
 
 _VIDEO_AI_CHAT_MESSAGE_COLUMNS = [

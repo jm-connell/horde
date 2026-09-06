@@ -18,6 +18,11 @@ class SearchMatchReason(BaseModel):
     snippet: Optional[str] = None
 
 
+class ChapterRead(BaseModel):
+    start_sec: float
+    title: str
+
+
 class VideoRead(BaseModel):
     id: int
     title: str
@@ -62,6 +67,9 @@ class VideoRead(BaseModel):
     tags_enriched_at: Optional[datetime] = None
     processing_summary: bool = False
     processing_sprites: bool = False
+    processing_chapters: bool = False
+    chapters: list[ChapterRead] = []
+    chapters_source: Optional[Literal["description", "source", "ai"]] = None
     match_reason: Optional[SearchMatchReason] = None
 
 

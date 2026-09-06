@@ -20,12 +20,10 @@ export default function ChaptersList({
   className = "",
 }: Props) {
   const scrollRef = useRef<HTMLUListElement>(null);
-  useAnimatedClipHeight(
-    scrollRef,
-    expanded,
-    collapsedRem,
-    chapters.length
-  );
+  const chaptersKey = chapters
+    .map((ch) => `${ch.startSec}:${ch.title}`)
+    .join("|");
+  useAnimatedClipHeight(scrollRef, expanded, collapsedRem, chaptersKey);
   if (chapters.length === 0) return null;
   const hourLong = chapters.some((ch) => ch.startSec >= 3600);
 
@@ -66,7 +64,7 @@ export default function ChaptersList({
       </ul>
       <OverlayScrollThumb
         scrollRef={scrollRef}
-        revision={`${expanded}-${chapters.length}`}
+        revision={`${expanded}-${chaptersKey}`}
       />
     </div>
   );

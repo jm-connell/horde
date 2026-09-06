@@ -2,12 +2,16 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import { UI_MENU_SURFACE } from "../uiMenu";
 
 type Flip = "down" | "up";
+
+const MENU_GAP_PX = 4;
 
 /**
  * Prefer opening up unless there is clearly enough space below.
@@ -40,6 +44,22 @@ export function useFlipMenu(
   return { flip, anchorRef };
 }
 
+/** Viewport-fixed coords so `.ui-menu` is not flattened by a parent `.ui-panel`. */
+export function flipMenuFixedStyle(
+  rect: Pick<DOMRect, "top" | "bottom" | "left" | "right" | "width">,
+  flip: Flip,
+  align: "left" | "right",
+  viewport: { width: number; height: number },
+  gap = MENU_GAP_PX
+): CSSProperties {
+  const style: CSSProperties = { minWidth: rect.width };
+  if (flip === "down") style.top = rect.bottom + gap;
+  else style.bottom = viewport.height - rect.top + gap;
+  if (align === "left") style.left = rect.left;
+  else style.right = viewport.width - rect.right;
+  return style;
+}
+
 export function FlipMenuPanel({
   open,
   flip,
@@ -53,14 +73,52 @@ export function FlipMenuPanel({
   className?: string;
   children: ReactNode;
 }) {
-  if (!open) return null;
-  const pos = flip === "down" ? "top-full mt-1" : "bottom-full mb-1";
-  const side = align === "left" ? "left-0" : "right-0";
+  const markerRef = useRef<HTMLSpanElement>(null);
+  const [coords, setCoords] = useState<CSSProperties | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setCoords(null);
+      return;
+    }
+    const anchor = markerRef.current?.parentElement;
+    if (!anchor) return;
+
+    const update = () => {
+      const rect = anchor.getBoundingClientRect();
+      setCoords(
+        flipMenuFixedStyle(rect, flip, align, {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        })
+      );
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [open, flip, align]);
+
   return (
-    <div
-      className={`absolute z-50 ${pos} ${side} overflow-hidden py-1 ${UI_MENU_SURFACE} ${className}`}
-    >
-      {children}
-    </div>
+    <>
+      <span ref={markerRef} hidden />
+      {open &&
+        coords &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            data-horde="flip-menu"
+            className={`fixed z-[80] overflow-hidden py-1 ${UI_MENU_SURFACE} ${className}`}
+            style={coords}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {children}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }

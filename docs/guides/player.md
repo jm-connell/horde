@@ -50,7 +50,7 @@ External **VTT** tracks (downloaded captions / uploaded) can be toggled with ++c
 
 ## Chapters
 
-Chapters are parsed from timestamp lines in the video **description** (YouTube-style). When two or more valid ascending timestamps exist, chapter markers appear on the scrubber; ++n++ jumps to the next chapter. Timestamp lines may be hidden from the description panel when chapters are shown separately.
+Chapters come from, in order: timestamp lines in the video **description**, yt-dlp native chapters saved at download, or an optional **AI** pass over captions when those are missing (queued after download, or from a Watch button). When two or more valid ascending timestamps exist, chapter markers appear on the scrubber; ++n++ jumps to the next chapter. Timestamp lines may be hidden from the description panel when chapters are shown separately. Stream preview still uses description timestamps only.
 
 ## Scrub sprites
 

@@ -1,7 +1,12 @@
 import HelpTip from "../../../components/HelpTip";
 import { useSettingsPage } from "../context";
 import { Section, SettingRow, Toggle } from "../ui";
-import { INPUT_COMPACT, SUMMARY_LENGTH_OPTIONS, SUMMARY_LENGTH_TIP } from "../constants";
+import {
+  CHAPTER_MODE_OPTIONS,
+  INPUT_COMPACT,
+  SUMMARY_LENGTH_OPTIONS,
+  SUMMARY_LENGTH_TIP,
+} from "../constants";
 
 export default function FeaturesPane() {
   const { q, match, aiDraft, setAiDraft, saveAi } = useSettingsPage();
@@ -21,7 +26,10 @@ export default function FeaturesPane() {
           "strictness",
           "summary",
           "summarize",
+          "chapters",
           "captions",
+          "watch",
+          "on download",
           "short",
           "medium",
           "long",
@@ -59,6 +67,62 @@ export default function FeaturesPane() {
             />
           }
         />
+        <SettingRow
+          title="AI video chapters"
+          description="When a description has no timestamps, generate chapter markers from captions. Skips videos under 3 minutes and lyric-heavy captions."
+          hidden={
+            !!q &&
+            !match("chapters", "timestamps", "captions", "watch", "transcript")
+          }
+          control={
+            <Toggle
+              checked={aiDraft.ai_chapters}
+              onChange={() =>
+                saveAi({ ai_chapters: !aiDraft.ai_chapters })
+              }
+            />
+          }
+        />
+        {aiDraft.ai_chapters && (
+          <SettingRow
+            title="Generate chapters"
+            description="On download queues a job after captions are ready. Watch page only generates when you click the button on a video."
+            hidden={
+              !!q &&
+              !match(
+                "chapters",
+                "download",
+                "watch",
+                "automatic",
+                "button",
+                "on download"
+              )
+            }
+            control={
+              <div className="ui-panel flex rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+                {CHAPTER_MODE_OPTIONS.map((opt) => {
+                  const selected = aiDraft.ai_chapters_mode === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() =>
+                        void saveAi({ ai_chapters_mode: opt.value })
+                      }
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        selected
+                          ? "bg-accent/15 text-accent"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            }
+          />
+        )}
         <SettingRow
           title="AI video chat"
           description="Ask the video questions on the Watch page using its metadata, description, and captions. Larger GPUs auto-upgrade to bigger chat models."

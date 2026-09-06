@@ -1,4 +1,4 @@
-"""AI job runners: embed, enrich tags, summarize, refresh categories."""
+"""AI job runners: embed, enrich tags, summarize, chapters, refresh categories."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any, Optional
 from sqlmodel import Session, select
 
 from ...models import AiCategory, AiJobKind, ChannelCatalogEmbedding, ChannelCatalogVideo, Video, VideoAiMeta, utcnow
-from .. import app_settings, library
+from .. import app_settings, chapters as chapters_svc, library
 from . import embeddings, text as ai_text
 from .provider import (
     OpenRouterProvider,
@@ -497,6 +497,133 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
     return cleaned
 
 
+class ChaptersError(Exception):
+    """User-facing chapter generation failure with an HTTP-ish status hint."""
+
+    def __init__(self, message: str, *, status_code: int = 400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+_CHAPTER_SKIP_MESSAGES = {
+    "description_chapters": "Video description already has chapters",
+    "source_chapters": "Source already provides chapters",
+    "already_generated": "Chapters already generated",
+    "previously_skipped": "Chapter generation was skipped for this video",
+    "no_subtitles": "Chapters require downloaded subtitles for this video",
+    "too_short": "Video is shorter than 3 minutes",
+    "music_like": "Captions look like music or lyrics",
+}
+
+
+def run_chapters(session: Session, video_id: int, *, force: bool = False) -> list[dict]:
+    ai = app_settings.ai_settings()
+    allowed, reason = llm_features_allowed()
+    if not allowed:
+        code = 409 if ai.get("paused") else 400
+        raise ChaptersError(reason or "AI is disabled", status_code=code)
+    if not ai.get("ai_chapters", True):
+        raise ChaptersError("AI video chapters are disabled", status_code=400)
+
+    video = session.get(Video, video_id)
+    if video is None:
+        raise ChaptersError("Video not found", status_code=404)
+    if video.needs_review:
+        raise ChaptersError("Video is still in review", status_code=400)
+
+    meta = session.get(VideoAiMeta, video_id)
+    cues = chapters_svc.load_timed_cues(video)
+    skip = chapters_svc.skip_reason(video, meta, force=force, cues=cues)
+    if skip == "already_generated" and meta is not None:
+        return chapters_svc.ai_chapters_for(meta)
+    if skip:
+        if chapters_svc.persist_skip_reason(skip):
+            if meta is None:
+                meta = VideoAiMeta(video_id=video_id)
+            meta.chapters_skip_reason = skip
+            meta.updated_at = utcnow()
+            session.add(meta)
+            session.commit()
+        raise ChaptersError(
+            _CHAPTER_SKIP_MESSAGES.get(skip, skip.replace("_", " ")),
+            status_code=400,
+        )
+
+    provider = get_llm_provider()
+    if provider is None:
+        raise ChaptersError(
+            "No LLM available (enable OpenRouter or Ollama)", status_code=503
+        )
+    if isinstance(provider, OpenRouterProvider):
+        chat_model = resolve_llm_model(provider)
+    else:
+        chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    missing = require_llm_chat_model(provider, chat_model)
+    if missing:
+        raise ChaptersError(missing, status_code=503)
+
+    max_chars = chapters_svc.transcript_char_cap(ai.get("workload_profile"))
+    transcript = chapters_svc.format_timed_transcript(cues, max_chars=max_chars)
+    if not transcript.strip():
+        raise ChaptersError(
+            "Chapters require downloaded subtitles for this video",
+            status_code=400,
+        )
+    prompt = chapters_svc.chapters_prompt(
+        video, transcript, duration_sec=video.duration_sec
+    )
+    system = chapters_svc.chapters_system_prompt()
+    session.commit()
+    _CHAPTERS_TIMEOUT = 300.0
+
+    cleaned: list[dict] = []
+    for attempt in range(2):
+        use_schema = attempt == 0
+        raw = provider.chat(
+            prompt,
+            chat_model,
+            system=system,
+            num_predict=1200,
+            timeout=_CHAPTERS_TIMEOUT,
+            format=chapters_svc.CHAPTERS_JSON_SCHEMA if use_schema else None,
+            temperature=0.2 if use_schema else 0.4,
+            usage_kind="chapters",
+            video_id=video_id,
+        )
+        payload = chapters_svc.chapters_from_model_output(raw)
+        cleaned = chapters_svc.snap_and_validate(
+            payload, cues, video.duration_sec
+        )
+        if cleaned:
+            break
+        logger.warning(
+            "chapters empty for video_id=%s attempt=%s raw_len=%s raw_prefix=%r",
+            video_id,
+            attempt + 1,
+            len(raw or ""),
+            (raw or "")[:240],
+        )
+    if not cleaned:
+        cleaned = chapters_svc.fallback_chapters_from_cues(cues, video.duration_sec)
+        if cleaned:
+            logger.warning(
+                "chapters fallback from captions video_id=%s count=%s",
+                video_id,
+                len(cleaned),
+            )
+    if not cleaned:
+        raise ChaptersError("Model returned unusable chapters", status_code=502)
+
+    if meta is None:
+        meta = VideoAiMeta(video_id=video_id)
+    meta.chapters = chapters_svc.dump_chapter_list(cleaned)
+    meta.chapters_skip_reason = None
+    meta.updated_at = utcnow()
+    session.add(meta)
+    session.commit()
+    return cleaned
+
+
 def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video]:
     """Mix recent watches, recent adds, and channel-stratified fill."""
     from collections import defaultdict
@@ -757,6 +884,16 @@ def dispatch(
         try:
             run_summarize(session, video_id, force=False)
         except SummarizeError as exc:
+            if exc.status_code in (400, 404):
+                return str(exc)[:200]
+            raise
+        return None
+    if kind == AiJobKind.chapters:
+        if video_id is None:
+            return "no video"
+        try:
+            run_chapters(session, video_id, force=False)
+        except ChaptersError as exc:
             if exc.status_code in (400, 404):
                 return str(exc)[:200]
             raise

@@ -627,6 +627,17 @@ export const api = {
     });
   },
 
+  generateVideoChapters(
+    id: number,
+    opts?: { force?: boolean; signal?: AbortSignal }
+  ): Promise<Video> {
+    const qs = opts?.force ? "?force=true" : "";
+    return request<Video>(`/api/videos/${id}/ai/chapters${qs}`, {
+      method: "POST",
+      signal: opts?.signal,
+    });
+  },
+
   getVideoAiChat(id: number): Promise<{ messages: VideoAiChatMessage[] }> {
     return request<{ messages: VideoAiChatMessage[] }>(
       `/api/videos/${id}/ai/chat`

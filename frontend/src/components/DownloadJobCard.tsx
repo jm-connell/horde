@@ -14,6 +14,7 @@ import {
 } from "../downloadErrors";
 import type { ChannelStat, DownloadJob, ProgressEvent } from "../types";
 import {
+  downloadProcessingLabel,
   downloadProgressPercent,
   formatSize,
   youtubeListThumbnailUrl,
@@ -403,7 +404,7 @@ export default function DownloadJobCard({
       : completed
         ? "Done"
         : status === "processing"
-          ? "Processing…"
+          ? downloadProcessingLabel(live?.stage)
           : status === "queued"
             ? job.paused || live?.status === "queued"
               ? "Paused"

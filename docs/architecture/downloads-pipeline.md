@@ -50,7 +50,7 @@ Download-related code is split for maintainability (façades may still re-export
 
 - Extractor args use yt-dlp’s default YouTube player clients minus `android_vr` (those CDN URLs now 403 after ~60s of range requests). bgutil POT is attached when `YTDLP_POT_BASE_URL` is set; cookies via [YouTube access](../ops/youtube-access.md).
 - Metadata extracts for downloads share the same global extract gate (1 + 1.25s spacing) as preview/feed extracts so concurrent browsing does not stampede YouTube.
-- Progress hooks update an in-memory `progress_store` consumed by SSE. Percent is combined downloaded bytes over the combined format size (video+audio), not yt-dlp’s per-chunk `total_bytes`. Intermediate `*.f401.mp4` / `.part` finishes stay in `downloading`; only the merged output flips to `processing`.
+- Progress hooks update an in-memory `progress_store` consumed by SSE. Percent is combined downloaded bytes over the combined format size (video+audio), not yt-dlp’s per-chunk `total_bytes`. Intermediate `*.f401.mp4` / `.part` finishes stay in `downloading`. yt-dlp merge/remux postprocessors and Horde’s MP4 compat / transcode / loudnorm steps flip to `processing` with a `stage` token (`merging`, `encoding_audio`, `remuxing`, `transcoding`, `normalizing`) so the Download UI can name the current step.
 - Preview `preset_sizes` walk the same `format_chain` + `format_sort` as the downloader and sum each selected format’s components (`filesize` / `filesize_approx` / bitrate×duration), so 4K DASH is not labeled with a progressive mux or audio-only size.
 - Failures set `DownloadJob.error` plus a typed `error_kind` (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `cancelled`, `unknown`) for actionable UI.
 - Retry (`POST /api/downloads/{id}/retry`) resets a failed/cancelled job to `queued`. Extra retries while it is already active return that same job. Creating a download for a URL that is already queued/downloading at the same preset and destination reuses the existing job.
@@ -80,7 +80,7 @@ On success the job links to a `videos` row (`file_path` relative to downloads, s
 
 ## SSE events
 
-`GET /api/downloads/{id}/events` (EventSource) streams progress snapshots (`progress`, status, title, `error` / `error_kind`, etc.) for the Download page and job cards. See [API overview](api-overview.md).
+`GET /api/downloads/{id}/events` (EventSource) streams progress snapshots (`progress`, status, `stage` during post-download work, title, `error` / `error_kind`, etc.) for the Download page and job cards. See [API overview](api-overview.md).
 
 ## Related
 

@@ -62,6 +62,33 @@ export function parseChapters(description: string | null): Chapter[] {
   return chapters;
 }
 
+export function chaptersFromApi(
+  rows: { start_sec: number; title: string }[] | null | undefined
+): Chapter[] {
+  if (!rows || rows.length < 2) return [];
+  const out: Chapter[] = [];
+  for (const row of rows) {
+    const startSec = Number(row.start_sec);
+    const title = String(row.title || "").trim();
+    if (!title || !Number.isFinite(startSec) || startSec < 0) continue;
+    out.push({ startSec, title });
+  }
+  if (out.length < 2) return [];
+  for (let i = 1; i < out.length; i++) {
+    if (out[i].startSec <= out[i - 1].startSec) return [];
+  }
+  return out;
+}
+
+export function resolveLibraryChapters(video: {
+  description?: string | null;
+  chapters?: { start_sec: number; title: string }[] | null;
+}): Chapter[] {
+  const fromApi = chaptersFromApi(video.chapters);
+  if (fromApi.length) return fromApi;
+  return parseChapters(video.description ?? null);
+}
+
 /** Remove chapter timestamp lines from description when chapters are shown separately. */
 export function stripChapterLines(description: string | null): string {
   if (!description) return "";
@@ -86,6 +113,22 @@ export function downloadProgressPercent(
     return Math.min(100, Math.max(0, Math.round((downloaded / total) * 100)));
   }
   return Math.min(100, Math.max(0, Math.round(progress ?? 0)));
+}
+
+const DOWNLOAD_STAGE_LABELS: Record<string, string> = {
+  merging: "Merging…",
+  encoding_audio: "Encoding audio…",
+  remuxing: "Remuxing…",
+  transcoding: "Transcoding…",
+  normalizing: "Normalizing…",
+};
+
+/** Queue / watch-page label while a download is in post-download work. */
+export function downloadProcessingLabel(stage?: string | null): string {
+  if (stage && DOWNLOAD_STAGE_LABELS[stage]) {
+    return DOWNLOAD_STAGE_LABELS[stage];
+  }
+  return "Processing…";
 }
 
 export function formatSize(bytes: number | null): string {
@@ -143,9 +186,11 @@ export function formatResolution(height: number | null): string {
 export function watchProcessingLabel(opts: {
   processing_summary?: boolean;
   processing_sprites?: boolean;
+  processing_chapters?: boolean;
 }): string | null {
   const parts: string[] = [];
   if (opts.processing_summary) parts.push("summary");
+  if (opts.processing_chapters) parts.push("chapters");
   if (opts.processing_sprites) parts.push("previews");
   return parts.length ? parts.join(", ") : null;
 }

@@ -67,6 +67,88 @@ def test_complete_device_skips_library_row(init_db, monkeypatch):
     assert "video_id" not in snap
 
 
+def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
+    from app.services.mp4_compat import MediaProbe
+
+    seen: list[tuple[str, str | None]] = []
+    job_id = 0
+
+    def fake_ensure(path: Path) -> Path:
+        seen.append(("ensure", downloader.progress_store.get(job_id, {}).get("stage")))
+        return path
+
+    def fake_transcode(path: Path, target: str, **_kwargs: object) -> Path:
+        seen.append(
+            ("transcode", downloader.progress_store.get(job_id, {}).get("stage"))
+        )
+        return path
+
+    def fake_loudnorm(_path: Path) -> None:
+        seen.append(
+            ("loudnorm", downloader.progress_store.get(job_id, {}).get("stage"))
+        )
+        return None
+
+    monkeypatch.setattr(downloader, "_apply_loudnorm", fake_loudnorm)
+    monkeypatch.setattr(downloader, "_check_quality", lambda *_a, **_k: None)
+    monkeypatch.setattr(downloader, "probe_duration", lambda _p: 12.0)
+    monkeypatch.setattr(downloader, "probe_dimensions", lambda _p: (1280, 720))
+    monkeypatch.setattr(downloader, "ensure_safari_mp4", fake_ensure)
+    monkeypatch.setattr(downloader, "transcode_video", fake_transcode)
+    monkeypatch.setattr(
+        downloader,
+        "probe_media",
+        lambda _p: MediaProbe(
+            video_codec="av1",
+            audio_codec="opus",
+            format_name="mov,mp4,m4a,3gp,3g2,mj2",
+            moov_front=False,
+        ),
+    )
+
+    downloads = init_db["downloads"]
+    with Session(init_db["engine"]) as session:
+        job = DownloadJob(
+            url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            quality_preset="720p",
+            status=JobStatus.downloading,
+            destination=DownloadDestination.device.value,
+            title="Device Clip",
+        )
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        job_id = job.id
+
+    downloader.progress_store[job_id] = {
+        "status": "processing",
+        "progress": 99.0,
+        "title": "Device Clip",
+    }
+    final = downloads / "_device" / str(job_id) / "Device Clip [dQw4w9WgXcQ].mp4"
+    _write_media(final)
+
+    downloader._complete_download(
+        job_id,
+        final,
+        {"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "720p",
+        None,
+        None,
+        True,
+        None,
+        None,
+        destination=DownloadDestination.device.value,
+        video_codec="h264",
+    )
+    assert seen == [
+        ("ensure", "encoding_audio"),
+        ("transcode", "transcoding"),
+        ("loudnorm", "normalizing"),
+    ]
+
+
 def test_device_file_endpoint_and_dismiss_cleanup(init_db):
     from app.api import downloads as downloads_api
 

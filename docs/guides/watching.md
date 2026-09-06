@@ -60,7 +60,7 @@ On the watch page you’ll also see messaging about downloading at the selected 
 
 ## Chapters, subtitles, casting
 
-Those controls live in the shared [video player](player.md): chapters parsed from descriptions, VTT subtitles, SponsorBlock, PiP, Chromecast / AirPlay, and layout modes.
+Those controls live in the shared [video player](player.md): chapters from descriptions, yt-dlp, or optional AI captions, VTT subtitles, SponsorBlock, PiP, Chromecast / AirPlay, and layout modes.
 
 ## Related
 

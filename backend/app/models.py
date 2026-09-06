@@ -86,6 +86,8 @@ class Video(SQLModel, table=True):
     title_is_custom: bool = Field(default=False)
     description_is_custom: bool = Field(default=False)
     subtitles_pending: bool = Field(default=False)
+    # JSON list of yt-dlp native chapters: [{"start_sec": float, "title": str}].
+    source_chapters: str = Field(default="[]")
 
 
 class DownloadJob(SQLModel, table=True):
@@ -160,6 +162,7 @@ class AiJobKind(str, Enum):
     refresh_categories = "refresh_categories"
     embed_catalog_video = "embed_catalog_video"
     summarize = "summarize"
+    chapters = "chapters"
 
 
 class ChannelCatalogStatus(str, Enum):
@@ -275,6 +278,9 @@ class VideoAiMeta(SQLModel, table=True):
     tags_locked: bool = Field(default=False)
     # Last embed failure message (cleared on successful index).
     embed_error: Optional[str] = None
+    # JSON list of LLM chapters: [{"start_sec": float, "title": str}].
+    chapters: Optional[str] = None
+    chapters_skip_reason: Optional[str] = None
     updated_at: datetime = Field(default_factory=utcnow)
 
 

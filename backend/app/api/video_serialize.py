@@ -11,8 +11,8 @@ from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, SPRITES_DIR
 from ..models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc
-from ..schemas import VideoRead
-from ..services import library
+from ..schemas import ChapterRead, VideoRead
+from ..services import chapters as chapters_svc, library
 from ..services.metadata import sprites_exist
 
 
@@ -40,6 +40,10 @@ def to_read(
     tags_enriched_at = None
     processing_summary = False
     processing_sprites = False
+    processing_chapters = False
+    resolved_chapters: list[ChapterRead] = []
+    chapters_source = None
+    meta = None
     if session is not None and video.id is not None:
         meta = session.get(VideoAiMeta, video.id)
         if meta is not None:
@@ -67,14 +71,27 @@ def to_read(
             from ..services.sprites import sprites_in_progress
 
             processing_sprites = sprites_in_progress(video.id)
-            job = session.exec(
+            summary_job = session.exec(
                 select(AiJob).where(
                     AiJob.video_id == video.id,
                     AiJob.kind == AiJobKind.summarize,
                     AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running]),  # type: ignore[attr-defined]
                 )
             ).first()
-            processing_summary = job is not None
+            processing_summary = summary_job is not None
+            chapter_job = session.exec(
+                select(AiJob).where(
+                    AiJob.video_id == video.id,
+                    AiJob.kind == AiJobKind.chapters,
+                    AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running]),  # type: ignore[attr-defined]
+                )
+            ).first()
+            processing_chapters = chapter_job is not None
+    resolved, source = chapters_svc.resolve_chapters(video, meta)
+    resolved_chapters = [
+        ChapterRead(start_sec=c["start_sec"], title=c["title"]) for c in resolved
+    ]
+    chapters_source = source
     return VideoRead(
         id=video.id,
         title=video.title,
@@ -122,6 +139,9 @@ def to_read(
         tags_enriched_at=tags_enriched_at,
         processing_summary=processing_summary,
         processing_sprites=processing_sprites,
+        processing_chapters=processing_chapters,
+        chapters=resolved_chapters,
+        chapters_source=chapters_source,
         match_reason=match_reason,
     )
 

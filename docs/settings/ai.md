@@ -47,6 +47,8 @@ Common embed presets: `nomic-embed-text`, `mxbai-embed-large`, `all-minilm`, or 
 |---------|-----|---------|----------------|
 | Use subtitles in search indexes | `use_subtitles` | `true` | Include captions in embeds / related / categories |
 | AI video summaries | `ai_summaries` | `true` | After download when captions exist; regenerate on Watch |
+| AI video chapters | `ai_chapters` | `true` | Enable caption-based chapter markers |
+| Generate chapters | `ai_chapters_mode` | `"on_download"` | `on_download` queues after download; `on_watch` is a Watch-page button |
 | AI video chat | `ai_chat` | `true` | Ask-the-video on Watch |
 | Summary length | `summary_length` | `"short"` | `short` \| `medium` \| `long` |
 | Category match strictness | `category_min_score` | `0.55` | 0.2–0.9 |

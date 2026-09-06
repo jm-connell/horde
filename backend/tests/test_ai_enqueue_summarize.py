@@ -35,6 +35,7 @@ def _ai(**overrides):
         "schedule": "on_download",
         "enrich_tags": False,
         "ai_summaries": True,
+        "ai_chapters": False,
     }
     settings.update(overrides)
     return settings

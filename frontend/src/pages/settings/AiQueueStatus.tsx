@@ -309,6 +309,13 @@ export default function AiQueueStatus({
                     "summaries"
                   )
                 : null,
+              aiStatus.queue_breakdown.chapters
+                ? plural(
+                    aiStatus.queue_breakdown.chapters,
+                    "chapter job",
+                    "chapter jobs"
+                  )
+                : null,
               aiStatus.queue_breakdown.refresh_categories
                 ? plural(
                     aiStatus.queue_breakdown.refresh_categories,

@@ -38,7 +38,10 @@ export default function ThemedSelect<T extends string>({
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!anchorRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (anchorRef.current?.contains(t)) return;
+      if (t instanceof Element && t.closest("[data-horde='flip-menu']")) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -81,7 +84,7 @@ export default function ThemedSelect<T extends string>({
             setOpen((v) => !v);
           }
         }}
-        className={`ui-panel ui-interactive inline-flex max-w-full items-center border border-ink-700 bg-ink-900 text-left outline-none hover:border-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={`ui-panel ui-menu ui-interactive inline-flex max-w-full items-center border border-ink-700 bg-ink-900 text-left outline-none hover:border-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 ${
           compact
             ? "gap-1 rounded px-1.5 py-0.5 text-xs text-gray-400"
             : "gap-2 rounded-lg px-3 py-2 text-sm text-gray-100"
@@ -96,13 +99,15 @@ export default function ThemedSelect<T extends string>({
         open={open}
         flip={flip}
         align={align}
-        className={
-          compact
-            ? "min-w-full max-h-56 overflow-y-auto py-0.5"
-            : "min-w-full max-h-64 overflow-y-auto"
-        }
+        className={compact ? "!py-0.5" : ""}
       >
-        <ul id={listId} role="listbox">
+        <ul
+          id={listId}
+          role="listbox"
+          className={
+            compact ? "max-h-56 overflow-y-auto" : "max-h-64 overflow-y-auto"
+          }
+        >
           {options.map((opt) => {
             const active = opt.value === value;
             return (

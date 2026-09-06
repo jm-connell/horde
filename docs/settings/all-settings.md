@@ -62,6 +62,8 @@ Related constants: catalog description limit for newest uploads ≈ 200 (`CHANNE
 | `enrich_tags` | `true` | bool | | AI |
 | `tag_rescan_days` | `90` | int | 7–365 | AI |
 | `ai_summaries` | `true` | bool | After download when captions exist | AI |
+| `ai_chapters` | `true` | bool | Enable caption-based chapter markers | AI |
+| `ai_chapters_mode` | `"on_download"` | `on_download` \| `on_watch` | Auto after download, or Watch-page button only | AI |
 | `ai_chat` | `true` | bool | | AI |
 | `summary_length` | `"short"` | string | `short` \| `medium` \| `long` | AI |
 | `ai_duplicates` | `true` | bool | On-demand Import LLM | AI |

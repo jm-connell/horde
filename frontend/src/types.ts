@@ -73,6 +73,9 @@ export interface Video {
   tags_enriched_at?: string | null;
   processing_summary?: boolean;
   processing_sprites?: boolean;
+  processing_chapters?: boolean;
+  chapters?: { start_sec: number; title: string }[];
+  chapters_source?: "description" | "source" | "ai" | null;
   match_reason?: SearchMatchReason | null;
 }
 
@@ -208,6 +211,8 @@ export interface DownloadJob {
 export interface ProgressEvent {
   status: string;
   progress?: number;
+  /** Post-download step while status is processing. */
+  stage?: string;
   title?: string;
   channel?: string;
   video_id?: number;
@@ -279,6 +284,7 @@ export interface StorageStats {
 export type AiSchedule = "on_download" | "on_request" | "timer" | "set_time";
 export type AiWorkloadProfile = "light" | "normal" | "heavy";
 export type AiSummaryLength = "short" | "medium" | "long";
+export type AiChaptersMode = "on_download" | "on_watch";
 export type AiGpuSource = "override" | "ollama" | "local" | "unknown";
 
 export interface AiSettings {
@@ -310,6 +316,8 @@ export interface AiSettings {
   /** Days before unlocked tags can be re-reviewed (7–365). */
   tag_rescan_days: number;
   ai_summaries: boolean;
+  ai_chapters: boolean;
+  ai_chapters_mode: AiChaptersMode;
   ai_chat: boolean;
   summary_length: AiSummaryLength;
   ai_duplicates: boolean;

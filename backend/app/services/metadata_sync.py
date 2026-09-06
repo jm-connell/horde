@@ -156,6 +156,10 @@ def refresh_video_metadata(
                 changed["description"] = (video.description, remote_description)
                 video.description = remote_description
 
+        from .chapters import apply_source_chapters
+
+        apply_source_chapters(video, info, replace_empty=False)
+
         video.metadata_synced_at = datetime.now(timezone.utc)
         session.add(video)
         session.commit()

@@ -35,9 +35,10 @@ export default function AddToPlaylist({
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const t = e.target as Node;
+      if (anchorRef.current?.contains(t)) return;
+      if (t instanceof Element && t.closest("[data-horde='flip-menu']")) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);

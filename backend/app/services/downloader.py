@@ -21,7 +21,7 @@ from ..models import DownloadDestination, DownloadJob, JobStatus, Video, VideoSt
 from . import activity, library, scanner
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
-from .mp4_compat import ensure_safari_mp4, probe_media
+from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
 from .video_transcode import encode_target, transcode_video
 from .paths import find_video_by_path, to_rel_path
 from .ytdlp_common import (
@@ -70,6 +70,21 @@ from .ytdlp_extract import (
 
 # Live progress snapshots keyed by job id, consumed by the SSE endpoint.
 progress_store: dict[int, dict[str, Any]] = {}
+
+# SSE `stage` tokens while status is `processing` (download card / watch indicator).
+STAGE_MERGING = "merging"
+STAGE_ENCODING_AUDIO = "encoding_audio"
+STAGE_REMUXING = "remuxing"
+STAGE_TRANSCODING = "transcoding"
+STAGE_NORMALIZING = "normalizing"
+
+_STAGE_ACTIVITY_DETAIL = {
+    STAGE_MERGING: "Merging streams",
+    STAGE_ENCODING_AUDIO: "Encoding audio to AAC",
+    STAGE_REMUXING: "Remuxing MP4",
+    STAGE_TRANSCODING: "Transcoding video",
+    STAGE_NORMALIZING: "Normalizing volume",
+}
 
 # QUALITY_FORMATS / PRESET_MAX_HEIGHT / STANDARD_HEIGHTS / _format_chain: see ytdlp_formats
 
@@ -701,6 +716,54 @@ class _DownloadProgress:
         return None
 
 
+def processing_stage_for_compat(plan: CompatPlan) -> Optional[str]:
+    """Label the Safari MP4 pass: AAC encode when needed, otherwise remux."""
+    if not plan.needed:
+        return None
+    if plan.transcode_audio:
+        return STAGE_ENCODING_AUDIO
+    return STAGE_REMUXING
+
+
+def processing_stage_for_postprocessor(name: Optional[str]) -> Optional[str]:
+    key = (name or "").lower().replace("ffmpeg", "")
+    if "merger" in key:
+        return STAGE_MERGING
+    if "remux" in key:
+        return STAGE_REMUXING
+    return None
+
+
+def _publish_job_progress(job_id: int, fields: dict[str, Any]) -> dict[str, Any]:
+    snap = {**progress_store.get(job_id, {}), **fields}
+    if snap.get("status") != "processing":
+        snap.pop("stage", None)
+    progress_store[job_id] = snap
+    return snap
+
+
+def _set_processing_stage(job_id: int, stage: str) -> dict[str, Any]:
+    prev = progress_store.get(job_id, {})
+    try:
+        progress_n = float(prev.get("progress") or 0)
+    except (TypeError, ValueError):
+        progress_n = 0.0
+    return _publish_job_progress(
+        job_id,
+        {
+            "status": "processing",
+            "stage": stage,
+            "progress": min(100.0, max(progress_n, 99.0)),
+        },
+    )
+
+
+def _processing_activity_detail(stage: Optional[str]) -> str:
+    if not stage:
+        return "Processing"
+    return _STAGE_ACTIVITY_DETAIL.get(str(stage), "Processing")
+
+
 def _make_progress_hook(
     job_id: int,
     cancel_event: threading.Event,
@@ -720,26 +783,58 @@ def _make_progress_hook(
             snap = tracker.apply(d)
             if not snap:
                 return
-            progress_store[job_id] = snap
+            merged = _publish_job_progress(job_id, snap)
             if activity_handle is None:
                 return
-            if snap.get("status") == "processing":
+            if merged.get("status") == "processing":
                 activity_handle.update(
                     done=99,
                     total=100,
-                    detail="Merging streams",
+                    detail=_processing_activity_detail(merged.get("stage")),
                     engine="ffmpeg",
                 )
                 return
             now = time.time()
-            pct_i = int(snap.get("progress") or 0)
+            pct_i = int(merged.get("progress") or 0)
             if now - last_activity_at >= 1.0 or pct_i >= last_activity_pct + 5:
                 last_activity_at = now
                 last_activity_pct = pct_i
                 activity_handle.update(
                     done=pct_i,
                     total=100,
-                    detail=snap.get("title") or None,
+                    detail=merged.get("title") or None,
+                )
+        except DownloadCancelled:
+            raise
+        except Exception:  # noqa: BLE001 — never fail a download over progress UI
+            return
+
+    return hook
+
+
+def _make_postprocessor_hook(
+    job_id: int,
+    cancel_event: threading.Event,
+    activity_handle: Optional[activity.ActivityHandle] = None,
+):
+    def hook(d: dict[str, Any]) -> None:
+        if cancel_event.is_set():
+            raise DownloadCancelled()
+        if not isinstance(d, dict):
+            return
+        if d.get("status") not in ("started", "processing"):
+            return
+        stage = processing_stage_for_postprocessor(d.get("postprocessor"))
+        if not stage:
+            return
+        try:
+            _set_processing_stage(job_id, stage)
+            if activity_handle is not None:
+                activity_handle.update(
+                    done=99,
+                    total=100,
+                    detail=_processing_activity_detail(stage),
+                    engine="ffmpeg",
                 )
         except DownloadCancelled:
             raise
@@ -1112,6 +1207,11 @@ def _complete_download(
     source_url = info.get("webpage_url") or url
 
     if final_path.exists():
+        probe = probe_media(final_path)
+        if probe is not None:
+            stage = processing_stage_for_compat(compat_plan(probe))
+            if stage:
+                _set_processing_stage(job_id, stage)
         final_path = ensure_safari_mp4(final_path)
 
     if video_codec != "av1" and final_path.exists() and not is_audio_preset(quality_preset):
@@ -1128,10 +1228,12 @@ def _complete_download(
             preset=quality_preset,
         )
         if target:
+            _set_processing_stage(job_id, STAGE_TRANSCODING)
             final_path = transcode_video(final_path, target)
 
     volume_warning: Optional[str] = None
     if normalize_volume and final_path.exists():
+        _set_processing_stage(job_id, STAGE_NORMALIZING)
         volume_warning = _apply_loudnorm(final_path)
 
     if cancel_event is not None and cancel_event.is_set():
@@ -1257,6 +1359,10 @@ def _complete_download(
 
         if not (is_replace and video.description_is_custom):
             video.description = remote_description
+
+        from .chapters import apply_source_chapters
+
+        apply_source_chapters(video, info)
 
         tags_locked = False
         if is_replace and video.id is not None:
@@ -1438,6 +1544,9 @@ def _run_download(
         {
             "outtmpl": outtmpl,
             "progress_hooks": [_make_progress_hook(job_id, cancel, act)],
+            "postprocessor_hooks": [
+                _make_postprocessor_hook(job_id, cancel, act)
+            ],
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
@@ -1563,7 +1672,7 @@ def _run_download(
 
         effective_info = _merge_info(_as_info(metadata_info), _as_info(info))
         detail = str(title_override or effective_info.get("title") or url)
-        act.update(done=100, detail=detail)
+        act.update(done=99, detail=detail, engine="ffmpeg")
         video_id = _complete_download(
             job_id,
             final_path,

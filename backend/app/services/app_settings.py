@@ -37,6 +37,9 @@ AI_DEFAULTS: dict[str, Any] = {
     # Re-queue unlocked videos whose tags_enriched_at is older than this.
     "tag_rescan_days": 90,
     "ai_summaries": True,
+    "ai_chapters": True,
+    # on_download | on_watch
+    "ai_chapters_mode": "on_download",
     "ai_chat": True,
     "summary_length": "short",  # short | medium | long
     "ai_duplicates": True,
@@ -59,6 +62,7 @@ TAG_RESCAN_DAYS_MAX = _TAG_RESCAN_DAYS_HI
 _WEEKLY_BUDGET_USD_LO = 0.01
 _WEEKLY_BUDGET_USD_HI = 100_000.0
 _SUMMARY_LENGTHS = frozenset({"short", "medium", "long"})
+_CHAPTERS_MODES = frozenset({"on_download", "on_watch"})
 _OPENROUTER_SCOPES = frozenset({"specialized", "all"})
 
 
@@ -87,6 +91,13 @@ def normalize_summary_length(value: Any) -> str:
     if raw in _SUMMARY_LENGTHS:
         return raw
     return str(AI_DEFAULTS["summary_length"])
+
+
+def normalize_ai_chapters_mode(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in _CHAPTERS_MODES:
+        return raw
+    return str(AI_DEFAULTS["ai_chapters_mode"])
 
 
 def clamp_tag_rescan_days(value: Any) -> int:
@@ -187,6 +198,9 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
         merged.get("category_min_score")
     )
     merged["summary_length"] = normalize_summary_length(merged.get("summary_length"))
+    merged["ai_chapters_mode"] = normalize_ai_chapters_mode(
+        merged.get("ai_chapters_mode")
+    )
     merged["tag_rescan_days"] = clamp_tag_rescan_days(merged.get("tag_rescan_days"))
     merged["vram_gb"] = clamp_vram_gb(merged.get("vram_gb"))
     merged["openrouter_scope"] = normalize_openrouter_scope(

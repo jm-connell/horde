@@ -87,7 +87,7 @@ def enqueue_for_video(
     include_tags: bool = True,
     force: bool = False,
 ) -> None:
-    """Queue embed (+ optional tag enrich and summary) for a video per schedule settings."""
+    """Queue embed (+ optional tag enrich, summary, and chapters) for a video per schedule settings."""
     ai = app_settings.ai_settings()
     if ai.get("paused"):
         return
@@ -121,6 +121,22 @@ def enqueue_for_video(
                 should_summarize = not has_summary
         if should_summarize:
             enqueue_job(AiJobKind.summarize, video_id, force=force)
+    chapters_mode = str(ai.get("ai_chapters_mode") or "on_download")
+    if (
+        ai.get("ai_chapters", True)
+        and chapters_mode == "on_download"
+        and (ollama_on or or_on)
+    ):
+        should_chapters = False
+        with Session(engine) as session:
+            video = session.get(Video, video_id)
+            if video is not None:
+                from ..chapters import skip_reason as chapters_skip_reason
+
+                meta = session.get(VideoAiMeta, video_id)
+                should_chapters = chapters_skip_reason(video, meta, force=False) is None
+        if should_chapters:
+            enqueue_job(AiJobKind.chapters, video_id, force=force)
 
 
 def _runtime_limits() -> tuple[int, int]:
@@ -448,6 +464,7 @@ def queue_breakdown() -> dict[str, int]:
         "refresh_categories": 0,
         "embed_catalog_video": 0,
         "summarize": 0,
+        "chapters": 0,
         "running": 0,
     }
     with Session(engine) as session:
@@ -755,7 +772,7 @@ def _job_runnable(
 ) -> bool:
     if kind in (AiJobKind.embed_video, AiJobKind.embed_catalog_video):
         return embed_ok
-    if kind in (AiJobKind.enrich_tags, AiJobKind.summarize):
+    if kind in (AiJobKind.enrich_tags, AiJobKind.summarize, AiJobKind.chapters):
         return llm_ok
     if kind == AiJobKind.refresh_categories:
         return embed_ok and llm_ok
@@ -871,6 +888,7 @@ _AI_KIND_LABELS = {
     "score_duplicates": "Scoring duplicate candidates",
     "embed_catalog_video": "Embedding catalog video",
     "summarize": "Summarizing video",
+    "chapters": "Generating chapters",
 }
 
 

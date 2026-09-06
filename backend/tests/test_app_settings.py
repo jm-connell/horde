@@ -64,6 +64,8 @@ def test_youtube_video_search_system(tmp_dirs):
 def test_normalize_helpers():
     assert settings_svc.normalize_summary_length("long") == "long"
     assert settings_svc.normalize_summary_length("nope") == "short"
+    assert settings_svc.normalize_ai_chapters_mode("on_watch") == "on_watch"
+    assert settings_svc.normalize_ai_chapters_mode("nope") == "on_download"
     assert settings_svc.normalize_openrouter_scope("all") == "all"
     assert settings_svc.normalize_openrouter_scope("weird") == "specialized"
     assert settings_svc.normalize_openrouter_embed_model("") == (
@@ -109,6 +111,13 @@ def test_openrouter_show_costs_defaults_false():
     assert merged["openrouter_show_costs"] is False
     on = settings_svc._merge_ai({"openrouter_show_costs": True})
     assert on["openrouter_show_costs"] is True
+
+
+def test_ai_chapters_mode_defaults_on_download():
+    merged = settings_svc._merge_ai({})
+    assert merged["ai_chapters_mode"] == "on_download"
+    watch = settings_svc._merge_ai({"ai_chapters_mode": "on_watch"})
+    assert watch["ai_chapters_mode"] == "on_watch"
 
 
 def test_mask_openrouter_api_key():

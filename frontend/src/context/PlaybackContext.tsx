@@ -24,7 +24,7 @@ import { useSponsorBlock } from "../hooks/useSponsorBlock";
 import { enabledSponsorBlockCategories } from "../sponsorBlock";
 import {
   dedupeSubtitleTracks,
-  parseChapters,
+  resolveLibraryChapters,
   type Chapter,
 } from "../utils";
 import { shouldSuspendPlaybackForWatch } from "../utils/watchHandoff";
@@ -78,6 +78,8 @@ interface PlaybackValue {
     videoId?: number | null;
   }) => void;
   registerDock: (el: HTMLElement | null) => void;
+  /** Patch the playing library video when metadata refreshes (same id). */
+  updateCurrentVideo: (video: Video) => void;
   /** True when the floating mini-player is showing (browsing away from Watch). */
   miniPlayerActive: boolean;
   /** Live bounds of the floating mini-player (null when not mini). */
@@ -577,7 +579,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
 
-  const libraryChapters = parseChapters(current?.description ?? null);
+  const libraryChapters = resolveLibraryChapters(current ?? { description: null });
   const sponsorSegments = useSponsorBlock(
     current?.source_url ?? null,
     current?.file_path ?? "",
@@ -590,11 +592,27 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     api.getVideo(current.id).then(setCurrent).catch(() => undefined);
   }, [current]);
 
+  const updateCurrentVideo = useCallback((video: Video) => {
+    setCurrent((prev) => (prev?.id === video.id ? { ...prev, ...video } : prev));
+  }, []);
+
   useEffect(() => {
-    if (!current?.subtitles_pending || stream) return;
+    if (!current || stream) return;
+    const pending =
+      !!current.subtitles_pending ||
+      !!current.processing_chapters ||
+      !!current.processing_summary;
+    if (!pending) return;
     const timer = window.setInterval(refreshCurrentVideo, 3000);
     return () => window.clearInterval(timer);
-  }, [current?.id, current?.subtitles_pending, stream, refreshCurrentVideo]);
+  }, [
+    current?.id,
+    current?.subtitles_pending,
+    current?.processing_chapters,
+    current?.processing_summary,
+    stream,
+    refreshCurrentVideo,
+  ]);
 
   const value: PlaybackValue = {
     current,
@@ -614,6 +632,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     close,
     suspendPlaybackMedia,
     registerDock,
+    updateCurrentVideo,
     miniPlayerActive,
     miniPlayerRect,
     activeStreamQuality,

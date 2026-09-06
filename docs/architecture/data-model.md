@@ -8,7 +8,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 
 | Table | Purpose |
 |-------|---------|
-| `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags |
+| `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags, yt-dlp `source_chapters` |
 | `download_jobs` | Queue rows: URL, quality, probed `height_px`, progress, pause, loudnorm, optional replace target, `error` + typed `error_kind` |
 | `playlists` | User or YouTube-imported playlists |
 | `playlist_items` | Ordered video membership |
@@ -27,12 +27,12 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | Table | Purpose |
 |-------|---------|
 | `video_embeddings` | Per-video vectors; `chunk_index` **-1** = metadata doc, **0+** = caption chunks |
-| `video_ai_meta` | Embed status, summary, AI/user tags, locks |
+| `video_ai_meta` | Embed status, summary, AI/user tags, locks, LLM chapters |
 | `video_ai_chat` | One chat thread per video |
 | `video_ai_chat_messages` | User/assistant turns (+ optional OpenRouter cost/model) |
 | `openrouter_usage` | Append-only cost ledger |
 | `ai_categories` | Recommendation category chips (name, blurb, embedding) |
-| `ai_jobs` | Background job queue (`embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize`) |
+| `ai_jobs` | Background job queue (`embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize`, `chapters`) |
 | `schema_migrations` | Ledger of applied migration step ids (`id`, `applied_at`) |
 
 ## Schema lifecycle

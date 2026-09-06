@@ -10,10 +10,13 @@ import {
   formatViewCount,
   formatLikeRatio,
   downloadProgressPercent,
+  downloadProcessingLabel,
   formatDate,
   formatPublishedAt,
   parseApiDate,
   parseChapters,
+  chaptersFromApi,
+  resolveLibraryChapters,
   readClipboardText,
   stripChapterLines,
   watchProcessingLabel,
@@ -64,6 +67,7 @@ describe("watchProcessingLabel", () => {
   it("joins in-flight summary and preview work", () => {
     expect(watchProcessingLabel({})).toBeNull();
     expect(watchProcessingLabel({ processing_summary: true })).toBe("summary");
+    expect(watchProcessingLabel({ processing_chapters: true })).toBe("chapters");
     expect(watchProcessingLabel({ processing_sprites: true })).toBe("previews");
     expect(
       watchProcessingLabel({
@@ -71,6 +75,19 @@ describe("watchProcessingLabel", () => {
         processing_sprites: true,
       })
     ).toBe("summary, previews");
+  });
+});
+
+describe("downloadProcessingLabel", () => {
+  it("names post-download stages", () => {
+    expect(downloadProcessingLabel()).toBe("Processing…");
+    expect(downloadProcessingLabel(null)).toBe("Processing…");
+    expect(downloadProcessingLabel("unknown")).toBe("Processing…");
+    expect(downloadProcessingLabel("merging")).toBe("Merging…");
+    expect(downloadProcessingLabel("encoding_audio")).toBe("Encoding audio…");
+    expect(downloadProcessingLabel("remuxing")).toBe("Remuxing…");
+    expect(downloadProcessingLabel("transcoding")).toBe("Transcoding…");
+    expect(downloadProcessingLabel("normalizing")).toBe("Normalizing…");
   });
 });
 
@@ -84,6 +101,24 @@ describe("chapters", () => {
   it("strips chapter lines", () => {
     expect(stripChapterLines(desc)).toContain("Intro");
     expect(stripChapterLines(desc)).not.toContain("0:00");
+  });
+  it("maps API chapters and prefers them over description", () => {
+    const fromApi = chaptersFromApi([
+      { start_sec: 0, title: "Open" },
+      { start_sec: 90, title: "Close" },
+    ]);
+    expect(fromApi).toEqual([
+      { startSec: 0, title: "Open" },
+      { startSec: 90, title: "Close" },
+    ]);
+    const resolved = resolveLibraryChapters({
+      description: desc,
+      chapters: [
+        { start_sec: 0, title: "API" },
+        { start_sec: 40, title: "Next" },
+      ],
+    });
+    expect(resolved[0].title).toBe("API");
   });
 });
 

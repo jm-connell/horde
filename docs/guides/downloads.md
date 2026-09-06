@@ -153,7 +153,7 @@ Toggle via the download options / `normalizeVolumeOnDownload` preference when su
 
 ## Progress and failures
 
-The queue panel shows status, percentage, and errors. Failures carry a typed **`error_kind`** (bot check, PO token, cookies, members-only, rate limit, unavailable, post-process, etc.) with a short fix hint on the card; the Download URL field also shows a banner when link preview fails for the same reasons.
+The queue panel shows status, percentage, and errors. After the file is on disk, the card names the current post-download step instead of a generic Processing label: **Merging** (yt-dlp combining video+audio), **Encoding audio** (Opus/Vorbis → AAC for Safari), **Remuxing** (MP4 / `faststart` without an audio re-encode), **Transcoding** (optional H.264/H.265), or **Normalizing** (optional loudnorm). Failures carry a typed **`error_kind`** (bot check, PO token, cookies, members-only, rate limit, unavailable, post-process, etc.) with a short fix hint on the card; the Download URL field also shows a banner when link preview fails for the same reasons.
 
 Failed jobs can be retried from the card. Retry **requeues the same job** (it does not create a second queue entry), so extra clicks while it is already queued or downloading are ignored. Active download paths are marked so the [import scanner](import-review.md) does not race the same files.
 

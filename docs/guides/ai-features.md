@@ -1,13 +1,13 @@
 # AI features
 
-Optional AI turns Horde from a downloader into a smarter archive: semantic search, related videos, summaries, chat, tags, recommendation shelves, and duplicate help.
+Optional AI turns Horde from a downloader into a smarter archive: semantic search, related videos, summaries, chapters, chat, tags, recommendation shelves, and duplicate help.
 
 ## Prerequisites
 
 AI features need **providers ready**:
 
 - **Embeddings** — Ollama and/or OpenRouter (for search indexes, related, catalog embeds, categories)
-- **Chat / LLM** — Ollama and/or OpenRouter (summaries, chat, enrich tags, category invention, duplicate confirmation)
+- **Chat / LLM** — Ollama and/or OpenRouter (summaries, chapters, chat, enrich tags, category invention, duplicate confirmation)
 
 Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../ops/ai-setup.md). Until embed/chat models are present and healthy, Library stays on a single home tab (no Recommended), hybrid search degrades to keyword-only, and LLM actions stay unavailable.
 
@@ -22,6 +22,7 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 | **Use subtitles in search indexes** | Include VTT/caption text in corpora (`use_subtitles`) | Embed rebuild after change |
 | **Related videos** | Neighbors on the watch page | Embeddings |
 | **Summaries** | Generate a synopsis for a video | Chat LLM |
+| **Chapters** | Generate Watch markers from captions when the description has none | Chat LLM |
 | **Chat** | Ask questions about a video (metadata + optional subs) | Chat LLM |
 | **Enrich tags** | Suggest / apply topical tags | Chat LLM |
 | **Recommended tab** | Home **Library / Recommended** tabs with category shelves | Embed + categories ready |
@@ -30,6 +31,10 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 ## Summaries
 
 When **AI video summaries** is on, a summary is queued after download once captions are on disk. Length is a setting (`short` / `medium` / `long`). Watch still has **Regenerate**, and older videos without a summary can **Generate** from the AI panel. Summaries use title, description, and caption text.
+
+## Chapters
+
+When **AI video chapters** is on, choose **On download** or **Watch page**. On download queues a chapter job after captions exist if the description (and yt-dlp chapter list) do not already provide markers. Watch page only generates when you click the button on a video. Videos under 3 minutes and lyric-heavy captions are skipped automatically; Watch **Generate** still runs for those. After AI markers exist, Watch shows a short “AI generated chapters” note and **Regenerate** on the Description row. Markers are stored beside the video; the description is not rewritten. Description timestamps always win over yt-dlp and AI.
 
 ## Chat
 

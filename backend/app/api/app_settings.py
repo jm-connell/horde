@@ -38,6 +38,8 @@ class AiSettingsRead(BaseModel):
     enrich_tags: bool = True
     tag_rescan_days: int = 90
     ai_summaries: bool = True
+    ai_chapters: bool = True
+    ai_chapters_mode: Literal["on_download", "on_watch"] = "on_download"
     ai_chat: bool = True
     summary_length: Literal["short", "medium", "long"] = "short"
     ai_duplicates: bool = True
@@ -75,6 +77,8 @@ class AiSettingsUpdate(BaseModel):
         le=app_settings.TAG_RESCAN_DAYS_MAX,
     )
     ai_summaries: Optional[bool] = None
+    ai_chapters: Optional[bool] = None
+    ai_chapters_mode: Optional[Literal["on_download", "on_watch"]] = None
     ai_chat: Optional[bool] = None
     summary_length: Optional[Literal["short", "medium", "long"]] = None
     ai_duplicates: Optional[bool] = None
@@ -120,10 +124,14 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
         filtered["category_min_score"] = app_settings.clamp_category_min_score(
             filtered["category_min_score"]
         )
-    if "summary_length" in filtered:
-        filtered["summary_length"] = app_settings.normalize_summary_length(
-            filtered["summary_length"]
-        )
+        if "summary_length" in filtered:
+            filtered["summary_length"] = app_settings.normalize_summary_length(
+                filtered["summary_length"]
+            )
+        if "ai_chapters_mode" in filtered:
+            filtered["ai_chapters_mode"] = app_settings.normalize_ai_chapters_mode(
+                filtered["ai_chapters_mode"]
+            )
     if "tag_rescan_days" in filtered:
         filtered["tag_rescan_days"] = app_settings.clamp_tag_rescan_days(
             filtered["tag_rescan_days"]
@@ -220,6 +228,10 @@ def update_settings(payload: AppSettingsUpdate):
         if "summary_length" in ai_updates:
             ai_updates["summary_length"] = app_settings.normalize_summary_length(
                 ai_updates["summary_length"]
+            )
+        if "ai_chapters_mode" in ai_updates:
+            ai_updates["ai_chapters_mode"] = app_settings.normalize_ai_chapters_mode(
+                ai_updates["ai_chapters_mode"]
             )
         if "tag_rescan_days" in ai_updates:
             ai_updates["tag_rescan_days"] = app_settings.clamp_tag_rescan_days(

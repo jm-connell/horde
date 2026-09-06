@@ -26,8 +26,9 @@ import { UI_MENU_SURFACE } from "../uiMenu";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { PRESET_ORDER, presetOptionLabel, resolveQualityPreset } from "../presets";
-import type { StreamPreviewMeta, Video } from "../types";
+import type { StreamPreviewMeta, Video, AiChaptersMode } from "../types";
 import {
+  downloadProcessingLabel,
   downloadProgressPercent,
   formatDate,
   formatDuration,
@@ -35,6 +36,7 @@ import {
   formatSize,
   formatViewCount,
   parseChapters,
+  resolveLibraryChapters,
   stripChapterLines,
   watchProcessingLabel,
 } from "../utils";
@@ -104,8 +106,13 @@ export default function Watch() {
   const [redownloading, setRedownloading] = useState(false);
   const [settings] = useSettings();
   const [aiSummariesEnabled, setAiSummariesEnabled] = useState(false);
+  const [aiChaptersEnabled, setAiChaptersEnabled] = useState(false);
+  const [aiChaptersMode, setAiChaptersMode] =
+    useState<AiChaptersMode>("on_download");
   const [aiChatEnabled, setAiChatEnabled] = useState(false);
   const [showAiCosts, setShowAiCosts] = useState(false);
+  const [generatingChapters, setGeneratingChapters] = useState(false);
+  const [chapterError, setChapterError] = useState<string | null>(null);
 
   // Stream download controls
   const [queuing, setQueuing] = useState(false);
@@ -135,6 +142,7 @@ export default function Watch() {
     getStreamPosition,
     activeStreamQuality,
     suspendPlaybackMedia,
+    updateCurrentVideo,
   } = usePlayback();
 
   const dockRef = useRef<HTMLDivElement>(null);
@@ -365,6 +373,10 @@ export default function Watch() {
         const localConnected = !!status.enabled && !!status.reachable;
         const llmConnected = openRouterConnected || localConnected;
         setAiSummariesEnabled(llmConnected && !!s.ai.ai_summaries);
+        setAiChaptersEnabled(llmConnected && !!s.ai.ai_chapters);
+        setAiChaptersMode(
+          s.ai.ai_chapters_mode === "on_watch" ? "on_watch" : "on_download"
+        );
         setAiChatEnabled(llmConnected && !!s.ai.ai_chat);
         setShowAiCosts(
           openRouterConnected && s.ai.openrouter_show_costs === true
@@ -373,6 +385,8 @@ export default function Watch() {
       .catch(() => {
         if (cancelled) return;
         setAiSummariesEnabled(false);
+        setAiChaptersEnabled(false);
+        setAiChaptersMode("on_download");
         setAiChatEnabled(false);
         setShowAiCosts(false);
       });
@@ -382,6 +396,11 @@ export default function Watch() {
   }, [source?.kind]);
 
   const video = source?.kind === "library" ? source.video : null;
+
+  useEffect(() => {
+    setChapterError(null);
+    setGeneratingChapters(false);
+  }, [video?.id]);
 
   useEffect(() => {
     if (!video) return;
@@ -446,11 +465,13 @@ export default function Watch() {
     const pending =
       !!video.subtitles_pending ||
       !!video.processing_summary ||
-      !!video.processing_sprites;
+      !!video.processing_sprites ||
+      !!video.processing_chapters;
     if (!pending) return;
     const timer = window.setInterval(() => {
       api.getVideo(video.id).then((v) => {
         setSource({ kind: "library", video: v });
+        updateCurrentVideo(v);
       }).catch(() => undefined);
     }, 3000);
     return () => window.clearInterval(timer);
@@ -459,6 +480,8 @@ export default function Watch() {
     video?.subtitles_pending,
     video?.processing_summary,
     video?.processing_sprites,
+    video?.processing_chapters,
+    updateCurrentVideo,
   ]);
 
   useEffect(() => {
@@ -508,7 +531,28 @@ export default function Watch() {
 
   const setVideo = useCallback((v: Video) => {
     setSource({ kind: "library", video: v });
-  }, []);
+    updateCurrentVideo(v);
+  }, [updateCurrentVideo]);
+
+  const generateChapters = useCallback(
+    async (force: boolean) => {
+      if (!video) return;
+      setGeneratingChapters(true);
+      setChapterError(null);
+      try {
+        const updated = await api.generateVideoChapters(video.id, { force });
+        setVideo(updated);
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Could not generate chapters";
+        setChapterError(msg);
+        showToast(msg);
+      } finally {
+        setGeneratingChapters(false);
+      }
+    },
+    [video, setVideo, showToast]
+  );
 
   const onRedownload = async () => {
     if (!video) return;
@@ -675,7 +719,9 @@ export default function Watch() {
   const description = isLibrary
     ? source.video.description
     : source.meta.description;
-  const chapters = parseChapters(description);
+  const chapters = isLibrary
+    ? resolveLibraryChapters(source.video)
+    : parseChapters(description);
   const descriptionBody = stripChapterLines(description);
   const queueVisible = isLibrary && queue.length > 0;
 
@@ -723,6 +769,23 @@ export default function Watch() {
   const hasSubtitles =
     isLibrary && (source.video.subtitles?.length ?? 0) > 0;
   const canAiSummarize = hasSubtitles && aiSummariesEnabled;
+  const chaptersSource = isLibrary ? source.video.chapters_source : null;
+  const hasAiChapters = chaptersSource === "ai";
+  const chapterBusy =
+    generatingChapters ||
+    !!(isLibrary && source.video.processing_chapters);
+  const canGenerateChapters =
+    isLibrary &&
+    aiChaptersEnabled &&
+    hasSubtitles &&
+    (chaptersSource == null || chaptersSource === "ai");
+  const showChapterGenerate =
+    canGenerateChapters &&
+    !hasAiChapters &&
+    (aiChaptersMode === "on_watch" || chapterBusy || !!chapterError);
+  const showChapterActions =
+    canGenerateChapters &&
+    (hasAiChapters || showChapterGenerate);
   const canAiChat =
     isLibrary &&
     aiChatEnabled &&
@@ -1016,7 +1079,7 @@ export default function Watch() {
                     <span className="inline-flex items-center gap-2 text-xs font-medium text-gray-300">
                       <span>
                         {live?.status === "processing"
-                          ? "Processing…"
+                          ? downloadProcessingLabel(live?.stage)
                           : live?.status === "queued"
                             ? "Queued…"
                             : `Downloading ${downloadPercent}%`}
@@ -1097,6 +1160,18 @@ export default function Watch() {
                   tags={isLibrary ? source.video.tags : []}
                   aiTags={isLibrary ? source.video.ai_tags : []}
                   userTags={isLibrary ? source.video.user_tags : []}
+                  chaptersSource={chaptersSource}
+                  chapterGenerate={
+                    showChapterActions
+                      ? {
+                          generating: chapterBusy,
+                          hasExisting: hasAiChapters,
+                          showGenerate: showChapterGenerate,
+                          onGenerate: (force) => void generateChapters(force),
+                          error: chapterError,
+                        }
+                      : null
+                  }
                   onAddTag={
                     isLibrary
                       ? async (cleaned) => {

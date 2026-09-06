@@ -326,6 +326,8 @@ export default function ProvidersPane() {
                           featurePatch.enrich_tags = true;
                         if (!aiDraft.ai_summaries)
                           featurePatch.ai_summaries = true;
+                        if (!aiDraft.ai_chapters)
+                          featurePatch.ai_chapters = true;
                         if (!aiDraft.ai_chat)
                           featurePatch.ai_chat = true;
                         if (!aiDraft.ai_duplicates)

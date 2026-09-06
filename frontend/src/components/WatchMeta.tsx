@@ -39,6 +39,17 @@ export type WatchMetaProps = {
   onAddTag?: (tag: string) => Promise<void> | void;
   onRemoveTag?: (tag: string) => Promise<void> | void;
   onTagError?: (message: string) => void;
+  /** How the visible chapter list was resolved. */
+  chaptersSource?: "description" | "source" | "ai" | null;
+  /** Library-only: generate AI chapters when description/source have none. */
+  chapterGenerate?: {
+    generating: boolean;
+    hasExisting: boolean;
+    onGenerate: (force: boolean) => void;
+    error?: string | null;
+    /** When false, hide the header Generate control (auto-on-download). */
+    showGenerate?: boolean;
+  } | null;
 };
 
 function DescriptionBoxToggle({
@@ -90,6 +101,30 @@ function DescriptionBoxToggle({
   );
 }
 
+const SUBTLE_ACTION =
+  "ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50";
+
+function SubtleActionButton({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={SUBTLE_ACTION}
+    >
+      {children}
+    </button>
+  );
+}
+
 /**
  * Shared description + chapters chrome for library and streamed watch pages.
  * Description text is clipped until the corner expand control; tags/notes
@@ -108,6 +143,8 @@ export default function WatchMeta({
   onAddTag,
   onRemoveTag,
   onTagError,
+  chaptersSource = null,
+  chapterGenerate = null,
 }: WatchMetaProps) {
   const [settings, updateSettings] = useSettings();
   const [extrasOpen, setExtrasOpen] = useState(false);
@@ -154,7 +191,13 @@ export default function WatchMeta({
     setBoxExpanded(next);
   };
 
-  if (!showDescriptionPanel && chapters.length === 0) {
+  const showGenerateHeader =
+    !!chapterGenerate &&
+    !chapterGenerate.hasExisting &&
+    chapterGenerate.showGenerate !== false;
+  const showAiChapterChrome = chapters.length > 0 && chaptersSource === "ai";
+
+  if (!showDescriptionPanel && chapters.length === 0 && !showGenerateHeader) {
     if (!settings.showDescription && notes) {
       return (
         <div className="ui-panel rounded-xl border border-accent/30 bg-accent/5 p-4 ring-1 ring-ink-700">
@@ -303,6 +346,13 @@ export default function WatchMeta({
     </>
   );
 
+  const runChapterAction = (force: boolean) => {
+    if (showDescriptionText && !settings.descriptionExpanded) {
+      updateSettings({ descriptionExpanded: true });
+    }
+    chapterGenerate?.onGenerate(force);
+  };
+
   const metaBody = (
         <div
           className={
@@ -381,26 +431,79 @@ export default function WatchMeta({
         </div>
   );
 
+  const headerRow =
+    showDescriptionText || showGenerateHeader || showAiChapterChrome ? (
+      <div>
+        <div
+          className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-2 ${
+            showDescriptionText ? "justify-between" : "justify-end"
+          }`}
+        >
+          {showDescriptionText && (
+            <button
+              type="button"
+              onClick={() =>
+                updateSettings({
+                  descriptionExpanded: !settings.descriptionExpanded,
+                })
+              }
+              className="ui-panel-toggle ui-interactive flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
+            >
+              <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
+                <span>Description</span>
+                <span>{settings.descriptionExpanded ? "▲" : "▼"}</span>
+              </span>
+            </button>
+          )}
+          {(showGenerateHeader || showAiChapterChrome) && (
+            <div className="flex shrink-0 items-center gap-2">
+              {showAiChapterChrome && (
+                <p className="text-[10px] leading-none text-gray-500">
+                  AI generated chapters (experimental)
+                </p>
+              )}
+              {showGenerateHeader && chapterGenerate && (
+                <SubtleActionButton
+                  disabled={chapterGenerate.generating}
+                  onClick={() => runChapterAction(false)}
+                >
+                  {chapterGenerate.generating
+                    ? "Generating…"
+                    : "Generate chapters"}
+                </SubtleActionButton>
+              )}
+              {chapterGenerate?.hasExisting && (
+                <SubtleActionButton
+                  disabled={chapterGenerate.generating}
+                  onClick={() => runChapterAction(true)}
+                >
+                  {chapterGenerate.generating ? "Generating…" : "Regenerate"}
+                </SubtleActionButton>
+              )}
+            </div>
+          )}
+        </div>
+        {chapterGenerate?.error &&
+          (showGenerateHeader || chapterGenerate.hasExisting) && (
+            <p className="pb-1 text-right text-[10px] text-amber-400/90">
+              {chapterGenerate.error}
+            </p>
+          )}
+      </div>
+    ) : null;
+
   if (!showDescriptionText) {
-    return <div>{metaBody}</div>;
+    return (
+      <div>
+        {headerRow}
+        {metaBody}
+      </div>
+    );
   }
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() =>
-          updateSettings({
-            descriptionExpanded: !settings.descriptionExpanded,
-          })
-        }
-        className="ui-panel-toggle ui-interactive flex w-full items-center justify-between py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
-      >
-        <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
-          <span>Description</span>
-          <span>{settings.descriptionExpanded ? "▲" : "▼"}</span>
-        </span>
-      </button>
+      {headerRow}
       <Collapse open={settings.descriptionExpanded}>
         {metaBody}
       </Collapse>

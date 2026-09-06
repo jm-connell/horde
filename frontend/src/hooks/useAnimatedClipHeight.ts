@@ -9,10 +9,26 @@ export function remPx(rem: number): number {
   return rem * rootPx;
 }
 
+/** Content height ignoring any current pixel clip (which inflates scrollHeight). */
+function measureContentHeight(clip: HTMLElement): number {
+  const prevHeight = clip.style.height;
+  const prevOverflow = clip.style.overflow;
+  const prevTransition = clip.style.transition;
+  clip.style.transition = "none";
+  clip.style.height = "auto";
+  clip.style.overflow = "hidden";
+  const contentHeight = clip.scrollHeight;
+  clip.style.height = prevHeight;
+  clip.style.overflow = prevOverflow;
+  clip.style.transition = prevTransition;
+  return contentHeight;
+}
+
 /**
  * Animate an element's height between a collapsed max and its content size.
  * Expanded resting state is `height: auto` so the box is only as tall as
- * its content (no extra whitespace).
+ * its content (no extra whitespace). Content changes (e.g. regenerated
+ * chapters) remeasure and resize even when the expand state is unchanged.
  */
 export function useAnimatedClipHeight(
   clipRef: { readonly current: HTMLElement | null },
@@ -36,9 +52,10 @@ export function useAnimatedClipHeight(
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches;
+    const contentHeight = measureContentHeight(clip);
     const target = expanded
-      ? clip.scrollHeight
-      : Math.min(clip.scrollHeight, collapsedMax);
+      ? contentHeight
+      : Math.min(contentHeight, collapsedMax);
 
     const applyResting = () => {
       clip.style.transition = "none";
@@ -53,21 +70,18 @@ export function useAnimatedClipHeight(
 
     const prev = prevExpandedRef.current;
     prevExpandedRef.current = expanded;
-
-    // First layout, or a content/layout change that isn't an expand toggle.
-    if (prev === null || prev === expanded) {
-      applyResting();
-      return;
-    }
-
-    const notifySettled = () => onSettledRef.current?.(expanded);
+    const expandedChanged = prev !== null && prev !== expanded;
 
     const from = clip.getBoundingClientRect().height;
-    if (reduceMotion || Math.abs(from - target) < 1) {
+    if (prev === null || reduceMotion || Math.abs(from - target) < 1) {
       applyResting();
-      notifySettled();
+      if (expandedChanged) onSettledRef.current?.(expanded);
       return;
     }
+
+    const notifySettled = () => {
+      if (expandedChanged) onSettledRef.current?.(expanded);
+    };
 
     clip.style.overflow = "hidden";
     clip.style.transition = "none";

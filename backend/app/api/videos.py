@@ -524,7 +524,33 @@ def summarize_video(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session)
+    return _to_read(video, session, include_processing=True)
+
+
+@router.post("/videos/{video_id}/ai/chapters", response_model=VideoRead)
+def generate_video_chapters(
+    video_id: int,
+    force: bool = Query(False),
+    session: Session = Depends(get_session),
+):
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    try:
+        from ..services.ai.tasks import ChaptersError, run_chapters
+
+        run_chapters(session, video_id, force=force)
+    except ChaptersError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    session.expire_all()
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return _to_read(video, session, include_processing=True)
 
 
 class VideoAiChatRequest(BaseModel):

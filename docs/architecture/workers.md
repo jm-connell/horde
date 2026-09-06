@@ -18,7 +18,7 @@ Discovers importable video extensions, ignores intermediate `.part` / `.fNNN` / 
 **Recover:** `download_queue.recover()` on startup — jobs left `downloading` become `queued` (restart from scratch; partials are not resumed). Global pause is restored from app settings key `download_queue_paused` so Pause survives process restart.
 
 - FIFO queue with `MAX_DOWNLOAD_CONCURRENCY` workers (default **2**).
-- Per-job cancel/pause events; progress snapshots for SSE (includes typed `error_kind` on failure).
+- Per-job cancel/pause events; progress snapshots for SSE (includes typed `error_kind` on failure and `stage` during post-download work).
 - Metadata extracts share the yt-dlp extract gate with preview/feed (1 + 1.25s spacing).
 - See [Download pipeline](downloads-pipeline.md) and [Troubleshooting](../ops/troubleshooting.md#download-error_kind-values).
 
@@ -41,7 +41,7 @@ Each cycle:
 
 | Behavior | Detail |
 |----------|--------|
-| Kinds | `embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize` |
+| Kinds | `embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize`, `chapters` |
 | Retries | Up to **3** attempts; backoff `run_after` ≈ **2 × attempts** minutes |
 | Pause | Settings `ai.paused` or OpenRouter hard budget stop |
 | Schedule | `on_download` enqueue (plus idle catch-up of missing search indexes) vs timed sweeps |

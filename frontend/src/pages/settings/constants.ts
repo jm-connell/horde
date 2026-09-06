@@ -8,6 +8,7 @@ import type {
   Theme,
 } from "../../hooks/useSettings";
 import type {
+  AiChaptersMode,
   AiSchedule,
   AiSettings,
   AiSummaryLength,
@@ -266,6 +267,11 @@ export const SUMMARY_LENGTH_OPTIONS: { value: AiSummaryLength; label: string }[]
   { value: "long", label: "Long" },
 ];
 
+export const CHAPTER_MODE_OPTIONS: { value: AiChaptersMode; label: string }[] = [
+  { value: "on_download", label: "On download" },
+  { value: "on_watch", label: "Watch page" },
+];
+
 export const DEFAULT_AI: AiSettings = {
   enabled: true,
   provider: "ollama",
@@ -290,6 +296,8 @@ export const DEFAULT_AI: AiSettings = {
   enrich_tags: true,
   tag_rescan_days: 90,
   ai_summaries: true,
+  ai_chapters: true,
+  ai_chapters_mode: "on_download",
   ai_chat: true,
   summary_length: "short",
   ai_duplicates: true,

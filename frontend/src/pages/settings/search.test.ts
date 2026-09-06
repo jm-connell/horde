@@ -28,6 +28,8 @@ describe("settings search routing", () => {
     expect(firstMatchingTab("po token")).toBe("system");
     expect(firstMatchingAiPane("ollama")).toBe("providers");
     expect(firstMatchingAiPane("summary")).toBe("features");
+    expect(firstMatchingAiPane("chapters")).toBe("features");
+    expect(firstMatchingAiPane("on download")).toBe("features");
     expect(firstMatchingAiPane("index missing")).toBe("jobs");
     expect(firstMatchingTab("index missing")).toBe("ai");
     expect(firstMatchingTab("direct youtube search")).toBe("library");
