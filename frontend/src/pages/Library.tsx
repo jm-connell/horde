@@ -5,6 +5,7 @@ import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import ChannelFeed from "../components/ChannelFeed";
 import ChannelFeedCard from "../components/ChannelFeedCard";
 import ChannelSidebar from "../components/ChannelSidebar";
+import Collapse from "../components/Collapse";
 import HelpTip from "../components/HelpTip";
 import LibraryBulkBar from "../components/LibraryBulkBar";
 import LiquidNav from "../components/LiquidNav";
@@ -13,6 +14,7 @@ import PlaybackQueue from "../components/PlaybackQueue";
 import RecommendedHome from "../components/RecommendedHome";
 import ThemedSelect from "../components/ThemedSelect";
 import VideoCard from "../components/VideoCard";
+import YoutubeSearchChip from "../components/YoutubeSearchChip";
 import { useDownloads } from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
 import { useSearch } from "../context/SearchContext";
@@ -48,10 +50,7 @@ import {
   YOUTUBE_SEARCH_LOAD_MORE_LABEL,
   YOUTUBE_SEARCH_PAGE_SIZE,
 } from "./libraryCatalogProgress";
-import {
-  DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP,
-  YOUTUBE_VIDEO_SEARCH_HEADER_TIP,
-} from "./settings/constants";
+import { DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP } from "./settings/constants";
 import {
   appendUnseenFeedEntries,
   excludeKnownYoutubeIds,
@@ -158,8 +157,6 @@ export default function Library() {
   const [youtubeLoadingMore, setYoutubeLoadingMore] = useState(false);
   const youtubeMoreAcRef = useRef<AbortController | null>(null);
   const youtubeFetchOffsetRef = useRef(0);
-  const [youtubeVideoSearch, setYoutubeVideoSearch] = useState(true);
-  const [homeYoutubeSaving, setHomeYoutubeSaving] = useState(false);
   const [continueWatching, setContinueWatching] = useState<Video[]>([]);
   const [channels, setChannels] = useState<ChannelStat[]>([]);
   const [tags, setTags] = useState<TagStat[]>([]);
@@ -173,8 +170,6 @@ export default function Library() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const lastSelectedIndex = useRef<number | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
-  const headerRowRef = useRef<HTMLDivElement>(null);
-  const [headerTagsFit, setHeaderTagsFit] = useState(true);
   const [queueDockedBottom, setQueueDockedBottom] = useState(true);
 
   // Bulk action popover state
@@ -185,7 +180,7 @@ export default function Library() {
   const [metadataSyncing, setMetadataSyncing] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const { search, setSearch, committedQuery, commitSearch } = useSearch();
+  const { search, setSearch, committedQuery, commitSearch, youtubeVideoSearch, setYoutubeVideoSearch } = useSearch();
   const [activeChannel, setActiveChannel] = useState<string | null>(
     searchParams.get("channel")
   );
@@ -463,19 +458,6 @@ export default function Library() {
   }, [debouncedSearch, activeChannel, refreshKey]);
 
   useEffect(() => {
-    let active = true;
-    api
-      .getAppSettings()
-      .then((s) => {
-        if (active) setYoutubeVideoSearch(s.youtube_video_search ?? true);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
     youtubeMoreAcRef.current?.abort();
     youtubeMoreAcRef.current = null;
     const q = youtubeQuery.trim();
@@ -597,6 +579,11 @@ export default function Library() {
     [youtubeResults, streamResults, videos, otherVideos]
   );
 
+  const hasTags = useMemo(
+    () => tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag),
+    [tags, activeTag]
+  );
+
   const visibleTags = useMemo(() => {
     const filtered = tags.filter(
       (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
@@ -623,92 +610,6 @@ export default function Library() {
   const isHome = !activeChannel && !activeTag;
   const showHomeTabs = isHome && aiReady;
   const onRecommendedTab = showHomeTabs && homeTab === "recommended";
-
-  // Hide the mid-width Tags control before it crowds the search / home tabs.
-  useLayoutEffect(() => {
-    const row = headerRowRef.current;
-    if (!row || !isHome || onRecommendedTab) {
-      setHeaderTagsFit(true);
-      return;
-    }
-
-    const TAGS_SLOT = 88;
-    const GAP = 12;
-    // Keep search usable; drop Tags once it would crush the field.
-    const SEARCH_COMFORT = 140;
-
-    const measure = () => {
-      const tagsBtn = row.querySelector(
-        "[data-header-tags]"
-      ) as HTMLElement | null;
-      const filters = row.querySelector(
-        "[data-header-filters]"
-      ) as HTMLElement | null;
-      const searchEl = row.querySelector(
-        "[data-header-search]"
-      ) as HTMLElement | null;
-      if (!filters) {
-        setHeaderTagsFit(true);
-        return;
-      }
-
-      const searchShown =
-        searchEl != null &&
-        searchEl.offsetParent !== null &&
-        getComputedStyle(searchEl).display !== "none";
-
-      if (tagsBtn) {
-        const searchTooNarrow =
-          searchShown && searchEl.offsetWidth < SEARCH_COMFORT;
-        const overflow = row.scrollWidth > row.clientWidth + 1;
-        setHeaderTagsFit(!searchTooNarrow && !overflow);
-        return;
-      }
-
-      // Tags hidden — restore when a Tags-sized slot fits without crushing search.
-      let leftUsed = 0;
-      for (const child of Array.from(row.children) as HTMLElement[]) {
-        if (child === filters) continue;
-        if (child.offsetParent === null || child.offsetHeight === 0) continue;
-        leftUsed += child.offsetWidth + GAP;
-      }
-
-      let filterFixed = 0;
-      let filterGaps = 0;
-      for (const child of Array.from(filters.children) as HTMLElement[]) {
-        if (child.hasAttribute("data-header-search")) continue;
-        if (child.offsetParent === null || child.offsetHeight === 0) continue;
-        filterFixed += child.offsetWidth;
-        filterGaps += GAP;
-      }
-
-      const reserved =
-        leftUsed + TAGS_SLOT + GAP + filterFixed + filterGaps;
-      if (!searchShown) {
-        setHeaderTagsFit(reserved <= row.clientWidth + 1);
-        return;
-      }
-
-      const availableForSearch = row.clientWidth - reserved;
-      setHeaderTagsFit(availableForSearch >= SEARCH_COMFORT);
-    };
-
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(row);
-    return () => ro.disconnect();
-  }, [
-    isHome,
-    onRecommendedTab,
-    showHomeTabs,
-    showTags,
-    search,
-    sort,
-    order,
-    selectMode,
-    tags,
-    headerTagsFit,
-  ]);
 
   const activeChannelUrl = useMemo(() => {
     if (!activeChannel) return null;
@@ -1218,7 +1119,6 @@ export default function Library() {
 
       <div ref={mainContentRef} className="min-w-0 flex-1">
         <div
-          ref={headerRowRef}
           className={`mb-5 flex min-w-0 items-center gap-x-2 gap-y-3 sm:gap-x-3 ${
             isHome ? "max-md:flex-wrap md:flex-nowrap" : "flex-wrap"
           }`}
@@ -1236,42 +1136,25 @@ export default function Library() {
               className="rounded-lg border border-accent bg-ink-950 px-3 py-1 text-2xl font-bold text-gray-100 outline-none"
             />
           ) : (
-            <>
-              <h1
-                className={`group ${
-                  isHome ? "hidden lg:flex" : "flex"
-                } shrink-0 items-center gap-2 text-2xl font-bold text-gray-100`}
-              >
-                {headline}
-                {activeChannel && (
-                  <button
-                    onClick={() => {
-                      setRenameValue(activeChannel);
-                      setRenaming(activeChannel);
-                    }}
-                    title="Rename channel"
-                    className="text-base text-gray-500 opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
-                  >
-                    ✎
-                  </button>
-                )}
-              </h1>
-              {isHome &&
-                !onRecommendedTab &&
-                headerTagsFit &&
-                tags.some(
-                  (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
-                ) && (
-                  <button
-                    type="button"
-                    data-header-tags
-                    onClick={() => setShowTags((s) => !s)}
-                    className="ui-panel ui-interactive hidden shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent sm:inline-flex lg:hidden"
-                  >
-                    {showTags ? "Hide tags" : "Tags"}
-                  </button>
-                )}
-            </>
+            <h1
+              className={`group ${
+                isHome ? "hidden lg:flex" : "flex"
+              } shrink-0 items-center gap-2 text-2xl font-bold text-gray-100`}
+            >
+              {headline}
+              {activeChannel && (
+                <button
+                  onClick={() => {
+                    setRenameValue(activeChannel);
+                    setRenaming(activeChannel);
+                  }}
+                  title="Rename channel"
+                  className="text-base text-gray-500 opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+                >
+                  ✎
+                </button>
+              )}
+            </h1>
           )}
 
           {showHomeTabs && (
@@ -1319,6 +1202,27 @@ export default function Library() {
                 Recommended
               </button>
             </LiquidNav>
+          )}
+          {isHome && hasTags && (
+            <button
+              type="button"
+              onClick={() => {
+                if (onRecommendedTab) {
+                  setHomeTab("library");
+                  setShowTags(true);
+                  return;
+                }
+                setShowTags((s) => !s);
+              }}
+              aria-pressed={showTags && !onRecommendedTab}
+              className={`ui-panel ui-interactive shrink-0 rounded-lg border px-2.5 py-1.5 text-sm transition-colors ${
+                showTags && !onRecommendedTab
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
+              }`}
+            >
+              {showTags && !onRecommendedTab ? "Hide tags" : "Tags"}
+            </button>
           )}
           {activeChannel && !activeTag && (
             <label className="inline-flex shrink-0 items-center gap-2 text-sm text-gray-300">
@@ -1466,43 +1370,23 @@ export default function Library() {
               </>
             ) : (
               <>
-                <input
+                <div
                   data-header-search
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      commitSearch();
-                    }
-                  }}
-                  placeholder="Search"
-                  className="ui-panel ui-interactive hidden min-w-0 max-w-64 flex-1 basis-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:px-4 md:block md:basis-40"
-                />
-                <div className="inline-flex shrink-0 items-center gap-1.5">
-                  <span className="hidden text-sm text-gray-300 sm:inline">
-                    YouTube
-                  </span>
-                  <HelpTip
-                    text={YOUTUBE_VIDEO_SEARCH_HEADER_TIP}
-                    placement="bottom"
-                  />
-                  <Toggle
-                    checked={youtubeVideoSearch}
-                    disabled={homeYoutubeSaving}
-                    onChange={() => {
-                      const next = !youtubeVideoSearch;
-                      setYoutubeVideoSearch(next);
-                      setHomeYoutubeSaving(true);
-                      void api
-                        .updateAppSettings({ youtube_video_search: next })
-                        .then((s) =>
-                          setYoutubeVideoSearch(s.youtube_video_search ?? next)
-                        )
-                        .catch(() => setYoutubeVideoSearch(!next))
-                        .finally(() => setHomeYoutubeSaving(false));
+                  className="relative hidden min-w-0 max-w-64 flex-1 basis-24 md:block md:basis-40"
+                >
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitSearch();
+                      }
                     }}
+                    placeholder="Search"
+                    className="ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 pr-8 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:pl-4"
                   />
+                  <YoutubeSearchChip />
                 </div>
                 <ThemedSelect
                   aria-label="Sort library"
@@ -1522,11 +1406,7 @@ export default function Library() {
                 >
                   {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
                 </button>
-                {!isHome &&
-                  !onRecommendedTab &&
-                  tags.some(
-                    (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
-                  ) && (
+                {!isHome && !onRecommendedTab && hasTags && (
                     <button
                       onClick={() => setShowTags((s) => !s)}
                       className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent lg:hidden"
@@ -1553,52 +1433,80 @@ export default function Library() {
           </div>
         </div>
 
-        {!onRecommendedTab && (
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          {activeTag && (
-            <button
-              onClick={() => setActiveTag(null)}
-              className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-ink-950"
-            >
-              #{activeTag} ✕
-            </button>
-          )}
-          {tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag) && (
-            <button
-              onClick={() => setShowTags((s) => !s)}
-              className="ui-panel ui-interactive hidden rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-gray-300 hover:border-accent hover:text-accent lg:inline-block"
-            >
-              {showTags ? "Hide tags" : "Show tags"}
-            </button>
-          )}
-          {showTags &&
-            visibleTags
-              .filter((t) => t.tag !== activeTag)
-              .map((t) => (
-                <button
-                  key={t.tag}
-                  onClick={() => setActiveTag(t.tag)}
-                  className="ui-panel ui-interactive rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
+        {!onRecommendedTab &&
+          (activeTag ||
+            hasTags ||
+            (onChannelPage && catalogProgress)) && (
+          <div>
+            {!isHome && (activeTag || hasTags || catalogProgress) && (
+              <div
+                className={`flex flex-wrap items-center gap-2 transition-[margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                  showTags && hasTags ? "mb-2" : "mb-5"
+                }`}
+              >
+                {activeTag && (
+                  <button
+                    onClick={() => setActiveTag(null)}
+                    className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-ink-950"
+                  >
+                    #{activeTag} ✕
+                  </button>
+                )}
+                {hasTags && (
+                  <button
+                    onClick={() => setShowTags((s) => !s)}
+                    className="ui-panel ui-interactive hidden rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-gray-300 hover:border-accent hover:text-accent lg:inline-block"
+                  >
+                    {showTags ? "Hide tags" : "Show tags"}
+                  </button>
+                )}
+                {onChannelPage && catalogProgress && (
+                  <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
+                    {formatCatalogProgress(catalogProgress)}
+                    <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
+                  </span>
+                )}
+              </div>
+            )}
+            {hasTags && (
+              <Collapse
+                open={showTags}
+                className="motion-reduce:transition-none"
+              >
+                <div
+                  className={`mb-5 flex flex-wrap items-center gap-2 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                    showTags
+                      ? "translate-y-0"
+                      : "pointer-events-none -translate-y-1"
+                  }`}
+                  aria-hidden={!showTags}
                 >
-                  #{t.tag}
-                  <span className="ml-1.5 text-gray-500">{t.count}</span>
-                </button>
-              ))}
-          {showTags && hiddenTagCount > 0 && (
-            <button
-              onClick={() => setShowAllTags(true)}
-              className="ui-panel ui-interactive rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-400 hover:border-accent hover:text-accent"
-            >
-              Show more ({hiddenTagCount})
-            </button>
-          )}
-          {onChannelPage && catalogProgress && (
-            <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
-              {formatCatalogProgress(catalogProgress)}
-              <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
-            </span>
-          )}
-        </div>
+                  {visibleTags
+                    .filter((t) => t.tag !== activeTag)
+                    .map((t) => (
+                      <button
+                        key={t.tag}
+                        onClick={() => setActiveTag(t.tag)}
+                        tabIndex={showTags ? 0 : -1}
+                        className="ui-panel ui-interactive rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
+                      >
+                        #{t.tag}
+                        <span className="ml-1.5 text-gray-500">{t.count}</span>
+                      </button>
+                    ))}
+                  {hiddenTagCount > 0 && (
+                    <button
+                      onClick={() => setShowAllTags(true)}
+                      tabIndex={showTags ? 0 : -1}
+                      className="ui-panel ui-interactive rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-400 hover:border-accent hover:text-accent"
+                    >
+                      Show more ({hiddenTagCount})
+                    </button>
+                  )}
+                </div>
+              </Collapse>
+            )}
+          </div>
         )}
 
         {onChannelPage && feedSort === "popular" && (

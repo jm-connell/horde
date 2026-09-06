@@ -8,7 +8,7 @@ The Library is Horde’s home screen: a video grid (or channel feed), channel si
 |--------|----------------|
 | **Channel sidebar** | Filter by channel; search local + remote channels |
 | **Main grid** | Your library videos (home) or a channel feed |
-| **Toolbar** | Search, YouTube toggle, sort, select mode, layout toggles |
+| **Toolbar** | Search (YT for live YouTube results), sort, select mode, layout toggles |
 | **Continue watching** | Row of in-progress videos (home only) |
 | **Home tabs** | **Library** / **Recommended** when AI is ready |
 
@@ -85,7 +85,7 @@ The left sidebar lists channels from your library. Sort order is controlled in [
 
 ## Search from the library
 
-The search box on the library **home** page searches your collection (and streamable catalog hits) as you type. A **YouTube** toggle next to the box (also in [Settings → Library](../settings/library.md)) adds live YouTube results after you pause typing, or immediately on Enter. Each result section can be collapsed; **Load more** at the bottom of **On YouTube** fetches another page. On a **channel page**, the header searches that channel’s indexed uploads and downloads instead. Full behavior is documented in [Search](search.md).
+The search box on the library **home** page searches your collection (and streamable catalog hits) as you type. **YT** inside the box (also in [Settings → Library](../settings/library.md)) turns live YouTube results on or off after you pause typing, or immediately on Enter. Each result section can be collapsed; **Load more** at the bottom of **On YouTube** fetches another page. On a **channel page**, the header searches that channel’s indexed uploads and downloads instead. Full behavior is documented in [Search](search.md).
 
 ## Related settings
 

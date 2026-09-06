@@ -10,6 +10,7 @@ import {
 } from "../utils/importQueue";
 import Collapse from "./Collapse";
 import LiquidNav from "./LiquidNav";
+import YoutubeSearchChip from "./YoutubeSearchChip";
 
 const NAV_LINKS = [
   { to: "/", label: "Home", end: true },
@@ -294,12 +295,10 @@ export default function TopNav() {
         ref={headerRef}
         data-horde="nav"
         data-nav-hidden={navHidden ? "true" : undefined}
-        className={`ui-panel z-30 border-b border-ink-700 bg-ink-950/90 pt-[env(safe-area-inset-top)] backdrop-blur motion-reduce:transition-none ${
+        className={`ui-panel fixed inset-x-0 top-0 z-30 border-b border-ink-700 bg-ink-950/90 pt-[env(safe-area-inset-top)] backdrop-blur motion-reduce:transition-none ${
           settings.translucentPanelLegibility ? "ui-panel-legible" : ""
         } ${
-          useHamburger
-            ? "fixed inset-x-0 top-0 transition-transform duration-200 ease-out"
-            : "relative sticky top-0"
+          useHamburger ? "transition-transform duration-200 ease-out" : ""
         } ${navHidden ? "pointer-events-none -translate-y-full" : "translate-y-0"}`}
       >
         <div
@@ -348,22 +347,25 @@ export default function TopNav() {
               }`}
             >
               {searchOpen && (
-                <input
-                  ref={searchInputRef}
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      commitSearch();
-                    }
-                  }}
-                  placeholder="Search"
-                  enterKeyHint="search"
-                  aria-label="Search library"
-                  className="ui-panel mr-1 min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
-                />
+                <div className="relative mr-1 min-w-0 flex-1">
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitSearch();
+                      }
+                    }}
+                    placeholder="Search"
+                    enterKeyHint="search"
+                    aria-label="Search library"
+                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                  />
+                  <YoutubeSearchChip />
+                </div>
               )}
               <button
                 type="button"
@@ -501,9 +503,7 @@ export default function TopNav() {
           </nav>
         </>
       )}
-      {useHamburger && (
-        <div aria-hidden className="shrink-0" style={{ height: navH }} />
-      )}
+      <div aria-hidden className="shrink-0" style={{ height: navH }} />
     </>
   );
 }

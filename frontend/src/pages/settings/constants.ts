@@ -44,7 +44,7 @@ export const DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP =
 export const YOUTUBE_VIDEO_SEARCH_TIP =
   "When on, Library home search can query YouTube for videos that are not already in your library or catalogs. Search text is sent to YouTube. Results load after you pause typing, or immediately if you press Enter. Separate from Direct YouTube search on channel pages.";
 export const YOUTUBE_VIDEO_SEARCH_HEADER_TIP =
-  "Searches YouTube after you pause typing, or immediately on Enter. Search text is sent to YouTube.";
+  "Toggle YouTube search results";
 export const METADATA_INTERVAL_TIP =
   "How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.";
 

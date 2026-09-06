@@ -77,7 +77,7 @@ When catalog indexing is enabled, Horde background-indexes **YouTube** channel u
 
 **Direct YouTube search** (YouTube-linked channel pages only) also queries YouTube’s in-channel search and adds matches that are not already on screen. Combined results follow the channel page **Recent / Popular** sort. Search text is sent to YouTube. Each channel can override this default (on / off / use Library default).
 
-**YouTube video search** is the Library home toggle: with it on, the home search box queries YouTube for videos that are not already in your library or catalogs after you pause typing (or immediately on Enter). The same setting is in Settings → Library. Search text is sent to YouTube. This is not the channel-page Direct YouTube search.
+**YouTube video search** is the **YT** control inside the Library home search box: when it is highlighted, the home search box queries YouTube for videos that are not already in your library or catalogs after you pause typing (or immediately on Enter). The same setting is in Settings → Library. Search text is sent to YouTube. This is not the channel-page Direct YouTube search.
 
 !!! tip "Large indexes"
     Values above **1000** can take a long time and may slow other YouTube work while indexing. System → Background activity has **Refresh catalogs** / **Full reindex**.

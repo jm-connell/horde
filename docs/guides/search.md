@@ -4,7 +4,7 @@ Horde uses a **single search box** on the Library home page, plus a separate **c
 
 ## Where to search
 
-Open the [Library](library.md) (`/`) and type in the search field in the toolbar (desktop) or the mobile search control. Library and catalog results update as you type (debounced). A compact **YouTube** toggle sits next to the home search box (and under [Settings → Library](../settings/library.md)). With it on, YouTube itself is queried after you pause typing (or immediately if you press Enter). Search text is sent to YouTube.
+Open the [Library](library.md) (`/`) and type in the search field in the toolbar (desktop) or the mobile search control. Library and catalog results update as you type (debounced). A compact **YT** control inside the home search box (and the same setting under [Settings → Library](../settings/library.md)) turns live YouTube results on or off. With it highlighted, YouTube itself is queried after you pause typing (or immediately if you press Enter). Search text is sent to YouTube.
 
 On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos**. When [Direct YouTube search](../settings/library.md) is on, it also queries YouTube for extra matches. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from home **YouTube video search**.
 

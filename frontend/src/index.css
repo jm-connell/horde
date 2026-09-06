@@ -804,10 +804,16 @@ html[data-hover-motion="glow"] .ui-panel-toggle:focus-visible .ui-panel-toggle-p
 /* Button press feedback (always on unless reduced motion).
    Panel headers use .ui-panel-toggle so only the label/arrow scale, not the
    full-width hover background. */
-html[data-button-press="on"] button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(.ui-player-chrome):active,
+html[data-button-press="on"] button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(.ui-player-chrome):not(.youtube-search-chip):active,
 html[data-button-press="on"] .ui-interactive:not(.ui-panel-toggle):active,
 html[data-button-press="on"] a.ui-card:active {
   transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+html[data-button-press="on"] button.youtube-search-chip:not(:disabled):active {
+  opacity: 0.75;
+  transform: none;
   transition-duration: 80ms;
 }
 

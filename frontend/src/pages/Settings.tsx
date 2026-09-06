@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import { useSearch } from "../context/SearchContext";
 import { useToast } from "../context/ToastContext";
 import {
   useSettings,
@@ -59,6 +60,7 @@ import type { AiPane, AiProcessAction, AiProviderPane, SettingsTab } from "./set
 export default function Settings() {
   const [settings, update] = useSettings();
   const { showToast } = useToast();
+  const { setYoutubeVideoSearch } = useSearch();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<SettingsTab>(() => {
     const fromUrl = resolveTabParam(
@@ -502,6 +504,9 @@ export default function Settings() {
       setAppSettings(updated);
       setCatalogMaxInput(String(updated.channel_catalog_max_videos ?? 1000));
       setSyncIntervalInput(String(updated.metadata_sync_interval_hours ?? 24));
+      if (patch.youtube_video_search != null) {
+        setYoutubeVideoSearch(updated.youtube_video_search ?? patch.youtube_video_search);
+      }
       refreshCatalogStatus();
     }
   };
