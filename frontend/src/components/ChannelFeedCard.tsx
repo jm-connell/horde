@@ -24,6 +24,40 @@ import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 
 const maxResCache = new Map<string, string>();
 
+function FeedChannelName({
+  name,
+  onChannelClick,
+  className,
+}: {
+  name: string;
+  onChannelClick?: () => void;
+  className: string;
+}) {
+  if (!onChannelClick) {
+    return <span className={className}>{name}</span>;
+  }
+  return (
+    <span
+      role="link"
+      tabIndex={0}
+      className={`${className} hover:text-accent`}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onChannelClick();
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        e.stopPropagation();
+        onChannelClick();
+      }}
+    >
+      {name}
+    </span>
+  );
+}
+
 function LikeRatioBadge({
   likes,
   dislikes,
@@ -75,6 +109,7 @@ function FeedMetaRow({
   downloading,
   stacked,
   onDownload,
+  onChannelClick,
 }: {
   channelName: string;
   entry: ChannelFeedEntry;
@@ -83,6 +118,7 @@ function FeedMetaRow({
   downloading?: boolean;
   stacked: boolean;
   onDownload: () => void;
+  onChannelClick?: () => void;
 }) {
   const dateLabel = formatPublishedAt(entry.published_at, entry.published_label);
   const secondary = (
@@ -141,9 +177,11 @@ function FeedMetaRow({
           {secondary}
         </div>
         <div className="flex min-w-0 items-center justify-between gap-2">
-          <span className="break-words text-xs leading-4 text-gray-400">
-            {channelName}
-          </span>
+          <FeedChannelName
+            name={channelName}
+            onChannelClick={onChannelClick}
+            className="break-words text-xs leading-4 text-gray-400"
+          />
           {actions}
         </div>
       </div>
@@ -153,9 +191,11 @@ function FeedMetaRow({
   return (
     <div className="flex min-w-0 items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-x-2">
-        <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-400">
-          {channelName}
-        </span>
+        <FeedChannelName
+          name={channelName}
+          onChannelClick={onChannelClick}
+          className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-400"
+        />
         {secondary}
       </div>
       {actions}
@@ -245,6 +285,7 @@ export default function ChannelFeedCard({
   downloading,
   skipRemotePreview = false,
   searchQuery = "",
+  onChannelClick,
 }: {
   entry: ChannelFeedEntry;
   channelName: string;
@@ -256,6 +297,7 @@ export default function ChannelFeedCard({
   /** Skip yt-dlp max-res probes (catalog feeds already feel fast without them). */
   skipRemotePreview?: boolean;
   searchQuery?: string;
+  onChannelClick?: (hit: { name: string; url: string | null }) => void;
 }) {
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
@@ -296,6 +338,13 @@ export default function ChannelFeedCard({
   );
   const matchTip = visibleMatchReasonTip(entry.match_reason, searchQuery);
   const titleText = entry.title || "Untitled";
+  const handleChannelClick = onChannelClick
+    ? () =>
+        onChannelClick({
+          name: channelName,
+          url: entry.channel_url ?? null,
+        })
+    : undefined;
   const likeLabel = formatLikeRatio(entry.like_count, entry.dislike_count);
   const hasSecondaryMeta = Boolean(
     dateLabel ||
@@ -380,7 +429,13 @@ export default function ChannelFeedCard({
               text={titleText}
               className="line-clamp-2 text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
             />
-            <span className="break-words text-xs text-gray-400">{channelName}</span>
+            <span className="break-words text-xs text-gray-400">
+              <FeedChannelName
+                name={channelName}
+                onChannelClick={handleChannelClick}
+                className="break-words text-xs leading-4 text-gray-400"
+              />
+            </span>
             <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
               {duration && <span>{duration}</span>}
               {duration && dateLabel && (
@@ -510,6 +565,7 @@ export default function ChannelFeedCard({
               downloading={downloading}
               stacked={stacked}
               onDownload={onDownload}
+              onChannelClick={handleChannelClick}
             />
           </div>
         </div>

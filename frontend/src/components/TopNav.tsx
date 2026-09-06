@@ -38,7 +38,7 @@ export default function TopNav() {
   const [navHidden, setNavHidden] = useState(false);
   const [navH, setNavH] = useState(56);
   const { activeCount } = useDownloads();
-  const { search, setSearch } = useSearch();
+  const { search, setSearch, commitSearch } = useSearch();
   const [settings] = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
@@ -353,6 +353,12 @@ export default function TopNav() {
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitSearch();
+                    }
+                  }}
                   placeholder="Search"
                   enterKeyHint="search"
                   aria-label="Search library"

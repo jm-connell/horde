@@ -41,6 +41,10 @@ export const DIRECT_YOUTUBE_SEARCH_TIP =
   "When on, channel search also queries YouTube for uploads that are not already in the results. Search text is sent to YouTube. YouTube-linked channels only; each channel can override this default.";
 export const DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP =
   "Also search YouTube for this channel. Search text is sent to YouTube. Overrides the Library default; Use default restores it.";
+export const YOUTUBE_VIDEO_SEARCH_TIP =
+  "When on, Library home search can query YouTube for videos that are not already in your library or catalogs. Search text is sent to YouTube. Results load after you pause typing, or immediately if you press Enter. Separate from Direct YouTube search on channel pages.";
+export const YOUTUBE_VIDEO_SEARCH_HEADER_TIP =
+  "Searches YouTube after you pause typing, or immediately on Enter. Search text is sent to YouTube.";
 export const METADATA_INTERVAL_TIP =
   "How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.";
 

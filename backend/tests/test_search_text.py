@@ -69,12 +69,18 @@ def test_query_token_groups_include_stems():
 
 
 def test_short_queries_skip_semantic():
-    from app.services.search_text import query_allows_semantic
+    from app.services.search_text import query_allows_semantic, query_looks_natural
 
     assert not query_allows_semantic("car")
     assert not query_allows_semantic("gpu")
-    assert query_allows_semantic("wifi")
-    assert query_allows_semantic("paint fix")
+    assert not query_allows_semantic("wifi")
+    assert not query_allows_semantic("hyprland")
+    assert not query_allows_semantic("paint fix")
+    assert not query_allows_semantic("hyprland install guide")
+    assert not query_looks_natural("hyprland install guide")
+    assert query_looks_natural("that episode about house wifi")
+    assert query_allows_semantic("that episode about house wifi")
+    assert query_allows_semantic("something cozy to fall asleep to")
 
 
 def test_keyword_rank_prefers_phrase_in_title():
@@ -109,6 +115,20 @@ def test_explain_keyword_prefers_title_then_description():
     assert desc_hit is not None
     assert desc_hit["source"] == "description"
     assert "wifi" in (desc_hit["snippet"] or "").lower()
+
+
+def test_explain_keyword_ignores_partial_token_overlap():
+    """A lone common word must not claim a multi-word query matched."""
+    hit = explain_match(
+        "hyprland install guide",
+        title="100 Thieves office tour",
+        description="A walk through the new office and install of the lights.",
+    )
+    assert hit is None
+
+
+def test_snippet_around_empty_when_no_token():
+    assert snippet_around("No overlapping terms in this blurb.", "hyprland") == ""
 
 
 def test_explain_captions_and_related():

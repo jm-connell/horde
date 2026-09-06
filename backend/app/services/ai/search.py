@@ -95,7 +95,7 @@ def hybrid_search(
         return keyword, chunks
 
     semantic_hits = embeddings.similar_video_hits(
-        session, query_vec, limit=80, min_score=0.22
+        session, query_vec, limit=80, min_score=0.35
     )
     if not semantic_hits:
         return keyword, chunks

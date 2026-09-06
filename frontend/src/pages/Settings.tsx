@@ -493,6 +493,7 @@ export default function Settings() {
         | "channel_catalog_max_videos"
         | "metadata_sync_interval_hours"
         | "direct_youtube_search"
+        | "youtube_video_search"
       >
     >
   ) => {

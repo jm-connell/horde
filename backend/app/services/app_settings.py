@@ -130,6 +130,7 @@ DEFAULTS: dict[str, Any] = {
     "channel_catalog_enabled": True,
     "channel_catalog_max_videos": 1000,
     "direct_youtube_search": True,
+    "youtube_video_search": True,
     "download_queue_paused": False,
     "ui": {},
     "ai": dict(AI_DEFAULTS),
@@ -150,6 +151,11 @@ def clamp_catalog_max_videos(value: Any) -> int:
 
 def direct_youtube_search_system(data: dict[str, Any] | None = None) -> bool:
     raw = (data if data is not None else load()).get("direct_youtube_search", True)
+    return bool(raw)
+
+
+def youtube_video_search_system(data: dict[str, Any] | None = None) -> bool:
+    raw = (data if data is not None else load()).get("youtube_video_search", True)
     return bool(raw)
 
 

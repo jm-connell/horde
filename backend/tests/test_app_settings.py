@@ -55,6 +55,12 @@ def test_direct_youtube_search_effective():
     assert settings_svc.direct_youtube_search_effective(1, False) is True
 
 
+def test_youtube_video_search_system(tmp_dirs):
+    assert settings_svc.youtube_video_search_system() is True
+    settings_svc.save({"youtube_video_search": False})
+    assert settings_svc.youtube_video_search_system() is False
+
+
 def test_normalize_helpers():
     assert settings_svc.normalize_summary_length("long") == "long"
     assert settings_svc.normalize_summary_length("nope") == "short"

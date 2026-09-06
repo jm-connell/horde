@@ -26,7 +26,10 @@ from ..schemas import (
 from ..services import channel_catalog, downloader, feed_meta_cache, library
 from ..services import app_settings as app_settings_svc
 from ..services.ytdlp_common import is_members_only_entry
-from ..services.ytdlp_extract import search_youtube_channel_videos
+from ..services.ytdlp_extract import (
+    search_youtube_channel_videos,
+    search_youtube_videos,
+)
 from .video_serialize import to_read
 
 router = APIRouter(prefix="/api", tags=["channels"])
@@ -234,6 +237,7 @@ def _feed_entries_from_raw(
                 published_at=published_at,
                 published_label=published_label,
                 channel=raw.get("channel") or channel_name,
+                channel_url=raw.get("channel_url") or channel_url,
                 in_library=in_library,
                 video_id=video_id,
                 library_height_px=library_height,
@@ -328,6 +332,39 @@ def channel_youtube_search(
         has_more=False,
         from_catalog=False,
         direct_youtube_search_effective=True,
+    )
+
+
+@router.get("/youtube/search", response_model=ChannelFeedPage)
+def youtube_video_search(
+    q: str = Query(..., min_length=2),
+    limit: int = Query(20, ge=1, le=40),
+    offset: int = Query(0, ge=0, le=200),
+    session: Session = Depends(get_session),
+):
+    """Site-wide YouTube video search for Library home."""
+    effective = app_settings_svc.youtube_video_search_system()
+    empty = ChannelFeedPage(
+        entries=[],
+        has_more=False,
+        from_catalog=False,
+        youtube_video_search_effective=effective,
+    )
+    if not effective:
+        return empty
+    data = search_youtube_videos(q, limit=limit, offset=offset)
+    raw_entries = data.get("entries") or []
+    entries = _feed_entries_from_raw(
+        session,
+        raw_entries,
+        channel_name=None,
+        global_search=True,
+    )
+    return ChannelFeedPage(
+        entries=entries,
+        has_more=bool(data.get("has_more")),
+        from_catalog=False,
+        youtube_video_search_effective=True,
     )
 
 

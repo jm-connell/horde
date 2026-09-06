@@ -105,8 +105,23 @@ def token_variants(token: str) -> list[str]:
     return sorted(forms, key=len, reverse=True)
 
 
+def query_looks_natural(query: str) -> bool:
+    """True for sentence-like queries (stopwords still in the raw string).
+
+    Keyword lookups such as ``hyprland`` or ``hyprland install guide`` stay
+    keyword-only so embeddings cannot rank unrelated tech videos.
+    """
+    raw = _TOKEN_RE.findall((query or "").lower())
+    content = tokenize_query(query)
+    if len(content) < 2:
+        return False
+    return any(t in STOPWORDS for t in raw)
+
+
 def query_allows_semantic(query: str) -> bool:
-    """Skip embeddings for tiny queries like ``car``; they rank too loosely."""
+    """Skip embeddings for keyword queries and tiny tokens like ``car``."""
+    if not query_looks_natural(query):
+        return False
     tokens = tokenize_query(query)
     if not tokens:
         return False
@@ -240,9 +255,7 @@ def snippet_around(
             best_i = match.start()
             best_n = match.end() - match.start()
     if best_i < 0:
-        if len(compact) <= max_chars:
-            return compact
-        return compact[: max_chars - 1].rstrip() + "…"
+        return ""
     start = max(0, best_i - radius)
     end = min(len(compact), best_i + best_n + radius)
     snippet = compact[start:end].strip()
@@ -281,19 +294,17 @@ def explain_keyword_match(
         ("tags", _field_text(tags)),
         ("notes", _field_text(notes)),
     ]
-    best_source = ""
-    best_hits = 0
-    best_text = ""
     for source, text in candidates:
-        hits = sum(1 for g in groups if _group_in_hay(text, g))
-        if hits > best_hits:
-            best_hits = hits
-            best_source = source
-            best_text = text
-    if best_hits <= 0:
-        return None
-    snippet = snippet_around(best_text, query)
-    return {"source": best_source, "snippet": snippet or None}
+        if query_in_text(query, text):
+            snippet = snippet_around(text, query)
+            return {"source": source, "snippet": snippet or None}
+    # Cross-field AND (SQL) — explain from the field that holds the longest token.
+    longest = max(groups, key=lambda g: max((len(v) for v in g), default=0))
+    for source, text in candidates:
+        if _group_in_hay(text, longest):
+            snippet = snippet_around(text, query)
+            return {"source": source, "snippet": snippet or None}
+    return None
 
 
 def explain_match(

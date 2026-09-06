@@ -185,6 +185,10 @@ def test_short_query_skips_semantic_even_when_enabled(session, monkeypatch):
     )
     search_catalog(session, LTT, "car", semantic=True)
     assert calls["n"] == 0
+    search_catalog(session, LTT, "hyprland", semantic=True)
+    assert calls["n"] == 0
+    search_catalog(session, LTT, "hyprland install guide", semantic=True)
+    assert calls["n"] == 0
 
 
 def test_semantic_hits_are_scoped_to_catalog(session, monkeypatch):

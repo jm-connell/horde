@@ -113,6 +113,7 @@ export interface ChannelFeedEntry {
   published_label?: string | null;
   /** Present on global catalog search results. */
   channel?: string | null;
+  channel_url?: string | null;
   in_library: boolean;
   video_id: number | null;
   library_height_px: number | null;
@@ -132,6 +133,7 @@ export interface ChannelFeedPage {
   catalog_complete?: boolean;
   catalog_status?: string | null;
   direct_youtube_search_effective?: boolean | null;
+  youtube_video_search_effective?: boolean | null;
 }
 
 export interface ChannelCatalogStatusItem {
@@ -352,6 +354,7 @@ export interface AppSettings {
   channel_catalog_enabled: boolean;
   channel_catalog_max_videos: number;
   direct_youtube_search: boolean;
+  youtube_video_search: boolean;
   ui: Record<string, unknown>;
   ai: AiSettings;
 }

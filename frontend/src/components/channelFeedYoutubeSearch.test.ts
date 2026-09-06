@@ -3,6 +3,7 @@ import type { ChannelFeedEntry } from "../types";
 import {
   appendUnseenFeedEntries,
   applyChannelFeedSort,
+  excludeKnownYoutubeIds,
   isYoutubeChannelUrl,
   mergeYoutubeFeedEntries,
   sortFeedEntries,
@@ -144,5 +145,14 @@ describe("applyChannelFeedSort", () => {
     expect(
       applyChannelFeedSort(list, "recent", "asc", "browse").map((e) => e.id)
     ).toEqual(["second", "first"]);
+  });
+});
+
+describe("excludeKnownYoutubeIds", () => {
+  it("drops ids already in library or catalog results", () => {
+    const incoming = [entry("keep"), entry("dup"), entry("also")];
+    expect(excludeKnownYoutubeIds(incoming, ["dup", null, ""]).map((e) => e.id)).toEqual(
+      ["keep", "also"]
+    );
   });
 });

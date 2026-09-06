@@ -5,6 +5,7 @@ import {
   CATALOG_MAX_TIP,
   CHANNEL_SORT_OPTIONS,
   DIRECT_YOUTUBE_SEARCH_TIP,
+  YOUTUBE_VIDEO_SEARCH_TIP,
   INPUT_COMPACT,
   METADATA_INTERVAL_TIP,
   PANEL_BTN,
@@ -401,7 +402,8 @@ export default function LibraryTab() {
             "refresh interval",
             "youtube only",
             "youtube",
-            "direct youtube search"
+            "direct youtube search",
+            "youtube video search"
           )
         }
       >
@@ -437,6 +439,25 @@ export default function LibraryTab() {
                     void saveCatalogSettings({
                       direct_youtube_search: !(
                         appSettings?.direct_youtube_search ?? true
+                      ),
+                    })
+                  }
+                />
+              </div>
+            }
+          />
+          <SettingRow
+            title="YouTube video search"
+            description="Library home search can query YouTube for videos not in your library or catalogs. Search text is sent to YouTube. Results load after you pause typing, or immediately if you press Enter."
+            control={
+              <div className="flex items-center gap-2">
+                <HelpTip text={YOUTUBE_VIDEO_SEARCH_TIP} />
+                <Toggle
+                  checked={appSettings?.youtube_video_search ?? true}
+                  onChange={() =>
+                    void saveCatalogSettings({
+                      youtube_video_search: !(
+                        appSettings?.youtube_video_search ?? true
                       ),
                     })
                   }

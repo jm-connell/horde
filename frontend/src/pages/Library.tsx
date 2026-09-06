@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
@@ -44,9 +44,20 @@ import {
   formatCatalogProgress,
   showChannelIndexButton,
   type CatalogProgress,
+  YOUTUBE_SEARCH_LOADING_LABEL,
+  YOUTUBE_SEARCH_LOAD_MORE_LABEL,
+  YOUTUBE_SEARCH_PAGE_SIZE,
 } from "./libraryCatalogProgress";
-import { DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP } from "./settings/constants";
-import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
+import {
+  DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP,
+  YOUTUBE_VIDEO_SEARCH_HEADER_TIP,
+} from "./settings/constants";
+import {
+  appendUnseenFeedEntries,
+  excludeKnownYoutubeIds,
+  isYoutubeChannelUrl,
+} from "../components/channelFeedYoutubeSearch";
+import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import {
   loadChannelUrlMap,
   loadFeedLayout,
@@ -75,35 +86,60 @@ function SearchResultSection({
   count,
   emptyText,
   loading = false,
+  footer,
   children,
 }: {
   title: string;
   count: number;
   emptyText: string;
   loading?: boolean;
+  footer?: ReactNode;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(true);
+  const bodyId = useId();
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-3">
         <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
-        <span className="shrink-0 text-xs font-medium text-gray-400">
-          {title}
-          {!loading && (
-            <span className="ml-1.5 text-gray-500">({count})</span>
-          )}
-        </span>
+        <button
+          type="button"
+          className="ui-interactive inline-flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-gray-400"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span
+            className={`inline-block text-[0.65rem] leading-none text-gray-500 transition-transform ${
+              open ? "" : "-rotate-90"
+            }`}
+            aria-hidden
+          >
+            ▼
+          </span>
+          <span>
+            {title}
+            {!loading && (
+              <span className="ml-1.5 text-gray-500">({count})</span>
+            )}
+          </span>
+        </button>
         <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
       </div>
-      {loading ? (
-        <LoadingIndicator className="py-8" />
-      ) : count > 0 ? (
-        children
-      ) : (
-        <p className="py-6 text-center text-sm text-gray-500" role="status">
-          {emptyText}
-        </p>
-      )}
+      <div id={bodyId} hidden={!open} className="space-y-4">
+        {loading ? (
+          <LoadingIndicator className="py-8" />
+        ) : count > 0 ? (
+          <>
+            {children}
+            {footer}
+          </>
+        ) : (
+          <p className="py-6 text-center text-sm text-gray-500" role="status">
+            {emptyText}
+          </p>
+        )}
+      </div>
     </section>
   );
 }
@@ -116,6 +152,14 @@ export default function Library() {
   const [streamDownloading, setStreamDownloading] = useState<Set<string>>(
     () => new Set()
   );
+  const [youtubeResults, setYoutubeResults] = useState<ChannelFeedEntry[]>([]);
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [youtubeHasMore, setYoutubeHasMore] = useState(false);
+  const [youtubeLoadingMore, setYoutubeLoadingMore] = useState(false);
+  const youtubeMoreAcRef = useRef<AbortController | null>(null);
+  const youtubeFetchOffsetRef = useRef(0);
+  const [youtubeVideoSearch, setYoutubeVideoSearch] = useState(true);
+  const [homeYoutubeSaving, setHomeYoutubeSaving] = useState(false);
   const [continueWatching, setContinueWatching] = useState<Video[]>([]);
   const [channels, setChannels] = useState<ChannelStat[]>([]);
   const [tags, setTags] = useState<TagStat[]>([]);
@@ -141,7 +185,7 @@ export default function Library() {
   const [metadataSyncing, setMetadataSyncing] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const { search, setSearch } = useSearch();
+  const { search, setSearch, committedQuery, commitSearch } = useSearch();
   const [activeChannel, setActiveChannel] = useState<string | null>(
     searchParams.get("channel")
   );
@@ -312,10 +356,21 @@ export default function Library() {
   }, [activeChannel]);
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [youtubeQuery, setYoutubeQuery] = useState("");
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(id);
   }, [search]);
+
+  useEffect(() => {
+    const trimmed = search.trim();
+    if (committedQuery === trimmed) {
+      setYoutubeQuery(trimmed);
+      return;
+    }
+    const id = setTimeout(() => setYoutubeQuery(trimmed), 800);
+    return () => clearTimeout(id);
+  }, [search, committedQuery]);
 
   useEffect(() => {
     reloadChannels();
@@ -407,6 +462,121 @@ export default function Library() {
     };
   }, [debouncedSearch, activeChannel, refreshKey]);
 
+  useEffect(() => {
+    let active = true;
+    api
+      .getAppSettings()
+      .then((s) => {
+        if (active) setYoutubeVideoSearch(s.youtube_video_search ?? true);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    youtubeMoreAcRef.current?.abort();
+    youtubeMoreAcRef.current = null;
+    const q = youtubeQuery.trim();
+    const live =
+      youtubeVideoSearch &&
+      !activeChannel &&
+      q.length >= 2 &&
+      q === search.trim();
+    if (!live) {
+      setYoutubeResults([]);
+      setYoutubeHasMore(false);
+      setYoutubeLoading(false);
+      setYoutubeLoadingMore(false);
+      youtubeFetchOffsetRef.current = 0;
+      return;
+    }
+    const ac = new AbortController();
+    setYoutubeResults([]);
+    setYoutubeHasMore(false);
+    setYoutubeLoading(true);
+    setYoutubeLoadingMore(false);
+    youtubeFetchOffsetRef.current = 0;
+    api
+      .searchYoutubeVideos({
+        q,
+        limit: YOUTUBE_SEARCH_PAGE_SIZE,
+        signal: ac.signal,
+      })
+      .then((page) => {
+        if (page.youtube_video_search_effective === false) {
+          setYoutubeVideoSearch(false);
+          setYoutubeResults([]);
+          setYoutubeHasMore(false);
+          return;
+        }
+        setYoutubeResults(page.entries ?? []);
+        setYoutubeHasMore(Boolean(page.has_more));
+        youtubeFetchOffsetRef.current = YOUTUBE_SEARCH_PAGE_SIZE;
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setYoutubeResults([]);
+        setYoutubeHasMore(false);
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setYoutubeLoading(false);
+      });
+    return () => {
+      ac.abort();
+      youtubeMoreAcRef.current?.abort();
+    };
+  }, [youtubeQuery, search, youtubeVideoSearch, activeChannel, refreshKey]);
+
+  const loadMoreYoutube = useCallback(() => {
+    const q = youtubeQuery.trim();
+    if (
+      !youtubeVideoSearch ||
+      activeChannel ||
+      q.length < 2 ||
+      q !== search.trim() ||
+      youtubeLoading ||
+      youtubeLoadingMore ||
+      !youtubeHasMore
+    ) {
+      return;
+    }
+    youtubeMoreAcRef.current?.abort();
+    const ac = new AbortController();
+    youtubeMoreAcRef.current = ac;
+    const offset = youtubeFetchOffsetRef.current;
+    setYoutubeLoadingMore(true);
+    api
+      .searchYoutubeVideos({
+        q,
+        limit: YOUTUBE_SEARCH_PAGE_SIZE,
+        offset,
+        signal: ac.signal,
+      })
+      .then((page) => {
+        const incoming = page.entries ?? [];
+        setYoutubeResults((prev) => appendUnseenFeedEntries(prev, incoming));
+        setYoutubeHasMore(Boolean(page.has_more));
+        youtubeFetchOffsetRef.current = offset + YOUTUBE_SEARCH_PAGE_SIZE;
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setYoutubeHasMore(false);
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setYoutubeLoadingMore(false);
+      });
+  }, [
+    youtubeQuery,
+    search,
+    youtubeVideoSearch,
+    activeChannel,
+    youtubeLoading,
+    youtubeLoadingMore,
+    youtubeHasMore,
+  ]);
+
   const visibleContinueWatching = useMemo(
     () => continueWatching.filter((v) => !isDismissed(v.id)),
     [continueWatching, isDismissed]
@@ -415,6 +585,16 @@ export default function Library() {
   const selectableVideos = useMemo(
     () => (debouncedSearch ? [...videos, ...otherVideos] : videos),
     [debouncedSearch, videos, otherVideos]
+  );
+
+  const youtubeVisible = useMemo(
+    () =>
+      excludeKnownYoutubeIds(youtubeResults, [
+        ...streamResults.map((e) => e.id),
+        ...videos.map((v) => extractYouTubeId(v.source_url, v.file_path)),
+        ...otherVideos.map((v) => extractYouTubeId(v.source_url, v.file_path)),
+      ]),
+    [youtubeResults, streamResults, videos, otherVideos]
   );
 
   const visibleTags = useMemo(() => {
@@ -769,6 +949,41 @@ export default function Library() {
     setSearch("");
     update({ showUndownloadedOnChannel: true });
     if (narrowViewport) closeSidebar();
+  };
+
+  const openFeedChannel = (hit: { name: string; url: string | null }) => {
+    if (hit.url) {
+      selectRemoteChannel({
+        name: hit.name,
+        url: hit.url,
+        subscriber_count: null,
+      });
+      return;
+    }
+    selectChannel(hit.name);
+  };
+
+  const queueRemoteDownload = (entry: ChannelFeedEntry) => {
+    if (!entry.url || streamDownloading.has(entry.url)) return;
+    const channelName = entry.channel || "Unknown channel";
+    setStreamDownloading((prev) => new Set(prev).add(entry.url));
+    void submitDownload(entry.url, "1080p", {
+      title: entry.title ?? undefined,
+      channel: channelName,
+    })
+      .then(() => showToast("Download queued"))
+      .catch((err: unknown) =>
+        showToast(
+          err instanceof Error ? err.message : "Could not start download"
+        )
+      )
+      .finally(() => {
+        setStreamDownloading((prev) => {
+          const next = new Set(prev);
+          next.delete(entry.url);
+          return next;
+        });
+      });
   };
 
   const toggleSelect = (id: number, index: number, shiftHeld: boolean) => {
@@ -1255,9 +1470,40 @@ export default function Library() {
                   data-header-search
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitSearch();
+                    }
+                  }}
                   placeholder="Search"
                   className="ui-panel ui-interactive hidden min-w-0 max-w-64 flex-1 basis-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:px-4 md:block md:basis-40"
                 />
+                <div className="inline-flex shrink-0 items-center gap-1.5">
+                  <span className="hidden text-sm text-gray-300 sm:inline">
+                    YouTube
+                  </span>
+                  <HelpTip
+                    text={YOUTUBE_VIDEO_SEARCH_HEADER_TIP}
+                    placement="bottom"
+                  />
+                  <Toggle
+                    checked={youtubeVideoSearch}
+                    disabled={homeYoutubeSaving}
+                    onChange={() => {
+                      const next = !youtubeVideoSearch;
+                      setYoutubeVideoSearch(next);
+                      setHomeYoutubeSaving(true);
+                      void api
+                        .updateAppSettings({ youtube_video_search: next })
+                        .then((s) =>
+                          setYoutubeVideoSearch(s.youtube_video_search ?? next)
+                        )
+                        .catch(() => setYoutubeVideoSearch(!next))
+                        .finally(() => setHomeYoutubeSaving(false));
+                    }}
+                  />
+                </div>
                 <ThemedSelect
                   aria-label="Sort library"
                   value={sort}
@@ -1449,41 +1695,65 @@ export default function Library() {
                       layout="grid"
                       inLibrary={false}
                       searchQuery={debouncedSearch}
-                      onDownload={() => {
-                        if (!entry.url || streamDownloading.has(entry.url))
-                          return;
-                        setStreamDownloading((prev) =>
-                          new Set(prev).add(entry.url)
-                        );
-                        void submitDownload(entry.url, "1080p", {
-                          title: entry.title ?? undefined,
-                          channel: channelName,
-                        })
-                          .then(() => showToast("Download queued"))
-                          .catch((err: unknown) =>
-                            showToast(
-                              err instanceof Error
-                                ? err.message
-                                : "Could not start download"
-                            )
-                          )
-                          .finally(() => {
-                            setStreamDownloading((prev) => {
-                              const next = new Set(prev);
-                              next.delete(entry.url);
-                              return next;
-                            });
-                          });
-                      }}
+                      onDownload={() => queueRemoteDownload(entry)}
                       downloading={streamDownloading.has(entry.url)}
                       skipRemotePreview
+                      onChannelClick={openFeedChannel}
                     />
                   );
                 })}
               </div>
             </SearchResultSection>
+            {youtubeLoading && youtubeVisible.length === 0 && (
+              <p className="text-center text-xs text-gray-600" role="status">
+                {YOUTUBE_SEARCH_LOADING_LABEL}
+              </p>
+            )}
+            {youtubeVisible.length > 0 && (
+              <SearchResultSection
+                title="On YouTube"
+                count={youtubeVisible.length}
+                emptyText=""
+                footer={
+                  youtubeHasMore ? (
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={youtubeLoadingMore}
+                        onClick={() => loadMoreYoutube()}
+                      >
+                        {youtubeLoadingMore
+                          ? "Loading…"
+                          : YOUTUBE_SEARCH_LOAD_MORE_LABEL}
+                      </button>
+                    </div>
+                  ) : null
+                }
+              >
+                <div className={videoGridClassName}>
+                  {youtubeVisible.map((entry) => {
+                    const channelName = entry.channel || "Unknown channel";
+                    return (
+                      <ChannelFeedCard
+                        key={entry.id || entry.url}
+                        entry={entry}
+                        channelName={channelName}
+                        layout="grid"
+                        inLibrary={false}
+                        searchQuery={youtubeQuery || debouncedSearch}
+                        onDownload={() => queueRemoteDownload(entry)}
+                        downloading={streamDownloading.has(entry.url)}
+                        skipRemotePreview
+                        onChannelClick={openFeedChannel}
+                      />
+                    );
+                  })}
+                </div>
+              </SearchResultSection>
+            )}
             <SearchResultSection
-              title="Other videos"
+              title="Other videos in library"
               count={otherVideos.length}
               emptyText="No other videos in library"
             >

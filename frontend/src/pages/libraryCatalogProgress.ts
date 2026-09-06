@@ -33,12 +33,23 @@ export function feedSearchStatusLabel(phase: FeedSearchPhase): string | null {
 }
 
 export const YOUTUBE_SEARCH_LOADING_LABEL = "Loading YouTube results…";
+export const YOUTUBE_SEARCH_PAGE_SIZE = 20;
+export const YOUTUBE_SEARCH_LOAD_MORE_LABEL = "Load more";
 
 const MATCH_SOURCE_LABEL: Record<string, string> = {
   description: "description",
   tags: "tags",
   notes: "notes",
 };
+
+export function matchedQueryLabel(query: string, snippet?: string | null): string {
+  const tokens = (query || "").toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const hay = (snippet || "").toLowerCase();
+  const hits = tokens.filter((t) => t.length > 1 && hay.includes(t));
+  if (hits.length) return hits.join(" ");
+  if (snippet?.trim()) return "";
+  return query.trim();
+}
 
 export function formatMatchReasonTip(
   reason: {
@@ -59,7 +70,7 @@ export function formatMatchReasonTip(
     return "Found on YouTube (not in the local catalog).";
   }
   const field = MATCH_SOURCE_LABEL[reason.source] ?? reason.source;
-  const term = query.trim();
+  const term = matchedQueryLabel(query, snippet);
   const head = term
     ? `Matched “${term}” in the ${field}`
     : `Matched in the ${field}`;

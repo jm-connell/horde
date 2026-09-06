@@ -8,6 +8,8 @@ import {
   showChannelIndexButton,
   visibleMatchReasonTip,
   YOUTUBE_SEARCH_LOADING_LABEL,
+  YOUTUBE_SEARCH_LOAD_MORE_LABEL,
+  YOUTUBE_SEARCH_PAGE_SIZE,
   type CatalogProgress,
 } from "./libraryCatalogProgress";
 
@@ -114,6 +116,8 @@ describe("feed search status copy", () => {
     expect(feedSearchStatusLabel("related")).toBe("Finding related matches…");
     expect(feedSearchStatusLabel("done")).toBeNull();
     expect(YOUTUBE_SEARCH_LOADING_LABEL).toBe("Loading YouTube results…");
+    expect(YOUTUBE_SEARCH_LOAD_MORE_LABEL).toBe("Load more");
+    expect(YOUTUBE_SEARCH_PAGE_SIZE).toBe(20);
     expect(formatSearchMatchCount(0)).toBe("0 matches");
     expect(formatSearchMatchCount(1)).toBe("1 match");
     expect(formatSearchMatchCount(12)).toBe("12 matches");
@@ -128,6 +132,22 @@ describe("formatMatchReasonTip", () => {
         "wifi"
       )
     ).toBe('Matched “wifi” in the description: “wifi hotspot in the cab”');
+    expect(
+      formatMatchReasonTip(
+        { source: "description", snippet: "install of the lights" },
+        "hyprland install guide"
+      )
+    ).toBe(
+      'Matched “install” in the description: “install of the lights”'
+    );
+    expect(
+      formatMatchReasonTip(
+        { source: "description", snippet: "A walk through the new office" },
+        "hyprland install guide"
+      )
+    ).toBe(
+      "Matched in the description: “A walk through the new office”"
+    );
     expect(
       formatMatchReasonTip(
         { source: "captions", snippet: "put a wifi hotspot in" },

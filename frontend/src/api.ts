@@ -326,6 +326,22 @@ export const api = {
     );
   },
 
+  searchYoutubeVideos(params: {
+    q: string;
+    limit?: number;
+    offset?: number;
+    signal?: AbortSignal;
+  }): Promise<ChannelFeedPage> {
+    const qs = new URLSearchParams();
+    qs.set("q", params.q);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    return request<ChannelFeedPage>(
+      `/api/youtube/search?${qs.toString()}`,
+      params.signal ? { signal: params.signal } : undefined
+    );
+  },
+
   updateChannelYoutubeSearch(params: {
     channel?: string;
     url?: string;

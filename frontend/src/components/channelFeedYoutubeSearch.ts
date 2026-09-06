@@ -24,6 +24,24 @@ function entryKey(entry: ChannelFeedEntry): string | null {
   return null;
 }
 
+/** Entries from `incoming` whose YouTube id is not in `knownIds`. */
+export function excludeKnownYoutubeIds(
+  incoming: ChannelFeedEntry[],
+  knownIds: Iterable<string | null | undefined>
+): ChannelFeedEntry[] {
+  const seen = new Set<string>();
+  for (const id of knownIds) {
+    if (id) seen.add(id);
+  }
+  const extras: ChannelFeedEntry[] = [];
+  for (const entry of incoming) {
+    if (!entry.id || seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    extras.push(entry);
+  }
+  return extras;
+}
+
 /** Entries from `incoming` whose id/url is not already in `existing`. */
 export function unseenFeedEntries(
   existing: ChannelFeedEntry[],

@@ -221,6 +221,7 @@ class ChannelFeedEntry(BaseModel):
     published_label: Optional[str] = None
     # Channel display name (set for global catalog search).
     channel: Optional[str] = None
+    channel_url: Optional[str] = None
     in_library: bool = False
     video_id: Optional[int] = None
     library_height_px: Optional[int] = None
@@ -240,6 +241,7 @@ class ChannelFeedPage(BaseModel):
     catalog_complete: bool = False
     catalog_status: Optional[str] = None
     direct_youtube_search_effective: Optional[bool] = None
+    youtube_video_search_effective: Optional[bool] = None
 
 
 class ChannelCatalogStatusItem(BaseModel):

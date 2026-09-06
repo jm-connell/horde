@@ -508,6 +508,12 @@ def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
     from .feed_meta_cache import published_meta_from_entry
 
     meta = published_meta_from_entry(entry)
+    channel = entry.get("uploader") or entry.get("channel")
+    channel_url = entry.get("uploader_url") or entry.get("channel_url")
+    if channel_url:
+        channel_url = str(channel_url).split("/videos")[0].rstrip("/")
+        if not str(channel_url).startswith("http"):
+            channel_url = None
     return {
         "id": vid,
         "url": entry_url,
@@ -518,6 +524,8 @@ def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
         "published_at": meta.iso,
         "published_label": meta.label,
         "availability": entry.get("availability"),
+        "channel": str(channel) if channel else None,
+        "channel_url": str(channel_url) if channel_url else None,
     }
 
 
@@ -690,6 +698,11 @@ def search_youtube_channel_videos(
         return []
 
     channel_name = info.get("uploader") or info.get("channel")
+    playlist_channel_url = info.get("uploader_url") or info.get("channel_url")
+    if playlist_channel_url:
+        playlist_channel_url = str(playlist_channel_url).split("/videos")[0].rstrip(
+            "/"
+        )
     entries: list[dict[str, Any]] = []
     for raw in info.get("entries") or []:
         if not isinstance(raw, dict) or is_youtube_short_entry(raw):
@@ -697,12 +710,93 @@ def search_youtube_channel_videos(
         mapped = _map_flat_video_entry(raw)
         if mapped is None:
             continue
-        mapped["channel"] = channel_name
+        mapped["channel"] = mapped.get("channel") or channel_name
+        if not mapped.get("channel_url") and playlist_channel_url:
+            mapped["channel_url"] = playlist_channel_url
         mapped["match_reason"] = {"source": "youtube", "snippet": None}
         entries.append(mapped)
         if len(entries) >= limit:
             break
     return entries
+
+
+_YT_SEARCH_FETCH_MAX = 200
+_YT_SEARCH_FETCH_STEPS = (80, 160, 200)
+_YT_SEARCH_PAGE_MAX = 40
+
+
+def youtube_search_fetch_n(*, offset: int = 0, limit: int = 20) -> int:
+    """ytsearch size so ``offset + limit`` can be sliced from one extract."""
+    end = max(0, int(offset or 0)) + max(1, min(int(limit or 20), _YT_SEARCH_PAGE_MAX))
+    for n in _YT_SEARCH_FETCH_STEPS:
+        if end <= n:
+            return n
+    return _YT_SEARCH_FETCH_MAX
+
+
+def youtube_video_search_url(query: str, *, fetch_n: int = 40) -> str:
+    """yt-dlp site-wide video search (spaces are significant; do not URL-encode)."""
+    q = (query or "").strip()
+    n = max(1, min(int(fetch_n or 40), _YT_SEARCH_FETCH_MAX))
+    return f"ytsearch{n}:{q}"
+
+
+def search_youtube_videos(
+    query: str, *, limit: int = 20, offset: int = 0
+) -> dict[str, Any]:
+    """Flat extract of YouTube's site-wide video search (one page)."""
+    q = (query or "").strip()
+    if len(q) < 2:
+        return {"entries": [], "has_more": False}
+    limit = max(1, min(int(limit or 20), _YT_SEARCH_PAGE_MAX))
+    offset = max(0, min(int(offset or 0), _YT_SEARCH_FETCH_MAX))
+    fetch_n = youtube_search_fetch_n(offset=offset, limit=limit)
+    search_url = youtube_video_search_url(q, fetch_n=fetch_n)
+    opts = apply_cookie_opts(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": "in_playlist",
+            "skip_download": True,
+            "playlistend": fetch_n,
+            "logger": QuietYtdlpLogger(),
+            "extractor_args": youtube_extractor_args(),
+        }
+    )
+    try:
+        info = _as_info(
+            extract_info_gated(
+                search_url, opts, cache_key=f"yt-video-search:v2:{q}:{fetch_n}"
+            )
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("youtube video search failed for %s", search_url, exc_info=True)
+        return {"entries": [], "has_more": False}
+
+    mapped: list[dict[str, Any]] = []
+    raw_n = 0
+    for raw in info.get("entries") or []:
+        if not isinstance(raw, dict):
+            continue
+        raw_n += 1
+        if is_youtube_short_entry(raw):
+            continue
+        item = _map_flat_video_entry(raw)
+        if item is None:
+            continue
+        item["match_reason"] = {"source": "youtube", "snippet": None}
+        mapped.append(item)
+
+    page = mapped[offset : offset + limit]
+    has_more = len(mapped) > offset + limit
+    if (
+        not has_more
+        and len(page) == limit
+        and fetch_n < _YT_SEARCH_FETCH_MAX
+        and raw_n >= fetch_n
+    ):
+        has_more = True
+    return {"entries": page, "has_more": has_more}
 
 
 def search_youtube_channels(query: str, *, limit: int = 8) -> list[dict[str, Any]]:

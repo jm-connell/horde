@@ -26,6 +26,7 @@ See [Settings overview](index.md#three-layer-persistence) for hydration and migr
 | `channel_catalog_enabled` | `true` | bool | YouTube channels only | Top-level |
 | `channel_catalog_max_videos` | `1000` | int | 100–5000 | Top-level |
 | `direct_youtube_search` | `true` | bool | Channel-page YouTube search fallback; per-channel override on `channel_catalogs.direct_youtube_search` | Top-level |
+| `youtube_video_search` | `true` | bool | Library home live YouTube video search (after pause / Enter) | Top-level |
 | `download_queue_paused` | `false` | bool | Restored on startup by download queue recover; set by Pause/Resume on Download | Top-level (**Backend-only** — no Settings control) |
 | `ui` | `{}` | object | Deep-merged on save | UI blob container |
 | `ai` | *(see below)* | object | Merged with `AI_DEFAULTS` | AI |

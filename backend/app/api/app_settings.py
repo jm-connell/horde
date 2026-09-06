@@ -90,6 +90,7 @@ class AppSettingsRead(BaseModel):
     channel_catalog_enabled: bool = True
     channel_catalog_max_videos: int = 1000
     direct_youtube_search: bool = True
+    youtube_video_search: bool = True
     ui: dict[str, Any] = Field(default_factory=dict)
     ai: AiSettingsRead = Field(default_factory=AiSettingsRead)
 
@@ -104,6 +105,7 @@ class AppSettingsUpdate(BaseModel):
         le=app_settings.CHANNEL_CATALOG_MAX_MAX,
     )
     direct_youtube_search: Optional[bool] = None
+    youtube_video_search: Optional[bool] = None
     ui: Optional[dict[str, Any]] = None
     ai: Optional[AiSettingsUpdate] = None
 
@@ -174,6 +176,7 @@ def _settings_read(data: dict[str, Any]) -> AppSettingsRead:
             data.get("channel_catalog_max_videos")
         ),
         direct_youtube_search=app_settings.direct_youtube_search_system(data),
+        youtube_video_search=app_settings.youtube_video_search_system(data),
         ui=ui,
         ai=_ai_read(data),
     )
@@ -199,6 +202,8 @@ def update_settings(payload: AppSettingsUpdate):
         )
     if payload.direct_youtube_search is not None:
         updates["direct_youtube_search"] = bool(payload.direct_youtube_search)
+    if payload.youtube_video_search is not None:
+        updates["youtube_video_search"] = bool(payload.youtube_video_search)
     if payload.ui is not None:
         updates["ui"] = payload.ui
     if payload.ai is not None:
