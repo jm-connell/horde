@@ -36,3 +36,7 @@ It exists because Plex is great for Movies and TV, and awkward for everything el
 - **Reference** — shortcuts, glossary, FAQ, roadmap
 
 In a running Horde instance, open **Settings → System → Documentation** to reach this wiki at `/wiki/`. Interactive API docs live at `/docs` (Swagger).
+
+## License
+
+Horde is source-available under the **PolyForm Noncommercial License 1.0.0**. Personal and other noncommercial use is allowed; selling Horde or using it commercially is not. The legal text is `LICENSE` at the repository root. See the [FAQ](reference/faq.md#what-license-is-horde-under).

@@ -150,3 +150,11 @@ MkDocs Material.
 - Channel catalogs (index remote uploads for feed search and stream preview)
   are YouTube-only. Non-YouTube yt-dlp URLs still download.
 - Health: `GET /api/health` (version, yt-dlp, POT, wiki, library count).
+
+## License
+
+Horde is **source-available** under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). You can run, change, and
+share it for personal / homelab use (and other noncommercial purposes). You
+may not sell it, offer it as a paid product or hosted service, or otherwise
+use it commercially. Full terms: [`LICENSE`](LICENSE).

@@ -645,14 +645,12 @@ html[data-translucent-panels="on"] header.ui-panel {
   box-shadow: none !important;
 }
 
-/* Stronger, theme-tinted fill for overlays that need readable text over effects.
+/* Stronger fill for overlays that need readable text over effects.
+   Same default panel color, higher opacity — no accent wash.
    Cards stay on the transparency slider — their fill is behind a thumbnail. */
-html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-panel-legible {
-  background-color: color-mix(
-    in srgb,
-    rgb(var(--ink-900) / 0.88) 82%,
-    rgb(var(--accent) / 0.22) 18%
-  ) !important;
+html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-panel-legible,
+html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-menu {
+  background-color: rgb(var(--ink-900) / 0.88) !important;
   backdrop-filter: blur(var(--ui-panel-blur, 12px));
   -webkit-backdrop-filter: blur(var(--ui-panel-blur, 12px));
 }
@@ -691,16 +689,13 @@ html[data-panel-tint="on"] header.ui-panel {
 }
 
 html[data-translucent-panels="on"][data-panel-legibility="on"][data-panel-tint="on"]
-  .ui-panel-legible {
+  .ui-panel-legible,
+html[data-translucent-panels="on"][data-panel-legibility="on"][data-panel-tint="on"]
+  .ui-menu {
   background-color: color-mix(
     in srgb,
     rgb(var(--ui-panel-tint) / 0.88) var(--ui-panel-tint-mix, 0%),
-    color-mix(
-      in srgb,
-      rgb(var(--ink-900) / 0.88) 82%,
-      rgb(var(--accent) / 0.22) 18%
-    )
-      calc(100% - var(--ui-panel-tint-mix, 0%))
+    rgb(var(--ink-900) / 0.88) calc(100% - var(--ui-panel-tint-mix, 0%))
   ) !important;
 }
 

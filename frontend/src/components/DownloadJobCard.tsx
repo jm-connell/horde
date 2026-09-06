@@ -21,6 +21,7 @@ import {
 import { PRESET_LABELS, PRESET_ORDER, finishedQualityLabel, jobQualityOptions, resolveQualityPreset } from "../presets";
 import AddToPlaylist from "./AddToPlaylist";
 import ChannelPicker from "./ChannelPicker";
+import ThemedSelect from "./ThemedSelect";
 import {
   applyActionRowCollapse,
   canChangeJobQuality,
@@ -739,21 +740,24 @@ export default function DownloadJobCard({
               </span>
             ) : null}
             {canChangeQuality ? (
-              <select
+              <div
                 data-collapse="res"
-                value={displayPreset}
-                disabled={changingQuality}
-                onChange={(e) => void onChangeQuality(e.target.value)}
+                className="shrink-0"
                 onClick={(e) => e.stopPropagation()}
-                aria-label="Download resolution"
-                className="shrink-0 cursor-pointer rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400 outline-none focus:ring-1 focus:ring-accent disabled:opacity-60"
               >
-                {qualityOptions.map((p) => (
-                  <option key={p} value={p}>
-                    {PRESET_LABELS[p] ?? p}
-                  </option>
-                ))}
-              </select>
+                <ThemedSelect
+                  aria-label="Download resolution"
+                  size="compact"
+                  align="right"
+                  value={displayPreset}
+                  disabled={changingQuality}
+                  options={qualityOptions.map((p) => ({
+                    value: p,
+                    label: PRESET_LABELS[p] ?? p,
+                  }))}
+                  onChange={(preset) => void onChangeQuality(preset)}
+                />
+              </div>
             ) : resLabel ? (
               <span
                 data-collapse="res"

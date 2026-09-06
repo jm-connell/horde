@@ -10,6 +10,7 @@ import type { ChannelStat } from "../types";
 import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
 import { youtubeThumbnailUrl } from "../utils";
 import ChannelDownloadEditModal from "./ChannelDownloadEditModal";
+import ThemedSelect from "./ThemedSelect";
 
 export default function ChannelDownloadPanel({
   defaultPreset,
@@ -86,17 +87,17 @@ export default function ChannelDownloadPanel({
           <label className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution
           </label>
-          <select
+          <ThemedSelect
+            aria-label="Download resolution"
             value={defaultPreset}
-            onChange={(e) => onDefaultPresetChange(e.target.value)}
-            className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-          >
-            {presetOptions.map((p) => (
-              <option key={p} value={p}>
-                {presetOptionLabel(p, undefined)}
-              </option>
-            ))}
-          </select>
+            options={presetOptions.map((p) => ({
+              value: p,
+              label: presetOptionLabel(p, undefined),
+            }))}
+            onChange={onDefaultPresetChange}
+            className="w-full"
+            buttonClassName="w-full"
+          />
         </div>
       </div>
     );
@@ -114,17 +115,17 @@ export default function ChannelDownloadPanel({
           <label className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution
           </label>
-          <select
+          <ThemedSelect
+            aria-label="Download resolution"
             value={defaultPreset}
-            onChange={(e) => onDefaultPresetChange(e.target.value)}
-            className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-          >
-            {presetOptions.map((p) => (
-              <option key={p} value={p}>
-                {presetOptionLabel(p, undefined)}
-              </option>
-            ))}
-          </select>
+            options={presetOptions.map((p) => ({
+              value: p,
+              label: presetOptionLabel(p, undefined),
+            }))}
+            onChange={onDefaultPresetChange}
+            className="w-full"
+            buttonClassName="w-full"
+          />
         </div>
 
         {visiblePending.map((item) => {
@@ -165,19 +166,20 @@ export default function ChannelDownloadPanel({
                   </p>
                   <p className="truncate text-xs text-gray-500">{item.channel}</p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    <select
+                    <ThemedSelect
+                      aria-label="Download resolution"
+                      size="compact"
                       value={item.preset}
-                      onChange={(e) =>
-                        onUpdatePending(item.tempId, { preset: e.target.value })
+                      options={qualityOptions.map((p) => ({
+                        value: p,
+                        label: presetOptionLabel(p, preview?.preset_sizes),
+                      }))}
+                      onChange={(preset) =>
+                        onUpdatePending(item.tempId, { preset })
                       }
-                      className="max-w-full flex-1 rounded border border-ink-700 bg-ink-950 px-2 py-1 text-xs text-gray-100 outline-none focus:border-accent"
-                    >
-                      {qualityOptions.map((p) => (
-                        <option key={p} value={p}>
-                          {presetOptionLabel(p, preview?.preset_sizes)}
-                        </option>
-                      ))}
-                    </select>
+                      className="max-w-full min-w-0 flex-1"
+                      buttonClassName="w-full"
+                    />
                     {sizeLabel && (
                       <span className="text-xs text-gray-500">{sizeLabel}</span>
                     )}

@@ -10,6 +10,7 @@ import { api, thumbnailUrl } from "../api";
 import AddToPlaylist from "../components/AddToPlaylist";
 import LoadingIndicator from "../components/LoadingIndicator";
 import PlaybackQueue from "../components/PlaybackQueue";
+import ThemedSelect from "../components/ThemedSelect";
 import VideoActionsMenu from "../components/VideoActionsMenu";
 import VideoAiPanel from "../components/VideoAiPanel";
 import VideoCard from "../components/VideoCard";
@@ -21,6 +22,7 @@ import {
 } from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
 import { useToast } from "../context/ToastContext";
+import { UI_MENU_SURFACE } from "../uiMenu";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { PRESET_ORDER, presetOptionLabel, resolveQualityPreset } from "../presets";
@@ -976,7 +978,7 @@ export default function Watch() {
                         <ul
                           role="listbox"
                           aria-label="Download quality"
-                          className="absolute left-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-lg border border-ink-700 bg-ink-900 py-1 shadow-lg ring-1 ring-ink-700"
+                          className={`absolute left-0 z-30 mt-1 min-w-[12rem] overflow-hidden py-1 ${UI_MENU_SURFACE}`}
                         >
                           {presetOptions.map((p) => (
                             <li
@@ -1037,23 +1039,22 @@ export default function Watch() {
                         </span>
                       )}
                       {presetOptions.length > 0 && (
-                        <select
+                        <ThemedSelect
+                          aria-label="Download resolution"
+                          size="compact"
                           value={resolveQualityPreset(
                             activeJob?.quality_preset || selectedPreset,
                             activeJob?.available_presets ?? availablePresets
                           )}
-                          onChange={(e) =>
-                            void handleChangeDownloadQuality(e.target.value)
+                          options={presetOptions.map((p) => ({
+                            value: p,
+                            label: presetOptionLabel(p, presetSizes),
+                          }))}
+                          onChange={(preset) =>
+                            void handleChangeDownloadQuality(preset)
                           }
-                          aria-label="Download resolution"
-                          className="cursor-pointer rounded bg-ink-800 px-1.5 py-0.5 text-[11px] font-medium text-gray-300 outline-none focus:ring-1 focus:ring-accent"
-                        >
-                          {presetOptions.map((p) => (
-                            <option key={p} value={p}>
-                              {presetOptionLabel(p, presetSizes)}
-                            </option>
-                          ))}
-                        </select>
+                          buttonClassName="cursor-pointer bg-ink-800 text-[11px] font-medium text-gray-300"
+                        />
                       )}
                     </span>
                   )}
@@ -1236,17 +1237,17 @@ export default function Watch() {
             <label className="mb-1 block text-xs font-medium text-gray-400">
               Quality
             </label>
-            <select
+            <ThemedSelect
+              aria-label="Quality"
               value={redownloadPreset}
-              onChange={(e) => setRedownloadPreset(e.target.value)}
-              className="mb-2 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-accent"
-            >
-              {presets.map((p) => (
-                <option key={p} value={p}>
-                  {PRESET_LABELS[p] ?? p}
-                </option>
-              ))}
-            </select>
+              options={presets.map((p) => ({
+                value: p,
+                label: PRESET_LABELS[p] ?? p,
+              }))}
+              onChange={setRedownloadPreset}
+              className="mb-2 w-full"
+              buttonClassName="w-full px-3 py-2.5"
+            />
             <p className="mb-6 text-xs text-gray-500">
               YouTube (and other sites) may not offer the selected tier. If the
               downloaded file is lower, Horde shows a toast when the job

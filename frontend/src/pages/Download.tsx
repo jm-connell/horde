@@ -5,6 +5,7 @@ import ChannelPicker from "../components/ChannelPicker";
 import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
 import LoadingIndicator from "../components/LoadingIndicator";
+import ThemedSelect from "../components/ThemedSelect";
 import {
   downloadErrorHint,
   downloadErrorLabel,
@@ -582,17 +583,17 @@ export default function Download() {
           <label className="mb-1 block text-sm font-medium text-gray-300">
             Quality
           </label>
-          <select
+          <ThemedSelect
+            aria-label="Quality"
             value={preset}
-            onChange={(e) => setPreset(e.target.value)}
-            className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-accent"
-          >
-            {qualityOptions.map((p) => (
-              <option key={p} value={p}>
-                {presetOptionLabel(p, metadataLoaded ? presetSizes : undefined)}
-              </option>
-            ))}
-          </select>
+            options={qualityOptions.map((p) => ({
+              value: p,
+              label: presetOptionLabel(p, metadataLoaded ? presetSizes : undefined),
+            }))}
+            onChange={setPreset}
+            className="w-full"
+            buttonClassName="w-full px-3 py-2.5"
+          />
         </div>
 
         <Collapse open={!isPlaylist}>

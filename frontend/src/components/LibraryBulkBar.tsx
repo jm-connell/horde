@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { UI_MENU_SURFACE } from "../uiMenu";
 import type { Playlist } from "../types";
 
 export default function LibraryBulkBar({
@@ -87,7 +88,9 @@ export default function LibraryBulkBar({
               + Playlist
             </button>
             {playlistOpen && (
-              <div className="absolute bottom-10 left-0 z-50 w-56 rounded-lg bg-ink-800 p-2 shadow-xl ring-1 ring-ink-600">
+              <div
+                className={`absolute bottom-10 left-0 z-50 w-56 p-2 ${UI_MENU_SURFACE}`}
+              >
                 {playlists.length === 0 ? (
                   <p className="px-2 py-1 text-xs text-gray-500">No playlists yet.</p>
                 ) : (
@@ -113,7 +116,9 @@ export default function LibraryBulkBar({
               Add note
             </button>
             {bulkNoteOpen && (
-              <div className="absolute bottom-10 left-0 z-50 w-72 rounded-lg bg-ink-800 p-3 shadow-xl ring-1 ring-ink-600">
+              <div
+                className={`absolute bottom-10 left-0 z-50 w-72 p-3 ${UI_MENU_SURFACE}`}
+              >
                 <div className="mb-1 flex items-baseline justify-between gap-2">
                   <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
                     Note

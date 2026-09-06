@@ -11,6 +11,7 @@ import {
   type SubtitleSize,
 } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { UI_MENU_SURFACE } from "../uiMenu";
 import { useApplyShakaQuality, useShakaDashLoad } from "../hooks/useShakaDash";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import {
@@ -2362,7 +2363,9 @@ export default function VideoPlayer({
                           : qualityMenuLabel(qualityChoice)}
                       </button>
                       {showQuality && (
-                        <div className="ui-panel absolute bottom-9 right-0 z-10 w-32 rounded-lg bg-ink-800 p-2 ring-1 ring-ink-600">
+                        <div
+                          className={`absolute bottom-9 right-0 z-10 w-32 p-2 ${UI_MENU_SURFACE}`}
+                        >
                           <div className="flex flex-col gap-0.5">
                             <button
                               type="button"
@@ -2414,7 +2417,9 @@ export default function VideoPlayer({
                     {rate}x
                   </button>
                   {showSpeed && (
-                    <div className="ui-panel absolute bottom-9 right-0 z-10 w-40 rounded-lg bg-ink-800 p-3 ring-1 ring-ink-600">
+                    <div
+                      className={`absolute bottom-9 right-0 z-10 w-40 p-3 ${UI_MENU_SURFACE}`}
+                    >
                       <div className="mb-2 grid grid-cols-3 gap-1">
                         {SPEED_STEPS.map((s) => (
                           <button

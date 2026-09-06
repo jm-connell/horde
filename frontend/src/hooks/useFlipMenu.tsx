@@ -5,6 +5,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { UI_MENU_SURFACE } from "../uiMenu";
 
 type Flip = "down" | "up";
 
@@ -57,7 +58,7 @@ export function FlipMenuPanel({
   const side = align === "left" ? "left-0" : "right-0";
   return (
     <div
-      className={`ui-panel ui-panel-legible absolute z-50 ${pos} ${side} overflow-hidden rounded-lg border border-ink-700 bg-ink-800 py-1 shadow-2xl ring-1 ring-ink-600 ${className}`}
+      className={`absolute z-50 ${pos} ${side} overflow-hidden py-1 ${UI_MENU_SURFACE} ${className}`}
     >
       {children}
     </div>

@@ -10,18 +10,18 @@ On a **channel page**, the box in the header searches that channel’s **indexed
 
 ## Result sections
 
-Matches are grouped into up to three sections:
+Matches are grouped into three sections. Empty sections still appear with a short message so the layout stays the same:
 
-| Section | Meaning |
-|---------|---------|
-| **In your library** | Videos already downloaded / approved into your library |
-| **Other videos** | Related library hits that don’t fit the primary library grouping (e.g. secondary matches) |
-| **Available to stream** | Channel **catalog** entries — indexed remote uploads you can preview or download |
+| Section | Meaning | Empty copy |
+|---------|---------|------------|
+| **In your library** | Videos already downloaded / approved into your library | No matching videos found in library |
+| **Available to stream** | Undownloaded catalog hits from channels you’ve indexed or already downloaded from | No matching videos from indexed channels |
+| **Other videos** | Downloaded library videos that did not match the query | No other videos in library |
 
-Catalog rows come from background [channel catalog indexing](channels.md). You can stream a preview or queue a download without leaving search.
+Catalog rows come from background [channel catalog indexing](channels.md). You can stream a preview or queue a download without leaving search. Library home search does not query YouTube yet; that will be a separate section later.
 
 !!! tip "Empty catalog section"
-    If **Available to stream** never appears, catalogs may still be indexing, disabled, or the channel hasn’t been opened/downloaded yet. See [Channels](channels.md) and [Library settings](../settings/library.md).
+    If **Available to stream** always shows the empty message, catalogs may still be indexing, disabled, or the channel hasn’t been opened/downloaded yet. See [Channels](channels.md) and [Library settings](../settings/library.md).
 
 ## Hybrid search (backend)
 

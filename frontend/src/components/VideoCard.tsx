@@ -15,6 +15,7 @@ import {
 import { previewResumeFor, previewStartSec } from "../utils/cardPreview";
 import { setWatchResume } from "../utils/watchHandoff";
 import CardPreviewVideo from "./CardPreviewVideo";
+import CardTitle from "./CardTitle";
 import MatchReasonBadge from "./MatchReasonBadge";
 
 function CardChannelName({
@@ -86,8 +87,14 @@ export default function VideoCard({
       ? formatViewCount(video.view_count)
       : "";
   const hasSecondaryMeta = Boolean(dateLabel || viewLabel);
-  const { detailsRef, sizerRef, combinedSizerRef, stacked, titleLines } =
-    useCardCopyLayout(video.title, Boolean(video.channel && hasSecondaryMeta));
+  const {
+    detailsRef,
+    sizerRef,
+    combinedSizerRef,
+    stacked,
+    titleLines,
+    titleNeeded,
+  } = useCardCopyLayout(video.title, Boolean(video.channel && hasSecondaryMeta));
 
   const handleClick = (e: React.MouseEvent) => {
     if (selectable) {
@@ -238,7 +245,9 @@ export default function VideoCard({
             </span>
           ) : null}
         </span>
-        <h3
+        <CardTitle
+          text={video.title}
+          truncated={titleNeeded > titleLines}
           className="min-h-0 flex-1 overflow-hidden break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
           style={{
             display: "-webkit-box",
@@ -246,9 +255,7 @@ export default function VideoCard({
             WebkitLineClamp: titleLines,
             minHeight: titleLines <= 1 ? "1.25rem" : "2.5rem",
           }}
-        >
-          {video.title}
-        </h3>
+        />
         <div className="flex shrink-0 flex-col gap-1">
           {stacked ? (
             <>

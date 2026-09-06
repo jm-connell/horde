@@ -7,6 +7,7 @@ import {
 import type { ChannelStat } from "../types";
 import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
 import { youtubeThumbnailUrl } from "../utils";
+import ThemedSelect from "./ThemedSelect";
 
 const labelClass = "mb-1 block text-xs font-medium text-gray-400";
 
@@ -89,17 +90,17 @@ export default function ChannelDownloadEditModal({
           </div>
           <div>
             <label className={labelClass}>Resolution</label>
-            <select
+            <ThemedSelect
+              aria-label="Resolution"
               value={item.preset}
-              onChange={(e) => onSave({ preset: e.target.value })}
-              className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-            >
-              {qualityOptions.map((p) => (
-                <option key={p} value={p}>
-                  {presetOptionLabel(p, preview?.preset_sizes)}
-                </option>
-              ))}
-            </select>
+              options={qualityOptions.map((p) => ({
+                value: p,
+                label: presetOptionLabel(p, preview?.preset_sizes),
+              }))}
+              onChange={(preset) => onSave({ preset })}
+              className="w-full"
+              buttonClassName="w-full"
+            />
           </div>
           <div>
             <div className="mb-1 flex items-baseline justify-between gap-2">

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { UI_MENU_SURFACE } from "../uiMenu";
 import type { ChannelStat } from "../types";
+import ThemedSelect from "./ThemedSelect";
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
   channels: ChannelStat[];
   placeholder?: string;
-  /** Prefer typeahead + Tab complete over a plain <select>. */
+  /** Prefer typeahead + Tab complete over a list picker. */
   autocomplete?: boolean;
 }
 
@@ -89,28 +91,29 @@ function SelectPicker({
   // select still shows the active value rather than appearing empty.
   const showCurrent = value !== "" && !names.includes(value);
 
+  const options = [
+    { value: "", label: placeholder ?? "Auto-detected" },
+    ...(showCurrent ? [{ value, label: value }] : []),
+    ...names.map((name) => ({ value: name, label: name })),
+    { value: CUSTOM, label: "Custom…" },
+  ];
+
   return (
-    <select
+    <ThemedSelect
+      aria-label={placeholder ?? "Channel"}
       value={value}
-      onChange={(e) => {
-        if (e.target.value === CUSTOM) {
+      options={options}
+      onChange={(next) => {
+        if (next === CUSTOM) {
           setCustom(true);
           onChange("");
         } else {
-          onChange(e.target.value);
+          onChange(next);
         }
       }}
-      className={`${inputClass} ui-select-chevron`}
-    >
-      <option value="">{placeholder ?? "Auto-detected"}</option>
-      {showCurrent && <option value={value}>{value}</option>}
-      {names.map((name) => (
-        <option key={name} value={name}>
-          {name}
-        </option>
-      ))}
-      <option value={CUSTOM}>Custom…</option>
-    </select>
+      className="w-full"
+      buttonClassName="w-full px-3 py-2.5"
+    />
   );
 }
 
@@ -217,7 +220,9 @@ function Combobox({
         </p>
       )}
       {open && matches.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-ink-800 py-1 shadow-2xl ring-1 ring-ink-600">
+        <ul
+          className={`absolute z-20 mt-1 max-h-60 w-full overflow-auto py-1 ${UI_MENU_SURFACE}`}
+        >
           {matches.slice(0, 50).map((name, i) => (
             <li key={name}>
               <button

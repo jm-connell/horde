@@ -18,6 +18,7 @@ import { enqueueYtPreview } from "../utils/ytPreviewQueue";
 import { previewResumeFor } from "../utils/cardPreview";
 import { setWatchResume } from "../utils/watchHandoff";
 import CardPreviewVideo from "./CardPreviewVideo";
+import CardTitle from "./CardTitle";
 import MatchReasonBadge from "./MatchReasonBadge";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 
@@ -302,8 +303,14 @@ export default function ChannelFeedCard({
       (entry.like_count != null && entry.dislike_count != null) ||
       inLibrary
   );
-  const { detailsRef, sizerRef, combinedSizerRef, stacked, titleLines } =
-    useCardCopyLayout(titleText, hasSecondaryMeta, layout === "grid");
+  const {
+    detailsRef,
+    sizerRef,
+    combinedSizerRef,
+    stacked,
+    titleLines,
+    titleNeeded,
+  } = useCardCopyLayout(titleText, hasSecondaryMeta, layout === "grid");
 
   useEffect(() => {
     if (entry.library_height_px) {
@@ -369,9 +376,10 @@ export default function ChannelFeedCard({
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-24">
-            <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent">
-              {titleText}
-            </h3>
+            <CardTitle
+              text={titleText}
+              className="line-clamp-2 text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
+            />
             <span className="break-words text-xs text-gray-400">{channelName}</span>
             <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
               {duration && <span>{duration}</span>}
@@ -482,7 +490,9 @@ export default function ChannelFeedCard({
               </span>
             ) : null}
           </span>
-          <h3
+          <CardTitle
+            text={titleText}
+            truncated={titleNeeded > titleLines}
             className="min-h-0 flex-1 overflow-hidden break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
             style={{
               display: "-webkit-box",
@@ -490,9 +500,7 @@ export default function ChannelFeedCard({
               WebkitLineClamp: titleLines,
               minHeight: titleLines <= 1 ? "1.25rem" : "2.5rem",
             }}
-          >
-            {titleText}
-          </h3>
+          />
           <div className="shrink-0">
             <FeedMetaRow
               channelName={channelName}

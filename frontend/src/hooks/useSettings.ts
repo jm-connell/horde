@@ -178,7 +178,7 @@ export interface Settings {
   translucentPanelTint: string;
   /** 0–1 mix toward `translucentPanelTint`. */
   translucentPanelTintStrength: number;
-  /** Raise opacity / tint on panels marked .ui-panel-legible. */
+  /** Raise opacity on panels marked .ui-panel-legible / .ui-menu. */
   translucentPanelLegibility: boolean;
   loadingStyle: LoadingStyle;
   /** Rem-based text size applied to documentElement font-size. */

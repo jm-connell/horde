@@ -48,6 +48,12 @@ YouTube challenged the extract. Check Settings → System → Status (POT provid
 
 Yes. Turn on **Enable custom CSS** under **Settings → Appearance → Custom CSS**, then paste a stylesheet (Jellyfin-style). Prefer CSS variables and `data-horde` / `data-page` hooks; see [Custom CSS](../settings/custom-css.md). There is no generated dump of every HTML node — that would go stale whenever the React tree changes.
 
+## What license is Horde under?
+
+**[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0).** You may run, modify, and share Horde for personal and other noncommercial purposes (homelab, hobby, private entertainment; also schools, charities, and similar noncommercial organizations). You may **not** sell it, wrap it as a paid product or hosted service, or otherwise use it commercially.
+
+This is **not** an OSI-approved “open source” license (MIT/Apache/GPL all allow commercial use). The full terms, including a required copyright notice, are in `LICENSE` at the repository root.
+
 ## Who wrote this?
 
 It was [vibecoded](../design/vibecoded.md) in Cursor with AI assistants. For questions, open the repo in Ask mode rather than expecting a full-time support desk.

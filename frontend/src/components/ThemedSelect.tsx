@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 
 export interface ThemedSelectOption<T extends string = string> {
   value: T;
@@ -13,6 +14,8 @@ interface Props<T extends string> {
   buttonClassName?: string;
   "aria-label"?: string;
   disabled?: boolean;
+  size?: "default" | "compact";
+  align?: "left" | "right";
 }
 
 export default function ThemedSelect<T extends string>({
@@ -23,16 +26,19 @@ export default function ThemedSelect<T extends string>({
   buttonClassName = "",
   "aria-label": ariaLabel,
   disabled = false,
+  size = "default",
+  align = "left",
 }: Props<T>) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const selected = options.find((o) => o.value === value) ?? options[0];
+  const compact = size === "compact";
+  const { flip, anchorRef } = useFlipMenu(open, compact ? 200 : 280);
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!anchorRef.current?.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -43,7 +49,7 @@ export default function ThemedSelect<T extends string>({
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, anchorRef]);
 
   const move = (dir: 1 | -1) => {
     const idx = options.findIndex((o) => o.value === value);
@@ -52,7 +58,7 @@ export default function ThemedSelect<T extends string>({
   };
 
   return (
-    <div ref={rootRef} className={`relative inline-block ${className}`}>
+    <div ref={anchorRef} className={`relative inline-block ${className}`}>
       <button
         type="button"
         disabled={disabled}
@@ -75,26 +81,37 @@ export default function ThemedSelect<T extends string>({
             setOpen((v) => !v);
           }
         }}
-        className={`ui-panel ui-interactive inline-flex w-max max-w-full items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-left text-sm text-gray-100 outline-none hover:border-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 ${buttonClassName}`}
+        className={`ui-panel ui-interactive inline-flex max-w-full items-center border border-ink-700 bg-ink-900 text-left outline-none hover:border-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 ${
+          compact
+            ? "gap-1 rounded px-1.5 py-0.5 text-xs text-gray-400"
+            : "gap-2 rounded-lg px-3 py-2 text-sm text-gray-100"
+        } ${buttonClassName}`}
       >
         <span className="min-w-0 truncate">{selected?.label ?? value}</span>
         <span className="shrink-0 text-gray-500" aria-hidden>
           ▾
         </span>
       </button>
-      {open && (
-        <ul
-          id={listId}
-          role="listbox"
-          className="ui-panel absolute left-0 z-50 mt-1 max-h-64 min-w-full overflow-y-auto rounded-lg border border-ink-700 bg-ink-900 py-1 shadow-xl ring-1 ring-ink-700"
-        >
+      <FlipMenuPanel
+        open={open}
+        flip={flip}
+        align={align}
+        className={
+          compact
+            ? "min-w-full max-h-56 overflow-y-auto py-0.5"
+            : "min-w-full max-h-64 overflow-y-auto"
+        }
+      >
+        <ul id={listId} role="listbox">
           {options.map((opt) => {
             const active = opt.value === value;
             return (
               <li key={opt.value} role="option" aria-selected={active}>
                 <button
                   type="button"
-                  className={`flex w-full px-3 py-2 text-left text-sm transition-colors ${
+                  className={`flex w-full px-3 py-2 text-left transition-colors ${
+                    compact ? "text-xs" : "text-sm"
+                  } ${
                     active
                       ? "bg-accent/15 text-accent"
                       : "text-gray-200 hover:bg-ink-800 hover:text-gray-100"
@@ -110,7 +127,7 @@ export default function ThemedSelect<T extends string>({
             );
           })}
         </ul>
-      )}
+      </FlipMenuPanel>
     </div>
   );
 }
