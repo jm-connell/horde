@@ -190,6 +190,7 @@ export default function Setup() {
     ollamaUrl,
     setOllamaUrl,
     aiStatus,
+    setAiStatus,
     aiBusy,
     goNext,
     goBack,
@@ -257,6 +258,7 @@ type WizardPanelProps = {
   ollamaUrl: string;
   setOllamaUrl: (value: string) => void;
   aiStatus: string | null;
+  setAiStatus: (value: string | null) => void;
   aiBusy: boolean;
   goNext: () => void;
   goBack: () => void;
@@ -279,6 +281,7 @@ function WizardPanel({
   ollamaUrl,
   setOllamaUrl,
   aiStatus,
+  setAiStatus,
   aiBusy,
   goNext,
   goBack,
