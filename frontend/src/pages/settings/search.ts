@@ -150,7 +150,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "system",
-    keywords: "update version github git pull docker compose rebuild",
+    keywords:
+      "reset factory wipe erase setup wizard restore defaults media library",
   },
   {
     tab: "system",

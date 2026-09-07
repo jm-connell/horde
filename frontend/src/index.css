@@ -599,6 +599,92 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
   }
 }
 
+@keyframes wizard-step-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes wizard-step-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes wizard-step-out-next {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-1.25rem);
+  }
+}
+
+@keyframes wizard-step-out-prev {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(1.25rem);
+  }
+}
+
+@keyframes wizard-step-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes wizard-step-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.wizard-step-in-next {
+  animation: wizard-step-in-next 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.wizard-step-in-prev {
+  animation: wizard-step-in-prev 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.wizard-step-out-next {
+  animation: wizard-step-out-next 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.wizard-step-out-prev {
+  animation: wizard-step-out-prev 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wizard-step-in-next,
+  .wizard-step-in-prev {
+    animation: wizard-step-fade-in 180ms ease-out both;
+  }
+  .wizard-step-out-next,
+  .wizard-step-out-prev {
+    animation: wizard-step-fade-out 180ms ease-out both;
+  }
+}
+
 /* Translucent panels — let background effects show through.
    Alpha/blur come from --ui-panel-* set by applyMotionPrefs (transparency + blur sliders). */
 html[data-translucent-panels="on"] .ui-panel,

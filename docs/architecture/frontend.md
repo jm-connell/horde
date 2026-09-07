@@ -14,11 +14,12 @@ React + Vite SPA under `frontend/`. Production build is copied to `backend/stati
 | `/import` | Import & review queue |
 | `/review` | Redirect → `/import` |
 | `/settings` | Settings (tabs via query, e.g. `?tab=playback`) |
+| `/setup` | First-install / post-reset wizard (hidden after `setup_completed`) |
 | `/watch/:id` | Watch library video |
 | `/watch?url=` | Watch / preview by source URL (optional `channel`) |
 | `/preview` | Legacy redirect → `/watch?…` |
 
-Shell: `TopNav` + `BackgroundEffect` wrap routes inside nested providers.
+Shell: `TopNav` + `BackgroundEffect` wrap routes inside nested providers. Until `setup_completed` is true, only `/setup` is shown (no nav).
 
 ## Providers
 

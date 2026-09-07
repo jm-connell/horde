@@ -85,7 +85,48 @@ def test_merge_ai_drops_unknown_and_clamps():
 def test_load_missing_file_returns_defaults(tmp_dirs):
     data = settings_svc.load()
     assert data["progress_expiry_days"] == 14
+    assert data["setup_completed"] is False
     assert data["ai"]["embed_model"] == settings_svc.AI_DEFAULTS["embed_model"]
+
+
+def test_load_grandfathers_missing_setup_completed(tmp_dirs):
+    path = tmp_dirs["data"] / "app_settings.json"
+    path.write_text(
+        json.dumps({"progress_expiry_days": 21, "ui": {"theme": "oled"}})
+    )
+    data = settings_svc.load()
+    assert data["setup_completed"] is True
+    assert data["progress_expiry_days"] == 21
+    assert data["ui"]["theme"] == "oled"
+
+
+def test_save_persists_grandfathered_setup_completed(tmp_dirs):
+    path = tmp_dirs["data"] / "app_settings.json"
+    path.write_text(json.dumps({"progress_expiry_days": 21}))
+    settings_svc.save({"progress_expiry_days": 22})
+    raw = json.loads(path.read_text())
+    assert raw["setup_completed"] is True
+    assert raw["progress_expiry_days"] == 22
+
+
+def test_reset_to_defaults_empties_ui_and_ai(tmp_dirs):
+    settings_svc.save(
+        {
+            "ui": {"theme": "oled", "fontSize": "large"},
+            "ai": {"enabled": False, "openrouter_api_key": "sk-or-secret"},
+            "setup_completed": True,
+        }
+    )
+    out = settings_svc.reset_to_defaults()
+    assert out["setup_completed"] is False
+    assert out["ui"] == {}
+    assert out["ai"]["enabled"] is True
+    assert out["ai"]["openrouter_api_key"] == ""
+    raw = json.loads((tmp_dirs["data"] / "app_settings.json").read_text())
+    assert raw["ui"] == {}
+    assert "theme" not in raw["ui"]
+    assert raw["setup_completed"] is False
+    assert raw["ai"]["enabled"] is True
 
 
 def test_load_corrupt_file_returns_defaults(tmp_dirs):

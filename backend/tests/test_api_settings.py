@@ -8,6 +8,7 @@ def test_settings_get_defaults_and_patch_roundtrip(client):
     assert body["progress_expiry_days"] == 14
     assert body["direct_youtube_search"] is True
     assert body["youtube_video_search"] is True
+    assert body["setup_completed"] is False
     assert "ui" in body
     assert "ai" in body
     assert body["ai"]["openrouter_api_key_set"] is False
@@ -94,3 +95,22 @@ def test_settings_persists_custom_css(client):
 def test_settings_rejects_out_of_range_expiry(client):
     resp = client.patch("/api/settings", json={"progress_expiry_days": 0})
     assert resp.status_code == 422
+
+
+def test_settings_setup_completed_patch_true_only(client):
+    denied = client.patch("/api/settings", json={"setup_completed": False})
+    assert denied.status_code == 400
+    assert client.get("/api/settings").json()["setup_completed"] is False
+
+    ok = client.patch("/api/settings", json={"setup_completed": True})
+    assert ok.status_code == 200
+    assert ok.json()["setup_completed"] is True
+    assert client.get("/api/settings").json()["setup_completed"] is True
+
+
+def test_settings_grandfathers_existing_file(client, tmp_dirs):
+    path = tmp_dirs["data"] / "app_settings.json"
+    path.write_text('{"progress_expiry_days": 14, "ui": {"theme": "oled"}}')
+    body = client.get("/api/settings").json()
+    assert body["setup_completed"] is True
+    assert body["ui"]["theme"] == "oled"

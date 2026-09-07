@@ -83,6 +83,17 @@ Also shown:
 
 Catalog indexing only appears when `channel_catalog_enabled` is on ([Library](library.md#channel-catalog)).
 
+## Reset Horde
+
+Last section on the System tab. **Reset Horde…** restores factory settings and sends you through the [setup wizard](../getting-started/first-run.md) again.
+
+| Option | Effect |
+|--------|--------|
+| Reset (default) | Rewrite `app_settings.json` to defaults (`setup_completed: false`). Clear download job history, the AI job queue, OpenRouter usage ledger, and uploaded fonts/backgrounds. **Keep** library files, videos, playlists, catalogs, and watch progress. |
+| **Erase all media** | Also delete every library file under the downloads volume, plus playlists, catalogs, embeddings, AI meta/chat, thumbs, sprites, and the feed meta cache. Type `RESET` to confirm. |
+
+Docker/env paths (`DOWNLOADS_PATH`, cookies, `OPENROUTER_API_KEY`, Ollama URL) are **not** changed. This is not a substitute for deleting host volumes; see [Backup & restore](../ops/backup-restore.md).
+
 ## See also
 
 - [Settings overview](index.md)

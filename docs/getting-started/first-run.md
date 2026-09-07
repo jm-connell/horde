@@ -1,6 +1,6 @@
 # First run
 
-You have Horde running (Docker or local dev). This page walks through the first useful loop: open the UI, download something, confirm it on disk and in the library, and know where settings live.
+You have Horde running (Docker or local dev). This page walks through the first useful loop: the setup wizard, a test download, confirm it on disk and in the library, and know where settings live.
 
 !!! warning "LAN only — no authentication"
     There is **no login screen**. Anyone who can reach the URL can manage downloads and the library. Stay on a trusted LAN.
@@ -16,7 +16,16 @@ You have Horde running (Docker or local dev). This page walks through the first 
 !!! note "Docker host port"
     Production Compose publishes **8686 → 8080**. Do not expect the UI on host port `8080` unless you changed the mapping.
 
-You should see the Home / Library UI. Settings are available from the app chrome (gear / Settings).
+A **setup wizard** runs on first install (and after **Settings → System → Reset Horde**). It covers:
+
+1. LAN warning and a storage health snapshot (disk free + library count)
+2. Archive video codec and volume normalization
+3. Theme palette
+4. Optional AI (OpenRouter key or Ollama) — skip if you do not need it yet
+
+**Use defaults** finishes immediately with built-in settings. You can change anything later under [Settings](../settings/index.md). Existing installs that already have `app_settings.json` are not sent through the wizard.
+
+When the wizard finishes, Horde opens **Downloads**. Settings stay in the app chrome (gear / Settings).
 
 ## Download your first video
 

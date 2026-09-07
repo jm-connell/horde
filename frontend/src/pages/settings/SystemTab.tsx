@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSettingsPage } from "./context";
 import { Section } from "./ui";
-import { PANEL_BTN, STATUS_TIPS } from "./constants";
+import { PANEL_BTN, STATUS_TIPS, INPUT } from "./constants";
 import { saveDismissedUpdateSha } from "./helpers";
 import { api } from "../../api";
 import { downloadErrorLabel } from "../../downloadErrors";
 import { formatSize } from "../../utils";
+import { clearHordeBrowserState } from "../../setupStorage";
 import LoadingIndicator from "../../components/LoadingIndicator";
+import Collapse from "../../components/Collapse";
 import HelpTip from "../../components/HelpTip";
 import AiQueueStatus from "./AiQueueStatus";
 import BackgroundActivity from "./BackgroundActivity";
@@ -624,6 +628,169 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
           </div>
         </Section>
       ) : null}
+
+      <Section
+        title="Reset Horde"
+        hidden={!match("reset", "factory", "wipe", "erase", "setup wizard")}
+      >
+        <ResetHordePanel />
+      </Section>
+    </>
+  );
+}
+
+function ResetHordePanel() {
+  const { showToast, storage, health } = useSettingsPage();
+  const [open, setOpen] = useState(false);
+  const [eraseMedia, setEraseMedia] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const videoCount = storage?.video_count ?? health?.library_video_count ?? 0;
+  const canReset = !eraseMedia || confirmText.trim() === "RESET";
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !resetting) {
+        setOpen(false);
+        setConfirmText("");
+      }
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, resetting]);
+
+  const close = () => {
+    if (resetting) return;
+    setOpen(false);
+    setConfirmText("");
+  };
+
+  const runReset = async () => {
+    if (resetting || !canReset) return;
+    setResetting(true);
+    try {
+      await api.resetApp(eraseMedia);
+      clearHordeBrowserState();
+      window.location.assign("/setup");
+    } catch (err) {
+      setResetting(false);
+      showToast(err instanceof Error ? err.message : "Reset failed");
+    }
+  };
+
+  return (
+    <>
+      <p className="mb-3 text-xs text-gray-500">
+        Restore factory settings and run the setup wizard again. Media volumes
+        and Docker environment variables are not changed unless you erase the
+        library.
+      </p>
+      <button type="button" onClick={() => setOpen(true)} className={PANEL_BTN}>
+        Reset Horde…
+      </button>
+      {open
+        ? createPortal(
+            <>
+              <div
+                className="fixed inset-0 z-[80] bg-black/60"
+                onClick={close}
+                aria-hidden
+              />
+              <div className="pointer-events-none fixed inset-0 z-[81] flex items-start justify-center p-4 pt-[max(1rem,calc(50dvh-8rem))]">
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="reset-horde-title"
+                  className="ui-panel pointer-events-auto w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600 max-h-[calc(100dvh-2rem)]"
+                >
+                  <h2
+                    id="reset-horde-title"
+                    className="text-base font-semibold text-gray-100"
+                  >
+                    Reset Horde?
+                  </h2>
+                  <p className="mt-2 text-sm text-gray-300">
+                    Appearance, download, playback, and AI settings return to
+                    defaults. You will go through the setup wizard again.
+                  </p>
+                  <label className="mt-4 flex items-start gap-3 text-sm text-gray-200">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={eraseMedia}
+                      disabled={resetting}
+                      onChange={(e) => {
+                        setEraseMedia(e.target.checked);
+                        setConfirmText("");
+                      }}
+                    />
+                    <span>
+                      Erase all media
+                      <span className="mt-0.5 block text-xs text-gray-500">
+                        Permanently delete {videoCount} video
+                        {videoCount === 1 ? "" : "s"}
+                        {storage?.total_bytes
+                          ? ` (${formatSize(storage.total_bytes)})`
+                          : ""}{" "}
+                        plus playlists and channel catalogs. Files on the
+                        downloads volume are removed.
+                      </span>
+                    </span>
+                  </label>
+                  <Collapse open={!eraseMedia}>
+                    <p className="pt-3 text-xs text-gray-500">
+                      Library files, playlists, and watch progress stay on
+                      disk.
+                    </p>
+                  </Collapse>
+                  <Collapse open={eraseMedia}>
+                    <div className="pt-4">
+                      <p className="text-xs text-gray-500">
+                        Type{" "}
+                        <span className="font-mono text-gray-300">RESET</span> to
+                        confirm.
+                      </p>
+                      <input
+                        type="text"
+                        value={confirmText}
+                        onChange={(e) => setConfirmText(e.target.value)}
+                        disabled={resetting}
+                        autoComplete="off"
+                        className={`${INPUT} mt-1`}
+                        aria-label="Type RESET to confirm"
+                      />
+                    </div>
+                  </Collapse>
+                  <div className="mt-5 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={close}
+                      disabled={resetting}
+                      className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-300 hover:bg-ink-700 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void runReset()}
+                      disabled={resetting || !canReset}
+                      className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-400 disabled:opacity-50"
+                    >
+                      {resetting ? "Resetting…" : "Reset"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>,
+            document.body
+          )
+        : null}
     </>
   );
 }

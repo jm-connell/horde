@@ -1086,12 +1086,49 @@ export function applyTheme(theme: Theme, customColors?: CustomColors): void {
 }
 
 const EVENT = "horde:settings-changed";
+const SETUP_EVENT = "horde:setup-changed";
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Module-level: one GET /api/settings for the whole app, not per useSettings mount. */
 let serverHydratePromise: Promise<void> | null = null;
 let serverHydrated = false;
+let setupCompletedFlag: boolean | null = null;
+
+export function useSetupGate(): { ready: boolean; completed: boolean } {
+  const [ready, setReady] = useState(serverHydrated);
+  const [completed, setCompleted] = useState(setupCompletedFlag !== false);
+
+  useEffect(() => {
+    const sync = () => {
+      setReady(true);
+      setCompleted(setupCompletedFlag !== false);
+    };
+    void ensureServerHydration().then(sync);
+    window.addEventListener(SETUP_EVENT, sync);
+    return () => window.removeEventListener(SETUP_EVENT, sync);
+  }, []);
+
+  return { ready, completed };
+}
+
+export function markSetupCompleted(): void {
+  setupCompletedFlag = true;
+  window.dispatchEvent(new Event(SETUP_EVENT));
+}
+
+export async function flushSettingsSync(): Promise<void> {
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+  const ui = settingsToServerUi(loadSettings());
+  try {
+    await api.updateAppSettings({ ui });
+  } catch {
+    // ignore
+  }
+}
 
 function ensureServerHydration(): Promise<void> {
   if (serverHydrated) return Promise.resolve();
@@ -1100,6 +1137,7 @@ function ensureServerHydration(): Promise<void> {
   serverHydratePromise = api
     .getAppSettings()
     .then((remote) => {
+      setupCompletedFlag = remote.setup_completed === true;
       const local = loadSettings();
       const ui = remote.ui && typeof remote.ui === "object" ? remote.ui : {};
       const hasServerUi = Object.keys(ui).length > 0;
@@ -1115,7 +1153,7 @@ function ensureServerHydration(): Promise<void> {
         if (!Object.prototype.hasOwnProperty.call(ui, "preview_muted")) {
           scheduleServerSync(next);
         }
-      } else {
+      } else if (remote.setup_completed) {
         // Migrate local → server
         const uiPayload = settingsToServerUi(local);
         if (Object.keys(uiPayload).length > 0) {
@@ -1132,6 +1170,14 @@ function ensureServerHydration(): Promise<void> {
             progressExpiryDays: remote.progress_expiry_days,
           });
         }
+      } else {
+        // Incomplete setup with empty ui: do not push leftover local prefs up.
+        persistLocal(
+          normalizeSettings({
+            ...DEFAULTS,
+            progressExpiryDays: remote.progress_expiry_days,
+          })
+        );
       }
     })
     .catch(() => undefined)

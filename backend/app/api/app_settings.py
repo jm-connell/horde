@@ -1,6 +1,6 @@
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from ..services import app_settings
@@ -95,6 +95,7 @@ class AppSettingsRead(BaseModel):
     channel_catalog_max_videos: int = 1000
     direct_youtube_search: bool = True
     youtube_video_search: bool = True
+    setup_completed: bool = False
     ui: dict[str, Any] = Field(default_factory=dict)
     ai: AiSettingsRead = Field(default_factory=AiSettingsRead)
 
@@ -110,6 +111,7 @@ class AppSettingsUpdate(BaseModel):
     )
     direct_youtube_search: Optional[bool] = None
     youtube_video_search: Optional[bool] = None
+    setup_completed: Optional[bool] = None
     ui: Optional[dict[str, Any]] = None
     ai: Optional[AiSettingsUpdate] = None
 
@@ -185,6 +187,7 @@ def _settings_read(data: dict[str, Any]) -> AppSettingsRead:
         ),
         direct_youtube_search=app_settings.direct_youtube_search_system(data),
         youtube_video_search=app_settings.youtube_video_search_system(data),
+        setup_completed=bool(data.get("setup_completed")),
         ui=ui,
         ai=_ai_read(data),
     )
@@ -212,6 +215,13 @@ def update_settings(payload: AppSettingsUpdate):
         updates["direct_youtube_search"] = bool(payload.direct_youtube_search)
     if payload.youtube_video_search is not None:
         updates["youtube_video_search"] = bool(payload.youtube_video_search)
+    if payload.setup_completed is False:
+        raise HTTPException(
+            status_code=400,
+            detail="setup_completed can only be set to true; use POST /api/setup/reset to restart setup",
+        )
+    if payload.setup_completed is True:
+        updates["setup_completed"] = True
     if payload.ui is not None:
         updates["ui"] = payload.ui
     if payload.ai is not None:

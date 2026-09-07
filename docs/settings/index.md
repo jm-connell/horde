@@ -24,7 +24,7 @@ flowchart LR
 ### How sync works
 
 1. **Boot** — Load `horde.settings` from localStorage and apply theme, custom CSS (when enabled), and fonts immediately.
-2. **Hydrate** — One `GET /api/settings` for the whole app. If `ui` has keys, they overwrite matching local fields (plus `progress_expiry_days` → `progressExpiryDays`). If `ui` is empty, the client **migrates** local `SERVER_UI_KEYS` up to the server.
+2. **Hydrate** — One `GET /api/settings` for the whole app. If `ui` has keys, they overwrite matching local fields (plus `progress_expiry_days` → `progressExpiryDays`). If `ui` is empty **and** `setup_completed` is true, the client **migrates** local `SERVER_UI_KEYS` up to the server. If setup is still incomplete, leftover local prefs are **not** pushed up (so a factory reset cannot restore the old theme/codec).
 3. **Edits** — `useSettings` writes localStorage first, then schedules a patch of the `ui` blob. Top-level and AI fields use explicit save helpers (e.g. progress expiry, catalog caps, `saveAi`).
 
 !!! tip "Same server, new browser"
@@ -77,6 +77,6 @@ The search box at the top of Settings filters rows **across tabs** using a keywo
 - [Library](library.md) — continue watching, sorts, catalog, metadata
 - [Playback](playback.md) — watch page, subtitles, SponsorBlock, speed
 - [AI](ai.md) — providers, features, jobs
-- [System](system.md) — updates, health, storage, docs links
+- [System](system.md) — updates, health, storage, factory reset, docs links
 - [All settings appendix](all-settings.md) — exhaustive key tables
 - [Settings split (design)](../design/settings-split.md) — why client vs server

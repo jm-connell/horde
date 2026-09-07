@@ -143,6 +143,7 @@ DEFAULTS: dict[str, Any] = {
     "direct_youtube_search": True,
     "youtube_video_search": True,
     "download_queue_paused": False,
+    "setup_completed": False,
     "ui": {},
     "ai": dict(AI_DEFAULTS),
 }
@@ -237,11 +238,18 @@ def load() -> dict[str, Any]:
             else:
                 merged["ui"] = {}
             merged["ai"] = _merge_ai(data.get("ai"))
+            # Existing installs predating the wizard must not be trapped in setup.
+            if "setup_completed" not in data:
+                merged["setup_completed"] = True
+            else:
+                merged["setup_completed"] = bool(data.get("setup_completed"))
             return merged
     except Exception:  # noqa: BLE001
         pass
     out = dict(DEFAULTS)
+    out["ui"] = {}
     out["ai"] = dict(AI_DEFAULTS)
+    out["setup_completed"] = False
     return out
 
 
@@ -256,10 +264,25 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
             current["ai"] = _merge_ai({**current.get("ai", {}), **updates["ai"]})
             updates = {k: v for k, v in updates.items() if k != "ai"}
         current.update(updates)
-        p = _path()
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(current, indent=2))
+        _write(current)
         return current
+
+
+def reset_to_defaults() -> dict[str, Any]:
+    """Replace the settings file with factory defaults (no ui/ai merge)."""
+    with _lock:
+        out = dict(DEFAULTS)
+        out["ui"] = {}
+        out["ai"] = dict(AI_DEFAULTS)
+        out["setup_completed"] = False
+        _write(out)
+        return out
+
+
+def _write(data: dict[str, Any]) -> None:
+    p = _path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=2))
 
 
 def ai_settings() -> dict[str, Any]:

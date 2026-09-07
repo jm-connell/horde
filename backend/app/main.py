@@ -29,6 +29,7 @@ from .api import (
     review,
     system,
     videos,
+    setup,
 )
 from .services.scanner import cleanup_orphans, start_scanner
 from .services import downloader, app_settings as app_settings_svc
@@ -98,6 +99,7 @@ app.include_router(ai.router)
 app.include_router(system.router)
 app.include_router(backgrounds.router)
 app.include_router(fonts.router)
+app.include_router(setup.router)
 
 
 def _yt_dlp_version() -> str:

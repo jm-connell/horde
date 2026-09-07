@@ -127,10 +127,10 @@ function SubtleActionButton({
 
 /**
  * Shared description + chapters chrome for library and streamed watch pages.
- * Description text is clipped until the corner expand control; tags/notes
- * sit at the end of that text. The chapters panel follows the same expanded
- * state and grows to its own content height (it does not stretch to the
- * description).
+ * Description text is clipped until the corner expand control. Tags/notes sit
+ * at the end of that text, inside the box, only after it is expanded. The
+ * chapters panel follows the same expanded state and grows to its own content
+ * height (it does not stretch to the description).
  */
 export default function WatchMeta({
   description,
@@ -184,6 +184,7 @@ export default function WatchMeta({
     if (!next) {
       if (panelRef.current) scrollToBoxTop(panelRef.current);
       topToggleRef.current?.focus({ preventScroll: true });
+      setExtrasOpen(false);
     } else {
       if (clipRef.current) clipRef.current.scrollTop = 0;
       setCollapseCaption(true);
@@ -380,7 +381,7 @@ export default function WatchMeta({
                       <p className="whitespace-pre-wrap text-sm text-gray-300">
                         <LinkifiedText text={descriptionBody} />
                       </p>
-                      {metaSideBySide && extrasBlock}
+                      {boxExpanded ? extrasBlock : null}
                     </div>
                   </div>
                   <OverlayScrollThumb
@@ -389,16 +390,8 @@ export default function WatchMeta({
                   />
                 </div>
               )}
-              {(!descriptionBody || !metaSideBySide) && hasExtras && (
-                <div
-                  className={
-                    descriptionBody
-                      ? `px-4 pb-3 ${collapseCaption ? TOGGLE_INSET : ""}`
-                      : "px-4 py-3"
-                  }
-                >
-                  {extrasBlock}
-                </div>
+              {!descriptionBody && hasExtras && (
+                <div className="px-4 py-3">{extrasBlock}</div>
               )}
               {descriptionBody && (
                 <>

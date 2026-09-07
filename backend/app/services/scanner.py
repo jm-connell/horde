@@ -28,6 +28,7 @@ from .paths import find_video_by_path, is_manual_import, to_rel_path
 from .thumbnails import unlink_for_video, write_list_thumbnail
 
 _scan_lock = threading.Lock()
+_suspended = threading.Event()
 
 # yt-dlp writes per-format fragments like "Title [id].f137.mp4" before merging
 # them into the final file; these must never be ingested as review items.
@@ -39,6 +40,19 @@ _active_source_ids: set[str] = set()
 _active_lock = threading.Lock()
 
 _SOURCE_ID_RE = re.compile(r"\[[^\]]+\]")
+
+
+def suspend_scanner() -> None:
+    """Stop ingesting files (factory reset). In-flight walks abort the remaining tree."""
+    _suspended.set()
+
+
+def resume_scanner() -> None:
+    _suspended.clear()
+
+
+def scanner_suspended() -> bool:
+    return _suspended.is_set()
 
 
 def mark_active(rel_path: str) -> None:
@@ -232,6 +246,8 @@ def scan_once(
     Returns ``(added, requeued)``. When the scan lock is already held and
     ``blocking`` is false, returns ``(0, 0)`` without walking the tree.
     """
+    if _suspended.is_set():
+        return 0, 0
     if not _scan_lock.acquire(blocking=blocking):
         return 0, 0
     added = 0
@@ -245,6 +261,8 @@ def scan_once(
         try:
             with Session(engine) as session:
                 for path in DOWNLOADS_DIR.rglob("*"):
+                    if _suspended.is_set():
+                        break
                     if _is_media(path) and _ingest_file(session, path):
                         added += 1
                         handle.update(done=added, detail=f"{added} new file(s)")
@@ -303,11 +321,15 @@ def cleanup_orphans() -> int:
 
 class _MediaEventHandler(FileSystemEventHandler):
     def _maybe_ingest(self, src_path: str) -> None:
+        if _suspended.is_set():
+            return
         path = Path(src_path)
         if not _is_media(path):
             return
         # Give the writer a moment to finish flushing the file.
         time.sleep(2)
+        if _suspended.is_set():
+            return
         try:
             with Session(engine) as session:
                 _ingest_file(session, path)

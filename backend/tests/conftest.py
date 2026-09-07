@@ -182,6 +182,7 @@ def app(init_db, monkeypatch):
         review,
         system,
         videos,
+        setup,
     )
     from app.database import get_session
     from app.main import health
@@ -210,6 +211,7 @@ def app(init_db, monkeypatch):
     test_app.include_router(system.router)
     test_app.include_router(backgrounds.router)
     test_app.include_router(fonts.router)
+    test_app.include_router(setup.router)
     test_app.add_api_route("/api/health", health, methods=["GET"])
 
     def _override_session():

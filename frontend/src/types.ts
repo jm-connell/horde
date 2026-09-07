@@ -363,6 +363,7 @@ export interface AppSettings {
   channel_catalog_max_videos: number;
   direct_youtube_search: boolean;
   youtube_video_search: boolean;
+  setup_completed: boolean;
   ui: Record<string, unknown>;
   ai: AiSettings;
 }

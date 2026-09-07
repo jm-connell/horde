@@ -41,6 +41,8 @@ describe("settings search routing", () => {
     expect(firstMatchingTab("thumbnail preview")).toBe("playback");
     expect(firstMatchingTab("preview when centered")).toBe("playback");
     expect(firstMatchingTab("none detected")).toBe("system");
+    expect(firstMatchingTab("factory reset")).toBe("system");
+    expect(firstMatchingTab("erase")).toBe("system");
   });
   it("resolves AI pane params", () => {
     expect(resolveAiPaneParam("jobs")).toBe("jobs");

@@ -3,6 +3,9 @@
 !!! tip "In the app"
     **Settings → System → Backup** summarizes what to back up and links this page at `/wiki/ops/backup-restore/` when the wiki is bundled.
 
+!!! warning "In-app reset is not a volume wipe"
+    **Settings → System → Reset Horde** restores `app_settings.json` to defaults and re-runs the setup wizard. With **Erase all media**, it deletes library files *inside* the mounted downloads directory and related DB rows. It does **not** change Compose host paths, cookie files, or env API keys. To throw away an entire dataset, snapshot/delete the host `DATA_PATH` and `DOWNLOADS_PATH` volumes instead.
+
 ## What to back up
 
 Back up both volume roots used by Compose (or your local dirs):

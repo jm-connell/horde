@@ -421,6 +421,18 @@ export const api = {
     });
   },
 
+  resetApp(eraseMedia: boolean): Promise<{
+    setup_completed: boolean;
+    erased_media: boolean;
+    library_video_count: number;
+  }> {
+    return request("/api/setup/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ erase_media: eraseMedia }),
+    });
+  },
+
   getAiStatus(): Promise<AiStatus> {
     return request<AiStatus>("/api/ai/status");
   },

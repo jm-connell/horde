@@ -7,14 +7,17 @@ import Download from "./pages/Download";
 import Import from "./pages/Import";
 import Watch from "./pages/Watch";
 import Settings from "./pages/Settings";
+import Setup from "./pages/Setup";
 import Playlists from "./pages/Playlists";
 import PlaylistDetail from "./pages/PlaylistDetail";
 import TopNav from "./components/TopNav";
 import BackgroundEffect from "./components/BackgroundEffect";
+import LoadingIndicator from "./components/LoadingIndicator";
 import { PlaybackProvider } from "./context/PlaybackContext";
 import { DownloadProvider } from "./context/DownloadContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
+import { useSetupGate } from "./hooks/useSettings";
 
 /** Back-compat: /preview?url=&channel= → /watch?url=&channel= */
 function PreviewRedirect() {
@@ -60,11 +63,47 @@ function AppRoutes() {
         <Route path="/import" element={<Import />} />
         <Route path="/review" element={<Navigate to="/import" replace />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/setup" element={<Navigate to="/" replace />} />
         <Route path="/watch/:id" element={<Watch />} />
         <Route path="/watch" element={<Watch />} />
         <Route path="/preview" element={<PreviewRedirect />} />
       </Routes>
     </main>
+  );
+}
+
+function AppShell() {
+  const { ready, completed } = useSetupGate();
+
+  if (!ready) {
+    return (
+      <div className="relative min-h-full overflow-x-hidden">
+        <BackgroundEffect />
+        <LoadingIndicator label="Loading" />
+      </div>
+    );
+  }
+
+  if (!completed) {
+    return (
+      <div className="relative min-h-full overflow-x-hidden">
+        <BackgroundEffect />
+        <main className="relative z-10">
+          <Routes>
+            <Route path="/setup" element={<Setup />} />
+            <Route path="*" element={<Navigate to="/setup" replace />} />
+          </Routes>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative min-h-full overflow-x-hidden">
+      <BackgroundEffect />
+      <TopNav />
+      <AppRoutes />
+    </div>
   );
 }
 
@@ -74,11 +113,7 @@ export default function App() {
       <DownloadProvider>
         <SearchProvider>
           <PlaybackProvider>
-            <div className="relative min-h-full overflow-x-hidden">
-              <BackgroundEffect />
-              <TopNav />
-              <AppRoutes />
-            </div>
+            <AppShell />
           </PlaybackProvider>
         </SearchProvider>
       </DownloadProvider>
