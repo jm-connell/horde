@@ -19,12 +19,17 @@ describe("loading styles", () => {
 
   it("accepts known styles and rejects unknown ones", () => {
     expect(isLoadingStyle("dots")).toBe(true);
-    expect(isLoadingStyle("blob")).toBe(true);
-    expect(isLoadingStyle("atom")).toBe(true);
     expect(isLoadingStyle("cube")).toBe(true);
     expect(isLoadingStyle("leapfrog")).toBe(true);
-    expect(isLoadingStyle("goo")).toBe(true);
-    expect(isLoadingStyle("pong")).toBe(true);
+    expect(isLoadingStyle("pong")).toBe(false);
+    expect(isLoadingStyle("orbit")).toBe(false);
+    expect(isLoadingStyle("blob")).toBe(false);
+    expect(isLoadingStyle("atom")).toBe(false);
+    expect(isLoadingStyle("helix")).toBe(false);
+    expect(isLoadingStyle("split")).toBe(false);
+    expect(isLoadingStyle("newton")).toBe(false);
+    expect(isLoadingStyle("bouncebox")).toBe(false);
+    expect(isLoadingStyle("goo")).toBe(false);
     expect(isLoadingStyle("infinity")).toBe(false);
     expect(isLoadingStyle("tesseract")).toBe(false);
     expect(isLoadingStyle("nope")).toBe(false);
@@ -34,11 +39,8 @@ describe("loading styles", () => {
 
 describe("settings search for loading styles", () => {
   it("routes loading animation names to appearance", () => {
-    expect(firstMatchingTab("orbit")).toBe("appearance");
     expect(firstMatchingTab("comet")).toBe("appearance");
-    expect(firstMatchingTab("helix")).toBe("appearance");
     expect(firstMatchingTab("leapfrog")).toBe("appearance");
-    expect(firstMatchingTab("newton")).toBe("appearance");
     expect(firstMatchingTab("equalizer")).toBe("appearance");
   });
 });

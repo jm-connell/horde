@@ -189,26 +189,17 @@ Settings shows a looping preview of each option instead of a text label.
 | `dots` | **Default** — bouncing beads |
 | `spinner` | Classic rotating ring |
 | `bar` | Indeterminate sweep |
-| `orbit` | Satellite around a core |
 | `pulse` | Expanding sonar rings |
 | `wave` | Equalizer bars |
 | `comet` | Sweeping tail |
 | `tiles` | Staggered squares |
 | `petal` | Blooming ring of beads |
-| `blob` | Morphing glow |
-| `atom` | Electrons on tilted orbital rings |
 | `cube` | Wireframe cube on every axis |
-| `helix` | Double strand |
 | `spiral` | Beads funneling inward |
 | `swarm` | Fireflies on tangled paths |
 | `leapfrog` | Beads hopping over each other |
 | `plus` | Arms fold in, then the plus turns |
-| `split` | Expanding grid; outer tiles step around |
 | `ringwalk` | Pentagon stepping on a spinning ring |
-| `newton` | Five-bead cradle |
-| `bouncebox` | Two beads ricocheting in a frame |
-| `pong` | A paddle batting a bouncing ball |
-| `goo` | Gooey dots cycling around a plus |
 
 ## See also
 
