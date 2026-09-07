@@ -65,6 +65,7 @@ export const CSS_SELECTORS: CssHookRow[] = [
   { selector: '[data-horde="background"]', meaning: "Background effect / image" },
   { selector: '[data-horde="video-card"]', meaning: "Library video card" },
   { selector: '[data-horde="feed-card"]', meaning: "Channel feed card" },
+  { selector: '[data-horde="card-preview-seek"]', meaning: "Hover-preview seek bar on a video thumbnail" },
   { selector: '[data-horde="page-scroll"]', meaning: "Document overlay scroll thumb" },
   { selector: ".page-shell", meaning: "Centered page column" },
   { selector: ".ui-panel", meaning: "Settings panels, menus, chrome blocks" },

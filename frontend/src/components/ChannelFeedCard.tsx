@@ -206,7 +206,11 @@ function FeedThumbnail({
           </span>
         </div>
         {showDuration && duration && (
-          <span className="pointer-events-none absolute bottom-2 right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
+          <span
+            className={`pointer-events-none absolute right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100 ${
+              previewing ? "bottom-3.5" : "bottom-2"
+            }`}
+          >
             {duration}
           </span>
         )}

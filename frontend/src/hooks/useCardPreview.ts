@@ -31,6 +31,30 @@ let envReady = false;
 let hoverMq: MediaQueryList | null = null;
 let motionMq: MediaQueryList | null = null;
 let observer: IntersectionObserver | null = null;
+/** Pointer capture on the preview seek bar; ignore hover-leave until release. */
+let previewRetainCount = 0;
+let retainReleaseTimer: number | null = null;
+
+function clearRetainReleaseTimer() {
+  if (retainReleaseTimer == null) return;
+  window.clearTimeout(retainReleaseTimer);
+  retainReleaseTimer = null;
+}
+
+function pointerIsOverCard(card: CardEntry, clientX?: number, clientY?: number) {
+  if (clientX != null && clientY != null) {
+    const hit = document.elementFromPoint(clientX, clientY);
+    return !!hit && card.el.contains(hit);
+  }
+  return card.el.matches(":hover");
+}
+
+function maybeReleaseRetainedHover(clientX?: number, clientY?: number) {
+  if (previewRetainCount > 0 || mode !== "hover" || !activeId) return;
+  const card = cards.get(activeId);
+  if (!card || pointerIsOverCard(card, clientX, clientY)) return;
+  setActive(null);
+}
 
 function clearHoverTimer() {
   if (hoverTimer == null) return;
@@ -66,7 +90,25 @@ function requestHover(id: string) {
 
 function releaseHover(id: string) {
   clearHoverTimer();
+  if (previewRetainCount > 0 && activeId === id) return;
   if (activeId === id) setActive(null);
+}
+
+/** Keep the hover preview alive while dragging the timeline off the card. */
+export function retainActiveCardPreview() {
+  clearRetainReleaseTimer();
+  previewRetainCount += 1;
+}
+
+export function releaseActiveCardPreview(clientX?: number, clientY?: number) {
+  previewRetainCount = Math.max(0, previewRetainCount - 1);
+  if (previewRetainCount > 0) return;
+  clearRetainReleaseTimer();
+  // Defer so a click from this pointer gesture still hits the seek bar, not a card link.
+  retainReleaseTimer = window.setTimeout(() => {
+    retainReleaseTimer = null;
+    maybeReleaseRetainedHover(clientX, clientY);
+  }, 0);
 }
 
 function evaluateCenter() {
@@ -172,6 +214,8 @@ function applyMode(next: PreviewMode) {
   }
   clearHoverTimer();
   clearCenterTimer();
+  clearRetainReleaseTimer();
+  previewRetainCount = 0;
   for (const card of cards.values()) {
     if (next === "hover") attachHover(card);
     else detachHover(card);
@@ -204,6 +248,8 @@ function onVisibility() {
   if (document.hidden) {
     clearHoverTimer();
     clearCenterTimer();
+    clearRetainReleaseTimer();
+    previewRetainCount = 0;
     setActive(null);
     return;
   }
@@ -244,6 +290,8 @@ function teardownEnvIfIdle() {
   observer = null;
   clearHoverTimer();
   clearCenterTimer();
+  clearRetainReleaseTimer();
+  previewRetainCount = 0;
   if (raf) {
     cancelAnimationFrame(raf);
     raf = 0;

@@ -885,7 +885,7 @@ html[data-hover-motion="glow"] .ui-panel-toggle:focus-visible .ui-panel-toggle-p
    full-width hover background. */
 html[data-button-press="on"] button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(.ui-player-chrome):not(.youtube-search-chip):active,
 html[data-button-press="on"] .ui-interactive:not(.ui-panel-toggle):active,
-html[data-button-press="on"] a.ui-card:active {
+html[data-button-press="on"] a.ui-card:active:not([data-preview-scrubbing]) {
   transform: scale(0.97);
   transition-duration: 80ms;
 }

@@ -150,11 +150,15 @@ export default function VideoCard({
           />
         ) : null}
         {duration && (
-          <span className="pointer-events-none absolute bottom-2 right-2 z-10 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100">
+          <span
+            className={`pointer-events-none absolute right-2 z-10 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100 ${
+              previewActive ? "bottom-3.5" : "bottom-2"
+            }`}
+          >
             {duration}
           </span>
         )}
-        {progress !== undefined && progress > 0 && (
+        {progress !== undefined && progress > 0 && !previewActive && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-1 bg-black/50">
             <div
               className="h-full bg-accent"
