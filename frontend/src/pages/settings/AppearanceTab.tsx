@@ -203,8 +203,6 @@ export default function AppearanceTab() {
         </Collapse>
       </Section>
 
-      <CustomCssSection />
-
       <Section
         title="Font"
         description="App typeface and size. Inter (default) keeps the current stack."
@@ -1145,6 +1143,8 @@ export default function AppearanceTab() {
           </div>
         </div>
       </Section>
+
+      <CustomCssSection />
     </>
   );
 }

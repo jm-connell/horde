@@ -238,12 +238,30 @@ export function formatPublishedAt(
   return formatDate(s);
 }
 
+/** 1500 → "1.5K", 23000 → "23K", 1_000_000 → "1M". */
+export function formatCompactCount(count: number): string {
+  const format = (n: number, suffix: string) => {
+    const rounded = Math.round(n * 10) / 10;
+    const body = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    return `${body}${suffix}`;
+  };
+  if (count >= 1_000_000_000) return format(count / 1_000_000_000, "B");
+  if (count >= 1_000_000) return format(count / 1_000_000, "M");
+  if (count >= 1_000) return format(count / 1_000, "K");
+  return String(count);
+}
+
 export function formatViewCount(count: number | null): string {
   if (count === null || count < 0) return "";
-  if (count >= 1_000_000_000) return `${(count / 1_000_000_000).toFixed(1)}B views`;
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M views`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K views`;
-  return `${count} views`;
+  if (count < 1_000) return `${count} views`;
+  return `${formatCompactCount(count)} views`;
+}
+
+/** Join card meta tokens with middots, skipping blanks. */
+export function joinDotList(
+  parts: Array<string | null | undefined | false>
+): string {
+  return parts.filter((p): p is string => typeof p === "string" && p.trim() !== "").join(" · ");
 }
 
 /** Compact like ratio label (e.g. "92%") when both counts are known. */
@@ -336,67 +354,10 @@ export function formatRelative(iso: string | null): string {
   return `${Math.floor(diffMo / 12)}y ago`;
 }
 
-function stripTrailingUrlPunctuation(url: string): string {
-  return url.replace(/[.,;:!?)]+$/, "");
-}
-
-/** First URL (or first line) from a clipboard paste. */
-export function clipboardTextToUrl(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) return "";
-  const firstLine = trimmed.split(/\r?\n/, 1)[0]!.trim();
-  if (/^https?:\/\//i.test(firstLine)) {
-    return stripTrailingUrlPunctuation(firstLine.split(/\s+/, 1)[0]!);
-  }
-  const match = trimmed.match(/https?:\/\/[^\s<>"']+/i);
-  if (!match) return firstLine;
-  return stripTrailingUrlPunctuation(match[0]);
-}
-
-function hrefFromHtml(html: string): string {
-  const href = html.match(/href=["'](https?:\/\/[^"']+)["']/i);
-  return href?.[1] ?? "";
-}
-
-/** Read clipboard text. Returns "" when the API is missing, denied, or empty. */
-export async function readClipboardText(): Promise<string> {
-  const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard;
-  if (!clipboard) return "";
-
-  let denied = false;
-  try {
-    if (typeof clipboard.readText === "function") {
-      const text = await clipboard.readText();
-      if (text?.trim()) return text;
-    }
-  } catch {
-    denied = true;
-  }
-  if (denied) return "";
-
-  try {
-    if (typeof clipboard.read !== "function") return "";
-    const items = await clipboard.read();
-    for (const item of items) {
-      if (item.types.includes("text/plain")) {
-        const raw = await (await item.getType("text/plain")).text();
-        if (raw.trim()) return raw;
-      }
-      if (item.types.includes("text/uri-list")) {
-        const raw = await (await item.getType("text/uri-list")).text();
-        if (raw.trim()) return raw;
-      }
-      if (item.types.includes("text/html")) {
-        const raw = await (await item.getType("text/html")).text();
-        const href = hrefFromHtml(raw);
-        if (href) return href;
-      }
-    }
-  } catch {
-    return "";
-  }
-  return "";
-}
+export {
+  clipboardTextToUrl,
+  readClipboardText,
+} from "./clipboard";
 
 /** Source URL for re-downloading; falls back to YouTube id in the file path. */
 export function effectiveSourceUrl(video: {

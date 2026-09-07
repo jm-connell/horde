@@ -87,9 +87,10 @@ html[data-page="watch"] [data-horde="nav"] {
 | `background` | Background effect canvas or custom image |
 | `video-card` | Library video card |
 | `feed-card` | Channel-feed card |
+| `page-scroll` | Document overlay scroll thumb (hover/scroll, no native track) |
 | `custom-css` | The injected `<style>` tag itself |
 
-Semantic classes already used by motion/transparency: `.ui-panel`, `.ui-panel-legible`, `.ui-card`, `.ui-interactive`, `.page-shell`, `.horde-scrollbar`, `.horde-meta-scrollbar`.
+Semantic classes already used by motion/transparency: `.ui-panel`, `.ui-panel-legible`, `.ui-card`, `.ui-interactive`, `.page-shell`, `.horde-scrollbar`, `.horde-meta-scrollbar`, `.horde-overlay-scroll-thumb`.
 
 ## Examples
 

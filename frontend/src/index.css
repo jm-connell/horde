@@ -3,25 +3,30 @@
 @tailwind utilities;
 
 html {
-  overflow-y: scroll;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--accent) / 0.45) rgb(var(--ink-800));
+  overflow-y: auto;
 }
-html::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+
+/* Overlay thumbs: hide native bars so GTK cannot draw stepper triangles
+   or a track. OverlayScrollThumb paints the accent pill on hover/scroll. */
+html,
+body,
+.horde-meta-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-html::-webkit-scrollbar-track {
-  background: rgb(var(--ink-800));
-  border-radius: 999px;
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.horde-meta-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
-html::-webkit-scrollbar-thumb {
-  background: rgb(var(--accent) / 0.45);
-  border-radius: 999px;
-}
-html::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--accent) / 0.7);
+
+/* Overlay pill is always opaque accent — not panel alpha / tint. */
+.horde-overlay-scroll-thumb {
+  background-color: rgb(var(--accent));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* Themed thin scrollbars (queue / panels) */
@@ -43,18 +48,6 @@ html::-webkit-scrollbar-thumb:hover {
 }
 .horde-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--accent) / 0.7);
-}
-
-/* Description / chapters: hide the native bar (GTK draws unstyleable
-   stepper triangles) and pair with OverlayScrollThumb for a hover thumb. */
-.horde-meta-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.horde-meta-scrollbar::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
 }
 
 /* Native <select> arrows sit on the GTK box edge; draw our own inset chevron. */

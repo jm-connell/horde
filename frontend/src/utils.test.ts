@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  clipboardTextToUrl,
   dedupeSubtitleTracks,
   effectiveSourceUrl,
   formatSize,
@@ -8,7 +7,9 @@ import {
   formatUsdCost,
   formatResolution,
   formatViewCount,
+  formatCompactCount,
   formatLikeRatio,
+  joinDotList,
   downloadProgressPercent,
   downloadProcessingLabel,
   formatDate,
@@ -17,7 +18,6 @@ import {
   parseChapters,
   chaptersFromApi,
   resolveLibraryChapters,
-  readClipboardText,
   stripChapterLines,
   watchProcessingLabel,
   youtubeListThumbnailUrl,
@@ -150,8 +150,17 @@ describe("misc helpers", () => {
     );
   });
   it("formats view count and like ratio", () => {
+    expect(formatViewCount(42)).toBe("42 views");
     expect(formatViewCount(1500)).toBe("1.5K views");
+    expect(formatViewCount(23_000)).toBe("23K views");
+    expect(formatViewCount(132_000)).toBe("132K views");
+    expect(formatViewCount(1_000_000)).toBe("1M views");
+    expect(formatViewCount(1_500_000)).toBe("1.5M views");
+    expect(formatCompactCount(23_000)).toBe("23K");
     expect(formatLikeRatio(92, 8)).toBe("92%");
+    expect(
+      joinDotList(["Sep 5, 2026", "83K views", "99%", "", null])
+    ).toBe("Sep 5, 2026 · 83K views · 99%");
   });
   it("effectiveSourceUrl falls back to path id", () => {
     expect(
@@ -160,79 +169,6 @@ describe("misc helpers", () => {
         file_path: "Chan/2024/Title [dQw4w9WgXcQ].mp4",
       })
     ).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-  });
-});
-
-describe("clipboardTextToUrl", () => {
-  it("trims and keeps a bare URL", () => {
-    expect(clipboardTextToUrl("  https://youtu.be/dQw4w9WgXcQ  \n")).toBe(
-      "https://youtu.be/dQw4w9WgXcQ"
-    );
-  });
-
-  it("pulls the first URL out of surrounding text", () => {
-    expect(
-      clipboardTextToUrl("watch this\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ extra")
-    ).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-  });
-
-  it("returns the first line when there is no URL", () => {
-    expect(clipboardTextToUrl("not a link\nsecond")).toBe("not a link");
-  });
-
-  it("keeps only the URL token on a mixed first line", () => {
-    expect(
-      clipboardTextToUrl("https://youtu.be/dQw4w9WgXcQ copied from YouTube.")
-    ).toBe("https://youtu.be/dQw4w9WgXcQ");
-  });
-});
-
-describe("readClipboardText", () => {
-  it("returns empty when the Clipboard API is missing", async () => {
-    expect(await readClipboardText()).toBe("");
-  });
-
-  it("returns clipboard text when readText succeeds", async () => {
-    const previous = globalThis.navigator;
-    Object.defineProperty(globalThis, "navigator", {
-      configurable: true,
-      value: {
-        clipboard: {
-          readText: async () => "  https://youtu.be/dQw4w9WgXcQ  ",
-        },
-      },
-    });
-    try {
-      expect(await readClipboardText()).toBe("  https://youtu.be/dQw4w9WgXcQ  ");
-    } finally {
-      Object.defineProperty(globalThis, "navigator", {
-        configurable: true,
-        value: previous,
-      });
-    }
-  });
-
-  it("returns empty when readText is denied", async () => {
-    const previous = globalThis.navigator;
-    Object.defineProperty(globalThis, "navigator", {
-      configurable: true,
-      value: {
-        clipboard: {
-          readText: async () => {
-            throw new Error("NotAllowedError");
-          },
-          read: async () => [{ types: ["text/plain"] }],
-        },
-      },
-    });
-    try {
-      expect(await readClipboardText()).toBe("");
-    } finally {
-      Object.defineProperty(globalThis, "navigator", {
-        configurable: true,
-        value: previous,
-      });
-    }
   });
 });
 

@@ -74,14 +74,17 @@ export function shouldStackMeta({
   rem,
   hasSecondary,
   combinedOverflows = false,
+  forceStacked = false,
 }: {
   titleNeeded: number;
   detailsInner: number;
   rem: number;
   hasSecondary: boolean;
   combinedOverflows?: boolean;
+  forceStacked?: boolean;
 }): boolean {
   if (!hasSecondary) return false;
+  if (forceStacked) return true;
   if (titleNeeded <= 1) return true;
   if (combinedOverflows) return true;
   if (detailsInner <= 0) return false;
@@ -129,7 +132,8 @@ function useNodeRef(): {
 export function useCardCopyLayout(
   title: string,
   hasSecondary: boolean,
-  enabled = true
+  enabled = true,
+  forceStacked = false
 ): {
   detailsRef: (node: HTMLElement | null) => void;
   sizerRef: (node: HTMLElement | null) => void;
@@ -196,6 +200,7 @@ export function useCardCopyLayout(
     rem,
     hasSecondary,
     combinedOverflows,
+    forceStacked,
   });
   const titleLines = titleLinesShown({
     titleNeeded,

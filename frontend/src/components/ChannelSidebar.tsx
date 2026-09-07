@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import Collapse from "./Collapse";
 import type { ChannelStat } from "../types";
+import { formatCompactCount } from "../utils";
+import Collapse from "./Collapse";
 
 const CHANNEL_SIDEBAR_LIMIT = 30;
 
 function formatSubscriberCount(count: number | null) {
   if (count === null) return null;
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
-  return String(count);
+  return formatCompactCount(count);
 }
 
 export default function ChannelSidebar({

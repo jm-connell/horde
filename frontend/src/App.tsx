@@ -13,6 +13,7 @@ import PlaylistDetail from "./pages/PlaylistDetail";
 import TopNav from "./components/TopNav";
 import BackgroundEffect from "./components/BackgroundEffect";
 import LoadingIndicator from "./components/LoadingIndicator";
+import OverlayScrollThumb from "./components/OverlayScrollThumb";
 import { PlaybackProvider } from "./context/PlaybackContext";
 import { DownloadProvider } from "./context/DownloadContext";
 import { ToastProvider } from "./context/ToastContext";
@@ -114,6 +115,7 @@ export default function App() {
         <SearchProvider>
           <PlaybackProvider>
             <AppShell />
+            <OverlayScrollThumb viewport />
           </PlaybackProvider>
         </SearchProvider>
       </DownloadProvider>

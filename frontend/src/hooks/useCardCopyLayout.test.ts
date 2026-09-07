@@ -93,6 +93,18 @@ describe("shouldStackMeta", () => {
     ).toBe(true);
   });
 
+  it("forceStacked keeps a two-line title from squeezing extra feed actions onto one row", () => {
+    expect(
+      shouldStackMeta({
+        titleNeeded: 2,
+        detailsInner: compactInner(2, 1),
+        rem,
+        hasSecondary: true,
+        forceStacked: true,
+      })
+    ).toBe(true);
+  });
+
   it("does not stack when there is no date/views to split", () => {
     expect(
       shouldStackMeta({

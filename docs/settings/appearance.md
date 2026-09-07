@@ -41,14 +41,6 @@ When theme is `custom`, `customColors` supplies:
 !!! note "Cap"
     At most **40** presets. Extra entries are dropped on normalize (`customThemes.slice(0, 40)`).
 
-## Custom CSS
-
-**Custom CSS** is off by default. Turn on **Enable custom CSS** to show the editor and inject the stylesheet as `#horde-custom-css` after built-in theme styles. Capped at **64 000** characters; synced in the `ui` blob (`customCss`, `customCssEnabled`). Turning the toggle off leaves the CSS in place but stops injecting it.
-
-Prefer CSS variables (`--accent`, `--ink-950` …) and stable hooks (`html[data-page]`, `[data-horde="nav"]`, `.ui-card`) over scraping every Tailwind class. When enabled, Settings shows a collapsed selector list; the full catalog is [Custom CSS](custom-css.md).
-
-A generated “HTML element wiki” is intentionally **not** shipped — component markup changes often, so DevTools is the source of truth for one-off selectors.
-
 ## Fonts
 
 ### Built-in typefaces (`uiFont`)
@@ -200,6 +192,14 @@ Settings shows a looping preview of each option instead of a text label.
 | `leapfrog` | Beads hopping over each other |
 | `plus` | Arms fold in, then the plus turns |
 | `ringwalk` | Pentagon stepping on a spinning ring |
+
+## Custom CSS
+
+**Custom CSS** is off by default. Turn on **Enable custom CSS** to show the editor and inject the stylesheet as `#horde-custom-css` after built-in theme styles. Capped at **64 000** characters; synced in the `ui` blob (`customCss`, `customCssEnabled`). Turning the toggle off leaves the CSS in place but stops injecting it.
+
+Prefer CSS variables (`--accent`, `--ink-950` …) and stable hooks (`html[data-page]`, `[data-horde="nav"]`, `.ui-card`) over scraping every Tailwind class. When enabled, Settings shows a collapsed selector list; the full catalog is [Custom CSS](custom-css.md).
+
+A generated “HTML element wiki” is intentionally **not** shipped — component markup changes often, so DevTools is the source of truth for one-off selectors.
 
 ## See also
 

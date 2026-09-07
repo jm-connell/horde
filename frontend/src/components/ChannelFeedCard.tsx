@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { api, streamUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
 import { useCardPreview } from "../hooks/useCardPreview";
-import { useCardCopyLayout } from "../hooks/useCardCopyLayout";
 import { maxPresetLabel } from "../presets";
 import type { ChannelFeedEntry } from "../types";
 import {
@@ -12,6 +11,7 @@ import {
   formatLikeRatio,
   formatResolution,
   formatViewCount,
+  joinDotList,
   youtubeThumbnailUrl,
 } from "../utils";
 import { enqueueYtPreview } from "../utils/ytPreviewQueue";
@@ -58,34 +58,12 @@ function FeedChannelName({
   );
 }
 
-function LikeRatioBadge({
-  likes,
-  dislikes,
-}: {
-  likes: number | null | undefined;
-  dislikes: number | null | undefined;
-}) {
-  const label = formatLikeRatio(likes, dislikes);
-  if (!label || likes == null || dislikes == null) return null;
-  const total = likes + dislikes;
-  const pct = total > 0 ? (likes / total) * 100 : 0;
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-500"
-      title={`${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes (YouTube)`}
-    >
-      <span
-        className="inline-block h-1 w-8 overflow-hidden rounded-full bg-ink-700"
-        aria-hidden
-      >
-        <span
-          className="block h-full rounded-full bg-emerald-500/80"
-          style={{ width: `${pct}%` }}
-        />
-      </span>
-      <span>{label}</span>
-    </span>
-  );
+function likeRatioTitle(
+  likes: number | null | undefined,
+  dislikes: number | null | undefined
+): string {
+  if (likes == null || dislikes == null) return "";
+  return `${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes (YouTube)`;
 }
 
 function watchHref(entry: ChannelFeedEntry, channelName: string): string | null {
@@ -107,7 +85,6 @@ function FeedMetaRow({
   maxRes,
   inLibrary,
   downloading,
-  stacked,
   onDownload,
   onChannelClick,
 }: {
@@ -116,89 +93,53 @@ function FeedMetaRow({
   maxRes: string;
   inLibrary: boolean;
   downloading?: boolean;
-  stacked: boolean;
   onDownload: () => void;
   onChannelClick?: () => void;
 }) {
   const dateLabel = formatPublishedAt(entry.published_at, entry.published_label);
-  const secondary = (
-    <>
-      {dateLabel ? (
-        <span className="shrink-0 text-xs leading-4 text-gray-500">{dateLabel}</span>
-      ) : null}
-      {entry.view_count != null ? (
-        <span className="shrink-0 text-xs leading-4 text-gray-500">
-          {formatViewCount(entry.view_count)}
-        </span>
-      ) : null}
-      <LikeRatioBadge
-        likes={entry.like_count}
-        dislikes={entry.dislike_count}
-      />
-      {inLibrary ? (
-        <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 ring-1 ring-emerald-500/40">
-          Downloaded
-        </span>
-      ) : null}
-    </>
-  );
-  const hasSecondary = Boolean(
-    dateLabel ||
-      entry.view_count != null ||
-      (entry.like_count != null && entry.dislike_count != null) ||
-      inLibrary
-  );
-  const actions = (
-    <div className="flex shrink-0 items-center gap-2">
-      {maxRes ? (
-        <span className="text-[10px] font-medium text-gray-500">{maxRes}</span>
-      ) : null}
-      {!inLibrary ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onDownload();
-          }}
-          disabled={downloading}
-          className="rounded bg-accent px-2 py-0.5 text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
-        >
-          {downloading ? "Queued…" : "Download"}
-        </button>
-      ) : null}
-    </div>
-  );
-
-  if (stacked && hasSecondary) {
-    return (
-      <div className="flex flex-col gap-1">
-        <div className="flex min-w-0 flex-nowrap items-center gap-x-2">
-          {secondary}
-        </div>
-        <div className="flex min-w-0 items-center justify-between gap-2">
-          <FeedChannelName
-            name={channelName}
-            onChannelClick={onChannelClick}
-            className="break-words text-xs leading-4 text-gray-400"
-          />
-          {actions}
-        </div>
-      </div>
-    );
-  }
-
+  const views =
+    entry.view_count != null ? formatViewCount(entry.view_count) : "";
+  const likeLabel = formatLikeRatio(entry.like_count, entry.dislike_count);
+  const stats = joinDotList([dateLabel, views, likeLabel]);
+  const likeTip = likeRatioTitle(entry.like_count, entry.dislike_count);
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-x-2">
-        <FeedChannelName
-          name={channelName}
-          onChannelClick={onChannelClick}
-          className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-400"
-        />
-        {secondary}
+    <div className="flex min-w-0 flex-col gap-1">
+      <FeedChannelName
+        name={channelName}
+        onChannelClick={onChannelClick}
+        className="min-w-0 truncate text-xs leading-4 text-gray-400"
+      />
+      <span
+        className="block min-h-4 min-w-0 truncate text-xs leading-4 text-gray-500"
+        title={likeTip ? `${stats}${stats ? " · " : ""}${likeTip}` : stats || undefined}
+      >
+        {stats || "\u00a0"}
+      </span>
+      <div className="flex h-6 min-w-0 items-center gap-2">
+        {inLibrary ? (
+          <span className="text-xs font-medium leading-none text-emerald-400">
+            Downloaded
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDownload();
+            }}
+            disabled={downloading}
+            className="h-6 shrink-0 rounded bg-accent px-2.5 text-xs font-medium leading-none text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+          >
+            {downloading ? "Queued…" : "Download"}
+          </button>
+        )}
+        {maxRes ? (
+          <span className="ml-auto shrink-0 text-[10px] font-medium text-gray-500">
+            {maxRes}
+          </span>
+        ) : null}
       </div>
-      {actions}
     </div>
   );
 }
@@ -345,21 +286,13 @@ export default function ChannelFeedCard({
           url: entry.channel_url ?? null,
         })
     : undefined;
-  const likeLabel = formatLikeRatio(entry.like_count, entry.dislike_count);
-  const hasSecondaryMeta = Boolean(
-    dateLabel ||
-      viewCount != null ||
-      (entry.like_count != null && entry.dislike_count != null) ||
-      inLibrary
-  );
-  const {
-    detailsRef,
-    sizerRef,
-    combinedSizerRef,
-    stacked,
-    titleLines,
-    titleNeeded,
-  } = useCardCopyLayout(titleText, hasSecondaryMeta, layout === "grid");
+  const listStats = joinDotList([
+    duration,
+    dateLabel,
+    viewCount != null ? formatViewCount(viewCount) : "",
+    formatLikeRatio(entry.like_count, entry.dislike_count),
+  ]);
+  const listLikeTip = likeRatioTitle(entry.like_count, entry.dislike_count);
 
   useEffect(() => {
     if (entry.library_height_px) {
@@ -436,32 +369,16 @@ export default function ChannelFeedCard({
                 className="break-words text-xs leading-4 text-gray-400"
               />
             </span>
-            <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
-              {duration && <span>{duration}</span>}
-              {duration && dateLabel && (
-                <span className="text-gray-600">·</span>
-              )}
-              {dateLabel && <span>{dateLabel}</span>}
-              {(duration || dateLabel) && viewCount != null && (
-                <span className="text-gray-600">·</span>
-              )}
-              {viewCount != null && <span>{formatViewCount(viewCount)}</span>}
-              {(duration || dateLabel || viewCount != null) &&
-                entry.like_count != null &&
-                entry.dislike_count != null && (
-                  <span className="text-gray-600">·</span>
-                )}
-              <LikeRatioBadge
-                likes={entry.like_count}
-                dislikes={entry.dislike_count}
-              />
-              {inLibrary && (
-                <>
-                  <span className="text-gray-600">·</span>
-                  <span className="text-emerald-400">Downloaded</span>
-                </>
-              )}
-            </div>
+            <p
+              className="truncate text-xs leading-4 text-gray-500"
+              title={
+                listLikeTip
+                  ? `${listStats}${listStats ? " · " : ""}${listLikeTip}`
+                  : listStats || undefined
+              }
+            >
+              {listStats}
+            </p>
           </div>
           <div className="flex h-full min-h-[4.5rem] shrink-0 flex-col items-end justify-between py-0.5 pl-3">
             {!inLibrary ? (
@@ -502,72 +419,28 @@ export default function ChannelFeedCard({
           previewActive={previewActive}
         />
         <div
-          ref={detailsRef}
-          className={`relative flex min-h-0 flex-1 flex-col gap-1 p-3 transition-colors duration-200 ${
+          className={`flex flex-col gap-1 p-3 transition-colors duration-200 ${
             previewActive ? "max-sm:bg-accent/10" : ""
           }`}
         >
-          <span
-            ref={sizerRef}
-            aria-hidden
-            className="pointer-events-none invisible absolute inset-x-3 top-3 -z-10 break-words text-sm font-semibold leading-5"
-          >
-            {titleText}
-          </span>
-          <span
-            ref={combinedSizerRef}
-            aria-hidden
-            className="pointer-events-none invisible absolute left-3 top-3 -z-10 flex w-max items-center gap-x-2 text-xs leading-4"
-          >
-            <span className="shrink-0 whitespace-nowrap">{channelName}</span>
-            {dateLabel ? (
-              <span className="shrink-0 whitespace-nowrap">{dateLabel}</span>
-            ) : null}
-            {viewCount != null ? (
-              <span className="shrink-0 whitespace-nowrap">
-                {formatViewCount(viewCount)}
-              </span>
-            ) : null}
-            {likeLabel ? (
-              <span className="shrink-0 whitespace-nowrap">{likeLabel}</span>
-            ) : null}
-            {inLibrary ? (
-              <span className="shrink-0 whitespace-nowrap">Downloaded</span>
-            ) : null}
-            {maxRes ? (
-              <span className="shrink-0 whitespace-nowrap text-[10px] font-medium">
-                {maxRes}
-              </span>
-            ) : null}
-            {!inLibrary ? (
-              <span className="shrink-0 whitespace-nowrap">
-                {downloading ? "Queued…" : "Download"}
-              </span>
-            ) : null}
-          </span>
           <CardTitle
             text={titleText}
-            truncated={titleNeeded > titleLines}
-            className="min-h-0 flex-1 overflow-hidden break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
+            className="line-clamp-2 min-h-10 overflow-hidden break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
             style={{
               display: "-webkit-box",
               WebkitBoxOrient: "vertical",
-              WebkitLineClamp: titleLines,
-              minHeight: titleLines <= 1 ? "1.25rem" : "2.5rem",
+              WebkitLineClamp: 2,
             }}
           />
-          <div className="shrink-0">
-            <FeedMetaRow
-              channelName={channelName}
-              entry={entry}
-              maxRes={maxRes}
-              inLibrary={inLibrary}
-              downloading={downloading}
-              stacked={stacked}
-              onDownload={onDownload}
-              onChannelClick={handleChannelClick}
-            />
-          </div>
+          <FeedMetaRow
+            channelName={channelName}
+            entry={entry}
+            maxRes={maxRes}
+            inLibrary={inLibrary}
+            downloading={downloading}
+            onDownload={onDownload}
+            onChannelClick={handleChannelClick}
+          />
         </div>
       </div>
     );

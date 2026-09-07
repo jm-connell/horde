@@ -18,20 +18,21 @@ import {
 } from "../presets";
 import type { ChannelStat, DownloadDestination, DownloadPreview, PlaylistPreviewEntry } from "../types";
 import {
+  clipboardEventToText,
+  clipboardReadAvailable,
   clipboardTextToUrl,
+  execPasteInto,
+  pasteTextFromButtonClick,
+  readClipboardText,
+  shouldCapturePagePaste,
+} from "../clipboard";
+import {
   formatDuration,
   formatViewCount,
-  readClipboardText,
   youtubeListThumbnailUrl,
 } from "../utils";
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
-
-function pasteEventTargetIsOtherField(target: EventTarget | null): boolean {
-  if (target instanceof HTMLTextAreaElement) return true;
-  if (target instanceof HTMLElement && target.isContentEditable) return true;
-  return false;
-}
 
 export default function Download() {
   const {
@@ -291,13 +292,8 @@ export default function Download() {
   // steal it from other fields; do take it from the page or the Paste button.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      const target = e.target;
-      if (target instanceof HTMLInputElement && target !== urlInputRef.current) {
-        return;
-      }
-      if (pasteEventTargetIsOtherField(target)) return;
-      if (target === urlInputRef.current) return;
-      const next = clipboardTextToUrl(e.clipboardData?.getData("text/plain") ?? "");
+      if (!shouldCapturePagePaste(e.target, urlInputRef.current)) return;
+      const next = clipboardTextToUrl(clipboardEventToText(e.clipboardData));
       if (!next) return;
       e.preventDefault();
       setUrl(next);
@@ -426,12 +422,19 @@ export default function Download() {
             />
             <button
               type="button"
-              // Keep focus on the URL field so a following Ctrl/Cmd+V goes
-              // there. Also avoids dismissing Firefox's paste permission menu.
-              onMouseDown={(e) => e.preventDefault()}
               onClick={async () => {
-                if (applyClipboardText(await readClipboardText())) return;
-                urlInputRef.current?.focus();
+                const text = await pasteTextFromButtonClick({
+                  clipboardReadAvailable: clipboardReadAvailable(),
+                  readClipboard: readClipboardText,
+                  execPaste: () => {
+                    const el = urlInputRef.current;
+                    const ok = execPasteInto(el);
+                    // execCommand can fill a controlled input without onChange.
+                    if (el?.value) applyClipboardText(el.value);
+                    return ok;
+                  },
+                });
+                applyClipboardText(text);
               }}
               className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
             >

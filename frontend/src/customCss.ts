@@ -65,12 +65,14 @@ export const CSS_SELECTORS: CssHookRow[] = [
   { selector: '[data-horde="background"]', meaning: "Background effect / image" },
   { selector: '[data-horde="video-card"]', meaning: "Library video card" },
   { selector: '[data-horde="feed-card"]', meaning: "Channel feed card" },
+  { selector: '[data-horde="page-scroll"]', meaning: "Document overlay scroll thumb" },
   { selector: ".page-shell", meaning: "Centered page column" },
   { selector: ".ui-panel", meaning: "Settings panels, menus, chrome blocks" },
   { selector: ".ui-card", meaning: "Hoverable cards (library, playlists)" },
   { selector: ".ui-interactive", meaning: "Buttons and clickable chrome" },
   { selector: ".horde-scrollbar", meaning: "Themed overlay scroll areas" },
-  { selector: ".horde-meta-scrollbar", meaning: "Watch description/chapters and settings activity native scrollbar (hidden; overlay thumb on hover)" },
+  { selector: ".horde-meta-scrollbar", meaning: "Watch description/chapters and settings activity native scrollbar (hidden; overlay thumb on hover/scroll)" },
+  { selector: ".horde-overlay-scroll-thumb", meaning: "Solid accent overlay scroll pill (page, description, chapters)" },
 ];
 
 const PAGE_IDS = [
