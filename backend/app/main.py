@@ -40,6 +40,10 @@ from .services.channel_catalog import (
     start_catalog_worker,
     stop_catalog_worker,
 )
+from .services.channel_autodownload import (
+    start_autodownload_worker,
+    stop_autodownload_worker,
+)
 
 # Static frontend build copied next to the backend in the Docker image.
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -66,10 +70,12 @@ async def lifespan(app: FastAPI):
     start_sync_worker(interval_hours=settings.get("metadata_sync_interval_hours", 24))
     start_ai_worker()
     start_catalog_worker()
+    start_autodownload_worker()
 
     try:
         yield
     finally:
+        stop_autodownload_worker()
         stop_catalog_worker()
         stop_ai_worker()
         observer.stop()

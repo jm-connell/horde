@@ -41,7 +41,7 @@ Health snapshot from `GET /api/health`:
 | Active downloads | Count + **paused** when the download queue is paused |
 | AI queue | Depth (+ running / failed counts, blocked reason) from `workers` |
 | Catalog queue | Depth (+ indexing) from `workers` |
-| Last extract failure | Kind + message from `youtube.last_extract_failure` (when set) |
+| Last extract failure | Kind + video/channel + message from `youtube.last_extract_failure` (when set) |
 | Disk free | Free / total bytes on the media volume |
 
 See [Troubleshooting](../ops/troubleshooting.md) for `error_kind` values and restart recovery.

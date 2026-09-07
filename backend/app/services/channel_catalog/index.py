@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlmodel import Session, func, select
@@ -46,6 +45,7 @@ from .skips import (
     record_members_only_skip,
     skipped_yt_ids,
 )
+from ..channel_autodownload import after_catalog_update, is_active_live_status
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +55,34 @@ def _fetch_flat_page(channel_url: str, offset: int, limit: int) -> dict[str, Any
     return fetch_channel_feed(channel_url, offset=offset, limit=limit)
 
 
+def _apply_mapped_fields(row: ChannelCatalogVideo, raw: dict[str, Any]) -> None:
+    row.url = str(raw.get("url") or row.url)
+    row.title = raw.get("title") or row.title
+    if raw.get("duration") is not None:
+        row.duration = raw.get("duration")
+    if raw.get("view_count") is not None:
+        row.view_count = raw.get("view_count")
+    published = parse_upload_date(raw.get("published_at"))
+    if raw.get("published_label"):
+        published = None
+    if published:
+        row.published_at = published
+    if raw.get("thumbnail_url"):
+        row.thumbnail_url = raw.get("thumbnail_url")
+    live_status = raw.get("live_status")
+    if live_status:
+        row.live_status = str(live_status)
+
+
 def _upsert_flat_entries(
     session: Session,
     catalog: ChannelCatalog,
     entries: list[dict[str, Any]],
     start_position: int,
-) -> int:
-    """Upsert flat entries starting at start_position. Returns next position."""
+) -> tuple[int, list[str]]:
+    """Upsert flat entries starting at start_position. Returns (next position, new yt ids)."""
     pos = start_position
+    inserted: list[str] = []
     skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
     for raw in entries:
         rejected = _reject_members_or_skipped(
@@ -81,31 +101,20 @@ def _upsert_flat_entries(
                 ChannelCatalogVideo.yt_id == str(yt_id),
             )
         ).first()
-        published = parse_upload_date(raw.get("published_at"))
-        if raw.get("published_label"):
-            published = None
         if existing is None:
             existing = ChannelCatalogVideo(
                 catalog_id=catalog.id,  # type: ignore[arg-type]
                 yt_id=str(yt_id),
                 url=str(entry_url),
             )
-        existing.url = str(entry_url)
-        existing.title = raw.get("title") or existing.title
-        existing.duration = raw.get("duration") if raw.get("duration") is not None else existing.duration
-        existing.view_count = (
-            raw.get("view_count")
-            if raw.get("view_count") is not None
-            else existing.view_count
-        )
-        existing.published_at = published or existing.published_at
-        existing.thumbnail_url = raw.get("thumbnail_url") or existing.thumbnail_url
+            inserted.append(str(yt_id))
+        _apply_mapped_fields(existing, raw)
         existing.position = pos
         existing.indexed_at = utcnow()
         session.add(existing)
         pos += 1
     session.commit()
-    return pos
+    return pos, inserted
 
 
 def _trim_beyond_cap(session: Session, catalog: ChannelCatalog) -> None:
@@ -168,6 +177,8 @@ def sync_feed_head(
         skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
 
         live_ids: list[str] = []
+        inserted: list[str] = []
+        live_finished: list[str] = []
         pos = 0
         for raw in entries:
             rejected = _reject_members_or_skipped(
@@ -180,6 +191,7 @@ def sync_feed_head(
             yt_id = str(raw["id"])
             live_ids.append(yt_id)
             row = by_yt.get(yt_id)
+            old_live = row.live_status if row is not None else None
             published = parse_upload_date(raw.get("published_at"))
             if raw.get("published_label"):
                 published = None
@@ -190,6 +202,7 @@ def sync_feed_head(
                     url=str(raw["url"]),
                 )
                 by_yt[yt_id] = row
+                inserted.append(yt_id)
             row.url = str(raw["url"])
             row.title = raw.get("title") or row.title
             if raw.get("duration") is not None:
@@ -200,10 +213,16 @@ def sync_feed_head(
                 row.published_at = published
             if raw.get("thumbnail_url"):
                 row.thumbnail_url = raw.get("thumbnail_url")
+            if raw.get("live_status"):
+                row.live_status = str(raw["live_status"])
             row.position = pos
             row.indexed_at = utcnow()
             session.add(row)
             pos += 1
+            if is_active_live_status(old_live) and not is_active_live_status(
+                row.live_status
+            ):
+                live_finished.append(yt_id)
 
         live_set = set(live_ids)
         next_pos = len(live_ids)
@@ -236,6 +255,18 @@ def sync_feed_head(
         session.add(catalog)
         session.commit()
 
+    try:
+        from ..channel_autodownload import after_catalog_update
+
+        after_catalog_update(
+            url,
+            new_yt_ids=inserted,
+            live_finished_ids=live_finished,
+            source="head",
+        )
+    except Exception:  # noqa: BLE001
+        logger.debug("autodownload after head sync failed for %s", url, exc_info=True)
+
     return data
 
 
@@ -265,7 +296,12 @@ def schedule_feed_head_sync(
     threading.Thread(target=_run, daemon=True, name="catalog-feed-head").start()
 
 
-def _fetch_description(url: str) -> tuple[Optional[str], Optional[str]]:
+def _fetch_description(
+    url: str,
+    *,
+    title: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> tuple[Optional[str], Optional[str]]:
     """Full extract for description; also returns published_at when yt-dlp has it."""
     opts = apply_cookie_opts(
         {
@@ -277,7 +313,13 @@ def _fetch_description(url: str) -> tuple[Optional[str], Optional[str]]:
         }
     )
     try:
-        info = extract_info_gated(url, opts, cache_key=f"catalog-desc:{url}")
+        info = extract_info_gated(
+            url,
+            opts,
+            cache_key=f"catalog-desc:{url}",
+            title=title,
+            channel=channel,
+        )
     except Exception as exc:  # noqa: BLE001
         if is_members_only_error(exc):
             raise MembersOnlyError(str(exc)) from exc
@@ -320,7 +362,9 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
             _set_runtime(done=i + 1)
             continue
         try:
-            desc, published = _fetch_description(row.url)
+            desc, published = _fetch_description(
+                row.url, title=row.title, channel=catalog.channel_name
+            )
         except MembersOnlyError:
             purge_catalog_video(session, row)
             _set_runtime(done=i + 1)
@@ -431,11 +475,23 @@ def index_catalog(catalog_id: int) -> None:
                     catalog.channel_name = channel_name
                 if channel_total is not None:
                     catalog.channel_total = channel_total
-                position = _upsert_flat_entries(session, catalog, entries, position)
+                position, new_ids = _upsert_flat_entries(
+                    session, catalog, entries, position
+                )
                 catalog.indexed_count = position
                 catalog.updated_at = utcnow()
                 session.add(catalog)
                 session.commit()
+            try:
+                after_catalog_update(
+                    channel_url, new_yt_ids=new_ids, source="index"
+                )
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "autodownload after index page failed for %s",
+                    channel_url,
+                    exc_info=True,
+                )
             _set_runtime(
                 done=position,
                 total=channel_total or max_videos,

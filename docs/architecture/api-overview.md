@@ -45,7 +45,7 @@ Library (and preview) media endpoints support HTTP **Range** requests so the bro
 | `wiki_available` | MkDocs static tree present |
 | `downloads` | `{ active, paused }` — pause from in-memory queue + `download_queue_paused` |
 | `workers` | `{ ai_queue_depth, ai_running, catalog_queue_depth, catalog_indexing }` |
-| `youtube` | `{ cookies_configured, last_extract_failure }` — last classified extract error |
+| `youtube` | `{ cookies_configured, last_extract_failure }` — last classified extract error (kind, message, optional video/channel `target`) |
 
 Settings → System → Status renders this snapshot. Full AI model detail remains on `GET /api/ai/status`.
 

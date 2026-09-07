@@ -58,6 +58,24 @@ Switch between **grid** and **list** layouts for the channel feed. The preferenc
 
 From a channel page you can open the download panel to queue undownloaded items (quality preset, selection, etc.), similar in spirit to the [Downloads](downloads.md) page but scoped to that channel’s feed. Queued items count down a few seconds so you can edit or cancel; leaving the page (for example opening Downloads) **confirms** anything still counting down instead of dropping it. The panel’s **Best available** default still fetches the highest source tier; once the job is in the download queue it is labeled with that actual resolution (for example 4K), which you can change mid-download.
 
+### Autodownload
+
+YouTube channel pages have an **Autodownload** button in the header. It opens a modal to turn automatic library downloads on or off for that channel.
+
+| Setting | Behavior |
+|---------|----------|
+| **Future videos only** | New uploads discovered after you enable autodownload |
+| **Last N previous + all future** | Also queue the newest **N** indexed uploads that are not already in the library (N is 1–500) |
+| **All previous indexed + all future** | Queue every indexed upload still missing from the library, then keep downloading new ones |
+| **Resolution** | Quality preset used for autodownloaded jobs (default **1080p**) |
+| **Include completed livestreams** | Off by default. Livestreams are **never** downloaded while live or upcoming. When on, finished stream recordings are included |
+
+The modal always warns that this can use a lot of storage. **All previous** is limited by the [catalog max videos](#max-videos-per-channel) cap (default 1000) and shows a stronger warning.
+
+After autodownload is on, the header button stays highlighted and reopens the same modal so you can change settings or turn it off. Turning it off does **not** cancel jobs already in the download queue.
+
+Horde finds new uploads from the channel catalog (opening the feed, periodic catalog refresh, and a dedicated autodownload poll every 15 minutes). YouTube Shorts are not autodownloaded.
+
 ## Catalog indexing
 
 Catalog indexing is **YouTube only**. When you open a YouTube channel feed or download from a YouTube channel, Horde indexes that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time. Non-YouTube sources skip catalog indexing.

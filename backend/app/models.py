@@ -211,9 +211,31 @@ class ChannelCatalogVideo(SQLModel, table=True):
     published_at: Optional[str] = None
     thumbnail_url: Optional[str] = None
     description: Optional[str] = None
+    # yt-dlp live_status: not_live | is_live | is_upcoming | was_live | post_live
+    live_status: Optional[str] = None
     # 0 = newest upload in the indexed window.
     position: int = Field(default=0, index=True)
     indexed_at: datetime = Field(default_factory=utcnow)
+
+
+class ChannelAutodownload(SQLModel, table=True):
+    """Per-channel policy for automatically enqueueing catalog uploads."""
+
+    __tablename__ = "channel_autodownloads"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    channel_url: str = Field(index=True, unique=True)
+    channel_name: Optional[str] = None
+    enabled: bool = Field(default=False, index=True)
+    # none = future only; count = last N previous + future; all = all indexed + future
+    previous_mode: str = Field(default="none")
+    previous_count: Optional[int] = 10
+    quality_preset: str = Field(default="1080p")
+    include_completed_streams: bool = Field(default=False)
+    # False until the first feed-head sync after enable, so existing uploads
+    # are not treated as "new" future videos.
+    anchor_ready: bool = Field(default=False)
+    updated_at: datetime = Field(default_factory=utcnow)
 
 
 class ChannelCatalogSkip(SQLModel, table=True):

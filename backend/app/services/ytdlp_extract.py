@@ -9,6 +9,7 @@ import logging
 import re
 import threading
 import time
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -17,9 +18,11 @@ from .ytdlp_common import (
     MembersOnlyError,
     QuietYtdlpLogger,
     apply_cookie_opts,
+    classify_ytdlp_error,
     extract_info_gated,
     is_members_only_entry,
     is_members_only_error,
+    record_extract_failure,
     youtube_extractor_args,
 )
 from .ytdlp_formats import (
@@ -274,6 +277,9 @@ def extract_preview(url: str) -> dict[str, Any]:
         "published_label": meta.label,
         "available_presets": available,
         "preset_sizes": _estimate_preset_sizes(info, available),
+        "duration": info.get("duration"),
+        "live_status": entry_live_status(info),
+        "url": info.get("webpage_url") or info.get("url") or url,
     }
 
 
@@ -297,7 +303,7 @@ def extract_playlist_entries(url: str) -> dict[str, Any]:
     for entry in info.get("entries") or []:
         if not isinstance(entry, dict):
             continue
-        if is_members_only_entry(entry):
+        if is_members_only_entry(entry) or is_youtube_short_entry(entry):
             continue
         entry_url = entry.get("url") or entry.get("webpage_url")
         vid = entry.get("id")
@@ -460,10 +466,35 @@ def is_youtube_playlist_entry(entry: dict[str, Any]) -> bool:
     return isinstance(vid, str) and not _YT_VIDEO_ID_RE.fullmatch(vid)
 
 
+def is_youtube_short_url(url: str) -> bool:
+    """True when the URL path is a YouTube Shorts link."""
+    return "/shorts/" in str(url or "").lower()
+
+
+def _short_era_timestamp(entry: dict[str, Any]) -> Optional[float]:
+    ts = entry.get("timestamp") or entry.get("release_timestamp")
+    try:
+        if ts is not None:
+            return float(ts)
+    except (TypeError, ValueError):
+        pass
+    published = entry.get("published_at")
+    if not isinstance(published, str) or len(published) < 10:
+        return None
+    try:
+        raw = published.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except ValueError:
+        return None
+
+
 def is_youtube_short_entry(entry: dict[str, Any]) -> bool:
-    """True for Shorts (watch or /shorts/ URLs) in channel search results."""
-    url = str(entry.get("url") or entry.get("webpage_url") or "").lower()
-    if "/shorts/" in url:
+    """True for Shorts (watch or /shorts/ URLs) in search, catalog, and downloads."""
+    url = str(entry.get("url") or entry.get("webpage_url") or "")
+    if is_youtube_short_url(url):
         return True
     title = str(entry.get("title") or "")
     if _SHORTS_TITLE_RE.search(title):
@@ -475,12 +506,20 @@ def is_youtube_short_entry(entry: dict[str, Any]) -> bool:
         dur = None
     if dur is None or dur <= 0 or dur > 60:
         return False
-    ts = entry.get("timestamp") or entry.get("release_timestamp")
-    try:
-        ts_n = float(ts) if ts is not None else None
-    except (TypeError, ValueError):
-        ts_n = None
+    ts_n = _short_era_timestamp(entry)
     return ts_n is None or ts_n >= _SHORTS_ERA_TS
+
+
+def entry_live_status(entry: dict[str, Any]) -> Optional[str]:
+    """Normalize yt-dlp live_status / is_live / was_live flags."""
+    raw = entry.get("live_status")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip().lower()
+    if entry.get("is_live") is True:
+        return "is_live"
+    if entry.get("was_live") is True:
+        return "was_live"
+    return None
 
 
 def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
@@ -488,6 +527,8 @@ def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
     if not isinstance(entry, dict):
         return None
     if is_members_only_entry(entry) or is_youtube_playlist_entry(entry):
+        return None
+    if is_youtube_short_entry(entry):
         return None
     entry_url = entry.get("url") or entry.get("webpage_url")
     vid = entry.get("id")
@@ -497,7 +538,7 @@ def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
         entry_url = f"https://www.youtube.com/watch?v={vid}"
     if not entry_url:
         return None
-    if "/shorts/" in str(entry_url).lower():
+    if is_youtube_short_url(str(entry_url)):
         return None
     view_count = entry.get("view_count")
     if view_count is not None:
@@ -526,6 +567,7 @@ def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
         "availability": entry.get("availability"),
         "channel": str(channel) if channel else None,
         "channel_url": str(channel_url) if channel_url else None,
+        "live_status": entry_live_status(entry),
     }
 
 
@@ -599,8 +641,13 @@ def fetch_channel_feed(
             "extractor_args": youtube_extractor_args(),
         }
     )
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = _as_info(ydl.extract_info(feed_url, download=False))
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = _as_info(ydl.extract_info(feed_url, download=False))
+    except Exception as exc:  # noqa: BLE001
+        kind, message = classify_ytdlp_error(exc, url=channel_url)
+        record_extract_failure(kind, message, url=channel_url)
+        raise
 
     entries: list[dict[str, Any]] = []
     for entry in info.get("entries") or []:
@@ -658,7 +705,11 @@ def extract_playlist(url: str) -> tuple[str, list[str]]:
             continue
         entry_url = entry.get("url") or entry.get("webpage_url")
         vid = entry.get("id")
+        if is_youtube_short_entry(entry):
+            continue
         if entry_url and entry_url.startswith("http"):
+            if is_youtube_short_url(str(entry_url)):
+                continue
             entries.append(entry_url)
         elif vid:
             entries.append(f"https://www.youtube.com/watch?v={vid}")

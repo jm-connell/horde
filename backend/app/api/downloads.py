@@ -33,6 +33,10 @@ from ..services.ytdlp_common import (
     http_detail_for_error,
     record_extract_failure,
 )
+from ..services.ytdlp_extract import (
+    is_youtube_short_entry,
+    is_youtube_short_url,
+)
 from ..services.ytdlp_formats import (
     decode_available_presets,
     default_download_video_codec,
@@ -145,18 +149,23 @@ def list_presets():
 def preview_download(url: str):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
+    cleaned = clean_url(url, keep_playlist=True)
     try:
-        return downloader.extract_preview(clean_url(url, keep_playlist=True))
+        return downloader.extract_preview(cleaned)
     except MembersOnlyError as exc:
         raise HTTPException(
             status_code=400,
-            detail=http_detail_for_error(exc, prefix="Could not read link"),
+            detail=http_detail_for_error(
+                exc, prefix="Could not read link", url=cleaned
+            ),
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        kind, _ = classify_ytdlp_error(exc)
-        detail = http_detail_for_error(exc, prefix="Could not read link")
+        kind, _ = classify_ytdlp_error(exc, url=cleaned)
+        detail = http_detail_for_error(
+            exc, prefix="Could not read link", url=cleaned
+        )
         if kind == ERROR_KIND_UNKNOWN:
             logger.exception("download preview extract failed for %r", url)
             raise HTTPException(status_code=500, detail=detail) from exc
@@ -197,8 +206,18 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
     if not payload.url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
 
+    if is_youtube_short_url(payload.url):
+        raise HTTPException(
+            status_code=400, detail="YouTube Shorts are not downloaded"
+        )
+
     url = clean_url(payload.url, keep_playlist=False)
     destination = payload.destination.value if payload.destination else "library"
+
+    if is_youtube_short_url(url):
+        raise HTTPException(
+            status_code=400, detail="YouTube Shorts are not downloaded"
+        )
 
     preview: dict = {}
     preview_kind: str | None = None
@@ -206,8 +225,19 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
     try:
         preview = downloader.extract_preview(url)
     except Exception as exc:  # noqa: BLE001
-        preview_kind, preview_message = classify_ytdlp_error(exc)
-        record_extract_failure(preview_kind, preview_message)
+        preview_kind, preview_message = classify_ytdlp_error(exc, url=url)
+        record_extract_failure(preview_kind, preview_message, url=url)
+
+    if is_youtube_short_entry(
+        {
+            **(preview if isinstance(preview, dict) else {}),
+            "url": payload.url,
+            "webpage_url": url,
+        }
+    ):
+        raise HTTPException(
+            status_code=400, detail="YouTube Shorts are not downloaded"
+        )
 
     # If this YouTube id is already in the library, replace that row on completion.
     # Device jobs must never overwrite library files.

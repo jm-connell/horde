@@ -6,7 +6,7 @@ import { Section } from "./ui";
 import { PANEL_BTN, STATUS_TIPS, INPUT } from "./constants";
 import { saveDismissedUpdateSha } from "./helpers";
 import { api } from "../../api";
-import { downloadErrorLabel } from "../../downloadErrors";
+import { downloadErrorLabel, extractFailureCopy } from "../../downloadErrors";
 import { formatSize } from "../../utils";
 import { clearHordeBrowserState } from "../../setupStorage";
 import LoadingIndicator from "../../components/LoadingIndicator";
@@ -15,6 +15,23 @@ import HelpTip from "../../components/HelpTip";
 import AiQueueStatus from "./AiQueueStatus";
 import BackgroundActivity from "./BackgroundActivity";
 import SystemStatsSnippet from "./SystemStatsSnippet";
+
+function LastExtractFailure({
+  failure,
+}: {
+  failure: { kind: string; message: string; target?: string | null };
+}) {
+  const copy = extractFailureCopy(failure);
+  return (
+    <>
+      <span className="text-red-400">{downloadErrorLabel(failure.kind)}</span>
+      {copy.target ? (
+        <div className="mt-0.5 text-xs text-gray-200">{copy.target}</div>
+      ) : null}
+      <div className="mt-0.5 text-xs text-gray-500">{copy.message}</div>
+    </>
+  );
+}
 
 function StatusRow({
   label,
@@ -348,14 +365,9 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                 tip={STATUS_TIPS.extractFailure}
                 ddClassName="max-w-xs text-right text-gray-200"
               >
-                <span className="text-red-400">
-                  {downloadErrorLabel(
-                    health.youtube.last_extract_failure.kind
-                  )}
-                </span>
-                <div className="mt-0.5 text-xs text-gray-500">
-                  {health.youtube.last_extract_failure.message}
-                </div>
+                <LastExtractFailure
+                  failure={health.youtube.last_extract_failure}
+                />
               </StatusRow>
             )}
             {health.disk && (

@@ -64,6 +64,8 @@ from .ytdlp_extract import (
     extract_playlist_entries,
     extract_preview,
     fetch_channel_feed,
+    is_youtube_short_entry,
+    is_youtube_short_url,
     search_youtube_channels,
 )
 
@@ -1487,6 +1489,8 @@ def _run_download(
         quality_preset = job.quality_preset
         title_override = job.title_override
         channel_override = job.channel_override
+        job_title = job.title
+        job_channel = job.channel
         normalize_volume = job.normalize_volume
         replace_video_id = job.replace_video_id
         notes_pending = job.notes_pending
@@ -1582,6 +1586,8 @@ def _run_download(
                         url,
                         meta_opts,
                         cache_key=f"download-meta:{url}",
+                        title=title_override or job_title,
+                        channel=channel_override or job_channel,
                     )
                 except Exception as exc:
                     if is_members_only_error(exc):
@@ -1771,12 +1777,35 @@ def _run_download(
         if destination == DownloadDestination.device.value:
             cleanup_device_job_files(job_id)
         prev = progress_store.get(job_id, {})
-        kind, message = classify_ytdlp_error(exc)
+        subject_title = (
+            title_override
+            or metadata_info.get("title")
+            or info.get("title")
+            or job_title
+        )
+        subject_channel = (
+            channel_override
+            or metadata_info.get("uploader")
+            or metadata_info.get("channel")
+            or info.get("uploader")
+            or info.get("channel")
+            or job_channel
+        )
+        kind, message = classify_ytdlp_error(
+            exc, url=url, title=subject_title, channel=subject_channel
+        )
         if kind == ERROR_KIND_MEMBERS or is_members_only_error(exc):
             kind = ERROR_KIND_MEMBERS
-            message = "Members-only video — skipped"
+            message = classify_ytdlp_error(
+                MembersOnlyError("Members-only video — skipped"),
+                url=url,
+                title=subject_title,
+                channel=subject_channel,
+            )[1]
             _purge_members_only_url(url)
-        record_extract_failure(kind, message)
+        record_extract_failure(
+            kind, message, url=url, title=subject_title, channel=subject_channel
+        )
         if kind == ERROR_KIND_UNKNOWN:
             logger.exception("download job %s failed unexpectedly", job_id)
         else:
@@ -2011,6 +2040,14 @@ def _run_playlist_import(
                     preview = extract_preview(entry_url)
                 except Exception:  # noqa: BLE001
                     pass
+                if is_youtube_short_url(entry_url) or is_youtube_short_entry(
+                    {**(preview or {}), "url": entry_url}
+                ):
+                    handle.update(
+                        done=index,
+                        detail=preview.get("title") or f"{index + 1}/{total} skipped",
+                    )
+                    continue
                 resolved, presets_json = quality_from_preview(quality_preset, preview)
                 job = DownloadJob(
                     url=entry_url,

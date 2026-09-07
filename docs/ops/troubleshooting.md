@@ -2,7 +2,7 @@
 
 ## Bot checks / YouTube blocks
 
-**Symptoms:** downloads fail with bot, PO token, or “sign in” style errors; previews hang; feed cards never load metadata. Download cards may show a typed label such as **Bot check**, **PO token**, or **Cookies / login** (`error_kind` on the job).
+**Symptoms:** downloads fail with bot, PO token, or “sign in” style errors; previews hang; feed cards never load metadata. Download cards may show a typed label such as **Bot check**, **PO token**, or **Age-restricted / private** (`error_kind` on the job).
 
 **Checks:**
 
@@ -19,7 +19,7 @@
 |------|---------|
 | `bot` | YouTube bot check |
 | `pot` | PO token / player challenge |
-| `cookies` | Login / age gate / private needing cookies |
+| `cookies` | Age-restricted, members-only, or private — not anonymous |
 | `members` | Members-only |
 | `rate_limit` | HTTP 429 / temporary block |
 | `unavailable` | Removed, geo, no formats |

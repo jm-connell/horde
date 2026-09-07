@@ -66,6 +66,12 @@ flat  →  descriptions  →  embed  →  ready
 
 Members-only IDs go to `channel_catalog_skips`. Runtime status (current channel, phase, counts) is exposed for the Settings/Channels UI.
 
+## Autodownload poller
+
+**Start:** `start_autodownload_worker()` after the catalog worker.
+
+Every **15 minutes** (first pass ~60s after startup), for each channel with autodownload enabled, run a feed-head sync of the newest uploads and enqueue matching videos into the download queue. Enabling autodownload from a channel page also syncs immediately. Jobs are created from catalog metadata (no per-video preview extract). See [Channels](../guides/channels.md#autodownload).
+
 ## Related
 
 - [Maintenance](../ops/maintenance.md)

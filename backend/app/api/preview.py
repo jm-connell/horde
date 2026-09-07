@@ -307,13 +307,17 @@ def preview_meta(url: str = Query(...), session: Session = Depends(get_session))
     except MembersOnlyError as exc:
         raise HTTPException(
             status_code=400,
-            detail=http_detail_for_error(exc, prefix="Could not load preview"),
+            detail=http_detail_for_error(
+                exc, prefix="Could not load preview", url=cleaned
+            ),
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        kind, _ = classify_ytdlp_error(exc)
-        detail = http_detail_for_error(exc, prefix="Could not load preview")
+        kind, _ = classify_ytdlp_error(exc, url=cleaned)
+        detail = http_detail_for_error(
+            exc, prefix="Could not load preview", url=cleaned
+        )
         if kind == ERROR_KIND_UNKNOWN:
             logger.exception("stream preview meta failed for %r", cleaned)
             raise HTTPException(status_code=500, detail=detail) from exc
@@ -441,7 +445,7 @@ def preview_manifest(request: Request, url: str = Query(...)):
         raise HTTPException(
             status_code=400,
             detail=http_detail_for_error(
-                exc, prefix="Could not build preview manifest"
+                exc, prefix="Could not build preview manifest", url=cleaned
             ),
         ) from exc
 

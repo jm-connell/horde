@@ -285,6 +285,33 @@ def test_health_and_system_activity(client, add_video):
     assert "encode" in body
 
 
+def test_health_last_extract_failure_names_video(client, monkeypatch):
+    from app.services.ytdlp_common import classify_ytdlp_error, record_extract_failure
+
+    monkeypatch.setattr(
+        "app.services.ytdlp_common.cookie_configured", lambda: False
+    )
+    kind, message = classify_ytdlp_error(
+        "Login required / age-restricted",
+        url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        title="Secret Video",
+        channel="Some Channel",
+    )
+    record_extract_failure(
+        kind,
+        message,
+        url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        title="Secret Video",
+        channel="Some Channel",
+    )
+    body = client.get("/api/health").json()
+    last = body["youtube"]["last_extract_failure"]
+    assert last["kind"] == "cookies"
+    assert last["target"] == '"Secret Video" · Some Channel'
+    assert "anonymously" in last["message"]
+    assert "Secret Video" in last["message"]
+
+
 def test_review_upload_rejects_non_video(client):
     resp = client.post(
         "/api/review/upload",

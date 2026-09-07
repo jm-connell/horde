@@ -20,7 +20,7 @@ YTDLP_POT_BASE_URL=http://bgutil-pot:4416
 The [bgutil yt-dlp POT provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider) supplies Proof-of-Origin tokens over HTTP. Horde wires this into yt-dlp extractor args when `YTDLP_POT_BASE_URL` is set. YouTube player clients follow yt-dlp’s current defaults (minus `android_vr`, whose media URLs now 403 after about a minute of playback).
 
 !!! tip "Health"
-    `GET /api/health` includes a `pot_provider` block (`ok` / `error`, URL, version) by pinging `{YTDLP_POT_BASE_URL}/ping`, plus `youtube.cookies_configured` and `youtube.last_extract_failure` (kind/message/timestamp of the most recent classified extract error). Download pause and AI/catalog queue depths are under `downloads` and `workers`.
+    `GET /api/health` includes a `pot_provider` block (`ok` / `error`, URL, version) by pinging `{YTDLP_POT_BASE_URL}/ping`, plus `youtube.cookies_configured` and `youtube.last_extract_failure` (kind/message/timestamp of the most recent classified extract error, plus the video or channel it targeted). Download pause and AI/catalog queue depths are under `downloads` and `workers`.
 
 If the sidecar is down, downloads and previews may fail with bot-check style errors (UI `error_kind` of `bot` or `pot`). Restart `bgutil-pot` and confirm the URL from inside the Horde container.
 

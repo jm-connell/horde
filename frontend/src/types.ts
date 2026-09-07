@@ -157,6 +157,19 @@ export interface ChannelCatalogStatusItem {
   direct_youtube_search_effective?: boolean;
 }
 
+export interface ChannelAutodownload {
+  configured: boolean;
+  enabled: boolean;
+  previous_mode: "none" | "count" | "all";
+  previous_count: number | null;
+  quality_preset: string;
+  include_completed_streams: boolean;
+  channel_url: string | null;
+  channel_name: string | null;
+  pending_estimate: number;
+  catalog_max_videos: number;
+}
+
 export interface ChannelCatalogStatus {
   enabled: boolean;
   running: boolean;
@@ -595,6 +608,8 @@ export interface HealthStats {
       kind: string;
       message: string;
       at: string;
+      target?: string | null;
+      url?: string | null;
     } | null;
   };
 }

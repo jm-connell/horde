@@ -11,6 +11,8 @@ from sqlmodel import Session, select
 from ..database import get_session
 from ..models import Video
 from ..schemas import (
+    ChannelAutodownloadRead,
+    ChannelAutodownloadUpdate,
     ChannelCatalogIndexRequest,
     ChannelCatalogIndexResult,
     ChannelCatalogStatusResponse,
@@ -23,7 +25,7 @@ from ..schemas import (
     ChannelSearchResponse,
     ChannelStat,
 )
-from ..services import channel_catalog, downloader, feed_meta_cache, library
+from ..services import channel_autodownload, channel_catalog, downloader, feed_meta_cache, library
 from ..services import app_settings as app_settings_svc
 from ..services.ytdlp_common import is_members_only_entry
 from ..services.ytdlp_extract import (
@@ -124,6 +126,81 @@ def channel_catalog_index(
         queued=1,
         catalog_id=catalog_id,
         detail=f"Queued indexing for {channel_name or channel_url}",
+    )
+
+
+def _resolve_youtube_channel_url(
+    session: Session,
+    *,
+    url: Optional[str],
+    channel: Optional[str],
+) -> tuple[str, Optional[str]]:
+    channel_url = (url or "").strip() or None
+    channel_name = (channel or "").strip() or None
+    if not channel_url and channel_name:
+        channel_url = library.resolve_channel_url(session, channel_name)
+    if not channel_url:
+        raise HTTPException(
+            status_code=400,
+            detail="No YouTube channel URL known for this channel",
+        )
+    if not channel_catalog.is_youtube_channel_url(channel_url):
+        raise HTTPException(
+            status_code=400,
+            detail="Autodownload is only available for YouTube channels",
+        )
+    return channel_url, channel_name
+
+
+@router.get("/channels/autodownload", response_model=ChannelAutodownloadRead)
+def get_channel_autodownload(
+    channel: Optional[str] = None,
+    url: Optional[str] = None,
+    session: Session = Depends(get_session),
+):
+    channel_url, channel_name = _resolve_youtube_channel_url(
+        session, url=url, channel=channel
+    )
+    policy = channel_autodownload.get_policy(session, channel_url)
+    return ChannelAutodownloadRead(
+        **channel_autodownload.policy_to_read(
+            session,
+            policy,
+            channel_url=channel_url,
+            channel_name=channel_name,
+        )
+    )
+
+
+@router.put("/channels/autodownload", response_model=ChannelAutodownloadRead)
+def put_channel_autodownload(
+    payload: ChannelAutodownloadUpdate,
+    session: Session = Depends(get_session),
+):
+    channel_url, channel_name = _resolve_youtube_channel_url(
+        session, url=payload.url, channel=payload.channel
+    )
+    policy = channel_autodownload.upsert_policy(
+        session,
+        channel_url=channel_url,
+        channel_name=channel_name,
+        enabled=payload.enabled,
+        previous_mode=payload.previous_mode,
+        previous_count=payload.previous_count,
+        quality_preset=payload.quality_preset,
+        include_completed_streams=payload.include_completed_streams,
+    )
+    if policy.enabled:
+        channel_autodownload.schedule_apply_saved_policy(
+            channel_url, channel_name=channel_name or policy.channel_name
+        )
+    return ChannelAutodownloadRead(
+        **channel_autodownload.policy_to_read(
+            session,
+            policy,
+            channel_url=channel_url,
+            channel_name=channel_name,
+        )
     )
 
 

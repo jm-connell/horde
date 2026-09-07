@@ -146,17 +146,145 @@ def _strip_ansi_local(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
-def classify_ytdlp_error(exc_or_message: Any) -> tuple[str, str]:
+def _clip_label(text: str, limit: int = 80) -> str:
+    cleaned = " ".join(str(text).split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 3].rstrip() + "..."
+
+
+def describe_extract_target(
+    url: Optional[str] = None,
+    *,
+    title: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> Optional[str]:
+    """Short label for the video/channel an extract was aimed at."""
+    title_s = _clip_label(title) if title else ""
+    channel_s = _clip_label(channel, 60) if channel else ""
+    if title_s and channel_s:
+        return f'"{title_s}" · {channel_s}'
+    if title_s:
+        return f'"{title_s}"'
+
+    raw = str(url or "").strip()
+    if not raw:
+        return channel_s or None
+
+    lower = raw.lower()
+    if lower.startswith("ytsearch"):
+        query = raw.split(":", 1)[1].strip() if ":" in raw else ""
+        return f'YouTube search "{_clip_label(query)}"' if query else "YouTube search"
+
+    from urllib.parse import parse_qs, unquote, urlparse
+
+    from .url_clean import youtube_video_id
+
+    parsed_url = raw if "://" in raw else f"https://{raw}"
+    try:
+        parsed = urlparse(parsed_url)
+    except ValueError:
+        return channel_s or _clip_label(raw, 96)
+
+    vid = youtube_video_id(parsed_url)
+    path_parts = [p for p in (parsed.path or "").split("/") if p]
+    query = parse_qs(parsed.query)
+
+    handle = None
+    channel_id = None
+    userish = None
+    tab = None
+    if path_parts:
+        if path_parts[0].startswith("@"):
+            handle = path_parts[0]
+            tab = path_parts[1] if len(path_parts) > 1 else None
+        elif path_parts[0] == "channel" and len(path_parts) > 1:
+            channel_id = path_parts[1]
+            tab = path_parts[2] if len(path_parts) > 2 else None
+        elif path_parts[0] in ("c", "user") and len(path_parts) > 1:
+            userish = path_parts[1]
+            tab = path_parts[2] if len(path_parts) > 2 else None
+
+    search_q = query.get("query", [None])[0] if tab == "search" else None
+    if search_q:
+        loc = handle or userish or channel_s or (
+            f"channel {_clip_label(channel_id, 24)}" if channel_id else "channel"
+        )
+        return f'{loc} search "{_clip_label(unquote(str(search_q)))}"'
+
+    if vid:
+        if channel_s:
+            return f"{channel_s} · video {vid}"
+        return f"youtube.com/watch?v={vid}"
+
+    playlist = query.get("list", [None])[0]
+    if playlist and (not vid or (path_parts and path_parts[0] == "playlist")):
+        return f"playlist {_clip_label(str(playlist), 40)}"
+
+    if handle:
+        return handle
+    if userish:
+        return userish
+    if channel_id:
+        return channel_s or f"channel {_clip_label(channel_id, 24)}"
+    if channel_s:
+        return channel_s
+
+    host = (parsed.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    path = (parsed.path or "").rstrip("/")
+    if host:
+        return _clip_label(f"{host}{path}", 96)
+    return _clip_label(raw, 96)
+
+
+def _with_extract_target(
+    message: str,
+    *,
+    url: Optional[str] = None,
+    title: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> str:
+    target = describe_extract_target(url, title=title, channel=channel)
+    if not target:
+        return message
+    suffix = f" On: {target}"
+    if message.endswith(suffix):
+        return message
+    return f"{message}{suffix}"
+
+
+def classify_ytdlp_error(
+    exc_or_message: Any,
+    *,
+    url: Optional[str] = None,
+    title: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> tuple[str, str]:
     """Map a yt-dlp exception/message to (error_kind, user_facing_message)."""
+    def _finish(kind: str, message: str) -> tuple[str, str]:
+        return kind, _with_extract_target(
+            message, url=url, title=title, channel=channel
+        )
+
     if isinstance(exc_or_message, MembersOnlyError):
-        return ERROR_KIND_MEMBERS, "Members-only video — skipped"
+        return _finish(
+            ERROR_KIND_MEMBERS,
+            "Members-only video — skipped. Member videos can't be downloaded "
+            "anonymously.",
+        )
 
     raw = _strip_ansi_local(str(exc_or_message or "")).strip()
     if not raw:
-        return ERROR_KIND_UNKNOWN, "Download failed"
+        return _finish(ERROR_KIND_UNKNOWN, "Download failed")
 
     if is_members_only_message(raw) or isinstance(exc_or_message, MembersOnlyError):
-        return ERROR_KIND_MEMBERS, "Members-only video — skipped"
+        return _finish(
+            ERROR_KIND_MEMBERS,
+            "Members-only video — skipped. Member videos can't be downloaded "
+            "anonymously.",
+        )
 
     if _BOT_MESSAGE.search(raw):
         if cookie_configured():
@@ -169,7 +297,7 @@ def classify_ytdlp_error(exc_or_message: Any) -> tuple[str, str]:
                 "YouTube bot check — configure cookies and/or a PO token provider "
                 "(Settings → System / Compose bgutil-pot)."
             )
-        return ERROR_KIND_BOT, msg
+        return _finish(ERROR_KIND_BOT, msg)
 
     if _POT_MESSAGE.search(raw):
         if pot_provider_configured():
@@ -182,23 +310,28 @@ def classify_ytdlp_error(exc_or_message: Any) -> tuple[str, str]:
                 "PO token required — set YTDLP_POT_BASE_URL / run the bgutil-pot "
                 "sidecar (see YouTube access docs)."
             )
-        return ERROR_KIND_POT, msg
+        return _finish(ERROR_KIND_POT, msg)
 
     if _COOKIES_MESSAGE.search(raw):
         if cookie_configured():
             msg = (
-                "Login / age gate — cookies may be expired or missing access. "
-                "Refresh the cookie file or browser cookie source."
+                "This looks like an age-restricted, members-only, or private "
+                "video — those can't be downloaded anonymously. Cookies are "
+                "configured but still don't have access. Refresh them, or use "
+                "an account that can watch this video."
             )
         else:
             msg = (
-                "Login / age gate — configure YTDLP_COOKIE_FILE or "
-                "YTDLP_COOKIES_FROM_BROWSER."
+                "This looks like an age-restricted, members-only, or private "
+                "video — those can't be downloaded anonymously. Horde's PO "
+                "tokens only cover public videos. To get this one you'd need "
+                "cookies from a signed-in account that can watch it "
+                "(YTDLP_COOKIE_FILE or YTDLP_COOKIES_FROM_BROWSER)."
             )
-        return ERROR_KIND_COOKIES, msg
+        return _finish(ERROR_KIND_COOKIES, msg)
 
     if re.search(r"http error 403|403:\s*forbidden", raw, re.I):
-        return (
+        return _finish(
             ERROR_KIND_POT,
             "YouTube rejected the media URL (HTTP 403). Usually a stale "
             "player client or missing PO token — update yt-dlp and check "
@@ -206,33 +339,46 @@ def classify_ytdlp_error(exc_or_message: Any) -> tuple[str, str]:
         )
 
     if _RATE_LIMIT_MESSAGE.search(raw):
-        return (
+        return _finish(
             ERROR_KIND_RATE_LIMIT,
             "Rate limited by the source — wait and retry; avoid bursty extracts.",
         )
 
     if _UNAVAILABLE_MESSAGE.search(raw):
-        return ERROR_KIND_UNAVAILABLE, raw
+        return _finish(ERROR_KIND_UNAVAILABLE, raw)
 
     if _POSTPROCESS_MESSAGE.search(raw):
-        return (
+        return _finish(
             ERROR_KIND_POSTPROCESS,
             "Download post-processing failed (merge/subtitles/ffmpeg). "
             f"Details: {raw}",
         )
 
-    return ERROR_KIND_UNKNOWN, raw
+    return _finish(ERROR_KIND_UNKNOWN, raw)
 
 
-def record_extract_failure(kind: str, message: str) -> None:
+def record_extract_failure(
+    kind: str,
+    message: str,
+    *,
+    url: Optional[str] = None,
+    title: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> None:
     """Remember the most recent extract/download classification for /api/health."""
     global _last_extract_failure
+    target = describe_extract_target(url, title=title, channel=channel)
+    payload: dict[str, Any] = {
+        "kind": kind,
+        "message": message,
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    if target:
+        payload["target"] = target
+    if url:
+        payload["url"] = str(url).strip()[:500]
     with _last_extract_failure_lock:
-        _last_extract_failure = {
-            "kind": kind,
-            "message": message,
-            "at": datetime.now(timezone.utc).isoformat(),
-        }
+        _last_extract_failure = payload
 
 
 def get_last_extract_failure() -> Optional[dict[str, Any]]:
@@ -242,10 +388,19 @@ def get_last_extract_failure() -> Optional[dict[str, Any]]:
         return dict(_last_extract_failure)
 
 
-def http_detail_for_error(exc_or_message: Any, *, prefix: str) -> dict[str, str]:
+def http_detail_for_error(
+    exc_or_message: Any,
+    *,
+    prefix: str,
+    url: Optional[str] = None,
+    title: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> dict[str, str]:
     """Structured FastAPI HTTPException detail for classified yt-dlp failures."""
-    kind, message = classify_ytdlp_error(exc_or_message)
-    record_extract_failure(kind, message)
+    kind, message = classify_ytdlp_error(
+        exc_or_message, url=url, title=title, channel=channel
+    )
+    record_extract_failure(kind, message, url=url, title=title, channel=channel)
     return {
         "message": f"{prefix}: {message}",
         "error_kind": kind,
@@ -348,6 +503,8 @@ def extract_info_gated(
     *,
     cache_key: Optional[str] = None,
     force: bool = False,
+    title: Optional[str] = None,
+    channel: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run yt-dlp extract_info with global spacing + short result cache.
 
@@ -387,8 +544,12 @@ def extract_info_gated(
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
         except Exception as exc:
-            kind, message = classify_ytdlp_error(exc)
-            record_extract_failure(kind, message)
+            kind, message = classify_ytdlp_error(
+                exc, url=url, title=title, channel=channel
+            )
+            record_extract_failure(
+                kind, message, url=url, title=title, channel=channel
+            )
             raise
         if not isinstance(info, dict):
             info = {}

@@ -4,6 +4,7 @@ import type {
   AiSettings,
   AiStatus,
   AppSettings,
+  ChannelAutodownload,
   ChannelCatalogStatus,
   ChannelFeedPage,
   ChannelStat,
@@ -382,6 +383,42 @@ export const api = {
         url: params.url ?? null,
         force: params.force ?? false,
         mode: params.mode ?? "incremental",
+      }),
+    });
+  },
+
+  getChannelAutodownload(params: {
+    channel?: string;
+    url?: string;
+  }): Promise<ChannelAutodownload> {
+    const qs = new URLSearchParams();
+    if (params.channel) qs.set("channel", params.channel);
+    if (params.url) qs.set("url", params.url);
+    return request<ChannelAutodownload>(
+      `/api/channels/autodownload?${qs.toString()}`
+    );
+  },
+
+  updateChannelAutodownload(params: {
+    channel?: string;
+    url?: string;
+    enabled: boolean;
+    previous_mode: ChannelAutodownload["previous_mode"];
+    previous_count?: number | null;
+    quality_preset: string;
+    include_completed_streams: boolean;
+  }): Promise<ChannelAutodownload> {
+    return request<ChannelAutodownload>("/api/channels/autodownload", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: params.channel ?? null,
+        url: params.url ?? null,
+        enabled: params.enabled,
+        previous_mode: params.previous_mode,
+        previous_count: params.previous_count ?? null,
+        quality_preset: params.quality_preset,
+        include_completed_streams: params.include_completed_streams,
       }),
     });
   },

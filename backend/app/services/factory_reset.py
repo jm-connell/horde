@@ -13,6 +13,7 @@ from ..database import engine
 from ..models import (
     AiCategory,
     AiJob,
+    ChannelAutodownload,
     ChannelCatalog,
     ChannelCatalogEmbedding,
     ChannelCatalogSkip,
@@ -42,6 +43,7 @@ _ERASE_MEDIA_MODELS = (
     ChannelCatalogSkip,
     ChannelCatalogVideo,
     ChannelCatalog,
+    ChannelAutodownload,
     PlaylistItem,
     Playlist,
     AiCategory,

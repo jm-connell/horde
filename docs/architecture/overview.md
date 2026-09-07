@@ -34,11 +34,12 @@ ensure_dirs
     -> start_sync_worker()        # metadata / catalog freshness
     -> start_ai_worker()
     -> start_catalog_worker()
+    -> start_autodownload_worker()
 ```
 
 Stuck mid-flight download / AI / catalog work is requeued **before** workers start so a crash cannot leave jobs stranded forever. Download queue pause is restored from `download_queue_paused` in app settings.
 
-Shutdown stops catalog and AI workers, joins the scanner observer, and closes the preview client.
+Shutdown stops autodownload, catalog, and AI workers, joins the scanner observer, and closes the preview client.
 
 ## Major moving parts
 
@@ -50,6 +51,7 @@ Shutdown stops catalog and AI workers, joins the scanner observer, and closes th
 | **Metadata sync** | Periodic refresh of source metadata |
 | **AI worker** | Single-flight embed/tag/category jobs |
 | **Catalog worker** | One-at-a-time channel index phases |
+| **Autodownload poller** | Periodic feed-head sync for channels with autodownload enabled |
 | **React SPA** | Library, player, settings; providers for download/playback/search/toast |
 
 !!! warning "Trust boundary"

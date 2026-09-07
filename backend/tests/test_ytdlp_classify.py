@@ -11,9 +11,12 @@ from app.services.ytdlp_common import (
     ERROR_KIND_UNKNOWN,
     MembersOnlyError,
     classify_ytdlp_error,
+    describe_extract_target,
+    get_last_extract_failure,
     http_detail_for_error,
     is_members_only_entry,
     is_members_only_message,
+    record_extract_failure,
     youtube_extractor_args,
 )
 
@@ -24,6 +27,78 @@ def test_members_only_message_and_error():
     kind, msg = classify_ytdlp_error(MembersOnlyError("locked"))
     assert kind == ERROR_KIND_MEMBERS
     assert "Members-only" in msg
+    assert "anonymously" in msg
+
+
+def test_describe_extract_target():
+    assert (
+        describe_extract_target(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            title="Never Gonna Give You Up",
+            channel="Rick Astley",
+        )
+        == '"Never Gonna Give You Up" · Rick Astley'
+    )
+    assert (
+        describe_extract_target("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        == "youtube.com/watch?v=dQw4w9WgXcQ"
+    )
+    assert (
+        describe_extract_target("https://www.youtube.com/@LinusTechTips")
+        == "@LinusTechTips"
+    )
+    assert (
+        describe_extract_target("ytsearch40:t480 mod")
+        == 'YouTube search "t480 mod"'
+    )
+    assert (
+        describe_extract_target(
+            "https://www.youtube.com/@LinusTechTips/search?query=paint"
+        )
+        == '@LinusTechTips search "paint"'
+    )
+
+
+def test_classify_cookies_explains_anonymous_and_names_target(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.ytdlp_common.cookie_configured", lambda: False
+    )
+    kind, msg = classify_ytdlp_error(
+        "Login required / age-restricted",
+        url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        title="Secret Video",
+        channel="Some Channel",
+    )
+    assert kind == ERROR_KIND_COOKIES
+    assert "anonymously" in msg
+    assert "public" in msg.lower()
+    assert "Secret Video" in msg
+    assert "Some Channel" in msg
+    assert "On:" in msg
+
+
+def test_record_extract_failure_stores_target():
+    record_extract_failure(
+        ERROR_KIND_COOKIES,
+        "gated",
+        url="https://www.youtube.com/@LinusTechTips",
+    )
+    last = get_last_extract_failure()
+    assert last is not None
+    assert last["target"] == "@LinusTechTips"
+    assert last["kind"] == ERROR_KIND_COOKIES
+    assert last["url"] == "https://www.youtube.com/@LinusTechTips"
+
+    record_extract_failure(
+        ERROR_KIND_COOKIES,
+        "gated",
+        url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        title="Secret Video",
+        channel="Some Channel",
+    )
+    last = get_last_extract_failure()
+    assert last is not None
+    assert last["target"] == '"Secret Video" · Some Channel'
 
 
 def test_classify_bot_pot_cookies(monkeypatch):
@@ -40,8 +115,9 @@ def test_classify_bot_pot_cookies(monkeypatch):
     kind, msg = classify_ytdlp_error("HTTP Error 403: Forbidden")
     assert kind == ERROR_KIND_POT
     assert "403" in msg
-    kind, _ = classify_ytdlp_error("Login required / age-restricted")
+    kind, msg = classify_ytdlp_error("Login required / age-restricted")
     assert kind == ERROR_KIND_COOKIES
+    assert "anonymously" in msg
 
 
 def test_classify_rate_unavailable_postprocess():

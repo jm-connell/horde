@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
+import ChannelAutodownloadModal from "../components/ChannelAutodownloadModal";
 import ChannelFeed from "../components/ChannelFeed";
 import ChannelFeedCard from "../components/ChannelFeedCard";
 import ChannelSidebar from "../components/ChannelSidebar";
@@ -29,6 +30,7 @@ import {
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
 import type {
+  ChannelAutodownload,
   ChannelFeedEntry,
   ChannelStat,
   Playlist,
@@ -207,6 +209,11 @@ export default function Library() {
   const [feedSort, setFeedSort] = useState<"recent" | "popular">("recent");
   const [feedOrder, setFeedOrder] = useState<"asc" | "desc">("desc");
   const [feedLayout, setFeedLayoutState] = useState(loadFeedLayout);
+  const [autodownloadOpen, setAutodownloadOpen] = useState(false);
+  const [autodownload, setAutodownload] = useState<ChannelAutodownload | null>(
+    null
+  );
+  const [autodownloadSaving, setAutodownloadSaving] = useState(false);
 
   const setHomeTab = useCallback((tab: HomeTab) => {
     setHomeTabState(tab);
@@ -348,6 +355,7 @@ export default function Library() {
     setFeedSearch("");
     setFeedSort("recent");
     setFeedOrder("desc");
+    setAutodownloadOpen(false);
   }, [activeChannel]);
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -627,6 +635,32 @@ export default function Library() {
   );
 
   useEffect(() => {
+    if (
+      !onChannelPage ||
+      !activeChannelUrl ||
+      !isYoutubeChannelUrl(activeChannelUrl)
+    ) {
+      setAutodownload(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .getChannelAutodownload({
+        channel: activeChannel ?? undefined,
+        url: activeChannelUrl,
+      })
+      .then((row) => {
+        if (!cancelled) setAutodownload(row);
+      })
+      .catch(() => {
+        if (!cancelled) setAutodownload(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [onChannelPage, activeChannel, activeChannelUrl]);
+
+  useEffect(() => {
     if (!onChannelPage || !activeChannelUrl) {
       setCatalogProgress(null);
       return;
@@ -760,6 +794,40 @@ export default function Library() {
       );
     } finally {
       setIndexingChannel(false);
+    }
+  };
+
+  const saveAutodownload = async (payload: {
+    enabled: boolean;
+    previous_mode: ChannelAutodownload["previous_mode"];
+    previous_count: number;
+    quality_preset: string;
+    include_completed_streams: boolean;
+  }) => {
+    if (!activeChannelUrl) {
+      showToast("No YouTube URL known for this channel yet");
+      return;
+    }
+    setAutodownloadSaving(true);
+    try {
+      const row = await api.updateChannelAutodownload({
+        channel: activeChannel ?? undefined,
+        url: activeChannelUrl,
+        ...payload,
+      });
+      setAutodownload(row);
+      setAutodownloadOpen(false);
+      showToast(
+        payload.enabled ? "Autodownload saved" : "Autodownload turned off"
+      );
+    } catch (err) {
+      showToast(
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not save autodownload"
+      );
+    } finally {
+      setAutodownloadSaving(false);
     }
   };
 
@@ -1119,9 +1187,9 @@ export default function Library() {
 
       <div ref={mainContentRef} className="min-w-0 flex-1">
         <div
-          className={`mb-5 flex min-w-0 items-center gap-x-2 gap-y-3 sm:gap-x-3 ${
-            isHome ? "max-md:flex-wrap md:flex-nowrap" : "flex-wrap"
-          }`}
+          className={`flex min-w-0 items-center gap-x-2 gap-y-3 sm:gap-x-3 ${
+            onChannelPage && showTags && hasTags ? "mb-2" : "mb-5"
+          } ${isHome ? "max-md:flex-wrap md:flex-nowrap" : "flex-wrap"}`}
         >
           {activeChannel && renaming === activeChannel ? (
             <input
@@ -1239,20 +1307,39 @@ export default function Library() {
               />
             </label>
           )}
+          {activeChannel &&
+            !activeTag &&
+            isYoutubeChannelUrl(activeChannelUrl) && (
+              <button
+                type="button"
+                onClick={() => setAutodownloadOpen(true)}
+                className={`ui-panel ui-interactive shrink-0 rounded-lg border px-2.5 py-1.5 text-sm transition-colors ${
+                  autodownload?.enabled
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
+                }`}
+              >
+                Autodownload
+              </button>
+            )}
 
           <div
             data-header-filters
-            className="ml-auto flex min-w-0 w-full basis-full flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:w-auto md:flex-1 md:basis-auto md:flex-nowrap"
+            className={
+              onChannelPage
+                ? "contents"
+                : "ml-auto flex min-w-0 w-full basis-full flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:w-auto md:flex-1 md:basis-auto md:flex-nowrap"
+            }
           >
             {onChannelPage ? (
               <>
-                <div className="flex min-w-0 flex-1 items-center gap-1.5 md:flex-initial md:w-auto">
+                <div className="flex min-w-[10rem] w-40 max-w-64 grow items-center gap-1.5 sm:min-w-[13rem] sm:w-52">
                   <input
                     data-header-search
                     value={feedSearch}
                     onChange={(e) => setFeedSearch(e.target.value)}
                     placeholder="Search this channel"
-                    className="ui-panel ui-interactive min-w-0 max-w-64 flex-1 basis-24 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:px-4 md:basis-40"
+                    className="ui-panel ui-interactive min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:px-4"
                   />
                   <HelpTip text={FEED_SEARCH_TIP} placement="bottom" />
                 </div>
@@ -1367,6 +1454,21 @@ export default function Library() {
                     </svg>
                   </button>
                 </div>
+                {hasTags && (
+                  <button
+                    type="button"
+                    onClick={() => setShowTags((s) => !s)}
+                    className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
+                  >
+                    {showTags ? "Hide tags" : "Show tags"}
+                  </button>
+                )}
+                {catalogProgress && (
+                  <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-gray-500">
+                    {formatCatalogProgress(catalogProgress)}
+                    <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
+                  </span>
+                )}
               </>
             ) : (
               <>
@@ -1434,11 +1536,9 @@ export default function Library() {
         </div>
 
         {!onRecommendedTab &&
-          (activeTag ||
-            hasTags ||
-            (onChannelPage && catalogProgress)) && (
+          (activeTag || hasTags) && (
           <div>
-            {!isHome && (activeTag || hasTags || catalogProgress) && (
+            {!isHome && !onChannelPage && (activeTag || hasTags) && (
               <div
                 className={`flex flex-wrap items-center gap-2 transition-[margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
                   showTags && hasTags ? "mb-2" : "mb-5"
@@ -1459,12 +1559,6 @@ export default function Library() {
                   >
                     {showTags ? "Hide tags" : "Show tags"}
                   </button>
-                )}
-                {onChannelPage && catalogProgress && (
-                  <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-gray-500">
-                    {formatCatalogProgress(catalogProgress)}
-                    <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
-                  </span>
                 )}
               </div>
             )}
@@ -1749,6 +1843,28 @@ export default function Library() {
             />
           </div>
         </div>
+      )}
+      {autodownloadOpen && activeChannel && (
+        <ChannelAutodownloadModal
+          channel={activeChannel}
+          policy={
+            autodownload ?? {
+              configured: false,
+              enabled: false,
+              previous_mode: "none",
+              previous_count: 10,
+              quality_preset: "1080p",
+              include_completed_streams: false,
+              channel_url: activeChannelUrl,
+              channel_name: activeChannel,
+              pending_estimate: 0,
+              catalog_max_videos: 1000,
+            }
+          }
+          saving={autodownloadSaving}
+          onClose={() => setAutodownloadOpen(false)}
+          onSave={(payload) => void saveAutodownload(payload)}
+        />
       )}
     </div>
   );

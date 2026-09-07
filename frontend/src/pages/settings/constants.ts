@@ -72,7 +72,7 @@ export const STATUS_TIPS = {
   catalogQueue:
     "Channel catalog indexing — walking YouTube upload lists so feed search works beyond the visible page.",
   extractFailure:
-    "The most recent yt-dlp metadata error (bot check, cookies, PO token, and similar). Useful for diagnosing YouTube access problems.",
+    "The most recent yt-dlp metadata error (bot check, age-restricted/private, PO token, and similar), including the video or channel it happened on.",
   disk: "Free space on the downloads volume versus total size. Downloads and imports will fail if this runs out.",
 } as const;
 

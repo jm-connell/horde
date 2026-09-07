@@ -3,14 +3,29 @@ import {
   downloadErrorHint,
   downloadErrorLabel,
   downloadErrorToast,
+  extractFailureCopy,
 } from "./downloadErrors";
 
 describe("downloadErrors", () => {
   it("labels and hints known kinds", () => {
     expect(downloadErrorLabel("bot")).toBe("Bot check");
+    expect(downloadErrorLabel("cookies")).toBe("Age-restricted / private");
     expect(downloadErrorHint("pot")).toContain("bgutil-pot");
+    expect(downloadErrorHint("cookies")).toMatch(/anonymously|signed-in/i);
     expect(downloadErrorLabel(null)).toBe("Failed");
     expect(downloadErrorHint("unknown")).toBeNull();
+  });
+
+  it("splits extract failure target from the message", () => {
+    expect(
+      extractFailureCopy({
+        message: 'Gated. On: "Secret" · Channel',
+        target: '"Secret" · Channel',
+      })
+    ).toEqual({
+      target: '"Secret" · Channel',
+      message: "Gated.",
+    });
   });
 
   it("composes toast messages", () => {

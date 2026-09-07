@@ -26,6 +26,7 @@ from .runtime import (
     get_catalog_by_url,
 )
 from .skips import skipped_yt_ids
+from ..ytdlp_extract import is_youtube_short_entry
 
 
 def catalog_progress(
@@ -101,6 +102,10 @@ def update_catalog_video_fields(
             if duration is not None and row.duration is None:
                 row.duration = duration
                 row_changed = True
+            live_status = item.get("live_status")
+            if live_status and row.live_status != live_status:
+                row.live_status = str(live_status)
+                row_changed = True
             thumb = item.get("thumbnail_url")
             if thumb and not row.thumbnail_url:
                 row.thumbnail_url = str(thumb)
@@ -139,22 +144,30 @@ def catalog_feed_page(
         ChannelCatalogStatus.error,
     ):
         return None
-    total = session.exec(
-        select(func.count(ChannelCatalogVideo.id)).where(
-            ChannelCatalogVideo.catalog_id == catalog.id
-        )
-    ).one()
-    total_n = int(total or 0)
-    if total_n == 0:
-        return None
     skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
-    rows = session.exec(
+    all_rows = session.exec(
         select(ChannelCatalogVideo)
         .where(ChannelCatalogVideo.catalog_id == catalog.id)
         .order_by(ChannelCatalogVideo.position.asc())
-        .offset(offset)
-        .limit(limit)
     ).all()
+    visible = [
+        r
+        for r in all_rows
+        if r.yt_id not in skipped
+        and not is_members_only_entry({"title": r.title})
+        and not is_youtube_short_entry(
+            {
+                "url": r.url,
+                "title": r.title,
+                "duration": r.duration,
+                "published_at": r.published_at,
+            }
+        )
+    ]
+    total_n = len(visible)
+    if total_n == 0:
+        return None
+    rows = visible[offset : offset + limit]
     entries = [
         {
             "id": r.yt_id,
@@ -166,8 +179,6 @@ def catalog_feed_page(
             "published_at": r.published_at,
         }
         for r in rows
-        if r.yt_id not in skipped
-        and not is_members_only_entry({"title": r.title})
     ]
     return {
         "channel": catalog.channel_name,
@@ -212,7 +223,16 @@ def _keyword_fetch_limit(limit: int) -> int:
 
 
 def _is_hidden_catalog_video(video: ChannelCatalogVideo, skipped: set[str]) -> bool:
-    return video.yt_id in skipped or is_members_only_entry({"title": video.title})
+    if video.yt_id in skipped or is_members_only_entry({"title": video.title}):
+        return True
+    return is_youtube_short_entry(
+        {
+            "url": video.url,
+            "title": video.title,
+            "duration": video.duration,
+            "published_at": video.published_at,
+        }
+    )
 
 
 def _keyword_catalog_rows(

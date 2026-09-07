@@ -313,6 +313,29 @@ class ChannelCatalogYoutubeSearchPref(BaseModel):
     direct_youtube_search_effective: bool = True
 
 
+class ChannelAutodownloadRead(BaseModel):
+    configured: bool = False
+    enabled: bool = False
+    previous_mode: Literal["none", "count", "all"] = "none"
+    previous_count: Optional[int] = 10
+    quality_preset: str = "1080p"
+    include_completed_streams: bool = False
+    channel_url: Optional[str] = None
+    channel_name: Optional[str] = None
+    pending_estimate: int = 0
+    catalog_max_videos: int = 1000
+
+
+class ChannelAutodownloadUpdate(BaseModel):
+    channel: Optional[str] = None
+    url: Optional[str] = None
+    enabled: bool = False
+    previous_mode: Literal["none", "count", "all"] = "none"
+    previous_count: Optional[int] = None
+    quality_preset: str = "1080p"
+    include_completed_streams: bool = False
+
+
 class TagStat(BaseModel):
     tag: str
     count: int

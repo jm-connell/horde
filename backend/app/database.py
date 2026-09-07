@@ -130,6 +130,10 @@ _CHANNEL_CATALOG_COLUMNS = [
     ("direct_youtube_search", "BOOLEAN"),
 ]
 
+_CHANNEL_CATALOG_VIDEO_COLUMNS = [
+    ("live_status", "VARCHAR"),
+]
+
 _AI_CATEGORY_COLUMNS = [
     ("blurb", "VARCHAR"),
 ]
@@ -189,6 +193,7 @@ def _step_add_columns() -> None:
     _migrate_table("video_ai_chat_messages", _VIDEO_AI_CHAT_MESSAGE_COLUMNS)
     _migrate_table("ai_jobs", _AI_JOB_COLUMNS)
     _migrate_table("channel_catalogs", _CHANNEL_CATALOG_COLUMNS)
+    _migrate_table("channel_catalog_videos", _CHANNEL_CATALOG_VIDEO_COLUMNS)
     _migrate_table("ai_categories", _AI_CATEGORY_COLUMNS)
 
 
@@ -230,6 +235,7 @@ def verify_schema() -> None:
         ("video_ai_chat_messages", _VIDEO_AI_CHAT_MESSAGE_COLUMNS),
         ("ai_jobs", _AI_JOB_COLUMNS),
         ("channel_catalogs", _CHANNEL_CATALOG_COLUMNS),
+        ("channel_catalog_videos", _CHANNEL_CATALOG_VIDEO_COLUMNS),
         ("ai_categories", _AI_CATEGORY_COLUMNS),
     ):
         if table not in inspector.get_table_names():
