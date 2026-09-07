@@ -40,6 +40,10 @@ import {
   streamQualityToChoice,
   type QualityChoice,
 } from "./videoPlayerQuality";
+import {
+  sponsorSegmentKey,
+  suppressSponsorSegmentsOnBackwardSeek,
+} from "./videoPlayerSponsor";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
 
@@ -345,6 +349,10 @@ export default function VideoPlayer({
     }, BUFFERING_INDICATOR_DELAY_MS);
   }, []);
   const suppressedSegmentsRef = useRef(new Set<string>());
+  const sponsorSegmentsRef = useRef(sponsorSegments);
+  sponsorSegmentsRef.current = sponsorSegments;
+  const sponsorSkipModeRef = useRef(sponsorSkipMode);
+  sponsorSkipModeRef.current = sponsorSkipMode;
   const [ccNotice, setCcNotice] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [qualityNotice, setQualityNotice] = useState<string | null>(null);
@@ -732,7 +740,7 @@ export default function VideoPlayer({
     const seg = skippedSegment;
     const v = videoRef.current;
     if (!seg || !v) return;
-    suppressedSegmentsRef.current.add(`${seg.startSec}-${seg.endSec}`);
+    suppressedSegmentsRef.current.add(sponsorSegmentKey(seg));
     v.currentTime = seg.startSec;
     clearSkipNotice();
   }, [skippedSegment, clearSkipNotice]);
@@ -950,6 +958,20 @@ export default function VideoPlayer({
   const seekTo = useCallback(
     (sec: number) => {
       const t = Math.max(0, sec);
+      const from = Math.max(
+        videoRef.current?.currentTime ?? 0,
+        prevTimeRef.current
+      );
+      // Timeline / arrow seeks set isSeeking and jump currentTime, so the
+      // timeupdate "moving backward" check never sees the jump. Record it here.
+      if (sponsorSkipModeRef.current !== "prompt") {
+        suppressSponsorSegmentsOnBackwardSeek(
+          from,
+          t,
+          sponsorSegmentsRef.current,
+          suppressedSegmentsRef.current
+        );
+      }
       isSeekingRef.current = true;
       prevTimeRef.current = t;
       setCurrent(t);
@@ -1928,21 +1950,19 @@ export default function VideoPlayer({
             // chapter jumps aren't redirected mid-seek.
             if (sponsorSegments.length > 0 && !isSeekingRef.current) {
               const movingForward = t >= prev - 0.05;
-              const seekingBack = t < prev - 0.05;
               const promptMode = sponsorSkipMode === "prompt";
+              if (!promptMode) {
+                suppressSponsorSegmentsOnBackwardSeek(
+                  prev,
+                  t,
+                  sponsorSegments,
+                  suppressedSegmentsRef.current
+                );
+              }
               let insidePrompt: SponsorSegment | null = null;
               for (const seg of sponsorSegments) {
-                const key = `${seg.startSec}-${seg.endSec}`;
+                const key = sponsorSegmentKey(seg);
                 if (suppressedSegmentsRef.current.has(key)) {
-                  continue;
-                }
-                if (
-                  !promptMode &&
-                  seekingBack &&
-                  t >= seg.startSec &&
-                  t < seg.endSec
-                ) {
-                  suppressedSegmentsRef.current.add(key);
                   continue;
                 }
                 if (
