@@ -67,6 +67,35 @@ def test_init_db_on_fresh_temp(tmp_dirs):
     verify_schema()
 
 
+def test_migrate_adds_playlist_subscribe_columns(tmp_dirs):
+    from app import models  # noqa: F401
+    from app import database
+    from sqlalchemy import inspect, text
+
+    engine = tmp_dirs["engine"]
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE playlists ("
+                "id INTEGER PRIMARY KEY, "
+                "name VARCHAR NOT NULL, "
+                "created_at VARCHAR"
+                ")"
+            )
+        )
+    database._migrate_columns()
+    cols = {c["name"] for c in inspect(engine).get_columns("playlists")}
+    assert "subscribed" in cols
+    assert "quality_preset" in cols
+    assert "last_synced_at" in cols
+    assert "sync_error" in cols
+    assert "position" in cols
+    assert "cover_video_id" in cols
+    assert "cover_path" in cols
+    database.verify_schema()
+    assert "2026_09_playlist_positions" in database.applied_migrations()
+
+
 def test_engine_enables_wal(init_db):
     from sqlalchemy import text
 

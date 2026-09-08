@@ -9,8 +9,8 @@ React + Vite SPA under `frontend/`. Production build is copied to `backend/stati
 | `/` | Library |
 | `/history` | Watch history / continue watching |
 | `/download` | Download queue & URL ingest |
-| `/playlists` | Playlist list |
-| `/playlists/:id` | Playlist detail |
+| `/playlists` | Playlists (expand a row; `?open=<id>` opens one) |
+| `/playlists/:id` | Redirect → `/playlists?open=:id` |
 | `/import` | Import & review queue |
 | `/review` | Redirect → `/import` |
 | `/settings` | Settings (tabs via query, e.g. `?tab=playback`) |

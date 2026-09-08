@@ -132,3 +132,36 @@ def unlink_for_video(
         return
     full_path(video_id).unlink(missing_ok=True)
     list_path(video_id).unlink(missing_ok=True)
+
+
+PLAYLIST_COVER_MAX_PX = 1280
+
+
+def playlist_cover_path(playlist_id: int) -> Path:
+    return THUMBNAILS_DIR / f"playlist_{playlist_id}.jpg"
+
+
+def write_playlist_cover(playlist_id: int, data: bytes) -> str:
+    """Save an uploaded image as a JPEG cover for a playlist."""
+    from PIL import Image
+
+    img = _open_rgb(data)
+    img.thumbnail(
+        (PLAYLIST_COVER_MAX_PX, PLAYLIST_COVER_MAX_PX),
+        Image.Resampling.LANCZOS,
+    )
+    dest = playlist_cover_path(playlist_id)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    img.save(dest, "JPEG", quality=88, optimize=True)
+    return str(dest)
+
+
+def unlink_playlist_cover(
+    playlist_id: Optional[int],
+    cover_path: Optional[str] = None,
+) -> None:
+    if cover_path:
+        Path(cover_path).unlink(missing_ok=True)
+    if playlist_id is None:
+        return
+    playlist_cover_path(playlist_id).unlink(missing_ok=True)

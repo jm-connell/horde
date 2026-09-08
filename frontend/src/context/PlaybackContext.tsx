@@ -28,6 +28,11 @@ import {
   type Chapter,
 } from "../utils";
 import { shouldSuspendPlaybackForWatch } from "../utils/watchHandoff";
+import {
+  clampMiniPos,
+  miniPlayerHostInsets,
+  type MiniPos,
+} from "../utils/miniPlayerLayout";
 import type { SubtitleTrack, Video } from "../types";
 
 export interface StreamSession {
@@ -95,8 +100,6 @@ const MINI_WIDTH_KEY = "horde.mini-width";
 const DEFAULT_MINI_WIDTH_MOBILE = 224;
 const DEFAULT_MINI_WIDTH_DESKTOP = 704;
 
-type MiniPos = { left: number; top: number };
-
 function loadMiniWidth(): number | null {
   try {
     const raw = localStorage.getItem(MINI_WIDTH_KEY);
@@ -106,21 +109,6 @@ function loadMiniWidth(): number | null {
   } catch {
     return null;
   }
-}
-
-function clampMiniPos(
-  left: number,
-  top: number,
-  width: number,
-  height: number
-): MiniPos {
-  const margin = 8;
-  const maxLeft = Math.max(margin, window.innerWidth - width - margin);
-  const maxTop = Math.max(margin, window.innerHeight - height - margin);
-  return {
-    left: Math.min(maxLeft, Math.max(margin, left)),
-    top: Math.min(maxTop, Math.max(margin, top)),
-  };
 }
 
 function mimeFromPath(filePath: string): string {
@@ -135,6 +123,29 @@ function mimeFromPath(filePath: string): string {
     default:
       return "video/mp4";
   }
+}
+
+function applyMiniHostInsets(
+  host: HTMLElement,
+  insets: ReturnType<typeof miniPlayerHostInsets>
+) {
+  host.style.left = insets.left;
+  host.style.top = insets.top;
+  host.style.right = insets.right;
+  host.style.bottom = insets.bottom;
+}
+
+function miniRectFromHost(host: HTMLElement): MiniPlayerRect | null {
+  const r = host.getBoundingClientRect();
+  if (r.width <= 0 || r.height <= 0) return null;
+  return {
+    left: r.left,
+    top: r.top,
+    width: r.width,
+    height: r.height,
+    right: r.right,
+    bottom: r.bottom,
+  };
 }
 
 function loadQueue(): Video[] {
@@ -297,19 +308,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         "fixed z-40 overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
       host.style.width = `${width}px`;
       host.style.maxWidth = isMobile ? "70vw" : "calc(100vw - 2rem)";
-      host.style.right = "";
-      host.style.bottom = "";
       const height = host.getBoundingClientRect().height || width * (9 / 16);
       const pos = miniPosLiveRef.current ?? miniPos;
-      if (pos) {
-        const clamped = clampMiniPos(pos.left, pos.top, width, height);
-        host.style.left = `${clamped.left}px`;
-        host.style.top = `${clamped.top}px`;
-      } else {
-        const margin = isMobile ? 12 : 16;
-        host.style.left = `${Math.max(margin, window.innerWidth - width - margin)}px`;
-        host.style.top = `${Math.max(margin, window.innerHeight - height - margin)}px`;
-      }
+      applyMiniHostInsets(
+        host,
+        miniPlayerHostInsets(pos, { width, height }, isMobile)
+      );
     } else {
       host.className = "hidden";
       host.style.width = "";
@@ -334,27 +338,45 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     }
 
     const publish = () => {
-      const r = host.getBoundingClientRect();
-      if (r.width <= 0 || r.height <= 0) return;
-      setMiniPlayerRect({
-        left: r.left,
-        top: r.top,
-        width: r.width,
-        height: r.height,
-        right: r.right,
-        bottom: r.bottom,
-      });
+      const next = miniRectFromHost(host);
+      if (next) setMiniPlayerRect(next);
+    };
+
+    const onWindowResize = () => {
+      const defaultWidth = isMobile
+        ? DEFAULT_MINI_WIDTH_MOBILE
+        : DEFAULT_MINI_WIDTH_DESKTOP;
+      const width = miniWidth ?? defaultWidth;
+      const height = host.getBoundingClientRect().height || width * (9 / 16);
+      const pos = miniPosLiveRef.current;
+      if (pos) {
+        const clamped = clampMiniPos(pos.left, pos.top, width, height);
+        applyMiniHostInsets(
+          host,
+          miniPlayerHostInsets(clamped, { width, height }, isMobile)
+        );
+        if (clamped.left !== pos.left || clamped.top !== pos.top) {
+          miniPosLiveRef.current = clamped;
+          setMiniPosState(clamped);
+        }
+      } else {
+        applyMiniHostInsets(
+          host,
+          miniPlayerHostInsets(null, { width, height }, isMobile)
+        );
+      }
+      publish();
     };
 
     publish();
     const ro = new ResizeObserver(publish);
     ro.observe(host);
-    window.addEventListener("resize", publish);
+    window.addEventListener("resize", onWindowResize, { passive: true });
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", publish);
+      window.removeEventListener("resize", onWindowResize);
     };
-  }, [miniPlayerActive, miniWidth, miniPos, current?.id, stream?.url]);
+  }, [miniPlayerActive, miniWidth, miniPos, current?.id, stream?.url, isMobile]);
 
   // Hide page scroll while windowed fullscreen is active.
   useEffect(() => {
@@ -642,14 +664,29 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     (width: number, origin: { left: number; top: number; height: number }) => {
       const host = hostRef.current;
       const height = origin.height || width * (9 / 16);
+      if (host) host.style.width = `${width}px`;
+      setMiniWidth(width);
+      // Still corner-anchored: only the width changes. CSS right/bottom keep
+      // the frame in the corner through both this resize and window resizes.
+      if (!miniPosLiveRef.current) {
+        if (host) {
+          applyMiniHostInsets(
+            host,
+            miniPlayerHostInsets(null, { width, height }, isMobile)
+          );
+          const next = miniRectFromHost(host);
+          if (next) setMiniPlayerRect(next);
+        }
+        return;
+      }
       const clamped = clampMiniPos(origin.left, origin.top, width, height);
       if (host) {
-        host.style.width = `${width}px`;
-        host.style.left = `${clamped.left}px`;
-        host.style.top = `${clamped.top}px`;
+        applyMiniHostInsets(
+          host,
+          miniPlayerHostInsets(clamped, { width, height }, isMobile)
+        );
       }
       miniPosLiveRef.current = clamped;
-      setMiniWidth(width);
       setMiniPos(clamped);
       setMiniPlayerRect({
         left: clamped.left,
@@ -660,7 +697,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         bottom: clamped.top + height,
       });
     },
-    [setMiniWidth, setMiniPos]
+    [setMiniWidth, setMiniPos, isMobile]
   );
 
   const handleMiniMove = useCallback(
@@ -671,8 +708,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
       const height = host.offsetHeight || width * (9 / 16);
       const clamped = clampMiniPos(left, top, width, height);
-      host.style.left = `${clamped.left}px`;
-      host.style.top = `${clamped.top}px`;
+      applyMiniHostInsets(
+        host,
+        miniPlayerHostInsets(clamped, { width, height }, isMobile)
+      );
       miniPosLiveRef.current = clamped;
       setMiniPlayerRect({
         left: clamped.left,
@@ -683,7 +722,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         bottom: clamped.top + height,
       });
     },
-    [miniWidth]
+    [miniWidth, isMobile]
   );
 
   const handleMiniMoveEnd = useCallback(() => {

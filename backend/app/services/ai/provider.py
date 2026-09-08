@@ -488,13 +488,9 @@ class OpenRouterProvider:
             return []
         out: list[dict[str, Any]] = []
         for row in rows:
-            if not isinstance(row, dict):
-                continue
-            mid = str(row.get("id") or "").strip()
-            if not mid:
-                continue
-            name = str(row.get("name") or mid).strip() or mid
-            out.append({"id": mid, "name": name})
+            parsed = parse_openrouter_catalog_row(row)
+            if parsed:
+                out.append(parsed)
         out.sort(key=lambda r: str(r["id"]).lower())
         return out
 
@@ -756,13 +752,9 @@ class OpenRouterProvider:
                     if isinstance(rows, list) and rows:
                         out: list[dict[str, Any]] = []
                         for row in rows:
-                            if not isinstance(row, dict):
-                                continue
-                            mid = str(row.get("id") or "").strip()
-                            if not mid:
-                                continue
-                            name = str(row.get("name") or mid).strip() or mid
-                            out.append({"id": mid, "name": name})
+                            parsed = parse_openrouter_catalog_row(row)
+                            if parsed:
+                                out.append(parsed)
                         out.sort(key=lambda r: str(r["id"]).lower())
                         return out
         except Exception:  # noqa: BLE001
@@ -778,6 +770,41 @@ class OpenRouterProvider:
 AnyEmbedProvider = Union[OllamaProvider, OpenRouterProvider]
 AnyLlmProvider = Union[OllamaProvider, OpenRouterProvider]
 
+
+
+def usd_per_million(raw: Any) -> Optional[float]:
+    """Convert OpenRouter USD-per-token list prices to USD per 1M tokens."""
+    if raw is None or raw == "":
+        return None
+    try:
+        per_token = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if per_token < 0 or per_token != per_token:
+        return None
+    return round(per_token * 1_000_000.0, 6)
+
+
+def parse_openrouter_catalog_row(row: Any) -> Optional[dict[str, Any]]:
+    """Normalize an OpenRouter ``/models`` row to id, name, and $/M prices."""
+    if not isinstance(row, dict):
+        return None
+    mid = str(row.get("id") or "").strip()
+    if not mid:
+        return None
+    name = str(row.get("name") or mid).strip() or mid
+    pricing = row.get("pricing")
+    prompt = None
+    completion = None
+    if isinstance(pricing, dict):
+        prompt = usd_per_million(pricing.get("prompt"))
+        completion = usd_per_million(pricing.get("completion"))
+    return {
+        "id": mid,
+        "name": name,
+        "prompt_per_million": prompt,
+        "completion_per_million": completion,
+    }
 
 
 def mask_openrouter_api_key(key: str) -> str:

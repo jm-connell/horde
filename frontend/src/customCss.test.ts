@@ -52,7 +52,7 @@ describe("pageIdFromPath", () => {
     expect(pageIdFromPath("/watch")).toBe("watch");
     expect(pageIdFromPath("/settings")).toBe("settings");
     expect(pageIdFromPath("/playlists")).toBe("playlists");
-    expect(pageIdFromPath("/playlists/abc")).toBe("playlist");
+    expect(pageIdFromPath("/playlists/abc")).toBe("playlists");
     expect(pageIdFromPath("/history")).toBe("history");
     expect(pageIdFromPath("/download")).toBe("download");
     expect(pageIdFromPath("/import")).toBe("import");

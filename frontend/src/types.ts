@@ -369,6 +369,14 @@ export interface OpenRouterCosts {
   blocked?: boolean;
 }
 
+/** OpenRouter catalog row from GET /api/ai/openrouter/models. */
+export interface OpenRouterModel {
+  id: string;
+  name: string;
+  prompt_per_million?: number | null;
+  completion_per_million?: number | null;
+}
+
 export interface AppSettings {
   progress_expiry_days: number;
   metadata_sync_interval_hours: number;
@@ -634,8 +642,17 @@ export interface Playlist {
   description: string | null;
   source_type: PlaylistSource;
   source_url: string | null;
+  subscribed: boolean;
+  quality_preset: string | null;
+  last_synced_at: string | null;
+  sync_error: string | null;
   created_at: string;
   item_count: number;
+  position: number;
+  cover_video_id: number | null;
+  has_custom_cover: boolean;
+  thumbnail_video_id: number | null;
+  has_thumbnail: boolean;
 }
 
 export interface PlaylistDetail extends Playlist {

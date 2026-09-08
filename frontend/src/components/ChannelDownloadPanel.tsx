@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { usePlayback } from "../context/PlaybackContext";
 import {
   formatApproxSize,
@@ -47,15 +48,25 @@ export default function ChannelDownloadPanel({
   const queueVisible = queue.length > 0;
   const liftAboveQueue =
     queueVisible && queueDockedBottom && !miniPlayerActive;
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window !== "undefined" ? window.innerWidth : 0,
+    height: typeof window !== "undefined" ? window.innerHeight : 0,
+  }));
+
+  useEffect(() => {
+    const onResize = () =>
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const positionStyle = avoidMiniPlayerStyle(
     miniPlayerActive ? miniPlayerRect : null,
     {
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
       queueBottomLiftPx: liftAboveQueue
-        ? Math.min(
-            typeof window !== "undefined" ? window.innerHeight * 0.34 : 272,
-            272
-          )
+        ? Math.min(viewport.height * 0.34, 272)
         : undefined,
     }
   );

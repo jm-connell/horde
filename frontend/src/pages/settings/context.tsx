@@ -17,6 +17,7 @@ import type {
   ChannelCatalogStatus,
   HealthStats,
   OpenRouterCosts,
+  OpenRouterModel,
   StorageStats,
   SystemActivity,
   SystemStats,
@@ -97,12 +98,10 @@ export type SettingsPageContextValue = {
   setOpenRouterTesting: Dispatch<SetStateAction<boolean>>;
   openRouterKeyDraft: string;
   setOpenRouterKeyDraft: Dispatch<SetStateAction<string>>;
-  openRouterModels: { id: string; name: string }[];
-  setOpenRouterModels: Dispatch<SetStateAction<{ id: string; name: string }[]>>;
-  openRouterEmbedModels: { id: string; name: string }[];
-  setOpenRouterEmbedModels: Dispatch<SetStateAction<{ id: string; name: string }[]>>;
-  openRouterModelFilter: string;
-  setOpenRouterModelFilter: Dispatch<SetStateAction<string>>;
+  openRouterModels: OpenRouterModel[];
+  setOpenRouterModels: Dispatch<SetStateAction<OpenRouterModel[]>>;
+  openRouterEmbedModels: OpenRouterModel[];
+  setOpenRouterEmbedModels: Dispatch<SetStateAction<OpenRouterModel[]>>;
   openRouterCosts: OpenRouterCosts | null;
   embedCustom: boolean;
   setEmbedCustom: Dispatch<SetStateAction<boolean>>;

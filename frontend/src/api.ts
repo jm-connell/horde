@@ -15,6 +15,7 @@ import type {
   DuplicateGroup,
   ImportScanResult,
   OpenRouterCosts,
+  OpenRouterModel,
   Playlist,
   PlaylistDetail,
   PlaylistPreviewData,
@@ -526,8 +527,8 @@ export const api = {
 
   getOpenRouterModels(): Promise<{
     presets: { id: string; label: string; model: string }[];
-    models: { id: string; name: string }[];
-    embedding_models?: { id: string; name: string }[];
+    models: OpenRouterModel[];
+    embedding_models?: OpenRouterModel[];
   }> {
     return request("/api/ai/openrouter/models");
   },
@@ -841,6 +842,20 @@ export const api = {
     });
   },
 
+  bulkCreateDownloads(
+    urls: string[],
+    quality_preset: string
+  ): Promise<{ jobs: DownloadJob[]; skipped: number }> {
+    return request<{ jobs: DownloadJob[]; skipped: number }>(
+      "/api/downloads/bulk",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls, quality_preset }),
+      }
+    );
+  },
+
   listJobs(): Promise<DownloadJob[]> {
     return request<DownloadJob[]>("/api/downloads");
   },
@@ -938,6 +953,27 @@ export const api = {
     });
   },
 
+  updatePlaylist(
+    id: number,
+    patch: {
+      name?: string;
+      description?: string;
+      subscribed?: boolean;
+      quality_preset?: string;
+      cover_video_id?: number | null;
+    }
+  ): Promise<Playlist> {
+    return request<Playlist>(`/api/playlists/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  },
+
+  syncPlaylist(id: number): Promise<Playlist> {
+    return request<Playlist>(`/api/playlists/${id}/sync`, { method: "POST" });
+  },
+
   deletePlaylist(id: number): Promise<void> {
     return request<void>(`/api/playlists/${id}`, { method: "DELETE" });
   },
@@ -975,10 +1011,27 @@ export const api = {
     });
   },
 
+  reorderPlaylists(playlistIds: number[]): Promise<Playlist[]> {
+    return request<Playlist[]>("/api/playlists/reorder", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playlist_ids: playlistIds }),
+    });
+  },
+
+  uploadPlaylistCover(id: number, file: File): Promise<Playlist> {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Playlist>(`/api/playlists/${id}/thumbnail`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
   importPlaylist(
     url: string,
     quality_preset: string,
-    opts: { name?: string; entries?: string[] } = {}
+    opts: { name?: string; entries?: string[]; subscribe?: boolean } = {}
   ): Promise<Playlist> {
     return request<Playlist>("/api/playlists/import", {
       method: "POST",
@@ -988,6 +1041,7 @@ export const api = {
         quality_preset,
         name: opts.name,
         entries: opts.entries,
+        subscribe: opts.subscribe ?? false,
       }),
     });
   },
@@ -1016,6 +1070,17 @@ export function thumbnailUrl(video: Video): string | null {
 /** ~320px JPEG for download-list tiles; falls back to full size if missing. */
 export function listThumbnailUrl(videoId: number): string {
   return `/api/thumbnails/${videoId}?size=sm`;
+}
+
+export function playlistCoverUrl(playlist: Playlist): string | null {
+  if (!playlist.has_thumbnail) return null;
+  if (playlist.has_custom_cover) {
+    return `/api/playlists/${playlist.id}/thumbnail?v=c`;
+  }
+  if (playlist.thumbnail_video_id) {
+    return listThumbnailUrl(playlist.thumbnail_video_id);
+  }
+  return null;
 }
 
 export function spritesMetaUrl(id: number): string {

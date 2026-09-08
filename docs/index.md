@@ -11,11 +11,11 @@ It exists because Plex is great for Movies and TV, and awkward for everything el
 
 | Area | What you get |
 |------|----------------|
-| **Downloads** | URL ingestion, quality presets, live progress, playlist import, pause/resume queue |
+| **Downloads** | URL ingestion, quality presets, live progress, playlist import/subscribe, pause/resume queue |
 | **Library** | Channel sidebar, tags, hybrid search, sorting, bulk select, continue watching |
 | **Import** | Watchdog + poll scanner for dropped files; review before they enter the library |
 | **Player** | Standard / theater / windowed modes, mini player, PiP, cast, SponsorBlock, chapters, subtitles |
-| **Playlists** | Your own lists or imported YouTube playlists |
+| **Playlists** | Your own lists, imported YouTube playlists, or subscribed lists that pick up new parts |
 | **AI** (optional) | Ollama and/or OpenRouter for embeddings, tags, summaries, chat, recommendations, duplicates |
 
 ## Where to start

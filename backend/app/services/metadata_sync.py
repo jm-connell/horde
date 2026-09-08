@@ -341,6 +341,13 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
         except Exception:  # noqa: BLE001
             pass
 
+        try:
+            from .playlist_sync import sync_subscribed_playlists
+
+            sync_subscribed_playlists()
+        except Exception:  # noqa: BLE001
+            pass
+
         # Re-read interval so Settings changes apply without restart.
         try:
             from . import app_settings as settings_svc

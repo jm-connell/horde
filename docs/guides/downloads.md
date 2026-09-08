@@ -1,6 +1,6 @@
 # Downloads
 
-The **Download** page (`/download`) is where you paste a URL, pick a quality preset, watch the queue, and import YouTube playlists into Horde.
+The **Download** page (`/download`) is where you paste a URL, pick a quality preset, watch the queue, and handle YouTube playlists (import, subscribe, or download as individual videos).
 
 Horde does not download **YouTube Shorts** (Shorts URLs, `#shorts` titles, or sub-minute uploads from the Shorts era). They are also omitted from channel feeds, catalog search, and playlist import. Videos already in the library are left as they are. Stream preview of a pasted Shorts URL can still play without saving a file.
 
@@ -131,21 +131,28 @@ Pause-all stops every download; nothing new starts until you resume. The pause f
 
 Completed library downloads land in the [Library](library.md), organized by channel/year on disk ([storage layout](../ops/storage-layout.md)). Device jobs show a **Save again** action on the card if the browser download was missed.
 
-Playlist import is library-only (device destination is hidden for playlist URLs).
+Playlist URLs are library-only (device destination is hidden). When Horde detects a playlist you choose one of three actions:
+
+| Action | What it does |
+|--------|----------------|
+| **Import playlist** (default) | One-time download of the videos, saved as a playlist in Horde |
+| **Subscribe** | Sync with the YouTube playlist and download new videos as they appear |
+| **Download videos** | Download like regular videos, without organizing into a playlist |
 
 ## Playlist import
 
 Paste a **playlist** URL on the Download page:
 
 1. Horde loads playlist entries.
-2. Select which items to import (all or a subset).
-3. Optionally set a **playlist name**.
-4. Choose a quality preset and import.
+2. Choose **Import playlist**, **Subscribe**, or **Download videos**.
+3. For import / download-videos, select which items (all or a subset). Subscribe uses the full remote list.
+4. Optionally set a **playlist name** (import and subscribe).
+5. Choose a quality preset and run the action.
 
-Horde creates a playlist and queues downloads for the selected entries. Manage the list later under [Playlists](playlists.md).
+Import and subscribe skip YouTube ids already in the library (attach only). Manage lists later under [Playlists](playlists.md). You can also subscribe from `/playlists` with a URL field.
 
 !!! tip "Create empty playlists elsewhere"
-    Local empty playlists are created on `/playlists`. YouTube playlist *import* always goes through Download.
+    Local empty playlists are created on `/playlists`. YouTube playlist ingest still goes through Download or the Playlists subscribe field.
 
 ## Loudnorm (optional)
 

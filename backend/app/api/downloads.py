@@ -12,6 +12,8 @@ from ..config import DOWNLOADS_DIR
 from ..database import get_session
 from ..models import DownloadDestination, DownloadJob, JobStatus, Video
 from ..schemas import (
+    DownloadBulkCreate,
+    DownloadBulkResult,
     DownloadCreate,
     DownloadJobRead,
     DownloadJobUpdate,
@@ -21,7 +23,7 @@ from ..schemas import (
 )
 from ..services import downloader, library
 from ..services.paths import safe_filename
-from ..services.url_clean import _youtube_video_id, clean_url
+from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
 from ..services.ytdlp_common import (
     ERROR_KIND_BOT,
     ERROR_KIND_COOKIES,
@@ -293,6 +295,85 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
 
     downloader.enqueue_download(job.id)
     return _enrich_jobs(session, [job])[0]
+
+
+@router.post("/bulk", response_model=DownloadBulkResult)
+def create_downloads_bulk(
+    payload: DownloadBulkCreate, session: Session = Depends(get_session)
+):
+    """Enqueue selected playlist entries as individual library jobs (no Horde playlist)."""
+    quality = (payload.quality_preset or "best").strip() or "best"
+    jobs: list[DownloadJob] = []
+    skipped = 0
+    seen_urls: set[str] = set()
+
+    for raw in payload.urls:
+        if not raw.strip():
+            continue
+        if is_youtube_short_url(raw):
+            skipped += 1
+            continue
+        url = clean_url(raw, keep_playlist=False)
+        if not url or url in seen_urls:
+            if url in seen_urls:
+                skipped += 1
+            continue
+        if is_youtube_short_url(url):
+            skipped += 1
+            continue
+        seen_urls.add(url)
+
+        yt_id = youtube_video_id(url)
+        if yt_id and library.find_video_by_youtube_id(session, yt_id) is not None:
+            skipped += 1
+            continue
+
+        preview: dict = {}
+        try:
+            preview = downloader.extract_preview(url)
+        except Exception:  # noqa: BLE001
+            preview = {}
+        if is_youtube_short_entry(
+            {
+                **(preview if isinstance(preview, dict) else {}),
+                "url": raw,
+                "webpage_url": url,
+            }
+        ):
+            skipped += 1
+            continue
+        preview_id = preview.get("id") if isinstance(preview, dict) else None
+        if preview_id and library.find_video_by_youtube_id(session, str(preview_id)) is not None:
+            skipped += 1
+            continue
+
+        quality_preset, presets_json = quality_from_preview(
+            quality, preview if isinstance(preview, dict) else {}
+        )
+        dest = DownloadDestination.library.value
+        with downloader.job_mutate_lock:
+            active = downloader.find_active_job(session, url, dest, quality_preset)
+            if active is not None:
+                jobs.append(active)
+                continue
+            job = DownloadJob(
+                url=url,
+                quality_preset=quality_preset,
+                available_presets_json=presets_json,
+                status=JobStatus.queued,
+                title=preview.get("title"),
+                channel=preview.get("channel"),
+                thumbnail_url=preview.get("thumbnail_url"),
+                video_codec=default_download_video_codec(),
+                destination=dest,
+            )
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+        downloader.enqueue_download(job.id)
+        jobs.append(job)
+
+    return DownloadBulkResult(jobs=_enrich_jobs(session, jobs), skipped=skipped)
 
 
 @router.patch("/{job_id}", response_model=DownloadJobRead)

@@ -7,6 +7,10 @@ import { formatUsdCost } from "../../../utils";
 import type { AiSettings } from "../../../types";
 import { ollamaIsUsed } from "../aiOllamaUsage";
 import { useSettingsPage } from "../context";
+import {
+  openRouterPriceHint,
+  openRouterSelectOptions,
+} from "../openRouterModels";
 import { Section, SettingRow, Toggle } from "../ui";
 import {
   CHAT_MODEL_OPTIONS,
@@ -50,8 +54,6 @@ export default function ProvidersPane() {
     setOpenRouterModels,
     openRouterEmbedModels,
     setOpenRouterEmbedModels,
-    openRouterModelFilter,
-    setOpenRouterModelFilter,
     openRouterCosts,
     embedCustom,
     setEmbedCustom,
@@ -806,123 +808,111 @@ export default function ProvidersPane() {
                         Clear saved key
                       </button>
                     )}
-                    <div className="max-w-md space-y-2">
-                      <span className="text-sm font-medium text-gray-200">
-                        Model
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        {OPENROUTER_PRESETS.map((preset) => {
-                          const active =
-                            aiDraft.openrouter_model === preset.model;
-                          return (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              onClick={() =>
-                                saveAi({ openrouter_model: preset.model })
-                              }
-                              className={
-                                active
-                                  ? "rounded-lg border border-accent/60 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
-                                  : "rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs font-medium text-gray-300 hover:border-accent/40 hover:text-accent"
-                              }
-                            >
-                              {preset.label}
-                              <span className="ml-1.5 text-[10px] text-gray-500">
-                                {preset.model}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <input
-                        value={openRouterModelFilter}
-                        onChange={(e) =>
-                          setOpenRouterModelFilter(e.target.value)
-                        }
-                        placeholder="Filter models…"
-                        aria-label="Filter OpenRouter models"
-                        className={`${INPUT_COMPACT} !w-44 max-w-[14rem]`}
-                      />
-                      <ThemedSelect
-                        value={aiDraft.openrouter_model}
-                        aria-label="OpenRouter model"
-                        className="w-full max-w-md"
-                        buttonClassName="w-full"
-                        options={(() => {
-                          const fq = openRouterModelFilter.trim().toLowerCase();
-                          const filtered = openRouterModels.filter((m) => {
-                            if (!fq) return true;
-                            return (
-                              m.id.toLowerCase().includes(fq) ||
-                              m.name.toLowerCase().includes(fq)
+                    <div className="max-w-xl space-y-4">
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium text-gray-200">
+                          Chat model
+                        </span>
+                        <div className="grid grid-cols-2 gap-2">
+                          {OPENROUTER_PRESETS.map((preset) => {
+                            const active =
+                              aiDraft.openrouter_model === preset.model;
+                            const price = openRouterPriceHint(
+                              openRouterModels.find(
+                                (m) => m.id === preset.model
+                              )
                             );
-                          });
-                          const opts = filtered.map((m) => ({
-                            value: m.id,
-                            label:
-                              m.name && m.name !== m.id
-                                ? `${m.name} (${m.id})`
-                                : m.id,
-                          }));
-                          if (
-                            !opts.some((o) => o.value === aiDraft.openrouter_model)
-                          ) {
-                            opts.unshift({
-                              value: aiDraft.openrouter_model,
-                              label: aiDraft.openrouter_model,
-                            });
+                            const recommended = preset.recommended;
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() =>
+                                  saveAi({ openrouter_model: preset.model })
+                                }
+                                className={
+                                  active
+                                    ? "rounded-lg border border-accent/60 bg-accent/10 px-3 py-2.5 text-left"
+                                    : "rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-left hover:border-accent/40"
+                                }
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    className={`text-sm font-medium ${
+                                      active ? "text-accent" : "text-gray-200"
+                                    }`}
+                                  >
+                                    {preset.label}
+                                  </span>
+                                  {recommended ? (
+                                    <span className="rounded-full px-1.5 py-px text-[10px] font-medium tracking-wide text-gray-500 ring-1 ring-ink-600">
+                                      Recommended
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="mt-0.5 block truncate text-[11px] text-gray-500">
+                                  {preset.model}
+                                </span>
+                                {price ? (
+                                  <span
+                                    className="mt-0.5 block text-[11px] tabular-nums text-gray-500"
+                                    title="USD per 1M tokens"
+                                  >
+                                    {price}
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <ThemedSelect
+                          value={aiDraft.openrouter_model}
+                          aria-label="OpenRouter model"
+                          className="w-full max-w-xl"
+                          buttonClassName="w-full"
+                          listClassName="max-h-80 overflow-y-auto"
+                          searchable
+                          searchPlaceholder="Search models…"
+                          options={openRouterSelectOptions(
+                            openRouterModels,
+                            aiDraft.openrouter_model,
+                            "",
+                            { pinRecommended: true }
+                          )}
+                          onChange={(value) =>
+                            void saveAi({ openrouter_model: value })
                           }
-                          return opts;
-                        })()}
-                        onChange={(value) =>
-                          void saveAi({ openrouter_model: value })
-                        }
-                      />
-                      <p className="text-xs text-gray-500">
-                        Recommendations are pinned above; pick any OpenRouter
-                        model from the list. Default is Budget (
-                        {OPENROUTER_PRESETS[0].model}).
-                      </p>
+                        />
+                        <p className="text-xs text-gray-500">
+                          Type to search. Recommended models stay pinned at the
+                          top of the list. Prices are USD per 1M input / output
+                          tokens.
+                        </p>
+                      </div>
                     </div>
                     {aiDraft.openrouter_scope === "all" && (
-                      <div className="max-w-md space-y-2">
+                      <div className="max-w-xl space-y-2">
                         <span className="text-sm font-medium text-gray-200">
                           Embedding model
                         </span>
                         <ThemedSelect
                           value={aiDraft.openrouter_embed_model}
                           aria-label="OpenRouter embedding model"
-                          className="w-full max-w-md"
+                          className="w-full max-w-xl"
                           buttonClassName="w-full"
-                          options={(() => {
-                            const source = openRouterEmbedModels.length
+                          options={openRouterSelectOptions(
+                            openRouterEmbedModels.length
                               ? openRouterEmbedModels
                               : [
                                   {
                                     id: aiDraft.openrouter_embed_model,
                                     name: aiDraft.openrouter_embed_model,
                                   },
-                                ];
-                            const opts = source.map((m) => ({
-                              value: m.id,
-                              label:
-                                m.name && m.name !== m.id
-                                  ? `${m.name} (${m.id})`
-                                  : m.id,
-                            }));
-                            if (
-                              !opts.some(
-                                (o) => o.value === aiDraft.openrouter_embed_model
-                              )
-                            ) {
-                              opts.unshift({
-                                value: aiDraft.openrouter_embed_model,
-                                label: aiDraft.openrouter_embed_model,
-                              });
-                            }
-                            return opts;
-                          })()}
+                                ],
+                            aiDraft.openrouter_embed_model
+                          )}
                           onChange={async (next) => {
                             const prev = aiDraft.openrouter_embed_model;
                             await saveAi({ openrouter_embed_model: next });

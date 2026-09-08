@@ -72,7 +72,7 @@ data/
   horde.db                 # SQLite library + jobs + AI tables
   app_settings.json        # Settings UI persistence
   feed_meta_cache.json     # Channel feed metadata cache
-  thumbnails/              # Cached poster images
+  thumbnails/              # Cached poster images (`{id}.jpg`, `{id}_sm.jpg`, `playlist_{id}.jpg`)
   sprites/                 # Seek-preview sprite sheets (+ JSON sidecars)
   backgrounds/             # Custom UI backgrounds
   fonts/                   # Uploaded UI fonts

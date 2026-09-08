@@ -24,7 +24,7 @@ When you leave the Watch page, playback continues in a floating **mini player**.
 - `document.body` for windowed mode
 - `document.body` with fixed positioning for the mini player
 
-Moving the same DOM node keeps the media element alive: **no reload, no seek reset, no flicker** from tearing down React trees. Width, position, and mobile vs desktop defaults are applied as styles on that host.
+Moving the same DOM node keeps the media element alive: **no reload, no seek reset, no flicker** from tearing down React trees. Width, position, and mobile vs desktop defaults are applied as styles on that host. Until the user drags it, the mini player is pinned with `right`/`bottom` so it stays in the corner when the window resizes; a dragged frame uses `left`/`top` and is clamped back on-screen. Floating channel-feed UI (download panel, queue) reads those live bounds and repositions with the viewport.
 
 !!! note "Shortcuts in mini mode"
     Global player hotkeys that would fight browsing are suppressed while the mini player is active; see the shortcuts reference.

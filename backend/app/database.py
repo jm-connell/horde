@@ -138,6 +138,16 @@ _AI_CATEGORY_COLUMNS = [
     ("blurb", "VARCHAR"),
 ]
 
+_PLAYLIST_COLUMNS = [
+    ("subscribed", "BOOLEAN DEFAULT 0"),
+    ("quality_preset", "VARCHAR"),
+    ("last_synced_at", "VARCHAR"),
+    ("sync_error", "VARCHAR"),
+    ("position", "INTEGER DEFAULT 0"),
+    ("cover_video_id", "INTEGER"),
+    ("cover_path", "VARCHAR"),
+]
+
 
 def _migrate_table(table: str, columns: list[tuple[str, str]]) -> None:
     inspector = inspect(engine)
@@ -195,6 +205,38 @@ def _step_add_columns() -> None:
     _migrate_table("channel_catalogs", _CHANNEL_CATALOG_COLUMNS)
     _migrate_table("channel_catalog_videos", _CHANNEL_CATALOG_VIDEO_COLUMNS)
     _migrate_table("ai_categories", _AI_CATEGORY_COLUMNS)
+    _migrate_table("playlists", _PLAYLIST_COLUMNS)
+
+
+def _step_playlist_positions() -> None:
+    """Preserve newest-first list order after adding ``playlists.position``."""
+    _step_add_columns()
+    inspector = inspect(engine)
+    if "playlists" not in inspector.get_table_names():
+        return
+    cols = {col["name"] for col in inspector.get_columns("playlists")}
+    if "position" not in cols:
+        return
+    order_sql = (
+        "SELECT id FROM playlists ORDER BY created_at DESC"
+        if "created_at" in cols
+        else "SELECT id FROM playlists ORDER BY id DESC"
+    )
+    with engine.begin() as conn:
+        rows = conn.execute(text(order_sql)).fetchall()
+        if len(rows) <= 1:
+            return
+        current = [
+            int(row[0] or 0)
+            for row in conn.execute(text("SELECT position FROM playlists")).fetchall()
+        ]
+        if len(set(current)) == len(current) and max(current) > 0:
+            return
+        for index, row in enumerate(rows):
+            conn.execute(
+                text("UPDATE playlists SET position = :pos WHERE id = :id"),
+                {"pos": index, "id": row[0]},
+            )
 
 
 # Ordered migration ledger. Additive column sync is always re-applied for safety
@@ -202,6 +244,7 @@ def _step_add_columns() -> None:
 # follow the same pattern without Alembic.
 MIGRATION_STEPS: list[tuple[str, Callable[[], None]]] = [
     ("2026_07_additive_columns", _step_add_columns),
+    ("2026_09_playlist_positions", _step_playlist_positions),
 ]
 
 
@@ -237,6 +280,7 @@ def verify_schema() -> None:
         ("channel_catalogs", _CHANNEL_CATALOG_COLUMNS),
         ("channel_catalog_videos", _CHANNEL_CATALOG_VIDEO_COLUMNS),
         ("ai_categories", _AI_CATEGORY_COLUMNS),
+        ("playlists", _PLAYLIST_COLUMNS),
     ):
         if table not in inspector.get_table_names():
             continue

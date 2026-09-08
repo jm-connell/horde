@@ -82,8 +82,9 @@ Navigate away from the watch page while a session is active and the player becom
 - **Drag** to reposition
 - **Resize** width between **160px and 960px**
 - Session starts bottom-right after close/reopen of the mini shell
+- Stays pinned to that corner when the window resizes (a dragged player is clamped on-screen)
 
-Floating UI (download panel / queue) avoids overlapping the mini player bounds when possible.
+Floating UI (download panel / queue) tracks the mini player on resize and avoids overlapping it when possible.
 
 ## Casting
 

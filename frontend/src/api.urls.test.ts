@@ -9,8 +9,9 @@ import {
   subtitleUrl,
   thumbnailUrl,
   listThumbnailUrl,
+  playlistCoverUrl,
 } from "./api";
-import type { Video } from "./types";
+import type { Playlist, Video } from "./types";
 
 describe("media URL helpers", () => {
   it("builds library and preview paths", () => {
@@ -37,5 +38,29 @@ describe("media URL helpers", () => {
       thumbnailUrl({ id: 1, has_thumbnail: true } as Video)
     ).toBe("/api/thumbnails/1");
     expect(listThumbnailUrl(1)).toBe("/api/thumbnails/1?size=sm");
+    expect(
+      playlistCoverUrl({
+        id: 4,
+        has_thumbnail: false,
+        has_custom_cover: false,
+        thumbnail_video_id: null,
+      } as Playlist)
+    ).toBeNull();
+    expect(
+      playlistCoverUrl({
+        id: 4,
+        has_thumbnail: true,
+        has_custom_cover: true,
+        thumbnail_video_id: 9,
+      } as Playlist)
+    ).toBe("/api/playlists/4/thumbnail?v=c");
+    expect(
+      playlistCoverUrl({
+        id: 4,
+        has_thumbnail: true,
+        has_custom_cover: false,
+        thumbnail_video_id: 9,
+      } as Playlist)
+    ).toBe("/api/thumbnails/9?size=sm");
   });
 });

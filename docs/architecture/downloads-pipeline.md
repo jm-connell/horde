@@ -26,7 +26,7 @@ Download-related code is split for maintainability (façades may still re-export
 
 | Module | Role |
 |--------|------|
-| `downloader.py` | `DownloadQueue`, finalize, playlist import orchestration |
+| `downloader.py` | `DownloadQueue`, finalize, playlist import / subscribe attach |
 | `ytdlp_extract.py` | Download-card preview, channel feed fetch, channel search |
 | `ytdlp_formats.py` | Quality preset / format-chain helpers (AV1 or H.264 native) |
 | `mp4_compat.py` | Copy-video remux to MP4: AAC audio + `faststart` for Safari |

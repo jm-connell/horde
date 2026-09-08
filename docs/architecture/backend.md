@@ -14,7 +14,7 @@ Python package under `backend/app/`. FastAPI app entry: `main.py`.
 | `downloads.py` | Queue jobs, presets, progress SSE, pause/resume |
 | `preview.py` | Watch-before-download / DASH proxy (uses `stream_preview`) |
 | `review.py` | Import queue, folder scan, approve/reject, duplicate groups (on-demand AI score) |
-| `playlists.py` | User + imported playlists |
+| `playlists.py` | User, imported, and subscribed YouTube playlists (covers, list order) |
 | `app_settings.py` | GET/PATCH settings |
 | `ai.py` | Status, chat stream, recommend, maintenance enqueue, OpenRouter costs |
 | `system.py` | Disk/system stats surfaces for Settings |
@@ -29,7 +29,7 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 |------|---------|------|
 | Downloads | `downloader.py`, `ytdlp_extract.py`, `ytdlp_formats.py`, `stream_preview.py`, `url_clean.py`, `ytdlp_common.py` | Queue/finalize; metadata extract & feed; format presets; in-app DASH/progressive preview; URL clean; POT/cookies/extract gate |
 | Library disk | `scanner.py`, `paths.py`, `library.py`, `metadata.py`, `sprites.py` | Scan, paths, probes, sprites |
-| Sync / feeds | `metadata_sync.py`, `feed_meta_cache.py`, `channel_catalog/` (package), `return_youtube_dislike.py` | Stale metadata, catalog worker/index/query/skips, caches |
+| Sync / feeds | `metadata_sync.py`, `playlist_sync.py`, `feed_meta_cache.py`, `channel_catalog/` (package), `return_youtube_dislike.py` | Stale metadata, subscribed playlist rescan, catalog worker/index/query/skips, caches |
 | Settings / updates | `app_settings.py`, `updates.py` | JSON settings, GitHub SHA compare |
 | AI | `ai/` (`worker`, `tasks`, `embeddings`, `provider`, `workload`, `chat`, `search`, `recommend`, `duplicates`, `cost_ledger`, `text`) | Queue, providers, RAG, costs |
 

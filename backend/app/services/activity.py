@@ -23,6 +23,7 @@ KIND_GROUPS: dict[str, str] = {
     "download": "download",
     "finalize": "download",
     "playlist_import": "download",
+    "playlist_sync": "download",
     "scan": "library",
     "ai": "ai",
     "model_pull": "ai",

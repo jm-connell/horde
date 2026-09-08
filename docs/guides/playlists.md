@@ -1,14 +1,28 @@
 # Playlists
 
-Playlists group library videos for binge sessions, curated mixes, or archived YouTube lists. Horde keeps **local** playlist creation on `/playlists` and **YouTube playlist import** on the Download page so URL ingestion and the download queue stay in one place.
+Horde playlists group library videos for binge sessions, curated mixes, archived YouTube lists, and **subscribed** YouTube playlists that stay in sync as new parts appear.
 
 ## Create a playlist
 
 1. Open **Playlists** (`/playlists`).
 2. Enter a name in the create field and press Enter / create.
-3. Open the new playlist to manage items, or add videos from the library (below).
+3. Click the new playlist row to expand it and manage items, or add videos from the library (below).
 
 Empty local playlists are always created here — not on Download.
+
+## Subscribe to a YouTube playlist
+
+Use this for series that grow over time (for example “2026 PC Build Log” with later parts).
+
+1. On **Playlists**, paste a YouTube playlist URL under **Subscribe to YouTube** and pick a max resolution (same presets as [Download](downloads.md)).
+2. Horde creates a local playlist, downloads videos that are not already in your library, and attaches ones that are.
+3. On a schedule (the metadata-sync worker tick, about hourly), Horde rescans the YouTube playlist, appends new entries, and keeps YouTube order.
+
+You can also subscribe from the [Download](downloads.md) page when a playlist URL is detected.
+
+Subscribed lists show a **Subscribed** tag under the source line. Expand a row to **Sync now**, **Stop subscribing** (the list stays), or turn a one-shot YouTube import into a subscription with **Subscribe to updates**.
+
+Removed YouTube entries are **not** dropped from Horde. Video files are never deleted by playlist sync. Existing library files are not re-downloaded; titles and views still follow [metadata sync](../settings/library.md).
 
 ## Add videos from the library
 
@@ -23,23 +37,22 @@ You can also add a single video from **Recent downloads** on the [Download](down
 
 ## Import from YouTube
 
-To bring in a remote playlist:
+To bring in a remote playlist **once** (no ongoing sync):
 
 1. Go to [Downloads](downloads.md) (`/download`).
-2. Paste the **playlist** URL (not a single video).
-3. Wait for the entry list to load; select all or a subset.
-4. Optionally set a **playlist name** (defaults apply if blank).
-5. Choose a quality [preset](downloads.md#quality-presets) and import.
+2. Paste the **playlist** URL.
+3. Choose **Import playlist**.
+4. Select all or a subset, optionally set a name, pick a quality preset, and import.
 
 Horde:
 
-- Creates a playlist marked as imported from YouTube (`source_type` youtube)
-- Queues downloads for the selected entries into the FIFO download queue
+- Creates a playlist marked as imported from YouTube (`source_type` youtube, not subscribed)
+- Queues downloads for the selected entries (skips YouTube ids already in the library)
 
-The playlist detail page notes when a list was imported from YouTube.
+Use **Subscribe** on that same page if you want future videos as well.
 
 !!! tip "Already have the files?"
-    If videos are already in your library, prefer creating a local playlist and bulk-adding — no need to re-download via YouTube import.
+    If videos are already in your library, prefer creating a local playlist and bulk-adding — or subscribe/import anyway; Horde will attach matching YouTube ids without re-downloading.
 
 ## Play all
 
@@ -55,18 +68,22 @@ See [Video player](player.md) for queue vs related autoplay (queue wins; related
 
 ## Managing a playlist
 
-On a playlist detail page you can:
+Click a playlist row on `/playlists` to expand it (or open `/playlists?open=<id>`). From there you can:
 
-- Browse members in order
+- Browse members in order (drag the grip on the left to reorder)
 - Open any item in the [watch](watching.md) player
 - Remove items you no longer want in the list
-- See source hints for YouTube-imported lists
+- The pencil beside the expand chevron turns the playlist title into an input and shows cover options (first video by default, any member's thumbnail, or an uploaded image)
+- See source hints for YouTube-imported and subscribed lists
+- Sync or stop a YouTube subscription
+
+Drag the grip on the far left of a playlist row to change the order of lists.
 
 Deleting a playlist does not delete the underlying library videos (only the list membership), unless a separate delete-video action says otherwise.
 
 ## Related
 
-- [Downloads](downloads.md) — YouTube playlist import and presets
+- [Downloads](downloads.md) — YouTube playlist import, subscribe, and presets
 - [Library](library.md) — select mode and bulk add
 - [Video player](player.md) — `horde.queue`, shortcuts, modes
 - [Watching](watching.md) — resume and related autoplay

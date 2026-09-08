@@ -4,6 +4,84 @@ import type { MiniPlayerRect } from "../context/PlaybackContext";
 const GAP = 16;
 const PANEL_EST_H = 260;
 const QUEUE_W = 416;
+const DRAG_MARGIN = 8;
+
+export type MiniPos = { left: number; top: number };
+
+export type MiniHostInsets = {
+  left: string;
+  top: string;
+  right: string;
+  bottom: string;
+};
+
+export function miniPlayerCornerMargin(isMobile: boolean): number {
+  return isMobile ? 12 : 16;
+}
+
+/** Keep a dragged mini player fully on-screen. */
+export function clampMiniPos(
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  vw?: number,
+  vh?: number
+): MiniPos {
+  const viewW = vw ?? window.innerWidth;
+  const viewH = vh ?? window.innerHeight;
+  const maxLeft = Math.max(DRAG_MARGIN, viewW - width - DRAG_MARGIN);
+  const maxTop = Math.max(DRAG_MARGIN, viewH - height - DRAG_MARGIN);
+  return {
+    left: Math.min(maxLeft, Math.max(DRAG_MARGIN, left)),
+    top: Math.min(maxTop, Math.max(DRAG_MARGIN, top)),
+  };
+}
+
+/**
+ * CSS insets for the floating mini host. Undragged stays `right`/`bottom`
+ * so it tracks viewport resize; dragged uses clamped `left`/`top`.
+ */
+export function miniPlayerHostInsets(
+  pos: MiniPos | null,
+  box: { width: number; height: number },
+  isMobile: boolean,
+  vw?: number,
+  vh?: number
+): MiniHostInsets {
+  if (pos) {
+    const clamped = clampMiniPos(
+      pos.left,
+      pos.top,
+      box.width,
+      box.height,
+      vw,
+      vh
+    );
+    return {
+      left: `${clamped.left}px`,
+      top: `${clamped.top}px`,
+      right: "",
+      bottom: "",
+    };
+  }
+  const margin = miniPlayerCornerMargin(isMobile);
+  return {
+    left: "",
+    top: "",
+    right: `${margin}px`,
+    bottom: `${margin}px`,
+  };
+}
+
+function viewportSize(
+  opts?: { viewportWidth?: number; viewportHeight?: number }
+): { vw: number; vh: number } {
+  return {
+    vw: opts?.viewportWidth ?? window.innerWidth,
+    vh: opts?.viewportHeight ?? window.innerHeight,
+  };
+}
 
 /** Fixed-position style that keeps a floating panel clear of the mini player. */
 export function avoidMiniPlayerStyle(
@@ -12,6 +90,8 @@ export function avoidMiniPlayerStyle(
     /** Extra lift when a bottom-docked queue is also present (no mini). */
     queueBottomLiftPx?: number;
     panelWidthRem?: number;
+    viewportWidth?: number;
+    viewportHeight?: number;
   }
 ): CSSProperties {
   const panelW = `${opts?.panelWidthRem ?? 22}rem`;
@@ -30,8 +110,7 @@ export function avoidMiniPlayerStyle(
     return { ...base, right: GAP, bottom };
   }
 
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  const { vw, vh } = viewportSize(opts);
   const miniOnRight = rect.left + rect.width / 2 >= vw / 2;
   const spaceAbove = rect.top - GAP;
   const spaceBelow = vh - rect.bottom - GAP;
@@ -67,7 +146,10 @@ export function avoidMiniPlayerStyle(
 }
 
 /** Bottom-docked queue placement opposite the mini player when present. */
-export function queueDockStyle(rect: MiniPlayerRect | null): CSSProperties {
+export function queueDockStyle(
+  rect: MiniPlayerRect | null,
+  opts?: { viewportWidth?: number }
+): CSSProperties {
   const base: CSSProperties = {
     position: "fixed",
     bottom: 0,
@@ -81,7 +163,8 @@ export function queueDockStyle(rect: MiniPlayerRect | null): CSSProperties {
     return { ...base, right: 0 };
   }
 
-  const miniOnRight = rect.left + rect.width / 2 >= window.innerWidth / 2;
+  const vw = opts?.viewportWidth ?? window.innerWidth;
+  const miniOnRight = rect.left + rect.width / 2 >= vw / 2;
   // Keep queue on the opposite side from the mini.
   if (miniOnRight) {
     return { ...base, left: 0 };
@@ -89,9 +172,13 @@ export function queueDockStyle(rect: MiniPlayerRect | null): CSSProperties {
   return { ...base, right: 0 };
 }
 
-export function queueDockAlignClass(rect: MiniPlayerRect | null): string {
+export function queueDockAlignClass(
+  rect: MiniPlayerRect | null,
+  opts?: { viewportWidth?: number }
+): string {
   if (!rect) return "ml-auto";
-  const miniOnRight = rect.left + rect.width / 2 >= window.innerWidth / 2;
+  const vw = opts?.viewportWidth ?? window.innerWidth;
+  const miniOnRight = rect.left + rect.width / 2 >= vw / 2;
   return miniOnRight ? "mr-auto" : "ml-auto";
 }
 

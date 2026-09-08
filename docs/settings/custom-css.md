@@ -64,8 +64,7 @@ Set on `<html>` from the current route:
 | `history` | `/history` |
 | `download` | `/download` |
 | `import` | `/import` (and legacy `/review`) |
-| `playlists` | `/playlists` |
-| `playlist` | `/playlists/:id` |
+| `playlists` | `/playlists` (including `?open=` and legacy `/playlists/:id` redirects) |
 | `other` | anything else |
 
 Example: hide the top bar only while watching:

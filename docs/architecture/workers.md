@@ -31,7 +31,10 @@ Each cycle:
 1. Select videos due for resync (`metadata_synced_at` older than interval).
 2. Process a **batch of 20** stale videos.
 3. Refresh stale channel catalogs when enabled.
-4. Sleep until the next interval (interval re-read from settings so UI changes apply without restart).
+4. Rescan **subscribed YouTube playlists** (flat extract; download missing ids; attach existing library matches; keep YouTube order).
+5. Sleep until the next interval (interval re-read from settings so UI changes apply without restart).
+
+The loop itself ticks about hourly; playlist membership is cheap compared to per-video metadata refresh. Use **Sync now** on a subscribed playlist if a new part just dropped.
 
 ## AI worker
 

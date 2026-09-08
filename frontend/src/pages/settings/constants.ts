@@ -312,12 +312,26 @@ export const OPENROUTER_PRESETS = [
     id: "budget",
     label: "Budget",
     model: "google/gemini-2.5-flash-lite",
+    recommended: true,
   },
   {
     id: "best",
     label: "Best",
     model: "google/gemini-2.5-flash",
+    recommended: false,
   },
+] as const;
+
+/** Pinned at the top of the OpenRouter chat-model dropdown. */
+export const OPENROUTER_RECOMMENDED_MODELS = [
+  "google/gemini-2.5-flash-lite",
+  "google/gemini-2.5-flash",
+  "google/gemini-3.1-flash-lite",
+  "openai/gpt-4.1-nano",
+  "openai/gpt-4o-mini",
+  "qwen/qwen3.7-flash",
+  "deepseek/deepseek-v4-flash",
+  "openai/gpt-4.1-mini",
 ] as const;
 
 export const HOVER_MOTION_OPTIONS: {

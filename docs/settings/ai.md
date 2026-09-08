@@ -35,7 +35,7 @@ Common embed presets: `nomic-embed-text`, `mxbai-embed-large`, `all-minilm`, or 
 | Enable OpenRouter | `openrouter_enabled` | `false` | Cloud LLM backend |
 | Scope | `openrouter_scope` | `"specialized"` | `specialized` = LLM tasks only; `all` = also embeddings |
 | API key | `openrouter_api_key` | `""` | Stored server-side; UI shows set/cleared, not the raw secret after save |
-| Chat model | `openrouter_model` | `"google/gemini-2.5-flash-lite"` | Presets: Budget / Best |
+| Chat model | `openrouter_model` | `"google/gemini-2.5-flash-lite"` | Presets: Budget (recommended) / Best. The picker pins a short recommended list, then all models, with live OpenRouter USD per 1M input / output tokens. |
 | Embed model | `openrouter_embed_model` | `"openai/text-embedding-3-small"` | When scope is `all` |
 | Show costs | `openrouter_show_costs` | `false` | Per-response cost chips on Watch (Settings totals always show) |
 | Weekly budget (USD) | `openrouter_weekly_budget_usd` | `null` | Soft limit over rolling 7 days; `null` = off (~$0.01–$100000) |

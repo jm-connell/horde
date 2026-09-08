@@ -5,6 +5,7 @@ import {
   formatSize,
   formatTimestamp,
   formatUsdCost,
+  formatOpenRouterPerMillion,
   formatResolution,
   formatViewCount,
   formatCompactCount,
@@ -22,6 +23,7 @@ import {
   watchProcessingLabel,
   youtubeListThumbnailUrl,
   youtubeVideoIdFromUrl,
+  moveItem,
 } from "./utils";
 
 describe("formatTimestamp", () => {
@@ -37,11 +39,12 @@ describe("formatSize / formatUsdCost / formatResolution", () => {
     expect(formatSize(512)).toBe("512 B");
     expect(formatSize(1536)).toBe("1.5 KB");
   });
-  it("formats costs", () => {
-    expect(formatUsdCost(null)).toBe("");
-    expect(formatUsdCost(0)).toBe("$0");
-    expect(formatUsdCost(0.00001)).toBe("<$0.0001");
-    expect(formatUsdCost(0.5)).toBe("$0.500");
+  it("formats OpenRouter per-million list prices", () => {
+    expect(formatOpenRouterPerMillion(null, null)).toBe("");
+    expect(formatOpenRouterPerMillion(0, 0)).toBe("Free");
+    expect(formatOpenRouterPerMillion(0.1, 0.4)).toBe("$0.10 / $0.40");
+    expect(formatOpenRouterPerMillion(0.03, 0.13)).toBe("$0.03 / $0.13");
+    expect(formatOpenRouterPerMillion(0.003, 0)).toBe("$0.003 / $0");
   });
   it("formats resolution", () => {
     expect(formatResolution(2160)).toBe("4K");
@@ -230,5 +233,13 @@ describe("youtubeVideoIdFromUrl", () => {
         "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
       )
     ).toBe("dQw4w9WgXcQ");
+  });
+});
+
+describe("moveItem", () => {
+  it("moves an element and leaves other indexes intact", () => {
+    expect(moveItem(["a", "b", "c", "d"], 0, 2)).toEqual(["b", "c", "a", "d"]);
+    expect(moveItem(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
+    expect(moveItem(["a", "b"], 0, 0)).toEqual(["a", "b"]);
   });
 });

@@ -17,13 +17,14 @@ logger = logging.getLogger(__name__)
 
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
 from ..database import engine
-from ..models import DownloadDestination, DownloadJob, JobStatus, Video, VideoStatus
+from ..models import DownloadDestination, DownloadJob, JobStatus, PlaylistItem, Video, VideoStatus
 from . import activity, library, scanner
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
 from .video_transcode import encode_target, transcode_video
 from .paths import find_video_by_path, to_rel_path
+from .url_clean import clean_url, youtube_video_id
 from .ytdlp_common import (
     ERROR_KIND_CANCELLED,
     ERROR_KIND_MEMBERS,
@@ -314,8 +315,6 @@ def _purge_members_only_yt_id(yt_id: str) -> None:
 
 
 def _purge_members_only_url(url: str) -> None:
-    from .url_clean import youtube_video_id
-
     yt_id = youtube_video_id(url)
     if yt_id:
         _purge_members_only_yt_id(yt_id)
@@ -2017,40 +2016,126 @@ def start_download(
     enqueue_download(job_id)
 
 
-def _run_playlist_import(
-    playlist_id: int, entries: list[str], quality_preset: str
-) -> None:
-    from ..models import PlaylistItem
+def _wait_for_job_video_id(job_id: int) -> Optional[int]:
+    while True:
+        with Session(engine) as session:
+            job = session.get(DownloadJob, job_id)
+            if job is None:
+                return None
+            if job.status in (
+                JobStatus.completed,
+                JobStatus.error,
+                JobStatus.cancelled,
+            ):
+                return job.video_id
+        threading.Event().wait(1.0)
 
-    total = len(entries)
-    with activity.track(
-        "playlist_import",
-        "Importing playlist",
-        reason="Playlist import started",
-        engine="yt-dlp",
-        detail=f"0/{total} videos",
-        total=total,
-        done=0,
-    ) as handle:
-        for index, entry_url in enumerate(entries):
-            with Session(engine) as session:
-                # Best-effort preview for title/channel/thumbnail on each entry.
-                preview: dict = {}
-                try:
-                    preview = extract_preview(entry_url)
-                except Exception:  # noqa: BLE001
-                    pass
-                if is_youtube_short_url(entry_url) or is_youtube_short_entry(
-                    {**(preview or {}), "url": entry_url}
-                ):
-                    handle.update(
-                        done=index,
-                        detail=preview.get("title") or f"{index + 1}/{total} skipped",
-                    )
-                    continue
-                resolved, presets_json = quality_from_preview(quality_preset, preview)
+
+def _upsert_playlist_item(
+    session: Session, playlist_id: int, video_id: int, position: int
+) -> None:
+    existing = session.exec(
+        select(PlaylistItem).where(
+            PlaylistItem.playlist_id == playlist_id,
+            PlaylistItem.video_id == video_id,
+        )
+    ).first()
+    if existing is None:
+        session.add(
+            PlaylistItem(
+                playlist_id=playlist_id,
+                video_id=video_id,
+                position=position,
+            )
+        )
+    else:
+        existing.position = position
+        session.add(existing)
+    session.commit()
+
+
+def _append_unlisted_playlist_items(
+    playlist_id: int, placed_video_ids: set[int], start_pos: int
+) -> None:
+    """Keep items that are not on the remote list, after YouTube order."""
+    with Session(engine) as session:
+        items = session.exec(
+            select(PlaylistItem)
+            .where(PlaylistItem.playlist_id == playlist_id)
+            .order_by(PlaylistItem.position)
+        ).all()
+        pos = start_pos
+        for item in items:
+            if item.video_id in placed_video_ids:
+                continue
+            item.position = pos
+            session.add(item)
+            pos += 1
+        session.commit()
+
+
+def _find_active_job_for_url(session: Session, url: str) -> Optional[DownloadJob]:
+    dest = DownloadDestination.library.value
+    return session.exec(
+        select(DownloadJob)
+        .where(
+            DownloadJob.url == url,
+            DownloadJob.destination == dest,
+            DownloadJob.status.in_(list(_ACTIVE_JOB_STATUSES)),
+        )
+        .order_by(DownloadJob.id.asc())
+    ).first()
+
+
+def _resolve_library_or_download(
+    entry_url: str, quality_preset: str
+) -> Optional[int]:
+    """Return a library video id, downloading only if the YouTube id is new."""
+    cleaned = clean_url(entry_url, keep_playlist=False)
+    if not cleaned:
+        return None
+    if is_youtube_short_url(cleaned) or is_youtube_short_url(entry_url):
+        return None
+
+    with Session(engine) as session:
+        yt_id = youtube_video_id(cleaned)
+        if yt_id:
+            existing = library.find_video_by_youtube_id(session, yt_id)
+            if existing is not None:
+                return existing.id
+        active = _find_active_job_for_url(session, cleaned)
+        if active is not None and active.id is not None:
+            job_id = active.id
+        else:
+            job_id = None
+
+    if job_id is not None:
+        return _wait_for_job_video_id(job_id)
+
+    preview: dict = {}
+    try:
+        preview = extract_preview(cleaned)
+    except Exception:  # noqa: BLE001
+        pass
+    if is_youtube_short_entry({**(preview or {}), "url": entry_url, "webpage_url": cleaned}):
+        return None
+    preview_id = preview.get("id") if isinstance(preview, dict) else None
+    if preview_id:
+        with Session(engine) as session:
+            existing = library.find_video_by_youtube_id(session, str(preview_id))
+            if existing is not None:
+                return existing.id
+
+    resolved, presets_json = quality_from_preview(quality_preset, preview)
+    created_job_id: Optional[int] = None
+    with job_mutate_lock:
+        with Session(engine) as session:
+            active = _find_active_job_for_url(session, cleaned)
+            if active is not None and active.id is not None:
+                job_id = active.id
+            else:
                 job = DownloadJob(
-                    url=entry_url,
+                    url=cleaned,
                     quality_preset=resolved,
                     available_presets_json=presets_json,
                     status=JobStatus.queued,
@@ -2063,48 +2148,57 @@ def _run_playlist_import(
                 session.commit()
                 session.refresh(job)
                 job_id = job.id
+                created_job_id = job_id
 
-            enqueue_download(job_id)
-            handle.update(
-                done=index,
-                detail=preview.get("title") or f"{index + 1}/{total} videos",
-            )
+    if created_job_id is not None:
+        enqueue_download(created_job_id)
+    if job_id is None:
+        return None
+    return _wait_for_job_video_id(job_id)
 
-            video_id = None
-            while True:
-                with Session(engine) as session:
-                    job = session.get(DownloadJob, job_id)
-                    if job is None:
-                        break
-                    if job.status in (
-                        JobStatus.completed,
-                        JobStatus.error,
-                        JobStatus.cancelled,
-                    ):
-                        video_id = job.video_id
-                        break
-                threading.Event().wait(1.0)
 
-            if video_id is None:
-                continue
-
+def run_playlist_entries(
+    playlist_id: int,
+    entries: list[str],
+    quality_preset: str,
+    *,
+    activity_handle: Any = None,
+) -> None:
+    """Attach playlist entries in order; skip re-download when the library already has the id."""
+    total = len(entries)
+    placed: list[int] = []
+    seen: set[int] = set()
+    for index, entry_url in enumerate(entries):
+        video_id = _resolve_library_or_download(entry_url, quality_preset)
+        if video_id is not None and video_id not in seen:
+            seen.add(video_id)
+            placed.append(video_id)
             with Session(engine) as session:
-                existing = session.exec(
-                    select(PlaylistItem).where(
-                        PlaylistItem.playlist_id == playlist_id,
-                        PlaylistItem.video_id == video_id,
-                    )
-                ).first()
-                if existing is None:
-                    session.add(
-                        PlaylistItem(
-                            playlist_id=playlist_id,
-                            video_id=video_id,
-                            position=index,
-                        )
-                    )
-                    session.commit()
-            handle.update(done=index + 1, detail=f"{index + 1}/{total} videos")
+                _upsert_playlist_item(session, playlist_id, video_id, len(placed) - 1)
+        if activity_handle is not None:
+            activity_handle.update(
+                done=index + 1,
+                detail=f"{index + 1}/{total} videos",
+            )
+    _append_unlisted_playlist_items(playlist_id, seen, start_pos=len(placed))
+
+
+def _run_playlist_import(
+    playlist_id: int, entries: list[str], quality_preset: str
+) -> None:
+    total = len(entries)
+    with activity.track(
+        "playlist_import",
+        "Importing playlist",
+        reason="Playlist import started",
+        engine="yt-dlp",
+        detail=f"0/{total} videos",
+        total=total,
+        done=0,
+    ) as handle:
+        run_playlist_entries(
+            playlist_id, entries, quality_preset, activity_handle=handle
+        )
 
 
 def start_playlist_import(

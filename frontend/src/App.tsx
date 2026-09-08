@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { applyPageId } from "./customCss";
 import Library from "./pages/Library";
@@ -9,7 +9,6 @@ import Watch from "./pages/Watch";
 import Settings from "./pages/Settings";
 import Setup from "./pages/Setup";
 import Playlists from "./pages/Playlists";
-import PlaylistDetail from "./pages/PlaylistDetail";
 import TopNav from "./components/TopNav";
 import BackgroundEffect from "./components/BackgroundEffect";
 import LoadingIndicator from "./components/LoadingIndicator";
@@ -19,6 +18,17 @@ import { DownloadProvider } from "./context/DownloadContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
 import { useSetupGate } from "./hooks/useSettings";
+
+/** Back-compat: `/playlists/:id` → `/playlists?open=:id` */
+function PlaylistOpenRedirect() {
+  const { id } = useParams();
+  return (
+    <Navigate
+      to={id ? `/playlists?open=${encodeURIComponent(id)}` : "/playlists"}
+      replace
+    />
+  );
+}
 
 /** Back-compat: /preview?url=&channel= → /watch?url=&channel= */
 function PreviewRedirect() {
@@ -60,7 +70,7 @@ function AppRoutes() {
         <Route path="/history" element={<History />} />
         <Route path="/download" element={<Download />} />
         <Route path="/playlists" element={<Playlists />} />
-        <Route path="/playlists/:id" element={<PlaylistDetail />} />
+        <Route path="/playlists/:id" element={<PlaylistOpenRedirect />} />
         <Route path="/import" element={<Import />} />
         <Route path="/review" element={<Navigate to="/import" replace />} />
         <Route path="/settings" element={<Settings />} />

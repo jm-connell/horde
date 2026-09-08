@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, api } from "../api";
 import { useDownloads, isActiveJob } from "../context/DownloadContext";
 import ChannelPicker from "../components/ChannelPicker";
@@ -44,6 +45,7 @@ export default function Download() {
     pauseQueue,
     resumeQueue,
     dismissFinishedJobs,
+    refreshJobs,
   } = useDownloads();
 
   const [url, setUrl] = useState("");
@@ -66,6 +68,10 @@ export default function Download() {
   const [channels, setChannels] = useState<ChannelStat[]>([]);
 
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importedPlaylist, setImportedPlaylist] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   const [playlistEntries, setPlaylistEntries] = useState<PlaylistPreviewEntry[]>(
     []
@@ -76,6 +82,9 @@ export default function Download() {
     Record<string, Record<string, number>>
   >({});
   const [loadingPlaylist, setLoadingPlaylist] = useState(false);
+  const [playlistMode, setPlaylistMode] = useState<
+    "subscribe" | "import" | "videos"
+  >("import");
 
   const [activeCollapsed, setActiveCollapsed] = useState(() => {
     try {
@@ -129,6 +138,7 @@ export default function Download() {
       setPreview(null);
       setPreviewError(null);
       setPreset("best");
+      setPlaylistMode("import");
       return;
     }
     setPreviewing(true);
@@ -252,14 +262,35 @@ export default function Download() {
 
   const importButtonLabel = useMemo(() => {
     if (submitting) return "Starting...";
+    if (playlistMode === "subscribe") {
+      const count = playlistEntries.length;
+      const base =
+        count === 0
+          ? "Subscribe"
+          : `Subscribe (${count} video${count === 1 ? "" : "s"})`;
+      return base;
+    }
     const count = selectedUrls.size;
     const approx = formatApproxSize(playlistTotalSize);
+    if (playlistMode === "videos") {
+      const base =
+        count === 0
+          ? "Download videos"
+          : `Download ${count} video${count === 1 ? "" : "s"}`;
+      return approx ? `${base} (${approx})` : base;
+    }
     const base =
       count === 0
-        ? "Download"
-        : `Download ${count} video${count === 1 ? "" : "s"}`;
+        ? "Import playlist"
+        : `Import ${count} video${count === 1 ? "" : "s"}`;
     return approx ? `${base} (${approx})` : base;
-  }, [submitting, selectedUrls.size, playlistTotalSize]);
+  }, [
+    submitting,
+    playlistMode,
+    playlistEntries.length,
+    selectedUrls.size,
+    playlistTotalSize,
+  ]);
 
   const allPlaylistSelected =
     playlistEntries.length > 0 && selectedUrls.size === playlistEntries.length;
@@ -352,17 +383,48 @@ export default function Download() {
 
   const importAll = async () => {
     const selected = [...selectedUrls];
-    if (!url.trim() || selected.length === 0) return;
+    if (!url.trim()) return;
+    if (playlistMode !== "subscribe" && selected.length === 0) return;
     setSubmitting(true);
     setError(null);
     setImportMessage(null);
+    setImportedPlaylist(null);
     try {
+      if (playlistMode === "videos") {
+        const result = await api.bulkCreateDownloads(selected, preset);
+        refreshJobs();
+        const queued = result.jobs.length;
+        const skipped = result.skipped;
+        const parts = [
+          queued
+            ? `Queued ${queued} video${queued === 1 ? "" : "s"}`
+            : "No new downloads",
+        ];
+        if (skipped) {
+          parts.push(
+            `${skipped} already in library`
+          );
+        }
+        setImportMessage(`${parts.join(" — ")}.`);
+        setUrl("");
+        setPreview(null);
+        setPreviewError(null);
+        setPlaylistEntries([]);
+        setSelectedUrls(new Set());
+        setPlaylistName("");
+        setPlaylistMode("import");
+        return;
+      }
       const created = await api.importPlaylist(url.trim(), preset, {
         name: playlistName.trim() || undefined,
-        entries: selected,
+        entries: playlistMode === "subscribe" ? undefined : selected,
+        subscribe: playlistMode === "subscribe",
       });
+      setImportedPlaylist({ id: created.id, name: created.name });
       setImportMessage(
-        `Importing "${created.name}" — videos will appear in your library as they finish.`
+        playlistMode === "subscribe"
+          ? `Subscribed to "${created.name}" — new videos will download automatically.`
+          : `Importing "${created.name}" — videos will appear in your library as they finish.`
       );
       setUrl("");
       setPreview(null);
@@ -370,6 +432,7 @@ export default function Download() {
       setPlaylistEntries([]);
       setSelectedUrls(new Set());
       setPlaylistName("");
+      setPlaylistMode("import");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
     } finally {
@@ -496,16 +559,67 @@ export default function Download() {
         >
           <div className="space-y-4 rounded-lg border border-accent/30 bg-accent/5 p-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-300">
-                Playlist name
-              </label>
-              <input
-                value={playlistName}
-                onChange={(e) => setPlaylistName(e.target.value)}
-                placeholder="Playlist name"
-                className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
-              />
+              <p className="mb-2 text-sm font-medium text-gray-300">
+                Playlist action
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {(
+                  [
+                    [
+                      "import",
+                      "Import playlist",
+                      "One-time download of the videos, saved as a playlist in Horde.",
+                    ],
+                    [
+                      "subscribe",
+                      "Subscribe",
+                      "Sync with the YouTube playlist and download new videos as they appear.",
+                    ],
+                    [
+                      "videos",
+                      "Download videos",
+                      "Download them like regular videos, without organizing into a playlist.",
+                    ],
+                  ] as const
+                ).map(([mode, label, hint]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setPlaylistMode(mode)}
+                    className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                      playlistMode === mode
+                        ? "border-accent bg-accent/15 text-accent"
+                        : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-500"
+                    }`}
+                  >
+                    <span className="block text-sm font-medium">{label}</span>
+                    <span
+                      className={`mt-1 block text-xs font-normal leading-relaxed ${
+                        playlistMode === mode
+                          ? "text-accent/80"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {hint}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {playlistMode !== "videos" && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-300">
+                  Playlist name
+                </label>
+                <input
+                  value={playlistName}
+                  onChange={(e) => setPlaylistName(e.target.value)}
+                  placeholder="Playlist name"
+                  className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                />
+              </div>
+            )}
 
             {loadingPlaylist ? (
               <LoadingIndicator label="Loading playlist" className="py-4" />
@@ -513,15 +627,21 @@ export default function Download() {
               <>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm text-gray-300">
-                    {selectedUrls.size} of {playlistEntries.length} selected
+                    {playlistMode === "subscribe"
+                      ? `${playlistEntries.length} video${
+                          playlistEntries.length === 1 ? "" : "s"
+                        } on this playlist`
+                      : `${selectedUrls.size} of ${playlistEntries.length} selected`}
                   </p>
-                  <button
-                    type="button"
-                    onClick={toggleAllPlaylistEntries}
-                    className="text-xs text-accent hover:underline"
-                  >
-                    {allPlaylistSelected ? "Deselect all" : "Select all"}
-                  </button>
+                  {playlistMode !== "subscribe" && (
+                    <button
+                      type="button"
+                      onClick={toggleAllPlaylistEntries}
+                      className="text-xs text-accent hover:underline"
+                    >
+                      {allPlaylistSelected ? "Deselect all" : "Select all"}
+                    </button>
+                  )}
                 </div>
                 <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg border border-ink-700 bg-ink-950/50 p-2">
                   {playlistEntries.map((entry) => {
@@ -529,46 +649,58 @@ export default function Download() {
                       entry.id,
                       entry.thumbnail_url
                     );
-                    return (
-                    <label
-                      key={entry.url}
-                      className="flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-ink-900"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedUrls.has(entry.url)}
-                        onChange={() => togglePlaylistEntry(entry.url)}
-                        className="mt-1 shrink-0 accent-accent"
-                      />
-                      <div className="h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
-                        {thumbSrc ? (
-                          <img
-                            src={thumbSrc}
-                            alt=""
-                            loading="lazy"
-                            className="h-full w-full object-cover"
+                    const rowClass =
+                      playlistMode === "subscribe"
+                        ? "flex items-start gap-3 rounded-lg p-2"
+                        : "flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-ink-900";
+                    const body = (
+                      <>
+                        {playlistMode !== "subscribe" && (
+                          <input
+                            type="checkbox"
+                            checked={selectedUrls.has(entry.url)}
+                            onChange={() => togglePlaylistEntry(entry.url)}
+                            className="mt-1 shrink-0 accent-accent"
                           />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-xs text-gray-600">
-                            No preview
-                          </div>
                         )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="line-clamp-2 text-sm text-gray-200">
-                          {entry.title ?? "Untitled"}
-                        </p>
-                        <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-gray-500">
-                          {entry.channel && <span>{entry.channel}</span>}
-                          {entry.view_count != null && (
-                            <span>{formatViewCount(entry.view_count)}</span>
-                          )}
-                          {entry.duration != null && (
-                            <span>{formatDuration(entry.duration)}</span>
+                        <div className="h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
+                          {thumbSrc ? (
+                            <img
+                              src={thumbSrc}
+                              alt=""
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-xs text-gray-600">
+                              No preview
+                            </div>
                           )}
                         </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-2 text-sm text-gray-200">
+                            {entry.title ?? "Untitled"}
+                          </p>
+                          <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-gray-500">
+                            {entry.channel && <span>{entry.channel}</span>}
+                            {entry.view_count != null && (
+                              <span>{formatViewCount(entry.view_count)}</span>
+                            )}
+                            {entry.duration != null && (
+                              <span>{formatDuration(entry.duration)}</span>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    );
+                    return playlistMode === "subscribe" ? (
+                      <div key={entry.url} className={rowClass}>
+                        {body}
                       </div>
-                    </label>
+                    ) : (
+                      <label key={entry.url} className={rowClass}>
+                        {body}
+                      </label>
                     );
                   })}
                 </div>
@@ -641,7 +773,11 @@ export default function Download() {
           <button
             type="button"
             onClick={importAll}
-            disabled={submitting || !url.trim() || selectedUrls.size === 0}
+            disabled={
+              submitting ||
+              !url.trim() ||
+              (playlistMode !== "subscribe" && selectedUrls.size === 0)
+            }
             className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-ink-950 transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
           >
             {importButtonLabel}
@@ -657,7 +793,22 @@ export default function Download() {
         )}
 
         {error && <p className="text-sm text-red-400">{error}</p>}
-        {importMessage && <p className="text-sm text-accent">{importMessage}</p>}
+        {importMessage && (
+          <p className="text-sm text-accent">
+            {importMessage}
+            {importedPlaylist && (
+              <>
+                {" "}
+                <Link
+                  to={`/playlists?open=${importedPlaylist.id}`}
+                  className="underline hover:text-accent-soft"
+                >
+                  Open playlist
+                </Link>
+              </>
+            )}
+          </p>
+        )}
       </form>
 
       {activeSectionVisible && (

@@ -105,6 +105,11 @@ class DownloadCreate(BaseModel):
     video_codec: Optional[str] = None
 
 
+class DownloadBulkCreate(BaseModel):
+    urls: list[str]
+    quality_preset: str = "best"
+
+
 class DownloadPreview(BaseModel):
     is_playlist: bool
     title: Optional[str]
@@ -172,6 +177,11 @@ class DownloadJobRead(BaseModel):
         if raw in {"h265", "hevc", "hev1", "hvc1"}:
             return "h265"
         return "av1"
+
+
+class DownloadBulkResult(BaseModel):
+    jobs: list[DownloadJobRead]
+    skipped: int = 0
 
 
 class DownloadJobUpdate(BaseModel):
@@ -361,6 +371,9 @@ class PlaylistCreate(BaseModel):
 class PlaylistUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    subscribed: Optional[bool] = None
+    quality_preset: Optional[str] = None
+    cover_video_id: Optional[int] = None
 
 
 class PlaylistRead(BaseModel):
@@ -369,8 +382,17 @@ class PlaylistRead(BaseModel):
     description: Optional[str]
     source_type: PlaylistSource
     source_url: Optional[str]
+    subscribed: bool = False
+    quality_preset: Optional[str] = None
+    last_synced_at: Optional[datetime] = None
+    sync_error: Optional[str] = None
     created_at: datetime
     item_count: int
+    position: int = 0
+    cover_video_id: Optional[int] = None
+    has_custom_cover: bool = False
+    thumbnail_video_id: Optional[int] = None
+    has_thumbnail: bool = False
 
 
 class PlaylistDetail(PlaylistRead):
@@ -385,11 +407,16 @@ class PlaylistReorder(BaseModel):
     video_ids: list[int]
 
 
+class PlaylistListReorder(BaseModel):
+    playlist_ids: list[int]
+
+
 class PlaylistImport(BaseModel):
     url: str
     quality_preset: str = "best"
     name: Optional[str] = None
     entries: list[str] = []
+    subscribe: bool = False
 
 
 class PlaylistPreviewEntry(BaseModel):

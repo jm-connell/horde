@@ -237,12 +237,17 @@ export default function Library() {
   const [narrowViewport, setNarrowViewport] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 1100
   );
+  const [viewportWidth, setViewportWidth] = useState(
+    () => (typeof window !== "undefined" ? window.innerWidth : 0)
+  );
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
   const [sidebarOverlayVisible, setSidebarOverlayVisible] = useState(false);
 
   useEffect(() => {
     const onResize = () => {
-      const narrow = window.innerWidth < 1100;
+      const width = window.innerWidth;
+      const narrow = width < 1100;
+      setViewportWidth(width);
       setNarrowViewport(narrow);
       if (!narrow) {
         setSidebarOverlayOpen(false);
@@ -1829,11 +1834,14 @@ export default function Library() {
 
       {showQueuePanel && queueDockedBottom && (
         <div
-          style={queueDockStyle(miniPlayerActive ? miniPlayerRect : null)}
+          style={queueDockStyle(miniPlayerActive ? miniPlayerRect : null, {
+            viewportWidth,
+          })}
         >
           <div
             className={`pointer-events-auto w-96 ${queueDockAlignClass(
-              miniPlayerActive ? miniPlayerRect : null
+              miniPlayerActive ? miniPlayerRect : null,
+              { viewportWidth }
             )}`}
           >
             <PlaybackQueue

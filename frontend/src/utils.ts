@@ -153,6 +153,31 @@ export function formatUsdCost(cost: number | null | undefined): string {
   return `$${cost.toFixed(2)}`;
 }
 
+function formatUsdPerMillionAmount(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "";
+  if (n === 0) return "$0";
+  if (n < 0.01) {
+    const trimmed = n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+    return `$${trimmed}`;
+  }
+  return `$${n.toFixed(2)}`;
+}
+
+/** Format OpenRouter list prices as "in / out" USD per 1M tokens. */
+export function formatOpenRouterPerMillion(
+  promptPerMillion?: number | null,
+  completionPerMillion?: number | null,
+): string {
+  if (promptPerMillion == null && completionPerMillion == null) return "";
+  const input = promptPerMillion ?? 0;
+  const output = completionPerMillion ?? 0;
+  if (input === 0 && output === 0) return "Free";
+  const inLabel = formatUsdPerMillionAmount(input);
+  const outLabel = formatUsdPerMillionAmount(output);
+  if (!inLabel || !outLabel) return inLabel || outLabel;
+  return `${inLabel} / ${outLabel}`;
+}
+
 interface LangTrack {
   lang: string;
 }
@@ -368,4 +393,20 @@ export function effectiveSourceUrl(video: {
   const match = video.file_path.match(/\[([A-Za-z0-9_-]{11})\]/);
   if (match) return `https://www.youtube.com/watch?v=${match[1]}`;
   return null;
+}
+
+export function moveItem<T>(list: T[], from: number, to: number): T[] {
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= list.length ||
+    to >= list.length
+  ) {
+    return list;
+  }
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
 }

@@ -121,6 +121,12 @@ class OpenRouterTestRequest(BaseModel):
 class OpenRouterModelRow(BaseModel):
     id: str
     name: str = ""
+    prompt_per_million: Optional[float] = None
+    completion_per_million: Optional[float] = None
+
+
+def _openrouter_model_row(row: dict[str, Any]) -> OpenRouterModelRow:
+    return OpenRouterModelRow.model_validate(row)
 
 
 class OpenRouterModelsResponse(BaseModel):
@@ -272,11 +278,8 @@ def ai_openrouter_models():
         embed_models = []
     return OpenRouterModelsResponse(
         presets=openrouter_preset_list(),
-        models=[OpenRouterModelRow(id=m["id"], name=m.get("name") or m["id"]) for m in models],
-        embedding_models=[
-            OpenRouterModelRow(id=m["id"], name=m.get("name") or m["id"])
-            for m in embed_models
-        ],
+        models=[_openrouter_model_row(m) for m in models],
+        embedding_models=[_openrouter_model_row(m) for m in embed_models],
     )
 
 

@@ -20,6 +20,7 @@ import type {
   ChannelCatalogStatus,
   HealthStats,
   OpenRouterCosts,
+  OpenRouterModel,
   StorageStats,
   SystemActivity,
   SystemStats,
@@ -83,13 +84,12 @@ export default function Settings() {
   const [aiTesting, setAiTesting] = useState(false);
   const [openRouterTesting, setOpenRouterTesting] = useState(false);
   const [openRouterKeyDraft, setOpenRouterKeyDraft] = useState("");
-  const [openRouterModels, setOpenRouterModels] = useState<
-    { id: string; name: string }[]
-  >([]);
+  const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModel[]>(
+    []
+  );
   const [openRouterEmbedModels, setOpenRouterEmbedModels] = useState<
-    { id: string; name: string }[]
+    OpenRouterModel[]
   >([]);
-  const [openRouterModelFilter, setOpenRouterModelFilter] = useState("");
   const [openRouterCosts, setOpenRouterCosts] = useState<OpenRouterCosts | null>(
     null
   );
@@ -246,10 +246,7 @@ export default function Settings() {
       .then((res) => {
         if (!cancelled) {
           setOpenRouterModels(res.models || []);
-          setOpenRouterEmbedModels(
-            (res as { embedding_models?: { id: string; name: string }[] })
-              .embedding_models || []
-          );
+          setOpenRouterEmbedModels(res.embedding_models || []);
         }
       })
       .catch(() => {
@@ -903,8 +900,6 @@ export default function Settings() {
     setOpenRouterModels,
     openRouterEmbedModels,
     setOpenRouterEmbedModels,
-    openRouterModelFilter,
-    setOpenRouterModelFilter,
     openRouterCosts,
     embedCustom,
     setEmbedCustom,

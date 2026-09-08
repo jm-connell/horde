@@ -99,6 +99,44 @@ def test_create_download_requires_url(client):
     assert resp.status_code == 400
 
 
+def test_bulk_skips_existing_and_does_not_create_playlist(
+    client, monkeypatch, add_video
+):
+    from app.services import downloader
+
+    existing = add_video(title="Have it", yt_id="dQw4w9WgXcQ")
+    monkeypatch.setattr(
+        downloader,
+        "extract_preview",
+        lambda url: {
+            "id": "newvideoid1",
+            "title": "New one",
+            "channel": "Chan",
+            "is_playlist": False,
+        },
+    )
+    resp = client.post(
+        "/api/downloads/bulk",
+        json={
+            "quality_preset": "720p",
+            "urls": [
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "https://www.youtube.com/watch?v=newvideoid1",
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["skipped"] == 1
+    assert len(body["jobs"]) == 1
+    assert body["jobs"][0]["url"] == "https://www.youtube.com/watch?v=newvideoid1"
+    assert existing.id not in [
+        job.get("replace_video_id") for job in body["jobs"]
+    ]
+    playlists = client.get("/api/playlists").json()
+    assert playlists == []
+
+
 def test_enqueue_stamps_video_codec(client, monkeypatch):
     from app.services import downloader
 

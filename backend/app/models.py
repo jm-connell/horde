@@ -136,6 +136,15 @@ class Playlist(SQLModel, table=True):
     description: Optional[str] = None
     source_type: PlaylistSource = Field(default=PlaylistSource.user)
     source_url: Optional[str] = None
+    subscribed: bool = Field(default=False)
+    quality_preset: Optional[str] = None
+    last_synced_at: Optional[datetime] = None
+    sync_error: Optional[str] = None
+    # Lower sorts first. New playlists are inserted at 0.
+    position: int = Field(default=0, index=True)
+    # Pinned cover from a member video; None uses the first item.
+    cover_video_id: Optional[int] = None
+    cover_path: Optional[str] = None
     created_at: datetime = Field(default_factory=utcnow, index=True)
 
 

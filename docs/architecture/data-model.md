@@ -10,7 +10,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 |-------|---------|
 | `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags, yt-dlp `source_chapters` |
 | `download_jobs` | Queue rows: URL, quality, probed `height_px`, progress, pause, loudnorm, optional replace target, `error` + typed `error_kind` |
-| `playlists` | User or YouTube-imported playlists |
+| `playlists` | User, imported, or subscribed YouTube playlists (`subscribed`, `quality_preset`, `last_synced_at`, `sync_error`, list `position`, optional `cover_video_id` / `cover_path`) |
 | `playlist_items` | Ordered video membership |
 
 ### Channel catalogs
