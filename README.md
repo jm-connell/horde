@@ -37,6 +37,14 @@ on the host. Interactive API docs: `/docs`.
 - **AI** (optional) — Ollama and/or OpenRouter for embeddings, tags, summaries,
   chat, recommendations, and duplicate help.
 
+## Screenshots
+
+![Library home with constellation background, channel sidebar, and video grid](docs/assets/screenshots/library.webp)
+
+![Download page with URL field, quality presets, and queue](docs/assets/screenshots/downloads.webp)
+
+![Watch page with the Horde player](docs/assets/screenshots/player.webp)
+
 ## Quick start
 
 ```bash

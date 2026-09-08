@@ -12,6 +12,8 @@ Every video watched through Horde instead of YouTube avoids all YouTube pre-roll
 
 There are several useful AI features that are fully optional. Horde can use either an Ollama instance or an OpenRouter API key. I prefer OpenRouter as it's fast, low maintenance, and for Horde's use, extremely cheap. Some AI features include summary generation, chat about a video (using metadata and subtitle files), enhanced search and recommendations, and generating tags.
 
+I strongly recommend using Tailscale (or something similar) if you aren't already. This makes remote access and playback very straightforward, assuming your network has the upload bandwidth necessary.
+
 The majority of this wiki beyond this point is AI-generated, but accurate. It provides a good overview of features and how-to's regarding Horde. If you have more advanced questions then I recommend you clone the repo, open in your IDE of choice, and ask your favorite model.
 
 !!! warning "LAN only — no authentication"
@@ -46,8 +48,6 @@ Want a tour of the UI first? See the [feature overview](features.md).
 2. [First run](getting-started/first-run.md) — download something and browse it
 3. [Settings](settings/index.md) — appearance, library, playback, AI
 4. [AI setup](ops/ai-setup.md) — when you want recommendations and smarter search
-
-
 
 ## Map of this wiki
 

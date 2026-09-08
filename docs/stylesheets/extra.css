@@ -204,6 +204,15 @@ body {
     scrollbar-color: rgb(var(--horde-accent) / 0.5) transparent;
   }
 
+  /* Padding on the scroll box becomes a gap above sticky section headers. */
+  .md-sidebar--primary .md-sidebar__inner {
+    padding-top: 0;
+  }
+
+  .md-sidebar--primary .md-nav--primary > .md-nav__list {
+    padding-top: 0.85rem;
+  }
+
   .md-sidebar--primary .md-sidebar__inner::-webkit-scrollbar,
   .md-sidebar--secondary .md-sidebar__inner::-webkit-scrollbar {
     width: 8px;
@@ -235,8 +244,9 @@ body {
     top: 0;
     z-index: 4;
     margin-top: 0;
-    padding-top: 0.45rem;
-    padding-bottom: 0.4rem;
+    margin-left: -0.85rem;
+    margin-right: -0.85rem;
+    padding: 0.55rem 0.85rem 0.4rem;
     background: rgb(var(--horde-ink-900) / 0.92);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
