@@ -61,14 +61,14 @@ export function miniPlayerHostInsets(
     return {
       left: `${clamped.left}px`,
       top: `${clamped.top}px`,
-      right: "",
-      bottom: "",
+      right: "auto",
+      bottom: "auto",
     };
   }
   const margin = miniPlayerCornerMargin(isMobile);
   return {
-    left: "",
-    top: "",
+    left: "auto",
+    top: "auto",
     right: `${margin}px`,
     bottom: `${margin}px`,
   };
@@ -92,6 +92,11 @@ export function avoidMiniPlayerStyle(
     panelWidthRem?: number;
     viewportWidth?: number;
     viewportHeight?: number;
+    /**
+     * Undragged mini player: pin with CSS `right` so a stale rect after
+     * resize cannot flip this panel onto a baked `left`.
+     */
+    cornerAnchor?: boolean;
   }
 ): CSSProperties {
   const panelW = `${opts?.panelWidthRem ?? 22}rem`;
@@ -111,17 +116,21 @@ export function avoidMiniPlayerStyle(
   }
 
   const { vw, vh } = viewportSize(opts);
-  const miniOnRight = rect.left + rect.width / 2 >= vw / 2;
+  const miniOnRight =
+    opts?.cornerAnchor || rect.left + rect.width / 2 >= vw / 2;
   const spaceAbove = rect.top - GAP;
   const spaceBelow = vh - rect.bottom - GAP;
+  const side = opts?.cornerAnchor
+    ? { right: GAP }
+    : miniOnRight
+      ? { right: Math.max(GAP, vw - rect.right) }
+      : { left: Math.max(GAP, rect.left) };
 
   // Prefer sitting above the mini on the same horizontal side.
   if (spaceAbove >= PANEL_EST_H) {
     return {
       ...base,
-      ...(miniOnRight
-        ? { right: Math.max(GAP, vw - rect.right) }
-        : { left: Math.max(GAP, rect.left) }),
+      ...side,
       bottom: vh - rect.top + GAP,
     };
   }
@@ -130,9 +139,7 @@ export function avoidMiniPlayerStyle(
   if (spaceBelow >= PANEL_EST_H) {
     return {
       ...base,
-      ...(miniOnRight
-        ? { right: Math.max(GAP, vw - rect.right) }
-        : { left: Math.max(GAP, rect.left) }),
+      ...side,
       top: rect.bottom + GAP,
     };
   }

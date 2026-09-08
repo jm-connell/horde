@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePlayback } from "../context/PlaybackContext";
 import {
   formatApproxSize,
@@ -44,7 +45,8 @@ export default function ChannelDownloadPanel({
   queueDockedBottom?: boolean;
   onDismiss?: () => void;
 }) {
-  const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
+  const { queue, miniPlayerActive, miniPlayerRect, miniPlayerCornerAnchor } =
+    usePlayback();
   const queueVisible = queue.length > 0;
   const liftAboveQueue =
     queueVisible && queueDockedBottom && !miniPlayerActive;
@@ -65,6 +67,8 @@ export default function ChannelDownloadPanel({
     {
       viewportWidth: viewport.width,
       viewportHeight: viewport.height,
+      panelWidthRem: pending.length === 0 ? 14 : 18,
+      cornerAnchor: miniPlayerActive && miniPlayerCornerAnchor,
       queueBottomLiftPx: liftAboveQueue
         ? Math.min(viewport.height * 0.34, 272)
         : undefined,
@@ -91,7 +95,7 @@ export default function ChannelDownloadPanel({
   ) : null;
 
   if (pending.length === 0) {
-    return (
+    return createPortal(
       <div style={positionStyle}>
         <div className={`${panelShell} relative p-4 pr-8`}>
           {dismissBtn}
@@ -110,7 +114,8 @@ export default function ChannelDownloadPanel({
             buttonClassName="w-full"
           />
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
@@ -118,7 +123,7 @@ export default function ChannelDownloadPanel({
   const visiblePending = pending.slice(0, 1);
   const hiddenCount = pending.length - visiblePending.length;
 
-  return (
+  return createPortal(
     <>
       <div style={positionStyle} className="flex flex-col gap-2">
         <div className={`${panelShell} relative pr-8`}>
@@ -249,6 +254,7 @@ export default function ChannelDownloadPanel({
           }}
         />
       )}
-    </>
+    </>,
+    document.body
   );
 }

@@ -37,8 +37,8 @@ describe("miniPlayerHostInsets", () => {
     );
     expect(insets.right).toBe("16px");
     expect(insets.bottom).toBe("16px");
-    expect(insets.left).toBe("");
-    expect(insets.top).toBe("");
+    expect(insets.left).toBe("auto");
+    expect(insets.top).toBe("auto");
   });
 
   it("uses a tighter corner margin on mobile", () => {
@@ -61,8 +61,8 @@ describe("miniPlayerHostInsets", () => {
     );
     expect(insets.left).toBe("392px");
     expect(insets.top).toBe("367px");
-    expect(insets.right).toBe("");
-    expect(insets.bottom).toBe("");
+    expect(insets.right).toBe("auto");
+    expect(insets.bottom).toBe("auto");
   });
 });
 
@@ -106,6 +106,24 @@ describe("avoidMiniPlayerStyle", () => {
     expect(after.bottom).toBe(800 - 359 + 16);
   });
 
+  it("stays CSS-right when corner-anchored even if the mini rect is stale", () => {
+    const staleMini = {
+      left: 784,
+      top: 359,
+      width: 400,
+      height: 225,
+      right: 1184,
+      bottom: 584,
+    };
+    const style = avoidMiniPlayerStyle(staleMini, {
+      viewportWidth: 2000,
+      viewportHeight: 800,
+      cornerAnchor: true,
+    });
+    expect(style.right).toBe(16);
+    expect(style.left).toBeUndefined();
+  });
+
   it("stays bottom-right when there is no mini player", () => {
     const style = avoidMiniPlayerStyle(null, {
       viewportWidth: 800,
@@ -113,5 +131,11 @@ describe("avoidMiniPlayerStyle", () => {
     });
     expect(style.right).toBe(16);
     expect(style.bottom).toBe(16);
+    expect(style.width).toBe("22rem");
+  });
+
+  it("honors a custom panel width", () => {
+    const style = avoidMiniPlayerStyle(null, { panelWidthRem: 14 });
+    expect(style.width).toBe("14rem");
   });
 });

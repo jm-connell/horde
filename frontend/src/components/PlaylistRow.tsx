@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, listThumbnailUrl, playlistCoverUrl } from "../api";
 import Collapse from "./Collapse";
+import ImageCropModal from "./ImageCropModal";
 import LoadingIndicator from "./LoadingIndicator";
 import {
   CoverEditIcon,
@@ -52,12 +53,18 @@ export default function PlaylistRow({
   const [actionBusy, setActionBusy] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [coverDraft, setCoverDraft] = useState<File | null>(null);
+  const [coverRev, setCoverRev] = useState(0);
   const [draftName, setDraftName] = useState(playlist.name);
   const videoDragIndex = useRef<number | null>(null);
   const [videoDragOver, setVideoDragOver] = useState<number | null>(null);
 
   const current = detail && detail.id === playlist.id ? detail : null;
   const coverSrc = playlistCoverUrl(playlist);
+  const coverSrcBusted =
+    coverSrc && playlist.has_custom_cover && coverRev
+      ? `${coverSrc}&r=${coverRev}`
+      : coverSrc;
 
   const applyPlaylist = (next: Playlist, videos?: Video[]) => {
     if (videos && current) {
@@ -233,20 +240,26 @@ export default function PlaylistRow({
     }
   };
 
-  const onUploadCover = async (file: File | undefined) => {
-    if (!file) return;
+  const clearCoverDraft = () => {
+    setCoverDraft(null);
+    if (coverInputRef.current) coverInputRef.current.value = "";
+  };
+
+  const onUploadCover = async (file: File) => {
     setActionBusy(true);
     setActionError(null);
     try {
       const updated = await api.uploadPlaylistCover(playlist.id, file);
       applyPlaylist(updated);
+      setCoverRev(Date.now());
+      clearCoverDraft();
     } catch (err) {
       setActionError(
         err instanceof Error ? err.message : "Could not upload cover"
       );
+      throw err;
     } finally {
       setActionBusy(false);
-      if (coverInputRef.current) coverInputRef.current.value = "";
     }
   };
 
@@ -295,7 +308,11 @@ export default function PlaylistRow({
             : "ring-ink-700 hover:ring-accent/60"
       }`}
     >
-        <div ref={headerRef} className="flex items-stretch">
+      <div
+        ref={headerRef}
+        className="flex cursor-pointer items-stretch"
+        onClick={onToggle}
+      >
         <DragHandle
           label="Drag to reorder playlists"
           onDragStart={(event) => {
@@ -305,18 +322,10 @@ export default function PlaylistRow({
           onDragEnd={onPlaylistDragEnd}
         />
         <div className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-2">
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={`playlist-panel-${playlist.id}`}
-            onClick={onToggle}
-            className="ui-interactive shrink-0"
-          >
-            <PlaylistThumb
-              src={coverSrc}
-              className="h-[5.5rem] w-[9.75rem] shrink-0 rounded-lg"
-            />
-          </button>
+          <PlaylistThumb
+            src={coverSrcBusted}
+            className="h-[5.5rem] w-[9.75rem] shrink-0 rounded-lg"
+          />
           <div className="min-w-0 flex-1">
             <h3 className="min-w-0">
               {editing ? (
@@ -346,28 +355,18 @@ export default function PlaylistRow({
                   className="w-full min-w-0 rounded-md border border-ink-600 bg-ink-950 px-2 py-0.5 font-semibold text-gray-100 outline-none focus:border-accent disabled:opacity-50"
                 />
               ) : (
-                <button
-                  type="button"
-                  onClick={onToggle}
-                  className="ui-interactive block w-full truncate text-left font-semibold text-gray-100"
-                >
+                <span className="block truncate font-semibold text-gray-100">
                   {playlist.name}
-                </button>
+                </span>
               )}
             </h3>
-            <button
-              type="button"
-              onClick={onToggle}
-              className="ui-interactive block w-full text-left"
-            >
-              <p className="text-xs text-gray-500">
-                {videoCount} video{videoCount === 1 ? "" : "s"}
-                {sourceHint}
-                {playlist.subscribed && playlist.last_synced_at
-                  ? ` · synced ${formatRelative(playlist.last_synced_at)}`
-                  : ""}
-              </p>
-            </button>
+            <p className="text-xs text-gray-500">
+              {videoCount} video{videoCount === 1 ? "" : "s"}
+              {sourceHint}
+              {playlist.subscribed && playlist.last_synced_at
+                ? ` · synced ${formatRelative(playlist.last_synced_at)}`
+                : ""}
+            </p>
             {playlist.subscribed && (
               <span className="ui-panel mt-1.5 inline-block rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300">
                 Subscribed
@@ -380,7 +379,8 @@ export default function PlaylistRow({
           title="Edit playlist"
           aria-label="Edit playlist"
           aria-pressed={editing}
-          onClick={() => {
+          onClick={(event) => {
+            event.stopPropagation();
             if (editing) void saveName();
             if (!editing && !open) onToggle();
             setEditing((on) => !on);
@@ -394,8 +394,11 @@ export default function PlaylistRow({
           aria-expanded={open}
           aria-controls={`playlist-panel-${playlist.id}`}
           aria-label={open ? "Collapse playlist" : "Expand playlist"}
-          onClick={onToggle}
-          className="ui-interactive group self-center pr-2"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle();
+          }}
+          className="ui-interactive group flex items-center self-stretch pr-2"
         >
           <ExpandChevron open={open} />
         </button>
@@ -560,9 +563,13 @@ export default function PlaylistRow({
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(event) =>
-                      void onUploadCover(event.target.files?.[0])
-                    }
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) setCoverDraft(file);
+                      else if (coverInputRef.current) {
+                        coverInputRef.current.value = "";
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -668,6 +675,15 @@ export default function PlaylistRow({
           )}
         </div>
       </Collapse>
+      {coverDraft ? (
+        <ImageCropModal
+          file={coverDraft}
+          title="Edit playlist cover"
+          confirmLabel="Use cover"
+          onCancel={clearCoverDraft}
+          onConfirm={onUploadCover}
+        />
+      ) : null}
     </div>
   );
 }

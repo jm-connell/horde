@@ -89,6 +89,8 @@ interface PlaybackValue {
   miniPlayerActive: boolean;
   /** Live bounds of the floating mini-player (null when not mini). */
   miniPlayerRect: MiniPlayerRect | null;
+  /** True until the user drags the mini player; then it keeps that pixel position. */
+  miniPlayerCornerAnchor: boolean;
   /** Live DASH/file track quality (YouTube ladder), null until known. */
   activeStreamQuality: number | null;
 }
@@ -129,10 +131,10 @@ function applyMiniHostInsets(
   host: HTMLElement,
   insets: ReturnType<typeof miniPlayerHostInsets>
 ) {
-  host.style.left = insets.left;
-  host.style.top = insets.top;
-  host.style.right = insets.right;
-  host.style.bottom = insets.bottom;
+  host.style.left = insets.left || "auto";
+  host.style.top = insets.top || "auto";
+  host.style.right = insets.right || "auto";
+  host.style.bottom = insets.bottom || "auto";
 }
 
 function miniRectFromHost(host: HTMLElement): MiniPlayerRect | null {
@@ -180,6 +182,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Session-only; always starts bottom-right when a miniplayer opens after close.
   const [miniPos, setMiniPosState] = useState<MiniPos | null>(null);
   const miniPosLiveRef = useRef<MiniPos | null>(null);
+  const [miniCornerAnchor, setMiniCornerAnchor] = useState(true);
   const streamPosRef = useRef(0);
   const libraryPosRef = useRef(0);
   const recentWatchedRef = useRef<number[]>([]);
@@ -304,16 +307,26 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         ? DEFAULT_MINI_WIDTH_MOBILE
         : DEFAULT_MINI_WIDTH_DESKTOP;
       const width = miniWidth ?? defaultWidth;
-      host.className =
-        "fixed z-40 overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
+      const pos = miniPosLiveRef.current ?? miniPos;
+      const heightGuess = width * (9 / 16);
       host.style.width = `${width}px`;
       host.style.maxWidth = isMobile ? "70vw" : "calc(100vw - 2rem)";
-      const height = host.getBoundingClientRect().height || width * (9 / 16);
-      const pos = miniPosLiveRef.current ?? miniPos;
+      // Insets must be in the style attribute *before* `position: fixed`.
+      // Measuring while fixed with auto insets snapshots the static
+      // position as used left/top, which then ignore window resize.
       applyMiniHostInsets(
         host,
-        miniPlayerHostInsets(pos, { width, height }, isMobile)
+        miniPlayerHostInsets(pos, { width, height: heightGuess }, isMobile)
       );
+      host.className =
+        "fixed z-40 overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
+      if (pos) {
+        const height = host.getBoundingClientRect().height || heightGuess;
+        applyMiniHostInsets(
+          host,
+          miniPlayerHostInsets(pos, { width, height }, isMobile)
+        );
+      }
     } else {
       host.className = "hidden";
       host.style.width = "";
@@ -372,9 +385,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     const ro = new ResizeObserver(publish);
     ro.observe(host);
     window.addEventListener("resize", onWindowResize, { passive: true });
+    window.visualViewport?.addEventListener("resize", onWindowResize, {
+      passive: true,
+    });
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", onWindowResize);
+      window.visualViewport?.removeEventListener("resize", onWindowResize);
     };
   }, [miniPlayerActive, miniWidth, miniPos, current?.id, stream?.url, isMobile]);
 
@@ -473,6 +490,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     libraryPosRef.current = 0;
     setDock(null);
     setMiniPos(null);
+    setMiniCornerAnchor(true);
   }, [setMiniPos]);
 
   const suspendPlaybackMedia = useCallback(
@@ -657,6 +675,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     updateCurrentVideo,
     miniPlayerActive,
     miniPlayerRect,
+    miniPlayerCornerAnchor: miniCornerAnchor,
     activeStreamQuality,
   };
 
@@ -713,6 +732,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         miniPlayerHostInsets(clamped, { width, height }, isMobile)
       );
       miniPosLiveRef.current = clamped;
+      setMiniCornerAnchor(false);
       setMiniPlayerRect({
         left: clamped.left,
         top: clamped.top,

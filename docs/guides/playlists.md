@@ -73,7 +73,7 @@ Click a playlist row on `/playlists` to expand it (or open `/playlists?open=<id>
 - Browse members in order (drag the grip on the left to reorder)
 - Open any item in the [watch](watching.md) player
 - Remove items you no longer want in the list
-- The pencil beside the expand chevron turns the playlist title into an input and shows cover options (first video by default, any member's thumbnail, or an uploaded image)
+- The pencil beside the expand chevron turns the playlist title into an input and shows cover options (first video by default, any member's thumbnail, or an uploaded image). Uploads open a 16:9 editor so you can zoom, rotate, and position the crop before saving.
 - See source hints for YouTube-imported and subscribed lists
 - Sync or stop a YouTube subscription
 
