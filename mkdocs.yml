@@ -1,13 +1,18 @@
 site_name: Horde
 site_description: Self-hosted media downloader and library
+site_url: https://jm-connell.github.io/horde/
+repo_url: https://github.com/jm-connell/horde
+repo_name: jm-connell/horde
+edit_uri: edit/main/docs/
 docs_dir: docs
+copyright: Source-available under the PolyForm Noncommercial License 1.0.0
 
 theme:
   name: material
   font: false
   palette:
     scheme: slate
-    primary: black
+    primary: cyan
     accent: cyan
   features:
     - navigation.sections
@@ -17,9 +22,16 @@ theme:
     - content.code.copy
     - toc.follow
 
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/constellation.js
+
 markdown_extensions:
   - admonition
   - attr_list
+  - md_in_html
   - tables
   - toc:
       permalink: true
@@ -34,6 +46,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - Features: features.md
   - Getting started:
       - Install with Docker: getting-started/install-docker.md
       - TrueNAS / Dockge: getting-started/truenas-dockge.md

@@ -134,6 +134,7 @@ If extracts still fail with bot / sign-in errors, check Settings → System
 
 | Topic | Where |
 |-------|--------|
+| Public wiki (GitHub Pages) | [jm-connell.github.io/horde](https://jm-connell.github.io/horde/) |
 | Install, TrueNAS, first run, updates | `/wiki/` → Getting started |
 | Library, player, downloads, AI | `/wiki/` → Using Horde |
 | Every setting | `/wiki/` → Settings |
@@ -142,7 +143,7 @@ If extracts still fail with bot / sign-in errors, check Settings → System
 | API (Swagger) | `/docs` |
 
 Source Markdown lives in [`docs/`](docs/) and is built into the image with
-MkDocs Material.
+MkDocs Material. The same site is deployed to GitHub Pages from `main`.
 
 ## Notes
 
