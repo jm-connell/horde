@@ -8,6 +8,8 @@ Direct YouTube playback is also supported, but somewhat fragile and resolution c
 
 Horde was built because of the features I believe Plex is missing. Plex is great for Movies and TV, but awkward for other videos — long-form YouTube, talks, music videos, random archives you want to keep forever. TubeArchivist and similar projects are solid; but Horde is the version shaped around my homelab setup: **TrueNAS with Dockge**, a single container, files on disk that still make sense over SMB, and an optional AI layer that is cheap to run.
 
+Every video watched through Horde instead of YouTube avoids all YouTube pre-roll and mid-roll ads. Baked-in video sponsors can also be skipped with included support for [SponsorBlock](https://github.com/ajayyy/SponsorBlock).
+
 There are several useful AI features that are fully optional. Horde can use either an Ollama instance or an OpenRouter API key. I prefer OpenRouter as it's fast, low maintenance, and for Horde's use, extremely cheap. Some AI features include summary generation, chat about a video (using metadata and subtitle files), enhanced search and recommendations, and generating tags.
 
 The majority of this wiki beyond this point is AI-generated, but accurate. It provides a good overview of features and how-to's regarding Horde. If you have more advanced questions then I recommend you clone the repo, open in your IDE of choice, and ask your favorite model.
@@ -56,7 +58,7 @@ Want a tour of the UI first? See the [feature overview](features.md).
 - **Configuration & ops** — env vars, storage, YouTube bot checks, backups, troubleshooting
 - **Architecture** — how the backend, frontend, workers, and AI pipeline fit together
 - **Design decisions** — why things work the way they do
-- **Reference** — shortcuts, glossary, FAQ, roadmap
+- **Reference** — shortcuts, glossary, FAQ
 
 In a running Horde instance, open **Settings → System → Documentation** to reach this wiki at `/wiki/`. Interactive API docs live at `/docs` (Swagger). The same wiki is published at [jm-connell.github.io/horde](https://jm-connell.github.io/horde/).
 

@@ -16,6 +16,7 @@
   --horde-accent-deep: 8 145 178;
   --md-text-font: "Oxanium", system-ui, sans-serif;
   --md-code-font: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --md-source-clones-icon: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25ZM5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>');
 }
 
 [data-md-color-scheme="slate"] {
@@ -90,6 +91,11 @@ body {
   color: rgb(var(--horde-accent));
 }
 
+.md-header__title {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
 .md-header__button {
   color: rgb(var(--horde-accent));
 }
@@ -130,6 +136,7 @@ body {
   background: transparent;
   border: none;
   padding: 0;
+  margin: 0;
 }
 
 .md-sidebar--primary .md-sidebar__inner,
@@ -167,9 +174,51 @@ body {
 }
 
 @media screen and (min-width: 76.25em) {
+  .md-sidebar {
+    padding-top: 0;
+    padding-bottom: 0;
+    /* Header is 2.8rem at Material’s 125% root; 1.5rem matches .md-main__inner. */
+    top: calc(2.8rem + 1.5rem) !important;
+  }
+
   .md-nav--primary > .md-nav__title,
   .md-nav--primary > .md-nav__source {
     display: none;
+  }
+
+  /* Scroll inside the bordered panel, not beside it. */
+  .md-sidebar--primary .md-sidebar__scrollwrap,
+  .md-sidebar--secondary .md-sidebar__scrollwrap {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .md-sidebar--primary .md-sidebar__inner,
+  .md-sidebar--secondary .md-sidebar__inner {
+    max-height: calc(100vh - 6.5rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--horde-accent) / 0.5) transparent;
+  }
+
+  .md-sidebar--primary .md-sidebar__inner::-webkit-scrollbar,
+  .md-sidebar--secondary .md-sidebar__inner::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .md-sidebar--primary .md-sidebar__inner::-webkit-scrollbar-track,
+  .md-sidebar--secondary .md-sidebar__inner::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 8px 0;
+  }
+
+  .md-sidebar--primary .md-sidebar__inner::-webkit-scrollbar-thumb,
+  .md-sidebar--secondary .md-sidebar__inner::-webkit-scrollbar-thumb {
+    background: rgb(var(--horde-accent) / 0.45);
+    border-radius: 999px;
   }
 
   /* Section headers stick while you scroll that group in the left nav. */
@@ -320,6 +369,10 @@ body {
   box-shadow: 0 18px 50px rgb(0 0 0 / 0.35);
 }
 
+.md-content__inner::before {
+  display: none;
+}
+
 @media screen and (min-width: 76.25em) {
   .md-content__inner {
     padding: 1.6rem 2rem 2.4rem;
@@ -438,4 +491,9 @@ body {
 
 .md-source:hover {
   color: rgb(var(--horde-accent));
+}
+
+.md-source__fact--clones:before {
+  -webkit-mask-image: var(--md-source-clones-icon);
+  mask-image: var(--md-source-clones-icon);
 }

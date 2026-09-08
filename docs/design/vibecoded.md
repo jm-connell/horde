@@ -11,7 +11,7 @@ From the project README (paraphrased and preserved in spirit):
 - Implementation credit goes to AI coding models used in Cursor — notably **Opus**, **Composer**, and **Grok** — not to a claim of hand-written exclusivity
 - The stack targets a homelab archive: download, organize, watch, optionally add small local AI
 
-Treat that origin story as part of the product ethics: expect sharp edges, welcome forks, and prefer reading the running app over assuming every [roadmap](../reference/roadmap.md) line item is gospel.
+Treat that origin story as part of the product ethics: expect sharp edges, welcome forks, and prefer reading the running app over any leftover planning notes.
 
 ## Extend with an AI IDE
 
@@ -32,7 +32,7 @@ The recommended way to ask “how does X work?” or “why did Y break?” is:
 2. Use **Ask** mode (read-only Q&A against the tree)
 3. Cite the files the model finds rather than guessing from memory
 
-That matches how the original author works and keeps answers grounded in *this* checkout — including features that landed after any static roadmap was written.
+That matches how the original author works and keeps answers grounded in *this* checkout.
 
 !!! tip "Docs in the app"
     On a running instance: **Settings → System → Documentation** → `/wiki/`. Interactive API: `/docs`.
@@ -41,4 +41,3 @@ That matches how the original author works and keeps answers grounded in *this* 
 
 - [Why Horde](why-horde.md)
 - [FAQ](../reference/faq.md)
-- [Roadmap](../reference/roadmap.md) — historical phases; verify against the app

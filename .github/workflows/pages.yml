@@ -6,6 +6,7 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      - "scripts/update_github_clones.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -26,6 +27,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Refresh GitHub clone archive
+        env:
+          TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/update_github_clones.py --optional
       - name: Build wiki
         run: |
           python -m pip install --upgrade pip

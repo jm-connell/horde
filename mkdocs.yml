@@ -1,4 +1,4 @@
-site_name: Horde
+site_name: HORDE
 site_description: Self-hosted media downloader and library
 site_url: https://jm-connell.github.io/horde/
 repo_url: https://github.com/jm-connell/horde
@@ -27,6 +27,7 @@ extra_css:
 
 extra_javascript:
   - javascripts/constellation.js
+  - javascripts/repo-clones.js
 
 markdown_extensions:
   - admonition
@@ -111,4 +112,3 @@ nav:
       - Glossary: reference/glossary.md
       - FAQ: reference/faq.md
       - Video player smoke checklist: reference/video-player-smoke.md
-      - Roadmap: reference/roadmap.md

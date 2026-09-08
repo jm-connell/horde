@@ -1,0 +1,43 @@
+name: Clone stats
+
+# Clone counts are not public. Create a fine-grained PAT with Administration:
+# read on this repo, save it as the TRAFFIC_TOKEN secret, then run this workflow.
+
+on:
+  schedule:
+    - cron: "20 6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/assets/github-clones.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clone-stats
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update clone archive
+        env:
+          TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/update_github_clones.py --optional
+      - name: Commit clone archive
+        run: |
+          git add docs/assets/github-clones.json
+          if git diff --cached --quiet; then
+            echo "No clone-stat changes"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "Update GitHub clone stats for the wiki header"
+          git push
