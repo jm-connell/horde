@@ -183,7 +183,8 @@ export default function ChannelFeed({
     cancelPending,
     updatePending,
     submitNow,
-    isQueuedOrLibrary,
+    isInLibrary,
+    isDownloading,
     resolveVideoId,
   } = useChannelDownloadQueue(channel);
 
@@ -560,11 +561,6 @@ export default function ChannelFeed({
     return () => observer.disconnect();
   }, [canLoadMore, entries.length, loadPage]);
 
-  const pendingUrls = useMemo(
-    () => new Set(pending.map((p) => p.entry.url)),
-    [pending]
-  );
-
   const q = feedSearch.trim();
   const searchBusy =
     q.length > 0 && (searchPhase === "keywords" || searchPhase === "related");
@@ -668,7 +664,7 @@ export default function ChannelFeed({
             }
           >
             {filteredEntries.map((entry) => {
-              const inLibrary = isQueuedOrLibrary(entry);
+              const inLibrary = isInLibrary(entry);
               const videoId = resolveVideoId(entry);
               return (
                 <ChannelFeedCard
@@ -678,7 +674,7 @@ export default function ChannelFeed({
                   layout={feedLayout}
                   inLibrary={inLibrary}
                   videoId={videoId ?? undefined}
-                  downloading={pendingUrls.has(entry.url)}
+                  downloading={!inLibrary && isDownloading(entry)}
                   onDownload={() => queueDownload(entry)}
                   skipRemotePreview={fromCatalog}
                   searchQuery={feedSearch}

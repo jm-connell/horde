@@ -131,7 +131,7 @@ function FeedMetaRow({
             disabled={downloading}
             className="h-6 shrink-0 rounded bg-accent px-2.5 text-xs font-medium leading-none text-ink-950 hover:bg-accent-soft disabled:opacity-60"
           >
-            {downloading ? "Queued…" : "Download"}
+            {downloading ? "Downloading" : "Download"}
           </button>
         )}
         {maxRes ? (
@@ -396,7 +396,7 @@ export default function ChannelFeedCard({
                 disabled={downloading}
                 className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
               >
-                {downloading ? "Queued…" : "Download"}
+                {downloading ? "Downloading" : "Download"}
               </button>
             ) : (
               <span className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-400 ring-1 ring-emerald-500/40">

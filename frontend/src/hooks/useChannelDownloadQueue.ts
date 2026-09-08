@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { isActiveJob, useDownloads } from "../context/DownloadContext";
 import { PRESET_ORDER, resolveQualityPreset } from "../presets";
-import type { ChannelFeedEntry, DownloadPreview } from "../types";
+import type { ChannelFeedEntry, DownloadJob, DownloadPreview } from "../types";
 
 const CONFIRM_SECONDS = 5;
 const DEFAULT_PRESET_KEY = "horde.channelFeed.defaultPreset";
@@ -32,6 +32,34 @@ export function confirmPendingOnLeave(
 
 let nextTempId = 0;
 
+export function channelFeedItemInLibrary(
+  entry: ChannelFeedEntry,
+  libraryVideoIds: ReadonlyMap<string, number>,
+  jobs: readonly DownloadJob[]
+): boolean {
+  if (entry.in_library || entry.video_id != null) return true;
+  if (libraryVideoIds.has(entry.url)) return true;
+  return jobs.some(
+    (j) =>
+      j.url === entry.url &&
+      j.status === "completed" &&
+      j.video_id != null &&
+      !j.video_missing &&
+      j.destination !== "device"
+  );
+}
+
+export function channelFeedItemDownloading(
+  entry: ChannelFeedEntry,
+  pendingUrls: ReadonlySet<string>,
+  queuedUrls: ReadonlySet<string>,
+  jobs: readonly DownloadJob[]
+): boolean {
+  if (pendingUrls.has(entry.url)) return true;
+  if (queuedUrls.has(entry.url)) return true;
+  return jobs.some((j) => j.url === entry.url && isActiveJob(j));
+}
+
 function loadDefaultPreset(): string {
   try {
     const raw = localStorage.getItem(DEFAULT_PRESET_KEY);
@@ -42,7 +70,7 @@ function loadDefaultPreset(): string {
 }
 
 export function useChannelDownloadQueue(channelName: string) {
-  const { submitDownload, onJobCompleted, jobs } = useDownloads();
+  const { submitDownload, jobs } = useDownloads();
   const [defaultPreset, setDefaultPresetState] = useState(loadDefaultPreset);
   const [allPresets, setAllPresets] = useState<string[]>([...PRESET_ORDER]);
   const [pending, setPending] = useState<PendingChannelDownload[]>([]);
@@ -73,11 +101,48 @@ export function useChannelDownloadQueue(channelName: string) {
   }, []);
 
   useEffect(() => {
-    return onJobCompleted((videoId) => {
-      if (videoId == null) return;
-      void videoId;
+    setLibraryVideoIds((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (const job of jobs) {
+        if (
+          job.status === "completed" &&
+          job.video_id != null &&
+          job.url &&
+          !job.video_missing &&
+          job.destination !== "device"
+        ) {
+          if (next.get(job.url) !== job.video_id) {
+            next.set(job.url, job.video_id);
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
     });
-  }, [onJobCompleted]);
+    setQueuedUrls((prev) => {
+      if (prev.size === 0) return prev;
+      let changed = false;
+      const next = new Set(prev);
+      for (const url of prev) {
+        const matching = jobs.filter((j) => j.url === url);
+        if (matching.length === 0) continue;
+        if (matching.some((j) => isActiveJob(j))) continue;
+        if (
+          matching.some(
+            (j) =>
+              j.status === "completed" ||
+              j.status === "error" ||
+              j.status === "cancelled"
+          )
+        ) {
+          next.delete(url);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [jobs]);
 
   const clearTimer = useCallback((tempId: number) => {
     const handle = intervalsRef.current.get(tempId);
@@ -254,18 +319,18 @@ export function useChannelDownloadQueue(channelName: string) {
     [submitPending]
   );
 
-  const isQueuedOrLibrary = useCallback(
+  const isInLibrary = useCallback(
+    (entry: ChannelFeedEntry) =>
+      channelFeedItemInLibrary(entry, libraryVideoIds, jobs),
+    [libraryVideoIds, jobs]
+  );
+
+  const isDownloading = useCallback(
     (entry: ChannelFeedEntry) => {
-      if (entry.in_library) return true;
-      if (queuedUrls.has(entry.url)) return true;
-      if (pendingUrlsRef.current.has(entry.url)) return true;
-      if (pending.some((p) => p.entry.url === entry.url)) return true;
-      if (jobs.some((j) => j.url === entry.url && isActiveJob(j))) {
-        return true;
-      }
-      return false;
+      const pendingUrls = new Set(pending.map((p) => p.entry.url));
+      return channelFeedItemDownloading(entry, pendingUrls, queuedUrls, jobs);
     },
-    [queuedUrls, pending, jobs]
+    [pending, queuedUrls, jobs]
   );
 
   const resolveVideoId = useCallback(
@@ -299,7 +364,8 @@ export function useChannelDownloadQueue(channelName: string) {
     cancelPending,
     updatePending,
     submitNow,
-    isQueuedOrLibrary,
+    isInLibrary,
+    isDownloading,
     resolveVideoId,
     setLibraryVideoIds,
   };
