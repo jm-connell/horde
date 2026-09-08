@@ -67,7 +67,7 @@ flat  →  descriptions  →  embed  →  ready
 2. **descriptions** — fill descriptions for newest window  
 3. **embed** — enqueue `embed_catalog_video` jobs for the AI worker  
 
-Members-only IDs go to `channel_catalog_skips`. Runtime status (current channel, phase, counts) is exposed for the Settings/Channels UI.
+Members-only, age-restricted, and private IDs go to `channel_catalog_skips`. Runtime status (current channel, phase, counts, last skip/error) is exposed for the Settings/Channels UI.
 
 ## Autodownload poller
 

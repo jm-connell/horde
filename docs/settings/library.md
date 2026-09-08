@@ -75,7 +75,7 @@ These are **top-level** keys (not the `ui` blob).
 
 When catalog indexing is enabled, Horde background-indexes **YouTube** channel uploads (titles; descriptions for the newest ~200) when you download from a channel or open its feed, so feed search works beyond the loaded page. Non-YouTube channel URLs are skipped.
 
-**Direct YouTube search** (YouTube-linked channel pages only) also queries YouTube’s in-channel search and adds matches that are not already on screen. Combined results follow the channel page **Recent / Popular** sort. Search text is sent to YouTube. Each channel can override this default (on / off / use Library default).
+**Direct YouTube search** (YouTube-linked channel pages only) also queries YouTube’s in-channel search and adds matches that are not already on screen. Combined results follow the channel page **Recent / Popular** sort. Search text is sent to YouTube. Each channel can override this default with the **YT** control in its search box.
 
 **YouTube video search** is the **YT** control inside the Library home search box: when it is highlighted, the home search box queries YouTube for videos that are not already in your library or catalogs after you pause typing (or immediately on Enter). The same setting is in Settings → Library. Search text is sent to YouTube. This is not the channel-page Direct YouTube search.
 

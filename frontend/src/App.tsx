@@ -15,6 +15,7 @@ import LoadingIndicator from "./components/LoadingIndicator";
 import OverlayScrollThumb from "./components/OverlayScrollThumb";
 import { PlaybackProvider } from "./context/PlaybackContext";
 import { DownloadProvider } from "./context/DownloadContext";
+import { ConfirmProvider } from "./context/ConfirmContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
 import { useSetupGate } from "./hooks/useSettings";
@@ -121,14 +122,16 @@ function AppShell() {
 export default function App() {
   return (
     <ToastProvider>
-      <DownloadProvider>
-        <SearchProvider>
-          <PlaybackProvider>
-            <AppShell />
-            <OverlayScrollThumb viewport />
-          </PlaybackProvider>
-        </SearchProvider>
-      </DownloadProvider>
+      <ConfirmProvider>
+        <DownloadProvider>
+          <SearchProvider>
+            <PlaybackProvider>
+              <AppShell />
+              <OverlayScrollThumb viewport />
+            </PlaybackProvider>
+          </SearchProvider>
+        </DownloadProvider>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }

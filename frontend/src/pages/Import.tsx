@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import LoadingIndicator from "../components/LoadingIndicator";
 import VideoEditForm from "../components/VideoEditForm";
+import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import type { DuplicateGroup, Video } from "../types";
 import { notifyImportQueueChanged } from "../utils/importQueue";
@@ -70,6 +71,7 @@ interface UploadItem {
 
 export default function Import() {
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const [items, setItems] = useState<Video[]>([]);
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
   const [dismissedDupes, setDismissedDupes] = useState<Set<string>>(() =>
@@ -101,16 +103,30 @@ export default function Import() {
 
   const keepVideo = async (group: DuplicateGroup, keep: Video) => {
     const others = group.videos.filter((v) => v.id !== keep.id);
-    const names = others.map((v) => `"${v.title}"`).join(", ");
-    if (
-      !confirm(
-        `Keep "${keep.title}" and delete ${others.length} other file${
-          others.length === 1 ? "" : "s"
-        }?\n\n${names}`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Keep this file?",
+      body: (
+        <>
+          <p className="break-words">
+            Keep &ldquo;{keep.title}&rdquo; and permanently delete{" "}
+            {others.length} other file{others.length === 1 ? "" : "s"}:
+          </p>
+          <ul className="mt-2 max-h-32 list-disc space-y-0.5 overflow-y-auto pl-5 text-gray-400">
+            {others.map((v) => (
+              <li key={v.id} className="break-words">
+                {v.title}
+              </li>
+            ))}
+          </ul>
+        </>
+      ),
+      confirmLabel:
+        others.length === 1
+          ? "Delete other file"
+          : `Delete ${others.length} files`,
+      danger: true,
+    });
+    if (!ok) return;
     try {
       for (const v of others) {
         await api.deleteVideo(v.id, true);
@@ -119,6 +135,22 @@ export default function Import() {
       load();
     } catch {
       showToast("Could not delete duplicate(s)");
+    }
+  };
+
+  const deleteVideoFile = async (v: Video) => {
+    const ok = await confirm({
+      title: "Delete this video?",
+      body: `"${v.title}" and its file will be permanently deleted.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.deleteVideo(v.id, true);
+      load();
+    } catch {
+      showToast("Could not delete video");
     }
   };
 
@@ -390,15 +422,7 @@ export default function Import() {
                       Skip
                     </button>
                     <button
-                      onClick={async () => {
-                        if (!confirm(`Delete "${v.title}" and its file?`)) return;
-                        try {
-                          await api.deleteVideo(v.id, true);
-                          load();
-                        } catch {
-                          showToast("Could not delete video");
-                        }
-                      }}
+                      onClick={() => void deleteVideoFile(v)}
                       className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-4 py-2 text-sm text-red-400 ring-1 ring-ink-700 hover:bg-red-500/10"
                     >
                       Delete
@@ -500,20 +524,7 @@ export default function Import() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    if (
-                                      !confirm(
-                                        `Delete "${v.title}" and its file?`
-                                      )
-                                    )
-                                      return;
-                                    try {
-                                      await api.deleteVideo(v.id, true);
-                                      load();
-                                    } catch {
-                                      showToast("Could not delete video");
-                                    }
-                                  }}
+                                  onClick={() => void deleteVideoFile(v)}
                                   className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
                                 >
                                   Delete

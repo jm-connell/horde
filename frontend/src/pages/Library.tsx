@@ -44,7 +44,6 @@ import {
 import { Toggle } from "./settings/ui";
 import {
   FEED_INDEX_TIP,
-  FEED_SEARCH_TIP,
   formatCatalogProgress,
   showChannelIndexButton,
   type CatalogProgress,
@@ -638,6 +637,8 @@ export default function Library() {
   const [catalogProgress, setCatalogProgress] = useState<CatalogProgress | null>(
     null
   );
+  const toastedCatalogErrorRef = useRef<string | null>(null);
+  const catalogErrorSeededRef = useRef(false);
 
   useEffect(() => {
     if (
@@ -668,6 +669,8 @@ export default function Library() {
   useEffect(() => {
     if (!onChannelPage || !activeChannelUrl) {
       setCatalogProgress(null);
+      toastedCatalogErrorRef.current = null;
+      catalogErrorSeededRef.current = false;
       return;
     }
     let cancelled = false;
@@ -692,6 +695,16 @@ export default function Library() {
             status.current_channel_url != null &&
             norm(status.current_channel_url) === target;
           const maxVideos = hit?.max_videos || 1000;
+          const lastError = hit?.last_error ?? null;
+          if (!catalogErrorSeededRef.current) {
+            catalogErrorSeededRef.current = true;
+            toastedCatalogErrorRef.current = lastError;
+          } else if (lastError && lastError !== toastedCatalogErrorRef.current) {
+            toastedCatalogErrorRef.current = lastError;
+            showToast(lastError);
+          } else if (!lastError) {
+            toastedCatalogErrorRef.current = null;
+          }
           if (!hit) {
             const system = status.direct_youtube_search ?? true;
             setCatalogProgress({
@@ -701,6 +714,7 @@ export default function Library() {
               complete: false,
               status: null,
               indexing: isCurrentJob,
+              lastError,
               youtubeSearchOverride: null,
               youtubeSearchEffective: system,
               youtubeSearchSystem: system,
@@ -725,6 +739,7 @@ export default function Library() {
             complete: hit.complete && !indexing,
             status: hit.status,
             indexing,
+            lastError,
             youtubeSearchOverride: hit.direct_youtube_search ?? null,
             youtubeSearchEffective:
               hit.direct_youtube_search_effective ??
@@ -740,7 +755,7 @@ export default function Library() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [onChannelPage, activeChannelUrl]);
+  }, [onChannelPage, activeChannelUrl, showToast]);
 
   const triggerChannelIndex = async () => {
     if (!activeChannel || indexingChannel) return;
@@ -780,6 +795,7 @@ export default function Library() {
             complete: false,
             status: hit?.status ?? "queued",
             indexing: true,
+            lastError: hit?.last_error ?? null,
             youtubeSearchOverride:
               hit?.direct_youtube_search ?? prev?.youtubeSearchOverride ?? null,
             youtubeSearchEffective:
@@ -1338,15 +1354,32 @@ export default function Library() {
           >
             {onChannelPage ? (
               <>
-                <div className="flex min-w-[10rem] w-40 max-w-64 grow items-center gap-1.5 sm:min-w-[13rem] sm:w-52">
+                <div className="relative min-w-[10rem] w-40 max-w-64 grow sm:min-w-[13rem] sm:w-52">
                   <input
                     data-header-search
                     value={feedSearch}
                     onChange={(e) => setFeedSearch(e.target.value)}
                     placeholder="Search this channel"
-                    className="ui-panel ui-interactive min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:px-4"
+                    className={`ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:pl-4 ${
+                      isYoutubeChannelUrl(activeChannelUrl)
+                        ? "pr-8"
+                        : "pr-3 sm:pr-4"
+                    }`}
                   />
-                  <HelpTip text={FEED_SEARCH_TIP} placement="bottom" />
+                  {isYoutubeChannelUrl(activeChannelUrl) ? (
+                    <YoutubeSearchChip
+                      checked={
+                        catalogProgress?.youtubeSearchEffective ?? true
+                      }
+                      disabled={youtubePrefSaving || !activeChannelUrl}
+                      title={DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP}
+                      onToggle={() =>
+                        void setChannelYoutubeSearch(
+                          !(catalogProgress?.youtubeSearchEffective ?? true)
+                        )
+                      }
+                    />
+                  ) : null}
                 </div>
                 {isYoutubeChannelUrl(activeChannelUrl) &&
                   (indexingChannel ||
@@ -1360,38 +1393,6 @@ export default function Library() {
                   >
                     {indexingChannel ? "Queuing…" : "Index channel"}
                   </button>
-                )}
-                {isYoutubeChannelUrl(activeChannelUrl) && (
-                  <div className="inline-flex shrink-0 items-center gap-1.5">
-                    <span className="hidden text-sm text-gray-300 xl:inline">
-                      YouTube search
-                    </span>
-                    <HelpTip
-                      text={DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP}
-                      placement="bottom"
-                    />
-                    <Toggle
-                      checked={
-                        catalogProgress?.youtubeSearchEffective ?? true
-                      }
-                      disabled={youtubePrefSaving || !activeChannelUrl}
-                      onChange={() =>
-                        void setChannelYoutubeSearch(
-                          !(catalogProgress?.youtubeSearchEffective ?? true)
-                        )
-                      }
-                    />
-                    {catalogProgress?.youtubeSearchOverride != null && (
-                      <button
-                        type="button"
-                        onClick={() => void setChannelYoutubeSearch(null)}
-                        disabled={youtubePrefSaving}
-                        className="hidden text-xs text-gray-500 hover:text-gray-300 sm:inline"
-                      >
-                        Use default
-                      </button>
-                    )}
-                  </div>
                 )}
                 <ThemedSelect
                   aria-label="Feed sort"
@@ -1469,7 +1470,14 @@ export default function Library() {
                   </button>
                 )}
                 {catalogProgress && (
-                  <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-gray-500">
+                  <span
+                    className={`ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs ${
+                      catalogProgress.status === "error"
+                        ? "text-red-400"
+                        : "text-gray-500"
+                    }`}
+                    title={catalogProgress.lastError || undefined}
+                  >
                     {formatCatalogProgress(catalogProgress)}
                     <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
                   </span>

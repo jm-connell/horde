@@ -107,12 +107,31 @@ ERROR_KIND_POSTPROCESS = "postprocess"
 ERROR_KIND_CANCELLED = "cancelled"
 ERROR_KIND_UNKNOWN = "unknown"
 
+# Per-video catalog skips — do not abort the rest of the channel index.
+SKIPPABLE_CATALOG_KINDS = frozenset(
+    {ERROR_KIND_COOKIES, ERROR_KIND_MEMBERS, ERROR_KIND_UNAVAILABLE}
+)
+_AGE_RESTRICTED_AVAILABILITY = frozenset({"age_restricted", "restricted"})
+_CATALOG_SKIP_LABELS = {
+    ERROR_KIND_COOKIES: "Age-restricted / private",
+    ERROR_KIND_MEMBERS: "Members-only",
+    ERROR_KIND_UNAVAILABLE: "Unavailable",
+}
+
 _last_extract_failure: Optional[dict[str, Any]] = None
 _last_extract_failure_lock = threading.Lock()
 
 
 class MembersOnlyError(Exception):
     """Raised when a video is YouTube members-only and should be skipped."""
+
+
+class CatalogSkipError(Exception):
+    """Per-video catalog skip (age-restricted, members-only, unavailable)."""
+
+    def __init__(self, kind: str, message: str):
+        super().__init__(message)
+        self.kind = kind
 
 
 def is_members_only_message(text: Optional[str]) -> bool:
@@ -140,6 +159,43 @@ def is_members_only_entry(entry: Optional[dict[str, Any]]) -> bool:
     if isinstance(title, str) and _MEMBERS_ONLY_TITLE.search(title):
         return True
     return False
+
+
+def is_age_restricted_entry(entry: Optional[dict[str, Any]]) -> bool:
+    """True when a yt-dlp entry is age-gated (not members-only)."""
+    if not entry or not isinstance(entry, dict):
+        return False
+    availability = entry.get("availability")
+    if isinstance(availability, str) and availability.strip().lower() in (
+        _AGE_RESTRICTED_AVAILABILITY
+    ):
+        return True
+    age_limit = entry.get("age_limit")
+    try:
+        if age_limit is not None and int(age_limit) >= 18:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
+
+
+def is_skippable_catalog_kind(kind: Optional[str]) -> bool:
+    return kind in SKIPPABLE_CATALOG_KINDS
+
+
+def catalog_skip_message(
+    kind: str,
+    *,
+    url: Optional[str] = None,
+    title: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> str:
+    """Short channel-page toast when a gated video is skipped mid-index."""
+    label = _CATALOG_SKIP_LABELS.get(kind, "Skipped")
+    target = describe_extract_target(url, title=title, channel=channel)
+    if target:
+        return f"{label}: skipped {target} and continued indexing"
+    return f"{label}: skipped a video and continued indexing"
 
 
 def _strip_ansi_local(text: str) -> str:

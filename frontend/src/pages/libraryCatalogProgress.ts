@@ -7,6 +7,7 @@ export type CatalogProgress = {
   complete: boolean;
   status: string | null;
   indexing: boolean;
+  lastError?: string | null;
   youtubeSearchOverride?: boolean | null;
   youtubeSearchEffective?: boolean;
   youtubeSearchSystem?: boolean;
@@ -102,6 +103,9 @@ export function formatCatalogProgress(p: CatalogProgress): string {
   if (indexing) {
     return `Indexing… ${indexed}/${denom}`;
   }
+  if (p.status === "error") {
+    return indexed > 0 ? `Index failed (${indexed}/${denom})` : "Index failed";
+  }
   if (isCatalogFullyIndexed(p)) {
     return `Fully indexed (${indexed})`;
   }
@@ -116,9 +120,6 @@ export function showChannelIndexButton(p: CatalogProgress | null): boolean {
   if (p == null || p.indexing) return false;
   return !isCatalogFullyIndexed(p);
 }
-
-export const FEED_SEARCH_TIP =
-  "Search this channel’s indexed uploads and your downloads. Also uses search indexes when they’re ready, including captions on downloaded videos. When Direct YouTube search is on, Horde also queries YouTube for extra matches. Results follow the Recent / Popular sort at the top of the page.";
 
 export const FEED_INDEX_TIP =
   "Horde indexes this channel’s uploads (descriptions+captions for 200 recent, titles for up to 1000) so search uses as much as possible. Indexing runs in the background and respects your max-videos setting.";

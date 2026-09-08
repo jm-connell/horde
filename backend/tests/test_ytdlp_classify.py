@@ -166,6 +166,32 @@ def test_is_members_only_entry():
     assert not is_members_only_entry(None)
 
 
+def test_is_age_restricted_entry():
+    from app.services.ytdlp_common import is_age_restricted_entry
+
+    assert is_age_restricted_entry({"availability": "age_restricted"})
+    assert is_age_restricted_entry({"age_limit": 18})
+    assert not is_age_restricted_entry({"availability": "public", "age_limit": 0})
+    assert not is_age_restricted_entry({"title": "Public video"})
+    assert not is_age_restricted_entry(None)
+
+
+def test_catalog_skip_message_names_target():
+    from app.services.ytdlp_common import ERROR_KIND_COOKIES, catalog_skip_message
+
+    msg = catalog_skip_message(
+        ERROR_KIND_COOKIES,
+        url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        title="Secret Video",
+        channel="karrigan",
+    )
+    assert msg.startswith("Age-restricted / private:")
+    assert "skipped" in msg
+    assert "continued indexing" in msg
+    assert "Secret Video" in msg
+    assert "karrigan" in msg
+
+
 def test_youtube_extractor_args_excludes_android_vr(monkeypatch):
     monkeypatch.setattr("app.services.ytdlp_common.YTDLP_POT_BASE_URL", "")
     args = youtube_extractor_args()

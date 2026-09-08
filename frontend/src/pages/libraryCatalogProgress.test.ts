@@ -66,6 +66,17 @@ describe("formatCatalogProgress", () => {
         complete: true,
       })
     ).toBe("Fully indexed (1000)");
+    expect(
+      formatCatalogProgress({
+        ...base,
+        indexed: 12,
+        total: 80,
+        status: "error",
+      })
+    ).toBe("Index failed (12/80)");
+    expect(
+      formatCatalogProgress({ ...base, status: "error" })
+    ).toBe("Index failed");
   });
 });
 

@@ -21,6 +21,7 @@ import {
   useDownloads,
 } from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
+import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import { UI_MENU_SURFACE } from "../uiMenu";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -128,6 +129,7 @@ export default function Watch() {
   activeJobIdRef.current = activeJobId;
 
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const { onJobCompleted, refreshJobs, submitDownload, changeJobQuality, progress, jobs } =
     useDownloads();
   const redownloadPending = useRef(false);
@@ -617,7 +619,13 @@ export default function Watch() {
 
   const onDelete = async () => {
     if (!video) return;
-    if (!confirm(`Delete "${video.title}" from the library?`)) return;
+    const ok = await confirm({
+      title: "Delete this video?",
+      body: `"${video.title}" will be removed from your library and the file will be permanently deleted.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.deleteVideo(video.id, true);
       navigate("/");

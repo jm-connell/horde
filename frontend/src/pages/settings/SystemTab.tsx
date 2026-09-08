@@ -6,6 +6,7 @@ import { Section } from "./ui";
 import { PANEL_BTN, STATUS_TIPS, INPUT } from "./constants";
 import { saveDismissedUpdateSha } from "./helpers";
 import { api } from "../../api";
+import { useConfirm } from "../../context/ConfirmContext";
 import { downloadErrorLabel, extractFailureCopy } from "../../downloadErrors";
 import { formatSize } from "../../utils";
 import { clearHordeBrowserState } from "../../setupStorage";
@@ -58,6 +59,7 @@ function StatusRow({
 }
 
 export default function SystemTab() {
+  const confirm = useConfirm();
   const {
     match,
     showToast,
@@ -456,9 +458,11 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                     disabled={catalogIndexing}
                     onClick={async () => {
                       if (catalogIndexing) return;
-                      const ok = window.confirm(
-                        "Re-walk every channel’s upload list up to the max-videos cap. This can take a long time on large libraries. Continue?"
-                      );
+                      const ok = await confirm({
+                        title: "Full channel reindex?",
+                        body: "Re-walk every channel’s upload list up to the max-videos cap. This can take a long time on large libraries.",
+                        confirmLabel: "Reindex",
+                      });
                       if (!ok) return;
                       setCatalogIndexing(true);
                       try {

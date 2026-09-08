@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import ConfirmDialog from "./ConfirmDialog";
 import { UI_MENU_SURFACE } from "../uiMenu";
 import type { Playlist } from "../types";
 
@@ -44,15 +45,6 @@ export default function LibraryBulkBar({
     selectedCount === 1
       ? "This video will be removed from your library and the file will be permanently deleted."
       : "These videos will be removed from your library and the files will be permanently deleted.";
-
-  useEffect(() => {
-    if (!deleteConfirmOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !deleting) setDeleteConfirmOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [deleteConfirmOpen, deleting]);
 
   const closeDeleteConfirm = () => {
     if (deleting) return;
@@ -176,44 +168,16 @@ export default function LibraryBulkBar({
         </div>
       </div>
       {deleteConfirmOpen ? (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-          onClick={closeDeleteConfirm}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="bulk-delete-title"
-            className="ui-panel w-full max-w-sm rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2
-              id="bulk-delete-title"
-              className="text-base font-semibold text-gray-100"
-            >
-              Delete {selectedCount} {videoWord}?
-            </h2>
-            <p className="mt-2 text-sm text-gray-300">{deleteBody}</p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeDeleteConfirm}
-                disabled={deleting}
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-300 hover:bg-ink-700 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void confirmDelete()}
-                disabled={deleting}
-                className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-400 disabled:opacity-50"
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title={`Delete ${selectedCount} ${videoWord}?`}
+          body={deleteBody}
+          confirmLabel="Delete"
+          danger
+          busy={deleting}
+          busyLabel="Deleting…"
+          onCancel={closeDeleteConfirm}
+          onConfirm={() => void confirmDelete()}
+        />
       ) : null}
     </>
   );

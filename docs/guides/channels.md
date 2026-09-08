@@ -42,7 +42,7 @@ The channel header search box looks across **indexed uploads** (titles, and desc
 - Multi-word queries require **all keywords** as whole words (stopwords like *the* / *to* / *his* are ignored). `paint fix` matches *I painted his House to Fix his WiFi*; `car` does not match *graphics card*. Home library search uses the same matcher.
 - Natural-language phrasing also uses catalog and library search indexes when those embeddings are ready (including captions on downloads).
 - While a query runs, the feed shows **Searching indexed catalog…** then **Finding related matches…**. If indexing is still in progress, results may be incomplete.
-- With **Direct YouTube search** on (Settings → Library, or the per-channel toggle), Horde also queries YouTube for extra matches. Local and YouTube cards are then sorted together by **Recent / Popular** (and the ↑/↓ direction) at the top of the page. A quiet **Loading YouTube results…** line appears until that call finishes.
+- With the **YT** control in the channel search box on (default from Settings → Library **Direct YouTube search**), Horde also queries YouTube for extra matches from that channel. Local and YouTube cards are then sorted together by **Recent / Popular** (and the ↑/↓ direction) at the top of the page. A quiet **Loading YouTube results…** line appears until that call finishes.
 
 See [Search](search.md).
 
@@ -80,7 +80,7 @@ Horde finds new uploads from the channel catalog (opening the feed, periodic cat
 
 Catalog indexing is **YouTube only**. When you open a YouTube channel feed or download from a YouTube channel, Horde indexes that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time. Non-YouTube sources skip catalog indexing.
 
-Progress shows in the channel header (for example **Fully indexed**). **Index channel** appears only when this catalog is missing, incomplete, or failed — a complete catalog does not need a manual re-walk.
+Progress shows in the channel header (for example **Fully indexed**). **Index channel** appears only when this catalog is missing, incomplete, or failed — a complete catalog does not need a manual re-walk. Age-restricted, members-only, and private uploads are skipped so the rest of the channel can still index; the channel page shows a toast when that happens.
 
 ### Phases
 

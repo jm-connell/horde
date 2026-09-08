@@ -11,6 +11,7 @@ import {
   PlaylistThumb,
   beginReorderDrag,
 } from "./playlistChrome";
+import { useConfirm } from "../context/ConfirmContext";
 import { usePlayback } from "../context/PlaybackContext";
 import type { Playlist, PlaylistDetail, Video } from "../types";
 import { formatDuration, formatRelative, moveItem } from "../utils";
@@ -41,6 +42,7 @@ export default function PlaylistRow({
   onPlaylistDragEnd: () => void;
 }) {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { playVideo, addToQueue } = usePlayback();
   const headerRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -143,7 +145,13 @@ export default function PlaylistRow({
   };
 
   const onDelete = async () => {
-    if (!confirm(`Delete playlist "${playlist.name}"?`)) return;
+    const ok = await confirm({
+      title: "Delete this playlist?",
+      body: `"${playlist.name}" will be deleted. Videos stay in your library.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     await api.deletePlaylist(playlist.id);
     onDeleted();
   };

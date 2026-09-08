@@ -16,7 +16,12 @@ from ...models import (
     utcnow,
 )
 from .. import feed_meta_cache
-from ..ytdlp_common import is_members_only_entry
+from ..ytdlp_common import (
+    ERROR_KIND_COOKIES,
+    catalog_skip_message,
+    is_age_restricted_entry,
+    is_members_only_entry,
+)
 
 def skipped_yt_ids(session: Session, catalog_id: int) -> set[str]:
     rows = session.exec(
@@ -37,11 +42,12 @@ def is_skipped(session: Session, catalog_id: int, yt_id: str) -> bool:
     return row is not None
 
 
-def record_members_only_skip(
+def record_catalog_skip(
     session: Session,
     catalog_id: int,
     yt_id: str,
     *,
+    reason: str = "members_only",
     commit: bool = False,
 ) -> None:
     yt_id = str(yt_id)
@@ -56,12 +62,24 @@ def record_members_only_skip(
             ChannelCatalogSkip(
                 catalog_id=catalog_id,
                 yt_id=yt_id,
-                reason="members_only",
+                reason=reason,
                 skipped_at=utcnow(),
             )
         )
     if commit:
         session.commit()
+
+
+def record_members_only_skip(
+    session: Session,
+    catalog_id: int,
+    yt_id: str,
+    *,
+    commit: bool = False,
+) -> None:
+    record_catalog_skip(
+        session, catalog_id, yt_id, reason="members_only", commit=commit
+    )
 
 
 def delete_catalog_video_row(session: Session, row: ChannelCatalogVideo) -> None:
@@ -96,8 +114,7 @@ def purge_catalog_video(
 
     delete_catalog_video_row(session, row)
 
-    record_members_only_skip(session, catalog_id, yt_id)
-    _ = reason
+    record_catalog_skip(session, catalog_id, yt_id, reason=reason)
     feed_meta_cache.drop(yt_id)
     if commit:
         session.commit()
@@ -118,6 +135,14 @@ def purge_members_only_by_yt_id(yt_id: str) -> None:
         feed_meta_cache.drop(yt_id)
 
 
+def _skip_reason_for_entry(raw: dict[str, Any]) -> Optional[str]:
+    if is_members_only_entry(raw):
+        return "members_only"
+    if is_age_restricted_entry(raw):
+        return "cookies"
+    return None
+
+
 def _reject_members_or_skipped(
     session: Session,
     catalog: ChannelCatalog,
@@ -135,9 +160,10 @@ def _reject_members_or_skipped(
         if skipped is not None
         else skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
     )
-    members = is_members_only_entry(raw) or yt_id in skip_set
-    if not members:
+    reason = _skip_reason_for_entry(raw)
+    if reason is None and yt_id not in skip_set:
         return None
+    skip_reason = reason or "members_only"
     existing = session.exec(
         select(ChannelCatalogVideo).where(
             ChannelCatalogVideo.catalog_id == catalog.id,
@@ -145,9 +171,17 @@ def _reject_members_or_skipped(
         )
     ).first()
     if existing is not None:
-        purge_catalog_video(session, existing, commit=False)
+        purge_catalog_video(session, existing, reason=skip_reason, commit=False)
     elif catalog.id is not None:
-        record_members_only_skip(session, catalog.id, yt_id)
+        record_catalog_skip(session, catalog.id, yt_id, reason=skip_reason)
+    if reason == "cookies" and not catalog.last_error:
+        catalog.last_error = catalog_skip_message(
+            ERROR_KIND_COOKIES,
+            url=str(raw.get("url") or "") or None,
+            title=raw.get("title") if isinstance(raw.get("title"), str) else None,
+            channel=catalog.channel_name,
+        )[:500]
+        session.add(catalog)
     return yt_id
 
 

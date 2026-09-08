@@ -6,7 +6,7 @@ Horde uses a **single search box** on the Library home page, plus a separate **c
 
 Open the [Library](library.md) (`/`) and type in the search field in the toolbar (desktop) or the mobile search control. Library and catalog results update as you type (debounced). A compact **YT** control inside the home search box (and the same setting under [Settings → Library](../settings/library.md)) turns live YouTube results on or off. With it highlighted, YouTube itself is queried after you pause typing (or immediately if you press Enter). Search text is sent to YouTube.
 
-On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos**. When [Direct YouTube search](../settings/library.md) is on, it also queries YouTube for extra matches. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from home **YouTube video search**.
+On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos**. A compact **YT** control inside that box (the same default as [Direct YouTube search](../settings/library.md)) queries YouTube for extra matches from **that channel only**. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from home **YouTube video search**.
 
 ## Result sections
 
@@ -41,7 +41,7 @@ The channel header search:
 1. Matches tokens against indexed titles and descriptions (SQL, fast).
 2. Merges downloaded videos for that channel via the same library hybrid path (captions included when search indexes exist).
 3. Then looks for **related** catalog embeddings so natural-language phrasing can surface uploads that don’t share the same words.
-4. If Direct YouTube search is enabled for that channel, queries YouTube’s in-channel search and adds videos that are not already on screen. Empty dates/views on local cards are filled from those hits when known. Approximate YouTube ages (`3 years ago`) stay as that wording instead of a made-up calendar day; **Recent** sort still uses the approximate timestamp under the hood. The combined list is then sorted by **Recent** (publish date) or **Popular** (view count) using the controls at the top of the page. While that call is in flight, the feed shows a quiet **Loading YouTube results…** line.
+4. If the channel search **YT** control is on, queries YouTube’s in-channel search and adds videos that are not already on screen. Empty dates/views on local cards are filled from those hits when known. Approximate YouTube ages (`3 years ago`) stay as that wording instead of a made-up calendar day; **Recent** sort still uses the approximate timestamp under the hood. The combined list is then sorted by **Recent** (publish date) or **Popular** (view count) using the controls at the top of the page. While that call is in flight, the feed shows a quiet **Loading YouTube results…** line.
 
 Status copy shows **Searching indexed catalog…**, then **Finding related matches…** while embeddings run, plus a match count when local results settle. If the catalog is still indexing, the feed notes that results may be incomplete.
 

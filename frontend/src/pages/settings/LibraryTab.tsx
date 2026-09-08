@@ -330,7 +330,7 @@ export default function LibraryTab() {
           />
           <SettingRow
             title="Direct YouTube search"
-            description="Channel search also queries YouTube for older uploads. Search text is sent to YouTube. Each YouTube channel can override this."
+            description="Channel search also queries YouTube for older uploads. Search text is sent to YouTube. The YT control in a channel’s search box can override this."
             control={
               <div className="flex items-center gap-2">
                 <HelpTip text={DIRECT_YOUTUBE_SEARCH_TIP} />

@@ -35,9 +35,9 @@ When POT is not enough (members content you are entitled to, stubborn challenges
 
 Cookie file takes precedence over browser cookies. Browser cookies typically require host-network / local runs (harder inside a locked-down container).
 
-## Members-only videos
+## Gated videos
 
-Members-only (and similar gated) entries are **skipped** during channel catalog indexing and download flows that detect the gate. Skips are recorded in `channel_catalog_skips` so indexing does not retry forever.
+Members-only, age-restricted, and private entries are **skipped** during channel catalog indexing and download flows that detect the gate. Skips are recorded in `channel_catalog_skips` so indexing does not retry forever. Indexing **continues** with the rest of the channel; the channel page shows a toast (and the catalog `last_error`) instead of failing the whole job.
 
 You will not get those videos without valid cookies for an entitled account — and Horde will not hammer YouTube retrying them.
 

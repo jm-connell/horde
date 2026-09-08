@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useSearch } from "../context/SearchContext";
+import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import {
   useSettings,
@@ -61,6 +62,7 @@ import type { AiPane, AiProcessAction, AiProviderPane, SettingsTab } from "./set
 export default function Settings() {
   const [settings, update] = useSettings();
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const { setYoutubeVideoSearch } = useSearch();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<SettingsTab>(() => {
@@ -515,9 +517,12 @@ export default function Settings() {
         ? ["all"]
         : metadataSyncFields;
     const label = fields.includes("all") ? "all metadata" : fields.join(", ");
-    if (!confirm(`Resync ${label} for all videos with a source URL?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Resync metadata?",
+      body: `Resync ${label} for all videos with a source URL?`,
+      confirmLabel: "Resync",
+    });
+    if (!ok) return;
     setMetadataSyncing(true);
     try {
       const result = await api.refreshMetadataBulk(undefined, fields);

@@ -39,9 +39,9 @@ export const CATALOG_INDEX_TIP =
 export const CATALOG_MAX_TIP =
   "Maximum YouTube uploads to keep per channel. Values above 1000 can take a long time and may slow other YouTube work while indexing.";
 export const DIRECT_YOUTUBE_SEARCH_TIP =
-  "When on, channel search also queries YouTube for uploads that are not already in the results. Search text is sent to YouTube. YouTube-linked channels only; each channel can override this default.";
+  "When on, channel search also queries YouTube for uploads that are not already in the results. Search text is sent to YouTube. YouTube-linked channels only; the YT control in a channel’s search box can override this.";
 export const DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP =
-  "Also search YouTube for this channel. Search text is sent to YouTube. Overrides the Library default; Use default restores it.";
+  "Search this channel on YouTube. Search text is sent to YouTube.";
 export const YOUTUBE_VIDEO_SEARCH_TIP =
   "When on, Library home search can query YouTube for videos that are not already in your library or catalogs. Search text is sent to YouTube. Results load after you pause typing, or immediately if you press Enter. Separate from Direct YouTube search on channel pages.";
 export const YOUTUBE_VIDEO_SEARCH_HEADER_TIP =

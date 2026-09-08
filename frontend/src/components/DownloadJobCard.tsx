@@ -22,6 +22,7 @@ import {
 import { PRESET_LABELS, PRESET_ORDER, finishedQualityLabel, jobQualityOptions, resolveQualityPreset } from "../presets";
 import AddToPlaylist from "./AddToPlaylist";
 import ChannelPicker from "./ChannelPicker";
+import ConfirmDialog from "./ConfirmDialog";
 import ThemedSelect from "./ThemedSelect";
 import {
   applyActionRowCollapse,
@@ -145,6 +146,7 @@ export default function DownloadJobCard({
   const [showNote, setShowNote] = useState(Boolean(job.notes_pending));
   const [dismissConfirm, setDismissConfirm] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [dontAskAgain, setDontAskAgain] = useState(false);
@@ -331,7 +333,11 @@ export default function DownloadJobCard({
       setDismissConfirm(true);
       return;
     }
-    if (!confirm("Cancel this download?")) return;
+    setCancelConfirm(true);
+  };
+
+  const confirmCancel = async () => {
+    setCancelConfirm(false);
     await cancelJob(job.id);
   };
 
@@ -779,71 +785,53 @@ export default function DownloadJobCard({
         </div>
       </div>
     </div>
-    {dismissConfirm && (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-        <div className="ui-panel w-full max-w-sm rounded-xl bg-ink-900 p-5 ring-1 ring-ink-600 shadow-xl">
-          <p className="text-sm text-gray-200">
-            {isDeviceJob
-              ? "Remove this card? The temporary file on the server will be deleted."
-              : "Remove this card from the list? The video stays in your library. To delete the file, use Delete."}
-          </p>
-          <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-gray-400">
-            <input
-              type="checkbox"
-              checked={dontAskAgain}
-              onChange={(e) => setDontAskAgain(e.target.checked)}
-              className="rounded border-ink-600"
-            />
-            Don&apos;t ask again
-          </label>
-          <div className="mt-5 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setDismissConfirm(false)}
-              className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-300 hover:bg-ink-700"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={confirmDismiss}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft"
-            >
-              Remove
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-    {deleteConfirm && (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-        <div className="ui-panel w-full max-w-sm rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600">
-          <p className="text-sm text-gray-200">
-            Delete this video from your library? The file will be removed. This
-            card stays so you can redownload. Use × if you only want to hide the
-            card.
-          </p>
-          <div className="mt-5 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setDeleteConfirm(false)}
-              disabled={deleting}
-              className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-300 hover:bg-ink-700 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void confirmDeleteFromLibrary()}
-              disabled={deleting}
-              className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-400 disabled:opacity-50"
-            >
-              {deleting ? "Deleting…" : "Delete from library"}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
+    {dismissConfirm ? (
+      <ConfirmDialog
+        title="Remove this card?"
+        body={
+          isDeviceJob
+            ? "The temporary file on the server will be deleted."
+            : "The video stays in your library. To delete the file, use Delete."
+        }
+        confirmLabel="Remove"
+        onCancel={() => setDismissConfirm(false)}
+        onConfirm={() => void confirmDismiss()}
+      >
+        <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-gray-400">
+          <input
+            type="checkbox"
+            checked={dontAskAgain}
+            onChange={(e) => setDontAskAgain(e.target.checked)}
+            className="rounded border-ink-600"
+          />
+          Don&apos;t ask again
+        </label>
+      </ConfirmDialog>
+    ) : null}
+    {deleteConfirm ? (
+      <ConfirmDialog
+        title="Delete this video?"
+        body="The file will be removed from your library. This card stays so you can redownload. Use × if you only want to hide the card."
+        confirmLabel="Delete from library"
+        danger
+        busy={deleting}
+        busyLabel="Deleting…"
+        onCancel={() => {
+          if (!deleting) setDeleteConfirm(false);
+        }}
+        onConfirm={() => void confirmDeleteFromLibrary()}
+      />
+    ) : null}
+    {cancelConfirm ? (
+      <ConfirmDialog
+        title="Cancel this download?"
+        body="The download will stop. You can retry it later from this page."
+        confirmLabel="Cancel download"
+        danger
+        onCancel={() => setCancelConfirm(false)}
+        onConfirm={() => void confirmCancel()}
+      />
+    ) : null}
     </>
   );
 }

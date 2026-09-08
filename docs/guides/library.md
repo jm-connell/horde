@@ -85,7 +85,7 @@ The left sidebar lists channels from your library. Sort order is controlled in [
 
 ## Search from the library
 
-The search box on the library **home** page searches your collection (and streamable catalog hits) as you type. **YT** inside the box (also in [Settings → Library](../settings/library.md)) turns live YouTube results on or off after you pause typing, or immediately on Enter. Each result section can be collapsed; **Load more** at the bottom of **On YouTube** fetches another page. On a **channel page**, the header searches that channel’s indexed uploads and downloads instead. Full behavior is documented in [Search](search.md).
+The search box on the library **home** page searches your collection (and streamable catalog hits) as you type. **YT** inside the box (also in [Settings → Library](../settings/library.md)) turns live YouTube results on or off after you pause typing, or immediately on Enter. Each result section can be collapsed; **Load more** at the bottom of **On YouTube** fetches another page. On a **channel page**, the header searches that channel’s indexed uploads and downloads instead; **YT** in that box queries YouTube for that channel only. Full behavior is documented in [Search](search.md).
 
 ## Related settings
 

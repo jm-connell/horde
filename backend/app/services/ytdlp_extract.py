@@ -636,8 +636,10 @@ def fetch_channel_feed(
             "no_warnings": True,
             "extract_flat": "in_playlist",
             "skip_download": True,
+            "ignoreerrors": True,
             "playliststart": offset + 1,
             "playlistend": offset + limit,
+            "logger": QuietYtdlpLogger(),
             "extractor_args": youtube_extractor_args(),
         }
     )
@@ -649,18 +651,21 @@ def fetch_channel_feed(
         record_extract_failure(kind, message, url=channel_url)
         raise
 
+    raw_entries = list(info.get("entries") or [])
     entries: list[dict[str, Any]] = []
-    for entry in info.get("entries") or []:
+    for entry in raw_entries:
         mapped = _map_flat_video_entry(entry)
         if mapped is None:
             continue
         entries.append(mapped)
 
+    fetched = len(raw_entries)
     result = {
         "channel": info.get("uploader") or info.get("channel"),
         "channel_url": info.get("uploader_url") or info.get("channel_url") or channel_url,
         "entries": entries,
-        "has_more": len(entries) == limit,
+        "has_more": fetched == limit,
+        "fetched": fetched,
         "playlist_count": _playlist_count(info),
     }
     with _feed_cache_lock:

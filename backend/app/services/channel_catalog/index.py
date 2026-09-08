@@ -19,12 +19,19 @@ from ...models import (
 from .. import activity, app_settings
 from ..feed_meta_cache import parse_upload_date, published_meta_from_entry
 from ..ytdlp_common import (
+    CatalogSkipError,
+    ERROR_KIND_COOKIES,
+    ERROR_KIND_MEMBERS,
     MembersOnlyError,
     QuietYtdlpLogger,
     apply_cookie_opts,
+    catalog_skip_message,
+    classify_ytdlp_error,
     extract_info_gated,
+    is_age_restricted_entry,
     is_members_only_entry,
     is_members_only_error,
+    is_skippable_catalog_kind,
     youtube_extractor_args,
 )
 from .runtime import (
@@ -42,7 +49,6 @@ from .skips import (
     _reject_members_or_skipped,
     delete_catalog_video_row,
     purge_catalog_video,
-    record_members_only_skip,
     skipped_yt_ids,
 )
 from ..channel_autodownload import after_catalog_update, is_active_live_status
@@ -321,11 +327,32 @@ def _fetch_description(
             channel=channel,
         )
     except Exception as exc:  # noqa: BLE001
-        if is_members_only_error(exc):
-            raise MembersOnlyError(str(exc)) from exc
+        kind, _message = classify_ytdlp_error(
+            exc, url=url, title=title, channel=channel
+        )
+        if is_skippable_catalog_kind(kind) or is_members_only_error(exc):
+            skip_kind = (
+                kind if is_skippable_catalog_kind(kind) else ERROR_KIND_MEMBERS
+            )
+            raise CatalogSkipError(
+                skip_kind,
+                catalog_skip_message(
+                    skip_kind, url=url, title=title, channel=channel
+                ),
+            ) from exc
         return None, None
-    if is_members_only_entry(info):
-        raise MembersOnlyError("members-only")
+    if is_members_only_entry(info) or is_age_restricted_entry(info):
+        skip_kind = (
+            ERROR_KIND_MEMBERS
+            if is_members_only_entry(info)
+            else ERROR_KIND_COOKIES
+        )
+        raise CatalogSkipError(
+            skip_kind,
+            catalog_skip_message(
+                skip_kind, url=url, title=title, channel=channel
+            ),
+        )
     desc = info.get("description")
     if not isinstance(desc, str) or not desc.strip():
         desc_out = None
@@ -365,8 +392,22 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
             desc, published = _fetch_description(
                 row.url, title=row.title, channel=catalog.channel_name
             )
-        except MembersOnlyError:
-            purge_catalog_video(session, row)
+        except (CatalogSkipError, MembersOnlyError) as skip:
+            skip_kind = getattr(skip, "kind", ERROR_KIND_MEMBERS)
+            reason = (
+                "members_only" if skip_kind == ERROR_KIND_MEMBERS else skip_kind
+            )
+            purge_catalog_video(session, row, reason=reason)
+            if not catalog.last_error:
+                catalog.last_error = str(skip)[:500]
+                session.add(catalog)
+                session.commit()
+            _set_runtime(done=i + 1)
+            continue
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "catalog description fetch failed for %s", row.url, exc_info=True
+            )
             _set_runtime(done=i + 1)
             continue
         changed = False
@@ -410,6 +451,20 @@ def _enqueue_catalog_embeds(catalog_id: int) -> None:
                 )
     except Exception:  # noqa: BLE001
         logger.debug("catalog embed enqueue skipped", exc_info=True)
+
+
+def _note_catalog_warning(catalog_id: int, message: str) -> None:
+    text = (message or "").strip()[:500]
+    if not text:
+        return
+    with Session(engine) as session:
+        catalog = session.get(ChannelCatalog, catalog_id)
+        if catalog is None or catalog.last_error:
+            return
+        catalog.last_error = text
+        catalog.updated_at = utcnow()
+        session.add(catalog)
+        session.commit()
 
 
 def index_catalog(catalog_id: int) -> None:
@@ -457,10 +512,34 @@ def index_catalog(catalog_id: int) -> None:
         position = 0
         reached_end = False
         channel_total: Optional[int] = None
+        listing_skips = 0
         while position < max_videos and not should_stop():
             limit = min(_PAGE_SIZE, max_videos - position)
-            data = _fetch_flat_page(channel_url, offset=offset, limit=limit)
+            try:
+                data = _fetch_flat_page(channel_url, offset=offset, limit=limit)
+            except Exception as exc:  # noqa: BLE001
+                kind, _message = classify_ytdlp_error(
+                    exc, url=channel_url, channel=channel_name
+                )
+                if not is_skippable_catalog_kind(kind):
+                    raise
+                listing_skips += 1
+                _note_catalog_warning(
+                    catalog_id,
+                    catalog_skip_message(
+                        kind, url=channel_url, channel=channel_name
+                    ),
+                )
+                if listing_skips >= 3:
+                    reached_end = True
+                    break
+                offset += limit
+                time.sleep(0.35)
+                continue
+            listing_skips = 0
             entries = data.get("entries") or []
+            raw_fetched = data.get("fetched")
+            fetched = int(raw_fetched) if raw_fetched is not None else len(entries)
             if data.get("channel") and not channel_name:
                 channel_name = data.get("channel")
             pc = data.get("playlist_count")
@@ -503,10 +582,10 @@ def index_catalog(catalog_id: int) -> None:
                 detail=f"{channel_name or channel_url} · listing videos",
                 label="Indexing channel catalog",
             )
-            if not entries or not data.get("has_more"):
+            if fetched <= 0 or not data.get("has_more"):
                 reached_end = True
                 break
-            offset += len(entries)
+            offset += fetched
             # Brief yield so downloads/previews can use the extract gate.
             time.sleep(0.35)
 
@@ -542,6 +621,12 @@ def index_catalog(catalog_id: int) -> None:
             if catalog is None:
                 act.discard()
                 return
+            count = session.exec(
+                select(func.count(ChannelCatalogVideo.id)).where(
+                    ChannelCatalogVideo.catalog_id == catalog_id
+                )
+            ).one()
+            catalog.indexed_count = int(count or 0)
             catalog.complete = bool(
                 reached_end
                 or (
@@ -555,7 +640,6 @@ def index_catalog(catalog_id: int) -> None:
             catalog.phase = "embed"
             catalog.finished_at = utcnow()
             catalog.updated_at = utcnow()
-            catalog.last_error = None
             session.add(catalog)
             session.commit()
 
@@ -577,18 +661,21 @@ def index_catalog(catalog_id: int) -> None:
                 session.commit()
         act.finish(detail=channel_name or channel_url)
     except Exception as exc:  # noqa: BLE001
+        _kind, message = classify_ytdlp_error(
+            exc, url=channel_url, channel=channel_name
+        )
         logger.warning("Catalog index failed for %s: %s", channel_url, exc)
         with Session(engine) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is not None:
                 catalog.status = ChannelCatalogStatus.error
-                catalog.last_error = str(exc)[:500]
+                catalog.last_error = message[:500]
                 catalog.phase = None
                 catalog.finished_at = utcnow()
                 catalog.updated_at = utcnow()
                 session.add(catalog)
                 session.commit()
-        act.finish(status="failed", error=str(exc)[:500])
+        act.finish(status="failed", error=message[:500])
     finally:
         if not act._closed:
             act.discard()
