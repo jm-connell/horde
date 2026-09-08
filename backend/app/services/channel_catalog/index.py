@@ -20,15 +20,13 @@ from .. import activity, app_settings
 from ..feed_meta_cache import parse_upload_date, published_meta_from_entry
 from ..ytdlp_common import (
     CatalogSkipError,
-    ERROR_KIND_COOKIES,
     ERROR_KIND_MEMBERS,
     MembersOnlyError,
     QuietYtdlpLogger,
-    apply_cookie_opts,
     catalog_skip_message,
     classify_ytdlp_error,
+    cookie_configured,
     extract_info_gated,
-    is_age_restricted_entry,
     is_members_only_entry,
     is_members_only_error,
     is_skippable_catalog_kind,
@@ -85,6 +83,8 @@ def _upsert_flat_entries(
     catalog: ChannelCatalog,
     entries: list[dict[str, Any]],
     start_position: int,
+    *,
+    allow_gated: bool = False,
 ) -> tuple[int, list[str]]:
     """Upsert flat entries starting at start_position. Returns (next position, new yt ids)."""
     pos = start_position
@@ -92,7 +92,7 @@ def _upsert_flat_entries(
     skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
     for raw in entries:
         rejected = _reject_members_or_skipped(
-            session, catalog, raw, skipped=skipped
+            session, catalog, raw, skipped=skipped, allow_gated=allow_gated
         )
         if rejected is not None:
             skipped.add(rejected)
@@ -309,15 +309,13 @@ def _fetch_description(
     channel: Optional[str] = None,
 ) -> tuple[Optional[str], Optional[str]]:
     """Full extract for description; also returns published_at when yt-dlp has it."""
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "skip_download": True,
-            "logger": QuietYtdlpLogger(),
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "logger": QuietYtdlpLogger(),
+        "extractor_args": youtube_extractor_args(),
+    }
     try:
         info = extract_info_gated(
             url,
@@ -341,18 +339,6 @@ def _fetch_description(
                 ),
             ) from exc
         return None, None
-    if is_members_only_entry(info) or is_age_restricted_entry(info):
-        skip_kind = (
-            ERROR_KIND_MEMBERS
-            if is_members_only_entry(info)
-            else ERROR_KIND_COOKIES
-        )
-        raise CatalogSkipError(
-            skip_kind,
-            catalog_skip_message(
-                skip_kind, url=url, title=title, channel=channel
-            ),
-        )
     desc = info.get("description")
     if not isinstance(desc, str) or not desc.strip():
         desc_out = None
@@ -381,7 +367,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
     for i, row in enumerate(rows):
         if should_stop():
             return
-        if is_members_only_entry({"title": row.title}):
+        if is_members_only_entry({"title": row.title}) and not cookie_configured():
             purge_catalog_video(session, row)
             _set_runtime(done=i + 1)
             continue
@@ -555,7 +541,11 @@ def index_catalog(catalog_id: int) -> None:
                 if channel_total is not None:
                     catalog.channel_total = channel_total
                 position, new_ids = _upsert_flat_entries(
-                    session, catalog, entries, position
+                    session,
+                    catalog,
+                    entries,
+                    position,
+                    allow_gated=cookie_configured(),
                 )
                 catalog.indexed_count = position
                 catalog.updated_at = utcnow()

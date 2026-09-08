@@ -26,7 +26,11 @@ If the sidecar is down, downloads and previews may fail with bot-check style err
 
 ## Cookie fallbacks
 
-When POT is not enough (members content you are entitled to, stubborn challenges, age gates):
+Cookies identify a signed-in YouTube account, so Horde **does not send them on ordinary requests** (channel feeds, search, public downloads, public index extracts). When cookies are configured they are a **per-video fallback**:
+
+1. Try the download or per-video index extract anonymously (PO token still applies).
+2. If YouTube blocks that one video as **age-restricted**, **members-only**, or similar login-required, retry **that action only** with cookies.
+3. Bot checks still go through the POT sidecar — cookies are not attached to clear a bot challenge.
 
 | Variable | Behavior |
 |----------|----------|
@@ -37,9 +41,11 @@ Cookie file takes precedence over browser cookies. Browser cookies typically req
 
 ## Gated videos
 
-Members-only, age-restricted, and private entries are **skipped** during channel catalog indexing and download flows that detect the gate. Skips are recorded in `channel_catalog_skips` so indexing does not retry forever. Indexing **continues** with the rest of the channel; the channel page shows a toast (and the catalog `last_error`) instead of failing the whole job.
+Channel **listings** (feeds, search, playlist pages) stay anonymous. Members-only / age-restricted entries are skipped on those lists unless cookies are configured (so you can try a download). A **full catalog index** keeps gated rows when cookies exist so the per-video description pass can retry with cookies after an anonymous block. Casual feed-head sync still skips them so browsing a channel does not attach cookies.
 
-You will not get those videos without valid cookies for an entitled account — and Horde will not hammer YouTube retrying them.
+Downloads, stream preview, metadata refresh, and that description pass try anonymously first, then retry **that video** once with cookies. If the account still cannot watch it, the video is skipped (`channel_catalog_skips`) and indexing continues; the channel page shows a toast (and the catalog `last_error`) instead of failing the whole job.
+
+You will not get those videos without valid cookies for an entitled account. After an anonymous block, Horde retries **that video** once with cookies (if configured) and then records a skip so indexing does not hammer YouTube.
 
 ## Extract gate (bot-check hygiene)
 

@@ -13,7 +13,7 @@ from ..database import engine
 from ..models import Video
 from . import activity, library
 from .thumbnails import save_from_url
-from .ytdlp_common import apply_cookie_opts, youtube_extractor_args
+from .ytdlp_common import extract_info_gated, youtube_extractor_args
 from .ytdlp_extract import _list_thumbnail_url
 
 SyncField = Literal["views", "thumbnails", "captions", "titles_descriptions", "all"]
@@ -45,18 +45,13 @@ def _set_job(**kwargs: Any) -> None:
 
 
 def _extract_metadata(url: str) -> dict[str, Any]:
-    import yt_dlp
-
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "skip_download": True,
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extractor_args": youtube_extractor_args(),
+    }
+    info = extract_info_gated(url, opts, cache_key=f"meta-sync:{url}")
     return info or {}
 
 

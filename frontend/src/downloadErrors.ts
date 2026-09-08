@@ -25,10 +25,10 @@ const LABELS: Record<string, string> = {
 
 const HINTS: Record<string, string> = {
   members: "Member videos can't be downloaded without a signed-in account that has membership.",
-  bot: "Check PO token health and cookies (Settings → System / YouTube access docs).",
+  bot: "Check PO token health (Settings → System / YouTube access docs). Cookies are not sent for bot checks.",
   pot: "Ensure bgutil-pot is running and YTDLP_POT_BASE_URL is reachable.",
   cookies:
-    "Public videos don't need cookies. Age-restricted, members-only, and private videos do — and that requires a signed-in account, which is not anonymous.",
+    "Horde retries this video with cookies after an anonymous block. If it still failed, the signed-in account does not have access.",
   rate_limit: "Wait and retry; avoid bursty browsing while downloads run.",
   unavailable: "The source may have removed or geo-blocked this video.",
   postprocess: "The file may still be salvageable — retry or check disk permissions.",

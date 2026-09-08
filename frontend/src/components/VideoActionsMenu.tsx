@@ -4,6 +4,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 import { extractYouTubeId } from "../hooks/useSponsorBlock";
+import { MenuScroll } from "./MenuFlyout";
 import type { Video } from "../types";
 import { effectiveSourceUrl } from "../utils";
 
@@ -98,81 +99,83 @@ export default function VideoActionsMenu({
       </button>
       {/* align left = panel extends to the right of the trigger */}
       <FlipMenuPanel open={open} flip={flip} align="left" className="w-52">
-        <button
-          onClick={() => {
-            onEdit();
-            setOpen(false);
-          }}
-          className={itemClass}
-        >
-          Edit details
-        </button>
-        <button
-          onClick={() => {
-            onAddNote();
-            setOpen(false);
-          }}
-          className={itemClass}
-        >
-          Add note
-        </button>
-        <button
-          onClick={() => {
-            update({ autoplayRelated: !settings.autoplayRelated });
-            setOpen(false);
-          }}
-          className={itemClass}
-        >
-          Autoplay related {settings.autoplayRelated ? "✓" : ""}
-        </button>
-        <button onClick={refreshTags} className={itemClass}>
-          Refresh tags (AI)
-        </button>
-        {canChangeResolution && (
+        <MenuScroll className="max-h-[min(24rem,calc(100vh-2rem))]">
           <button
             onClick={() => {
-              onChangeResolution();
+              onEdit();
               setOpen(false);
             }}
             className={itemClass}
           >
-            Change resolution
+            Edit details
           </button>
-        )}
-        {canNormalize && (
           <button
             onClick={() => {
-              onNormalizeVolume?.();
+              onAddNote();
               setOpen(false);
             }}
             className={itemClass}
           >
-            Normalize volume
+            Add note
           </button>
-        )}
-        <button onClick={downloadFile} className={itemClass}>
-          Download file
-        </button>
-        {video.source_url && (
-          <a
-            href={video.source_url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => setOpen(false)}
+          <button
+            onClick={() => {
+              update({ autoplayRelated: !settings.autoplayRelated });
+              setOpen(false);
+            }}
             className={itemClass}
           >
-            {sourceLinkLabel(video)}
-          </a>
-        )}
-        <button
-          onClick={() => {
-            setOpen(false);
-            onDelete();
-          }}
-          className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
-        >
-          Delete
-        </button>
+            Autoplay related {settings.autoplayRelated ? "✓" : ""}
+          </button>
+          <button onClick={refreshTags} className={itemClass}>
+            Refresh tags (AI)
+          </button>
+          {canChangeResolution && (
+            <button
+              onClick={() => {
+                onChangeResolution();
+                setOpen(false);
+              }}
+              className={itemClass}
+            >
+              Change resolution
+            </button>
+          )}
+          {canNormalize && (
+            <button
+              onClick={() => {
+                onNormalizeVolume?.();
+                setOpen(false);
+              }}
+              className={itemClass}
+            >
+              Normalize volume
+            </button>
+          )}
+          <button onClick={downloadFile} className={itemClass}>
+            Download file
+          </button>
+          {video.source_url && (
+            <a
+              href={video.source_url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setOpen(false)}
+              className={itemClass}
+            >
+              {sourceLinkLabel(video)}
+            </a>
+          )}
+          <button
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+            className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
+          >
+            Delete
+          </button>
+        </MenuScroll>
       </FlipMenuPanel>
     </div>
   );

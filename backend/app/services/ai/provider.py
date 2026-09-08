@@ -488,6 +488,8 @@ class OpenRouterProvider:
             return []
         out: list[dict[str, Any]] = []
         for row in rows:
+            if not is_openrouter_text_llm(row):
+                continue
             parsed = parse_openrouter_catalog_row(row)
             if parsed:
                 out.append(parsed)
@@ -783,6 +785,53 @@ def usd_per_million(raw: Any) -> Optional[float]:
     if per_token < 0 or per_token != per_token:
         return None
     return round(per_token * 1_000_000.0, 6)
+
+
+_NON_TEXT_OUTPUT = frozenset({"image", "audio", "video", "embeddings", "embedding"})
+
+
+def is_openrouter_text_llm(row: Any) -> bool:
+    """True when the model can do Horde's text chat workload.
+
+    Vision models that also accept images are kept (we only send text).
+    Image/audio generators, TTS/music, and embedding models are excluded.
+    Rows without architecture metadata are kept so older payloads still work.
+    """
+    if not isinstance(row, dict):
+        return False
+    arch = row.get("architecture")
+    if not isinstance(arch, dict):
+        return True
+    outputs = arch.get("output_modalities")
+    if isinstance(outputs, list) and outputs:
+        out_set = {
+            str(x).strip().lower()
+            for x in outputs
+            if x is not None and str(x).strip()
+        }
+        if "text" not in out_set or out_set & _NON_TEXT_OUTPUT:
+            return False
+        inputs = arch.get("input_modalities")
+        if isinstance(inputs, list) and inputs:
+            in_set = {
+                str(x).strip().lower()
+                for x in inputs
+                if x is not None and str(x).strip()
+            }
+            if in_set and "text" not in in_set:
+                return False
+        return True
+    modality = str(arch.get("modality") or "").strip().lower()
+    if not modality or "->" not in modality:
+        return True
+    left, right = modality.split("->", 1)
+    in_parts = {p.strip() for p in left.split("+") if p.strip()}
+    out_parts = {p.strip() for p in right.split("+") if p.strip()}
+    if "text" not in in_parts or "text" not in out_parts:
+        return False
+    if out_parts & _NON_TEXT_OUTPUT:
+        return False
+    return True
 
 
 def parse_openrouter_catalog_row(row: Any) -> Optional[dict[str, Any]]:

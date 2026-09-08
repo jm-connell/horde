@@ -1,6 +1,6 @@
 import { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
-import { UI_MENU_SURFACE } from "../uiMenu";
+import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import type { Playlist } from "../types";
 
 export default function LibraryBulkBar({
@@ -79,25 +79,31 @@ export default function LibraryBulkBar({
             >
               + Playlist
             </button>
-            {playlistOpen && (
-              <div
-                className={`absolute bottom-10 left-0 z-50 w-56 p-2 ${UI_MENU_SURFACE}`}
+            <MenuFlyout
+              open={playlistOpen}
+              className="absolute bottom-10 left-0 z-50 w-56"
+            >
+              <MenuScroll
+                className="max-h-56"
+                revision={playlists.length}
               >
                 {playlists.length === 0 ? (
-                  <p className="px-2 py-1 text-xs text-gray-500">No playlists yet.</p>
+                  <p className="px-3 py-2 text-xs text-gray-500">
+                    No playlists yet.
+                  </p>
                 ) : (
                   playlists.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => onAddToPlaylist(p.id)}
-                      className="block w-full truncate rounded px-2 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
+                      className="block w-full truncate px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
                     >
                       {p.name}
                     </button>
                   ))
                 )}
-              </div>
-            )}
+              </MenuScroll>
+            </MenuFlyout>
           </div>
 
           <div className="relative">
@@ -107,32 +113,33 @@ export default function LibraryBulkBar({
             >
               Add note
             </button>
-            {bulkNoteOpen && (
-              <div
-                className={`absolute bottom-10 left-0 z-50 w-72 p-3 ${UI_MENU_SURFACE}`}
-              >
-                <div className="mb-1 flex items-baseline justify-between gap-2">
-                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Note
-                  </span>
+            <MenuFlyout
+              open={bulkNoteOpen}
+              className="absolute bottom-10 left-0 z-50 w-72"
+            >
+                <div className="p-3">
+                  <div className="mb-1 flex items-baseline justify-between gap-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Note
+                    </span>
+                  </div>
+                  <textarea
+                    value={bulkNote}
+                    onChange={(e) => onNoteChange(e.target.value)}
+                    rows={3}
+                    placeholder="Note to apply to all selected..."
+                    className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    autoFocus
+                  />
+                  <button
+                    onClick={onSaveNote}
+                    disabled={!bulkNote.trim()}
+                    className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-40"
+                  >
+                    Apply to {selectedCount} video{selectedCount === 1 ? "" : "s"}
+                  </button>
                 </div>
-                <textarea
-                  value={bulkNote}
-                  onChange={(e) => onNoteChange(e.target.value)}
-                  rows={3}
-                  placeholder="Note to apply to all selected..."
-                  className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                  autoFocus
-                />
-                <button
-                  onClick={onSaveNote}
-                  disabled={!bulkNote.trim()}
-                  className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-40"
-                >
-                  Apply to {selectedCount} video{selectedCount === 1 ? "" : "s"}
-                </button>
-              </div>
-            )}
+              </MenuFlyout>
           </div>
 
           <button

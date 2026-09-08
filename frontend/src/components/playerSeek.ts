@@ -1,17 +1,11 @@
-/** Hit-testing helpers for the player seek bar vs. caption overlay. */
+/** Seek-bar geometry helpers, including caption clearance while chrome is up. */
 
-export function pointInClientRect(
-  clientX: number,
-  clientY: number,
-  rect: { left: number; right: number; top: number; bottom: number }
-): boolean {
-  return (
-    clientX >= rect.left &&
-    clientX <= rect.right &&
-    clientY >= rect.top &&
-    clientY <= rect.bottom
-  );
-}
+export type ClientBox = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
 
 export function scrubPositionFromClientX(
   clientX: number,
@@ -23,13 +17,56 @@ export function scrubPositionFromClientX(
   return { time: ratio * duration, pct: ratio * 100 };
 }
 
-/** Captions sit above the chrome; only the seek strip should steal that click. */
-export function shouldPassthroughSeek(
-  clientX: number,
-  clientY: number,
-  seekRect: { left: number; right: number; top: number; bottom: number } | null,
-  controlsVisible: boolean
+/** Breathing room between lifted captions and the seek bar. */
+export const CAPTION_TIMELINE_GAP_PX = 8;
+
+/** Lift only while chrome is up, not during a drag or right after placing. */
+export function captionLiftActive(
+  controlsVisible: boolean,
+  dragging: boolean,
+  holdOffUntilChromeHide: boolean
 ): boolean {
-  if (!controlsVisible || !seekRect) return false;
-  return pointInClientRect(clientX, clientY, seekRect);
+  return controlsVisible && !dragging && !holdOffUntilChromeHide;
+}
+
+/**
+ * Pixels to translate captions up so they sit above the seek bar while chrome
+ * is visible. Uses the resting (untransformed) caption box. Zero when the UI
+ * is hidden, the user is placing captions, or they already clear the timeline.
+ */
+export function captionTimelineLiftPx(
+  caption: ClientBox | null,
+  timeline: Pick<ClientBox, "left" | "right" | "top"> | null,
+  controlsVisible: boolean,
+  gapPx = CAPTION_TIMELINE_GAP_PX
+): number {
+  if (!controlsVisible || !caption || !timeline) return 0;
+  if (caption.right <= timeline.left || caption.left >= timeline.right) {
+    return 0;
+  }
+  const overlap = caption.bottom - timeline.top;
+  if (overlap <= 0) return 0;
+  return Math.ceil(overlap + gapPx);
+}
+
+/** Layout box from offset* (ignores CSS transform, unlike getBoundingClientRect). */
+export function layoutBoxFromOffsets(
+  parentViewport: { left: number; top: number },
+  parentClientLeft: number,
+  parentClientTop: number,
+  el: {
+    offsetLeft: number;
+    offsetTop: number;
+    offsetWidth: number;
+    offsetHeight: number;
+  }
+): ClientBox {
+  const left = parentViewport.left + parentClientLeft + el.offsetLeft;
+  const top = parentViewport.top + parentClientTop + el.offsetTop;
+  return {
+    left,
+    right: left + el.offsetWidth,
+    top,
+    bottom: top + el.offsetHeight,
+  };
 }

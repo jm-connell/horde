@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { MenuScroll } from "./MenuFlyout";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 import type { Playlist } from "../types";
 
@@ -80,23 +81,23 @@ export default function AddToPlaylist({
           {status}
         </span>
       )}
-      <FlipMenuPanel open={open} flip={flip} align="left" className="w-64 p-2">
-        <div className="max-h-48 overflow-y-auto">
+      <FlipMenuPanel open={open} flip={flip} align="left" className="w-64">
+        <MenuScroll className="max-h-48" revision={playlists.length}>
           {playlists.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-gray-500">No playlists yet.</p>
+            <p className="px-3 py-2 text-xs text-gray-500">No playlists yet.</p>
           ) : (
             playlists.map((p) => (
               <button
                 key={p.id}
                 onClick={() => add(p.id, p.name)}
-                className="block w-full truncate rounded px-2 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
+                className="block w-full truncate px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
               >
                 {p.name}
               </button>
             ))
           )}
-        </div>
-        <div className="mt-2 flex gap-1 border-t border-ink-700 pt-2">
+        </MenuScroll>
+        <div className="flex gap-1 border-t border-ink-700 p-2">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}

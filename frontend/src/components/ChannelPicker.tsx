@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UI_MENU_SURFACE } from "../uiMenu";
 import type { ChannelStat } from "../types";
+import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import ThemedSelect from "./ThemedSelect";
 
 interface Props {
@@ -219,28 +219,31 @@ function Combobox({
           Tab · {tabSuggestion}
         </p>
       )}
-      {open && matches.length > 0 && (
-        <ul
-          className={`absolute z-20 mt-1 max-h-60 w-full overflow-auto py-1 ${UI_MENU_SURFACE}`}
-        >
-          {matches.slice(0, 50).map((name, i) => (
-            <li key={name}>
-              <button
-                type="button"
-                onMouseEnter={() => setHighlight(i)}
-                onClick={() => accept(name)}
-                className={`block w-full px-3 py-2 text-left text-sm ${
-                  i === highlight
-                    ? "bg-ink-700 text-accent"
-                    : "text-gray-200 hover:bg-ink-700"
-                }`}
-              >
-                {name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <MenuFlyout
+        open={open && matches.length > 0}
+        className="absolute z-20 mt-1 w-full"
+      >
+        <MenuScroll className="max-h-60" revision={matches.length}>
+          <ul>
+            {matches.slice(0, 50).map((name, i) => (
+              <li key={name}>
+                <button
+                  type="button"
+                  onMouseEnter={() => setHighlight(i)}
+                  onClick={() => accept(name)}
+                  className={`block w-full px-3 py-2 text-left text-sm ${
+                    i === highlight
+                      ? "bg-ink-700 text-accent"
+                      : "text-gray-200 hover:bg-ink-700"
+                  }`}
+                >
+                  {name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </MenuScroll>
+      </MenuFlyout>
     </div>
   );
 }

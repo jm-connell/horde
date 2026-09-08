@@ -461,6 +461,8 @@ video.sub-large::cue {
   box-sizing: border-box;
   /* Player chrome uses leading-none; don't inherit that or glyphs clip. */
   line-height: 1.35;
+  /* Lift above the timeline while chrome is visible; drop when it fades. */
+  transition: transform 300ms ease-out;
 }
 
 .subtitle-overlay-draggable {
@@ -473,6 +475,13 @@ video.sub-large::cue {
 
 .subtitle-overlay-dragging {
   cursor: grabbing;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subtitle-overlay {
+    transition: none;
+  }
 }
 
 .subtitle-overlay-clip {

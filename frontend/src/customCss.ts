@@ -72,7 +72,7 @@ export const CSS_SELECTORS: CssHookRow[] = [
   { selector: ".ui-card", meaning: "Hoverable cards (library, playlists)" },
   { selector: ".ui-interactive", meaning: "Buttons and clickable chrome" },
   { selector: ".horde-scrollbar", meaning: "Themed overlay scroll areas" },
-  { selector: ".horde-meta-scrollbar", meaning: "Watch description/chapters and settings activity native scrollbar (hidden; overlay thumb on hover/scroll)" },
+  { selector: ".horde-meta-scrollbar", meaning: "Watch description/chapters, dropdown lists, and settings activity native scrollbar (hidden; overlay thumb on hover/scroll)" },
   { selector: ".horde-overlay-scroll-thumb", meaning: "Solid accent overlay scroll pill (page, description, chapters)" },
 ];
 

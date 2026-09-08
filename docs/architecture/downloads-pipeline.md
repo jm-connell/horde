@@ -9,7 +9,7 @@ URL
   -> url_clean (normalize / strip tracking)
     -> enqueue DownloadJob (destination: library | device)
     -> worker slot (MAX_DOWNLOAD_CONCURRENCY)
-    -> yt-dlp download (POT + cookies, quality preset)
+    -> yt-dlp download (POT; cookies only after an age/members block, quality preset)
     -> library: Channel/YYYY/Title [id].ext
        device:  _device/{job_id}/Title [id].ext (ephemeral)
     -> optional loudnorm (.norm intermediate)
@@ -48,7 +48,7 @@ Download-related code is split for maintainability (façades may still re-export
   %(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s
   ```
 
-- Extractor args use yt-dlp’s default YouTube player clients minus `android_vr` (those CDN URLs now 403 after ~60s of range requests). bgutil POT is attached when `YTDLP_POT_BASE_URL` is set; cookies via [YouTube access](../ops/youtube-access.md).
+- Extractor args use yt-dlp’s default YouTube player clients minus `android_vr` (those CDN URLs now 403 after ~60s of range requests). bgutil POT is attached when `YTDLP_POT_BASE_URL` is set. Cookies (see [YouTube access](../ops/youtube-access.md)) stay off until a specific video is blocked as age-restricted or members-only; that one extract/download is retried with cookies.
 - Metadata extracts for downloads share the same global extract gate (1 + 1.25s spacing) as preview/feed extracts so concurrent browsing does not stampede YouTube.
 - Progress hooks update an in-memory `progress_store` consumed by SSE. Percent is combined downloaded bytes over the combined format size (video+audio), not yt-dlp’s per-chunk `total_bytes`. Intermediate `*.f401.mp4` / `.part` finishes stay in `downloading`. yt-dlp merge/remux postprocessors and Horde’s MP4 compat / transcode / loudnorm steps flip to `processing` with a `stage` token (`merging`, `encoding_audio`, `remuxing`, `transcoding`, `normalizing`) so the Download UI can name the current step.
 - Preview `preset_sizes` walk the same `format_chain` + `format_sort` as the downloader and sum each selected format’s components (`filesize` / `filesize_approx` / bitrate×duration), so 4K DASH is not labeled with a progressive mux or audio-only size.

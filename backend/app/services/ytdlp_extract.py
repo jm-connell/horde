@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 from .ytdlp_common import (
     MembersOnlyError,
     QuietYtdlpLogger,
-    apply_cookie_opts,
     classify_ytdlp_error,
+    cookie_configured,
+    extract_has_media,
     extract_info_gated,
     is_members_only_entry,
     is_members_only_error,
@@ -187,14 +188,12 @@ def _estimate_preset_sizes(
     if not formats:
         return sizes
     codec = default_download_video_codec()
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "skip_download": True,
-            "format_sort": format_sort_for("best", codec),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "format_sort": format_sort_for("best", codec),
+    }
     work = {**info, "formats": list(formats)}
     with yt_dlp.YoutubeDL(opts) as ydl:
         try:
@@ -216,16 +215,14 @@ def _estimate_preset_sizes(
 
 
 def extract_preview(url: str) -> dict[str, Any]:
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "skip_download": True,
-            "extract_flat": "in_playlist",
-            "logger": QuietYtdlpLogger(),
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": "in_playlist",
+        "logger": QuietYtdlpLogger(),
+        "extractor_args": youtube_extractor_args(),
+    }
     try:
         info = _as_info(extract_info_gated(url, opts, cache_key=f"preview:{url}"))
     except Exception as exc:  # noqa: BLE001
@@ -233,7 +230,7 @@ def extract_preview(url: str) -> dict[str, Any]:
             _purge_members_only_url(url)
             raise MembersOnlyError("Members-only video — skipped") from exc
         raise
-    if is_members_only_entry(info):
+    if is_members_only_entry(info) and not extract_has_media(info):
         yt_id = info.get("id")
         if yt_id:
             _purge_members_only_yt_id(str(yt_id))
@@ -287,15 +284,13 @@ def extract_playlist_entries(url: str) -> dict[str, Any]:
     """Fast flat extraction of playlist metadata and entry list."""
     import yt_dlp
 
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": "in_playlist",
-            "skip_download": True,
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "extractor_args": youtube_extractor_args(),
+    }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = _as_info(ydl.extract_info(url, download=False))
 
@@ -303,7 +298,9 @@ def extract_playlist_entries(url: str) -> dict[str, Any]:
     for entry in info.get("entries") or []:
         if not isinstance(entry, dict):
             continue
-        if is_members_only_entry(entry) or is_youtube_short_entry(entry):
+        if is_youtube_short_entry(entry):
+            continue
+        if is_members_only_entry(entry) and not cookie_configured():
             continue
         entry_url = entry.get("url") or entry.get("webpage_url")
         vid = entry.get("id")
@@ -526,7 +523,9 @@ def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
     """Normalize a flat yt-dlp playlist entry into catalog/feed fields."""
     if not isinstance(entry, dict):
         return None
-    if is_members_only_entry(entry) or is_youtube_playlist_entry(entry):
+    if is_youtube_playlist_entry(entry):
+        return None
+    if is_members_only_entry(entry) and not cookie_configured():
         return None
     if is_youtube_short_entry(entry):
         return None
@@ -630,19 +629,17 @@ def fetch_channel_feed(
         if cached and now - cached[0] < _FEED_CACHE_TTL_SEC:
             return cached[1]
 
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": "in_playlist",
-            "skip_download": True,
-            "ignoreerrors": True,
-            "playliststart": offset + 1,
-            "playlistend": offset + limit,
-            "logger": QuietYtdlpLogger(),
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "ignoreerrors": True,
+        "playliststart": offset + 1,
+        "playlistend": offset + limit,
+        "logger": QuietYtdlpLogger(),
+        "extractor_args": youtube_extractor_args(),
+    }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = _as_info(ydl.extract_info(feed_url, download=False))
@@ -691,15 +688,13 @@ def estimate_playlist_sizes(
 def extract_playlist(url: str) -> tuple[str, list[str]]:
     import yt_dlp
 
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": "in_playlist",
-            "skip_download": True,
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "extractor_args": youtube_extractor_args(),
+    }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = _as_info(ydl.extract_info(url, download=False))
 
@@ -732,21 +727,22 @@ def search_youtube_channel_videos(
     search_url = channel_search_url(channel_url, q)
     # Over-fetch: channel search interleaves Shorts and playlists with videos.
     fetch_n = min(80, max(limit * 4, 40))
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": "in_playlist",
-            "skip_download": True,
-            "playlistend": fetch_n,
-            "logger": QuietYtdlpLogger(),
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "playlistend": fetch_n,
+        "logger": QuietYtdlpLogger(),
+        "extractor_args": youtube_extractor_args(),
+    }
     try:
         info = _as_info(
             extract_info_gated(
-                search_url, opts, cache_key=f"channel-search:v2:{search_url}:{fetch_n}"
+                search_url,
+                opts,
+                cache_key=f"channel-search:v2:{search_url}:{fetch_n}",
+                cookie_retry=False,
             )
         )
     except Exception:  # noqa: BLE001
@@ -808,21 +804,22 @@ def search_youtube_videos(
     offset = max(0, min(int(offset or 0), _YT_SEARCH_FETCH_MAX))
     fetch_n = youtube_search_fetch_n(offset=offset, limit=limit)
     search_url = youtube_video_search_url(q, fetch_n=fetch_n)
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": "in_playlist",
-            "skip_download": True,
-            "playlistend": fetch_n,
-            "logger": QuietYtdlpLogger(),
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "playlistend": fetch_n,
+        "logger": QuietYtdlpLogger(),
+        "extractor_args": youtube_extractor_args(),
+    }
     try:
         info = _as_info(
             extract_info_gated(
-                search_url, opts, cache_key=f"yt-video-search:v2:{q}:{fetch_n}"
+                search_url,
+                opts,
+                cache_key=f"yt-video-search:v2:{q}:{fetch_n}",
+                cookie_retry=False,
             )
         )
     except Exception:  # noqa: BLE001
@@ -871,16 +868,14 @@ def search_youtube_channels(query: str, *, limit: int = 8) -> list[dict[str, Any
         + urllib.parse.quote(q)
         + "&sp=EgIQAg%253D%253D"
     )
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": "in_playlist",
-            "skip_download": True,
-            "playlistend": limit,
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "playlistend": limit,
+        "extractor_args": youtube_extractor_args(),
+    }
     results: list[dict[str, Any]] = []
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:

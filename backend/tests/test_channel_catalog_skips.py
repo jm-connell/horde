@@ -86,6 +86,60 @@ def test_upsert_skips_age_restricted_and_keeps_public(session):
     assert titles == ["Public match"]
 
 
+def test_upsert_keeps_age_restricted_when_allow_gated(session):
+    catalog = _catalog(session)
+    pos, inserted = _upsert_flat_entries(
+        session,
+        catalog,
+        [
+            {
+                "id": "pub11111111",
+                "url": "https://www.youtube.com/watch?v=pub11111111",
+                "title": "Public match",
+            },
+            {
+                "id": "age11111111",
+                "url": "https://www.youtube.com/watch?v=age11111111",
+                "title": "Gated clip",
+                "availability": "age_restricted",
+            },
+        ],
+        0,
+        allow_gated=True,
+    )
+    assert inserted == ["pub11111111", "age11111111"]
+    assert pos == 2
+    assert skipped_yt_ids(session, catalog.id) == set()
+
+
+def test_description_pass_keeps_unlocked_age_restricted(session, monkeypatch):
+    catalog = _catalog(session)
+    gated = _video(
+        session, catalog, yt_id="age11111111", title="Gated clip", position=0
+    )
+
+    def fake_extract(url, opts, **_kwargs):
+        assert "cookiefile" not in opts
+        assert "cookiesfrombrowser" not in opts
+        return {
+            "id": gated.yt_id,
+            "description": "unlocked with cookies at extract layer",
+            "availability": "age_restricted",
+        }
+
+    monkeypatch.setattr(
+        "app.services.channel_catalog.index.extract_info_gated", fake_extract
+    )
+
+    _run_description_pass(session, catalog)
+    row = session.exec(
+        select(ChannelCatalogVideo).where(ChannelCatalogVideo.yt_id == gated.yt_id)
+    ).first()
+    assert row is not None
+    assert row.description == "unlocked with cookies at extract layer"
+    assert session.exec(select(ChannelCatalogSkip)).first() is None
+
+
 def test_description_pass_skips_cookies_error_and_continues(session, monkeypatch):
     catalog = _catalog(session)
     gated = _video(
@@ -230,6 +284,8 @@ def test_fetch_channel_feed_ignores_per_video_errors(monkeypatch):
         "https://www.youtube.com/@karrigan", offset=0, limit=2
     )
     assert captured.get("ignoreerrors") is True
+    assert "cookiefile" not in captured
+    assert "cookiesfrombrowser" not in captured
     assert result["fetched"] == 2
     assert result["has_more"] is True
     assert [e["id"] for e in result["entries"]] == ["ok111111111"]

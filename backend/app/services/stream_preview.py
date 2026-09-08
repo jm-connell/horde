@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 from .ytdlp_common import (
     MembersOnlyError,
     QuietYtdlpLogger,
-    apply_cookie_opts,
+    extract_has_media,
     extract_info_gated,
     is_members_only_entry,
     is_members_only_error,
@@ -499,15 +499,13 @@ def _build_representation(
 
 
 def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
-    opts = apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "skip_download": True,
-            "logger": QuietYtdlpLogger(),
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "logger": QuietYtdlpLogger(),
+        "extractor_args": youtube_extractor_args(),
+    }
     # Share cache with download-preview when possible (same URL, full extract).
     try:
         info = _as_info(
@@ -520,7 +518,7 @@ def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
             _purge_members_only_url(url)
             raise MembersOnlyError("Members-only video — skipped") from exc
         raise
-    if is_members_only_entry(info):
+    if is_members_only_entry(info) and not extract_has_media(info):
         yt_id = info.get("id")
         if yt_id:
             _purge_members_only_yt_id(str(yt_id))

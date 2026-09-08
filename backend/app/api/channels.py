@@ -27,7 +27,7 @@ from ..schemas import (
 )
 from ..services import channel_autodownload, channel_catalog, downloader, feed_meta_cache, library
 from ..services import app_settings as app_settings_svc
-from ..services.ytdlp_common import is_members_only_entry
+from ..services.ytdlp_common import cookie_configured, is_members_only_entry
 from ..services.ytdlp_extract import (
     search_youtube_channel_videos,
     search_youtube_videos,
@@ -244,7 +244,7 @@ def _feed_entries_from_raw(
     to_cache: list[dict[str, Any]] = []
     catalog_updates: list[dict[str, Any]] = []
     for raw in raw_entries:
-        if is_members_only_entry(raw):
+        if is_members_only_entry(raw) and not cookie_configured():
             continue
         yt_id = raw.get("id")
         lib = lib_map.get(yt_id) if yt_id else None
@@ -590,7 +590,7 @@ def channel_feed(
     to_cache: list[dict] = []
     entries: list[ChannelFeedEntry] = []
     for raw in data.get("entries") or []:
-        if is_members_only_entry(raw):
+        if is_members_only_entry(raw) and not cookie_configured():
             continue
         yt_id = raw.get("id")
         lib = lib_map.get(yt_id) if yt_id else None

@@ -9,6 +9,7 @@ import {
 import { api, thumbnailUrl } from "../api";
 import AddToPlaylist from "../components/AddToPlaylist";
 import LoadingIndicator from "../components/LoadingIndicator";
+import { MenuFlyout, MenuScroll } from "../components/MenuFlyout";
 import PlaybackQueue from "../components/PlaybackQueue";
 import ThemedSelect from "../components/ThemedSelect";
 import VideoActionsMenu from "../components/VideoActionsMenu";
@@ -23,7 +24,6 @@ import {
 import { usePlayback } from "../context/PlaybackContext";
 import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
-import { UI_MENU_SURFACE } from "../uiMenu";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { PRESET_ORDER, presetOptionLabel, resolveQualityPreset } from "../presets";
@@ -1045,42 +1045,49 @@ export default function Watch() {
                           </span>
                         </button>
                       </div>
-                      {presetMenuOpen && (
-                        <ul
-                          role="listbox"
-                          aria-label="Download quality"
-                          className={`absolute left-0 z-30 mt-1 min-w-[12rem] overflow-hidden py-1 ${UI_MENU_SURFACE}`}
-                        >
-                          {presetOptions.map((p) => (
-                            <li
-                              key={p}
-                              role="option"
-                              aria-selected={p === selectedPreset}
+                      <MenuFlyout
+                        open={presetMenuOpen}
+                        className="absolute left-0 z-30 mt-1 min-w-[12rem]"
+                      >
+                          <MenuScroll
+                            className="max-h-60"
+                            revision={presetOptions.length}
+                          >
+                            <ul
+                              role="listbox"
+                              aria-label="Download quality"
                             >
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  userPickedPresetRef.current = true;
-                                  setSelectedPreset(p);
-                                  setPresetMenuOpen(false);
-                                }}
-                                className={`flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-xs hover:bg-ink-800 ${
-                                  p === selectedPreset
-                                    ? "font-semibold text-accent"
-                                    : "text-gray-200"
-                                }`}
-                              >
-                                <span>
-                                  {presetOptionLabel(p, presetSizes)}
-                                </span>
-                                {p === selectedPreset && (
-                                  <span className="text-accent">✓</span>
-                                )}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                              {presetOptions.map((p) => (
+                                <li
+                                  key={p}
+                                  role="option"
+                                  aria-selected={p === selectedPreset}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      userPickedPresetRef.current = true;
+                                      setSelectedPreset(p);
+                                      setPresetMenuOpen(false);
+                                    }}
+                                    className={`flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-xs hover:bg-ink-800 ${
+                                      p === selectedPreset
+                                        ? "font-semibold text-accent"
+                                        : "text-gray-200"
+                                    }`}
+                                  >
+                                    <span>
+                                      {presetOptionLabel(p, presetSizes)}
+                                    </span>
+                                    {p === selectedPreset && (
+                                      <span className="text-accent">✓</span>
+                                    )}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </MenuScroll>
+                        </MenuFlyout>
                     </div>
                   )}
                   {!isLibrary && downloadActive && (

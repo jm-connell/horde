@@ -11,7 +11,7 @@ describe("downloadErrors", () => {
     expect(downloadErrorLabel("bot")).toBe("Bot check");
     expect(downloadErrorLabel("cookies")).toBe("Age-restricted / private");
     expect(downloadErrorHint("pot")).toContain("bgutil-pot");
-    expect(downloadErrorHint("cookies")).toMatch(/anonymously|signed-in/i);
+    expect(downloadErrorHint("cookies")).toMatch(/retries|signed-in|access/i);
     expect(downloadErrorLabel(null)).toBe("Failed");
     expect(downloadErrorHint("unknown")).toBeNull();
   });

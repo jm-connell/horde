@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { absoluteUrl, api, spritesImageUrl, streamUrl } from "../api";
 import PlayerOverlays from "./PlayerOverlays";
 import SubtitleOverlay from "./SubtitleOverlay";
+import { MenuFlyout } from "./MenuFlyout";
 import { useAirPlay } from "../hooks/useAirPlay";
 import { useChromecast } from "../hooks/useChromecast";
 import { usePlaybackHealth } from "../hooks/usePlaybackHealth";
@@ -11,7 +12,6 @@ import {
   type SubtitleSize,
 } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { UI_MENU_SURFACE } from "../uiMenu";
 import { useApplyShakaQuality, useShakaDashLoad } from "../hooks/useShakaDash";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import {
@@ -30,10 +30,7 @@ import type {
 } from "shaka-player/dist/shaka-player.dash.js";
 
 import type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
-import {
-  scrubPositionFromClientX,
-  shouldPassthroughSeek,
-} from "./playerSeek";
+import { scrubPositionFromClientX } from "./playerSeek";
 import {
   abrRestrictions,
   qualityMenuLabel,
@@ -1282,32 +1279,6 @@ export default function VideoPlayer({
     []
   );
 
-  const isScrubPassthroughPoint = useCallback(
-    (clientX: number, clientY: number) =>
-      shouldPassthroughSeek(
-        clientX,
-        clientY,
-        scrubberRef.current?.getBoundingClientRect() ?? null,
-        controlsVisible
-      ),
-    [controlsVisible]
-  );
-
-  const onScrubPassthroughDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      onControlsInteractionStart();
-      scrubFromClientX(e.clientX);
-    },
-    [onControlsInteractionStart, scrubFromClientX]
-  );
-
-  const onScrubPassthroughMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      scrubFromClientX(e.clientX);
-    },
-    [scrubFromClientX]
-  );
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -2099,10 +2070,8 @@ export default function VideoPlayer({
             offset={subtitleOffset}
             active
             onPositionChange={onSubtitlePositionChange}
-            isPassthroughPoint={isScrubPassthroughPoint}
-            onPassthroughPointerDown={onScrubPassthroughDown}
-            onPassthroughPointerMove={onScrubPassthroughMove}
-            onPassthroughPointerUp={onScrubPointerUp}
+            timelineRef={isMini ? undefined : scrubberRef}
+            controlsVisible={!isMini && controlsVisible}
           />
         )}
 
@@ -2382,11 +2351,11 @@ export default function VideoPlayer({
                           ? `Auto · ${qualityMenuLabel(activeQuality)}`
                           : qualityMenuLabel(qualityChoice)}
                       </button>
-                      {showQuality && (
-                        <div
-                          className={`absolute bottom-9 right-0 z-10 w-32 p-2 ${UI_MENU_SURFACE}`}
-                        >
-                          <div className="flex flex-col gap-0.5">
+                      <MenuFlyout
+                        open={showQuality}
+                        className="absolute bottom-9 right-0 z-10 w-32"
+                      >
+                          <div className="flex flex-col">
                             <button
                               type="button"
                               onClick={() => {
@@ -2418,8 +2387,7 @@ export default function VideoPlayer({
                               </button>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        </MenuFlyout>
                     </div>
                   )}
                 <div className="relative">
@@ -2436,33 +2404,34 @@ export default function VideoPlayer({
                   >
                     {rate}x
                   </button>
-                  {showSpeed && (
-                    <div
-                      className={`absolute bottom-9 right-0 z-10 w-40 p-3 ${UI_MENU_SURFACE}`}
+                    <MenuFlyout
+                      open={showSpeed}
+                      className="absolute bottom-9 right-0 z-10 w-40"
                     >
-                      <div className="mb-2 grid grid-cols-3 gap-1">
-                        {SPEED_STEPS.map((s) => (
-                          <button
-                            type="button"
-                            key={s}
-                            onClick={() => setRate(s)}
-                            className={`${playerMenuItem(rate === s)} tabular-nums`}
-                          >
-                            {s}x
-                          </button>
-                        ))}
+                      <div className="p-3">
+                        <div className="mb-2 grid grid-cols-3 gap-1">
+                          {SPEED_STEPS.map((s) => (
+                            <button
+                              type="button"
+                              key={s}
+                              onClick={() => setRate(s)}
+                              className={`${playerMenuItem(rate === s)} tabular-nums`}
+                            >
+                              {s}x
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="range"
+                          min={0.25}
+                          max={3}
+                          step={0.05}
+                          value={rate}
+                          onChange={(e) => setRate(Number(e.target.value))}
+                          className="accent-scrubber w-full"
+                        />
                       </div>
-                      <input
-                        type="range"
-                        min={0.25}
-                        max={3}
-                        step={0.05}
-                        value={rate}
-                        onChange={(e) => setRate(Number(e.target.value))}
-                        className="accent-scrubber w-full"
-                      />
-                    </div>
-                  )}
+                    </MenuFlyout>
                 </div>
                 {(tracks.length > 0 || subtitlesPending) && (
                   <button

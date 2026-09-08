@@ -5,14 +5,16 @@ export default function Collapse({
   open,
   children,
   className = "",
+  durationClass = "duration-300",
 }: {
   open: boolean;
   children: ReactNode;
   className?: string;
+  durationClass?: string;
 }) {
   return (
     <div
-      className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      className={`grid transition-[grid-template-rows,opacity] ${durationClass} ease-[cubic-bezier(0.22,1,0.36,1)] ${
         open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
       } ${className}`}
     >

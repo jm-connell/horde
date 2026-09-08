@@ -60,7 +60,7 @@ export const STATUS_TIPS = {
   openrouter:
     "Optional cloud LLM for models you don’t run locally. Needs an API key under AI → Providers.",
   cookies:
-    "Browser or Netscape cookies passed to yt-dlp. Needed for age gates, members-only videos you’re entitled to, or stubborn bot checks that PO tokens don’t clear. Public videos often work without them. This makes downloads significantly less anonymous — YouTube sees the logged-in account.",
+    "Browser or Netscape cookies for yt-dlp. Horde leaves them off public requests and only attaches them after an age-restricted or members-only block on that one video. Bot checks use the PO token sidecar, not cookies. This still identifies your account to YouTube for those gated videos.",
   library:
     "How many videos Horde has in its database and how much space they use — downloads and imports, including any still waiting in the import queue.",
   pendingImport:

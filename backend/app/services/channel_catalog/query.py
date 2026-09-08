@@ -20,7 +20,7 @@ from ..search_text import (
     keyword_rank_key,
     query_allows_semantic,
 )
-from ..ytdlp_common import is_members_only_entry
+from ..ytdlp_common import cookie_configured, is_members_only_entry
 from .runtime import (
     _normalize_channel_url,
     get_catalog_by_url,
@@ -154,7 +154,7 @@ def catalog_feed_page(
         r
         for r in all_rows
         if r.yt_id not in skipped
-        and not is_members_only_entry({"title": r.title})
+        and (cookie_configured() or not is_members_only_entry({"title": r.title}))
         and not is_youtube_short_entry(
             {
                 "url": r.url,
@@ -223,7 +223,9 @@ def _keyword_fetch_limit(limit: int) -> int:
 
 
 def _is_hidden_catalog_video(video: ChannelCatalogVideo, skipped: set[str]) -> bool:
-    if video.yt_id in skipped or is_members_only_entry({"title": video.title}):
+    if video.yt_id in skipped:
+        return True
+    if not cookie_configured() and is_members_only_entry({"title": video.title}):
         return True
     return is_youtube_short_entry(
         {

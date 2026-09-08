@@ -42,11 +42,16 @@ from .ytdlp_common import (
     QuietYtdlpLogger,
     apply_cookie_opts,
     classify_ytdlp_error,
+    extract_has_media,
     extract_info_gated,
+    extract_used_cookies,
     is_members_only_entry,
     is_members_only_error,
     is_members_only_message,
     record_extract_failure,
+    remember_cookie_required,
+    should_retry_with_cookies,
+    url_cookie_required,
     youtube_extractor_args,
 )
 
@@ -924,21 +929,20 @@ def _cleanup_subtitle_partials(parent: Path, stem: str) -> None:
             _safe_unlink(entry)
 
 
-def _subtitle_ydl_opts(outtmpl: str) -> dict[str, Any]:
-    return apply_cookie_opts(
-        {
-            "quiet": True,
-            "no_warnings": True,
-            "skip_download": True,
-            "writesubtitles": True,
-            "writeautomaticsub": True,
-            "subtitleslangs": ["en"],
-            "subtitlesformat": "vtt/best",
-            "outtmpl": outtmpl,
-            "postprocessors": [{"key": "FFmpegSubtitlesConvertor", "format": "vtt"}],
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+def _subtitle_ydl_opts(outtmpl: str, *, with_cookies: bool = False) -> dict[str, Any]:
+    opts: dict[str, Any] = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": ["en"],
+        "subtitlesformat": "vtt/best",
+        "outtmpl": outtmpl,
+        "postprocessors": [{"key": "FFmpegSubtitlesConvertor", "format": "vtt"}],
+        "extractor_args": youtube_extractor_args(),
+    }
+    return apply_cookie_opts(opts) if with_cookies else opts
 
 
 def download_subtitles(media: Path, source_url: str) -> list[dict[str, Any]]:
@@ -957,8 +961,19 @@ def download_subtitles(media: Path, source_url: str) -> list[dict[str, Any]]:
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             outtmpl = str(Path(tmpdir) / f"{stem}.%(ext)s")
-            with yt_dlp.YoutubeDL(_subtitle_ydl_opts(outtmpl)) as ydl:
-                ydl.download([source_url])
+            with_cookies = url_cookie_required(source_url)
+            try:
+                with yt_dlp.YoutubeDL(
+                    _subtitle_ydl_opts(outtmpl, with_cookies=with_cookies)
+                ) as ydl:
+                    ydl.download([source_url])
+            except Exception as exc:  # noqa: BLE001
+                if with_cookies or not should_retry_with_cookies({}, exc):
+                    raise
+                with yt_dlp.YoutubeDL(
+                    _subtitle_ydl_opts(outtmpl, with_cookies=True)
+                ) as ydl:
+                    ydl.download([source_url])
 
             for entry in Path(tmpdir).iterdir():
                 if not entry.is_file() or entry.suffix.lower() != ".vtt":
@@ -1553,43 +1568,42 @@ def _run_download(
         done=0,
     )
 
-    base_ydl_opts: dict[str, Any] = apply_cookie_opts(
-        {
-            "outtmpl": outtmpl,
-            "progress_hooks": [_make_progress_hook(job_id, cancel, act)],
-            "postprocessor_hooks": [
-                _make_postprocessor_hook(job_id, cancel, act)
-            ],
-            "noplaylist": True,
-            "quiet": True,
-            "no_warnings": True,
-            "logger": ytdlp_logger,
-            "merge_output_format": "mp4",
-            "ignoreerrors": True,
-            "overwrites": True,
-            "format_sort": format_sort_for(quality_preset, video_codec),
-            "file_access_retries": 10,
-            "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
-            "extractor_args": youtube_extractor_args(),
-        }
-    )
+    used_cookies = url_cookie_required(url)
+    base_ydl_opts: dict[str, Any] = {
+        "outtmpl": outtmpl,
+        "progress_hooks": [_make_progress_hook(job_id, cancel, act)],
+        "postprocessor_hooks": [
+            _make_postprocessor_hook(job_id, cancel, act)
+        ],
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "logger": ytdlp_logger,
+        "merge_output_format": "mp4",
+        "ignoreerrors": True,
+        "overwrites": True,
+        "format_sort": format_sort_for(quality_preset, video_codec),
+        "file_access_retries": 10,
+        "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
+        "extractor_args": youtube_extractor_args(),
+    }
 
     try:
         for fmt in _format_chain(quality_preset, video_codec):
             attempt_paths: set[str] = set()
             ydl_opts = {**base_ydl_opts, "format": fmt}
+            if used_cookies:
+                ydl_opts = apply_cookie_opts(ydl_opts)
             try:
                 # Share extract spacing with preview/meta so downloads don't
                 # stampede YouTube alongside feed browsing.
-                meta_opts = apply_cookie_opts(
-                    {
-                        "quiet": True,
-                        "no_warnings": True,
-                        "skip_download": True,
-                        "logger": QuietYtdlpLogger(),
-                        "extractor_args": youtube_extractor_args(),
-                    }
-                )
+                meta_opts: dict[str, Any] = {
+                    "quiet": True,
+                    "no_warnings": True,
+                    "skip_download": True,
+                    "logger": QuietYtdlpLogger(),
+                    "extractor_args": youtube_extractor_args(),
+                }
                 try:
                     fetched = extract_info_gated(
                         url,
@@ -1605,8 +1619,13 @@ def _run_download(
                         ) from exc
                     raise
 
-                if is_members_only_entry(
-                    fetched if isinstance(fetched, dict) else None
+                if extract_used_cookies():
+                    used_cookies = True
+                    ydl_opts = apply_cookie_opts({**base_ydl_opts, "format": fmt})
+
+                fetched_info = fetched if isinstance(fetched, dict) else None
+                if is_members_only_entry(fetched_info) and not extract_has_media(
+                    fetched_info
                 ):
                     raise MembersOnlyError("Members-only video — skipped")
                 metadata_info = _merge_info(metadata_info, fetched)
@@ -1638,16 +1657,60 @@ def _run_download(
                         metadata_info = info
                     except Exception as exc:
                         last_exc = exc
-                        if ytdlp_logger.members_only or is_members_only_error(exc):
+                        if should_retry_with_cookies(
+                            ydl_opts,
+                            exc,
+                            logger_members_only=ytdlp_logger.members_only,
+                        ):
+                            used_cookies = True
+                            remember_cookie_required(url)
+                            ytdlp_logger.members_only = False
+                            logger.info(
+                                "Retrying download with cookies after age/members gate: %s",
+                                url,
+                            )
+                            cookie_opts = apply_cookie_opts(
+                                {**base_ydl_opts, "format": fmt}
+                            )
+                            with yt_dlp.YoutubeDL(cookie_opts) as ydl_auth:
+                                prepared = Path(
+                                    ydl_auth.prepare_filename(metadata_info)
+                                )
+                                for candidate in (
+                                    prepared,
+                                    prepared.with_suffix(".mp4"),
+                                ):
+                                    rel = _safe_rel(candidate)
+                                    if rel:
+                                        attempt_paths.add(rel)
+                                        active_paths.add(rel)
+                                        scanner.mark_active(rel)
+                                downloaded = ydl_auth.extract_info(
+                                    url, download=True
+                                )
+                                if ytdlp_logger.members_only:
+                                    raise MembersOnlyError(
+                                        "Members-only video — skipped"
+                                    ) from exc
+                                info = _merge_info(metadata_info, downloaded)
+                                metadata_info = info
+                        elif ytdlp_logger.members_only or is_members_only_error(
+                            exc
+                        ):
                             raise MembersOnlyError(
                                 "Members-only video — skipped"
                             ) from exc
-                        if not _is_recoverable_download_error(exc):
+                        elif not _is_recoverable_download_error(exc):
                             raise
-                        final_path = _resolve_merged_video(prepared, active_paths)
-                        final_path = _reject_unplayable(final_path, attempt_paths)
-                        if final_path is None:
-                            raise
+                        else:
+                            final_path = _resolve_merged_video(
+                                prepared, active_paths
+                            )
+                            final_path = _reject_unplayable(
+                                final_path, attempt_paths
+                            )
+                            if final_path is None:
+                                raise
 
                     if final_path is None:
                         final_path = _resolve_merged_video(prepared, active_paths)

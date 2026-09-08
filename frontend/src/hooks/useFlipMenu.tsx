@@ -7,7 +7,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { UI_MENU_SURFACE } from "../uiMenu";
+import { MenuFlyout, useMenuPresence } from "../components/MenuFlyout";
 
 type Flip = "down" | "up";
 
@@ -75,9 +75,10 @@ export function FlipMenuPanel({
 }) {
   const markerRef = useRef<HTMLSpanElement>(null);
   const [coords, setCoords] = useState<CSSProperties | null>(null);
+  const present = useMenuPresence(open);
 
   useLayoutEffect(() => {
-    if (!open) {
+    if (!present) {
       setCoords(null);
       return;
     }
@@ -100,23 +101,25 @@ export function FlipMenuPanel({
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
-  }, [open, flip, align]);
+  }, [present, flip, align]);
 
   return (
     <>
       <span ref={markerRef} hidden />
-      {open &&
+      {present &&
         coords &&
         typeof document !== "undefined" &&
         createPortal(
-          <div
+          <MenuFlyout
+            open={open}
+            unmountOnExit={false}
             data-horde="flip-menu"
-            className={`fixed z-[80] overflow-hidden py-1 ${UI_MENU_SURFACE} ${className}`}
+            className={`fixed z-[80] ${className}`}
             style={coords}
             onMouseDown={(e) => e.stopPropagation()}
           >
             {children}
-          </div>,
+          </MenuFlyout>,
           document.body
         )}
     </>

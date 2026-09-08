@@ -149,6 +149,7 @@ def _reject_members_or_skipped(
     raw: dict[str, Any],
     *,
     skipped: Optional[set[str]] = None,
+    allow_gated: bool = False,
 ) -> Optional[str]:
     """If entry must be ignored, purge any existing row and return yt_id; else None."""
     yt_id = raw.get("id")
@@ -161,6 +162,10 @@ def _reject_members_or_skipped(
         else skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
     )
     reason = _skip_reason_for_entry(raw)
+    if reason is not None and allow_gated:
+        # Full catalog index can keep the row so a later per-video extract
+        # retries with cookies. Feed-head sync stays anonymous and skips.
+        reason = None
     if reason is None and yt_id not in skip_set:
         return None
     skip_reason = reason or "members_only"

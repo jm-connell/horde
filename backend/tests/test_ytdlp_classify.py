@@ -141,13 +141,14 @@ def test_classify_empty_unknown():
 
 def test_classify_ansi_stripped_bot(monkeypatch):
     monkeypatch.setattr(
-        "app.services.ytdlp_common.cookie_configured", lambda: True
+        "app.services.ytdlp_common.pot_provider_configured", lambda: True
     )
     kind, msg = classify_ytdlp_error(
         "\x1b[31mSign in to confirm you’re not a bot\x1b[0m"
     )
     assert kind == ERROR_KIND_BOT
-    assert "cookies are configured" in msg
+    assert "po token" in msg.lower()
+    assert "does not send cookies" in msg.lower()
 
 
 def test_http_detail_for_error_shape(monkeypatch):

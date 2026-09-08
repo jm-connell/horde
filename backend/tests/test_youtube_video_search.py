@@ -41,7 +41,7 @@ def test_search_skips_short_query(monkeypatch):
 
 
 def test_search_maps_per_entry_channel(monkeypatch):
-    def fake_extract(url, opts, *, cache_key=None, force=False):
+    def fake_extract(url, opts, *, cache_key=None, force=False, **_kwargs):
         assert url == "ytsearch80:t480 mod"
         assert cache_key == "yt-video-search:v2:t480 mod:80"
         assert opts.get("playlistend", 0) >= 40
@@ -85,7 +85,7 @@ def test_search_maps_per_entry_channel(monkeypatch):
 
 
 def test_search_skips_shorts_and_playlists(monkeypatch):
-    def fake_extract(url, opts, *, cache_key=None, force=False):
+    def fake_extract(url, opts, **_kwargs):
         return {
             "entries": [
                 {
@@ -181,7 +181,7 @@ def test_youtube_search_api_respects_setting(client, monkeypatch):
 
 
 def test_search_pages_offset(monkeypatch):
-    def fake_extract(url, opts, *, cache_key=None, force=False):
+    def fake_extract(url, opts, **_kwargs):
         assert url.startswith("ytsearch80:")
         return {
             "entries": [

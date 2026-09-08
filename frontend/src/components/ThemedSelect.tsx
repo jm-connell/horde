@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { MenuScroll } from "./MenuFlyout";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 
 export interface ThemedSelectOption<T extends string = string> {
@@ -115,12 +116,10 @@ export default function ThemedSelect<T extends string>({
     if (next) onChange(next.value);
   };
 
-  const listClass =
-    listClassName ||
-    (compact ? "max-h-56 overflow-y-auto" : "max-h-64 overflow-y-auto");
+  const listClass = listClassName || (compact ? "max-h-56" : "max-h-64");
 
   const optionList = (
-    <ul id={listId} role="listbox" className={listClass}>
+    <ul id={listId} role="listbox">
       {visible.length === 0 ? (
         <li className="px-3 py-2 text-sm text-gray-500">No matching models</li>
       ) : (
@@ -298,13 +297,13 @@ export default function ThemedSelect<T extends string>({
           </span>
         </button>
       )}
-      <FlipMenuPanel
-        open={open}
-        flip={flip}
-        align={align}
-        className={compact ? "!py-0.5" : ""}
-      >
-        {optionList}
+      <FlipMenuPanel open={open} flip={flip} align={align}>
+        <MenuScroll
+          className={listClass}
+          revision={`${visible.length}:${query}`}
+        >
+          {optionList}
+        </MenuScroll>
       </FlipMenuPanel>
     </div>
   );

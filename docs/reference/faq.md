@@ -34,7 +34,7 @@ In Docker/production, the wiki is built into the image and served at **`/wiki/`*
 
 ## Do members-only / paid YouTube videos work?
 
-Only if **yt-dlp on your server** can access them — typically with appropriate cookies / account configuration on the host. Horde does not bypass YouTube membership paywalls by itself. Bot checks and PO tokens are a separate problem; see [YouTube access](../ops/youtube-access.md).
+Only if **yt-dlp on your server** can access them — typically with cookies from a signed-in account that has membership. Horde tries the video anonymously first and only then retries **that video** with cookies. It does not bypass YouTube membership paywalls. Bot checks and PO tokens are a separate problem; see [YouTube access](../ops/youtube-access.md).
 
 ## Why did my download fail with “Bot check” / “PO token”?
 

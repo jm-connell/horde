@@ -8,6 +8,11 @@ import {
 } from "react";
 import type { SubtitleSize } from "../hooks/useSettings";
 import {
+  captionLiftActive,
+  captionTimelineLiftPx,
+  layoutBoxFromOffsets,
+} from "./playerSeek";
+import {
   findCaptionLineIndex,
   parseVttLines,
   revealedWordCount,
@@ -25,11 +30,10 @@ interface Props {
   offset: number;
   active: boolean;
   onPositionChange?: (left: number, offset: number) => void;
-  /** When true, skip drag and let the parent treat this pointer as a seek. */
-  isPassthroughPoint?: (clientX: number, clientY: number) => boolean;
-  onPassthroughPointerDown?: (e: ReactPointerEvent<HTMLDivElement>) => void;
-  onPassthroughPointerMove?: (e: ReactPointerEvent<HTMLDivElement>) => void;
-  onPassthroughPointerUp?: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  /** Seek bar to clear while player chrome is visible. */
+  timelineRef?: RefObject<HTMLDivElement | null>;
+  /** When true, lift captions that would cover the timeline. */
+  controlsVisible?: boolean;
 }
 
 const SLIDE_MS = 250;
@@ -54,14 +58,13 @@ export default function SubtitleOverlay({
   offset,
   active,
   onPositionChange,
-  isPassthroughPoint,
-  onPassthroughPointerDown,
-  onPassthroughPointerMove,
-  onPassthroughPointerUp,
+  timelineRef,
+  controlsVisible = false,
 }: Props) {
   const [lines, setLines] = useState<CaptionLine[]>([]);
   const [view, setView] = useState<ViewLine[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [liftPx, setLiftPx] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const clipRef = useRef<HTMLDivElement>(null);
   const stackRef = useRef<HTMLDivElement>(null);
@@ -77,7 +80,9 @@ export default function SubtitleOverlay({
     parentW: number;
     parentH: number;
   } | null>(null);
-  const passingRef = useRef(false);
+  // After a drag, keep captions at their resting spot until chrome hides so
+  // placement on the timeline is visible. Next hover lifts them again.
+  const suppressLiftRef = useRef(false);
 
   useEffect(() => {
     if (!active || !src) {
@@ -308,6 +313,63 @@ export default function SubtitleOverlay({
     return () => cancelAnimationFrame(raf);
   }, [active, lines, videoRef]);
 
+  const measureLiftRef = useRef(() => {});
+  measureLiftRef.current = () => {
+    if (!controlsVisible) suppressLiftRef.current = false;
+    if (
+      !captionLiftActive(
+        controlsVisible,
+        dragging,
+        suppressLiftRef.current
+      )
+    ) {
+      setLiftPx((prev) => (prev === 0 ? prev : 0));
+      return;
+    }
+    const el = rootRef.current;
+    const bar = timelineRef?.current;
+    if (!el || !bar) {
+      setLiftPx((prev) => (prev === 0 ? prev : 0));
+      return;
+    }
+    const parent = el.offsetParent as HTMLElement | null;
+    if (!parent) {
+      setLiftPx((prev) => (prev === 0 ? prev : 0));
+      return;
+    }
+    const next = captionTimelineLiftPx(
+      layoutBoxFromOffsets(
+        parent.getBoundingClientRect(),
+        parent.clientLeft,
+        parent.clientTop,
+        el
+      ),
+      bar.getBoundingClientRect(),
+      true
+    );
+    setLiftPx((prev) => (prev === next ? prev : next));
+  };
+
+  useEffect(() => {
+    measureLiftRef.current();
+  }, [controlsVisible, dragging, left, offset, size, view.length, rollupSig]);
+
+  useEffect(() => {
+    const run = () => measureLiftRef.current();
+    run();
+    const el = rootRef.current;
+    const bar = timelineRef?.current;
+    if (!el) return;
+    const ro = new ResizeObserver(run);
+    ro.observe(el);
+    if (bar) ro.observe(bar);
+    window.addEventListener("resize", run);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", run);
+    };
+  }, [timelineRef, view.length, rollupSig, active]);
+
   const releasePointer = (e: ReactPointerEvent<HTMLDivElement>) => {
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -316,36 +378,17 @@ export default function SubtitleOverlay({
     }
   };
 
-  const endPassthrough = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!passingRef.current) return false;
-    passingRef.current = false;
-    onPassthroughPointerUp?.(e);
-    releasePointer(e);
-    return true;
-  };
-
   const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (endPassthrough(e)) return;
     if (!dragRef.current) return;
     dragRef.current = null;
+    suppressLiftRef.current = true;
+    setLiftPx(0);
     setDragging(false);
     releasePointer(e);
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
-    if (isPassthroughPoint?.(e.clientX, e.clientY)) {
-      passingRef.current = true;
-      e.stopPropagation();
-      e.preventDefault();
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-      onPassthroughPointerDown?.(e);
-      return;
-    }
     if (!onPositionChange) return;
     e.stopPropagation();
     e.preventDefault();
@@ -355,6 +398,10 @@ export default function SubtitleOverlay({
     const rect = parent.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+    // Drop the chrome lift immediately so the box they drag is the resting
+    // position (including over the timeline).
+    suppressLiftRef.current = true;
+    setLiftPx(0);
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -367,11 +414,6 @@ export default function SubtitleOverlay({
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (passingRef.current) {
-      e.stopPropagation();
-      onPassthroughPointerMove?.(e);
-      return;
-    }
     const drag = dragRef.current;
     if (!drag || !onPositionChange) return;
     e.stopPropagation();
@@ -397,7 +439,6 @@ export default function SubtitleOverlay({
   if (!active || view.length === 0) return null;
 
   const canDrag = Boolean(onPositionChange);
-  const handlePointer = canDrag || Boolean(isPassthroughPoint);
 
   return (
     <div
@@ -408,12 +449,13 @@ export default function SubtitleOverlay({
       style={{
         left: `${clamp(left, 0, 90)}%`,
         bottom: `${clamp(offset, 0, 85)}%`,
+        transform: `translateY(-${liftPx}px)`,
       }}
       aria-hidden
-      onPointerDown={handlePointer ? onPointerDown : undefined}
-      onPointerMove={handlePointer ? onPointerMove : undefined}
-      onPointerUp={handlePointer ? endDrag : undefined}
-      onPointerCancel={handlePointer ? endDrag : undefined}
+      onPointerDown={canDrag ? onPointerDown : undefined}
+      onPointerMove={canDrag ? onPointerMove : undefined}
+      onPointerUp={canDrag ? endDrag : undefined}
+      onPointerCancel={canDrag ? endDrag : undefined}
     >
       <div ref={clipRef} className="subtitle-overlay-clip">
         <div ref={stackRef} className="subtitle-overlay-stack">

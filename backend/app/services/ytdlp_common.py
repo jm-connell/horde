@@ -1,10 +1,13 @@
 """Shared yt-dlp option helpers."""
 
+import logging
 import re
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 from ..config import (
     YTDLP_COOKIES_FROM_BROWSER,
@@ -111,6 +114,8 @@ ERROR_KIND_UNKNOWN = "unknown"
 SKIPPABLE_CATALOG_KINDS = frozenset(
     {ERROR_KIND_COOKIES, ERROR_KIND_MEMBERS, ERROR_KIND_UNAVAILABLE}
 )
+# Only these gates justify attaching cookies — never bot checks or listing traffic.
+COOKIE_RETRY_KINDS = frozenset({ERROR_KIND_COOKIES, ERROR_KIND_MEMBERS})
 _AGE_RESTRICTED_AVAILABILITY = frozenset({"age_restricted", "restricted"})
 _CATALOG_SKIP_LABELS = {
     ERROR_KIND_COOKIES: "Age-restricted / private",
@@ -343,15 +348,16 @@ def classify_ytdlp_error(
         )
 
     if _BOT_MESSAGE.search(raw):
-        if cookie_configured():
+        if pot_provider_configured():
             msg = (
-                "YouTube bot check — cookies are configured but still blocked. "
-                "Try refreshing cookies or check the PO token provider."
+                "YouTube bot check — check that the PO token provider is healthy. "
+                "Horde does not send cookies for bot checks."
             )
         else:
             msg = (
-                "YouTube bot check — configure cookies and/or a PO token provider "
-                "(Settings → System / Compose bgutil-pot)."
+                "YouTube bot check — configure a PO token provider "
+                "(Settings → System / Compose bgutil-pot). "
+                "Horde does not send cookies for bot checks."
             )
         return _finish(ERROR_KIND_BOT, msg)
 
@@ -501,8 +507,15 @@ def youtube_extractor_args() -> dict[str, Any]:
     return args
 
 
+_AUTH_CACHE_SUFFIX = ":auth"
+
+_extract_tls = threading.local()
+_cookie_required_lock = threading.Lock()
+_cookie_required_until: dict[str, float] = {}
+
+
 def apply_cookie_opts(opts: dict[str, Any]) -> dict[str, Any]:
-    """Attach cookie auth when configured (fixes YouTube bot checks)."""
+    """Attach cookie auth when configured. Call only after a per-video gate."""
     merged = dict(opts)
     if YTDLP_COOKIE_FILE is not None and YTDLP_COOKIE_FILE.is_file():
         merged["cookiefile"] = str(YTDLP_COOKIE_FILE)
@@ -522,6 +535,127 @@ def cookie_configured() -> bool:
 
 def pot_provider_configured() -> bool:
     return bool(YTDLP_POT_BASE_URL)
+
+
+def opts_have_cookies(opts: dict[str, Any]) -> bool:
+    return bool(opts.get("cookiefile") or opts.get("cookiesfrombrowser"))
+
+
+def error_kind_for_cookie_retry(exc: BaseException) -> Optional[str]:
+    kind, _ = classify_ytdlp_error(exc)
+    if kind in COOKIE_RETRY_KINDS:
+        return kind
+    return None
+
+
+def should_retry_with_cookies(
+    opts: dict[str, Any],
+    exc: Optional[BaseException] = None,
+    *,
+    logger_members_only: bool = False,
+) -> bool:
+    """True when this per-video action should be retried once with cookies."""
+    if not cookie_configured() or opts_have_cookies(opts):
+        return False
+    if logger_members_only:
+        return True
+    if exc is None:
+        return False
+    return error_kind_for_cookie_retry(exc) is not None
+
+
+def extract_has_media(info: Optional[dict[str, Any]]) -> bool:
+    """True when yt-dlp returned downloadable media (not a gated stub)."""
+    if not info or not isinstance(info, dict):
+        return False
+    formats = info.get("formats") or []
+    if isinstance(formats, list):
+        for fmt in formats:
+            if not isinstance(fmt, dict):
+                continue
+            if fmt.get("url") or fmt.get("fragments") or fmt.get("fragment_base_url"):
+                return True
+    if info.get("url") and info.get("ext") and info.get("_type") != "playlist":
+        return True
+    requested = info.get("requested_formats") or info.get("requested_downloads") or []
+    if isinstance(requested, list):
+        for fmt in requested:
+            if isinstance(fmt, dict) and (fmt.get("url") or fmt.get("fragments")):
+                return True
+    return False
+
+
+def _info_blocked_without_auth(info: dict[str, Any], opts: dict[str, Any]) -> bool:
+    """Successful extract that is still a gated stub — worth one cookie retry."""
+    if opts.get("extract_flat"):
+        # Channel/search listings stay anonymous. Single-video preview uses
+        # extract_flat in_playlist but should still cookie-retry a gated stub.
+        if info.get("_type") == "playlist" or info.get("entries"):
+            return False
+    if not (is_members_only_entry(info) or is_age_restricted_entry(info)):
+        return False
+    if extract_has_media(info):
+        return False
+    desc = info.get("description")
+    if isinstance(desc, str) and desc.strip():
+        return False
+    return True
+
+
+def extract_used_cookies() -> bool:
+    """Whether the latest extract_info_gated call on this thread attached cookies."""
+    return bool(getattr(_extract_tls, "used_cookies", False))
+
+
+def remember_cookie_required(url: str) -> None:
+    key = str(url or "").strip()
+    if not key:
+        return
+    now = time.time()
+    with _cookie_required_lock:
+        _cookie_required_until[key] = now + _INFO_CACHE_TTL_SEC
+        stale = [u for u, exp in _cookie_required_until.items() if exp <= now]
+        for old in stale:
+            _cookie_required_until.pop(old, None)
+
+
+def url_cookie_required(url: str) -> bool:
+    key = str(url or "").strip()
+    if not key:
+        return False
+    now = time.time()
+    with _cookie_required_lock:
+        exp = _cookie_required_until.get(key)
+        if exp is None:
+            return False
+        if exp <= now:
+            _cookie_required_until.pop(key, None)
+            return False
+        return True
+
+
+def _auth_cache_key(key: str) -> str:
+    if key.endswith(_AUTH_CACHE_SUFFIX):
+        return key
+    return f"{key}{_AUTH_CACHE_SUFFIX}"
+
+
+def _cache_put(key: str, info: dict[str, Any]) -> None:
+    global _last_extract_at
+    with _extract_gate_lock:
+        _last_extract_at = time.time()
+        _info_cache[key] = (_last_extract_at + _INFO_CACHE_TTL_SEC, info)
+        if len(_info_cache) > _INFO_CACHE_MAX:
+            oldest = sorted(_info_cache.items(), key=lambda item: item[1][0])
+            for drop_key, _ in oldest[: len(_info_cache) - _INFO_CACHE_MAX]:
+                _info_cache.pop(drop_key, None)
+
+
+def _cache_get(key: str) -> Optional[dict[str, Any]]:
+    cached = _info_cache.get(key)
+    if cached and cached[0] > time.time():
+        return dict(cached[1])
+    return None
 
 
 _plugins_loaded = False
@@ -553,6 +687,14 @@ def ensure_plugins_loaded() -> None:
         _plugins_loaded = True
 
 
+def _ytdlp_extract(url: str, opts: dict[str, Any]) -> dict[str, Any]:
+    import yt_dlp
+
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    return info if isinstance(info, dict) else {}
+
+
 def extract_info_gated(
     url: str,
     opts: dict[str, Any],
@@ -561,6 +703,7 @@ def extract_info_gated(
     force: bool = False,
     title: Optional[str] = None,
     channel: Optional[str] = None,
+    cookie_retry: bool = True,
 ) -> dict[str, Any]:
     """Run yt-dlp extract_info with global spacing + short result cache.
 
@@ -569,53 +712,106 @@ def extract_info_gated(
 
     When force=True, skip the cache read and invalidate any existing entry so
     CDN URL refresh actually fetches fresh format URLs.
-    """
-    global _last_extract_at
 
+    Cookies are not attached by default. When cookie_retry=True (single-video
+    extracts) and YouTube blocks with an age-restricted or members-only gate,
+    the same extract is retried once with cookies if they are configured.
+    Channel listings and search pass cookie_retry=False.
+    """
+    _extract_tls.used_cookies = opts_have_cookies(opts)
     key = cache_key or url
-    now = time.time()
-    if not force:
-        cached = _info_cache.get(key)
-        if cached and cached[0] > now:
-            return dict(cached[1])
-    else:
+    auth_key = _auth_cache_key(key)
+    prefer_cookies = (
+        cookie_retry
+        and cookie_configured()
+        and not opts_have_cookies(opts)
+        and url_cookie_required(url)
+    )
+
+    if force:
         _info_cache.pop(key, None)
+        _info_cache.pop(auth_key, None)
+    else:
+        if prefer_cookies:
+            cached = _cache_get(auth_key)
+            if cached is not None:
+                _extract_tls.used_cookies = True
+                return cached
+        else:
+            cached = _cache_get(key)
+            if cached is not None:
+                return cached
 
     ensure_plugins_loaded()
-    import yt_dlp
+
+    def _record_failure(exc: BaseException) -> None:
+        kind, message = classify_ytdlp_error(
+            exc, url=url, title=title, channel=channel
+        )
+        record_extract_failure(
+            kind, message, url=url, title=title, channel=channel
+        )
+
+    def _extract_with_cookies(*, known: bool = False) -> dict[str, Any]:
+        cookie_opts = apply_cookie_opts(opts)
+        if not opts_have_cookies(cookie_opts):
+            raise RuntimeError("cookies configured but could not be attached")
+        if known:
+            logger.info("Using cookies for previously gated video: %s", url)
+        else:
+            logger.info(
+                "Retrying extract with cookies after age/members gate: %s", url
+            )
+        info = _ytdlp_extract(url, cookie_opts)
+        _extract_tls.used_cookies = True
+        remember_cookie_required(url)
+        _cache_put(auth_key, info)
+        return dict(info)
 
     with _extract_sem:
         if not force:
-            cached = _info_cache.get(key)
-            now = time.time()
-            if cached and cached[0] > now:
-                return dict(cached[1])
+            if prefer_cookies:
+                cached = _cache_get(auth_key)
+                if cached is not None:
+                    _extract_tls.used_cookies = True
+                    return cached
+            else:
+                cached = _cache_get(key)
+                if cached is not None:
+                    return cached
 
         with _extract_gate_lock:
             wait = _EXTRACT_MIN_INTERVAL_SEC - (time.time() - _last_extract_at)
         if wait > 0:
             time.sleep(wait)
 
+        if prefer_cookies:
+            try:
+                return _extract_with_cookies(known=True)
+            except Exception as exc:
+                _record_failure(exc)
+                raise
+
         try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=False)
+            info = _ytdlp_extract(url, opts)
         except Exception as exc:
-            kind, message = classify_ytdlp_error(
-                exc, url=url, title=title, channel=channel
-            )
-            record_extract_failure(
-                kind, message, url=url, title=title, channel=channel
-            )
+            if cookie_retry and should_retry_with_cookies(opts, exc):
+                try:
+                    return _extract_with_cookies()
+                except Exception as retry_exc:
+                    _record_failure(retry_exc)
+                    raise retry_exc from exc
+            _record_failure(exc)
             raise
-        if not isinstance(info, dict):
-            info = {}
 
-        with _extract_gate_lock:
-            _last_extract_at = time.time()
-            _info_cache[key] = (_last_extract_at + _INFO_CACHE_TTL_SEC, info)
-            if len(_info_cache) > _INFO_CACHE_MAX:
-                oldest = sorted(_info_cache.items(), key=lambda item: item[1][0])
-                for drop_key, _ in oldest[: len(_info_cache) - _INFO_CACHE_MAX]:
-                    _info_cache.pop(drop_key, None)
+        if cookie_retry and _info_blocked_without_auth(info, opts):
+            if should_retry_with_cookies(opts, None, logger_members_only=True):
+                try:
+                    return _extract_with_cookies()
+                except Exception as retry_exc:
+                    _record_failure(retry_exc)
+                    raise
 
+        _extract_tls.used_cookies = opts_have_cookies(opts)
+        _cache_put(key, info)
         return dict(info)

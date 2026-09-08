@@ -23,8 +23,8 @@ In Compose, Horde maps host **8686** → container **8080**. See [Ports & networ
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `YTDLP_POT_BASE_URL` | *(empty)*; Compose: `http://bgutil-pot:4416` | Base URL for the [bgutil POT](youtube-access.md) HTTP provider. |
-| `YTDLP_COOKIE_FILE` | *(empty)* | Path to a Netscape cookie file for authenticated / age-gated extracts. |
-| `YTDLP_COOKIES_FROM_BROWSER` | *(empty)* | Browser cookies via yt-dlp (`browser` or `browser:profile`). Used only if `YTDLP_COOKIE_FILE` is unset or missing. |
+| `YTDLP_COOKIE_FILE` | *(empty)* | Path to a Netscape cookie file. Attached only after a per-video age-restricted or members-only block. |
+| `YTDLP_COOKIES_FROM_BROWSER` | *(empty)* | Browser cookies via yt-dlp (`browser` or `browser:profile`). Used only if `YTDLP_COOKIE_FILE` is unset or missing. Same per-video fallback as the cookie file. |
 
 Cookie file wins over browser cookies when the file exists. Details: [YouTube access](youtube-access.md).
 

@@ -51,7 +51,7 @@ def test_search_skips_short_query_and_non_youtube(monkeypatch):
 
 
 def test_search_maps_flat_entries(monkeypatch):
-    def fake_extract(url, opts, *, cache_key=None, force=False):
+    def fake_extract(url, opts, *, cache_key=None, force=False, **_kwargs):
         assert "/search?query=paint" in url
         assert cache_key and cache_key.startswith("channel-search:v2:")
         assert cache_key.endswith(":80")
@@ -92,7 +92,7 @@ def test_search_maps_flat_entries(monkeypatch):
 
 
 def test_search_maps_timestamp_when_upload_date_missing(monkeypatch):
-    def fake_extract(url, opts, *, cache_key=None, force=False):
+    def fake_extract(url, opts, **_kwargs):
         return {
             "uploader": "Linus Tech Tips",
             "entries": [
@@ -117,7 +117,7 @@ def test_search_maps_timestamp_when_upload_date_missing(monkeypatch):
 
 
 def test_search_skips_shorts_and_playlists(monkeypatch):
-    def fake_extract(url, opts, *, cache_key=None, force=False):
+    def fake_extract(url, opts, **_kwargs):
         return {
             "uploader": "Linus Tech Tips",
             "entries": [

@@ -3,6 +3,7 @@ import { api } from "../../../api";
 import ThemedSelect from "../../../components/ThemedSelect";
 import Collapse from "../../../components/Collapse";
 import HelpTip from "../../../components/HelpTip";
+import { useConfirm } from "../../../context/ConfirmContext";
 import { formatUsdCost } from "../../../utils";
 import type { AiSettings } from "../../../types";
 import { ollamaIsUsed } from "../aiOllamaUsage";
@@ -67,6 +68,7 @@ export default function ProvidersPane() {
     applyWorkload,
     saveModels,
   } = useSettingsPage();
+  const confirm = useConfirm();
 
   const [openRouterTestStatus, setOpenRouterTestStatus] = useState<
     "ok" | "fail" | null
@@ -787,11 +789,6 @@ export default function ProvidersPane() {
                             Unreachable
                           </span>
                         )}
-                        {aiStatus?.llm_backend === "openrouter" && (
-                          <span className="text-xs text-gray-500">
-                            LLM tasks use OpenRouter
-                          </span>
-                        )}
                       </div>
                     </div>
                     {aiDraft.openrouter_api_key_set && (
@@ -799,6 +796,13 @@ export default function ProvidersPane() {
                         type="button"
                         className="text-xs text-gray-500 underline-offset-2 hover:text-gray-300 hover:underline"
                         onClick={async () => {
+                          const ok = await confirm({
+                            title: "Clear saved OpenRouter key?",
+                            body: "OpenRouter only shows a key once. After you clear it here, you'll need a new key from OpenRouter to reconnect.",
+                            confirmLabel: "Clear key",
+                            danger: true,
+                          });
+                          if (!ok) return;
                           await saveAi({ openrouter_api_key: "" });
                           setOpenRouterKeyDraft("");
                           setOpenRouterTestStatus(null);
@@ -872,7 +876,7 @@ export default function ProvidersPane() {
                           aria-label="OpenRouter model"
                           className="w-full max-w-xl"
                           buttonClassName="w-full"
-                          listClassName="max-h-80 overflow-y-auto"
+                          listClassName="max-h-80"
                           searchable
                           searchPlaceholder="Search models…"
                           options={openRouterSelectOptions(
@@ -886,9 +890,8 @@ export default function ProvidersPane() {
                           }
                         />
                         <p className="text-xs text-gray-500">
-                          Type to search. Recommended models stay pinned at the
-                          top of the list. Prices are USD per 1M input / output
-                          tokens.
+                          Text chat models only. Type to search. Prices are USD
+                          per 1M input / output tokens.
                         </p>
                       </div>
                     </div>
