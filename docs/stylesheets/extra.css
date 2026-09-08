@@ -387,6 +387,14 @@ body {
   letter-spacing: 0.01em;
 }
 
+.md-typeset h1 {
+  margin: 0 0 0.35em;
+}
+
+.md-typeset h1 + * {
+  margin-top: 0;
+}
+
 .md-typeset a {
   color: rgb(var(--horde-accent));
 }
