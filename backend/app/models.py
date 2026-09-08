@@ -115,6 +115,8 @@ class DownloadJob(SQLModel, table=True):
     # Relative path under DOWNLOADS_DIR for device jobs (serve + cleanup).
     device_file_path: Optional[str] = None
     replace_video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
+    # When set, the finished library video is appended to this playlist.
+    playlist_id: Optional[int] = Field(default=None, index=True)
     error: Optional[str] = None
     error_kind: Optional[str] = None
     video_id: Optional[int] = Field(default=None, foreign_key="videos.id")

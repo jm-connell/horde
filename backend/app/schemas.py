@@ -103,6 +103,7 @@ class DownloadCreate(BaseModel):
     normalize_volume: bool = False
     destination: DownloadDestination = DownloadDestination.library
     video_codec: Optional[str] = None
+    playlist_id: Optional[int] = None
 
 
 class DownloadBulkCreate(BaseModel):
@@ -167,6 +168,7 @@ class DownloadJobRead(BaseModel):
     created_at: datetime
     video_missing: bool = False
     superseded: bool = False
+    playlist_id: Optional[int] = None
 
     @field_validator("video_codec", mode="before")
     @classmethod
@@ -400,7 +402,8 @@ class PlaylistDetail(PlaylistRead):
 
 
 class PlaylistItemAdd(BaseModel):
-    video_id: int
+    video_id: Optional[int] = None
+    url: Optional[str] = None
 
 
 class PlaylistReorder(BaseModel):

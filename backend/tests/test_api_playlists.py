@@ -304,3 +304,78 @@ def test_playlist_cover_default_pick_and_upload(client, add_video, session):
     assert reset.json()["has_custom_cover"] is False
     assert reset.json()["cover_video_id"] is None
     assert reset.json()["thumbnail_video_id"] == v1.id
+
+
+def test_add_item_requires_video_or_url(client):
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+    blank = client.post(f"/api/playlists/{pid}/items", json={})
+    assert blank.status_code == 400
+
+
+def test_add_item_url_uses_existing_library_video(client, add_video):
+    video = add_video(title="Already local", yt_id="dQw4w9WgXcQ")
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+
+    added = client.post(
+        f"/api/playlists/{pid}/items",
+        json={"url": "https://youtu.be/dQw4w9WgXcQ"},
+    )
+    assert added.status_code == 200
+    assert [v["id"] for v in added.json()["videos"]] == [video.id]
+
+
+def test_add_item_url_queues_download(client, monkeypatch):
+    from app.services import downloader
+
+    monkeypatch.setattr(
+        downloader,
+        "extract_preview",
+        lambda url: {
+            "id": "bbbbbbbbbb1",
+            "title": "New clip",
+            "channel": "Chan",
+            "is_playlist": False,
+        },
+    )
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+    queued = client.post(
+        f"/api/playlists/{pid}/items",
+        json={"url": "https://www.youtube.com/watch?v=bbbbbbbbbb1"},
+    )
+    assert queued.status_code == 200
+    assert queued.json()["videos"] == []
+
+    jobs = client.get("/api/downloads").json()
+    assert len(jobs) == 1
+    assert jobs[0]["playlist_id"] == pid
+    assert "bbbbbbbbbb1" in jobs[0]["url"]
+
+
+def test_attach_completed_download_to_playlist(session, add_video):
+    from app.models import DownloadJob, JobStatus, Playlist, PlaylistItem
+    from app.services.downloader import _attach_download_to_playlist
+    from sqlmodel import select
+
+    video = add_video(title="Fresh")
+    playlist = Playlist(name="Mix")
+    session.add(playlist)
+    session.commit()
+    session.refresh(playlist)
+    job = DownloadJob(
+        url="https://www.youtube.com/watch?v=cccccccccc1",
+        status=JobStatus.completed,
+        playlist_id=playlist.id,
+        video_id=video.id,
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    _attach_download_to_playlist(job.id, video.id)
+    session.expire_all()
+    items = list(
+        session.exec(
+            select(PlaylistItem).where(PlaylistItem.playlist_id == playlist.id)
+        ).all()
+    )
+    assert [item.video_id for item in items] == [video.id]

@@ -213,6 +213,7 @@ export interface DownloadJob {
   device_file_path?: string | null;
   video_id: number | null;
   replace_video_id?: number | null;
+  playlist_id?: number | null;
   file_size: number | null;
   height_px?: number | null;
   video_codec?: string | null;
@@ -247,6 +248,8 @@ export interface DownloadPreview {
   thumbnail_url: string | null;
   entry_count: number | null;
   view_count?: number | null;
+  published_at?: string | null;
+  published_label?: string | null;
   available_presets: string[];
   preset_sizes: Record<string, number>;
 }

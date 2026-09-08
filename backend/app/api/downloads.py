@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR
 from ..database import get_session
-from ..models import DownloadDestination, DownloadJob, JobStatus, Video
+from ..models import DownloadDestination, DownloadJob, JobStatus, Playlist, Video
 from ..schemas import (
     DownloadBulkCreate,
     DownloadBulkResult,
@@ -215,6 +215,12 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
 
     url = clean_url(payload.url, keep_playlist=False)
     destination = payload.destination.value if payload.destination else "library"
+    playlist_id = payload.playlist_id
+    if playlist_id is not None:
+        if session.get(Playlist, playlist_id) is None:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        if destination != "library":
+            playlist_id = None
 
     if is_youtube_short_url(url):
         raise HTTPException(
@@ -265,6 +271,11 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
             session, url, destination, quality_preset
         )
         if active is not None:
+            if playlist_id is not None and active.playlist_id is None:
+                active.playlist_id = playlist_id
+                session.add(active)
+                session.commit()
+                session.refresh(active)
             return _enrich_jobs(session, [active])[0]
 
         job = DownloadJob(
@@ -284,6 +295,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
             ),
             destination=destination,
             replace_video_id=replace_video_id,
+            playlist_id=playlist_id,
         )
         if preview_kind and preview_kind in _PREVIEW_ATTACH_KINDS and preview_message:
             # Still enqueue, but surface why metadata is missing on the card.

@@ -100,6 +100,7 @@ _DOWNLOAD_JOB_COLUMNS = [
     ("available_presets_json", "VARCHAR"),
     ("height_px", "INTEGER"),
     ("video_codec", "VARCHAR DEFAULT 'av1'"),
+    ("playlist_id", "INTEGER"),
 ]
 
 _VIDEO_AI_META_COLUMNS = [

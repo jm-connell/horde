@@ -986,6 +986,14 @@ export const api = {
     });
   },
 
+  addUrlToPlaylist(playlistId: number, url: string): Promise<PlaylistDetail> {
+    return request<PlaylistDetail>(`/api/playlists/${playlistId}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+  },
+
   bulkAddToPlaylist(playlistId: number, videoIds: number[]): Promise<void> {
     return request<void>(`/api/playlists/${playlistId}/items/bulk`, {
       method: "POST",

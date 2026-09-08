@@ -15,6 +15,7 @@ import { useConfirm } from "../context/ConfirmContext";
 import { usePlayback } from "../context/PlaybackContext";
 import type { Playlist, PlaylistDetail, Video } from "../types";
 import { formatDuration, formatRelative, moveItem } from "../utils";
+import PlaylistAddVideo from "./PlaylistAddVideo";
 
 export default function PlaylistRow({
   playlist,
@@ -424,42 +425,53 @@ export default function PlaylistRow({
             <p className="py-6 text-center text-sm text-gray-500">{loadError}</p>
           ) : (
             <>
-              <div className="flex items-center gap-2">
-                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+              <div className="flex flex-wrap items-start gap-2">
+                <div className="flex min-w-0 flex-1 flex-nowrap items-start gap-2">
                 <button
                   type="button"
                   onClick={playAll}
                   disabled={!current || current.videos.length === 0}
-                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                  className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
                 >
                   Play all
                 </button>
                 {playlist.subscribed && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={onSync}
-                      disabled={actionBusy}
-                      className="rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
-                    >
-                      Sync now
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onStopSubscribing}
-                      disabled={actionBusy}
-                      className="rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/10 disabled:opacity-50"
-                    >
-                      Stop subscription
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={onSync}
+                    disabled={actionBusy}
+                    className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
+                  >
+                    Sync now
+                  </button>
+                )}
+                <PlaylistAddVideo
+                  playlistId={playlist.id}
+                  memberIds={new Set((current?.videos ?? []).map((v) => v.id))}
+                  active={open}
+                  onAdded={(next) => {
+                    setDetail(next);
+                    onUpdated(next);
+                  }}
+                />
+                </div>
+                <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                {playlist.subscribed && (
+                  <button
+                    type="button"
+                    onClick={onStopSubscribing}
+                    disabled={actionBusy}
+                    className="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/10 disabled:opacity-50"
+                  >
+                    Stop subscription
+                  </button>
                 )}
                 {youtubeImported && !playlist.subscribed && (
                   <button
                     type="button"
                     onClick={onSubscribeUpdates}
                     disabled={actionBusy}
-                    className="rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
+                    className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
                   >
                     Subscribe to updates
                   </button>
@@ -467,21 +479,21 @@ export default function PlaylistRow({
                 <button
                   type="button"
                   onClick={onDelete}
-                  className="rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+                  className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
                 >
                   Delete
                 </button>
-                </div>
                 {playlist.source_url && (
                   <a
                     href={playlist.source_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="ml-auto shrink-0 text-sm text-accent hover:underline"
+                    className="shrink-0 text-sm text-accent hover:underline"
                   >
                     Source playlist ↗
                   </a>
                 )}
+                </div>
               </div>
               {playlist.sync_error && (
                 <p className="mt-2 text-sm text-red-400">{playlist.sync_error}</p>
@@ -588,7 +600,7 @@ export default function PlaylistRow({
                   <p className="py-8 text-center text-sm text-gray-500">
                     {youtubeImported
                       ? "Videos will appear here as they finish downloading."
-                      : "No videos yet. Add some from the library or watch page."}
+                      : "No videos yet. Search your library or paste a download link."}
                   </p>
                 ) : (
                   current.videos.map((v, i) => {

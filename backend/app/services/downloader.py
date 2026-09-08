@@ -11,13 +11,22 @@ from pathlib import Path
 from typing import Any, Optional
 from xml.sax.saxutils import escape as xml_escape
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
 from ..database import engine
-from ..models import DownloadDestination, DownloadJob, JobStatus, PlaylistItem, Video, VideoStatus
+from ..models import (
+    DownloadDestination,
+    DownloadJob,
+    JobStatus,
+    Playlist,
+    PlaylistItem,
+    Video,
+    VideoStatus,
+)
 from . import activity, library, scanner
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
@@ -1453,6 +1462,7 @@ def _complete_download(
         error=None,
         error_kind=None,
     )
+    _attach_download_to_playlist(job_id, video_id)
     progress_store[job_id] = snapshot
     return video_id
 
@@ -2029,6 +2039,46 @@ def _wait_for_job_video_id(job_id: int) -> Optional[int]:
             ):
                 return job.video_id
         threading.Event().wait(1.0)
+
+
+def append_playlist_item(session: Session, playlist_id: int, video_id: int) -> bool:
+    """Append a video to a playlist if it is not already a member."""
+    existing = session.exec(
+        select(PlaylistItem).where(
+            PlaylistItem.playlist_id == playlist_id,
+            PlaylistItem.video_id == video_id,
+        )
+    ).first()
+    if existing is not None:
+        return False
+    count = session.exec(
+        select(func.count())
+        .select_from(PlaylistItem)
+        .where(PlaylistItem.playlist_id == playlist_id)
+    ).one()
+    session.add(
+        PlaylistItem(
+            playlist_id=playlist_id,
+            video_id=video_id,
+            position=int(count or 0),
+        )
+    )
+    session.commit()
+    return True
+
+
+def _attach_download_to_playlist(job_id: int, video_id: Optional[int]) -> None:
+    if video_id is None:
+        return
+    with Session(engine) as session:
+        job = session.get(DownloadJob, job_id)
+        if job is None or job.playlist_id is None:
+            return
+        if session.get(Playlist, job.playlist_id) is None:
+            return
+        if session.get(Video, video_id) is None:
+            return
+        append_playlist_item(session, job.playlist_id, video_id)
 
 
 def _upsert_playlist_item(

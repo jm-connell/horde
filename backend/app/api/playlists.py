@@ -9,6 +9,7 @@ from ..database import get_session
 from ..models import Playlist, PlaylistItem, PlaylistSource, Video
 from ..schemas import (
     BulkPlaylistAdd,
+    DownloadCreate,
     PlaylistCreate,
     PlaylistDetail,
     PlaylistImport,
@@ -21,7 +22,7 @@ from ..schemas import (
     PlaylistSizeEstimateRequest,
     PlaylistUpdate,
 )
-from ..services import downloader
+from ..services import downloader, library
 from ..services.playlist_sync import (
     find_subscribed_by_url,
     start_playlist_sync,
@@ -30,7 +31,7 @@ from ..services.thumbnails import (
     unlink_playlist_cover,
     write_playlist_cover,
 )
-from ..services.url_clean import clean_url
+from ..services.url_clean import clean_url, youtube_video_id
 from .videos import _to_read
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
@@ -45,6 +46,22 @@ def _item_count(session: Session, playlist_id: int) -> int:
         )
         or 0
     )
+
+
+def _library_video_id_for_url(session: Session, raw_url: str) -> int | None:
+    cleaned = clean_url(raw_url, keep_playlist=False) or raw_url.strip()
+    yt_id = youtube_video_id(cleaned) or youtube_video_id(raw_url)
+    if yt_id:
+        existing = library.find_video_by_youtube_id(session, yt_id)
+        if existing is not None and existing.id is not None:
+            return existing.id
+    candidates = [value for value in (cleaned, raw_url.strip()) if value]
+    if not candidates:
+        return None
+    row = session.exec(select(Video).where(Video.source_url.in_(candidates))).first()
+    if row is not None and row.id is not None:
+        return row.id
+    return None
 
 
 def _playlist_items(session: Session, playlist_id: int) -> list[PlaylistItem]:
@@ -364,13 +381,35 @@ def add_item(
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    if session.get(Video, payload.video_id) is None:
+
+    video_id = payload.video_id
+    raw_url = (payload.url or "").strip()
+    if video_id is None and not raw_url:
+        raise HTTPException(status_code=400, detail="video_id or url is required")
+
+    if video_id is None and raw_url:
+        video_id = _library_video_id_for_url(session, raw_url)
+        if video_id is None:
+            from .downloads import create_download
+
+            quality = (playlist.quality_preset or "").strip() or "best"
+            create_download(
+                DownloadCreate(
+                    url=raw_url,
+                    quality_preset=quality,
+                    playlist_id=playlist_id,
+                ),
+                session,
+            )
+            return get_playlist(playlist_id, session)
+
+    if session.get(Video, video_id) is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
     existing = session.exec(
         select(PlaylistItem).where(
             PlaylistItem.playlist_id == playlist_id,
-            PlaylistItem.video_id == payload.video_id,
+            PlaylistItem.video_id == video_id,
         )
     ).first()
     if existing is None:
@@ -378,7 +417,7 @@ def add_item(
         session.add(
             PlaylistItem(
                 playlist_id=playlist_id,
-                video_id=payload.video_id,
+                video_id=video_id,
                 position=next_pos,
             )
         )
