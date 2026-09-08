@@ -39,6 +39,12 @@ describe("formatSize / formatUsdCost / formatResolution", () => {
     expect(formatSize(512)).toBe("512 B");
     expect(formatSize(1536)).toBe("1.5 KB");
   });
+  it("formats costs", () => {
+    expect(formatUsdCost(null)).toBe("");
+    expect(formatUsdCost(0)).toBe("$0");
+    expect(formatUsdCost(0.00001)).toBe("<$0.0001");
+    expect(formatUsdCost(0.5)).toBe("$0.500");
+  });
   it("formats OpenRouter per-million list prices", () => {
     expect(formatOpenRouterPerMillion(null, null)).toBe("");
     expect(formatOpenRouterPerMillion(0, 0)).toBe("Free");
