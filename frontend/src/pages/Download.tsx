@@ -7,6 +7,7 @@ import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
 import LoadingIndicator from "../components/LoadingIndicator";
 import ThemedSelect from "../components/ThemedSelect";
+import { useToast } from "../context/ToastContext";
 import {
   downloadErrorHint,
   downloadErrorLabel,
@@ -17,12 +18,15 @@ import {
   PRESET_ORDER,
   presetOptionLabel,
 } from "../presets";
-import type { ChannelStat, DownloadDestination, DownloadPreview, PlaylistPreviewEntry } from "../types";
+import type { ChannelStat, DownloadBulkSkip, DownloadDestination, DownloadPreview, PlaylistPreviewEntry } from "../types";
 import {
   clipboardEventToText,
   clipboardReadAvailable,
   clipboardTextToUrl,
   execPasteInto,
+  isYoutubePlaylistOnlyUrl,
+  isYoutubeShortsUrl,
+  parseDownloadUrlList,
   pasteTextFromButtonClick,
   readClipboardText,
   shouldCapturePagePaste,
@@ -35,13 +39,41 @@ import {
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
+const SKIP_TOAST: Record<string, string> = {
+  already_queued: "Already queued",
+  already_downloading: "Already downloading",
+  already_in_library: "Already in library",
+  playlist: "Skipped playlist link — paste it alone to import.",
+  shorts: "YouTube Shorts are not downloaded",
+  duplicate_in_paste: "Skipped duplicate links",
+};
+
+function toastBulkSkips(
+  skips: DownloadBulkSkip[],
+  showToast: (message: string) => void
+) {
+  if (skips.length === 0) return;
+  const counts = new Map<string, number>();
+  for (const skip of skips) {
+    counts.set(skip.reason, (counts.get(skip.reason) ?? 0) + 1);
+  }
+  const parts: string[] = [];
+  for (const [reason, n] of counts) {
+    const msg = SKIP_TOAST[reason] ?? reason;
+    parts.push(n > 1 && reason !== "playlist" ? `${msg} (${n})` : msg);
+  }
+  showToast(parts.join(" · "));
+}
+
 export default function Download() {
+  const { showToast } = useToast();
   const {
     jobs,
     progress,
     activeCount,
     queuePaused,
     submitDownload,
+    submitBulkDownloads,
     pauseQueue,
     resumeQueue,
     dismissFinishedJobs,
@@ -133,7 +165,15 @@ export default function Download() {
   }, []);
 
   useEffect(() => {
-    const trimmed = url.trim();
+    const urls = parseDownloadUrlList(url);
+    if (urls.length > 1) {
+      setPreview(null);
+      setPreviewError(null);
+      setPreviewing(false);
+      setPlaylistMode("import");
+      return;
+    }
+    const trimmed = urls[0] ?? url.trim();
     if (!trimmed) {
       setPreview(null);
       setPreviewError(null);
@@ -218,15 +258,21 @@ export default function Download() {
     };
   }, [preview?.is_playlist, playlistEntries]);
 
+  const urlList = useMemo(() => parseDownloadUrlList(url), [url]);
+  const isBulkList = urlList.length > 1;
+
   const metadataLoaded =
-    preview != null && !preview.is_playlist && preview.available_presets.length > 0;
+    !isBulkList &&
+    preview != null &&
+    !preview.is_playlist &&
+    preview.available_presets.length > 0;
 
   const qualityOptions = useMemo(() => {
     if (!metadataLoaded) return allPresets;
     return mergePinnedPreset(preview!.available_presets, preset);
   }, [metadataLoaded, preview, preset, allPresets]);
 
-  const isPlaylist = preview?.is_playlist ?? false;
+  const isPlaylist = !isBulkList && (preview?.is_playlist ?? false);
   const toDevice = !isPlaylist && destination === "device";
   const presetSizes = preview?.preset_sizes;
   const selectedPresetSize = presetSizes?.[preset];
@@ -239,12 +285,16 @@ export default function Download() {
 
   const downloadButtonLabel = useMemo(() => {
     if (submitting) return "Starting...";
+    if (isBulkList) {
+      const n = urlList.length;
+      return `Download ${n} video${n === 1 ? "" : "s"}`;
+    }
     const approx = formatApproxSize(selectedPresetSize);
     if (toDevice) {
       return approx ? `Save to device (${approx})` : "Save to device";
     }
     return approx ? `Download (${approx})` : "Download";
-  }, [submitting, selectedPresetSize, toDevice]);
+  }, [submitting, selectedPresetSize, toDevice, isBulkList, urlList.length]);
 
   const playlistTotalSize = useMemo(() => {
     if (!isPlaylist || selectedUrls.size === 0) return undefined;
@@ -313,7 +363,12 @@ export default function Download() {
   };
 
   const applyClipboardText = useCallback((text: string) => {
-    const next = clipboardTextToUrl(text);
+    const urls = parseDownloadUrlList(text);
+    if (urls.length > 1) {
+      setUrl(urls.join(", "));
+      return true;
+    }
+    const next = urls[0] || clipboardTextToUrl(text);
     if (!next) return false;
     setUrl(next);
     return true;
@@ -324,10 +379,10 @@ export default function Download() {
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       if (!shouldCapturePagePaste(e.target, urlInputRef.current)) return;
-      const next = clipboardTextToUrl(clipboardEventToText(e.clipboardData));
-      if (!next) return;
+      const next = parseDownloadUrlList(clipboardEventToText(e.clipboardData));
+      if (next.length === 0) return;
       e.preventDefault();
-      setUrl(next);
+      setUrl(next.length > 1 ? next.join(", ") : next[0]!);
     };
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
@@ -354,20 +409,43 @@ export default function Download() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim()) return;
+    const urls = parseDownloadUrlList(url);
+    if (urls.length === 0) return;
     setSubmitting(true);
     setError(null);
     try {
-      const detectedTitle = (preview?.title ?? "").trim();
-      const detectedChannel = (preview?.channel ?? "").trim();
-      const t = title.trim();
-      const c = channel.trim();
-      await submitDownload(url.trim(), preset, {
-        title: t && t !== detectedTitle ? t : undefined,
-        channel:
-          toDevice || !c || c === detectedChannel ? undefined : c,
-        destination: toDevice ? "device" : "library",
-      });
+      if (urls.length > 1) {
+        const toSend: string[] = [];
+        const localSkips: DownloadBulkSkip[] = [];
+        for (const item of urls) {
+          if (isYoutubeShortsUrl(item)) {
+            localSkips.push({ url: item, reason: "shorts" });
+            continue;
+          }
+          if (isYoutubePlaylistOnlyUrl(item)) {
+            localSkips.push({ url: item, reason: "playlist" });
+            continue;
+          }
+          toSend.push(item);
+        }
+        toastBulkSkips(localSkips, showToast);
+        if (toSend.length === 0) return;
+        const result = await submitBulkDownloads(toSend, preset, {
+          destination: toDevice ? "device" : "library",
+        });
+        toastBulkSkips(result.skips, showToast);
+      } else {
+        const detectedTitle = (preview?.title ?? "").trim();
+        const detectedChannel = (preview?.channel ?? "").trim();
+        const t = title.trim();
+        const c = channel.trim();
+        await submitDownload(urls[0]!, preset, {
+          title: t && t !== detectedTitle ? t : undefined,
+          channel:
+            toDevice || !c || c === detectedChannel ? undefined : c,
+          destination: toDevice ? "device" : "library",
+        });
+      }
       setUrl("");
       setPreview(null);
       setPreviewError(null);
@@ -375,7 +453,11 @@ export default function Download() {
       setChannel("");
       setDestination("library");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Download failed");
+      if (err instanceof ApiError && err.code) {
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : "Download failed");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -391,7 +473,7 @@ export default function Download() {
     setImportedPlaylist(null);
     try {
       if (playlistMode === "videos") {
-        const result = await api.bulkCreateDownloads(selected, preset);
+        const result = await submitBulkDownloads(selected, preset);
         refreshJobs();
         const queued = result.jobs.length;
         const skipped = result.skipped;
@@ -402,10 +484,11 @@ export default function Download() {
         ];
         if (skipped) {
           parts.push(
-            `${skipped} already in library`
+            `${skipped} skipped`
           );
         }
         setImportMessage(`${parts.join(" — ")}.`);
+        toastBulkSkips(result.skips, showToast);
         setUrl("");
         setPreview(null);
         setPreviewError(null);
@@ -504,7 +587,10 @@ export default function Download() {
               Paste
             </button>
           </div>
-          {previewing && (
+          <p className="mt-1 text-xs text-gray-500">
+            Accepts comma-separated links.
+          </p>
+          {previewing && !isBulkList && (
             <p className="mt-1 text-xs text-gray-500">Reading link...</p>
           )}
           {!previewing && previewError && (
@@ -524,7 +610,7 @@ export default function Download() {
           )}
         </div>
 
-        <Collapse open={!isPlaylist}>
+        <Collapse open={!isPlaylist && !isBulkList}>
           <div className={toDevice ? undefined : "space-y-4"}>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-300">
@@ -893,7 +979,12 @@ export default function Download() {
             <h2 className="text-sm font-medium text-gray-400">
               Recent downloads
             </h2>
-            {recentJobs.some((j) => j.status === "completed" || j.status === "error") && (
+            {recentJobs.some(
+              (j) =>
+                j.status === "completed" ||
+                j.status === "error" ||
+                j.status === "cancelled"
+            ) && (
               <button
                 type="button"
                 onClick={dismissFinishedJobs}

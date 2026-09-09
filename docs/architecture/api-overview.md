@@ -22,7 +22,8 @@ Use `/docs` as the live catalog of request/response shapes. This wiki does **not
 
 | Endpoint pattern | Use |
 |------------------|-----|
-| `/api/downloads/{id}/events` | Live download progress for a job |
+| `/api/downloads/events` | Live progress for the whole queue (`job_id` + snapshot) |
+| `/api/downloads/{id}/events` | Live download progress for a single job |
 | AI chat stream routes under `/api/ai/...` | Token/streamed chat replies |
 
 Clients typically use `EventSource` for downloads and fetch/stream readers for chat.

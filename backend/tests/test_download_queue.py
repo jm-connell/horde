@@ -69,6 +69,21 @@ def test_pause_and_resume_all(init_db, monkeypatch):
         assert all(not j.paused for j in jobs)
 
 
+def test_pause_does_not_requeue_ffmpeg_jobs(init_db, monkeypatch):
+    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    q = downloader.DownloadQueue()
+    with Session(init_db["engine"]) as session:
+        encoding = _add_job(session, status=JobStatus.downloading)
+        encoding_id = encoding.id
+    q._ffmpeg_running.add(encoding_id)
+    q.pause_all()
+    with Session(init_db["engine"]) as session:
+        job = session.get(DownloadJob, encoding_id)
+        assert job.status == JobStatus.downloading
+        assert job.paused is False
+    q._ffmpeg_running.discard(encoding_id)
+
+
 def test_recover_stuck_downloading(init_db, monkeypatch):
     monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
     q = downloader.DownloadQueue()

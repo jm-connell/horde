@@ -53,6 +53,31 @@ def youtube_video_id(url: str) -> str | None:
     return _youtube_video_id(parsed)
 
 
+def youtube_thumbnail_url(yt_id: str) -> str:
+    """Stable hqdefault thumbnail; no yt-dlp extract required."""
+    return f"https://i.ytimg.com/vi/{yt_id}/hqdefault.jpg"
+
+
+def is_playlist_only_url(url: str) -> bool:
+    """True for a YouTube playlist page with no watch video id.
+
+    ``watch?v=…&list=`` is a single video (list is stripped on enqueue). A
+    ``/playlist?list=`` URL in a bulk paste must not be exploded into entries.
+    """
+    try:
+        parsed = urlparse(url.strip())
+    except ValueError:
+        return False
+    if parsed.netloc.lower() not in _YOUTUBE_HOSTS:
+        return False
+    if _youtube_video_id(parsed):
+        return False
+    path = parsed.path.rstrip("/")
+    if path == "/playlist" or path.startswith("/playlist/"):
+        return True
+    return "list" in parse_qs(parsed.query)
+
+
 def clean_url(url: str, keep_playlist: bool = False) -> str:
     """Return a canonical URL with tracking parameters removed.
 

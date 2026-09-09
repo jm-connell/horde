@@ -6,11 +6,12 @@ import logging
 import subprocess
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from . import activity, scanner
 from .encode_probe import EncoderChoice, pick_encoder, probe_encode_capabilities
 from .ffmpeg_bin import ffmpeg_bin
+from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
 from .mp4_compat import codec_family, is_aac_audio, probe_media
 from .paths import to_rel_path
 from .ytdlp_formats import is_audio_preset, normalize_video_codec
@@ -209,6 +210,9 @@ def transcode_video(
     target: str,
     *,
     encoder: Optional[EncoderChoice] = None,
+    cancel_event: Optional[threading.Event] = None,
+    on_progress: Optional[Callable[[float], None]] = None,
+    duration: Optional[float] = None,
 ) -> Path:
     """Re-encode ``path`` to H.264 or H.265 MP4. Raises TranscodeError on failure."""
     if not path.exists():
@@ -249,20 +253,25 @@ def transcode_video(
             engine="ffmpeg",
             detail=path.name,
         ):
-            result = subprocess.run(
-                cmd,
-                check=False,
-                capture_output=True,
-                timeout=_TRANSCODE_TIMEOUT_SEC,
-            )
-            if result.returncode != 0:
-                err = (result.stderr or result.stdout or b"").decode("utf-8", "replace")
+            try:
+                run_ffmpeg(
+                    cmd,
+                    duration=duration,
+                    on_progress=on_progress,
+                    cancel_event=cancel_event,
+                    timeout=_TRANSCODE_TIMEOUT_SEC,
+                )
+            except subprocess.CalledProcessError as exc:
+                err = (exc.stderr or exc.stdout or b"").decode("utf-8", "replace")
                 logger.warning("transcode failed (%s): %s", choice.name, err[-800:])
-                raise TranscodeError(f"ffmpeg {choice.name} failed")
+                raise TranscodeError(f"ffmpeg {choice.name} failed") from exc
             tmp.replace(dest)
         if dest != path:
             _safe_unlink(path)
         return dest
+    except FfmpegCancelled:
+        _safe_unlink(tmp)
+        raise
     except subprocess.TimeoutExpired as exc:
         _safe_unlink(tmp)
         raise TranscodeError("ffmpeg transcode timed out") from exc

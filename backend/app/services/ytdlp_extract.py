@@ -15,6 +15,8 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 from .ytdlp_common import (
+    EXTRACT_PRIORITY_BACKGROUND,
+    EXTRACT_PRIORITY_INTERACTIVE,
     MembersOnlyError,
     QuietYtdlpLogger,
     classify_ytdlp_error,
@@ -214,7 +216,9 @@ def _estimate_preset_sizes(
     return sizes
 
 
-def extract_preview(url: str) -> dict[str, Any]:
+def extract_preview(
+    url: str, *, priority: int = EXTRACT_PRIORITY_INTERACTIVE
+) -> dict[str, Any]:
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -224,7 +228,14 @@ def extract_preview(url: str) -> dict[str, Any]:
         "extractor_args": youtube_extractor_args(),
     }
     try:
-        info = _as_info(extract_info_gated(url, opts, cache_key=f"preview:{url}"))
+        info = _as_info(
+            extract_info_gated(
+                url,
+                opts,
+                cache_key=url,
+                priority=priority,
+            )
+        )
     except Exception as exc:  # noqa: BLE001
         if is_members_only_error(exc):
             _purge_members_only_url(url)
@@ -743,6 +754,7 @@ def search_youtube_channel_videos(
                 opts,
                 cache_key=f"channel-search:v2:{search_url}:{fetch_n}",
                 cookie_retry=False,
+                priority=EXTRACT_PRIORITY_BACKGROUND,
             )
         )
     except Exception:  # noqa: BLE001
@@ -820,6 +832,7 @@ def search_youtube_videos(
                 opts,
                 cache_key=f"yt-video-search:v2:{q}:{fetch_n}",
                 cookie_retry=False,
+                priority=EXTRACT_PRIORITY_BACKGROUND,
             )
         )
     except Exception:  # noqa: BLE001

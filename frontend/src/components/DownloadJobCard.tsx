@@ -88,12 +88,10 @@ export default function DownloadJobCard({
     live?.downloaded_bytes ?? 0
   );
   const liveTotal =
-    status === "downloading" || status === "processing"
-      ? live?.total_bytes
-      : undefined;
+    status === "downloading" ? live?.total_bytes : undefined;
   const percent = downloadProgressPercent(
     live?.progress ?? job.progress,
-    status === "downloading" || status === "processing" ? downloaded : undefined,
+    status === "downloading" ? downloaded : undefined,
     liveTotal
   );
   const completed = status === "completed";
@@ -163,7 +161,6 @@ export default function DownloadJobCard({
   const titleInputRef = useRef<HTMLInputElement>(null);
   const actionRowRef = useRef<HTMLDivElement | null>(null);
   const collapseRoRef = useRef<ResizeObserver | null>(null);
-  const previewFetchedFor = useRef<number | null>(null);
   editingTitleRef.current = editingTitle;
 
   const savedTitle = useRef(resolveTitle());
@@ -194,23 +191,8 @@ export default function DownloadJobCard({
   useEffect(() => {
     if (storedPresets && storedPresets.length > 0) {
       setSourcePresets(storedPresets);
-      return;
     }
-    if (!canChangeQuality || !job.url) return;
-    if (previewFetchedFor.current === job.id) return;
-    let cancelledFetch = false;
-    api
-      .previewDownload(job.url)
-      .then((p) => {
-        if (cancelledFetch || p.is_playlist) return;
-        previewFetchedFor.current = job.id;
-        setSourcePresets(p.available_presets);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelledFetch = true;
-    };
-  }, [job.id, job.url, storedPresets, canChangeQuality]);
+  }, [job.id, storedPresets]);
 
   const qualityOptions = jobQualityOptions(
     sourcePresets,
@@ -436,7 +418,7 @@ export default function DownloadJobCard({
       const bytes = live?.file_size ?? job.file_size;
       return bytes ? formatSize(bytes) : "";
     }
-    if (status === "downloading" || status === "processing") {
+    if (status === "downloading") {
       const total = liveTotal;
       if (total) {
         return `${formatSize(downloaded || null)} / ${formatSize(total)}`;

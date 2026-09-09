@@ -195,7 +195,7 @@ def test_postprocessor_merger_sets_merging_stage():
     snap = downloader.progress_store[job_id]
     assert snap["status"] == "processing"
     assert snap["stage"] == "merging"
-    assert snap["progress"] >= 99
+    assert snap["progress"] == 0.0
     assert snap["title"] == "Clip"
     assert snap["destination"] == "library"
     downloader.progress_store.pop(job_id, None)

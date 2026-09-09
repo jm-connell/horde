@@ -15,6 +15,71 @@ export function clipboardTextToUrl(text: string): string {
   return stripTrailingUrlPunctuation(match[0]);
 }
 
+function urlFromChunk(part: string): string {
+  const trimmed = part.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) {
+    return stripTrailingUrlPunctuation(trimmed.split(/\s+/, 1)[0]!);
+  }
+  const match = trimmed.match(/https?:\/\/[^\s<>"']+/i);
+  return match ? stripTrailingUrlPunctuation(match[0]) : "";
+}
+
+/** Comma-separated download paste. Keeps the full list, unlike clipboardTextToUrl. */
+export function parseDownloadUrlList(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  const parts = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const url = urlFromChunk(part);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+  if (urls.length > 0) return urls;
+  const fallback = clipboardTextToUrl(trimmed);
+  return fallback ? [fallback] : [];
+}
+
+const YOUTUBE_HOSTS = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "music.youtube.com",
+  "youtu.be",
+]);
+
+export function isYoutubeShortsUrl(url: string): boolean {
+  return /\/shorts\//i.test(url);
+}
+
+/** Playlist page with no watch video id — skip these inside a bulk list. */
+export function isYoutubePlaylistOnlyUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url.trim());
+    if (!YOUTUBE_HOSTS.has(parsed.hostname.toLowerCase())) return false;
+    const path = parsed.pathname;
+    if (parsed.hostname.toLowerCase() === "youtu.be" && path.split("/")[1]) {
+      return false;
+    }
+    if (parsed.searchParams.get("v")) return false;
+    for (const prefix of ["/shorts/", "/embed/", "/live/", "/v/"]) {
+      if (path.startsWith(prefix) && path.slice(prefix.length).split("/")[0]) {
+        return false;
+      }
+    }
+    const normalized = path.replace(/\/+$/, "") || "/";
+    if (normalized === "/playlist" || normalized.startsWith("/playlist/")) {
+      return true;
+    }
+    return parsed.searchParams.has("list");
+  } catch {
+    return false;
+  }
+}
+
 function hrefFromHtml(html: string): string {
   const href = html.match(/href=["'](https?:\/\/[^"']+)["']/i);
   return href?.[1] ?? "";

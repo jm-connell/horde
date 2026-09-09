@@ -27,7 +27,7 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 
 | Area | Modules | Role |
 |------|---------|------|
-| Downloads | `downloader.py`, `ytdlp_extract.py`, `ytdlp_formats.py`, `stream_preview.py`, `url_clean.py`, `ytdlp_common.py` | Queue/finalize; metadata extract & feed; format presets; in-app DASH/progressive preview; URL clean; POT/cookies/extract gate |
+| Downloads | `downloader.py`, `job_metadata.py`, `ffmpeg_progress.py`, `ytdlp_extract.py`, `ytdlp_formats.py`, `stream_preview.py`, `url_clean.py`, `ytdlp_common.py` | Queue/finalize; cheap-enqueue metadata fill; ffmpeg progress; metadata extract & feed; format presets; in-app DASH/progressive preview; URL clean; POT/cookies/extract gate |
 | Library disk | `scanner.py`, `paths.py`, `library.py`, `metadata.py`, `sprites.py` | Scan, paths, probes, sprites |
 | Sync / feeds | `metadata_sync.py`, `subtitle_retry.py`, `playlist_sync.py`, `feed_meta_cache.py`, `channel_catalog/` (package), `return_youtube_dislike.py` | Stale metadata, delayed caption retry, subscribed playlist rescan, catalog worker/index/query/skips, caches |
 | Settings / updates | `app_settings.py`, `updates.py` | JSON settings, GitHub SHA compare |

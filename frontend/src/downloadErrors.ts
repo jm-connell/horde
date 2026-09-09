@@ -48,10 +48,11 @@ export function downloadErrorToast(
   kind: string | null | undefined,
   message: string | null | undefined
 ): string {
+  if (kind === "cancelled") return "Cancelled";
   const label = downloadErrorLabel(kind);
   const msg = (message || "").trim();
   if (!msg) return label === "Failed" ? "Download failed" : `Download failed: ${label}`;
-  if (kind && kind !== "unknown" && kind !== "cancelled") {
+  if (kind && kind !== "unknown") {
     return `${label}: ${msg}`;
   }
   return msg || "Download failed";

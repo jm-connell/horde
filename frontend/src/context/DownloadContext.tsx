@@ -6,11 +6,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { api, deviceDownloadFileUrl, triggerBrowserDownload } from "../api";
+import { ApiError, api, deviceDownloadFileUrl, triggerBrowserDownload } from "../api";
 import { downloadErrorToast } from "../downloadErrors";
 import { useSettings } from "../hooks/useSettings";
-import { subscribeToJob } from "../hooks/useJobEvents";
+import { subscribeToQueue } from "../hooks/useJobEvents";
 import type {
+  DownloadBulkResult,
   DownloadDestination,
   DownloadJob,
   DownloadQueueStatus,
@@ -35,6 +36,11 @@ interface DownloadContextValue {
     preset: string,
     overrides: SubmitOverrides
   ) => Promise<DownloadJob>;
+  submitBulkDownloads: (
+    urls: string[],
+    preset: string,
+    overrides?: Pick<SubmitOverrides, "destination">
+  ) => Promise<DownloadBulkResult>;
   retryJob: (
     jobId: number,
     overrides?: SubmitOverrides
@@ -56,6 +62,11 @@ interface DownloadContextValue {
 const Ctx = createContext<DownloadContextValue | null>(null);
 
 const TERMINAL = new Set(["completed", "error", "cancelled"]);
+const DUPLICATE_CODES = new Set([
+  "already_queued",
+  "already_downloading",
+  "already_in_library",
+]);
 
 function jobStatus(job: DownloadJob, live?: ProgressEvent): string {
   // Prefer persisted terminal states over stale SSE snapshots.
@@ -73,6 +84,17 @@ function isActiveJob(job: DownloadJob, live?: ProgressEvent): boolean {
   return status === "queued" || status === "downloading" || status === "processing";
 }
 
+function patchJobFromEvent(job: DownloadJob, event: ProgressEvent): DownloadJob {
+  return {
+    ...job,
+    title: event.title ?? job.title,
+    channel: event.channel ?? job.channel,
+    thumbnail_url: event.thumbnail_url ?? job.thumbnail_url,
+    quality_preset: event.quality_preset ?? job.quality_preset,
+    available_presets: event.available_presets ?? job.available_presets,
+  };
+}
+
 export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const { showToast } = useToast();
   const [settings, updateSettings] = useSettings();
@@ -80,8 +102,9 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const [progress, setProgress] = useState<Record<number, ProgressEvent>>({});
   const [queuePaused, setQueuePaused] = useState(false);
 
-  const sources = useRef<Map<number, () => void>>(new Map());
   const toastedErrors = useRef<Set<number>>(new Set());
+  const toastedCancelled = useRef<Set<number>>(new Set());
+  const toastedSkipped = useRef<Set<number>>(new Set());
   const deviceSaved = useRef<Set<number>>(new Set());
   const restartingJobs = useRef<Set<number>>(new Set());
   const completionListeners = useRef<
@@ -123,57 +146,87 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     triggerBrowserDownload(deviceDownloadFileUrl(jobId));
   }, []);
 
-  const subscribe = useCallback(
-    (jobId: number) => {
-      if (sources.current.has(jobId)) return;
-      const close = subscribeToJob(jobId, (event) => {
+  const handleQueueEvent = useCallback(
+    (event: ProgressEvent) => {
+      const jobId = event.job_id;
+      if (jobId == null) return;
+
+      if (event.status === "skipped" && event.reason === "shorts") {
+        if (!toastedSkipped.current.has(jobId)) {
+          toastedSkipped.current.add(jobId);
+          showToast("YouTube Shorts are not downloaded");
+        }
+        setJobs((prev) => prev.filter((j) => j.id !== jobId));
+        setProgress((prev) => {
+          const next = { ...prev };
+          delete next[jobId];
+          return next;
+        });
+        return;
+      }
+
+      if (
+        restartingJobs.current.has(jobId) &&
+        event.status === "cancelled"
+      ) {
+        return;
+      }
+
+      setProgress((prev) => ({
+        ...prev,
+        [jobId]: { ...prev[jobId], ...event },
+      }));
+      if (
+        event.title ||
+        event.channel ||
+        event.thumbnail_url ||
+        event.quality_preset ||
+        event.available_presets
+      ) {
+        setJobs((prev) =>
+          prev.map((j) => (j.id === jobId ? patchJobFromEvent(j, event) : j))
+        );
+      }
+
+      if (!TERMINAL.has(event.status)) return;
+      refreshJob(jobId);
+      if (event.status === "completed") {
+        const videoId = event.video_id ?? null;
+        maybeSaveDeviceFile(jobId, event.destination);
+        completionListeners.current.forEach((cb) => cb(videoId, event));
+        if (event.quality_warning) {
+          showToast(event.quality_warning);
+        }
+        return;
+      }
+      if (event.status === "cancelled") {
         if (
-          restartingJobs.current.has(jobId) &&
-          event.status === "cancelled"
+          !restartingJobs.current.has(jobId) &&
+          !toastedCancelled.current.has(jobId)
         ) {
-          sources.current.get(jobId)?.();
-          sources.current.delete(jobId);
-          return;
+          toastedCancelled.current.add(jobId);
+          showToast("Cancelled");
         }
-        setProgress((prev) => ({ ...prev, [jobId]: event }));
-        if (TERMINAL.has(event.status)) {
-          sources.current.get(jobId)?.();
-          sources.current.delete(jobId);
-          refreshJob(jobId);
-          if (event.status === "completed") {
-            const videoId = event.video_id ?? null;
-            maybeSaveDeviceFile(jobId, event.destination);
-            completionListeners.current.forEach((cb) => cb(videoId, event));
-            if (event.quality_warning) {
-              showToast(event.quality_warning);
-            }
-          } else if (event.status === "error" && !toastedErrors.current.has(jobId)) {
-            if (restartingJobs.current.has(jobId)) {
-              return;
-            }
-            toastedErrors.current.add(jobId);
-            showToast(downloadErrorToast(event.error_kind, event.error));
-          }
-        }
-      });
-      sources.current.set(jobId, close);
+        return;
+      }
+      if (event.status === "error" && !toastedErrors.current.has(jobId)) {
+        if (restartingJobs.current.has(jobId)) return;
+        toastedErrors.current.add(jobId);
+        showToast(downloadErrorToast(event.error_kind, event.error));
+      }
     },
     [refreshJob, showToast, maybeSaveDeviceFile]
   );
 
+  const handleQueueEventRef = useRef(handleQueueEvent);
+  handleQueueEventRef.current = handleQueueEvent;
+
   const refreshJobs = useCallback(() => {
     api
       .listJobs()
-      .then((all) => {
-        setJobs(all);
-        all.forEach((j) => {
-          if (isActiveJob(j)) {
-            subscribe(j.id);
-          }
-        });
-      })
+      .then(setJobs)
       .catch(() => undefined);
-  }, [subscribe]);
+  }, []);
 
   const syncQueue = useCallback(() => {
     api
@@ -183,49 +236,70 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    api
-      .listJobs()
-      .then((all) => {
-        setJobs(all);
-        all.filter((j) => isActiveJob(j)).forEach((j) => subscribe(j.id));
-      })
-      .catch(() => undefined);
+    api.listJobs().then(setJobs).catch(() => undefined);
     syncQueue();
+    const close = subscribeToQueue((event) => handleQueueEventRef.current(event));
     const poll = setInterval(refreshJobs, 10000);
     const queuePoll = setInterval(syncQueue, 5000);
-    const current = sources.current;
     return () => {
       clearInterval(poll);
       clearInterval(queuePoll);
-      current.forEach((close) => close());
-      current.clear();
+      close();
     };
-  }, [subscribe, refreshJobs, syncQueue]);
+  }, [refreshJobs, syncQueue]);
 
   const submitDownload = useCallback(
     async (url: string, preset: string, overrides: SubmitOverrides) => {
-      const job = await api.createDownload(url, preset, {
-        title_override: overrides.title?.trim() || undefined,
-        channel_override: overrides.channel?.trim() || undefined,
-        notes_pending: overrides.notes?.trim() || undefined,
+      try {
+        const job = await api.createDownload(url, preset, {
+          title_override: overrides.title?.trim() || undefined,
+          channel_override: overrides.channel?.trim() || undefined,
+          notes_pending: overrides.notes?.trim() || undefined,
+          normalize_volume: settings.normalizeVolumeOnDownload,
+          video_codec: settings.downloadVideoCodec,
+          destination: overrides.destination ?? "library",
+        });
+        setJobs((prev) => [job, ...prev.filter((j) => j.id !== job.id)]);
+        syncQueue();
+        if (overrides.channel?.trim()) {
+          updateSettings({ lastCustomChannel: overrides.channel.trim() });
+        }
+        return job;
+      } catch (err) {
+        if (err instanceof ApiError && err.code && DUPLICATE_CODES.has(err.code)) {
+          showToast(err.message);
+        }
+        throw err;
+      }
+    },
+    [updateSettings, settings.normalizeVolumeOnDownload, settings.downloadVideoCodec, syncQueue, showToast]
+  );
+
+  const submitBulkDownloads = useCallback(
+    async (
+      urls: string[],
+      preset: string,
+      overrides: Pick<SubmitOverrides, "destination"> = {}
+    ) => {
+      const result = await api.bulkCreateDownloads(urls, preset, {
+        destination: overrides.destination ?? "library",
         normalize_volume: settings.normalizeVolumeOnDownload,
         video_codec: settings.downloadVideoCodec,
-        destination: overrides.destination ?? "library",
       });
-      setJobs((prev) => [job, ...prev.filter((j) => j.id !== job.id)]);
-      subscribe(job.id);
+      setJobs((prev) => {
+        const ids = new Set(result.jobs.map((j) => j.id));
+        return [...result.jobs, ...prev.filter((j) => !ids.has(j.id))];
+      });
       syncQueue();
-      if (overrides.channel?.trim()) {
-        updateSettings({ lastCustomChannel: overrides.channel.trim() });
-      }
-      return job;
+      return result;
     },
-    [subscribe, updateSettings, settings.normalizeVolumeOnDownload, settings.downloadVideoCodec, syncQueue]
+    [settings.normalizeVolumeOnDownload, settings.downloadVideoCodec, syncQueue]
   );
 
   const retryJob = useCallback(
     async (jobId: number, overrides: SubmitOverrides = {}) => {
       toastedErrors.current.delete(jobId);
+      toastedCancelled.current.delete(jobId);
       deviceSaved.current.delete(jobId);
       setProgress((prev) => ({
         ...prev,
@@ -244,7 +318,6 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           notes_pending: overrides.notes?.trim() || undefined,
         });
         setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
-        subscribe(job.id);
         syncQueue();
         return job;
       } catch (err) {
@@ -257,7 +330,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
     },
-    [refreshJob, subscribe, syncQueue]
+    [refreshJob, syncQueue]
   );
 
   const changeJobQuality = useCallback(
@@ -286,9 +359,6 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       try {
         const job = await api.changeJobQuality(jobId, preset);
         setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
-        sources.current.get(jobId)?.();
-        sources.current.delete(jobId);
-        subscribe(job.id);
         syncQueue();
         return job;
       } catch (err) {
@@ -299,7 +369,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         window.setTimeout(() => restartingJobs.current.delete(jobId), 10000);
       }
     },
-    [refreshJob, subscribe, syncQueue]
+    [refreshJob, syncQueue]
   );
 
   const updateJobOverrides = useCallback(
@@ -349,14 +419,23 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const dismissFinishedJobs = useCallback(async () => {
     await api.dismissFinished();
     setJobs((prev) =>
-      prev.filter((j) => j.status !== "completed" && j.status !== "error")
+      prev.filter(
+        (j) =>
+          j.status !== "completed" &&
+          j.status !== "error" &&
+          j.status !== "cancelled"
+      )
     );
     setProgress((prev) => {
       const next = { ...prev };
       for (const key of Object.keys(next)) {
         const id = Number(key);
         const ev = next[id];
-        if (ev?.status === "completed" || ev?.status === "error") {
+        if (
+          ev?.status === "completed" ||
+          ev?.status === "error" ||
+          ev?.status === "cancelled"
+        ) {
           delete next[id];
         }
       }
@@ -392,6 +471,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     activeCount,
     queuePaused,
     submitDownload,
+    submitBulkDownloads,
     retryJob,
     changeJobQuality,
     updateJobOverrides,

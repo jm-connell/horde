@@ -19,10 +19,11 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from . import activity, scanner
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin, ffprobe_bin
+from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
 from .paths import to_rel_path
 
 logger = logging.getLogger(__name__)
@@ -280,13 +281,30 @@ def _dest_mp4(path: Path) -> Path:
     return path.with_suffix(".mp4")
 
 
-def ensure_safari_mp4(path: Path) -> Path:
+def ensure_safari_mp4(
+    path: Path,
+    *,
+    cancel_event: Optional[threading.Event] = None,
+    on_progress: Optional[Callable[[float], None]] = None,
+    duration: Optional[float] = None,
+) -> Path:
     """Copy video, AAC audio if needed, faststart. Returns the playable path."""
     with _lock_for(path):
-        return _ensure_safari_mp4_locked(path)
+        return _ensure_safari_mp4_locked(
+            path,
+            cancel_event=cancel_event,
+            on_progress=on_progress,
+            duration=duration,
+        )
 
 
-def _ensure_safari_mp4_locked(path: Path) -> Path:
+def _ensure_safari_mp4_locked(
+    path: Path,
+    *,
+    cancel_event: Optional[threading.Event] = None,
+    on_progress: Optional[Callable[[float], None]] = None,
+    duration: Optional[float] = None,
+) -> Path:
     if not path.exists():
         return path
     if not ffmpeg_available():
@@ -326,11 +344,20 @@ def _ensure_safari_mp4_locked(path: Path) -> Path:
             engine="ffmpeg",
             detail=path.name,
         ):
-            subprocess.run(cmd, check=True, capture_output=True, timeout=4 * 3600)
+            run_ffmpeg(
+                cmd,
+                duration=duration,
+                on_progress=on_progress,
+                cancel_event=cancel_event,
+                timeout=4 * 3600,
+            )
             _replace_with_retries(tmp, dest_path)
         if dest_path != path:
             _safe_unlink(path)
         return dest_path
+    except FfmpegCancelled:
+        _safe_unlink(tmp)
+        raise
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
         logger.warning("Safari MP4 remux failed for %s: %s", path.name, exc)
         _safe_unlink(tmp)

@@ -17,10 +17,17 @@ Discovers importable video extensions, ignores intermediate `.part` / `.fNNN` / 
 
 **Recover:** `download_queue.recover()` on startup — jobs left `downloading` become `queued` (restart from scratch; partials are not resumed). Global pause is restored from app settings key `download_queue_paused` so Pause survives process restart.
 
-- FIFO queue with `MAX_DOWNLOAD_CONCURRENCY` workers (default **2**).
-- Per-job cancel/pause events; progress snapshots for SSE (includes typed `error_kind` on failure and `stage` during post-download work).
-- Metadata extracts share the yt-dlp extract gate with preview/feed (1 + 1.25s spacing).
+- FIFO queue with `MAX_DOWNLOAD_CONCURRENCY` **download** workers (default **2**) plus a separate ffmpeg pool (`MAX_FFMPEG_CONCURRENCY`, default 1 or 2 with GPU).
+- One multiplex SSE stream (`GET /api/downloads/events`); per-job streams remain for Watch.
+- Per-job cancel/pause events; pause does not kill an in-flight encode. Progress snapshots for SSE (includes typed `error_kind` on failure and `stage` during post-download work).
+- Metadata extracts share the yt-dlp extract gate with preview/feed (1 + 1.25s spacing; interactive preview jumps background fills).
 - See [Download pipeline](downloads-pipeline.md) and [Troubleshooting](../ops/troubleshooting.md#download-error_kind-values).
+
+## Job metadata
+
+**Start:** `start_job_metadata_worker()` after subtitle retry.
+
+Cheap URL/bulk enqueue does not wait on yt-dlp. This worker fills title, channel, thumbnail, and `available_presets` (and resolves `best` to a concrete height). YouTube Shorts discovered after enqueue are dropped (`skipped` / shorts), not shown as cancelled.
 
 ## Metadata sync
 

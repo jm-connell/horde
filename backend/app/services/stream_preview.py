@@ -19,6 +19,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 from .ytdlp_common import (
+    EXTRACT_PRIORITY_INTERACTIVE,
     MembersOnlyError,
     QuietYtdlpLogger,
     extract_has_media,
@@ -28,7 +29,7 @@ from .ytdlp_common import (
     youtube_extractor_args,
 )
 from .ytdlp_extract import _best_thumbnail_url
-from .ytdlp_formats import _available_presets
+from .ytdlp_formats import _available_presets, pick_original_audio_format
 
 
 def _as_info(value: Any) -> dict[str, Any]:
@@ -143,10 +144,6 @@ def _pick_adaptive_formats(
     formats = info.get("formats") or []
     # (family, height) -> best format
     video_by_key: dict[tuple[str, int], dict[str, Any]] = {}
-    audio_candidates: list[tuple[int, dict[str, Any]]] = []
-    original_lang = str(
-        info.get("language") or info.get("original_language") or ""
-    ).lower()
 
     for fmt in formats:
         if not isinstance(fmt, dict) or not fmt.get("url"):
@@ -185,37 +182,6 @@ def _pick_adaptive_formats(
                 entry["_score"] = score
                 entry["_codec_family"] = family
                 video_by_key[key] = entry
-            continue
-
-        # Audio-only adaptive.
-        if vcodec == "none" and acodec != "none":
-            if not _is_mp4_audio_codec(acodec):
-                continue
-            score = 0
-            abr = fmt.get("abr") or fmt.get("tbr") or 0
-            try:
-                score += int(float(abr))
-            except (TypeError, ValueError):
-                pass
-            # Prefer higher sample rate / channels as a tie-break.
-            try:
-                score += int(fmt.get("asr") or 0) // 100
-            except (TypeError, ValueError):
-                pass
-            format_id = str(fmt.get("format_id") or "")
-            # Prefer non-DRC variants (YouTube exposes "-drc" format IDs).
-            if "-drc" in format_id.lower() or "drc" in str(
-                fmt.get("format_note") or ""
-            ).lower():
-                score -= 50_000
-            lang = str(fmt.get("language") or fmt.get("lang") or "").lower()
-            if original_lang and lang == original_lang:
-                score += 20_000
-            elif lang in ("", "und", "en") and not original_lang:
-                score += 5_000
-            elif lang and original_lang and lang != original_lang:
-                score -= 10_000
-            audio_candidates.append((score, fmt))
 
     videos = sorted(
         video_by_key.values(),
@@ -227,11 +193,8 @@ def _pick_adaptive_formats(
     for v in videos:
         v.pop("_score", None)
 
-    audios: list[dict[str, Any]] = []
-    if audio_candidates:
-        audio_candidates.sort(key=lambda item: item[0], reverse=True)
-        audios.append(audio_candidates[0][1])
-
+    audio = pick_original_audio_format(info, require_mp4=True)
+    audios: list[dict[str, Any]] = [audio] if audio else []
     return videos, audios
 
 
@@ -510,7 +473,11 @@ def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
     try:
         info = _as_info(
             extract_info_gated(
-                url, opts, cache_key=f"stream:{url}", force=force
+                url,
+                opts,
+                cache_key=url,
+                force=force,
+                priority=EXTRACT_PRIORITY_INTERACTIVE,
             )
         )
     except Exception as exc:  # noqa: BLE001

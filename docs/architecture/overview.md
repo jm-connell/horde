@@ -36,11 +36,12 @@ ensure_dirs
     -> start_catalog_worker()
     -> start_autodownload_worker()
     -> start_subtitle_retry_worker()
+    -> start_job_metadata_worker()
 ```
 
 Stuck mid-flight download / AI / catalog work is requeued **before** workers start so a crash cannot leave jobs stranded forever. Download queue pause is restored from `download_queue_paused` in app settings.
 
-Shutdown stops subtitle retry, autodownload, catalog, and AI workers, joins the scanner observer, and closes the preview client.
+Shutdown stops job-metadata, subtitle retry, autodownload, catalog, and AI workers, joins the scanner observer, and closes the preview client.
 
 ## Major moving parts
 
@@ -48,7 +49,8 @@ Shutdown stops subtitle retry, autodownload, catalog, and AI workers, joins the 
 |-------|------|
 | **API routers** | Videos, downloads, preview, review, playlists, settings, AI, system, backgrounds, fonts |
 | **Scanner** | Discovers files dropped into downloads; orphan awareness |
-| **Download queue** | Concurrent yt-dlp jobs, SSE progress |
+| **Download queue** | Concurrent yt-dlp jobs, ffmpeg postprocess pool, multiplex SSE |
+| **Job metadata** | Background title/preset fill for cheap-enqueued downloads |
 | **Metadata sync** | Periodic refresh of source metadata |
 | **AI worker** | Single-flight embed/tag/category jobs |
 | **Catalog worker** | One-at-a-time channel index phases |

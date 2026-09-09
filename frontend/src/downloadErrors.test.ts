@@ -32,5 +32,9 @@ describe("downloadErrors", () => {
     expect(downloadErrorToast("bot", "blocked")).toBe("Bot check: blocked");
     expect(downloadErrorToast("unknown", "raw msg")).toBe("raw msg");
     expect(downloadErrorToast(null, null)).toBe("Download failed");
+    expect(downloadErrorToast("cancelled", "Cancelled")).toBe("Cancelled");
+    expect(downloadErrorToast("cancelled", "Download failed: boom")).toBe(
+      "Cancelled"
+    );
   });
 });

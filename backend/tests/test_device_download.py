@@ -73,7 +73,7 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
     seen: list[tuple[str, str | None]] = []
     job_id = 0
 
-    def fake_ensure(path: Path) -> Path:
+    def fake_ensure(path: Path, **_kwargs: object) -> Path:
         seen.append(("ensure", downloader.progress_store.get(job_id, {}).get("stage")))
         return path
 
@@ -83,7 +83,7 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
         )
         return path
 
-    def fake_loudnorm(_path: Path) -> None:
+    def fake_loudnorm(_path: Path, **_kwargs: object) -> None:
         seen.append(
             ("loudnorm", downloader.progress_store.get(job_id, {}).get("stage"))
         )

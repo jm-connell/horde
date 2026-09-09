@@ -338,14 +338,7 @@ def test_autodownload_api_rejects_non_youtube(client):
     assert bad.status_code == 400
 
 
-def test_create_download_rejects_shorts_url(client, monkeypatch):
-    from app.services import downloader
-
-    monkeypatch.setattr(
-        downloader,
-        "extract_preview",
-        lambda url: {"id": "shorturl111", "title": "Reel", "duration": 12},
-    )
+def test_create_download_rejects_shorts_url(client):
     resp = client.post(
         "/api/downloads",
         json={"url": "https://www.youtube.com/shorts/shorturl111"},
@@ -354,26 +347,33 @@ def test_create_download_rejects_shorts_url(client, monkeypatch):
     assert "Shorts" in resp.json()["detail"]
 
 
-def test_create_download_rejects_short_watch_url(client, monkeypatch):
-    from app.services import downloader
+def test_create_download_drops_short_watch_url_after_metadata(client, monkeypatch, init_db):
+    from sqlmodel import Session
+
+    from app.models import DownloadJob
+    from app.services import job_metadata
 
     monkeypatch.setattr(
-        downloader,
+        job_metadata,
         "extract_preview",
-        lambda url: {
+        lambda url, *, priority=2: {
             "id": "talkshort01",
             "title": "Quick tip",
             "duration": 22,
             "url": url,
             "published_at": "2024-01-01",
+            "is_playlist": False,
         },
     )
     resp = client.post(
         "/api/downloads",
         json={"url": "https://www.youtube.com/watch?v=talkshort01"},
     )
-    assert resp.status_code == 400
-    assert "Shorts" in resp.json()["detail"]
+    assert resp.status_code == 200
+    job_id = resp.json()["id"]
+    job_metadata._fill_job(job_id)
+    with Session(init_db["engine"]) as session:
+        assert session.get(DownloadJob, job_id) is None
 
 
 def test_normalize_helpers():

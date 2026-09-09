@@ -13,7 +13,11 @@ from ..database import engine
 from ..models import Video
 from . import activity
 from .thumbnails import save_from_url
-from .ytdlp_common import extract_info_gated, youtube_extractor_args
+from .ytdlp_common import (
+    EXTRACT_PRIORITY_BACKGROUND,
+    extract_info_gated,
+    youtube_extractor_args,
+)
 from .ytdlp_extract import _list_thumbnail_url
 
 SyncField = Literal["views", "thumbnails", "captions", "titles_descriptions", "all"]
@@ -51,7 +55,12 @@ def _extract_metadata(url: str) -> dict[str, Any]:
         "skip_download": True,
         "extractor_args": youtube_extractor_args(),
     }
-    info = extract_info_gated(url, opts, cache_key=f"meta-sync:{url}")
+    info = extract_info_gated(
+        url,
+        opts,
+        cache_key=f"meta-sync:{url}",
+        priority=EXTRACT_PRIORITY_BACKGROUND,
+    )
     return info or {}
 
 

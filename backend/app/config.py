@@ -38,6 +38,20 @@ PORT: int = int(os.environ.get("PORT", "8080"))
 # Max simultaneous download workers (FIFO queue).
 MAX_DOWNLOAD_CONCURRENCY: int = int(os.environ.get("MAX_DOWNLOAD_CONCURRENCY", "2"))
 
+# Max simultaneous ffmpeg postprocess workers (remux / transcode / loudnorm).
+# Empty = 2 when a GPU encoder is available, otherwise 1.
+def _optional_positive_int(name: str) -> Optional[int]:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return None
+
+
+MAX_FFMPEG_CONCURRENCY: Optional[int] = _optional_positive_int("MAX_FFMPEG_CONCURRENCY")
+
 # Max simultaneous ffmpeg sprite-sheet workers (CPU-heavy full-video decode).
 SPRITE_CONCURRENCY: int = max(1, int(os.environ.get("SPRITE_CONCURRENCY", "1")))
 

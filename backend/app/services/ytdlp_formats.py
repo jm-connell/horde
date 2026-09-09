@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Optional
 
 # Audio-only bitrate caps (kbps). Shown as labeled presets when the source has audio.
@@ -15,7 +16,6 @@ _H264 = "[vcodec~='^(avc1|avc|h264)']"
 _AAC = "[acodec~='^(mp4a|aac)']"
 
 VIDEO_CODECS = ("av1", "h264", "h265")
-FORMAT_SORT_H264 = ["res", "fps", "hdr:12", "vcodec:h264", "acodec:mp4a", "vbr", "abr"]
 
 
 def normalize_video_codec(value: Any) -> str:
@@ -84,7 +84,9 @@ STANDARD_HEIGHTS = (2160, 1440, 1080, 720, 480)
 
 # Must match download YoutubeDL opts so preview sizes pick the same stream.
 # vcodec:av01 beats a fatter VP9/H.264 at the same height; AAC for iPhone MP4.
-FORMAT_SORT = ["res", "fps", "hdr:12", "vcodec:av01", "acodec:mp4a", "vbr", "abr"]
+# lang before abr so dubbed higher-bitrate tracks lose to the original.
+FORMAT_SORT = ["res", "fps", "hdr:12", "vcodec:av01", "lang", "acodec:mp4a", "vbr", "abr"]
+FORMAT_SORT_H264 = ["res", "fps", "hdr:12", "vcodec:h264", "lang", "acodec:mp4a", "vbr", "abr"]
 
 
 def is_audio_preset(preset: str) -> bool:
@@ -275,6 +277,117 @@ def quality_from_preview(requested: str, preview: dict[str, Any] | None) -> tupl
             available = [str(p) for p in raw if p]
     resolved = resolve_quality_preset(requested or "best", available)
     return resolved, encode_available_presets(available)
+
+
+def original_language(info: dict[str, Any] | None) -> str:
+    if not isinstance(info, dict):
+        return ""
+    return str(info.get("language") or info.get("original_language") or "").lower()
+
+
+def _is_mp4_audio_codec(acodec: str) -> bool:
+    a = acodec.lower()
+    return a.startswith("mp4a") or a in ("aac", "mp4a.40.2", "mp4a.40.5")
+
+
+def score_audio_format(fmt: dict[str, Any], original_lang: str) -> int:
+    """Higher is better. Prefers original language over a fatter dubbed track."""
+    score = 0
+    abr = fmt.get("abr") or fmt.get("tbr") or 0
+    try:
+        score += int(float(abr))
+    except (TypeError, ValueError):
+        pass
+    try:
+        score += int(fmt.get("asr") or 0) // 100
+    except (TypeError, ValueError):
+        pass
+    acodec = str(fmt.get("acodec") or "")
+    if _is_mp4_audio_codec(acodec):
+        score += 2_000
+    format_id = str(fmt.get("format_id") or "")
+    note = str(fmt.get("format_note") or "").lower()
+    track = fmt.get("audio_track")
+    track_id = ""
+    if isinstance(track, dict):
+        track_id = str(track.get("id") or "").lower()
+        display = str(track.get("display_name") or "").lower()
+        note = f"{note} {display}"
+    blob = f"{format_id} {note} {track_id}"
+    if "-drc" in format_id.lower() or "drc" in note:
+        score -= 50_000
+    if "dubbed" in blob or "dub " in note:
+        score -= 40_000
+    lang = str(fmt.get("language") or fmt.get("lang") or "").lower()
+    if original_lang and lang == original_lang:
+        score += 20_000
+    elif "original" in blob:
+        score += 15_000
+    elif lang in ("", "und") and not original_lang:
+        score += 5_000
+    elif lang == "en" and not original_lang:
+        score += 5_000
+    elif lang and original_lang and lang != original_lang:
+        score -= 10_000
+    return score
+
+
+def pick_original_audio_format(
+    info: dict[str, Any] | None,
+    *,
+    require_mp4: bool = False,
+) -> Optional[dict[str, Any]]:
+    """Choose the original-language audio track when YouTube offers autodubs."""
+    if not isinstance(info, dict):
+        return None
+    original_lang = original_language(info)
+    candidates: list[tuple[int, dict[str, Any]]] = []
+    for fmt in info.get("formats") or []:
+        if not isinstance(fmt, dict):
+            continue
+        vcodec = str(fmt.get("vcodec") or "none")
+        acodec = str(fmt.get("acodec") or "none")
+        if vcodec != "none" or acodec == "none":
+            continue
+        if require_mp4:
+            ext = str(fmt.get("ext") or "").lower()
+            if ext not in ("mp4", "m4a"):
+                continue
+            if not _is_mp4_audio_codec(acodec):
+                continue
+            if not fmt.get("url"):
+                continue
+            if str(fmt.get("format_note") or "").lower().startswith("storyboard"):
+                continue
+            if fmt.get("protocol") in (
+                "mhtml",
+                "m3u8",
+                "m3u8_native",
+                "http_dash_segments",
+            ):
+                continue
+            if fmt.get("fragments"):
+                continue
+        candidates.append((score_audio_format(fmt, original_lang), fmt))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def apply_audio_format_id(chain: list[str], audio_id: str) -> list[str]:
+    """Pin a concrete audio format id in place of ``ba``, not ``bestaudio``."""
+    aid = (audio_id or "").strip()
+    if not aid:
+        return chain
+    out: list[str] = []
+    ba_plus = re.compile(r"\+ba(?:\[[^\]]*\])?")
+    ba_token = re.compile(r"(?<![A-Za-z0-9_+])ba(?![A-Za-z0-9_])(?:\[[^\]]*\])?")
+    for spec in chain:
+        pinned = ba_plus.sub(f"+{aid}", spec)
+        pinned = ba_token.sub(aid, pinned)
+        out.append(pinned)
+    return out
 
 
 # Underscore aliases for existing call sites / tests.

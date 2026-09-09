@@ -17,7 +17,7 @@ Horde does not download **YouTube Shorts** (Shorts URLs, `#shorts` titles, or su
 | **audio** | Best audio-only stream |
 | **audio-160** / **128** / **64** | Audio-only capped at that bitrate (kbps) |
 
-After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known. Audio bitrate caps that are at or above the source’s best stream are omitted (use **Audio (best)** instead).
+After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known. Audio bitrate caps that are at or above the source’s best stream are omitted (use **Audio (best)** instead). Downloads pick the **original-language** audio track when YouTube also offers autodubs (same scoring as stream preview). Existing library files are not rewritten.
 
 When you queue with **Best available** (the channel download panel default), Horde still fetches the highest source tier, but the download queue stores and shows that **actual resolution** (for example **4K**) instead of the “best” label. Finished cards use the probed file height, never **Best available**.
 
@@ -106,9 +106,14 @@ Downloads run in a **FIFO** worker queue.
 
 | Knob | Default | Notes |
 |------|---------|--------|
-| `MAX_DOWNLOAD_CONCURRENCY` | **2** | Env var — how many downloads run at once |
+| `MAX_DOWNLOAD_CONCURRENCY` | **2** | Env var — how many yt-dlp downloads run at once |
+| `MAX_FFMPEG_CONCURRENCY` | **1** (or **2** with GPU) | Env var — remux / transcode / loudnorm overlap |
 
-Set concurrency in the container environment ([Environment variables](../ops/environment.md)). Lower values (1–2) reduce YouTube IP flagging risk; see [YouTube access](../ops/youtube-access.md).
+Set concurrency in the container environment ([Environment variables](../ops/environment.md)). Lower values (1–2) reduce YouTube IP flagging risk; see [YouTube access](../ops/youtube-access.md). After yt-dlp finishes, the next queued download can start while the last file is still remuxing or transcoding.
+
+The URL field accepts **comma-separated links**. One link still loads preview and playlist import. Two or more skip preview of the blob, apply the same quality to every URL, and enqueue immediately. Playlist-only URLs in a list are skipped (`Skipped playlist link — paste it alone to import.`). Paste a playlist URL **alone** for import/subscribe. Duplicate videos (already queued, downloading, or in the library) toast and are not added; deleting a library row and pasting again is allowed.
+
+Cancel shows **Cancelled**, not a failed download. Quality-restart cancels stay silent.
 
 ### Pause / resume
 
@@ -117,17 +122,17 @@ On the Download page:
 - **Pause** — stops active work and prevents new jobs from starting until you resume
 - **Resume** — continues the FIFO queue
 
-Pause-all stops every download; nothing new starts until you resume. The pause flag is stored as `download_queue_paused` in app settings, so it **survives a container restart**.
+Pause-all stops claiming new yt-dlp downloads; an encode that already started keeps running. Nothing new starts until you resume. The pause flag is stored as `download_queue_paused` in app settings, so it **survives a container restart**.
 
 ## Single video
 
-1. Paste a video URL (YouTube or other [yt-dlp](https://github.com/yt-dlp/yt-dlp)-supported site).
-2. Wait for preview metadata.
+1. Paste one video URL, or several separated by commas.
+2. One URL: wait for preview metadata if you want title/channel edits. Several URLs skip preview and use the quality selector for every link.
 3. Choose a preset (and optional volume normalize).
 4. Choose a **destination**:
    - **Save to library** (default) — archives on the server under Channel/Year and appears in Library.
    - **Download to this device** — Horde still fetches/merges on the server into a temporary folder, then your browser saves the file. It is **not** kept in the library; dismissing the job card deletes the temp file.
-5. Submit — the job appears in the queue with live progress.
+5. Submit — cards appear immediately (`Working…` until metadata fills). Already queued, downloading, or library videos toast instead of adding a second job.
 
 Completed library downloads land in the [Library](library.md), organized by channel/year on disk ([storage layout](../ops/storage-layout.md)). Device jobs show a **Save again** action on the card if the browser download was missed.
 

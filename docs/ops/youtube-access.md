@@ -54,8 +54,9 @@ All metadata `extract_info` calls (feed cards, download preview, stream preview,
 | Control | Value | Purpose |
 |---------|-------|---------|
 | Semaphore | **1** | One extract at a time |
+| Priority | interactive **0**, download-meta **1**, background **2** | Preview/stream-preview jump job-metadata fills |
 | Min interval | **1.25 s** | Spacing between extracts |
-| Result cache | **180 s** TTL (max 48 entries) | Reuse recent info JSON |
+| Result cache | **180 s** TTL (max 48 entries) | Shared by preview, download-meta, and stream preview (`cache_key=url`) |
 
 Downloads themselves stay limited by `MAX_DOWNLOAD_CONCURRENCY` (default **2**). The extract gate is specifically for metadata bursts when scrolling feeds or opening many previews. Caption fetches after download share a separate timedtext cooldown so a 429 does not drop subtitles forever — see [subtitle retry](../architecture/workers.md#subtitle-retry).
 

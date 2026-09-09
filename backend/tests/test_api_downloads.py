@@ -17,18 +17,16 @@ def test_presets_and_queue_status(client):
     assert body["queued_count"] == 0
 
 
-def test_enqueue_cancel_and_pause(client, monkeypatch, add_video):
-    from app.services import downloader
+def test_enqueue_cancel_and_pause(client, monkeypatch):
+    from app.services import downloader, ytdlp_extract
 
-    def fake_preview(url: str):
-        return {
-            "id": "dQw4w9WgXcQ",
-            "title": "Preview Title",
-            "channel": "Preview Chan",
-            "thumbnail_url": "https://example.com/t.jpg",
-            "is_playlist": False,
-        }
+    calls = {"n": 0}
 
+    def fake_preview(url: str, *, priority: int = 0):
+        calls["n"] += 1
+        raise AssertionError("create must not extract")
+
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", fake_preview)
     monkeypatch.setattr(downloader, "extract_preview", fake_preview)
 
     created = client.post(
@@ -43,10 +41,12 @@ def test_enqueue_cancel_and_pause(client, monkeypatch, add_video):
     job = created.json()
     assert job["status"] == "queued"
     assert job["url"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    assert job["title"] == "Preview Title"
+    assert job["title"] is None
     assert job["title_override"] == "My Title"
     assert job["quality_preset"] == "720p"
+    assert job["thumbnail_url"] == "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
     assert job.get("video_codec") in ("av1", "h264", "h265")
+    assert calls["n"] == 0
     job_id = job["id"]
 
     listed = client.get("/api/downloads").json()
@@ -72,26 +72,19 @@ def test_enqueue_cancel_and_pause(client, monkeypatch, add_video):
     assert client.post("/api/downloads/99999/cancel").status_code == 404
 
 
-def test_enqueue_sets_replace_video_id_for_existing_youtube(client, monkeypatch, add_video):
-    from app.services import downloader
-
+def test_enqueue_existing_youtube_is_already_in_library(client, add_video):
     existing = add_video(title="Already have it", yt_id="dQw4w9WgXcQ")
-    monkeypatch.setattr(
-        downloader,
-        "extract_preview",
-        lambda url: {
-            "id": "dQw4w9WgXcQ",
-            "title": "Again",
-            "channel": "Chan",
-            "is_playlist": False,
-        },
-    )
     created = client.post(
         "/api/downloads",
         json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
     )
-    assert created.status_code == 200
-    assert created.json()["replace_video_id"] == existing.id
+    assert created.status_code == 409
+    detail = created.json()["detail"]
+    assert detail["code"] == "already_in_library"
+    assert detail["message"] == "Already in library"
+    listed = client.get("/api/downloads").json()
+    assert existing.id not in [row.get("replace_video_id") for row in listed]
+    assert [row for row in listed if row.get("status") == "queued"] == []
 
 
 def test_create_download_requires_url(client):
@@ -100,21 +93,9 @@ def test_create_download_requires_url(client):
 
 
 def test_bulk_skips_existing_and_does_not_create_playlist(
-    client, monkeypatch, add_video
+    client, add_video
 ):
-    from app.services import downloader
-
     existing = add_video(title="Have it", yt_id="dQw4w9WgXcQ")
-    monkeypatch.setattr(
-        downloader,
-        "extract_preview",
-        lambda url: {
-            "id": "newvideoid1",
-            "title": "New one",
-            "channel": "Chan",
-            "is_playlist": False,
-        },
-    )
     resp = client.post(
         "/api/downloads/bulk",
         json={
@@ -122,14 +103,17 @@ def test_bulk_skips_existing_and_does_not_create_playlist(
             "urls": [
                 "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
                 "https://www.youtube.com/watch?v=newvideoid1",
+                "https://www.youtube.com/playlist?list=PLtest",
             ],
         },
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["skipped"] == 1
+    assert body["skipped"] == 2
     assert len(body["jobs"]) == 1
     assert body["jobs"][0]["url"] == "https://www.youtube.com/watch?v=newvideoid1"
+    reasons = {skip["reason"] for skip in body["skips"]}
+    assert reasons == {"already_in_library", "playlist"}
     assert existing.id not in [
         job.get("replace_video_id") for job in body["jobs"]
     ]
@@ -137,19 +121,7 @@ def test_bulk_skips_existing_and_does_not_create_playlist(
     assert playlists == []
 
 
-def test_enqueue_stamps_video_codec(client, monkeypatch):
-    from app.services import downloader
-
-    monkeypatch.setattr(
-        downloader,
-        "extract_preview",
-        lambda url: {
-            "id": "dQw4w9WgXcQ",
-            "title": "Codec",
-            "channel": "Chan",
-            "is_playlist": False,
-        },
-    )
+def test_enqueue_stamps_video_codec(client):
     created = client.post(
         "/api/downloads",
         json={
@@ -273,19 +245,7 @@ def test_list_jobs_marks_video_missing_after_delete(client, init_db, add_video):
     assert row["quality_preset"] == "720p"
 
 
-def test_create_download_reuses_active_job(client, monkeypatch):
-    from app.services import downloader
-
-    monkeypatch.setattr(
-        downloader,
-        "extract_preview",
-        lambda url: {
-            "id": "dQw4w9WgXcQ",
-            "title": "Preview Title",
-            "channel": "Preview Chan",
-            "is_playlist": False,
-        },
-    )
+def test_create_download_reuses_active_job(client):
     payload = {
         "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         "quality_preset": "720p",
@@ -293,26 +253,14 @@ def test_create_download_reuses_active_job(client, monkeypatch):
     first = client.post("/api/downloads", json=payload)
     second = client.post("/api/downloads", json=payload)
     assert first.status_code == 200
-    assert second.status_code == 200
-    assert first.json()["id"] == second.json()["id"]
+    assert second.status_code == 409
+    assert second.json()["detail"]["code"] == "already_queued"
     listed = client.get("/api/downloads").json()
-    assert len(listed) == 1
+    assert len([row for row in listed if row["status"] == "queued"]) == 1
 
 
-def test_create_download_after_failure_is_new_job(client, init_db, monkeypatch):
-    from app.services import downloader
-
+def test_create_download_after_failure_is_new_job(client, init_db):
     failed_id = _failed_job(init_db)
-    monkeypatch.setattr(
-        downloader,
-        "extract_preview",
-        lambda url: {
-            "id": "dQw4w9WgXcQ",
-            "title": "Preview Title",
-            "channel": "Preview Chan",
-            "is_playlist": False,
-        },
-    )
     created = client.post(
         "/api/downloads",
         json={
@@ -326,21 +274,7 @@ def test_create_download_after_failure_is_new_job(client, init_db, monkeypatch):
     assert len(listed) == 2
 
 
-def test_create_download_resolves_best_to_available_height(client, monkeypatch):
-    from app.services import downloader
-
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    monkeypatch.setattr(
-        downloader,
-        "extract_preview",
-        lambda url: {
-            "id": "dQw4w9WgXcQ",
-            "title": "Preview Title",
-            "channel": "Preview Chan",
-            "is_playlist": False,
-            "available_presets": ["2160p", "1080p", "720p", "audio"],
-        },
-    )
+def test_create_download_keeps_best_until_metadata_fills(client):
     created = client.post(
         "/api/downloads",
         json={
@@ -350,8 +284,8 @@ def test_create_download_resolves_best_to_available_height(client, monkeypatch):
     )
     assert created.status_code == 200
     body = created.json()
-    assert body["quality_preset"] == "2160p"
-    assert body["available_presets"][0] == "2160p"
+    assert body["quality_preset"] == "best"
+    assert body["available_presets"] == []
 
 
 def test_change_quality_on_queued_job(client, monkeypatch):
@@ -491,3 +425,82 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
     assert body["status"] == "queued"
     assert body["progress"] == 0.0
     assert downloader.progress_store[job_id]["status"] == "queued"
+
+
+def test_create_download_after_library_delete_is_allowed(client, add_video):
+    video = add_video(title="Gone soon", yt_id="dQw4w9WgXcQ")
+    assert client.delete(f"/api/videos/{video.id}").status_code == 204
+    created = client.post(
+        "/api/downloads",
+        json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+    )
+    assert created.status_code == 200
+    assert created.json()["status"] == "queued"
+
+
+def test_list_jobs_keeps_all_queued_when_history_is_long(client, init_db):
+    from sqlmodel import Session
+
+    from app.models import DownloadJob, JobStatus
+
+    with Session(init_db["engine"]) as session:
+        for i in range(45):
+            session.add(
+                DownloadJob(
+                    url=f"https://www.youtube.com/watch?v=done{i:02d}xxxxxx",
+                    quality_preset="720p",
+                    status=JobStatus.completed,
+                    title=f"Done {i}",
+                )
+            )
+        queued = DownloadJob(
+            url="https://www.youtube.com/watch?v=queuedvideoid",
+            quality_preset="720p",
+            status=JobStatus.queued,
+            title="Still queued",
+        )
+        session.add(queued)
+        session.commit()
+        queued_id = queued.id
+
+    listed = client.get("/api/downloads").json()
+    ids = [row["id"] for row in listed]
+    assert queued_id in ids
+    queued_row = next(row for row in listed if row["id"] == queued_id)
+    assert listed.index(queued_row) == 0
+
+
+def test_dismiss_finished_includes_cancelled(client, init_db):
+    from app.models import JobStatus
+
+    cancelled_id = _failed_job(
+        init_db,
+        status=JobStatus.cancelled,
+        error="Cancelled",
+        error_kind="cancelled",
+    )
+    completed_id = _failed_job(
+        init_db,
+        url="https://www.youtube.com/watch?v=completedidxx",
+        status=JobStatus.completed,
+        error=None,
+        error_kind=None,
+    )
+    queued = client.post(
+        "/api/downloads",
+        json={"url": "https://www.youtube.com/watch?v=stillqueuedxx"},
+    ).json()
+    resp = client.post("/api/downloads/dismiss-finished")
+    assert resp.status_code == 204
+    listed = client.get("/api/downloads").json()
+    ids = {row["id"] for row in listed}
+    assert cancelled_id not in ids
+    assert completed_id not in ids
+    assert queued["id"] in ids
+
+
+def test_queue_events_route_registered(client):
+    paths = [getattr(route, "path", "") for route in client.app.routes]
+    assert "/api/downloads/events" in paths
+    assert "/api/downloads/{job_id}/events" in paths
+

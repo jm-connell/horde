@@ -1,8 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import AsyncGenerator, Optional
-from urllib.parse import urlparse
+from typing import Any, AsyncGenerator, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -14,6 +13,7 @@ from ..models import DownloadDestination, DownloadJob, JobStatus, Playlist, Vide
 from ..schemas import (
     DownloadBulkCreate,
     DownloadBulkResult,
+    DownloadBulkSkip,
     DownloadCreate,
     DownloadJobRead,
     DownloadJobUpdate,
@@ -21,29 +21,25 @@ from ..schemas import (
     DownloadQualityUpdate,
     DownloadQueueStatus,
 )
-from ..services import downloader, library
+from ..services import downloader
 from ..services.paths import safe_filename
-from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
+from ..services.url_clean import (
+    clean_url,
+    is_playlist_only_url,
+    youtube_thumbnail_url,
+    youtube_video_id,
+)
 from ..services.ytdlp_common import (
-    ERROR_KIND_BOT,
-    ERROR_KIND_COOKIES,
-    ERROR_KIND_MEMBERS,
-    ERROR_KIND_UNAVAILABLE,
     ERROR_KIND_UNKNOWN,
     MembersOnlyError,
     classify_ytdlp_error,
     http_detail_for_error,
-    record_extract_failure,
 )
-from ..services.ytdlp_extract import (
-    is_youtube_short_entry,
-    is_youtube_short_url,
-)
+from ..services.ytdlp_extract import is_youtube_short_url
 from ..services.ytdlp_formats import (
     decode_available_presets,
     default_download_video_codec,
     normalize_video_codec,
-    quality_from_preview,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,14 +58,12 @@ _CONTENT_TYPES = {
     ".ogg": "audio/ogg",
 }
 
-_PREVIEW_ATTACH_KINDS = frozenset(
-    {
-        ERROR_KIND_MEMBERS,
-        ERROR_KIND_BOT,
-        ERROR_KIND_COOKIES,
-        ERROR_KIND_UNAVAILABLE,
+
+def _duplicate_detail(code: str) -> dict[str, str]:
+    return {
+        "code": code,
+        "message": downloader.DUPLICATE_MESSAGES.get(code, "Already added"),
     }
-)
 
 
 def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobRead]:
@@ -203,6 +197,30 @@ def resume_queue():
     )
 
 
+@router.get("/events")
+async def queue_events() -> StreamingResponse:
+    """One EventSource for the whole download queue (avoids HTTP/1.1 socket cap)."""
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        last_payloads: dict[int, Any] = {}
+        while True:
+            items = list(downloader.progress_store.items())
+            for job_id, snapshot in items:
+                if not isinstance(snapshot, dict):
+                    continue
+                if snapshot != last_payloads.get(job_id):
+                    last_payloads[job_id] = snapshot
+                    payload = {"job_id": job_id, **snapshot}
+                    yield f"data: {json.dumps(payload)}\n\n"
+            await asyncio.sleep(0.4)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.post("", response_model=DownloadJobRead)
 def create_download(payload: DownloadCreate, session: Session = Depends(get_session)):
     if not payload.url.strip():
@@ -226,66 +244,38 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         raise HTTPException(
             status_code=400, detail="YouTube Shorts are not downloaded"
         )
-
-    preview: dict = {}
-    preview_kind: str | None = None
-    preview_message: str | None = None
-    try:
-        preview = downloader.extract_preview(url)
-    except Exception as exc:  # noqa: BLE001
-        preview_kind, preview_message = classify_ytdlp_error(exc, url=url)
-        record_extract_failure(preview_kind, preview_message, url=url)
-
-    if is_youtube_short_entry(
-        {
-            **(preview if isinstance(preview, dict) else {}),
-            "url": payload.url,
-            "webpage_url": url,
-        }
-    ):
+    if is_playlist_only_url(payload.url) or is_playlist_only_url(url):
         raise HTTPException(
-            status_code=400, detail="YouTube Shorts are not downloaded"
+            status_code=400,
+            detail="Paste a playlist link by itself to import it",
         )
 
-    # If this YouTube id is already in the library, replace that row on completion.
-    # Device jobs must never overwrite library files.
-    replace_video_id = None
-    if destination == "library":
-        yt_id = preview.get("id") if isinstance(preview, dict) else None
-        if not yt_id:
-            try:
-                yt_id = _youtube_video_id(urlparse(url))
-            except Exception:  # noqa: BLE001
-                yt_id = None
-        if yt_id:
-            existing = library.find_video_by_youtube_id(session, str(yt_id))
-            if existing is not None:
-                replace_video_id = existing.id
+    quality_preset = (payload.quality_preset or "best").strip() or "best"
+    yt_id = youtube_video_id(url)
+    thumb = youtube_thumbnail_url(yt_id) if yt_id else None
 
-    quality_preset, presets_json = quality_from_preview(
-        payload.quality_preset, preview if isinstance(preview, dict) else {}
-    )
+    from ..services.job_metadata import request_job_metadata
 
     with downloader.job_mutate_lock:
-        active = downloader.find_active_job(
-            session, url, destination, quality_preset
-        )
-        if active is not None:
-            if playlist_id is not None and active.playlist_id is None:
-                active.playlist_id = playlist_id
-                session.add(active)
-                session.commit()
-                session.refresh(active)
-            return _enrich_jobs(session, [active])[0]
+        dup = downloader.classify_enqueue_duplicate(session, url)
+        if dup is not None:
+            code, existing_id = dup
+            if playlist_id is not None and existing_id is not None:
+                active = session.get(DownloadJob, existing_id)
+                if active is not None:
+                    if active.playlist_id is None:
+                        active.playlist_id = playlist_id
+                        session.add(active)
+                        session.commit()
+                        session.refresh(active)
+                    return _enrich_jobs(session, [active])[0]
+            raise HTTPException(status_code=409, detail=_duplicate_detail(code))
 
         job = DownloadJob(
             url=url,
             quality_preset=quality_preset,
-            available_presets_json=presets_json,
             status=JobStatus.queued,
-            title=preview.get("title"),
-            channel=preview.get("channel"),
-            thumbnail_url=preview.get("thumbnail_url"),
+            thumbnail_url=thumb,
             title_override=(payload.title_override or "").strip() or None,
             channel_override=(payload.channel_override or "").strip() or None,
             notes_pending=(payload.notes_pending or "").strip() or None,
@@ -294,17 +284,14 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
                 payload.video_codec or default_download_video_codec()
             ),
             destination=destination,
-            replace_video_id=replace_video_id,
             playlist_id=playlist_id,
+            paused=downloader.download_queue.is_paused(),
         )
-        if preview_kind and preview_kind in _PREVIEW_ATTACH_KINDS and preview_message:
-            # Still enqueue, but surface why metadata is missing on the card.
-            job.error = preview_message
-            job.error_kind = preview_kind
         session.add(job)
         session.commit()
         session.refresh(job)
 
+    request_job_metadata(job.id)
     downloader.enqueue_download(job.id)
     return _enrich_jobs(session, [job])[0]
 
@@ -313,79 +300,73 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
 def create_downloads_bulk(
     payload: DownloadBulkCreate, session: Session = Depends(get_session)
 ):
-    """Enqueue selected playlist entries as individual library jobs (no Horde playlist)."""
+    """Enqueue URLs as individual jobs without blocking on metadata extract."""
     quality = (payload.quality_preset or "best").strip() or "best"
+    destination = payload.destination.value if payload.destination else "library"
+    codec = normalize_video_codec(
+        payload.video_codec or default_download_video_codec()
+    )
     jobs: list[DownloadJob] = []
-    skipped = 0
+    skips: list[DownloadBulkSkip] = []
     seen_urls: set[str] = set()
+    seen_ids: set[str] = set()
+
+    from ..services.job_metadata import request_job_metadata
 
     for raw in payload.urls:
         if not raw.strip():
             continue
         if is_youtube_short_url(raw):
-            skipped += 1
+            skips.append(DownloadBulkSkip(url=raw.strip(), reason="shorts"))
+            continue
+        if is_playlist_only_url(raw):
+            skips.append(DownloadBulkSkip(url=raw.strip(), reason="playlist"))
             continue
         url = clean_url(raw, keep_playlist=False)
-        if not url or url in seen_urls:
-            if url in seen_urls:
-                skipped += 1
+        if not url:
             continue
         if is_youtube_short_url(url):
-            skipped += 1
+            skips.append(DownloadBulkSkip(url=url, reason="shorts"))
+            continue
+        if is_playlist_only_url(url):
+            skips.append(DownloadBulkSkip(url=url, reason="playlist"))
+            continue
+        yt_id = youtube_video_id(url)
+        identity = yt_id or url
+        if url in seen_urls or identity in seen_ids:
+            skips.append(DownloadBulkSkip(url=url, reason="duplicate_in_paste"))
             continue
         seen_urls.add(url)
+        seen_ids.add(identity)
 
-        yt_id = youtube_video_id(url)
-        if yt_id and library.find_video_by_youtube_id(session, yt_id) is not None:
-            skipped += 1
-            continue
-
-        preview: dict = {}
-        try:
-            preview = downloader.extract_preview(url)
-        except Exception:  # noqa: BLE001
-            preview = {}
-        if is_youtube_short_entry(
-            {
-                **(preview if isinstance(preview, dict) else {}),
-                "url": raw,
-                "webpage_url": url,
-            }
-        ):
-            skipped += 1
-            continue
-        preview_id = preview.get("id") if isinstance(preview, dict) else None
-        if preview_id and library.find_video_by_youtube_id(session, str(preview_id)) is not None:
-            skipped += 1
-            continue
-
-        quality_preset, presets_json = quality_from_preview(
-            quality, preview if isinstance(preview, dict) else {}
-        )
-        dest = DownloadDestination.library.value
         with downloader.job_mutate_lock:
-            active = downloader.find_active_job(session, url, dest, quality_preset)
-            if active is not None:
-                jobs.append(active)
+            dup = downloader.classify_enqueue_duplicate(session, url)
+            if dup is not None:
+                code, _existing = dup
+                skips.append(DownloadBulkSkip(url=url, reason=code))
                 continue
             job = DownloadJob(
                 url=url,
-                quality_preset=quality_preset,
-                available_presets_json=presets_json,
+                quality_preset=quality,
                 status=JobStatus.queued,
-                title=preview.get("title"),
-                channel=preview.get("channel"),
-                thumbnail_url=preview.get("thumbnail_url"),
-                video_codec=default_download_video_codec(),
-                destination=dest,
+                thumbnail_url=youtube_thumbnail_url(yt_id) if yt_id else None,
+                normalize_volume=payload.normalize_volume,
+                video_codec=codec,
+                destination=destination,
+                paused=downloader.download_queue.is_paused(),
             )
             session.add(job)
             session.commit()
             session.refresh(job)
+        request_job_metadata(job.id)
         downloader.enqueue_download(job.id)
         jobs.append(job)
 
-    return DownloadBulkResult(jobs=_enrich_jobs(session, jobs), skipped=skipped)
+    return DownloadBulkResult(
+        jobs=_enrich_jobs(session, jobs),
+        skipped=len(skips),
+        skips=skips,
+    )
 
 
 @router.patch("/{job_id}", response_model=DownloadJobRead)
@@ -503,10 +484,13 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
 
 @router.post("/dismiss-finished", status_code=204)
 def dismiss_finished_jobs(session: Session = Depends(get_session)):
-    """Remove all completed and errored jobs from the list."""
+    """Remove completed, failed, and cancelled jobs from the list."""
     statement = select(DownloadJob).where(
-        DownloadJob.status.in_([JobStatus.completed, JobStatus.error])  # type: ignore[attr-defined]
+        DownloadJob.status.in_(
+            [JobStatus.completed, JobStatus.error, JobStatus.cancelled]
+        )  # type: ignore[attr-defined]
     )
+    jobs = list(session.exec(statement).all())
     jobs = list(session.exec(statement).all())
     for job in jobs:
         if job.destination == DownloadDestination.device.value:
@@ -537,8 +521,32 @@ def dismiss_job(job_id: int, session: Session = Depends(get_session)):
 
 @router.get("", response_model=list[DownloadJobRead])
 def list_jobs(session: Session = Depends(get_session)):
-    statement = select(DownloadJob).order_by(DownloadJob.created_at.desc()).limit(50)
-    return _enrich_jobs(session, list(session.exec(statement).all()))
+    active = list(
+        session.exec(
+            select(DownloadJob)
+            .where(
+                DownloadJob.status.in_(
+                    [JobStatus.queued, JobStatus.downloading]
+                )
+            )
+            .order_by(DownloadJob.created_at.asc())
+        ).all()
+    )
+    recent = list(
+        session.exec(
+            select(DownloadJob)
+            .where(
+                DownloadJob.status.in_(
+                    [JobStatus.completed, JobStatus.error, JobStatus.cancelled]
+                )
+            )
+            .order_by(DownloadJob.created_at.desc())
+            .limit(40)
+        ).all()
+    )
+    seen = {job.id for job in active}
+    jobs = active + [job for job in recent if job.id not in seen]
+    return _enrich_jobs(session, jobs)
 
 
 @router.get("/{job_id}", response_model=DownloadJobRead)

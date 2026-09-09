@@ -8,6 +8,7 @@ import type {
   ChannelCatalogStatus,
   ChannelFeedPage,
   ChannelStat,
+  DownloadBulkResult,
   DownloadJob,
   DownloadOverrides,
   DownloadPreview,
@@ -34,11 +35,18 @@ import type {
 
 export class ApiError extends Error {
   errorKind?: string;
+  code?: string;
+  status: number;
 
-  constructor(message: string, errorKind?: string) {
+  constructor(
+    message: string,
+    extra?: { errorKind?: string; code?: string; status?: number }
+  ) {
     super(message);
     this.name = "ApiError";
-    this.errorKind = errorKind;
+    this.errorKind = extra?.errorKind;
+    this.code = extra?.code;
+    this.status = extra?.status ?? 0;
   }
 }
 
@@ -65,13 +73,17 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
         message?: string;
         error_kind?: string;
         detail?: string;
+        code?: string;
       };
-      throw new ApiError(
-        d.message || d.detail || JSON.stringify(detail),
-        d.error_kind
-      );
+      throw new ApiError(d.message || d.detail || JSON.stringify(detail), {
+        errorKind: d.error_kind,
+        code: d.code,
+        status: resp.status,
+      });
     }
-    throw new ApiError(typeof detail === "string" ? detail : String(detail));
+    throw new ApiError(typeof detail === "string" ? detail : String(detail), {
+      status: resp.status,
+    });
   }
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
@@ -844,16 +856,18 @@ export const api = {
 
   bulkCreateDownloads(
     urls: string[],
-    quality_preset: string
-  ): Promise<{ jobs: DownloadJob[]; skipped: number }> {
-    return request<{ jobs: DownloadJob[]; skipped: number }>(
-      "/api/downloads/bulk",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ urls, quality_preset }),
-      }
-    );
+    quality_preset: string,
+    extra: {
+      destination?: DownloadJob["destination"];
+      normalize_volume?: boolean;
+      video_codec?: string;
+    } = {}
+  ): Promise<DownloadBulkResult> {
+    return request<DownloadBulkResult>("/api/downloads/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls, quality_preset, ...extra }),
+    });
   },
 
   listJobs(): Promise<DownloadJob[]> {

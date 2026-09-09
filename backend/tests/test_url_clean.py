@@ -1,6 +1,11 @@
 """Tests for URL normalization."""
 
-from app.services.url_clean import clean_url, is_playlist_url, youtube_video_id
+from app.services.url_clean import (
+    clean_url,
+    is_playlist_only_url,
+    is_playlist_url,
+    youtube_video_id,
+)
 
 
 def test_youtu_be_to_watch():
@@ -41,6 +46,11 @@ def test_playlist_only_url():
     assert clean_url(url, keep_playlist=True) == (
         "https://www.youtube.com/playlist?list=PLtest"
     )
+    assert is_playlist_only_url(url) is True
+    assert is_playlist_only_url(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest"
+    ) is False
+    assert is_playlist_only_url("https://youtu.be/dQw4w9WgXcQ") is False
 
 
 def test_youtube_video_id():

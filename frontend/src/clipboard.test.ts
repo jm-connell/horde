@@ -4,10 +4,54 @@ import {
   clipboardReadAvailable,
   clipboardTextToUrl,
   execPasteInto,
+  isYoutubePlaylistOnlyUrl,
+  isYoutubeShortsUrl,
+  parseDownloadUrlList,
   pasteTextFromButtonClick,
   readClipboardText,
   shouldCapturePagePaste,
 } from "./clipboard";
+
+describe("parseDownloadUrlList", () => {
+  it("keeps comma-separated links", () => {
+    expect(
+      parseDownloadUrlList(
+        "https://youtu.be/aaaaaaaaaaa, https://youtu.be/bbbbbbbbbbb"
+      )
+    ).toEqual([
+      "https://youtu.be/aaaaaaaaaaa",
+      "https://youtu.be/bbbbbbbbbbb",
+    ]);
+  });
+
+  it("returns a single URL like clipboardTextToUrl", () => {
+    expect(parseDownloadUrlList("watch this https://youtu.be/dQw4w9WgXcQ")).toEqual(
+      ["https://youtu.be/dQw4w9WgXcQ"]
+    );
+  });
+});
+
+describe("isYoutubePlaylistOnlyUrl", () => {
+  it("detects playlist pages and not watch-with-list", () => {
+    expect(
+      isYoutubePlaylistOnlyUrl("https://www.youtube.com/playlist?list=PLtest")
+    ).toBe(true);
+    expect(
+      isYoutubePlaylistOnlyUrl(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest"
+      )
+    ).toBe(false);
+  });
+});
+
+describe("isYoutubeShortsUrl", () => {
+  it("matches /shorts/ paths", () => {
+    expect(isYoutubeShortsUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ")).toBe(
+      true
+    );
+    expect(isYoutubeShortsUrl("https://youtu.be/dQw4w9WgXcQ")).toBe(false);
+  });
+});
 
 describe("clipboardTextToUrl", () => {
   it("trims and keeps a bare URL", () => {

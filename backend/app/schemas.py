@@ -109,6 +109,14 @@ class DownloadCreate(BaseModel):
 class DownloadBulkCreate(BaseModel):
     urls: list[str]
     quality_preset: str = "best"
+    destination: DownloadDestination = DownloadDestination.library
+    normalize_volume: bool = False
+    video_codec: Optional[str] = None
+
+
+class DownloadBulkSkip(BaseModel):
+    url: str
+    reason: str
 
 
 class DownloadPreview(BaseModel):
@@ -184,6 +192,7 @@ class DownloadJobRead(BaseModel):
 class DownloadBulkResult(BaseModel):
     jobs: list[DownloadJobRead]
     skipped: int = 0
+    skips: list[DownloadBulkSkip] = []
 
 
 class DownloadJobUpdate(BaseModel):

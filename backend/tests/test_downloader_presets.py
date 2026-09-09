@@ -55,6 +55,8 @@ def test_quality_formats_prefer_av1_and_aac():
 
     assert "vcodec:av01" in FORMAT_SORT
     assert "acodec:mp4a" in FORMAT_SORT
+    assert "lang" in FORMAT_SORT
+    assert FORMAT_SORT.index("lang") < FORMAT_SORT.index("abr")
     assert "vcodec:h264" not in FORMAT_SORT
     for preset in ("best", "2160p", "1080p", "720p"):
         spec = QUALITY_FORMATS[preset]
@@ -159,3 +161,16 @@ def test_resolve_quality_preset_best_to_highest_tier():
     assert resolved == "1440p"
     assert encoded is not None
     assert "1440p" in encoded
+
+
+def test_apply_audio_format_id_pins_ba_not_bestaudio():
+    from app.services.ytdlp_formats import apply_audio_format_id
+
+    chain = [
+        "bv*+ba/bv*+ba/bestaudio/best",
+        "ba/ba/bestaudio/best",
+    ]
+    pinned = apply_audio_format_id(chain, "140")
+    assert pinned[0] == "bv*+140/bv*+140/bestaudio/best"
+    assert pinned[1] == "140/140/bestaudio/best"
+

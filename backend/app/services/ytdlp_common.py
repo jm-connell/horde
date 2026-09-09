@@ -1,5 +1,6 @@
 """Shared yt-dlp option helpers."""
 
+import heapq
 import logging
 import re
 import threading
@@ -663,13 +664,45 @@ _plugins_lock = threading.Lock()
 
 # Serialize metadata extracts the same way downloads stay at low concurrency —
 # bursty feed-card / preview extracts trip YouTube bot checks quickly.
-_extract_sem = threading.Semaphore(1)
+# Interactive preview jumps ahead of background job-metadata fills.
+EXTRACT_PRIORITY_INTERACTIVE = 0
+EXTRACT_PRIORITY_DOWNLOAD = 1
+EXTRACT_PRIORITY_BACKGROUND = 2
+
 _extract_gate_lock = threading.Lock()
+_extract_held = False
+_extract_waiter_seq = 0
+_extract_waiters: list[tuple[int, int, threading.Event]] = []
 _last_extract_at = 0.0
 _EXTRACT_MIN_INTERVAL_SEC = 1.25
 _info_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _INFO_CACHE_TTL_SEC = 180.0
 _INFO_CACHE_MAX = 48
+
+
+def _acquire_extract_gate(priority: int) -> None:
+    """One extract at a time; lower ``priority`` values run first."""
+    global _extract_held, _extract_waiter_seq
+    with _extract_gate_lock:
+        if not _extract_held and not _extract_waiters:
+            _extract_held = True
+            return
+        waiter = threading.Event()
+        heapq.heappush(
+            _extract_waiters, (int(priority), _extract_waiter_seq, waiter)
+        )
+        _extract_waiter_seq += 1
+    waiter.wait()
+
+
+def _release_extract_gate() -> None:
+    global _extract_held
+    with _extract_gate_lock:
+        if _extract_waiters:
+            _prio, _seq, waiter = heapq.heappop(_extract_waiters)
+            waiter.set()
+            return
+        _extract_held = False
 
 
 def ensure_plugins_loaded() -> None:
@@ -704,6 +737,7 @@ def extract_info_gated(
     title: Optional[str] = None,
     channel: Optional[str] = None,
     cookie_retry: bool = True,
+    priority: int = EXTRACT_PRIORITY_DOWNLOAD,
 ) -> dict[str, Any]:
     """Run yt-dlp extract_info with global spacing + short result cache.
 
@@ -768,7 +802,8 @@ def extract_info_gated(
         _cache_put(auth_key, info)
         return dict(info)
 
-    with _extract_sem:
+    _acquire_extract_gate(priority)
+    try:
         if not force:
             if prefer_cookies:
                 cached = _cache_get(auth_key)
@@ -815,3 +850,5 @@ def extract_info_gated(
         _extract_tls.used_cookies = opts_have_cookies(opts)
         _cache_put(key, info)
         return dict(info)
+    finally:
+        _release_extract_gate()

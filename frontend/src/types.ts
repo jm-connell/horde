@@ -223,16 +223,21 @@ export interface DownloadJob {
 }
 
 export interface ProgressEvent {
+  job_id?: number;
   status: string;
   progress?: number;
   /** Post-download step while status is processing. */
   stage?: string;
   title?: string;
   channel?: string;
+  thumbnail_url?: string;
+  quality_preset?: string;
+  available_presets?: string[];
   video_id?: number;
   destination?: DownloadDestination;
   error?: string;
   error_kind?: string;
+  reason?: string;
   total_bytes?: number;
   downloaded_bytes?: number;
   file_size?: number;
@@ -277,6 +282,17 @@ export interface DownloadOverrides {
   normalize_volume?: boolean;
   video_codec?: string;
   destination?: DownloadDestination;
+}
+
+export interface DownloadBulkSkip {
+  url: string;
+  reason: string;
+}
+
+export interface DownloadBulkResult {
+  jobs: DownloadJob[];
+  skipped: number;
+  skips: DownloadBulkSkip[];
 }
 
 export interface DownloadQueueStatus {

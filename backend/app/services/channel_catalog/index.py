@@ -19,6 +19,7 @@ from ...models import (
 from .. import activity, app_settings
 from ..feed_meta_cache import parse_upload_date, published_meta_from_entry
 from ..ytdlp_common import (
+    EXTRACT_PRIORITY_BACKGROUND,
     CatalogSkipError,
     ERROR_KIND_MEMBERS,
     MembersOnlyError,
@@ -323,6 +324,7 @@ def _fetch_description(
             cache_key=f"catalog-desc:{url}",
             title=title,
             channel=channel,
+            priority=EXTRACT_PRIORITY_BACKGROUND,
         )
     except Exception as exc:  # noqa: BLE001
         kind, _message = classify_ytdlp_error(
