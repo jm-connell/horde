@@ -29,7 +29,7 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 |------|---------|------|
 | Downloads | `downloader.py`, `ytdlp_extract.py`, `ytdlp_formats.py`, `stream_preview.py`, `url_clean.py`, `ytdlp_common.py` | Queue/finalize; metadata extract & feed; format presets; in-app DASH/progressive preview; URL clean; POT/cookies/extract gate |
 | Library disk | `scanner.py`, `paths.py`, `library.py`, `metadata.py`, `sprites.py` | Scan, paths, probes, sprites |
-| Sync / feeds | `metadata_sync.py`, `playlist_sync.py`, `feed_meta_cache.py`, `channel_catalog/` (package), `return_youtube_dislike.py` | Stale metadata, subscribed playlist rescan, catalog worker/index/query/skips, caches |
+| Sync / feeds | `metadata_sync.py`, `subtitle_retry.py`, `playlist_sync.py`, `feed_meta_cache.py`, `channel_catalog/` (package), `return_youtube_dislike.py` | Stale metadata, delayed caption retry, subscribed playlist rescan, catalog worker/index/query/skips, caches |
 | Settings / updates | `app_settings.py`, `updates.py` | JSON settings, GitHub SHA compare |
 | AI | `ai/` (`worker`, `tasks`, `embeddings`, `provider`, `workload`, `chat`, `search`, `recommend`, `duplicates`, `cost_ledger`, `text`) | Queue, providers, RAG, costs |
 
@@ -59,8 +59,10 @@ From `main.py` `lifespan`:
 10. `start_sync_worker(interval_hours=…)` — from settings  
 11. `start_ai_worker()`  
 12. `start_catalog_worker()`  
+13. `start_autodownload_worker()`  
+14. `start_subtitle_retry_worker()`  
 
-On shutdown (reverse concerns): stop catalog → stop AI → stop observer → close preview client.
+On shutdown (reverse concerns): stop subtitle retry → stop autodownload → stop catalog → stop AI → stop observer → close preview client.
 
 ## Related
 

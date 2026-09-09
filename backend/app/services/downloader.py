@@ -319,6 +319,27 @@ class _YtdlpLogger:
         # Fall through: leave other errors to raised exceptions / default silence.
 
 
+class _SubtitleYtdlpLogger:
+    """Capture timedtext errors without printing them to stderr."""
+
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+
+    def debug(self, msg: str) -> None:
+        pass
+
+    def info(self, msg: str) -> None:
+        pass
+
+    def warning(self, msg: str) -> None:
+        if msg:
+            self.messages.append(str(msg))
+
+    def error(self, msg: str) -> None:
+        if msg:
+            self.messages.append(str(msg))
+
+
 def _purge_members_only_yt_id(yt_id: str) -> None:
     try:
         from .channel_catalog.skips import purge_members_only_by_yt_id
@@ -929,7 +950,12 @@ def _cleanup_subtitle_partials(parent: Path, stem: str) -> None:
             _safe_unlink(entry)
 
 
-def _subtitle_ydl_opts(outtmpl: str, *, with_cookies: bool = False) -> dict[str, Any]:
+def _subtitle_ydl_opts(
+    outtmpl: str,
+    *,
+    with_cookies: bool = False,
+    ytdlp_logger: Optional[_SubtitleYtdlpLogger] = None,
+) -> dict[str, Any]:
     opts: dict[str, Any] = {
         "quiet": True,
         "no_warnings": True,
@@ -941,22 +967,31 @@ def _subtitle_ydl_opts(outtmpl: str, *, with_cookies: bool = False) -> dict[str,
         "outtmpl": outtmpl,
         "postprocessors": [{"key": "FFmpegSubtitlesConvertor", "format": "vtt"}],
         "extractor_args": youtube_extractor_args(),
+        "logger": ytdlp_logger or _SubtitleYtdlpLogger(),
     }
     return apply_cookie_opts(opts) if with_cookies else opts
 
 
-def download_subtitles(media: Path, source_url: str) -> list[dict[str, Any]]:
-    """Best-effort subtitle fetch; never raises. Uses a temp dir to avoid Windows locks."""
+def download_subtitles(media: Path, source_url: str):
+    """Best-effort subtitle fetch; never raises. Uses a temp dir to avoid Windows locks.
+
+    Returns a ``SubtitleFetchOutcome``: tracks when VTT landed, or ``retryable``
+    when timedtext should be tried again later.
+    """
+    from .subtitle_retry import SubtitleFetchOutcome, outcome_from_fetch
+
     import tempfile
 
     import yt_dlp
 
     if not media.exists():
-        return []
+        return SubtitleFetchOutcome(tracks=[], retryable=True)
 
     parent = media.parent
     stem = media.stem
     _cleanup_subtitle_partials(parent, stem)
+    ytdlp_logger = _SubtitleYtdlpLogger()
+    last_exc: Optional[BaseException] = None
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -964,14 +999,22 @@ def download_subtitles(media: Path, source_url: str) -> list[dict[str, Any]]:
             with_cookies = url_cookie_required(source_url)
             try:
                 with yt_dlp.YoutubeDL(
-                    _subtitle_ydl_opts(outtmpl, with_cookies=with_cookies)
+                    _subtitle_ydl_opts(
+                        outtmpl,
+                        with_cookies=with_cookies,
+                        ytdlp_logger=ytdlp_logger,
+                    )
                 ) as ydl:
                     ydl.download([source_url])
             except Exception as exc:  # noqa: BLE001
                 if with_cookies or not should_retry_with_cookies({}, exc):
                     raise
                 with yt_dlp.YoutubeDL(
-                    _subtitle_ydl_opts(outtmpl, with_cookies=True)
+                    _subtitle_ydl_opts(
+                        outtmpl,
+                        with_cookies=True,
+                        ytdlp_logger=ytdlp_logger,
+                    )
                 ) as ydl:
                     ydl.download([source_url])
 
@@ -987,10 +1030,14 @@ def download_subtitles(media: Path, source_url: str) -> list[dict[str, Any]]:
                         shutil.copy2(entry, dest)
                     except OSError:
                         pass
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        last_exc = exc
 
-    return _collect_subtitles(media)
+    return outcome_from_fetch(
+        _collect_subtitles(media),
+        messages=ytdlp_logger.messages,
+        exc=last_exc,
+    )
 
 
 def _remove_review_duplicates(
@@ -1169,27 +1216,33 @@ def _finalize_in_background(
             detail=title,
             video_id=video_id,
         ):
-            tracks: list[dict[str, Any]] = []
+            outcome = None
             thumb: Optional[str] = None
             try:
-                tracks = download_subtitles(final_path, source_url)
+                from .subtitle_retry import apply_subtitle_outcome, outcome_from_fetch
+
+                try:
+                    outcome = download_subtitles(final_path, source_url)
+                except Exception as exc:  # noqa: BLE001
+                    outcome = outcome_from_fetch([], exc=exc)
+                apply_subtitle_outcome(video_id, outcome)
+            except Exception:  # noqa: BLE001
+                pass
+            try:
                 thumb = _save_thumbnail(
                     thumbnail_url, video_id, list_url=list_thumbnail_url
                 )
             except Exception:  # noqa: BLE001
-                pass
-            with Session(engine) as session:
-                video = session.get(Video, video_id)
-                if video is None:
-                    return
-                if tracks:
-                    video.subtitles = library.dump_subtitles(tracks)
-                if thumb:
+                thumb = None
+            if thumb:
+                with Session(engine) as session:
+                    video = session.get(Video, video_id)
+                    if video is None:
+                        return
                     video.thumbnail_path = thumb
-                video.subtitles_pending = False
-                session.add(video)
-                session.commit()
-            # Re-embed with subtitle text once captions are on disk.
+                    session.add(video)
+                    session.commit()
+            # Re-embed even if captions are still pending (hash updates later).
             try:
                 from .ai import enqueue_for_video
 

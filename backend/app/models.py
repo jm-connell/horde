@@ -85,7 +85,10 @@ class Video(SQLModel, table=True):
     source_description: Optional[str] = None
     title_is_custom: bool = Field(default=False)
     description_is_custom: bool = Field(default=False)
-    subtitles_pending: bool = Field(default=False)
+    subtitles_pending: bool = Field(default=False, index=True)
+    # Next timedtext attempt after a retryable miss (429 / network). Internal.
+    subtitles_retry_after: Optional[datetime] = None
+    subtitles_fetch_attempts: int = Field(default=0)
     # JSON list of yt-dlp native chapters: [{"start_sec": float, "title": str}].
     source_chapters: str = Field(default="[]")
 

@@ -44,6 +44,10 @@ from .services.channel_autodownload import (
     start_autodownload_worker,
     stop_autodownload_worker,
 )
+from .services.subtitle_retry import (
+    start_subtitle_retry_worker,
+    stop_subtitle_retry_worker,
+)
 
 # Static frontend build copied next to the backend in the Docker image.
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -71,10 +75,12 @@ async def lifespan(app: FastAPI):
     start_ai_worker()
     start_catalog_worker()
     start_autodownload_worker()
+    start_subtitle_retry_worker()
 
     try:
         yield
     finally:
+        stop_subtitle_retry_worker()
         stop_autodownload_worker()
         stop_catalog_worker()
         stop_ai_worker()

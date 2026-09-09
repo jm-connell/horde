@@ -75,6 +75,21 @@ Members-only, age-restricted, and private IDs go to `channel_catalog_skips`. Run
 
 Every **15 minutes** (first pass ~60s after startup), for each channel with autodownload enabled, run a feed-head sync of the newest uploads and enqueue matching videos into the download queue. Enabling autodownload from a channel page also syncs immediately. Jobs are created from catalog metadata (no per-video preview extract). See [Channels](../guides/channels.md#autodownload).
 
+## Subtitle retry
+
+**Start:** `start_subtitle_retry_worker()` after autodownload.
+
+English captions are fetched after the file is watchable. A timedtext **HTTP 429** (or other retryable miss) leaves `subtitles_pending` set and stores `subtitles_retry_after` / `subtitles_fetch_attempts` instead of treating empty VTT as final.
+
+| Control | Value | Purpose |
+|---------|-------|---------|
+| Backoff | **5m → 10m → 20m → 40m → 1h** | Per-video wait after each retryable miss |
+| Global cooldown | same delay (max wins) | Do not immediately hit timedtext for the next pending video |
+| Poll | **15 s** | Pick one due video (newest download first) |
+| Spacing | **15 s** between fetches | Avoid a caption stampede after the cooldown lifts |
+
+Videos added in the last **48 hours** that never got a metadata sync and still have empty captions are re-queued on worker start. Watch keeps showing “Subtitles loading” while `subtitles_pending` is true. Library **Resync** uses the same helper and skips timedtext while backoff is active.
+
 ## Related
 
 - [Maintenance](../ops/maintenance.md)

@@ -27,6 +27,8 @@ def test_migrate_adds_missing_column(tmp_dirs, monkeypatch):
     cols = {c["name"] for c in inspect(engine).get_columns("videos")}
     assert "notes" in cols
     assert "channel_url" in cols
+    assert "subtitles_retry_after" in cols
+    assert "subtitles_fetch_attempts" in cols
     database.verify_schema()
     assert "2026_07_additive_columns" in database.applied_migrations()
 

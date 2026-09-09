@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 from ..config import DOWNLOADS_DIR
 from ..database import engine
 from ..models import Video
-from . import activity, library
+from . import activity
 from .thumbnails import save_from_url
 from .ytdlp_common import extract_info_gated, youtube_extractor_args
 from .ytdlp_extract import _list_thumbnail_url
@@ -162,17 +162,18 @@ def refresh_video_metadata(
     if "captions" in want:
         try:
             from .downloader import download_subtitles
+            from .subtitle_retry import apply_subtitle_outcome, captions_fetch_allowed
 
             with Session(engine) as session:
                 video = session.get(Video, video_id)
                 if video is None:
                     return changed
+                if not captions_fetch_allowed(video):
+                    return changed
                 media = DOWNLOADS_DIR / video.file_path
-                tracks = download_subtitles(media, source_url)
-                if tracks:
-                    video.subtitles = library.dump_subtitles(tracks)
-                session.add(video)
-                session.commit()
+                tracks_url = source_url
+            outcome = download_subtitles(media, tracks_url)
+            apply_subtitle_outcome(video_id, outcome)
         except Exception:  # noqa: BLE001
             pass
 

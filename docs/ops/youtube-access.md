@@ -57,7 +57,7 @@ All metadata `extract_info` calls (feed cards, download preview, stream preview,
 | Min interval | **1.25 s** | Spacing between extracts |
 | Result cache | **180 s** TTL (max 48 entries) | Reuse recent info JSON |
 
-Downloads themselves stay limited by `MAX_DOWNLOAD_CONCURRENCY` (default **2**). The extract gate is specifically for metadata bursts when scrolling feeds or opening many previews.
+Downloads themselves stay limited by `MAX_DOWNLOAD_CONCURRENCY` (default **2**). The extract gate is specifically for metadata bursts when scrolling feeds or opening many previews. Caption fetches after download share a separate timedtext cooldown so a 429 does not drop subtitles forever — see [subtitle retry](../architecture/workers.md#subtitle-retry).
 
 `force=True` bypasses cache reads (used when refreshing CDN URLs for DASH/progressive preview).
 

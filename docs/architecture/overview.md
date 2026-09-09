@@ -35,11 +35,12 @@ ensure_dirs
     -> start_ai_worker()
     -> start_catalog_worker()
     -> start_autodownload_worker()
+    -> start_subtitle_retry_worker()
 ```
 
 Stuck mid-flight download / AI / catalog work is requeued **before** workers start so a crash cannot leave jobs stranded forever. Download queue pause is restored from `download_queue_paused` in app settings.
 
-Shutdown stops autodownload, catalog, and AI workers, joins the scanner observer, and closes the preview client.
+Shutdown stops subtitle retry, autodownload, catalog, and AI workers, joins the scanner observer, and closes the preview client.
 
 ## Major moving parts
 

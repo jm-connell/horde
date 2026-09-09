@@ -19,7 +19,7 @@ The majority of this wiki beyond this point is AI-generated, but accurate. It pr
 !!! warning "LAN only — no authentication"
     Horde is a single-admin app with **no login**. Keep it on a trusted LAN. Do not expose it to the public internet.
 
-## Feature highlights
+##  Feature highlights
 
 See the [feature overview](features.md) for screenshots and detail. In short:
 
@@ -49,6 +49,8 @@ Want a tour of the UI first? See the [feature overview](features.md).
 3. [Updating](getting-started/updating.md) — `git pull` via `bash update.sh` on the host
 4. [Settings](settings/index.md) — appearance, library, playback, AI
 5. [AI setup](ops/ai-setup.md) — when you want recommendations and smarter search
+
+
 
 ## Map of this wiki
 

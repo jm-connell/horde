@@ -123,6 +123,10 @@ def test_classify_bot_pot_cookies(monkeypatch):
 def test_classify_rate_unavailable_postprocess():
     kind, _ = classify_ytdlp_error("HTTP Error 429: Too Many Requests")
     assert kind == ERROR_KIND_RATE_LIMIT
+    kind, _ = classify_ytdlp_error(
+        "Unable to download video subtitles for 'en': HTTP Error 429: Too Many Requests"
+    )
+    assert kind == ERROR_KIND_RATE_LIMIT
     kind, msg = classify_ytdlp_error("Video unavailable")
     assert kind == ERROR_KIND_UNAVAILABLE
     assert "unavailable" in msg.lower()

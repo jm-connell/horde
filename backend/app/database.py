@@ -80,6 +80,8 @@ _VIDEO_COLUMNS = [
     ("title_is_custom", "BOOLEAN DEFAULT 0"),
     ("description_is_custom", "BOOLEAN DEFAULT 0"),
     ("subtitles_pending", "BOOLEAN DEFAULT 0"),
+    ("subtitles_retry_after", "VARCHAR"),
+    ("subtitles_fetch_attempts", "INTEGER DEFAULT 0"),
     ("sprite_path", "VARCHAR"),
     ("source_chapters", "VARCHAR DEFAULT '[]'"),
 ]

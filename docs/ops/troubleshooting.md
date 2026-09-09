@@ -21,7 +21,7 @@
 | `pot` | PO token / player challenge |
 | `cookies` | Age-restricted, members-only, or private — not anonymous |
 | `members` | Members-only |
-| `rate_limit` | HTTP 429 / temporary block |
+| `rate_limit` | HTTP 429 / temporary block. Caption (timedtext) 429s are retried automatically with backoff; the video file is still kept. |
 | `unavailable` | Removed, geo, no formats |
 | `postprocess` | Merge / subtitles / ffmpeg salvage or H.264/H.265 transcode failed |
 | `cancelled` | User cancel |

@@ -29,6 +29,7 @@ KIND_GROUPS: dict[str, str] = {
     "model_pull": "ai",
     "catalog": "index",
     "metadata_sync": "library",
+    "subtitles": "library",
     "feed_enrich": "index",
 }
 

@@ -65,7 +65,7 @@ Global queue pause is persisted as `download_queue_paused` in app settings so it
 
 | Step | Detail |
 |------|--------|
-| **FFmpegSubtitlesConvertor** | yt-dlp postprocessor → WebVTT sidecars |
+| **FFmpegSubtitlesConvertor** | yt-dlp postprocessor → WebVTT sidecars. Timedtext **429**s keep `subtitles_pending` and retry with backoff ([subtitle retry](workers.md#subtitle-retry)) instead of giving up. |
 | **mp4 compat** | Video-copy remux: AAC audio if needed, `+faststart`. Keeps AV1/4K on the AV1 setting. |
 | **compat transcode** | When the job’s `video_codec` is h264/h265 and the file is not already that codec (H.265 skips encode at ≤1080p H.264). GPU NVENC/QSV/VAAPI when the Horde process can use it; otherwise software. |
 | **loudnorm** | Optional EBU-ish loudness (`I=-16:TP=-1.5:LRA=11`) when the job requests normalize; keeps AAC + faststart |
