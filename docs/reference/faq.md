@@ -1,5 +1,9 @@
 # FAQ
 
+## How do I install Horde?
+
+Clone [the git repo](https://github.com/jm-connell/horde) onto the Docker host, copy `.env.example` to `.env`, set `PUID` / `PGID` / `DOWNLOADS_PATH` / `DATA_PATH`, then `docker compose up --build -d`. On TrueNAS, clone into Dockge’s stacks directory and **Scan Stacks Folder** — do not paste compose into **Add Stack** alone. Walkthroughs: [Install with Docker](../getting-started/install-docker.md), [TrueNAS / Dockge](../getting-started/truenas-dockge.md). Later: `bash update.sh` on the host ([Updating](../getting-started/updating.md)).
+
 ## Is there authentication?
 
 **No.** Horde is a single-admin app with no login. Keep it on a **trusted LAN** (or behind your own VPN / SSO gateway). Details: [No authentication](../design/no-auth.md).

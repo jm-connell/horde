@@ -36,7 +36,7 @@ See the [feature overview](features.md) for screenshots and detail. In short:
 | **AI** (optional) | Ollama and/or OpenRouter for embeddings, tags, summaries, chat, recommendations, duplicates    |
 
 
-Install on any Docker host, or follow the TrueNAS / Dockge walkthrough.
+Install starts with **cloning this git repo** onto the Docker host (Horde is built from source, not pulled as a Hub image). Then either `docker compose up --build` or Dockge **Scan** + **Deploy**.
 
 [Install with Docker](getting-started/install-docker.md){ .md-button .md-button--primary } [TrueNAS / Dockge](getting-started/truenas-dockge.md){ .md-button }
 
@@ -44,15 +44,16 @@ Want a tour of the UI first? See the [feature overview](features.md).
 
 ## Where to start
 
-1. [Install with Docker](getting-started/install-docker.md) — or [TrueNAS / Dockge](getting-started/truenas-dockge.md)
+1. [Install with Docker](getting-started/install-docker.md) — clone, `.env`, compose — or [TrueNAS / Dockge](getting-started/truenas-dockge.md) from a blank NAS
 2. [First run](getting-started/first-run.md) — download something and browse it
-3. [Settings](settings/index.md) — appearance, library, playback, AI
-4. [AI setup](ops/ai-setup.md) — when you want recommendations and smarter search
+3. [Updating](getting-started/updating.md) — `git pull` via `bash update.sh` on the host
+4. [Settings](settings/index.md) — appearance, library, playback, AI
+5. [AI setup](ops/ai-setup.md) — when you want recommendations and smarter search
 
 ## Map of this wiki
 
 - **Features** — product tour with screenshots
-- **Getting started** — install, update, local development, [automated testing](getting-started/testing.md)
+- **Getting started** — clone, Docker / Dockge from zero, first run, update, local development, [automated testing](getting-started/testing.md)
 - **Using Horde** — day-to-day guides for every major screen
 - **Settings** — every control and what it does
 - **Configuration & ops** — env vars, storage, YouTube bot checks, backups, troubleshooting

@@ -109,4 +109,4 @@ Setup: [AI setup](ops/ai-setup.md). What each feature does: [AI features](guides
 
 API, React UI, and this wiki ship in a single image. Host port **8686** maps to container **8080**. Full docs in a running instance: **Settings → System → Documentation**, or `/wiki/`. Interactive API: `/docs`.
 
-Next: [Install with Docker](getting-started/install-docker.md) or [TrueNAS / Dockge](getting-started/truenas-dockge.md).
+Next: clone and [install with Docker](getting-started/install-docker.md), or [TrueNAS / Dockge](getting-started/truenas-dockge.md) from zero.

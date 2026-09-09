@@ -2,25 +2,78 @@
 
 Horde runs as a Docker Compose stack: the main `horde` app, a `bgutil-pot` sidecar for YouTube proof-of-origin tokens, and an optional `ollama` service behind the `ai` profile.
 
+There is **no pre-built image on Docker Hub**. You clone this git repository onto the Docker host and Compose **builds** `horde:latest` from the `Dockerfile`. A zip download of the source can start once, but it has no `.git` directory, so later [`update.sh`](updating.md) / `git pull` will fail.
+
+On **TrueNAS with Dockge**, clone into the Dockge stacks directory and deploy from the UI: [TrueNAS / Dockge](truenas-dockge.md).
+
 !!! warning "LAN only — no authentication"
     Horde has **no login**. Bind it to a trusted LAN only. Do not publish it to the public internet or reverse-proxy it without your own access control in front.
 
 ## Requirements
 
-- Docker Engine and Docker Compose v2
+- **Git** on the Docker host (for clone and later pulls)
+- Docker Engine and Docker Compose **v2** (`docker compose`, not the old `docker-compose` binary)
 - A host directory for media downloads
-- A host directory for persistent app data (SQLite database and thumbnails)
+- A host directory for persistent app data (SQLite database and thumbnails) — keep this **outside** the git working tree
+- Outbound HTTPS on first build (`apt`, `npm`, `pip`, base images)
 - Enough disk for the library you plan to archive
 
-## Quick start
+## From zero
 
-From a clone of the repository:
+Work on the **host** (SSH or a local terminal). Do not run these commands in a container shell.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/jm-connell/horde.git
+cd horde
+```
+
+HTTPS is enough; the repo is public. Stay on `main` unless you intend to run another branch.
+
+If you already cloned it and only need new commits, do **not** clone again. From the same directory:
+
+```bash
+bash update.sh
+```
+
+That is `git pull` plus rebuild. Details: [Updating](updating.md).
+
+### 2. Create host directories
+
+Pick two paths that will survive container rebuilds. Examples on a generic Linux box:
+
+```text
+/home/you/horde-media     → DOWNLOADS_PATH
+/home/you/horde-data      → DATA_PATH
+```
+
+```bash
+mkdir -p /home/you/horde-media /home/you/horde-data
+```
+
+`.env.example` ships TrueNAS-style defaults (`/mnt/tank/media/youtube_archive`, `/opt/dockge/horde/data`). If you leave those paths on a machine where they do not exist, Compose may create them as **root**, and Horde will not be able to write. Always set paths that you created and own.
+
+### 3. Copy and edit `.env`
 
 ```bash
 cp .env.example .env
-# edit .env — set PUID, PGID, DOWNLOADS_PATH, and DATA_PATH
+```
+
+Set at least `PUID`, `PGID`, `DOWNLOADS_PATH`, and `DATA_PATH` (see [Configure .env](#configure-env) below). Then fix ownership to match:
+
+```bash
+# use the same numbers you put in .env
+sudo chown -R 1000:1000 /home/you/horde-media /home/you/horde-data
+```
+
+### 4. Build and start
+
+```bash
 docker compose up --build -d
 ```
+
+The first build compiles the React UI, the MkDocs wiki, and the Python runtime. Expect several minutes. Recreates after that are faster.
 
 Open the UI at:
 
@@ -31,13 +84,9 @@ http://<server-ip>:8686
 !!! note "Host port is 8686, not 8080"
     Compose publishes **host port 8686 → container port 8080**. The app listens on `8080` inside the container. Use `http://<server-ip>:8686` from your browser, not `:8080` on the host.
 
-## Configure `.env`
+## Configure .env
 
-Copy the example file and adjust the values for your host:
-
-```bash
-cp .env.example .env
-```
+You copied `.env` in step 3. These are the host-side keys that matter:
 
 | Variable | Purpose |
 |----------|---------|
@@ -110,5 +159,11 @@ Then open `http://<server-ip>:8686` from a machine on your LAN.
 
 !!! tip "Permission denied writing downloads"
     Recheck `PUID`/`PGID` against the owner of `DOWNLOADS_PATH`. The container must be able to create Channel/Year folders under `/downloads`.
+
+!!! tip "`Dockerfile` not found / unable to prepare context"
+    Compose is not running in a full Horde checkout. `cd` into the `git clone` (the folder that contains `Dockerfile` and `docker-compose.yml`). Dockge **Add Stack** with pasted YAML is not enough.
+
+!!! tip "`fatal: not a git repository` on update"
+    First install used a ZIP or a copy without `.git`. Clone with `git clone` into a new folder (or add the GitHub remote to an existing tree) and point `.env` at the same `DOWNLOADS_PATH` / `DATA_PATH`.
 
 If downloads fail with bot checks, see [YouTube access](../ops/youtube-access.md). Broader fixes: [Troubleshooting](../ops/troubleshooting.md).

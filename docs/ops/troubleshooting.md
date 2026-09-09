@@ -53,6 +53,21 @@ Docker entrypoint runs Horde as `PUID`:`PGID` (defaults `1000:1000`) and chowns 
 
 **Fix:** set `PUID`/`PGID` to the owner of your media dataset, recreate the container, ensure the mount is writable by that user.
 
+## First install: stack missing or image will not build
+
+**Symptoms:** Dockge has no `horde` stack; `docker compose` cannot find a `Dockerfile`; build context is empty; `update.sh` says `not a git repository`.
+
+Horde is built from a **git clone** of this repo. Compose `build: .` needs `Dockerfile` plus `backend/` and `frontend/` in the same folder as `docker-compose.yml`.
+
+**Fix:**
+
+1. Clone into Dockge’s stacks directory (or any host folder for plain Compose): `git clone https://github.com/jm-connell/horde.git horde`. Do not use Dockge **Add Stack** with only pasted YAML, and do not use a GitHub ZIP if you want later pulls.
+2. In Dockge, **Scan Stacks Folder**. The stack name is the folder name.
+3. Confirm Dockge’s stacks host path equals the path inside the Dockge container ([TrueNAS / Dockge](../getting-started/truenas-dockge.md)).
+4. Set `DOWNLOADS_PATH` / `DATA_PATH` in `.env` to directories you created — do not leave the TrueNAS example paths on a machine where they do not exist.
+
+Full from-zero steps: [Install with Docker](../getting-started/install-docker.md).
+
 ## Ollama offline
 
 **Symptoms:** AI status Offline / Blocked; embeds/tags show **waiting** (not progressing); `/api/health` shows `ollama.reachable: false` and may include `workers.ai_blocked_reason`. Settings → System / AI → Jobs shows the blocked reason.

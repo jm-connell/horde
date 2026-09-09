@@ -2,6 +2,8 @@
 
 Horde’s Docker image is **built from source** on your host (`build: .` in `docker-compose.yml`). Updating means pulling new git commits, rebuilding the `horde` image with the current commit SHA, and recreating containers.
 
+First-time install is a `git clone` plus Compose/Dockge deploy — [Install with Docker](install-docker.md) or [TrueNAS / Dockge](truenas-dockge.md). This page is only for an existing checkout.
+
 Library media (`DOWNLOADS_PATH`) and app data (`DATA_PATH`) live on host volumes and are **not** wiped by a rebuild. `update.sh` snapshots bind mounts from the running container into `.env` *before* `git pull`, so a compose-file refresh cannot remount Horde onto empty default directories (which looks like "settings reset" and "storage paths changed").
 
 !!! warning "TrueNAS / Dockge: use the host shell"

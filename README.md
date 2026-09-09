@@ -47,56 +47,109 @@ on the host. Interactive API docs: `/docs`.
 
 ## Quick start
 
+There is no pre-built Docker Hub image. Clone this repo onto the Docker host,
+set two paths in `.env`, and Compose **builds** the image. Use a real
+`git clone` (not a GitHub ZIP) so later `update.sh` can `git pull`.
+
+Do this on the **host** (SSH / TrueNAS shell) — not Dockge’s per-service
+**Bash** button, which is inside a container.
+
+### Clone
+
+Any Docker host:
+
+```bash
+git clone https://github.com/jm-connell/horde.git
+cd horde
+```
+
+**TrueNAS / Dockge:** clone *into* `DOCKGE_STACKS_DIR` so the folder name is
+the stack name. The host path and the path *inside the Dockge container* must
+match (default `/opt/stacks`; on TrueNAS prefer a pool dataset). Do not
+**Add Stack** and paste only `docker-compose.yml` — `build: .` needs the
+whole repo. Dockge itself: [louislam/dockge](https://github.com/louislam/dockge).
+
+```bash
+cd /mnt/tank/dockge/stacks          # your DOCKGE_STACKS_DIR
+git clone https://github.com/jm-connell/horde.git horde
+cd horde
+```
+
+### Configure
+
 ```bash
 cp .env.example .env
-# set PUID, PGID, DOWNLOADS_PATH, and DATA_PATH
+```
+
+Change the TrueNAS-shaped defaults before first start, or Docker may create
+those paths as root. Keep paths in `.env`, not hardcoded in
+`docker-compose.yml`.
+
+| Variable | What to put |
+|----------|-------------|
+| `PUID` / `PGID` | File owner (`id <user>`, or TrueNAS → Credentials → Local Users) |
+| `DOWNLOADS_PATH` | Host folder for videos (`Channel/Year/...`) |
+| `DATA_PATH` | Host folder for SQLite + thumbnails (on the pool, not in the git tree) |
+
+```bash
+# generic example — use your real paths and the same PUID:PGID as in .env
+mkdir -p /home/you/horde-media /home/you/horde-data
+sudo chown -R 1000:1000 /home/you/horde-media /home/you/horde-data
+```
+
+TrueNAS-shaped `.env`:
+
+```env
+PUID=1000
+PGID=1000
+DOWNLOADS_PATH=/mnt/tank/media/youtube_archive
+DATA_PATH=/mnt/tank/apps/horde/data
+SCAN_INTERVAL_SEC=60
+```
+
+Optional SMB on the media dataset: dropped `.mp4` / `.mkv` / `.webm` files
+show up in **Import** within `SCAN_INTERVAL_SEC` (default 60s).
+
+### Start
+
+```bash
 docker compose up --build -d
 ```
 
+On Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not
+rewrite volume lines in the compose editor. The first build compiles the UI
+and wiki and can take several minutes.
+
 Open `http://<server-ip>:8686` (host **8686** → container **8080**).
+`curl -sf http://127.0.0.1:8686/api/health` should return `status: ok`.
 
-Optional local Ollama:
+Optional local Ollama: `docker compose --profile ai up -d`. Or set
+`OLLAMA_BASE_URL` / `OPENROUTER_API_KEY` in `.env` and enable the provider
+under Settings → AI.
 
-```bash
-docker compose --profile ai up -d
-```
+### Update
 
-Or skip the profile and set `OLLAMA_BASE_URL` / `OPENROUTER_API_KEY` in `.env`
-(and enable the provider under Settings → AI).
-
-## TrueNAS / Dockge
-
-1. Create a media dataset, e.g. `/mnt/tank/media/youtube_archive`.
-2. Put that path in `.env` as `DOWNLOADS_PATH`. Put persistent app data
-   (SQLite, thumbnails) in `DATA_PATH`. Keep both in `.env`, not hardcoded
-   only in `docker-compose.yml`.
-3. Set `PUID` / `PGID` to the user that owns the dataset (`id <user>`, or
-   TrueNAS → Credentials → Local Users) so downloads are not owned by root
-   and stay writable over SMB.
-4. Clone this repo into a Dockge stack folder and deploy the included
-   `docker-compose.yml`.
-
-Dropped files on the share show up in **Import** within `SCAN_INTERVAL_SEC`
-(default 60s).
-
-## Update
-
-On the **host** shell (TrueNAS / SSH — not Dockge’s per-service Bash):
+From the same clone, on the host:
 
 ```bash
-cd /path/to/your/horde/stack
+cd /path/to/horde          # e.g. /mnt/tank/dockge/stacks/horde
 bash update.sh
 ```
 
 That snapshots live volume mounts into `.env`, `git pull`s, rebuilds with the
-commit SHA, recreates containers, and waits on `/api/health`. Then hard-refresh
-the browser (`Ctrl+Shift+R`). Media and settings on host volumes are preserved.
+commit SHA, recreates containers, and waits on `/api/health`. Media and
+settings on host volumes are preserved. Hard-refresh the browser
+(`Ctrl+Shift+R`). Do not `git reset --hard` to unstick a pull.
 
-Do not click **Deploy** in Dockge afterward with a stale compose editor — the
-script already recreated the stack. Refresh Dockge so it reloads the file.
+If you use Dockge, refresh it so it reloads compose — do **not** click
+**Deploy** with a stale editor (the script already recreated the stack).
 
-yt-dlp is **pinned** in `backend/requirements.txt` and installed at image
-build time. Pull + rebuild is how you pick up a newer pin.
+yt-dlp is **pinned** in `backend/requirements.txt` at image build time; pull
++ rebuild is how you pick up a newer pin.
+
+Longer walkthroughs: [`docs/getting-started/install-docker.md`](docs/getting-started/install-docker.md),
+[`docs/getting-started/truenas-dockge.md`](docs/getting-started/truenas-dockge.md),
+[`docs/getting-started/updating.md`](docs/getting-started/updating.md).
 
 ## Local development
 

@@ -1,6 +1,6 @@
 # Local development
 
-Run the FastAPI backend and Vite frontend on your machine for UI and API work. This path does not require Docker, though you can still use Compose for a production-like stack ([Install with Docker](install-docker.md)).
+Run the FastAPI backend and Vite frontend on your machine for UI and API work. Clone the repo first (`git clone https://github.com/jm-connell/horde.git`), then work from that checkout. This path does not require Docker, though you can still use Compose for a production-like stack ([Install with Docker](install-docker.md)).
 
 !!! warning "LAN only — no authentication"
     Even in dev, Horde has **no login**. Do not expose the Vite or uvicorn ports beyond a trusted network.
@@ -9,6 +9,7 @@ Run the FastAPI backend and Vite frontend on your machine for UI and API work. T
 
 - Python 3 with `venv`
 - Node.js and npm
+- Git (you need a clone of this repo)
 - `curl` (Linux/macOS helper scripts wait on `/api/health`)
 
 On Fedora, something like `sudo dnf install python3 nodejs npm curl` covers the basics.
