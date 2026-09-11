@@ -170,7 +170,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       if (event.status === "skipped" && event.reason === "shorts") {
         if (!toastedSkipped.current.has(jobId)) {
           toastedSkipped.current.add(jobId);
-          showToast("YouTube Shorts are not downloaded");
+          showToast("Don't watch shorts");
         }
         setJobs((prev) => prev.filter((j) => j.id !== jobId));
         setProgress((prev) => {

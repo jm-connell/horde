@@ -8,17 +8,20 @@ import DownloadJobCard from "../components/DownloadJobCard";
 import LoadingIndicator from "../components/LoadingIndicator";
 import ThemedSelect from "../components/ThemedSelect";
 import { useToast } from "../context/ToastContext";
-import {
-  downloadErrorHint,
-  downloadErrorLabel,
-} from "../downloadErrors";
+import { downloadErrorHint, downloadErrorLabel } from "../downloadErrors";
 import {
   formatApproxSize,
   mergePinnedPreset,
   PRESET_ORDER,
   presetOptionLabel,
 } from "../presets";
-import type { ChannelStat, DownloadBulkSkip, DownloadDestination, DownloadPreview, PlaylistPreviewEntry } from "../types";
+import type {
+  ChannelStat,
+  DownloadBulkSkip,
+  DownloadDestination,
+  DownloadPreview,
+  PlaylistPreviewEntry,
+} from "../types";
 import {
   clipboardEventToText,
   clipboardReadAvailable,
@@ -44,13 +47,13 @@ const SKIP_TOAST: Record<string, string> = {
   already_downloading: "Already downloading",
   already_in_library: "Already in library",
   playlist: "Skipped playlist link — paste it alone to import.",
-  shorts: "YouTube Shorts are not downloaded",
+  shorts: "Don't watch shorts",
   duplicate_in_paste: "Skipped duplicate links",
 };
 
 function toastBulkSkips(
   skips: DownloadBulkSkip[],
-  showToast: (message: string) => void
+  showToast: (message: string) => void,
 ) {
   if (skips.length === 0) return;
   const counts = new Map<string, number>();
@@ -83,7 +86,8 @@ export default function Download() {
   const [url, setUrl] = useState("");
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [preset, setPreset] = useState("best");
-  const [destination, setDestination] = useState<DownloadDestination>("library");
+  const [destination, setDestination] =
+    useState<DownloadDestination>("library");
   const [allPresets, setAllPresets] = useState<string[]>([...PRESET_ORDER]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,9 +109,9 @@ export default function Download() {
     name: string;
   } | null>(null);
 
-  const [playlistEntries, setPlaylistEntries] = useState<PlaylistPreviewEntry[]>(
-    []
-  );
+  const [playlistEntries, setPlaylistEntries] = useState<
+    PlaylistPreviewEntry[]
+  >([]);
   const [playlistName, setPlaylistName] = useState("");
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
   const [playlistSizes, setPlaylistSizes] = useState<
@@ -126,10 +130,10 @@ export default function Download() {
     }
   });
   const [activeSectionVisible, setActiveSectionVisible] = useState(
-    () => activeCount > 0
+    () => activeCount > 0,
   );
   const [activeSectionEntered, setActiveSectionEntered] = useState(
-    () => activeCount > 0
+    () => activeCount > 0,
   );
 
   useEffect(() => {
@@ -160,8 +164,14 @@ export default function Download() {
   };
 
   useEffect(() => {
-    api.listPresets().then(setAllPresets).catch(() => undefined);
-    api.listChannels().then(setChannels).catch(() => undefined);
+    api
+      .listPresets()
+      .then(setAllPresets)
+      .catch(() => undefined);
+    api
+      .listChannels()
+      .then(setChannels)
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -192,7 +202,7 @@ export default function Download() {
           // Leave channel empty so the picker stays on "Auto-detected".
           if (!p.is_playlist && p.available_presets.length > 0) {
             setPreset((current) =>
-              current !== "best" ? current : p.available_presets[0]
+              current !== "best" ? current : p.available_presets[0],
             );
           }
         })
@@ -441,8 +451,7 @@ export default function Download() {
         const c = channel.trim();
         await submitDownload(urls[0]!, preset, {
           title: t && t !== detectedTitle ? t : undefined,
-          channel:
-            toDevice || !c || c === detectedChannel ? undefined : c,
+          channel: toDevice || !c || c === detectedChannel ? undefined : c,
           destination: toDevice ? "device" : "library",
         });
       }
@@ -483,9 +492,7 @@ export default function Download() {
             : "No new downloads",
         ];
         if (skipped) {
-          parts.push(
-            `${skipped} skipped`
-          );
+          parts.push(`${skipped} skipped`);
         }
         setImportMessage(`${parts.join(" — ")}.`);
         toastBulkSkips(result.skips, showToast);
@@ -507,7 +514,7 @@ export default function Download() {
       setImportMessage(
         playlistMode === "subscribe"
           ? `Subscribed to "${created.name}" — new videos will download automatically.`
-          : `Importing "${created.name}" — videos will appear in your library as they finish.`
+          : `Importing "${created.name}" — videos will appear in your library as they finish.`,
       );
       setUrl("");
       setPreview(null);
@@ -544,8 +551,8 @@ export default function Download() {
                 ?
               </span>
               <span className="pointer-events-none absolute left-1/2 top-6 z-10 w-64 -translate-x-1/2 rounded-lg bg-ink-800 p-3 text-xs font-normal leading-relaxed text-gray-300 opacity-0 ring-1 ring-ink-600 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
-                Works with YouTube, Vimeo, Twitch, TikTok, Twitter/X, Dailymotion,
-                SoundCloud, and{" "}
+                Works with YouTube, Vimeo, Twitch, TikTok, Twitter/X,
+                Dailymotion, SoundCloud, and{" "}
                 <a
                   href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md"
                   target="_blank"
@@ -733,7 +740,7 @@ export default function Download() {
                   {playlistEntries.map((entry) => {
                     const thumbSrc = youtubeListThumbnailUrl(
                       entry.id,
-                      entry.thumbnail_url
+                      entry.thumbnail_url,
                     );
                     const rowClass =
                       playlistMode === "subscribe"
@@ -809,7 +816,10 @@ export default function Download() {
             value={preset}
             options={qualityOptions.map((p) => ({
               value: p,
-              label: presetOptionLabel(p, metadataLoaded ? presetSizes : undefined),
+              label: presetOptionLabel(
+                p,
+                metadataLoaded ? presetSizes : undefined,
+              ),
             }))}
             onChange={setPreset}
             className="w-full"
@@ -848,8 +858,8 @@ export default function Download() {
             </div>
             {toDevice && (
               <p className="mt-2 text-xs text-gray-500">
-                Horde fetches the file then saves it to your browser.
-                It is not kept in the library.
+                Horde fetches the file then saves it to your browser. It is not
+                kept in the library.
               </p>
             )}
           </div>
@@ -911,7 +921,9 @@ export default function Download() {
               onClick={toggleActiveCollapsed}
               className="ui-interactive flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left"
             >
-              <span className="text-gray-400">{activeCollapsed ? "▶" : "▼"}</span>
+              <span className="text-gray-400">
+                {activeCollapsed ? "▶" : "▼"}
+              </span>
               <span className="text-sm font-semibold text-gray-100">
                 Active downloads
               </span>
@@ -983,7 +995,7 @@ export default function Download() {
               (j) =>
                 j.status === "completed" ||
                 j.status === "error" ||
-                j.status === "cancelled"
+                j.status === "cancelled",
             ) && (
               <button
                 type="button"
