@@ -7,7 +7,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { ApiError, api, deviceDownloadFileUrl, triggerBrowserDownload } from "../api";
+import {
+  ApiError,
+  api,
+  deviceDownloadFileUrl,
+  triggerBrowserDownload,
+} from "../api";
 import { downloadErrorToast } from "../downloadErrors";
 import { useSettings } from "../hooks/useSettings";
 import { subscribeToQueue } from "../hooks/useJobEvents";
@@ -35,21 +40,21 @@ interface DownloadContextValue {
   submitDownload: (
     url: string,
     preset: string,
-    overrides: SubmitOverrides
+    overrides: SubmitOverrides,
   ) => Promise<DownloadJob>;
   submitBulkDownloads: (
     urls: string[],
     preset: string,
-    overrides?: Pick<SubmitOverrides, "destination">
+    overrides?: Pick<SubmitOverrides, "destination">,
   ) => Promise<DownloadBulkResult>;
   retryJob: (
     jobId: number,
-    overrides?: SubmitOverrides
+    overrides?: SubmitOverrides,
   ) => Promise<DownloadJob>;
   changeJobQuality: (jobId: number, preset: string) => Promise<DownloadJob>;
   updateJobOverrides: (
     jobId: number,
-    overrides: SubmitOverrides & { notes?: string }
+    overrides: SubmitOverrides & { notes?: string },
   ) => Promise<void>;
   cancelJob: (jobId: number) => Promise<void>;
   dismissJob: (jobId: number) => Promise<void>;
@@ -57,7 +62,9 @@ interface DownloadContextValue {
   pauseQueue: () => Promise<void>;
   resumeQueue: () => Promise<void>;
   refreshJobs: () => void;
-  onJobCompleted: (cb: (videoId: number | null, event?: ProgressEvent) => void) => () => void;
+  onJobCompleted: (
+    cb: (videoId: number | null, event?: ProgressEvent) => void,
+  ) => () => void;
 }
 
 const Ctx = createContext<DownloadContextValue | null>(null);
@@ -82,10 +89,15 @@ function jobStatus(job: DownloadJob, live?: ProgressEvent): string {
 
 function isActiveJob(job: DownloadJob, live?: ProgressEvent): boolean {
   const status = jobStatus(job, live);
-  return status === "queued" || status === "downloading" || status === "processing";
+  return (
+    status === "queued" || status === "downloading" || status === "processing"
+  );
 }
 
-function patchJobFromEvent(job: DownloadJob, event: ProgressEvent): DownloadJob {
+function patchJobFromEvent(
+  job: DownloadJob,
+  event: ProgressEvent,
+): DownloadJob {
   return {
     ...job,
     title: event.title ?? job.title,
@@ -140,12 +152,15 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       .catch(() => undefined);
   }, []);
 
-  const maybeSaveDeviceFile = useCallback((jobId: number, destination?: string) => {
-    if (destination !== "device") return;
-    if (deviceSaved.current.has(jobId)) return;
-    deviceSaved.current.add(jobId);
-    triggerBrowserDownload(deviceDownloadFileUrl(jobId));
-  }, []);
+  const maybeSaveDeviceFile = useCallback(
+    (jobId: number, destination?: string) => {
+      if (destination !== "device") return;
+      if (deviceSaved.current.has(jobId)) return;
+      deviceSaved.current.add(jobId);
+      triggerBrowserDownload(deviceDownloadFileUrl(jobId));
+    },
+    [],
+  );
 
   const handleQueueEvent = useCallback(
     (event: ProgressEvent) => {
@@ -166,10 +181,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (
-        restartingJobs.current.has(jobId) &&
-        event.status === "cancelled"
-      ) {
+      if (restartingJobs.current.has(jobId) && event.status === "cancelled") {
         return;
       }
 
@@ -185,7 +197,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         event.available_presets
       ) {
         setJobs((prev) =>
-          prev.map((j) => (j.id === jobId ? patchJobFromEvent(j, event) : j))
+          prev.map((j) => (j.id === jobId ? patchJobFromEvent(j, event) : j)),
         );
       }
 
@@ -216,7 +228,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         showToast(downloadErrorToast(event.error_kind, event.error));
       }
     },
-    [refreshJob, showToast, maybeSaveDeviceFile]
+    [refreshJob, showToast, maybeSaveDeviceFile],
   );
 
   const handleQueueEventRef = useRef(handleQueueEvent);
@@ -237,9 +249,14 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    api.listJobs().then(setJobs).catch(() => undefined);
+    api
+      .listJobs()
+      .then(setJobs)
+      .catch(() => undefined);
     syncQueue();
-    const close = subscribeToQueue((event) => handleQueueEventRef.current(event));
+    const close = subscribeToQueue((event) =>
+      handleQueueEventRef.current(event),
+    );
     const poll = setInterval(refreshJobs, 10000);
     const queuePoll = setInterval(syncQueue, 5000);
     return () => {
@@ -267,20 +284,30 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         }
         return job;
       } catch (err) {
-        if (err instanceof ApiError && err.code && DUPLICATE_CODES.has(err.code)) {
+        if (
+          err instanceof ApiError &&
+          err.code &&
+          DUPLICATE_CODES.has(err.code)
+        ) {
           showToast(err.message);
         }
         throw err;
       }
     },
-    [updateSettings, settings.normalizeVolumeOnDownload, settings.downloadVideoCodec, syncQueue, showToast]
+    [
+      updateSettings,
+      settings.normalizeVolumeOnDownload,
+      settings.downloadVideoCodec,
+      syncQueue,
+      showToast,
+    ],
   );
 
   const submitBulkDownloads = useCallback(
     async (
       urls: string[],
       preset: string,
-      overrides: Pick<SubmitOverrides, "destination"> = {}
+      overrides: Pick<SubmitOverrides, "destination"> = {},
     ) => {
       const result = await api.bulkCreateDownloads(urls, preset, {
         destination: overrides.destination ?? "library",
@@ -294,7 +321,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       syncQueue();
       return result;
     },
-    [settings.normalizeVolumeOnDownload, settings.downloadVideoCodec, syncQueue]
+    [
+      settings.normalizeVolumeOnDownload,
+      settings.downloadVideoCodec,
+      syncQueue,
+    ],
   );
 
   const retryJob = useCallback(
@@ -331,7 +362,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
     },
-    [refreshJob, syncQueue]
+    [refreshJob, syncQueue],
   );
 
   const changeJobQuality = useCallback(
@@ -346,8 +377,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
                 progress: 0,
                 status: j.status === "downloading" ? "queued" : j.status,
               }
-            : j
-        )
+            : j,
+        ),
       );
       setProgress((prev) => ({
         ...prev,
@@ -370,14 +401,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         window.setTimeout(() => restartingJobs.current.delete(jobId), 10000);
       }
     },
-    [refreshJob, syncQueue]
+    [refreshJob, syncQueue],
   );
 
   const updateJobOverrides = useCallback(
-    async (
-      jobId: number,
-      overrides: SubmitOverrides & { notes?: string }
-    ) => {
+    async (jobId: number, overrides: SubmitOverrides & { notes?: string }) => {
       const updated = await api.updateJob(jobId, {
         title_override: overrides.title?.trim() || undefined,
         channel_override: overrides.channel?.trim() || undefined,
@@ -385,7 +413,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       });
       setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
     },
-    []
+    [],
   );
 
   const cancelJob = useCallback(
@@ -404,7 +432,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       }
       syncQueue();
     },
-    [syncQueue]
+    [syncQueue],
   );
 
   const dismissJob = useCallback(async (jobId: number) => {
@@ -424,8 +452,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         (j) =>
           j.status !== "completed" &&
           j.status !== "error" &&
-          j.status !== "cancelled"
-      )
+          j.status !== "cancelled",
+      ),
     );
     setProgress((prev) => {
       const next = { ...prev };
@@ -461,7 +489,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       completionListeners.current.add(cb);
       return () => completionListeners.current.delete(cb);
     },
-    []
+    [],
   );
 
   const activeCount = jobs.filter((j) => isActiveJob(j, progress[j.id])).length;
@@ -503,7 +531,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       resumeQueue,
       refreshJobs,
       onJobCompleted,
-    ]
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -511,7 +539,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
 export function useDownloads(): DownloadContextValue {
   const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("useDownloads must be used within DownloadProvider");
+  if (!ctx)
+    throw new Error("useDownloads must be used within DownloadProvider");
   return ctx;
 }
 

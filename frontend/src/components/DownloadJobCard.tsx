@@ -1,4 +1,11 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -8,10 +15,7 @@ import {
 } from "../api";
 import { useDownloads, jobStatus } from "../context/DownloadContext";
 import { useToast } from "../context/ToastContext";
-import {
-  downloadErrorHint,
-  downloadErrorLabel,
-} from "../downloadErrors";
+import { downloadErrorHint, downloadErrorLabel } from "../downloadErrors";
 import type { ChannelStat, DownloadJob, ProgressEvent } from "../types";
 import {
   downloadProcessingLabel,
@@ -19,7 +23,13 @@ import {
   formatSize,
   youtubeListThumbnailUrl,
 } from "../utils";
-import { PRESET_LABELS, PRESET_ORDER, finishedQualityLabel, jobQualityOptions, resolveQualityPreset } from "../presets";
+import {
+  PRESET_LABELS,
+  PRESET_ORDER,
+  finishedQualityLabel,
+  jobQualityOptions,
+  resolveQualityPreset,
+} from "../presets";
 import AddToPlaylist from "./AddToPlaylist";
 import ChannelPicker from "./ChannelPicker";
 import ConfirmDialog from "./ConfirmDialog";
@@ -56,12 +66,7 @@ function skipDismissConfirm(): boolean {
 }
 
 // Memoized: unrelated SSE progress ticks re-render other cards' props by reference only.
-function DownloadJobCard({
-  job,
-  live,
-  channels,
-  active = false,
-}: Props) {
+function DownloadJobCard({ job, live, channels, active = false }: Props) {
   const {
     updateJobOverrides,
     retryJob,
@@ -78,22 +83,18 @@ function DownloadJobCard({
     if (live?.downloaded_bytes) {
       maxBytesRef.current = Math.max(
         maxBytesRef.current,
-        live.downloaded_bytes
+        live.downloaded_bytes,
       );
     }
   } else {
     maxBytesRef.current = 0;
   }
-  const downloaded = Math.max(
-    maxBytesRef.current,
-    live?.downloaded_bytes ?? 0
-  );
-  const liveTotal =
-    status === "downloading" ? live?.total_bytes : undefined;
+  const downloaded = Math.max(maxBytesRef.current, live?.downloaded_bytes ?? 0);
+  const liveTotal = status === "downloading" ? live?.total_bytes : undefined;
   const percent = downloadProgressPercent(
     live?.progress ?? job.progress,
     status === "downloading" ? downloaded : undefined,
-    liveTotal
+    liveTotal,
   );
   const completed = status === "completed";
   const failed = status === "error";
@@ -102,41 +103,46 @@ function DownloadJobCard({
     status,
     failed,
     cancelled,
-    completed
+    completed,
   );
   const videoId = live?.video_id ?? job.video_id;
-  const isDeviceJob =
-    (live?.destination ?? job.destination) === "device";
+  const isDeviceJob = (live?.destination ?? job.destination) === "device";
   const videoGone = isLibraryVideoGone(
     isDeviceJob,
     job.video_missing,
-    job.superseded
+    job.superseded,
   );
   const canEditNotes = canEditDownloadJobNotes(
     isDeviceJob,
     failed,
     cancelled,
     videoGone,
-    completed
+    completed,
   );
   const inLibrary = canManageCompletedLibraryVideo(
     completed,
     isDeviceJob,
     videoGone,
-    videoId
+    videoId,
   );
   const canRedownload = canRedownloadRemovedJob(
     completed,
     isDeviceJob,
     failed,
     job.video_missing,
-    job.superseded
+    job.superseded,
   );
   const isReplacing =
-    active && Boolean(job.replace_video_id) && !completed && !failed && !cancelled;
+    active &&
+    Boolean(job.replace_video_id) &&
+    !completed &&
+    !failed &&
+    !cancelled;
 
-  const resolveTitle = () => job.title_override ?? live?.title ?? job.title ?? "";
-  const resolveChannel = () => job.channel_override ?? live?.channel ?? job.channel ?? "";
+  const resolveTitle = () =>
+    job.title_override ?? live?.title ?? job.title ?? "";
+  const resolveChannel = () =>
+    job.channel_override ?? live?.channel ?? job.channel ?? "";
 
   const [title, setTitle] = useState(resolveTitle);
   const [channel, setChannel] = useState(resolveChannel);
@@ -153,7 +159,7 @@ function DownloadJobCard({
   const [redownloading, setRedownloading] = useState(false);
   const [changingQuality, setChangingQuality] = useState(false);
   const [sourcePresets, setSourcePresets] = useState<string[]>(
-    () => job.available_presets ?? []
+    () => job.available_presets ?? [],
   );
   const [editingTitle, setEditingTitle] = useState(false);
   const retryingRef = useRef(false);
@@ -195,25 +201,19 @@ function DownloadJobCard({
     }
   }, [job.id, storedPresets]);
 
-  const qualityOptions = jobQualityOptions(
-    sourcePresets,
-    job.quality_preset,
-    [...PRESET_ORDER]
-  );
+  const qualityOptions = jobQualityOptions(sourcePresets, job.quality_preset, [
+    ...PRESET_ORDER,
+  ]);
   const displayPreset = resolveQualityPreset(
     job.quality_preset || "best",
-    sourcePresets
+    sourcePresets,
   );
   const finishedRes = completed
-    ? finishedQualityLabel(
-        job.quality_preset,
-        job.height_px,
-        sourcePresets
-      )
+    ? finishedQualityLabel(job.quality_preset, job.height_px, sourcePresets)
     : "";
   const inFlightRes =
     !completed && job.quality_preset
-      ? PRESET_LABELS[displayPreset] ?? displayPreset
+      ? (PRESET_LABELS[displayPreset] ?? displayPreset)
       : "";
   const resLabel = completed ? finishedRes : inFlightRes;
 
@@ -233,7 +233,8 @@ function DownloadJobCard({
     if (row) applyActionRowCollapse(row);
   });
 
-  const isDirty = title !== savedTitle.current || channel !== savedChannel.current;
+  const isDirty =
+    title !== savedTitle.current || channel !== savedChannel.current;
 
   const flashSaved = () => {
     setSaved(true);
@@ -332,9 +333,7 @@ function DownloadJobCard({
       setDeleteConfirm(false);
       refreshJobs();
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Could not delete video"
-      );
+      showToast(err instanceof Error ? err.message : "Could not delete video");
     } finally {
       setDeleting(false);
     }
@@ -409,7 +408,9 @@ function DownloadJobCard({
   ].filter((u, i, arr): u is string => !!u && arr.indexOf(u) === i);
   const thumbSrc = thumbFallbacks[0] ?? null;
 
-  const errorKind = failed ? live?.error_kind ?? job.error_kind ?? null : null;
+  const errorKind = failed
+    ? (live?.error_kind ?? job.error_kind ?? null)
+    : null;
   const errorMsg =
     failed && !completed ? stripAnsi(live?.error ?? job.error ?? "") : "";
   const errorHint = failed ? downloadErrorHint(errorKind) : null;
@@ -431,390 +432,396 @@ function DownloadJobCard({
 
   return (
     <>
-    <div
-      className={`ui-panel relative rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700 ${
-        active ? "overflow-hidden border-l-4 border-l-accent pl-[calc(1.25rem-2px)]" : ""
-      }${videoGone ? " opacity-60" : ""}${playlistOpen ? " z-30" : ""}`}
-    >
-      <div className="mb-3 flex items-start justify-between gap-3 text-sm">
-        <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
-          {completed && !videoGone && (
-            <span className="shrink-0 text-accent">✓</span>
-          )}
-          {failed && <span className="shrink-0 text-red-400">✗</span>}
-          {editingTitle ? (
-            <input
-              ref={titleInputRef}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => {
-                if (!editingTitleRef.current) return;
-                void finishTitleEdit(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void finishTitleEdit(true);
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  void finishTitleEdit(false);
-                }
-              }}
-              placeholder="Title"
-              className="min-w-0 flex-1 rounded-md border border-ink-600 bg-ink-950 px-2 py-1 text-sm font-medium text-gray-100 outline-none focus:border-accent"
-            />
-          ) : (
-            <>
-              <span
-                className={`min-w-0 truncate${
-                  videoGone ? " text-gray-500 line-through" : ""
-                }${canEditTitle ? " cursor-text" : ""}`}
-                onClick={startTitleEdit}
-                title={title || undefined}
-              >
-                {title || "Working…"}
-              </span>
-              {canEditTitle && (
-                <button
-                  type="button"
-                  onClick={startTitleEdit}
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:text-accent"
-                  title="Edit title"
-                  aria-label="Edit title"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-3.5 w-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
-                  >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                  </svg>
-                </button>
-              )}
-            </>
-          )}
-          {job.superseded && (
-            <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
-              Replaced
-            </span>
-          )}
-          {job.video_missing && !job.superseded && (
-            <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
-              Removed
-            </span>
-          )}
-          {isReplacing && (
-            <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-              Replacing
-            </span>
-          )}
-          {isDeviceJob && (
-            <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-              This device
-            </span>
-          )}
-        </span>
-        <div className="flex shrink-0 items-center gap-2">
-          {!completed && (
-            <span
-              className={`${failed ? "text-red-400" : "text-gray-400"}`}
-            >
-              {statusLabel}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={onDismiss}
-            className={
-              completed || failed || cancelled
-                ? "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-400 hover:border-ink-500 hover:bg-ink-700 hover:text-gray-200"
-                : "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-300 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-400"
-            }
-            title={
-              completed || failed || cancelled
-                ? "Remove from list (video stays in library)"
-                : "Cancel download"
-            }
-            aria-label={
-              completed || failed || cancelled
-                ? "Remove from list"
-                : "Cancel download"
-            }
-          >
-            ×
-          </button>
-        </div>
-      </div>
-
-      <div className="flex items-start gap-4">
-        <div
-          className={`hidden h-[6.75rem] w-52 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block${
-            videoGone ? " grayscale" : ""
-          }`}
-        >
-          {thumbSrc ? (
-            <img
-              key={`${job.id}-${thumbSrc}`}
-              src={thumbSrc}
-              alt=""
-              decoding="async"
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                const el = e.currentTarget;
-                const nextIdx = Number(el.dataset.fallbackIdx || "0") + 1;
-                const next = thumbFallbacks[nextIdx];
-                if (!next) return;
-                el.dataset.fallbackIdx = String(nextIdx);
-                el.src = next;
-              }}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-xs text-gray-600">
-              No preview
-            </div>
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          {!completed && !failed && !cancelled && (
-            <div className="mb-4 h-2.5 w-full overflow-hidden rounded-full bg-ink-700">
-              <div
-                className="h-full rounded-full bg-accent transition-all duration-300"
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-          )}
-
-          {failed && (errorMsg || errorHint) && (
-            <div className="mb-3 space-y-1 text-sm text-red-400">
-              {errorMsg && <p>{errorMsg}</p>}
-              {errorHint && errorHint !== errorMsg && (
-                <p className="text-xs text-red-400/80">{errorHint}</p>
-              )}
-            </div>
-          )}
-
-          {!cancelled && (
-            <div className="w-full sm:max-w-md">
-              <label className={labelClass}>Channel</label>
-              <ChannelPicker
-                value={channel}
-                onChange={setChannel}
-                channels={channels}
-                placeholder="Channel"
-              />
-            </div>
-          )}
-
-          {canEditNotes && (showNote || note) && (
-            <div className="mt-3">
-              <div className="mb-1 flex items-baseline justify-between gap-2">
-                <label className={labelClass + " mb-0"}>Note</label>
-              </div>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={2}
-                placeholder="Personal note about this video..."
-                className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-              />
-            </div>
-          )}
-
-          <div
-            ref={setActionRow}
-            className="mt-3 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-hidden sm:gap-2"
-          >
-            {completed && isDeviceJob && (
-              <button
-                type="button"
-                onClick={() =>
-                  triggerBrowserDownload(deviceDownloadFileUrl(job.id))
-                }
-                className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
-              >
-                Save again
-              </button>
+      <div
+        className={`ui-panel relative rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700 ${
+          active
+            ? "overflow-hidden border-l-4 border-l-accent pl-[calc(1.25rem-2px)]"
+            : ""
+        }${videoGone ? " opacity-60" : ""}${playlistOpen ? " z-30" : ""}`}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3 text-sm">
+          <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
+            {completed && !videoGone && (
+              <span className="shrink-0 text-accent">✓</span>
             )}
-            {inLibrary && videoId != null && (
+            {failed && <span className="shrink-0 text-red-400">✗</span>}
+            {editingTitle ? (
+              <input
+                ref={titleInputRef}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={() => {
+                  if (!editingTitleRef.current) return;
+                  void finishTitleEdit(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void finishTitleEdit(true);
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    void finishTitleEdit(false);
+                  }
+                }}
+                placeholder="Title"
+                className="min-w-0 flex-1 rounded-md border border-ink-600 bg-ink-950 px-2 py-1 text-sm font-medium text-gray-100 outline-none focus:border-accent"
+              />
+            ) : (
               <>
-                <Link
-                  to={`/watch/${videoId}`}
-                  className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
+                <span
+                  className={`min-w-0 truncate${
+                    videoGone ? " text-gray-500 line-through" : ""
+                  }${canEditTitle ? " cursor-text" : ""}`}
+                  onClick={startTitleEdit}
+                  title={title || undefined}
                 >
-                  Watch →
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setDeleteConfirm(true)}
-                  disabled={deleting}
-                  title="Delete this video from your library"
-                  className="shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Delete
-                </button>
-                <div data-collapse="playlist" className="shrink-0">
-                  <AddToPlaylist
-                    videoId={videoId}
-                    buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
-                    onOpenChange={setPlaylistOpen}
-                  />
-                </div>
+                  {title || "Working…"}
+                </span>
+                {canEditTitle && (
+                  <button
+                    type="button"
+                    onClick={startTitleEdit}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:text-accent"
+                    title="Edit title"
+                    aria-label="Edit title"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-3.5 w-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </button>
+                )}
               </>
             )}
-            {canRedownload && (
-              <button
-                type="button"
-                onClick={onRedownload}
-                disabled={redownloading || !job.url}
-                className="shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {redownloading ? "Starting…" : "Redownload"}
-              </button>
-            )}
-            {completed && !isDeviceJob && videoGone && (
-              <span className="shrink-0 whitespace-nowrap text-xs text-gray-500">
-                {job.video_missing
-                  ? "Video no longer in library"
-                  : "Superseded by a newer download"}
+            {job.superseded && (
+              <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                Replaced
               </span>
             )}
-            {failed && (
-              <button
-                type="button"
-                onClick={onRetry}
-                disabled={retrying}
-                className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {retrying ? "Retrying…" : "Retry"}
-              </button>
-            )}
-            {!failed && !cancelled && !videoGone && isDirty && (
-              <button
-                onClick={save}
-                className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
-              >
-                Save changes
-              </button>
-            )}
-            {canEditNotes && (
-              <button
-                onClick={() => setShowNote((v) => !v)}
-                className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
-              >
-                {showNote ? "Hide note" : "Add note"}
-              </button>
-            )}
-            {canEditNotes && showNote && (
-              <button
-                onClick={saveNote}
-                className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
-              >
-                Save note
-              </button>
-            )}
-            {saved && <span className="shrink-0 text-xs text-accent">Saved</span>}
-            <span className="min-w-0 flex-1" data-collapse-ignore aria-hidden />
-            {sizeLabel ? (
-              <span
-                data-collapse="size"
-                className="shrink-0 whitespace-nowrap text-xs text-gray-500"
-              >
-                {sizeLabel}
+            {job.video_missing && !job.superseded && (
+              <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                Removed
               </span>
-            ) : null}
-            {canChangeQuality ? (
-              <div
-                data-collapse="res"
-                className="shrink-0"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ThemedSelect
-                  aria-label="Download resolution"
-                  size="compact"
-                  align="right"
-                  value={displayPreset}
-                  disabled={changingQuality}
-                  options={qualityOptions.map((p) => ({
-                    value: p,
-                    label: PRESET_LABELS[p] ?? p,
-                  }))}
-                  onChange={(preset) => void onChangeQuality(preset)}
+            )}
+            {isReplacing && (
+              <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+                Replacing
+              </span>
+            )}
+            {isDeviceJob && (
+              <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+                This device
+              </span>
+            )}
+          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {!completed && (
+              <span className={`${failed ? "text-red-400" : "text-gray-400"}`}>
+                {statusLabel}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={onDismiss}
+              className={
+                completed || failed || cancelled
+                  ? "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-400 hover:border-ink-500 hover:bg-ink-700 hover:text-gray-200"
+                  : "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-300 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-400"
+              }
+              title={
+                completed || failed || cancelled
+                  ? "Remove from list (video stays in library)"
+                  : "Cancel download"
+              }
+              aria-label={
+                completed || failed || cancelled
+                  ? "Remove from list"
+                  : "Cancel download"
+              }
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-4">
+          <div
+            className={`hidden h-[6.75rem] w-52 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block${
+              videoGone ? " grayscale" : ""
+            }`}
+          >
+            {thumbSrc ? (
+              <img
+                key={`${job.id}-${thumbSrc}`}
+                src={thumbSrc}
+                alt=""
+                decoding="async"
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  const el = e.currentTarget;
+                  const nextIdx = Number(el.dataset.fallbackIdx || "0") + 1;
+                  const next = thumbFallbacks[nextIdx];
+                  if (!next) return;
+                  el.dataset.fallbackIdx = String(nextIdx);
+                  el.src = next;
+                }}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-gray-600">
+                No preview
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            {!completed && !failed && !cancelled && (
+              <div className="mb-4 h-2.5 w-full overflow-hidden rounded-full bg-ink-700">
+                <div
+                  className="h-full rounded-full bg-accent transition-all duration-300"
+                  style={{ width: `${percent}%` }}
                 />
               </div>
-            ) : resLabel ? (
-              <span
-                data-collapse="res"
-                className="shrink-0 whitespace-nowrap rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400"
-              >
-                {resLabel}
-              </span>
-            ) : null}
-            {completed && (!videoGone || isDeviceJob) && (
-              <span
-                data-collapse="done"
-                className="shrink-0 whitespace-nowrap text-xs text-gray-400"
-              >
-                Done
-              </span>
             )}
+
+            {failed && (errorMsg || errorHint) && (
+              <div className="mb-3 space-y-1 text-sm text-red-400">
+                {errorMsg && <p>{errorMsg}</p>}
+                {errorHint && errorHint !== errorMsg && (
+                  <p className="text-xs text-red-400/80">{errorHint}</p>
+                )}
+              </div>
+            )}
+
+            {!cancelled && (
+              <div className="w-full sm:max-w-md">
+                <label className={labelClass}>Channel</label>
+                <ChannelPicker
+                  value={channel}
+                  onChange={setChannel}
+                  channels={channels}
+                  placeholder="Channel"
+                />
+              </div>
+            )}
+
+            {canEditNotes && (showNote || note) && (
+              <div className="mt-3">
+                <div className="mb-1 flex items-baseline justify-between gap-2">
+                  <label className={labelClass + " mb-0"}>Note</label>
+                </div>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={2}
+                  placeholder="Personal note about this video..."
+                  className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                />
+              </div>
+            )}
+
+            <div
+              ref={setActionRow}
+              className="mt-3 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-hidden sm:gap-2"
+            >
+              {completed && isDeviceJob && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    triggerBrowserDownload(deviceDownloadFileUrl(job.id))
+                  }
+                  className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
+                >
+                  Save again
+                </button>
+              )}
+              {inLibrary && videoId != null && (
+                <>
+                  <Link
+                    to={`/watch/${videoId}`}
+                    className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
+                  >
+                    Watch →
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm(true)}
+                    disabled={deleting}
+                    title="Delete this video from your library"
+                    className="shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                  <div data-collapse="playlist" className="shrink-0">
+                    <AddToPlaylist
+                      videoId={videoId}
+                      buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
+                      onOpenChange={setPlaylistOpen}
+                    />
+                  </div>
+                </>
+              )}
+              {canRedownload && (
+                <button
+                  type="button"
+                  onClick={onRedownload}
+                  disabled={redownloading || !job.url}
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {redownloading ? "Starting…" : "Redownload"}
+                </button>
+              )}
+              {completed && !isDeviceJob && videoGone && (
+                <span className="shrink-0 whitespace-nowrap text-xs text-gray-500">
+                  {job.video_missing
+                    ? "Video no longer in library"
+                    : "Superseded by a newer download"}
+                </span>
+              )}
+              {failed && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  disabled={retrying}
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {retrying ? "Retrying…" : "Retry"}
+                </button>
+              )}
+              {!failed && !cancelled && !videoGone && isDirty && (
+                <button
+                  onClick={save}
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
+                >
+                  Save changes
+                </button>
+              )}
+              {canEditNotes && (
+                <button
+                  onClick={() => setShowNote((v) => !v)}
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
+                >
+                  {showNote ? "Hide note" : "Add note"}
+                </button>
+              )}
+              {canEditNotes && showNote && (
+                <button
+                  onClick={saveNote}
+                  className="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
+                >
+                  Save note
+                </button>
+              )}
+              {saved && (
+                <span className="shrink-0 text-xs text-accent">Saved</span>
+              )}
+              <span
+                className="min-w-0 flex-1"
+                data-collapse-ignore
+                aria-hidden
+              />
+              {sizeLabel ? (
+                <span
+                  data-collapse="size"
+                  className="shrink-0 whitespace-nowrap text-xs text-gray-500"
+                >
+                  {sizeLabel}
+                </span>
+              ) : null}
+              {canChangeQuality ? (
+                <div
+                  data-collapse="res"
+                  className="shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ThemedSelect
+                    aria-label="Download resolution"
+                    size="compact"
+                    align="right"
+                    value={displayPreset}
+                    disabled={changingQuality}
+                    options={qualityOptions.map((p) => ({
+                      value: p,
+                      label: PRESET_LABELS[p] ?? p,
+                    }))}
+                    onChange={(preset) => void onChangeQuality(preset)}
+                  />
+                </div>
+              ) : resLabel ? (
+                <span
+                  data-collapse="res"
+                  className="shrink-0 whitespace-nowrap rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400"
+                >
+                  {resLabel}
+                </span>
+              ) : null}
+              {completed && (!videoGone || isDeviceJob) && (
+                <span
+                  data-collapse="done"
+                  className="shrink-0 whitespace-nowrap text-xs text-gray-400"
+                >
+                  Done
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    {dismissConfirm ? (
-      <ConfirmDialog
-        title="Remove this card?"
-        body={
-          isDeviceJob
-            ? "The temporary file on the server will be deleted."
-            : "The video stays in your library. To delete the file, use Delete."
-        }
-        confirmLabel="Remove"
-        onCancel={() => setDismissConfirm(false)}
-        onConfirm={() => void confirmDismiss()}
-      >
-        <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-gray-400">
-          <input
-            type="checkbox"
-            checked={dontAskAgain}
-            onChange={(e) => setDontAskAgain(e.target.checked)}
-            className="rounded border-ink-600"
-          />
-          Don&apos;t ask again
-        </label>
-      </ConfirmDialog>
-    ) : null}
-    {deleteConfirm ? (
-      <ConfirmDialog
-        title="Delete this video?"
-        body="The file will be removed from your library. This card stays so you can redownload. Use × if you only want to hide the card."
-        confirmLabel="Delete from library"
-        danger
-        busy={deleting}
-        busyLabel="Deleting…"
-        onCancel={() => {
-          if (!deleting) setDeleteConfirm(false);
-        }}
-        onConfirm={() => void confirmDeleteFromLibrary()}
-      />
-    ) : null}
-    {cancelConfirm ? (
-      <ConfirmDialog
-        title="Cancel this download?"
-        body="The download will stop. You can retry it later from this page."
-        confirmLabel="Cancel download"
-        danger
-        onCancel={() => setCancelConfirm(false)}
-        onConfirm={() => void confirmCancel()}
-      />
-    ) : null}
+      {dismissConfirm ? (
+        <ConfirmDialog
+          title="Remove this card?"
+          body={
+            isDeviceJob
+              ? "The temporary file on the server will be deleted."
+              : "The video stays in your library. To delete the file, use Delete."
+          }
+          confirmLabel="Remove"
+          onCancel={() => setDismissConfirm(false)}
+          onConfirm={() => void confirmDismiss()}
+        >
+          <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-gray-400">
+            <input
+              type="checkbox"
+              checked={dontAskAgain}
+              onChange={(e) => setDontAskAgain(e.target.checked)}
+              className="rounded border-ink-600"
+            />
+            Don&apos;t ask again
+          </label>
+        </ConfirmDialog>
+      ) : null}
+      {deleteConfirm ? (
+        <ConfirmDialog
+          title="Delete this video?"
+          body="The file will be removed from your library. This card stays so you can redownload. Use × if you only want to hide the card."
+          confirmLabel="Delete from library"
+          danger
+          busy={deleting}
+          busyLabel="Deleting…"
+          onCancel={() => {
+            if (!deleting) setDeleteConfirm(false);
+          }}
+          onConfirm={() => void confirmDeleteFromLibrary()}
+        />
+      ) : null}
+      {cancelConfirm ? (
+        <ConfirmDialog
+          title="Cancel this download?"
+          body="The download will stop. You can retry it later from this page."
+          confirmLabel="Cancel download"
+          danger
+          onCancel={() => setCancelConfirm(false)}
+          onConfirm={() => void confirmCancel()}
+        />
+      ) : null}
     </>
   );
 }
