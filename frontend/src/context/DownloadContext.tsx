@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -465,24 +466,45 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const activeCount = jobs.filter((j) => isActiveJob(j, progress[j.id])).length;
 
-  const value: DownloadContextValue = {
-    jobs,
-    progress,
-    activeCount,
-    queuePaused,
-    submitDownload,
-    submitBulkDownloads,
-    retryJob,
-    changeJobQuality,
-    updateJobOverrides,
-    cancelJob,
-    dismissJob,
-    dismissFinishedJobs,
-    pauseQueue,
-    resumeQueue,
-    refreshJobs,
-    onJobCompleted,
-  };
+  // Memoized so an SSE tick for one job doesn't re-render every useDownloads() consumer.
+  const value: DownloadContextValue = useMemo(
+    () => ({
+      jobs,
+      progress,
+      activeCount,
+      queuePaused,
+      submitDownload,
+      submitBulkDownloads,
+      retryJob,
+      changeJobQuality,
+      updateJobOverrides,
+      cancelJob,
+      dismissJob,
+      dismissFinishedJobs,
+      pauseQueue,
+      resumeQueue,
+      refreshJobs,
+      onJobCompleted,
+    }),
+    [
+      jobs,
+      progress,
+      activeCount,
+      queuePaused,
+      submitDownload,
+      submitBulkDownloads,
+      retryJob,
+      changeJobQuality,
+      updateJobOverrides,
+      cancelJob,
+      dismissJob,
+      dismissFinishedJobs,
+      pauseQueue,
+      resumeQueue,
+      refreshJobs,
+      onJobCompleted,
+    ]
+  );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

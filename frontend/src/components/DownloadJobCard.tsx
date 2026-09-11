@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -55,7 +55,8 @@ function skipDismissConfirm(): boolean {
   }
 }
 
-export default function DownloadJobCard({
+// Memoized: unrelated SSE progress ticks re-render other cards' props by reference only.
+function DownloadJobCard({
   job,
   live,
   channels,
@@ -817,3 +818,5 @@ export default function DownloadJobCard({
     </>
   );
 }
+
+export default memo(DownloadJobCard);
