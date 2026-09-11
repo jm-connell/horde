@@ -228,7 +228,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
 
     if is_youtube_short_url(payload.url):
         raise HTTPException(
-            status_code=400, detail="Don't watch shorts"
+            status_code=400, detail="Don't watch Shorts"
         )
 
     url = clean_url(payload.url, keep_playlist=False)
@@ -242,7 +242,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
 
     if is_youtube_short_url(url):
         raise HTTPException(
-            status_code=400, detail="Don't watch shorts"
+            status_code=400, detail="Don't watch Shorts"
         )
     if is_playlist_only_url(payload.url) or is_playlist_only_url(url):
         raise HTTPException(
