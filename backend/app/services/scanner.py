@@ -16,7 +16,7 @@ from ..config import (
 )
 from ..database import engine
 from ..models import Video, VideoStatus, utcnow
-from . import activity
+from . import activity, library
 from .metadata import (
     grab_frame,
     probe_dimensions,
@@ -351,6 +351,11 @@ def _polling_loop() -> None:
         try:
             scan_once()
         except Exception:  # noqa: BLE001 - keep the poller alive across errors
+            pass
+        try:
+            with Session(engine) as session:
+                library.expire_stale_progress(session)
+        except Exception:  # noqa: BLE001
             pass
 
 

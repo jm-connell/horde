@@ -28,7 +28,44 @@ def to_read(
     *,
     include_processing: bool = False,
     match_reason: Optional[dict] = None,
+    compact: bool = False,
 ) -> VideoRead:
+    if compact:
+        return VideoRead(
+            id=video.id,
+            title=video.title,
+            channel=video.channel,
+            channel_url=video.channel_url,
+            tags=library.parse_tags(video.tags),
+            description=None,
+            notes=None,
+            source_url=video.source_url,
+            # No Path.exists()/stat() here — list views only need "is one set".
+            has_thumbnail=bool(video.thumbnail_path),
+            subtitles=[],
+            file_path=video.file_path,
+            duration_sec=video.duration_sec,
+            file_size=video.file_size,
+            width_px=video.width_px,
+            height_px=video.height_px,
+            frame_rate=video.frame_rate,
+            view_count=video.view_count,
+            channel_subscriber_count=video.channel_subscriber_count,
+            published_at=as_utc(video.published_at),
+            added_at=as_utc(video.added_at) or video.added_at,
+            last_position_sec=video.last_position_sec,
+            last_watched_at=as_utc(video.last_watched_at),
+            needs_review=video.needs_review,
+            platform=video.platform,
+            status=video.status,
+            metadata_synced_at=as_utc(video.metadata_synced_at),
+            source_title=video.source_title,
+            source_description=None,
+            title_is_custom=video.title_is_custom,
+            description_is_custom=video.description_is_custom,
+            subtitles_pending=video.subtitles_pending,
+            match_reason=match_reason,
+        )
     ai_tags: list[str] = []
     user_tags: list[str] = []
     ai_summary: Optional[str] = None

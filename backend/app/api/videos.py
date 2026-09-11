@@ -79,8 +79,7 @@ def list_videos(
     seed: Optional[int] = None,
     session: Session = Depends(get_session),
 ):
-    if continue_watching or watched_only:
-        library.expire_stale_progress(session)
+    # Expiry is a write; it now runs on a background tick, not this read path.
     if q and not continue_watching and not watched_only:
         from ..services.ai.search import explain_library_video, hybrid_search
 
@@ -98,6 +97,7 @@ def list_videos(
             _to_read(
                 v,
                 session,
+                compact=True,
                 match_reason=explain_library_video(
                     v, q, chunk_index=chunks.get(v.id) if v.id is not None else None
                 ),
@@ -116,7 +116,7 @@ def list_videos(
         watched_only=watched_only,
         seed=seed,
     )
-    return [_to_read(v, session) for v in videos]
+    return [_to_read(v, session, compact=True) for v in videos]
 
 
 @router.get("/tags", response_model=list[str])
@@ -212,7 +212,7 @@ def related_videos(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     rows = library.related_videos(session, video_id, limit=limit, offset=offset)
-    return [_to_read(v, session) for v in rows]
+    return [_to_read(v, session, compact=True) for v in rows]
 
 
 @router.patch("/videos/{video_id}", response_model=VideoRead)

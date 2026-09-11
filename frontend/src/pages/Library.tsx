@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
@@ -37,10 +46,7 @@ import type {
   TagStat,
   Video,
 } from "../types";
-import {
-  queueDockAlignClass,
-  queueDockStyle,
-} from "../utils/miniPlayerLayout";
+import { queueDockAlignClass, queueDockStyle } from "../utils/miniPlayerLayout";
 import { Toggle } from "./settings/ui";
 import {
   FEED_INDEX_TIP,
@@ -70,7 +76,6 @@ import {
 
 const TAG_MIN_COUNT = 3;
 
-
 const TAG_PAGE_SIZE = 20;
 // Fixed queue overlay width (w-[26rem]) — dock to bottom when grid extends into this zone.
 const QUEUE_RESERVE_PX = 416;
@@ -79,6 +84,28 @@ function videoProgress(video: Video): number | undefined {
   if (!video.duration_sec || video.duration_sec <= 0) return undefined;
   if (video.last_position_sec <= 0) return undefined;
   return Math.min(1, video.last_position_sec / video.duration_sec);
+}
+
+const LIBRARY_CACHE_KEY = "horde:libraryCache:v1";
+
+// Lets a return to Home paint from the last list in one frame while it revalidates.
+function readLibraryCache(key: string): Video[] | null {
+  try {
+    const raw = sessionStorage.getItem(LIBRARY_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { key: string; videos: Video[] };
+    return parsed.key === key ? parsed.videos : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLibraryCache(key: string, videos: Video[]): void {
+  try {
+    sessionStorage.setItem(LIBRARY_CACHE_KEY, JSON.stringify({ key, videos }));
+  } catch {
+    // Quota/private-mode failures are non-fatal — cache is best-effort.
+  }
 }
 
 function SearchResultSection({
@@ -150,7 +177,7 @@ export default function Library() {
   const [streamResults, setStreamResults] = useState<ChannelFeedEntry[]>([]);
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamDownloading, setStreamDownloading] = useState<Set<string>>(
-    () => new Set()
+    () => new Set(),
   );
   const [youtubeResults, setYoutubeResults] = useState<ChannelFeedEntry[]>([]);
   const [youtubeLoading, setYoutubeLoading] = useState(false);
@@ -181,12 +208,19 @@ export default function Library() {
   const [metadataSyncing, setMetadataSyncing] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const { search, setSearch, committedQuery, commitSearch, youtubeVideoSearch, setYoutubeVideoSearch } = useSearch();
+  const {
+    search,
+    setSearch,
+    committedQuery,
+    commitSearch,
+    youtubeVideoSearch,
+    setYoutubeVideoSearch,
+  } = useSearch();
   const [activeChannel, setActiveChannel] = useState<string | null>(
-    searchParams.get("channel")
+    searchParams.get("channel"),
   );
   const [activeTag, setActiveTag] = useState<string | null>(
-    searchParams.get("tag")
+    searchParams.get("tag"),
   );
   const [sortState, setSortState] = useState<LibrarySortState>(() => {
     const saved = loadLibrarySort(loadSettings().defaultLibrarySort);
@@ -199,9 +233,8 @@ export default function Library() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [channelUrlOverrides, setChannelUrlOverrides] = useState<
-    Record<string, string>
-  >(loadChannelUrlMap);
+  const [channelUrlOverrides, setChannelUrlOverrides] =
+    useState<Record<string, string>>(loadChannelUrlMap);
   const [homeTab, setHomeTabState] = useState<HomeTab>(loadHomeTab);
   const [aiReady, setAiReady] = useState(false);
   const [feedSearch, setFeedSearch] = useState("");
@@ -210,7 +243,7 @@ export default function Library() {
   const [feedLayout, setFeedLayoutState] = useState(loadFeedLayout);
   const [autodownloadOpen, setAutodownloadOpen] = useState(false);
   const [autodownload, setAutodownload] = useState<ChannelAutodownload | null>(
-    null
+    null,
   );
   const [autodownloadSaving, setAutodownloadSaving] = useState(false);
 
@@ -234,10 +267,10 @@ export default function Library() {
   const { onJobCompleted, submitDownload } = useDownloads();
   const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
   const [narrowViewport, setNarrowViewport] = useState(
-    () => typeof window !== "undefined" && window.innerWidth < 1100
+    () => typeof window !== "undefined" && window.innerWidth < 1100,
   );
-  const [viewportWidth, setViewportWidth] = useState(
-    () => (typeof window !== "undefined" ? window.innerWidth : 0)
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 0,
   );
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
   const [sidebarOverlayVisible, setSidebarOverlayVisible] = useState(false);
@@ -306,9 +339,48 @@ export default function Library() {
     }
   }, [narrowViewport]);
 
+  const backgroundRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  // Coalesce several job completions into one full-library refetch instead of one each.
+  const scheduleBackgroundRefresh = useCallback(() => {
+    if (backgroundRefreshTimer.current) {
+      clearTimeout(backgroundRefreshTimer.current);
+    }
+    backgroundRefreshTimer.current = setTimeout(() => {
+      backgroundRefreshTimer.current = null;
+      setRefreshKey((k) => k + 1);
+    }, 4000);
+  }, []);
+
   useEffect(() => {
-    return onJobCompleted(() => setRefreshKey((k) => k + 1));
-  }, [onJobCompleted]);
+    return onJobCompleted((videoId) => {
+      if (videoId == null) {
+        scheduleBackgroundRefresh();
+        return;
+      }
+      api
+        .getVideo(videoId)
+        .then((video) => {
+          setVideos((prev) => {
+            const idx = prev.findIndex((v) => v.id === video.id);
+            if (idx === -1) return [video, ...prev];
+            const next = [...prev];
+            next[idx] = video;
+            return next;
+          });
+          setContinueWatching((prev) => {
+            const idx = prev.findIndex((v) => v.id === video.id);
+            if (idx === -1) return prev;
+            const next = [...prev];
+            next[idx] = video;
+            return next;
+          });
+        })
+        .catch(() => undefined);
+      scheduleBackgroundRefresh();
+    });
+  }, [onJobCompleted, scheduleBackgroundRefresh]);
 
   useEffect(() => {
     let active = true;
@@ -331,7 +403,10 @@ export default function Library() {
 
   const reloadChannels = () =>
     api
-      .listChannels({ sort: settings.channelSort, order: settings.channelOrder })
+      .listChannels({
+        sort: settings.channelSort,
+        order: settings.channelOrder,
+      })
       .then(setChannels)
       .catch(() => undefined);
 
@@ -379,27 +454,50 @@ export default function Library() {
     return () => clearTimeout(id);
   }, [search, committedQuery]);
 
+  const isHome = !activeChannel && !activeTag;
+  const showHomeTabs = isHome && aiReady;
+  // Recommended tab renders its own data; skip the full-library fetches below.
+  const onRecommendedTab = showHomeTabs && homeTab === "recommended";
+  const recommendedTabActive = onRecommendedTab && !debouncedSearch;
+
   useEffect(() => {
     reloadChannels();
   }, [videos.length, settings.channelSort, settings.channelOrder]);
 
   useEffect(() => {
+    if (recommendedTabActive) return;
     api
       .listVideos({ continue_watching: true })
       .then(setContinueWatching)
       .catch(() => undefined);
-  }, [videos.length, refreshKey]);
+  }, [videos.length, refreshKey, recommendedTabActive]);
 
   useEffect(() => {
+    if (recommendedTabActive) return;
     api
       .tagStats(activeChannel || undefined)
       .then(setTags)
       .catch(() => undefined);
     setShowAllTags(false);
-  }, [activeChannel, videos.length]);
+  }, [activeChannel, videos.length, recommendedTabActive]);
 
   useEffect(() => {
-    setLoading(true);
+    if (recommendedTabActive) return;
+    const cacheKey = JSON.stringify({
+      q: debouncedSearch || "",
+      channel: activeChannel || "",
+      tag: activeTag || "",
+      sort,
+      order,
+      seed: sort === "random" ? randomSeed : undefined,
+    });
+    const cached = readLibraryCache(cacheKey);
+    if (cached) {
+      setVideos(cached);
+    } else if (videos.length === 0) {
+      // Nothing to show yet (first visit or a filter with no cached match).
+      setLoading(true);
+    }
     api
       .listVideos({
         q: debouncedSearch || undefined,
@@ -411,6 +509,7 @@ export default function Library() {
       })
       .then(async (matches) => {
         setVideos(matches);
+        writeLibraryCache(cacheKey, matches);
         if (!debouncedSearch) {
           setOtherVideos([]);
           return;
@@ -430,8 +529,10 @@ export default function Library() {
         }
       })
       .catch(() => {
-        setVideos([]);
-        setOtherVideos([]);
+        if (!cached) {
+          setVideos([]);
+          setOtherVideos([]);
+        }
       })
       .finally(() => setLoading(false));
   }, [
@@ -442,6 +543,7 @@ export default function Library() {
     order,
     randomSeed,
     refreshKey,
+    recommendedTabActive,
   ]);
 
   // Global catalog search (home search only — channel pages use feed search).
@@ -573,12 +675,12 @@ export default function Library() {
 
   const visibleContinueWatching = useMemo(
     () => continueWatching.filter((v) => !isDismissed(v.id)),
-    [continueWatching, isDismissed]
+    [continueWatching, isDismissed],
   );
 
   const selectableVideos = useMemo(
     () => (debouncedSearch ? [...videos, ...otherVideos] : videos),
-    [debouncedSearch, videos, otherVideos]
+    [debouncedSearch, videos, otherVideos],
   );
 
   const youtubeVisible = useMemo(
@@ -588,17 +690,17 @@ export default function Library() {
         ...videos.map((v) => extractYouTubeId(v.source_url, v.file_path)),
         ...otherVideos.map((v) => extractYouTubeId(v.source_url, v.file_path)),
       ]),
-    [youtubeResults, streamResults, videos, otherVideos]
+    [youtubeResults, streamResults, videos, otherVideos],
   );
 
   const hasTags = useMemo(
     () => tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag),
-    [tags, activeTag]
+    [tags, activeTag],
   );
 
   const visibleTags = useMemo(() => {
     const filtered = tags.filter(
-      (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
+      (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag,
     );
     if (!showAllTags && filtered.length > TAG_PAGE_SIZE) {
       return filtered.slice(0, TAG_PAGE_SIZE);
@@ -608,7 +710,7 @@ export default function Library() {
 
   const hiddenTagCount = useMemo(() => {
     const filtered = tags.filter(
-      (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
+      (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag,
     );
     return showAllTags ? 0 : Math.max(0, filtered.length - TAG_PAGE_SIZE);
   }, [tags, activeTag, showAllTags]);
@@ -618,10 +720,6 @@ export default function Library() {
     if (activeTag) return `#${activeTag}`;
     return "Home";
   }, [activeChannel, activeTag]);
-
-  const isHome = !activeChannel && !activeTag;
-  const showHomeTabs = isHome && aiReady;
-  const onRecommendedTab = showHomeTabs && homeTab === "recommended";
 
   const activeChannelUrl = useMemo(() => {
     if (!activeChannel) return null;
@@ -634,9 +732,8 @@ export default function Library() {
 
   const onChannelPage = Boolean(activeChannel);
   const [indexingChannel, setIndexingChannel] = useState(false);
-  const [catalogProgress, setCatalogProgress] = useState<CatalogProgress | null>(
-    null
-  );
+  const [catalogProgress, setCatalogProgress] =
+    useState<CatalogProgress | null>(null);
   const toastedCatalogErrorRef = useRef<string | null>(null);
   const catalogErrorSeededRef = useRef(false);
 
@@ -684,7 +781,7 @@ export default function Library() {
               .replace(/\/+$/, "")
               .replace(
                 /\/(videos|shorts|streams|playlists|featured|about|search)$/i,
-                ""
+                "",
               )
               .toLowerCase();
           const target = norm(activeChannelUrl);
@@ -699,7 +796,10 @@ export default function Library() {
           if (!catalogErrorSeededRef.current) {
             catalogErrorSeededRef.current = true;
             toastedCatalogErrorRef.current = lastError;
-          } else if (lastError && lastError !== toastedCatalogErrorRef.current) {
+          } else if (
+            lastError &&
+            lastError !== toastedCatalogErrorRef.current
+          ) {
             toastedCatalogErrorRef.current = lastError;
             showToast(lastError);
           } else if (!lastError) {
@@ -727,9 +827,7 @@ export default function Library() {
             isCurrentJob;
           // While the flat list is still growing, prefer live done count.
           const indexed =
-            isCurrentJob &&
-            status.current_phase === "flat" &&
-            status.done > 0
+            isCurrentJob && status.current_phase === "flat" && status.done > 0
               ? status.done
               : hit.indexed_count;
           setCatalogProgress({
@@ -743,7 +841,8 @@ export default function Library() {
             youtubeSearchOverride: hit.direct_youtube_search ?? null,
             youtubeSearchEffective:
               hit.direct_youtube_search_effective ??
-              (status.direct_youtube_search ?? true),
+              status.direct_youtube_search ??
+              true,
             youtubeSearchSystem: status.direct_youtube_search ?? true,
           });
         })
@@ -781,12 +880,12 @@ export default function Library() {
               .replace(/\/+$/, "")
               .replace(
                 /\/(videos|shorts|streams|playlists|featured|about|search)$/i,
-                ""
+                "",
               )
               .toLowerCase();
           const target = norm(activeChannelUrl);
           const hit = status.catalogs.find(
-            (c) => norm(c.channel_url) === target
+            (c) => norm(c.channel_url) === target,
           );
           setCatalogProgress((prev) => ({
             indexed: hit?.indexed_count ?? 0,
@@ -811,7 +910,7 @@ export default function Library() {
       showToast(
         err instanceof Error && err.message
           ? err.message
-          : "Could not start channel indexing"
+          : "Could not start channel indexing",
       );
     } finally {
       setIndexingChannel(false);
@@ -839,13 +938,13 @@ export default function Library() {
       setAutodownload(row);
       setAutodownloadOpen(false);
       showToast(
-        payload.enabled ? "Autodownload saved" : "Autodownload turned off"
+        payload.enabled ? "Autodownload saved" : "Autodownload turned off",
       );
     } catch (err) {
       showToast(
         err instanceof Error && err.message
           ? err.message
-          : "Could not save autodownload"
+          : "Could not save autodownload",
       );
     } finally {
       setAutodownloadSaving(false);
@@ -870,13 +969,13 @@ export default function Library() {
               youtubeSearchOverride: result.direct_youtube_search,
               youtubeSearchEffective: result.direct_youtube_search_effective,
             }
-          : prev
+          : prev,
       );
     } catch (err) {
       showToast(
         err instanceof Error && err.message
           ? err.message
-          : "Could not update YouTube search"
+          : "Could not update YouTube search",
       );
     } finally {
       setYoutubePrefSaving(false);
@@ -964,8 +1063,8 @@ export default function Library() {
       .then(() => showToast("Download queued"))
       .catch((err: unknown) =>
         showToast(
-          err instanceof Error ? err.message : "Could not start download"
-        )
+          err instanceof Error ? err.message : "Could not start download",
+        ),
       )
       .finally(() => {
         setStreamDownloading((prev) => {
@@ -1017,7 +1116,9 @@ export default function Library() {
 
   const bulkSaveNote = async () => {
     if (!selectedIds.size || !bulkNote.trim()) return;
-    await api.bulkUpdateNotes([...selectedIds], bulkNote.trim()).catch(() => undefined);
+    await api
+      .bulkUpdateNotes([...selectedIds], bulkNote.trim())
+      .catch(() => undefined);
     setBulkNote("");
     setBulkNoteOpen(false);
     exitSelectMode();
@@ -1025,7 +1126,9 @@ export default function Library() {
 
   const bulkAddToPlaylist = async (playlistId: number) => {
     if (!selectedIds.size) return;
-    await api.bulkAddToPlaylist(playlistId, [...selectedIds]).catch(() => undefined);
+    await api
+      .bulkAddToPlaylist(playlistId, [...selectedIds])
+      .catch(() => undefined);
     setPlaylistOpen(false);
     exitSelectMode();
   };
@@ -1056,14 +1159,17 @@ export default function Library() {
     }
     showToast(
       `Synced ${result.refreshed} video${result.refreshed === 1 ? "" : "s"}` +
-        (result.failed ? ` (${result.failed} failed)` : "")
+        (result.failed ? ` (${result.failed} failed)` : ""),
     );
     setRefreshKey((k) => k + 1);
     exitSelectMode();
   };
 
   const openPlaylistPicker = () => {
-    api.listPlaylists().then(setPlaylists).catch(() => undefined);
+    api
+      .listPlaylists()
+      .then(setPlaylists)
+      .catch(() => undefined);
     setPlaylistOpen(true);
   };
 
@@ -1077,7 +1183,7 @@ export default function Library() {
     const el = mainContentRef.current;
     if (!el) return;
     setQueueDockedBottom(
-      el.getBoundingClientRect().right > window.innerWidth - QUEUE_RESERVE_PX
+      el.getBoundingClientRect().right > window.innerWidth - QUEUE_RESERVE_PX,
     );
   }, []);
 
@@ -1106,7 +1212,9 @@ export default function Library() {
   }`;
 
   return (
-    <div className={`flex gap-6${showQueuePanel && queueDockedBottom ? " pb-4" : ""}`}>
+    <div
+      className={`flex gap-6${showQueuePanel && queueDockedBottom ? " pb-4" : ""}`}
+    >
       {showQueuePanel && !queueDockedBottom && (
         <div className="pointer-events-none fixed inset-y-0 right-0 z-40 hidden w-[26rem] p-3 pt-20 lg:block">
           <div className="pointer-events-auto ml-auto flex max-h-full w-96 flex-col overflow-hidden">
@@ -1368,14 +1476,12 @@ export default function Library() {
                   />
                   {isYoutubeChannelUrl(activeChannelUrl) ? (
                     <YoutubeSearchChip
-                      checked={
-                        catalogProgress?.youtubeSearchEffective ?? true
-                      }
+                      checked={catalogProgress?.youtubeSearchEffective ?? true}
                       disabled={youtubePrefSaving || !activeChannelUrl}
                       title={DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP}
                       onToggle={() =>
                         void setChannelYoutubeSearch(
-                          !(catalogProgress?.youtubeSearchEffective ?? true)
+                          !(catalogProgress?.youtubeSearchEffective ?? true),
                         )
                       }
                     />
@@ -1384,16 +1490,16 @@ export default function Library() {
                 {isYoutubeChannelUrl(activeChannelUrl) &&
                   (indexingChannel ||
                     showChannelIndexButton(catalogProgress)) && (
-                  <button
-                    type="button"
-                    onClick={() => void triggerChannelIndex()}
-                    disabled={indexingChannel || !activeChannelUrl}
-                    className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-                    title="Index this channel’s uploads for search"
-                  >
-                    {indexingChannel ? "Queuing…" : "Index channel"}
-                  </button>
-                )}
+                    <button
+                      type="button"
+                      onClick={() => void triggerChannelIndex()}
+                      disabled={indexingChannel || !activeChannelUrl}
+                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Index this channel’s uploads for search"
+                    >
+                      {indexingChannel ? "Queuing…" : "Index channel"}
+                    </button>
+                  )}
                 <ThemedSelect
                   aria-label="Feed sort"
                   value={feedSort}
@@ -1516,19 +1622,21 @@ export default function Library() {
                   onClick={toggleOrder}
                   className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-2 text-sm text-gray-100 hover:border-accent sm:px-3"
                   title={
-                    sort === "random" ? "Shuffle again" : "Toggle sort direction"
+                    sort === "random"
+                      ? "Shuffle again"
+                      : "Toggle sort direction"
                   }
                 >
                   {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
                 </button>
                 {!isHome && !onRecommendedTab && hasTags && (
-                    <button
-                      onClick={() => setShowTags((s) => !s)}
-                      className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent lg:hidden"
-                    >
-                      {showTags ? "Hide tags" : "Tags"}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setShowTags((s) => !s)}
+                    className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent lg:hidden"
+                  >
+                    {showTags ? "Hide tags" : "Tags"}
+                  </button>
+                )}
                 {!onRecommendedTab && (
                   <button
                     onClick={() =>
@@ -1548,8 +1656,7 @@ export default function Library() {
           </div>
         </div>
 
-        {!onRecommendedTab &&
-          (activeTag || hasTags) && (
+        {!onRecommendedTab && (activeTag || hasTags) && (
           <div>
             {!isHome && !onChannelPage && (activeTag || hasTags) && (
               <div
@@ -1634,120 +1741,77 @@ export default function Library() {
 
         <div
           key={
-            onChannelPage ? "feed" : onRecommendedTab ? "recommended" : "library"
+            onChannelPage
+              ? "feed"
+              : onRecommendedTab
+                ? "recommended"
+                : "library"
           }
           className="page-shell page-shell--animate"
         >
-        {onChannelPage ? (
-          <ChannelFeed
-            channel={activeChannel!}
-            channelUrl={activeChannelUrl}
-            channels={channels}
-            feedSearch={feedSearch}
-            feedSort={feedSort}
-            feedOrder={feedOrder}
-            feedLayout={feedLayout}
-            showUndownloaded={settings.showUndownloadedOnChannel}
-            catalogIndexing={Boolean(catalogProgress?.indexing)}
-            queueDockedBottom={showQueuePanel && queueDockedBottom}
-            directYoutubeSearch={
-              catalogProgress?.youtubeSearchEffective ?? true
-            }
-          />
-        ) : onRecommendedTab && !debouncedSearch ? (
-          <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
-        ) : loading ? (
-          <LoadingIndicator />
-        ) : !debouncedSearch && videos.length === 0 ? (
-          <div className="py-20 text-center text-gray-500">
-            <p className="text-lg">No videos yet.</p>
-            <p className="mt-1 text-sm">
-              Paste a link on the Download page or drop files into your media
-              folder.
-            </p>
-          </div>
-        ) : debouncedSearch ? (
-          <div className="space-y-6">
-            <SearchResultSection
-              title="In your library"
-              count={videos.length}
-              emptyText="No matching videos found in library"
-            >
-              <div className={videoGridClassName}>
-                {videos.map((v, idx) => (
-                  <VideoCard
-                    key={v.id}
-                    video={v}
-                    layout="feed"
-                    searchQuery={debouncedSearch}
-                    showViewCount={sort === "view_count"}
-                    progress={
-                      settings.showProgressOnAllVideos
-                        ? videoProgress(v)
-                        : undefined
-                    }
-                    selectable={selectMode}
-                    selected={selectedIds.has(v.id)}
-                    onSelect={(id, e) => toggleSelect(id, idx, e.shiftKey)}
-                  />
-                ))}
-              </div>
-            </SearchResultSection>
-            <SearchResultSection
-              title="Available to stream"
-              count={streamResults.length}
-              emptyText="No matching videos from indexed channels"
-              loading={streamLoading}
-            >
-              <div className={videoGridClassName}>
-                {streamResults.map((entry) => {
-                  const channelName = entry.channel || "Unknown channel";
-                  return (
-                    <ChannelFeedCard
-                      key={entry.id || entry.url}
-                      entry={entry}
-                      channelName={channelName}
-                      layout="grid"
-                      inLibrary={false}
-                      searchQuery={debouncedSearch}
-                      onDownload={() => queueRemoteDownload(entry)}
-                      downloading={streamDownloading.has(entry.url)}
-                      skipRemotePreview
-                      onChannelClick={openFeedChannel}
-                    />
-                  );
-                })}
-              </div>
-            </SearchResultSection>
-            {youtubeLoading && youtubeVisible.length === 0 && (
-              <p className="text-center text-xs text-gray-600" role="status">
-                {YOUTUBE_SEARCH_LOADING_LABEL}
+          {onChannelPage ? (
+            <ChannelFeed
+              channel={activeChannel!}
+              channelUrl={activeChannelUrl}
+              channels={channels}
+              feedSearch={feedSearch}
+              feedSort={feedSort}
+              feedOrder={feedOrder}
+              feedLayout={feedLayout}
+              showUndownloaded={settings.showUndownloadedOnChannel}
+              catalogIndexing={Boolean(catalogProgress?.indexing)}
+              queueDockedBottom={showQueuePanel && queueDockedBottom}
+              directYoutubeSearch={
+                catalogProgress?.youtubeSearchEffective ?? true
+              }
+            />
+          ) : onRecommendedTab && !debouncedSearch ? (
+            <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
+          ) : loading ? (
+            <LoadingIndicator />
+          ) : !debouncedSearch && videos.length === 0 ? (
+            <div className="py-20 text-center text-gray-500">
+              <p className="text-lg">No videos yet.</p>
+              <p className="mt-1 text-sm">
+                Paste a link on the Download page or drop files into your media
+                folder.
               </p>
-            )}
-            {youtubeVisible.length > 0 && (
+            </div>
+          ) : debouncedSearch ? (
+            <div className="space-y-6">
               <SearchResultSection
-                title="On YouTube"
-                count={youtubeVisible.length}
-                emptyText=""
-                footer={
-                  youtubeHasMore ? (
-                    <div className="flex justify-center">
-                      <button
-                        type="button"
-                        className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={youtubeLoadingMore}
-                        onClick={() => loadMoreYoutube()}
-                      >
-                        {youtubeLoadingMore
-                          ? "Loading…"
-                          : YOUTUBE_SEARCH_LOAD_MORE_LABEL}
-                      </button>
-                    </div>
-                  ) : null
-                }
+                title="In your library"
+                count={videos.length}
+                emptyText="No matching videos found in library"
               >
                 <div className={videoGridClassName}>
-                  {youtubeVisible.map((entry) => {
+                  {videos.map((v, idx) => (
+                    <VideoCard
+                      key={v.id}
+                      video={v}
+                      layout="feed"
+                      searchQuery={debouncedSearch}
+                      showViewCount={sort === "view_count"}
+                      progress={
+                        settings.showProgressOnAllVideos
+                          ? videoProgress(v)
+                          : undefined
+                      }
+                      selectable={selectMode}
+                      selected={selectedIds.has(v.id)}
+                      onSelect={(id, e) => toggleSelect(id, idx, e.shiftKey)}
+                    />
+                  ))}
+                </div>
+              </SearchResultSection>
+              <SearchResultSection
+                title="Available to stream"
+                count={streamResults.length}
+                emptyText="No matching videos from indexed channels"
+                loading={streamLoading}
+              >
+                <div className={videoGridClassName}>
+                  {streamResults.map((entry) => {
                     const channelName = entry.channel || "Unknown channel";
                     return (
                       <ChannelFeedCard
@@ -1756,7 +1820,7 @@ export default function Library() {
                         channelName={channelName}
                         layout="grid"
                         inLibrary={false}
-                        searchQuery={youtubeQuery || debouncedSearch}
+                        searchQuery={debouncedSearch}
                         onDownload={() => queueRemoteDownload(entry)}
                         downloading={streamDownloading.has(entry.url)}
                         skipRemotePreview
@@ -1766,56 +1830,103 @@ export default function Library() {
                   })}
                 </div>
               </SearchResultSection>
-            )}
-            <SearchResultSection
-              title="Other videos in library"
-              count={otherVideos.length}
-              emptyText="No other videos in library"
-            >
-              <div className={videoGridClassName}>
-                {otherVideos.map((v, idx) => (
-                  <VideoCard
-                    key={v.id}
-                    video={v}
-                    layout="feed"
-                    searchQuery={debouncedSearch}
-                    showViewCount={sort === "view_count"}
-                    progress={
-                      settings.showProgressOnAllVideos
-                        ? videoProgress(v)
-                        : undefined
-                    }
-                    selectable={selectMode}
-                    selected={selectedIds.has(v.id)}
-                    onSelect={(id, e) =>
-                      toggleSelect(id, videos.length + idx, e.shiftKey)
-                    }
-                  />
-                ))}
-              </div>
-            </SearchResultSection>
-          </div>
-        ) : (
-          <div className={videoGridClassName}>
-            {videos.map((v, idx) => (
-              <VideoCard
-                key={v.id}
-                video={v}
-                layout="feed"
-                searchQuery={debouncedSearch}
-                showViewCount={sort === "view_count"}
-                progress={
-                  settings.showProgressOnAllVideos
-                    ? videoProgress(v)
-                    : undefined
-                }
-                selectable={selectMode}
-                selected={selectedIds.has(v.id)}
-                onSelect={(id, e) => toggleSelect(id, idx, e.shiftKey)}
-              />
-            ))}
-          </div>
-        )}
+              {youtubeLoading && youtubeVisible.length === 0 && (
+                <p className="text-center text-xs text-gray-600" role="status">
+                  {YOUTUBE_SEARCH_LOADING_LABEL}
+                </p>
+              )}
+              {youtubeVisible.length > 0 && (
+                <SearchResultSection
+                  title="On YouTube"
+                  count={youtubeVisible.length}
+                  emptyText=""
+                  footer={
+                    youtubeHasMore ? (
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={youtubeLoadingMore}
+                          onClick={() => loadMoreYoutube()}
+                        >
+                          {youtubeLoadingMore
+                            ? "Loading…"
+                            : YOUTUBE_SEARCH_LOAD_MORE_LABEL}
+                        </button>
+                      </div>
+                    ) : null
+                  }
+                >
+                  <div className={videoGridClassName}>
+                    {youtubeVisible.map((entry) => {
+                      const channelName = entry.channel || "Unknown channel";
+                      return (
+                        <ChannelFeedCard
+                          key={entry.id || entry.url}
+                          entry={entry}
+                          channelName={channelName}
+                          layout="grid"
+                          inLibrary={false}
+                          searchQuery={youtubeQuery || debouncedSearch}
+                          onDownload={() => queueRemoteDownload(entry)}
+                          downloading={streamDownloading.has(entry.url)}
+                          skipRemotePreview
+                          onChannelClick={openFeedChannel}
+                        />
+                      );
+                    })}
+                  </div>
+                </SearchResultSection>
+              )}
+              <SearchResultSection
+                title="Other videos in library"
+                count={otherVideos.length}
+                emptyText="No other videos in library"
+              >
+                <div className={videoGridClassName}>
+                  {otherVideos.map((v, idx) => (
+                    <VideoCard
+                      key={v.id}
+                      video={v}
+                      layout="feed"
+                      searchQuery={debouncedSearch}
+                      showViewCount={sort === "view_count"}
+                      progress={
+                        settings.showProgressOnAllVideos
+                          ? videoProgress(v)
+                          : undefined
+                      }
+                      selectable={selectMode}
+                      selected={selectedIds.has(v.id)}
+                      onSelect={(id, e) =>
+                        toggleSelect(id, videos.length + idx, e.shiftKey)
+                      }
+                    />
+                  ))}
+                </div>
+              </SearchResultSection>
+            </div>
+          ) : (
+            <div className={videoGridClassName}>
+              {videos.map((v, idx) => (
+                <VideoCard
+                  key={v.id}
+                  video={v}
+                  layout="feed"
+                  searchQuery={debouncedSearch}
+                  showViewCount={sort === "view_count"}
+                  progress={
+                    settings.showProgressOnAllVideos
+                      ? videoProgress(v)
+                      : undefined
+                  }
+                  selectable={selectMode}
+                  selected={selectedIds.has(v.id)}
+                  onSelect={(id, e) => toggleSelect(id, idx, e.shiftKey)}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {selectMode && selectedIds.size > 0 && (
@@ -1849,7 +1960,7 @@ export default function Library() {
           <div
             className={`pointer-events-auto w-96 ${queueDockAlignClass(
               miniPlayerActive ? miniPlayerRect : null,
-              { viewportWidth }
+              { viewportWidth },
             )}`}
           >
             <PlaybackQueue

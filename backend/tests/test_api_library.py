@@ -101,6 +101,52 @@ def test_tags_and_storage_stats(client, add_video):
     assert storage["video_bytes"] == 150
 
 
+def test_list_videos_are_compact(client, add_video):
+    video = add_video(
+        title="Chapter-rich",
+        description="Intro\n0:00 Start\n1:00 Middle\n2:30 End\n",
+        source_description="Source blurb",
+        notes="private note",
+        thumbnail_path="thumbs/missing.jpg",
+    )
+
+    row = next(r for r in client.get("/api/videos").json() if r["id"] == video.id)
+    assert row["description"] is None
+    assert row["source_description"] is None
+    assert row["notes"] is None
+    assert row["chapters"] == []
+    assert row["subtitles"] == []
+    # Compact list must not stat the filesystem — a set path is enough.
+    assert row["has_thumbnail"] is True
+    assert row["has_sprites"] is False
+
+    detail = client.get(f"/api/videos/{video.id}").json()
+    assert detail["description"] == video.description
+    assert [c["title"] for c in detail["chapters"]] == ["Start", "Middle", "End"]
+    assert detail["chapters_source"] == "description"
+
+
+def test_continue_watching_get_is_read_only(client, add_video, session):
+    from datetime import datetime, timedelta, timezone
+
+    from app.models import Video
+
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    video = add_video(
+        title="Stale progress",
+        duration_sec=200.0,
+        last_position_sec=40.0,
+        last_watched_at=stale_cutoff,
+    )
+
+    client.get("/api/videos", params={"continue_watching": True})
+
+    # Expiry now runs on a background tick, not this GET — position is untouched.
+    row = session.get(Video, video.id)
+    session.refresh(row)
+    assert row.last_position_sec == 40.0
+
+
 def test_channels_list_and_rename(client, add_video):
     add_video(title="One", channel="OldName")
     add_video(title="Two", channel="OldName")
