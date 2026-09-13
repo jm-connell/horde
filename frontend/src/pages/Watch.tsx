@@ -17,16 +17,17 @@ import VideoAiPanel from "../components/VideoAiPanel";
 import VideoCard from "../components/VideoCard";
 import VideoEditForm from "../components/VideoEditForm";
 import WatchMeta from "../components/WatchMeta";
-import {
-  isActiveJob,
-  useDownloads,
-} from "../context/DownloadContext";
+import { isActiveJob, useDownloads } from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
 import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
-import { PRESET_ORDER, presetOptionLabel, resolveQualityPreset } from "../presets";
+import {
+  PRESET_ORDER,
+  presetOptionLabel,
+  resolveQualityPreset,
+} from "../presets";
 import type { StreamPreviewMeta, Video, AiChaptersMode } from "../types";
 import {
   downloadProcessingLabel,
@@ -130,8 +131,14 @@ export default function Watch() {
 
   const { showToast } = useToast();
   const confirm = useConfirm();
-  const { onJobCompleted, refreshJobs, submitDownload, changeJobQuality, progress, jobs } =
-    useDownloads();
+  const {
+    onJobCompleted,
+    refreshJobs,
+    submitDownload,
+    changeJobQuality,
+    progress,
+    jobs,
+  } = useDownloads();
   const redownloadPending = useRef(false);
   const isMobile = useIsMobile();
   const {
@@ -157,7 +164,8 @@ export default function Watch() {
     setLoading(true);
     setError(null);
     const fromHandoff = peekWatchResume(libraryId);
-    const navResume = (location.state as { resumeAt?: number } | null)?.resumeAt;
+    const navResume = (location.state as { resumeAt?: number } | null)
+      ?.resumeAt;
     const resumeAt =
       fromHandoff ??
       (typeof navResume === "number" && navResume > 1 ? navResume : null);
@@ -213,9 +221,7 @@ export default function Watch() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(
-          err instanceof Error ? err.message : "Could not load stream"
-        );
+        setError(err instanceof Error ? err.message : "Could not load stream");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -295,7 +301,7 @@ export default function Watch() {
   useEffect(() => {
     if (source?.kind !== "stream" || activeJobId != null) return;
     const existing = jobs.find(
-      (j) => j.url === source.url && isActiveJob(j, progress[j.id])
+      (j) => j.url === source.url && isActiveJob(j, progress[j.id]),
     );
     if (existing) setActiveJobId(existing.id);
   }, [source, jobs, progress, activeJobId]);
@@ -377,11 +383,11 @@ export default function Watch() {
         setAiSummariesEnabled(llmConnected && !!s.ai.ai_summaries);
         setAiChaptersEnabled(llmConnected && !!s.ai.ai_chapters);
         setAiChaptersMode(
-          s.ai.ai_chapters_mode === "on_watch" ? "on_watch" : "on_download"
+          s.ai.ai_chapters_mode === "on_watch" ? "on_watch" : "on_download",
         );
         setAiChatEnabled(llmConnected && !!s.ai.ai_chat);
         setShowAiCosts(
-          openRouterConnected && s.ai.openrouter_show_costs === true
+          openRouterConnected && s.ai.openrouter_show_costs === true,
         );
       })
       .catch(() => {
@@ -413,7 +419,7 @@ export default function Watch() {
       .then((rows) => {
         setMoreLikeThis(rows);
         setRelatedHasMore(
-          rows.length >= RELATED_PAGE && rows.length < RELATED_MAX
+          rows.length >= RELATED_PAGE && rows.length < RELATED_MAX,
         );
       })
       .catch(() => setMoreLikeThis([]));
@@ -430,7 +436,7 @@ export default function Watch() {
       const rows = await api.getRelatedVideos(
         video.id,
         RELATED_PAGE,
-        moreLikeThis.length
+        moreLikeThis.length,
       );
       setMoreLikeThis((prev) => {
         const seen = new Set(prev.map((v) => v.id));
@@ -439,7 +445,7 @@ export default function Watch() {
       });
       setRelatedHasMore(
         rows.length >= RELATED_PAGE &&
-          moreLikeThis.length + rows.length < RELATED_MAX
+          moreLikeThis.length + rows.length < RELATED_MAX,
       );
     } catch {
       setRelatedHasMore(false);
@@ -456,7 +462,7 @@ export default function Watch() {
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) void loadMoreRelated();
       },
-      { rootMargin: "200px" }
+      { rootMargin: "200px" },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -471,10 +477,13 @@ export default function Watch() {
       !!video.processing_chapters;
     if (!pending) return;
     const timer = window.setInterval(() => {
-      api.getVideo(video.id).then((v) => {
-        setSource({ kind: "library", video: v });
-        updateCurrentVideo(v);
-      }).catch(() => undefined);
+      api
+        .getVideo(video.id)
+        .then((v) => {
+          setSource({ kind: "library", video: v });
+          updateCurrentVideo(v);
+        })
+        .catch(() => undefined);
     }, 3000);
     return () => window.clearInterval(timer);
   }, [
@@ -495,7 +504,10 @@ export default function Watch() {
   }, [registerDock, source]);
 
   useEffect(() => {
-    api.listPresets().then(setPresets).catch(() => undefined);
+    api
+      .listPresets()
+      .then(setPresets)
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -531,10 +543,13 @@ export default function Watch() {
     });
   }, [onJobCompleted, video, showToast, getCurrentPosition, playVideo]);
 
-  const setVideo = useCallback((v: Video) => {
-    setSource({ kind: "library", video: v });
-    updateCurrentVideo(v);
-  }, [updateCurrentVideo]);
+  const setVideo = useCallback(
+    (v: Video) => {
+      setSource({ kind: "library", video: v });
+      updateCurrentVideo(v);
+    },
+    [updateCurrentVideo],
+  );
 
   const generateChapters = useCallback(
     async (force: boolean) => {
@@ -553,7 +568,7 @@ export default function Watch() {
         setGeneratingChapters(false);
       }
     },
-    [video, setVideo, showToast]
+    [video, setVideo, showToast],
   );
 
   const onRedownload = async () => {
@@ -565,7 +580,7 @@ export default function Watch() {
         video.id,
         redownloadPreset,
         settings.normalizeVolumeOnDownload,
-        settings.downloadVideoCodec
+        settings.downloadVideoCodec,
       );
       showToast("Download started — check the Download page for progress.");
       refreshJobs();
@@ -573,7 +588,7 @@ export default function Watch() {
     } catch (err) {
       redownloadPending.current = false;
       showToast(
-        err instanceof Error ? err.message : "Could not start download"
+        err instanceof Error ? err.message : "Could not start download",
       );
     } finally {
       setRedownloading(false);
@@ -592,7 +607,7 @@ export default function Watch() {
       else if (h >= 480) preset = "480p";
     }
     if (!presets.includes(preset)) {
-      preset = presets.includes("1080p") ? "1080p" : presets[0] ?? "best";
+      preset = presets.includes("1080p") ? "1080p" : (presets[0] ?? "best");
     }
     setRedownloading(true);
     try {
@@ -601,16 +616,16 @@ export default function Watch() {
         video.id,
         preset,
         true,
-        settings.downloadVideoCodec
+        settings.downloadVideoCodec,
       );
       showToast(
-        "Normalizing via redownload — check the Download page for progress."
+        "Normalizing via redownload — check the Download page for progress.",
       );
       refreshJobs();
     } catch (err) {
       redownloadPending.current = false;
       showToast(
-        err instanceof Error ? err.message : "Could not start download"
+        err instanceof Error ? err.message : "Could not start download",
       );
     } finally {
       setRedownloading(false);
@@ -630,9 +645,7 @@ export default function Watch() {
       await api.deleteVideo(video.id, true);
       navigate("/");
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Could not delete video"
-      );
+      showToast(err instanceof Error ? err.message : "Could not delete video");
     }
   };
 
@@ -650,7 +663,7 @@ export default function Watch() {
       showToast(STAY_DOWNLOAD_TOAST);
     } catch (err: unknown) {
       showToast(
-        err instanceof Error ? err.message : "Could not start download"
+        err instanceof Error ? err.message : "Could not start download",
       );
     } finally {
       setQueuing(false);
@@ -668,12 +681,12 @@ export default function Watch() {
         setSelectedPreset(
           resolveQualityPreset(
             activeJob.quality_preset,
-            activeJob.available_presets ?? availablePresets
-          )
+            activeJob.available_presets ?? availablePresets,
+          ),
         );
       }
       showToast(
-        err instanceof Error ? err.message : "Could not change resolution"
+        err instanceof Error ? err.message : "Could not change resolution",
       );
     }
   }
@@ -736,35 +749,30 @@ export default function Watch() {
   const live = activeJobId != null ? progress[activeJobId] : undefined;
   const activeJob =
     activeJobId != null
-      ? jobs.find((j) => j.id === activeJobId) ?? null
+      ? (jobs.find((j) => j.id === activeJobId) ?? null)
       : null;
   const downloadPercent = downloadProgressPercent(
     live?.progress ?? activeJob?.progress,
     live?.downloaded_bytes,
-    live?.total_bytes
+    live?.total_bytes,
   );
-  const downloadActive =
-    activeJob != null && isActiveJob(activeJob, live);
+  const downloadActive = activeJob != null && isActiveJob(activeJob, live);
 
   // Live track quality for streams; file height for library.
   const resolution = isLibrary
     ? formatResolution(source.video.height_px)
     : formatResolution(activeStreamQuality);
-  const processingLabel = isLibrary
-    ? watchProcessingLabel(source.video)
-    : null;
+  const processingLabel = isLibrary ? watchProcessingLabel(source.video) : null;
 
   const contentClass = showRelatedRight
-    ? "mx-auto max-w-[90rem]"
-    : "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-7xl";
+    ? "mx-auto max-w-[90rem] 2xl:max-w-[116rem]"
+    : "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-[116rem]";
 
   const playerOuterClass = isMobile
     ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
     : isWide
       ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
-      : showRelatedRight
-        ? "w-full bg-black"
-        : "mx-auto max-w-5xl";
+      : "w-full bg-black";
   const playerInnerClass = isWide && !isMobile ? "mx-auto w-full" : "w-full";
 
   const channelHref = channelName
@@ -774,14 +782,12 @@ export default function Watch() {
     ? `/?channel=${encodeURIComponent(channelParam)}`
     : "/";
 
-  const hasSubtitles =
-    isLibrary && (source.video.subtitles?.length ?? 0) > 0;
+  const hasSubtitles = isLibrary && (source.video.subtitles?.length ?? 0) > 0;
   const canAiSummarize = hasSubtitles && aiSummariesEnabled;
   const chaptersSource = isLibrary ? source.video.chapters_source : null;
   const hasAiChapters = chaptersSource === "ai";
   const chapterBusy =
-    generatingChapters ||
-    !!(isLibrary && source.video.processing_chapters);
+    generatingChapters || !!(isLibrary && source.video.processing_chapters);
   const canGenerateChapters =
     isLibrary &&
     aiChaptersEnabled &&
@@ -792,8 +798,7 @@ export default function Watch() {
     !hasAiChapters &&
     (aiChaptersMode === "on_watch" || chapterBusy || !!chapterError);
   const showChapterActions =
-    canGenerateChapters &&
-    (hasAiChapters || showChapterGenerate);
+    canGenerateChapters && (hasAiChapters || showChapterGenerate);
   const canAiChat =
     isLibrary &&
     aiChatEnabled &&
@@ -852,9 +857,7 @@ export default function Watch() {
         })}
       </div>
       <div ref={relatedSentinelRef} className="h-2" />
-      {relatedLoading && (
-        <p className="text-xs text-gray-500">Loading more…</p>
-      )}
+      {relatedLoading && <p className="text-xs text-gray-500">Loading more…</p>}
     </div>
   ) : null;
 
@@ -953,8 +956,7 @@ export default function Watch() {
                       onClick={async () => {
                         const updated = await api
                           .updateVideo(source.video.id, {
-                            description:
-                              source.video.description ?? undefined,
+                            description: source.video.description ?? undefined,
                             description_is_custom: true,
                           })
                           .catch(() => null);
@@ -1049,45 +1051,42 @@ export default function Watch() {
                         open={presetMenuOpen}
                         className="absolute left-0 z-30 mt-1 min-w-[12rem]"
                       >
-                          <MenuScroll
-                            className="max-h-60"
-                            revision={presetOptions.length}
-                          >
-                            <ul
-                              role="listbox"
-                              aria-label="Download quality"
-                            >
-                              {presetOptions.map((p) => (
-                                <li
-                                  key={p}
-                                  role="option"
-                                  aria-selected={p === selectedPreset}
+                        <MenuScroll
+                          className="max-h-60"
+                          revision={presetOptions.length}
+                        >
+                          <ul role="listbox" aria-label="Download quality">
+                            {presetOptions.map((p) => (
+                              <li
+                                key={p}
+                                role="option"
+                                aria-selected={p === selectedPreset}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    userPickedPresetRef.current = true;
+                                    setSelectedPreset(p);
+                                    setPresetMenuOpen(false);
+                                  }}
+                                  className={`flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-xs hover:bg-ink-800 ${
+                                    p === selectedPreset
+                                      ? "font-semibold text-accent"
+                                      : "text-gray-200"
+                                  }`}
                                 >
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      userPickedPresetRef.current = true;
-                                      setSelectedPreset(p);
-                                      setPresetMenuOpen(false);
-                                    }}
-                                    className={`flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-xs hover:bg-ink-800 ${
-                                      p === selectedPreset
-                                        ? "font-semibold text-accent"
-                                        : "text-gray-200"
-                                    }`}
-                                  >
-                                    <span>
-                                      {presetOptionLabel(p, presetSizes)}
-                                    </span>
-                                    {p === selectedPreset && (
-                                      <span className="text-accent">✓</span>
-                                    )}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </MenuScroll>
-                        </MenuFlyout>
+                                  <span>
+                                    {presetOptionLabel(p, presetSizes)}
+                                  </span>
+                                  {p === selectedPreset && (
+                                    <span className="text-accent">✓</span>
+                                  )}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </MenuScroll>
+                      </MenuFlyout>
                     </div>
                   )}
                   {!isLibrary && downloadActive && (
@@ -1122,7 +1121,7 @@ export default function Watch() {
                           size="compact"
                           value={resolveQualityPreset(
                             activeJob?.quality_preset || selectedPreset,
-                            activeJob?.available_presets ?? availablePresets
+                            activeJob?.available_presets ?? availablePresets,
                           )}
                           options={presetOptions.map((p) => ({
                             value: p,
@@ -1195,7 +1194,7 @@ export default function Watch() {
                             {
                               tags: [...(source.video.tags || []), cleaned],
                               user_tag: cleaned,
-                            }
+                            },
                           );
                           setVideo(updated);
                         }
@@ -1205,11 +1204,11 @@ export default function Watch() {
                     isLibrary
                       ? async (tag) => {
                           const next = (source.video.tags || []).filter(
-                            (t) => t.toLowerCase() !== tag.toLowerCase()
+                            (t) => t.toLowerCase() !== tag.toLowerCase(),
                           );
                           const updated = await api.updateVideo(
                             source.video.id,
-                            { tags: next }
+                            { tags: next },
                           );
                           setVideo(updated);
                         }
@@ -1270,30 +1269,26 @@ export default function Watch() {
               </div>
             )}
 
-            {isLibrary &&
-              !showRelatedRight &&
-              moreLikeThis.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                    More like this
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                    {moreLikeThis.map((v) => (
-                      <VideoCard key={v.id} video={v} />
-                    ))}
-                  </div>
-                  <div ref={relatedSentinelRef} className="h-4" />
-                  {relatedLoading && <LoadingIndicator />}
+            {isLibrary && !showRelatedRight && moreLikeThis.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  More like this
+                </h3>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  {moreLikeThis.map((v) => (
+                    <VideoCard key={v.id} video={v} />
+                  ))}
                 </div>
-              )}
+                <div ref={relatedSentinelRef} className="h-4" />
+                {relatedLoading && <LoadingIndicator />}
+              </div>
+            )}
           </div>
         </div>
 
         {showRelatedRight && (
           <aside className="hidden space-y-6 xl:block">
-            {queue.length > 0 && (
-              <PlaybackQueue className="sticky top-20" />
-            )}
+            {queue.length > 0 && <PlaybackQueue className="sticky top-20" />}
             <div className={queue.length > 0 ? "" : "sticky top-20"}>
               {relatedList}
             </div>

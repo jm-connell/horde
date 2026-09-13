@@ -1,4 +1,11 @@
-import { Navigate, Route, Routes, useLocation, useParams, useSearchParams } from "react-router-dom";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { applyPageId } from "./customCss";
 import Library from "./pages/Library";
@@ -64,7 +71,7 @@ function AppRoutes() {
     <main
       ref={mainRef}
       data-horde="main"
-      className="page-shell relative z-10 mx-auto max-w-[1600px] px-3 py-6 md:px-6"
+      className="page-shell relative z-10 mx-auto max-w-[1920px] px-3 py-6 md:px-6"
     >
       <Routes>
         <Route path="/" element={<Library />} />
