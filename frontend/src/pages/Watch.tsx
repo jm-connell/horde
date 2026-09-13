@@ -770,10 +770,13 @@ export default function Watch() {
 
   const playerOuterClass = isMobile
     ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
-    : isWide
-      ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
-      : "w-full bg-black";
+    : `relative left-1/2 -translate-x-1/2 bg-black transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+        isWide ? "w-screen" : "w-full"
+      }`;
   const playerInnerClass = isWide && !isMobile ? "mx-auto w-full" : "w-full";
+  const playerMetaClass =
+    "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none" +
+    (isWide ? " px-3 md:px-6" : "");
 
   const channelHref = channelName
     ? `/?channel=${encodeURIComponent(channelName)}`
@@ -862,7 +865,9 @@ export default function Watch() {
   ) : null;
 
   return (
-    <div className={`${contentClass} ${isWide ? "-mt-6" : ""}`}>
+    <div
+      className={`${contentClass} transition-[margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${isWide ? "-mt-6" : "mt-0"}`}
+    >
       <div
         className={
           showRelatedRight
@@ -877,7 +882,7 @@ export default function Watch() {
             </div>
           </div>
 
-          <div className={isWide ? "px-3 md:px-6" : undefined}>
+          <div className={playerMetaClass}>
             {isLibrary &&
               source.video.title_is_custom &&
               source.video.source_title &&

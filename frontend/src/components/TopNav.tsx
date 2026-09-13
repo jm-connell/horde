@@ -308,7 +308,7 @@ export default function TopNav() {
       >
         <div
           ref={headerRowRef}
-          className={`relative z-50 mx-auto flex items-center gap-2 py-1.5 transition-[max-width,padding] duration-300 ease-out md:py-3 ${
+          className={`relative z-50 mx-auto flex items-center gap-2 py-1.5 transition-[max-width] duration-300 ease-out md:py-3 ${
             isTheaterWide ? "max-w-none" : "max-w-[1920px] px-3 md:px-6"
           }`}
           style={

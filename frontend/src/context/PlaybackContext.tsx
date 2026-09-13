@@ -139,6 +139,51 @@ function applyMiniHostInsets(
   host.style.bottom = insets.bottom || "auto";
 }
 
+const FLIP_DURATION_MS = 320;
+const FLIP_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+// Animate the player host jumping between the watch dock and the fullscreen
+// (windowed/"fit") overlay. The host is reparented across the DOM (not just
+// restyled), so a plain CSS transition can't interpolate the change — instead
+// this replays a FLIP: snapshot the pre-move box, let the mutation happen,
+// then transform from the old box back to the new one and let it settle.
+function flipHostTransition(host: HTMLElement, before: DOMRect) {
+  if (before.width <= 0 || before.height <= 0) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const after = host.getBoundingClientRect();
+  if (after.width <= 0 || after.height <= 0) return;
+  const dx = before.left - after.left;
+  const dy = before.top - after.top;
+  const sx = before.width / after.width;
+  const sy = before.height / after.height;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+  if (!Number.isFinite(sx) || !Number.isFinite(sy)) return;
+  if (
+    Math.abs(dx) < 1 &&
+    Math.abs(dy) < 1 &&
+    Math.abs(sx - 1) < 0.01 &&
+    Math.abs(sy - 1) < 0.01
+  ) {
+    return;
+  }
+  host.style.transition = "none";
+  host.style.transformOrigin = "top left";
+  host.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+  // Force layout so the browser commits the starting transform before we
+  // animate away from it on the next frame.
+  void host.offsetWidth;
+  requestAnimationFrame(() => {
+    host.style.transition = `transform ${FLIP_DURATION_MS}ms ${FLIP_EASING}`;
+    host.style.transform = "";
+    const onEnd = (e: TransitionEvent) => {
+      if (e.target !== host || e.propertyName !== "transform") return;
+      host.style.transition = "";
+      host.removeEventListener("transitionend", onEnd);
+    };
+    host.addEventListener("transitionend", onEnd);
+  });
+}
+
 function miniRectFromHost(host: HTMLElement): MiniPlayerRect | null {
   const r = host.getBoundingClientRect();
   if (r.width <= 0 || r.height <= 0) return null;
@@ -283,9 +328,29 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Move the persistent player node into the watch dock, body (windowed), or a
   // floating mini-player while browsing. Using appendChild (not portal
   // re-targeting) keeps the <video> element alive so playback never restarts.
+  const prevHostStateRef = useRef<
+    "windowed" | "dock" | "mini" | "hidden" | null
+  >(null);
   useEffect(() => {
     const host = hostRef.current!;
-    if (!isMobile && mode === "windowed" && activeSession) {
+    const nextState: "windowed" | "dock" | "mini" | "hidden" =
+      !isMobile && mode === "windowed" && activeSession
+        ? "windowed"
+        : dock && activeSession
+          ? "dock"
+          : activeSession
+            ? "mini"
+            : "hidden";
+    const prevState = prevHostStateRef.current;
+    // Only FLIP the dock <-> fullscreen "fit" jump; other transitions (e.g.
+    // into/out of the floating mini player) already animate via their own
+    // inset/position styles.
+    const shouldFlip =
+      (prevState === "dock" && nextState === "windowed") ||
+      (prevState === "windowed" && nextState === "dock");
+    const beforeRect = shouldFlip ? host.getBoundingClientRect() : null;
+
+    if (nextState === "windowed") {
       document.body.appendChild(host);
       host.className = "fixed inset-0 z-50";
       host.style.width = "";
@@ -294,8 +359,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.style.top = "";
       host.style.right = "";
       host.style.bottom = "";
-    } else if (dock && activeSession) {
-      dock.appendChild(host);
+    } else if (nextState === "dock") {
+      dock!.appendChild(host);
       host.className = "h-full w-full";
       host.style.width = "";
       host.style.maxWidth = "";
@@ -304,7 +369,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.style.right = "";
       host.style.bottom = "";
       host.style.height = "";
-    } else if (activeSession) {
+    } else if (nextState === "mini") {
       document.body.appendChild(host);
       const defaultWidth = isMobile
         ? DEFAULT_MINI_WIDTH_MOBILE
@@ -339,6 +404,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.style.right = "";
       host.style.bottom = "";
     }
+
+    if (beforeRect) flipHostTransition(host, beforeRect);
+    prevHostStateRef.current = nextState;
   }, [
     dock,
     current,
