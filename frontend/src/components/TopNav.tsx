@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useDownloads } from "../context/DownloadContext";
+import { usePlayback } from "../context/PlaybackContext";
 import { useSearch } from "../context/SearchContext";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import {
   IMPORT_QUEUE_EVENT,
@@ -43,6 +45,11 @@ export default function TopNav() {
   const [settings] = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
+  const { mode, videoFrameInset } = usePlayback();
+  const isMobile = useIsMobile();
+  // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
+  const isTheaterWide =
+    !isMobile && mode === "theater" && location.pathname.startsWith("/watch");
   const indicatorOn = settings.navIndicator !== "none";
   const measureRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -53,8 +60,7 @@ export default function TopNav() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const lastScrollY = useRef(0);
 
-  const showDownloadBadge =
-    settings.showDownloadNavBadge && activeCount > 0;
+  const showDownloadBadge = settings.showDownloadNavBadge && activeCount > 0;
 
   useEffect(() => {
     let active = true;
@@ -261,8 +267,7 @@ export default function TopNav() {
   const importBadge = badge(importCount);
   const downloadBadge = badge(showDownloadBadge ? activeCount : 0);
 
-  const mobileBadgeCount =
-    importCount + (showDownloadBadge ? activeCount : 0);
+  const mobileBadgeCount = importCount + (showDownloadBadge ? activeCount : 0);
 
   const linkBadge = (label: string) =>
     label === "Import"
@@ -303,7 +308,14 @@ export default function TopNav() {
       >
         <div
           ref={headerRowRef}
-          className="relative z-50 mx-auto flex max-w-[1600px] items-center gap-2 px-3 py-1.5 md:px-6 md:py-3"
+          className={`relative z-50 mx-auto flex items-center gap-2 py-1.5 transition-[max-width,padding] duration-300 ease-out md:py-3 ${
+            isTheaterWide ? "max-w-none" : "max-w-[1920px] px-3 md:px-6"
+          }`}
+          style={
+            isTheaterWide
+              ? { paddingLeft: videoFrameInset, paddingRight: videoFrameInset }
+              : undefined
+          }
         >
           <NavLink
             ref={brandRef}
@@ -449,9 +461,7 @@ export default function TopNav() {
             type="button"
             aria-label="Close navigation menu"
             className={`fixed inset-0 z-20 cursor-default bg-black/40 transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-              menuShown
-                ? "opacity-100"
-                : "pointer-events-none opacity-0"
+              menuShown ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
             onClick={() => setMenuOpen(false)}
           />
@@ -467,20 +477,18 @@ export default function TopNav() {
               <div
                 data-horde="nav-menu"
                 className={`ui-panel border-b border-ink-700 bg-ink-950 shadow-2xl ${
-                  settings.translucentPanelLegibility
-                    ? "ui-panel-legible"
-                    : ""
+                  settings.translucentPanelLegibility ? "ui-panel-legible" : ""
                 }`}
               >
                 <LiquidNav
-                  className="mx-auto flex max-w-[1600px] flex-col gap-1 px-3 py-3 md:px-6"
+                  className="mx-auto flex max-w-[1920px] flex-col gap-1 px-3 py-3 md:px-6"
                   dependency={location.pathname}
                 >
                   {NAV_LINKS.map((link) => {
                     const active = isLinkActive(
                       location.pathname,
                       link.to,
-                      link.end
+                      link.end,
                     );
                     return (
                       <NavLink

@@ -93,6 +93,8 @@ interface PlaybackValue {
   miniPlayerCornerAnchor: boolean;
   /** Live DASH/file track quality (YouTube ladder), null until known. */
   activeStreamQuality: number | null;
+  /** Pillarbox inset (px) of the visible picture inside the player box. */
+  videoFrameInset: number;
 }
 
 const Ctx = createContext<PlaybackValue | null>(null);
@@ -129,7 +131,7 @@ function mimeFromPath(filePath: string): string {
 
 function applyMiniHostInsets(
   host: HTMLElement,
-  insets: ReturnType<typeof miniPlayerHostInsets>
+  insets: ReturnType<typeof miniPlayerHostInsets>,
 ) {
   host.style.left = insets.left || "auto";
   host.style.top = insets.top || "auto";
@@ -176,7 +178,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<Video[]>(loadQueue);
   const [dock, setDock] = useState<HTMLElement | null>(null);
   const [mode, setModeState] = useState<ViewMode>(
-    () => loadSettings().playbackMode
+    () => loadSettings().playbackMode,
   );
   const [miniWidth, setMiniWidthState] = useState<number | null>(loadMiniWidth);
   // Session-only; always starts bottom-right when a miniplayer opens after close.
@@ -191,11 +193,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   currentRef.current = current;
   streamRef.current = stream;
   const [miniPlayerRect, setMiniPlayerRect] = useState<MiniPlayerRect | null>(
-    null
+    null,
   );
   const [activeStreamQuality, setActiveStreamQuality] = useState<number | null>(
-    null
+    null,
   );
+  const [videoFrameInset, setVideoFrameInset] = useState(0);
   const [mediaSuspended, setMediaSuspended] = useState(false);
 
   useEffect(() => {
@@ -227,7 +230,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setModeState(next);
       updateSettings({ playbackMode: next });
     },
-    [updateSettings]
+    [updateSettings],
   );
 
   // Mobile always uses the inline standard layout (no theater/fullscreen).
@@ -265,12 +268,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       // Resuming watch (≥30s) should bring the video back to Continue watching.
       if (sec >= 30) {
         import("../hooks/useContinueWatchingDismiss").then((m) =>
-          m.undismissContinueWatching(id)
+          m.undismissContinueWatching(id),
         );
       }
       api.saveProgress(id, sec).catch(() => undefined);
     },
-    []
+    [],
   );
 
   useEffect(() => {
@@ -316,7 +319,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       // position as used left/top, which then ignore window resize.
       applyMiniHostInsets(
         host,
-        miniPlayerHostInsets(pos, { width, height: heightGuess }, isMobile)
+        miniPlayerHostInsets(pos, { width, height: heightGuess }, isMobile),
       );
       host.className =
         "fixed z-40 overflow-hidden rounded-xl shadow-2xl ring-1 ring-ink-700";
@@ -324,7 +327,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         const height = host.getBoundingClientRect().height || heightGuess;
         applyMiniHostInsets(
           host,
-          miniPlayerHostInsets(pos, { width, height }, isMobile)
+          miniPlayerHostInsets(pos, { width, height }, isMobile),
         );
       }
     } else {
@@ -336,10 +339,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       host.style.right = "";
       host.style.bottom = "";
     }
-  }, [dock, current, stream, activeSession, isMobile, mode, miniWidth, miniPos]);
+  }, [
+    dock,
+    current,
+    stream,
+    activeSession,
+    isMobile,
+    mode,
+    miniWidth,
+    miniPos,
+  ]);
 
   const miniPlayerActive = Boolean(
-    activeSession && !dock && !( !isMobile && mode === "windowed")
+    activeSession && !dock && !(!isMobile && mode === "windowed"),
   );
 
   // Publish mini-player bounds so floating UI (download panel / queue) can avoid it.
@@ -366,7 +378,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         const clamped = clampMiniPos(pos.left, pos.top, width, height);
         applyMiniHostInsets(
           host,
-          miniPlayerHostInsets(clamped, { width, height }, isMobile)
+          miniPlayerHostInsets(clamped, { width, height }, isMobile),
         );
         if (clamped.left !== pos.left || clamped.top !== pos.top) {
           miniPosLiveRef.current = clamped;
@@ -375,7 +387,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       } else {
         applyMiniHostInsets(
           host,
-          miniPlayerHostInsets(null, { width, height }, isMobile)
+          miniPlayerHostInsets(null, { width, height }, isMobile),
         );
       }
       publish();
@@ -393,7 +405,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("resize", onWindowResize);
       window.visualViewport?.removeEventListener("resize", onWindowResize);
     };
-  }, [miniPlayerActive, miniWidth, miniPos, current?.id, stream?.url, isMobile]);
+  }, [
+    miniPlayerActive,
+    miniWidth,
+    miniPos,
+    current?.id,
+    stream?.url,
+    isMobile,
+  ]);
 
   // Hide page scroll while windowed fullscreen is active.
   useEffect(() => {
@@ -412,30 +431,27 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const playVideo = useCallback(
-    (video: Video, opts?: { queue?: Video[] }) => {
-      setMediaSuspended(false);
-      setCurrent((prev) => {
-        if (prev?.id != null && prev.id !== video.id) {
-          recentWatchedRef.current = [
-            prev.id,
-            ...recentWatchedRef.current.filter((id) => id !== prev.id),
-          ].slice(0, 12);
-        }
-        return video;
-      });
-      setStream(null);
-      setActiveStreamQuality(null);
-      streamPosRef.current = 0;
-      libraryPosRef.current = video.last_position_sec || 0;
-      if (opts?.queue) {
-        setQueue(opts.queue.filter((v) => v.id !== video.id));
-      } else {
-        setQueue((q) => q.filter((v) => v.id !== video.id));
+  const playVideo = useCallback((video: Video, opts?: { queue?: Video[] }) => {
+    setMediaSuspended(false);
+    setCurrent((prev) => {
+      if (prev?.id != null && prev.id !== video.id) {
+        recentWatchedRef.current = [
+          prev.id,
+          ...recentWatchedRef.current.filter((id) => id !== prev.id),
+        ].slice(0, 12);
       }
-    },
-    []
-  );
+      return video;
+    });
+    setStream(null);
+    setActiveStreamQuality(null);
+    streamPosRef.current = 0;
+    libraryPosRef.current = video.last_position_sec || 0;
+    if (opts?.queue) {
+      setQueue(opts.queue.filter((v) => v.id !== video.id));
+    } else {
+      setQueue((q) => q.filter((v) => v.id !== video.id));
+    }
+  }, []);
 
   const playStream = useCallback((session: StreamSession) => {
     setCurrent(null);
@@ -507,7 +523,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       }
       setMediaSuspended(true);
     },
-    []
+    [],
   );
 
   const queueRef = useRef(queue);
@@ -545,7 +561,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setQueue((q) => q.filter((v) => v.id !== video.id));
       navigate(`/watch/${video.id}`);
     },
-    [clearUpNext, navigate]
+    [clearUpNext, navigate],
   );
 
   const startUpNextCountdown = useCallback(
@@ -567,7 +583,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         });
       }, 1000);
     },
-    [clearUpNext, playSuggested]
+    [clearUpNext, playSuggested],
   );
 
   const advance = useCallback(() => {
@@ -619,21 +635,28 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
 
-  const libraryChapters = resolveLibraryChapters(current ?? { description: null });
+  const libraryChapters = resolveLibraryChapters(
+    current ?? { description: null },
+  );
   const sponsorSegments = useSponsorBlock(
     current?.source_url ?? null,
     current?.file_path ?? "",
     settings.sponsorBlockEnabled && !stream,
-    enabledSponsorBlockCategories(settings.sponsorBlockCategories)
+    enabledSponsorBlockCategories(settings.sponsorBlockCategories),
   );
 
   const refreshCurrentVideo = useCallback(() => {
     if (!current) return;
-    api.getVideo(current.id).then(setCurrent).catch(() => undefined);
+    api
+      .getVideo(current.id)
+      .then(setCurrent)
+      .catch(() => undefined);
   }, [current]);
 
   const updateCurrentVideo = useCallback((video: Video) => {
-    setCurrent((prev) => (prev?.id === video.id ? { ...prev, ...video } : prev));
+    setCurrent((prev) =>
+      prev?.id === video.id ? { ...prev, ...video } : prev,
+    );
   }, []);
 
   useEffect(() => {
@@ -677,6 +700,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     miniPlayerRect,
     miniPlayerCornerAnchor: miniCornerAnchor,
     activeStreamQuality,
+    videoFrameInset,
   };
 
   const handleMiniResize = useCallback(
@@ -691,7 +715,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         if (host) {
           applyMiniHostInsets(
             host,
-            miniPlayerHostInsets(null, { width, height }, isMobile)
+            miniPlayerHostInsets(null, { width, height }, isMobile),
           );
           const next = miniRectFromHost(host);
           if (next) setMiniPlayerRect(next);
@@ -702,7 +726,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       if (host) {
         applyMiniHostInsets(
           host,
-          miniPlayerHostInsets(clamped, { width, height }, isMobile)
+          miniPlayerHostInsets(clamped, { width, height }, isMobile),
         );
       }
       miniPosLiveRef.current = clamped;
@@ -716,20 +740,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         bottom: clamped.top + height,
       });
     },
-    [setMiniWidth, setMiniPos, isMobile]
+    [setMiniWidth, setMiniPos, isMobile],
   );
 
   const handleMiniMove = useCallback(
     (left: number, top: number) => {
       const host = hostRef.current;
       if (!host) return;
-      const width =
-        host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
+      const width = host.offsetWidth || miniWidth || DEFAULT_MINI_WIDTH_DESKTOP;
       const height = host.offsetHeight || width * (9 / 16);
       const clamped = clampMiniPos(left, top, width, height);
       applyMiniHostInsets(
         host,
-        miniPlayerHostInsets(clamped, { width, height }, isMobile)
+        miniPlayerHostInsets(clamped, { width, height }, isMobile),
       );
       miniPosLiveRef.current = clamped;
       setMiniCornerAnchor(false);
@@ -742,7 +765,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         bottom: clamped.top + height,
       });
     },
-    [miniWidth, isMobile]
+    [miniWidth, isMobile],
   );
 
   const handleMiniMoveEnd = useCallback(() => {
@@ -819,6 +842,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           updateSettings({ autoplayRelated: enabled })
         }
         onActiveQualityChange={setActiveStreamQuality}
+        onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
       />
     ) : stream != null ? (
@@ -858,6 +882,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onMiniMove={handleMiniMove}
         onMiniMoveEnd={handleMiniMoveEnd}
         onActiveQualityChange={setActiveStreamQuality}
+        onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
       />
     ) : null;
