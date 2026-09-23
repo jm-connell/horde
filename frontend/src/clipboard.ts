@@ -185,10 +185,26 @@ export function execPasteInto(
 }
 
 /**
- * Paste-button click. On HTTP LAN `navigator.clipboard` is missing; we must
- * run execPaste in the same turn as the click. Awaiting the Clipboard API
- * first drops user activation and is why live deploys broke while localhost
- * (a secure context) still worked.
+ * Hint after a Paste click that got no clipboard text.
+ * Empty on HTTPS and localhost, where the Clipboard API can run.
+ *
+ * Chrome, Firefox, and Safari refuse clipboard reads from a button on any
+ * other http:// origin (LAN IP, Tailscale name, Docker port). No page script
+ * or response header can lift that. Ctrl/Cmd+V and long-press paste still work.
+ */
+export function insecureClipboardHint(isSecureContext: boolean): string {
+  if (isSecureContext) return "";
+  return "Paste into the box with Ctrl+V, ⌘V, or a long-press.";
+}
+
+/**
+ * Paste-button click.
+ *
+ * On http:// the Clipboard API is missing, so execPaste has to run in this
+ * same turn. Current browsers still reject execCommand("paste") for web
+ * pages, which is why the button stays empty on a live deploy. Awaiting the
+ * Clipboard API before that call would also drop user activation on browsers
+ * that do allow the command.
  */
 export async function pasteTextFromButtonClick(hooks: {
   clipboardReadAvailable: boolean;

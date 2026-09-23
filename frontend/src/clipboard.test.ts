@@ -4,6 +4,7 @@ import {
   clipboardReadAvailable,
   clipboardTextToUrl,
   execPasteInto,
+  insecureClipboardHint,
   isYoutubePlaylistOnlyUrl,
   isYoutubeShortsUrl,
   parseDownloadUrlList,
@@ -153,6 +154,16 @@ describe("execPasteInto", () => {
 
   it("returns false when there is no field", () => {
     expect(execPasteInto(null, () => true)).toBe(false);
+  });
+});
+
+describe("insecureClipboardHint", () => {
+  it("is empty on a secure context", () => {
+    expect(insecureClipboardHint(true)).toBe("");
+  });
+
+  it("tells the user to paste manually on http", () => {
+    expect(insecureClipboardHint(false)).toMatch(/Ctrl\+V/);
   });
 });
 

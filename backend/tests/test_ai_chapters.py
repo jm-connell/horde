@@ -262,6 +262,67 @@ def test_run_chapters_accepts_clock_string_json(
     assert result[0]["start_sec"] == 0.0
 
 
+def test_run_chapters_rewrites_caption_quotes(
+    session, add_video, tmp_dirs, monkeypatch
+):
+    video = _caption(add_video, session, tmp_dirs, title="Treasure hunt")
+    quoted = {
+        "chapters": [
+            {"start_sec": 0, "title": "1:42 >> All right, lets hold. Let’s hold"},
+            {"start_sec": 400, "title": "5:03 >>I’m digging down. >> I’m digging"},
+        ]
+    }
+    topics = {
+        "chapters": [
+            {"start_sec": 0, "title": "Opening remarks"},
+            {"start_sec": 400, "title": "Digging for treasure"},
+        ]
+    }
+    fake = FakeLlm([json.dumps(quoted), json.dumps(topics)])
+    monkeypatch.setattr(tasks, "get_llm_provider", lambda: fake)
+    monkeypatch.setattr(tasks, "require_llm_chat_model", lambda *a, **k: None)
+    monkeypatch.setattr(tasks, "llm_features_allowed", lambda: (True, None))
+    monkeypatch.setattr(tasks.app_settings, "ai_settings", lambda: _ai())
+
+    result = tasks.run_chapters(session, video.id, force=True)
+    titles = [c["title"] for c in result]
+    assert "Digging for treasure" in titles
+    assert "Opening remarks" in titles
+    assert all(">>" not in title for title in titles)
+    assert all(not title[:1].isdigit() for title in titles)
+    assert len(fake.calls) == 2
+    assert "[0:00]" in fake.calls[1]["prompt"]
+    assert ">>" not in fake.calls[1]["prompt"]
+
+
+def test_run_chapters_keyword_title_when_rewrite_still_quotes(
+    session, add_video, tmp_dirs, monkeypatch
+):
+    video = _caption(add_video, session, tmp_dirs)
+    quoted = {
+        "chapters": [
+            {"start_sec": 0, "title": "1:42 >> All right, lets hold. Let’s hold"},
+            {"start_sec": 400, "title": "5:03 >>I’m digging down. >> I’m digging"},
+        ]
+    }
+    fake = FakeLlm([json.dumps(quoted), json.dumps(quoted)])
+    monkeypatch.setattr(tasks, "get_llm_provider", lambda: fake)
+    monkeypatch.setattr(tasks, "require_llm_chat_model", lambda *a, **k: None)
+    monkeypatch.setattr(tasks, "llm_features_allowed", lambda: (True, None))
+    monkeypatch.setattr(tasks.app_settings, "ai_settings", lambda: _ai())
+
+    result = tasks.run_chapters(session, video.id, force=True)
+    cues = chapters_svc.load_timed_cues(video)
+    assert len(result) >= 2
+    assert len(fake.calls) == 2
+    for chapter in result:
+        title = chapter["title"]
+        assert ">>" not in title
+        assert "lets hold" not in title.lower()
+        assert "digging" not in title.lower()
+        assert not chapters_svc.title_is_spoken_quote(title, cues, chapter["start_sec"])
+
+
 def test_get_video_processing_chapters(client, add_video, session):
     video = add_video(duration_sec=1200)
     session.add(

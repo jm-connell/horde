@@ -250,3 +250,64 @@ def test_fallback_chapters_from_cues():
     out = chapters_svc.fallback_chapters_from_cues(cues, 480)
     assert len(out) >= 2
     assert out[0]["start_sec"] == 0.0
+    assert out[0]["title"] == "Intro"
+    assert all("unique topic" not in c["title"] for c in out[1:])
+
+
+def test_caption_artifacts_stripped_timestamps_kept():
+    raw = """WEBVTT
+
+00:01:42.000 --> 00:01:44.000
+>> All right, lets hold.
+
+00:01:44.000 --> 00:01:47.000
+Let's hold here.
+
+00:05:03.000 --> 00:05:06.000
+[Music] >>I’m digging down.
+
+00:05:06.000 --> 00:05:09.000
+>> I’m digging
+"""
+    cues = chapters_svc.parse_vtt_cues(raw)
+    assert cues
+    assert all(">>" not in text and "Music" not in text for _, text in cues)
+    text = chapters_svc.format_timed_transcript(cues, max_chars=4000)
+    assert "[1:42]" in text
+    assert "[5:03]" in text
+    assert ">>" not in text
+    assert "All right, lets hold here." in text
+    assert text.count("digging") == 1
+
+
+def test_spoken_caption_titles_are_quotes_topic_labels_are_not():
+    cues = [
+        (0.0, "welcome back"),
+        (100.0, "we're digging down looking for gold"),
+        (120.0, "digging for gold and getting rich"),
+        (140.0, "so much gold from digging"),
+        (400.0, "wrap up the show"),
+    ]
+    hold = "1:42 >> All right, lets hold. Let’s hold"
+    digging = "5:03 >>I’m digging down. >> I’m digging"
+    assert chapters_svc.title_is_spoken_quote(hold, cues, 0)
+    assert chapters_svc.title_is_spoken_quote(digging, cues, 100)
+    for title in ("Digging for treasure", "Installing the GPU", "Opening remarks"):
+        assert not chapters_svc.title_is_spoken_quote(title, cues, 100)
+
+    replaced = chapters_svc.replace_spoken_titles(
+        [
+            {"start_sec": 0.0, "title": "Intro"},
+            {"start_sec": 100.0, "title": digging},
+            {"start_sec": 400.0, "title": "Wrap up"},
+        ],
+        cues,
+    )
+    assert replaced[0]["title"] == "Intro"
+    assert replaced[2]["title"] == "Wrap up"
+    assert ">>" not in replaced[1]["title"]
+    assert "digging" in replaced[1]["title"].lower()
+    assert "gold" in replaced[1]["title"].lower()
+    assert not chapters_svc.title_is_spoken_quote(
+        replaced[1]["title"], cues, replaced[1]["start_sec"]
+    )

@@ -449,7 +449,12 @@ def fallback_chapters_from_cues(
     raw: list[Chapter] = []
     for i, idx in enumerate(idxs):
         start, text = windows[idx]
-        title = "Intro" if i == 0 else _title_from_cue(text)
+        if i == 0:
+            title = "Intro"
+        else:
+            next_idx = idxs[i + 1] if i + 1 < len(idxs) else len(windows)
+            texts = [windows[j][1] for j in range(idx, next_idx)]
+            title = topic_title_from_texts(texts or [text])
         raw.append({"start_sec": start, "title": title})
     return snap_and_validate(raw, cues, duration_sec)
 
@@ -494,7 +499,10 @@ def chapters_system_prompt() -> str:
         "Put each chapter at the first line where that topic begins, "
         "not after it is already underway. If two nearby times fit, pick the earlier. "
         "Always include a chapter at 0 and at least one later chapter. "
-        "Titles are 2–8 words. "
+        "Titles are 2–6 word topic labels for the section, "
+        'like "Digging for treasure" or "Installing the GPU". '
+        "Name the activity or subject. Do not quote a spoken line, "
+        "copy transcript text, or include a timestamp or speaker marker. "
         "Do not invent times that are not in the transcript."
     )
 
@@ -518,7 +526,10 @@ def chapters_prompt(
         f"Return between 2 and {cap} chapters. Short videos still need at least 2.\n"
         "Pick the earliest transcript timestamp where each new section starts.\n"
         "Do not wait until the topic is fully underway.\n"
-        "Use numeric start_sec values in seconds (example: 0, 95, 180).\n\n"
+        "Use numeric start_sec values in seconds (example: 0, 95, 180).\n"
+        "Each title names the topic of that section in 2–6 words. "
+        'A stretch of talk about digging and getting rich is "Digging for treasure", '
+        "not a line someone said.\n\n"
         "Timed transcript:\n"
         f"{transcript}"
     )
@@ -547,7 +558,7 @@ def _coerce_chapter(item: Any) -> Optional[Chapter]:
     start_sec = _parse_start_value(start)
     if start_sec is None or not title:
         return None
-    title = re.sub(r"\s+", " ", title).strip()
+    title = _sanitize_chapter_title(title)
     if not title or len(title) > 120:
         return None
     return {"start_sec": start_sec, "title": title}
@@ -656,11 +667,47 @@ def _decode_vtt_entities(raw: str) -> str:
     return out
 
 
+_SPEAKER_MARK_RE = re.compile(r">{2,}")
+_SOUND_TAG_RE = re.compile(
+    r"\[\s*(?:music|applause|laughter|laughing|inaudible|silence|noise|"
+    r"cheering|crosstalk|background noise)\s*\]",
+    re.IGNORECASE,
+)
+_LEADING_CLOCK_RE = re.compile(
+    r"^\s*(?:\[\s*)?(?:(?:\d{1,2}):)?\d{1,2}:\d{2}(?:\.\d{1,3})?\s*\]?\s*"
+)
+_SPEECH_OPENERS = (
+    "all right",
+    "alright",
+    "okay so",
+    "ok so",
+    "okay",
+    "ok",
+    "let's",
+    "lets",
+    "let us",
+    "i'm",
+    "i am",
+    "we're",
+    "we are",
+    "you're",
+    "you know",
+    "hold on",
+    "yeah",
+    "um",
+    "uh",
+)
+_QUOTE_CUE_WINDOW_SEC = 90.0
+
+
 def _clean_cue_text(raw: str) -> str:
     text = _decode_vtt_entities(raw)
     text = re.sub(r"<[^>]+>", "", text)
     text = _decode_vtt_entities(text)
-    return re.sub(r"\s+", " ", text).strip()
+    text = _SOUND_TAG_RE.sub(" ", text)
+    text = _SPEAKER_MARK_RE.sub(" ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return _collapse_stutter(text)
 
 
 def _downsample_cues(
@@ -670,18 +717,21 @@ def _downsample_cues(
         return []
     windows: list[tuple[float, str]] = []
     start = cues[0][0]
-    parts = [cues[0][1]]
+    merged = cues[0][1]
     for ts, text in cues[1:]:
         if ts >= start + window_sec:
-            windows.append((start, " ".join(parts).strip()))
+            body = _collapse_stutter(merged)
+            if body:
+                windows.append((start, body))
             start = ts
-            parts = [text]
+            merged = text
             continue
-        if not parts or parts[-1] != text:
-            parts.append(text)
-    if parts:
-        windows.append((start, " ".join(parts).strip()))
-    return [(t, body) for t, body in windows if body]
+        if text and text != merged:
+            merged = _merge_rolling(merged, text)
+    body = _collapse_stutter(merged)
+    if body:
+        windows.append((start, body))
+    return windows
 
 
 def _fmt_ts(sec: float) -> str:
@@ -712,15 +762,314 @@ def _even_indices(n: int, k: int) -> list[int]:
     return deduped
 
 
-def _title_from_cue(text: str) -> str:
-    cleaned = re.sub(r"\s+", " ", (text or "").strip())
-    if not cleaned:
+def _norm_words(text: str) -> list[str]:
+    cleaned = (text or "").replace("’", "'").replace("‘", "'").lower()
+    return re.findall(r"[a-z0-9]+(?:'[a-z0-9]+)?", cleaned)
+
+
+def _word_key(word: str) -> str:
+    keys = _norm_words(word)
+    return keys[0].replace("'", "") if keys else ""
+
+
+def _cmp_words(text: str) -> list[str]:
+    return [word.replace("'", "") for word in _norm_words(text)]
+
+
+def _merge_rolling(prev: str, nxt: str) -> str:
+    """Drop the overlapping prefix when YouTube captions roll forward."""
+    prev = (prev or "").strip()
+    nxt = (nxt or "").strip()
+    if not nxt:
+        return prev
+    if not prev:
+        return nxt
+    prev_words = prev.split()
+    next_words = nxt.split()
+    prev_keys = [_word_key(w) for w in prev_words]
+    next_keys = [_word_key(w) for w in next_words]
+    if next_keys and len(next_keys) >= 2 and prev_keys[: len(next_keys)] == next_keys:
+        return prev
+    max_k = min(len(prev_keys), len(next_keys))
+    overlap = 0
+    for k in range(max_k, 0, -1):
+        if prev_keys[-k:] == next_keys[:k]:
+            overlap = k
+            break
+    if overlap == len(next_keys) and overlap:
+        return prev
+    if overlap:
+        kept = list(prev_words)
+        if overlap < len(next_words):
+            kept[-1] = kept[-1].rstrip(".,;:")
+        return " ".join(kept + next_words[overlap:]).strip()
+    if len(next_keys) >= 2 and _contains_seq(prev_keys, next_keys):
+        return prev
+    return " ".join(prev_words + next_words).strip()
+
+
+def _contains_seq(hay: list[str], needle: list[str]) -> bool:
+    n = len(needle)
+    if n == 0 or n > len(hay):
+        return False
+    for i in range(len(hay) - n + 1):
+        if hay[i : i + n] == needle:
+            return True
+    return False
+
+
+def _collapse_stutter(text: str) -> str:
+    """Drop a clause that repeats the previous one, or keep the longer extension."""
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if p.strip()]
+    if len(parts) < 2:
+        return (text or "").strip()
+    out: list[str] = []
+    keys: list[list[str]] = []
+    for part in parts:
+        nxt = _cmp_words(part)
+        if keys and nxt:
+            prev = keys[-1]
+            if prev == nxt or prev[: len(nxt)] == nxt or prev[-len(nxt) :] == nxt:
+                continue
+            if nxt[: len(prev)] == prev:
+                out[-1] = part
+                keys[-1] = nxt
+                continue
+        out.append(part)
+        keys.append(nxt)
+    return " ".join(out).strip()
+
+
+def _sanitize_chapter_title(title: str) -> str:
+    text = (title or "").replace("’", "'").replace("‘", "'").strip()
+    text = text.strip("\"'“”")
+    for _ in range(3):
+        nxt = _LEADING_CLOCK_RE.sub("", text)
+        nxt = _SPEAKER_MARK_RE.sub(" ", nxt)
+        nxt = re.sub(r"\s+", " ", nxt).strip(" \"'“”")
+        if nxt == text:
+            break
+        text = nxt
+    text = re.sub(r"\s+", " ", text).strip(" -–—:|.,;")
+    return text
+
+
+def _opens_like_speech(text: str) -> bool:
+    words = _norm_words(text)
+    if not words:
+        return False
+    for opener in _SPEECH_OPENERS:
+        op_words = opener.split()
+        if words[: len(op_words)] == op_words:
+            return True
+    return False
+
+
+def _repeats_clause(text: str) -> bool:
+    parts = [p.strip() for p in re.split(r"[.!?]+", text) if p.strip()]
+    if len(parts) >= 2:
+        keys = [_cmp_words(p) for p in parts]
+        for i in range(len(keys) - 1):
+            a, b = keys[i], keys[i + 1]
+            if not a or not b:
+                continue
+            if a == b or a[: len(b)] == b or b[: len(a)] == a or a[-len(b) :] == b:
+                return True
+        return False
+    words = _cmp_words(text)
+    if len(words) < 4:
+        return False
+    for n in range(2, len(words) // 2 + 1):
+        if words[:n] == words[n : n * 2]:
+            return True
+    return False
+
+
+def _cue_words_near(
+    cues: list[tuple[float, str]], start_sec: float, window: float = _QUOTE_CUE_WINDOW_SEC
+) -> list[str]:
+    words: list[str] = []
+    for ts, text in cues:
+        if start_sec - 8.0 <= ts <= start_sec + window:
+            words.extend(_norm_words(text))
+    return words
+
+
+def _is_contiguous_quote(title_words: list[str], cue_words: list[str]) -> bool:
+    n = len(title_words)
+    if n < 4 or n > len(cue_words):
+        return False
+    for i in range(len(cue_words) - n + 1):
+        if cue_words[i : i + n] == title_words:
+            return True
+    return False
+
+
+def title_is_spoken_quote(
+    title: str,
+    cues: list[tuple[float, str]],
+    start_sec: float,
+) -> bool:
+    """True when a title is still a caption line rather than a topic label."""
+    text = _sanitize_chapter_title(title)
+    if not text:
+        return True
+    if ">>" in text or _LEADING_CLOCK_RE.match(text):
+        return True
+    if _opens_like_speech(text) or _repeats_clause(text):
+        return True
+    words = _norm_words(text)
+    return _is_contiguous_quote(words, _cue_words_near(cues, start_sec))
+
+
+def titles_need_rewrite(
+    chapters: list[Chapter], cues: list[tuple[float, str]]
+) -> bool:
+    return any(
+        title_is_spoken_quote(str(chapter["title"]), cues, float(chapter["start_sec"]))
+        for chapter in chapters
+    )
+
+
+def _topic_words(text: str) -> list[str]:
+    out: list[str] = []
+    for word in _norm_words(text):
+        if word.isdigit() or len(word) <= 2 or word in _STOPWORDS:
+            continue
+        out.append(word)
+    return out
+
+
+def topic_title_from_texts(texts: list[str]) -> str:
+    """2–3 distinctive words from a segment, not the opening line of a cue."""
+    counts: dict[str, int] = {}
+    order: list[str] = []
+    for text in texts:
+        for word in _topic_words(text):
+            if word not in counts:
+                order.append(word)
+            counts[word] = counts.get(word, 0) + 1
+    if not counts:
         return "Chapter"
-    title = " ".join(cleaned.split()[:7])
-    if len(title) > 80:
-        title = title[:80].rsplit(" ", 1)[0].strip()
-    title = title.strip(" -–—:|.,;")
-    return title or "Chapter"
+    ranked = sorted(order, key=lambda w: (-counts[w], order.index(w)))
+    repeated = [w for w in ranked if counts[w] >= 2]
+    picked = repeated[:3] if len(repeated) >= 2 else ranked[:3]
+    return " ".join(word.capitalize() for word in picked) or "Chapter"
+
+
+def _segment_texts(
+    chapters: list[Chapter],
+    cues: list[tuple[float, str]],
+    index: int,
+) -> list[str]:
+    start = float(chapters[index]["start_sec"])
+    if index + 1 < len(chapters):
+        end = float(chapters[index + 1]["start_sec"])
+    else:
+        end = start + 300.0
+    texts = [text for ts, text in cues if start - 1.0 <= ts < end]
+    if texts:
+        return texts
+    return [text for ts, text in cues if abs(ts - start) <= 30.0]
+
+
+def replace_spoken_titles(
+    chapters: list[Chapter], cues: list[tuple[float, str]]
+) -> list[Chapter]:
+    """Swap any remaining caption quotes for a keyword label from that segment."""
+    out: list[Chapter] = []
+    for i, chapter in enumerate(chapters):
+        start = float(chapter["start_sec"])
+        title = _sanitize_chapter_title(str(chapter["title"]))
+        if not title or title_is_spoken_quote(title, cues, start):
+            title = topic_title_from_texts(_segment_texts(chapters, cues, i))
+        out.append({"start_sec": start, "title": title})
+    return out
+
+
+def apply_title_rewrites(
+    chapters: list[Chapter],
+    payload: list[Any],
+    cues: list[tuple[float, str]],
+) -> list[Chapter]:
+    """Keep snapped start times; take a rewrite title when it is a topic label."""
+    candidates: list[Chapter] = []
+    for item in payload:
+        chapter = _coerce_chapter(item)
+        if chapter is not None:
+            candidates.append(chapter)
+    out: list[Chapter] = []
+    used: set[int] = set()
+    for index, chapter in enumerate(chapters):
+        start = float(chapter["start_sec"])
+        title = str(chapter["title"])
+        cand_i: Optional[int] = None
+        if len(candidates) == len(chapters):
+            cand_i = index
+        else:
+            best_delta = 20.0
+            for i, cand in enumerate(candidates):
+                if i in used:
+                    continue
+                delta = abs(float(cand["start_sec"]) - start)
+                if delta < best_delta:
+                    best_delta = delta
+                    cand_i = i
+        if cand_i is not None:
+            used.add(cand_i)
+            cand_title = str(candidates[cand_i]["title"])
+            if cand_title and not title_is_spoken_quote(cand_title, cues, start):
+                title = cand_title
+        out.append({"start_sec": start, "title": title})
+    return out
+
+
+def title_rewrite_system_prompt() -> str:
+    return (
+        "You rewrite video chapter titles into short topic labels. "
+        "Reply with JSON only: "
+        '{"chapters":[{"start_sec":0,"title":"..."}, ...]}. '
+        "Keep each start_sec unchanged. "
+        'Titles are 2–6 words naming the topic, like "Digging for treasure". '
+        "Do not quote dialogue or include timestamps or speaker markers."
+    )
+
+
+def title_rewrite_prompt(
+    chapters: list[Chapter], cues: list[tuple[float, str]]
+) -> str:
+    blocks: list[str] = []
+    for i, chapter in enumerate(chapters):
+        start = float(chapter["start_sec"])
+        lines: list[str] = []
+        used = 0
+        for ts, text in cues:
+            end = (
+                float(chapters[i + 1]["start_sec"])
+                if i + 1 < len(chapters)
+                else start + 300.0
+            )
+            if ts < start - 1.0 or ts >= end:
+                continue
+            line = f"[{_fmt_ts(ts)}] {text}"
+            if used and used + len(line) > 800:
+                break
+            lines.append(line)
+            used += len(line) + 1
+        start_label = int(start) if start == int(start) else start
+        blocks.append(
+            f"start_sec: {start_label}\n"
+            f"current_title: {chapter['title']}\n"
+            "transcript:\n"
+            + ("\n".join(lines) if lines else "(no captions)")
+        )
+    return (
+        "Rewrite every current_title into a 2–6 word topic label. "
+        "Keep start_sec the same. "
+        "If the transcript is people talking about digging and getting rich, "
+        'write "Digging for treasure", not a line they said.\n\n'
+        + "\n\n".join(blocks)
+    )
 
 
 def _truncate_transcript(text: str, max_chars: int) -> str:

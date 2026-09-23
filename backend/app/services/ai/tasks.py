@@ -603,6 +603,31 @@ def run_chapters(session: Session, video_id: int, *, force: bool = False) -> lis
             len(raw or ""),
             (raw or "")[:240],
         )
+    if cleaned and chapters_svc.titles_need_rewrite(cleaned, cues):
+        try:
+            rewritten = provider.chat(
+                chapters_svc.title_rewrite_prompt(cleaned, cues),
+                chat_model,
+                system=chapters_svc.title_rewrite_system_prompt(),
+                num_predict=1200,
+                timeout=_CHAPTERS_TIMEOUT,
+                format=chapters_svc.CHAPTERS_JSON_SCHEMA,
+                temperature=0.2,
+                usage_kind="chapters",
+                video_id=video_id,
+            )
+        except Exception:
+            logger.warning(
+                "chapter title rewrite failed for video_id=%s",
+                video_id,
+                exc_info=True,
+            )
+            rewritten = ""
+        cleaned = chapters_svc.apply_title_rewrites(
+            cleaned,
+            chapters_svc.chapters_from_model_output(rewritten),
+            cues,
+        )
     if not cleaned:
         cleaned = chapters_svc.fallback_chapters_from_cues(cues, video.duration_sec)
         if cleaned:
@@ -611,6 +636,8 @@ def run_chapters(session: Session, video_id: int, *, force: bool = False) -> lis
                 video_id,
                 len(cleaned),
             )
+    if cleaned:
+        cleaned = chapters_svc.replace_spoken_titles(cleaned, cues)
     if not cleaned:
         raise ChaptersError("Model returned unusable chapters", status_code=502)
 

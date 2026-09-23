@@ -27,6 +27,7 @@ import {
   clipboardReadAvailable,
   clipboardTextToUrl,
   execPasteInto,
+  insecureClipboardHint,
   isYoutubePlaylistOnlyUrl,
   isYoutubeShortsUrl,
   parseDownloadUrlList,
@@ -84,6 +85,7 @@ export default function Download() {
   } = useDownloads();
 
   const [url, setUrl] = useState("");
+  const [pasteHint, setPasteHint] = useState("");
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [preset, setPreset] = useState("best");
   const [destination, setDestination] =
@@ -392,6 +394,7 @@ export default function Download() {
       const next = parseDownloadUrlList(clipboardEventToText(e.clipboardData));
       if (next.length === 0) return;
       e.preventDefault();
+      setPasteHint("");
       setUrl(next.length > 1 ? next.join(", ") : next[0]!);
     };
     document.addEventListener("paste", onPaste);
@@ -569,13 +572,18 @@ export default function Download() {
             <input
               ref={urlInputRef}
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                setPasteHint("");
+                setUrl(e.target.value);
+              }}
               placeholder="Video or playlist URL (YouTube, etc.)"
               className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
             />
             <button
               type="button"
               onClick={async () => {
+                const before = urlInputRef.current?.value ?? "";
+                let filledFromField = false;
                 const text = await pasteTextFromButtonClick({
                   clipboardReadAvailable: clipboardReadAvailable(),
                   readClipboard: readClipboardText,
@@ -583,11 +591,21 @@ export default function Download() {
                     const el = urlInputRef.current;
                     const ok = execPasteInto(el);
                     // execCommand can fill a controlled input without onChange.
-                    if (el?.value) applyClipboardText(el.value);
+                    if (el?.value && el.value !== before) {
+                      filledFromField = applyClipboardText(el.value);
+                    }
                     return ok;
                   },
                 });
-                applyClipboardText(text);
+                if (applyClipboardText(text) || filledFromField) {
+                  setPasteHint("");
+                  return;
+                }
+                setPasteHint(
+                  insecureClipboardHint(
+                    typeof window !== "undefined" && window.isSecureContext,
+                  ),
+                );
               }}
               className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
             >
@@ -597,6 +615,9 @@ export default function Download() {
           <p className="mt-1 text-xs text-gray-500">
             Accepts comma-separated links.
           </p>
+          {pasteHint && (
+            <p className="mt-1 text-xs text-amber-200/90">{pasteHint}</p>
+          )}
           {previewing && !isBulkList && (
             <p className="mt-1 text-xs text-gray-500">Reading link...</p>
           )}
