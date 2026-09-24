@@ -57,14 +57,11 @@ function DescriptionBoxToggle({
   onToggle,
   corner,
   buttonRef,
-  caption,
 }: {
   expanded: boolean;
   onToggle: () => void;
   corner: "top" | "bottom";
   buttonRef?: Ref<HTMLButtonElement>;
-  /** Visible label; omit to leave the arrow alone. */
-  caption?: "expand" | "collapse";
 }) {
   const label = expanded ? "Collapse description" : "Expand description";
   return (
@@ -72,20 +69,15 @@ function DescriptionBoxToggle({
       type="button"
       onClick={onToggle}
       ref={buttonRef}
-      className={`absolute right-3 z-[2] flex h-7 min-w-7 items-center justify-end gap-1 text-gray-500/55 hover:text-accent ${
+      className={`absolute right-3 z-[2] flex h-8 min-w-8 items-center justify-end text-gray-500/55 hover:text-accent ${
         corner === "top" ? "top-0" : "bottom-0"
       }`}
       aria-label={label}
       aria-expanded={expanded}
     >
-      {caption ? (
-        <span className="select-none whitespace-nowrap text-[10px] font-medium leading-none tracking-wide">
-          {caption}
-        </span>
-      ) : null}
       <svg
         viewBox="0 0 24 24"
-        className={`h-3.5 w-3.5 shrink-0 transition-transform duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`h-[18px] w-[18px] shrink-0 transition-transform duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
           expanded ? "rotate-180" : ""
         }`}
         fill="none"
@@ -149,7 +141,6 @@ export default function WatchMeta({
   const [settings, updateSettings] = useSettings();
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [boxExpanded, setBoxExpanded] = useState(false);
-  const [collapseCaption, setCollapseCaption] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
 
   const descriptionBody = (description ?? "").trim() ? description : null;
@@ -170,15 +161,7 @@ export default function WatchMeta({
     ? COLLAPSED_REM_SIDE
     : COLLAPSED_REM_STACKED;
 
-  useAnimatedClipHeight(
-    clipRef,
-    boxExpanded,
-    collapsedRem,
-    descriptionBody,
-    (open) => {
-      if (!open) setCollapseCaption(false);
-    }
-  );
+  useAnimatedClipHeight(clipRef, boxExpanded, collapsedRem, descriptionBody);
 
   const toggleBox = (next: boolean) => {
     if (!next) {
@@ -187,7 +170,6 @@ export default function WatchMeta({
       setExtrasOpen(false);
     } else {
       if (clipRef.current) clipRef.current.scrollTop = 0;
-      setCollapseCaption(true);
     }
     setBoxExpanded(next);
   };
@@ -400,14 +382,12 @@ export default function WatchMeta({
                     onToggle={() => toggleBox(!boxExpanded)}
                     corner="top"
                     buttonRef={topToggleRef}
-                    caption={collapseCaption ? undefined : "expand"}
                   />
-                  {collapseCaption && (
+                  {boxExpanded && (
                     <DescriptionBoxToggle
                       expanded
                       onToggle={() => toggleBox(false)}
                       corner="bottom"
-                      caption="collapse"
                     />
                   )}
                 </>
