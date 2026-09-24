@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from .ffmpeg_bin import ffmpeg_bin, ffprobe_bin
+from .ffmpeg_bin import below_playback, ffmpeg_bin, ffprobe_bin
 
 
 def probe_duration(path: Path) -> Optional[float]:
@@ -154,24 +154,30 @@ def grab_frame(
     at_seconds: float = 5.0,
     *,
     scale_width: int = 640,
+    low_priority: bool = False,
 ) -> bool:
     """Extract a single frame as a JPEG thumbnail. Returns True on success."""
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        cmd = [
+            ffmpeg_bin(),
+            "-y",
+            "-ss",
+            str(at_seconds),
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            "-vf",
+            f"scale={scale_width}:-1",
+            str(output_path),
+        ]
+        if low_priority:
+            # One decode thread, below playback, so a montage fallback does
+            # not saturate the machine while this file is being watched.
+            cmd = below_playback([cmd[0], "-threads", "1", *cmd[1:]])
         result = subprocess.run(
-            [
-                ffmpeg_bin(),
-                "-y",
-                "-ss",
-                str(at_seconds),
-                "-i",
-                str(video_path),
-                "-frames:v",
-                "1",
-                "-vf",
-                f"scale={scale_width}:-1",
-                str(output_path),
-            ],
+            cmd,
             capture_output=True,
             text=True,
             timeout=60,
@@ -313,20 +319,26 @@ def _sprite_via_ffmpeg_tile(
 ) -> bool:
     try:
         image_path.parent.mkdir(parents=True, exist_ok=True)
+        # Full-file decode. One thread at low priority so playback of this
+        # same file keeps the CPU while the sheet is built.
         result = subprocess.run(
-            [
-                ffmpeg_bin(),
-                "-y",
-                "-i",
-                str(video_path),
-                "-vf",
-                f"fps=1/{interval},scale={SPRITE_TILE_WIDTH}:-1,tile={columns}x{rows}",
-                "-frames:v",
-                "1",
-                "-q:v",
-                "3",
-                str(image_path),
-            ],
+            below_playback(
+                [
+                    ffmpeg_bin(),
+                    "-threads",
+                    "1",
+                    "-y",
+                    "-i",
+                    str(video_path),
+                    "-vf",
+                    f"fps=1/{interval},scale={SPRITE_TILE_WIDTH}:-1,tile={columns}x{rows}",
+                    "-frames:v",
+                    "1",
+                    "-q:v",
+                    "3",
+                    str(image_path),
+                ]
+            ),
             capture_output=True,
             text=True,
             timeout=600,
@@ -361,7 +373,11 @@ def _sprite_via_frame_montage(
             at = i * interval + interval / 2
             dest = tmp_dir / f"{i:04d}.jpg"
             if not grab_frame(
-                video_path, dest, at_seconds=at, scale_width=SPRITE_TILE_WIDTH
+                video_path,
+                dest,
+                at_seconds=at,
+                scale_width=SPRITE_TILE_WIDTH,
+                low_priority=True,
             ):
                 continue
             frames.append(dest)
