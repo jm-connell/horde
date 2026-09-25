@@ -16,6 +16,7 @@ import type {
   AppSettings,
   ChannelCatalogStatus,
   HealthStats,
+  OpenAiModel,
   OpenRouterCosts,
   OpenRouterModel,
   StorageStats,
@@ -103,6 +104,14 @@ export type SettingsPageContextValue = {
   openRouterEmbedModels: OpenRouterModel[];
   setOpenRouterEmbedModels: Dispatch<SetStateAction<OpenRouterModel[]>>;
   openRouterCosts: OpenRouterCosts | null;
+  openAiTesting: boolean;
+  setOpenAiTesting: Dispatch<SetStateAction<boolean>>;
+  openAiKeyDraft: string;
+  setOpenAiKeyDraft: Dispatch<SetStateAction<string>>;
+  openAiModels: OpenAiModel[];
+  setOpenAiModels: Dispatch<SetStateAction<OpenAiModel[]>>;
+  openAiEmbedModels: OpenAiModel[];
+  setOpenAiEmbedModels: Dispatch<SetStateAction<OpenAiModel[]>>;
   embedCustom: boolean;
   setEmbedCustom: Dispatch<SetStateAction<boolean>>;
   chatCustom: boolean;

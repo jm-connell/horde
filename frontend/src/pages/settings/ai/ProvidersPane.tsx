@@ -56,6 +56,14 @@ export default function ProvidersPane() {
     openRouterEmbedModels,
     setOpenRouterEmbedModels,
     openRouterCosts,
+    openAiTesting,
+    setOpenAiTesting,
+    openAiKeyDraft,
+    setOpenAiKeyDraft,
+    openAiModels,
+    setOpenAiModels,
+    openAiEmbedModels,
+    setOpenAiEmbedModels,
     embedCustom,
     setEmbedCustom,
     chatCustom,
@@ -73,11 +81,18 @@ export default function ProvidersPane() {
   const [openRouterTestStatus, setOpenRouterTestStatus] = useState<
     "ok" | "fail" | null
   >(null);
+  const [openAiTestStatus, setOpenAiTestStatus] = useState<
+    "ok" | "fail" | null
+  >(null);
 
   const localAiUnused =
-    aiDraft.openrouter_enabled &&
-    aiDraft.openrouter_api_key_set &&
-    aiDraft.openrouter_scope === "all" &&
+    (aiDraft.openrouter_enabled &&
+      aiDraft.openrouter_api_key_set &&
+      aiDraft.openrouter_scope === "all" &&
+      !aiDraft.ollama_prefer_embeddings) ||
+    (aiDraft.openai_enabled &&
+      aiDraft.openai_api_key_set &&
+      !aiDraft.ollama_prefer_embeddings);
     !aiDraft.ollama_prefer_embeddings;
   const showOllamaGpu = ollamaIsUsed(aiDraft);
 
@@ -170,6 +185,7 @@ export default function ProvidersPane() {
           [
             { id: "local" as const, label: "Local AI" },
             { id: "openrouter" as const, label: "OpenRouter" },
+            { id: "openai" as const, label: "OpenAI API" },
           ] as const
         ).map((pane) => {
           const active = aiProviderPane === pane.id;
@@ -1128,6 +1144,347 @@ export default function ProvidersPane() {
                     )}
                   </div>
                 )}
+            </div>
+          </Section>
+        </>
+      )}
+
+      {aiProviderPane === "openai" && (
+        <>
+          <Section
+            first
+            title="OpenAI-Compatible API"
+            hidden={
+              !!q &&
+              !match(
+                "openai",
+                "api key",
+                "openai",
+                "vllm",
+                "tgi",
+                "lm studio",
+                "base url",
+                "chat model",
+                "embed model",
+                "budget",
+                "cost",
+                "usage"
+              )
+            }
+          >
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-gray-200">
+                  Enable OpenAI-Compatible API
+                </span>
+                <Toggle
+                  checked={aiDraft.openai_enabled}
+                  onChange={() =>
+                    saveAi({
+                      openai_enabled: !aiDraft.openai_enabled,
+                    })
+                  }
+                />
+              </div>
+              <p className="max-w-2xl text-xs text-gray-500">
+                Use any OpenAI-compatible endpoint for summaries, chat, tag enrichment,
+                duplicate confirmation, and embeddings. Works with OpenRouter, OpenAI,
+                vLLM, TGI, LM Studio, Ollama (OpenAI compat), and others.
+              </p>
+              {!aiDraft.openai_enabled && (
+                <div className="max-w-2xl rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                  <p className="text-xs text-amber-200/90">
+                    OpenAI API is disabled. Local AI (Ollama) and/or OpenRouter handle
+                    AI tasks when enabled. Turn this on to use a custom OpenAI-compatible
+                    endpoint for all AI features.
+                  </p>
+                </div>
+              )}
+              <div
+                className={
+                  !aiDraft.openai_enabled
+                    ? `space-y-4 ${OPTIONS_MUTED}`
+                    : "space-y-4"
+                }
+                aria-disabled={!aiDraft.openai_enabled || undefined}
+              >
+                <div className="space-y-2">
+                  <span className="block text-sm font-medium text-gray-200">
+                    Base URL
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      value={aiDraft.openai_base_url}
+                      onChange={(e) =>
+                        setAiDraft((d) => ({ ...d, openai_base_url: e.target.value }))
+                      }
+                      onBlur={(e) =>
+                        saveAi({ openai_base_url: e.target.value.trim() })
+                      }
+                      placeholder="https://openrouter.ai/api/v1"
+                      aria-label="OpenAI-compatible API base URL"
+                      className={INPUT_INLINE}
+                    />
+                    <p className="text-xs text-gray-500">
+                      Default: OpenRouter. Use your vLLM/TGI/LM Studio URL (e.g. http://localhost:8000/v1)
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <span className="block text-sm font-medium text-gray-200">
+                    API Key
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={openAiKeyDraft}
+                      onChange={(e) => setOpenAiKeyDraft(e.target.value)}
+                      onBlur={async () => {
+                        const trimmed = openAiKeyDraft.trim();
+                        if (!trimmed) return;
+                        await saveAi({ openai_api_key: trimmed });
+                        setOpenAiKeyDraft("");
+                        showToast("API key saved");
+                      }}
+                      placeholder={
+                        aiDraft.openai_api_key_set
+                          ? `Key saved (${aiDraft.openai_api_key || "••••"})`
+                          : "sk-…"
+                      }
+                      aria-label="OpenAI-compatible API key"
+                      className={INPUT_KEY}
+                    />
+                    <button
+                      type="button"
+                      disabled={openAiTesting}
+                      onClick={async () => {
+                        setOpenAiTesting(true);
+                        const result = await api
+                          .testOpenAiConnection(
+                            openAiKeyDraft.trim() || undefined,
+                            aiDraft.openai_base_url || undefined
+                          )
+                          .catch(() => null);
+                        setOpenAiTesting(false);
+                        if (!result) {
+                          setOpenAiTestStatus("fail");
+                          showToast("Connection test failed");
+                          return;
+                        }
+                        setOpenAiTestStatus(result.ok ? "ok" : "fail");
+                        showToast(
+                          result.ok
+                            ? result.detail || "Connected"
+                            : result.detail || "Unreachable"
+                        );
+                        if (result.ok && openAiKeyDraft.trim()) {
+                          await saveAi({
+                            openai_api_key: openAiKeyDraft.trim(),
+                          });
+                          setOpenAiKeyDraft("");
+                        }
+                        if (result.ok) {
+                          const models = await api
+                            .getOpenAiModels()
+                            .catch(() => null);
+                          if (models) {
+                            setOpenAiModels(models.models || []);
+                            setOpenAiEmbedModels(models.embedding_models || []);
+                          }
+                        }
+                        refreshAiStatus();
+                      }}
+                      className={PANEL_BTN}
+                    >
+                      {openAiTesting ? "Testing…" : "Test Connection"}
+                    </button>
+                    {(openAiTestStatus === "ok" ||
+                      (openAiTestStatus !== "fail" &&
+                        aiStatus?.openai_reachable)) && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                        Connected
+                      </span>
+                    )}
+                    {openAiTestStatus === "fail" && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-300 ring-1 ring-amber-500/30">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                        Unreachable
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {aiDraft.openai_api_key_set && (
+                  <button
+                    type="button"
+                    className="text-xs text-gray-500 underline-offset-2 hover:text-gray-300 hover:underline"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: "Clear saved API key?",
+                        body: "You'll need to enter a new key to reconnect.",
+                        confirmLabel: "Clear key",
+                        danger: true,
+                      });
+                      if (!ok) return;
+                      await saveAi({ openai_api_key: "" });
+                      setOpenAiKeyDraft("");
+                      setOpenAiTestStatus(null);
+                      showToast("API key cleared");
+                    }}
+                  >
+                    Clear saved key
+                  </button>
+                )}
+                <div className="max-w-xl space-y-4">
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-gray-200">
+                      Chat Model
+                    </span>
+                    <ThemedSelect
+                      value={aiDraft.openai_chat_model}
+                      aria-label="OpenAI-compatible chat model"
+                      className="w-full max-w-xl"
+                      buttonClassName="w-full"
+                      listClassName="max-h-80"
+                      searchable
+                      searchPlaceholder="Search models…"
+                      options={openAiModels.length
+                        ? openAiModels.map((m) => ({ id: m.id, name: m.name }))
+                        : [{ id: aiDraft.openai_chat_model, name: aiDraft.openai_chat_model }]
+                      }
+                      onChange={(value) =>
+                        void saveAi({ openai_chat_model: value })
+                      }
+                    />
+                    <p className="text-xs text-gray-500">
+                      Used for summaries, chat, tags, and duplicate confirmation.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-gray-200">
+                      Embedding Model
+                    </span>
+                    <ThemedSelect
+                      value={aiDraft.openai_embed_model}
+                      aria-label="OpenAI-compatible embedding model"
+                      className="w-full max-w-xl"
+                      buttonClassName="w-full"
+                      options={openAiEmbedModels.length
+                        ? openAiEmbedModels.map((m) => ({ id: m.id, name: m.name }))
+                        : [{ id: aiDraft.openai_embed_model, name: aiDraft.openai_embed_model }]
+                      }
+                      onChange={async (next) => {
+                        const prev = aiDraft.openai_embed_model;
+                        await saveAi({ openai_embed_model: next });
+                        if (next !== prev) {
+                          setReindexPrompt(
+                            "Embedding model changed. Rebuild search indexes so vectors match the new model?"
+                          );
+                        }
+                      }}
+                    />
+                    <p className="text-xs text-gray-500">
+                      Used for search indexes, related videos, and category shelves.
+                      Changing this requires a reindex.
+                    </p>
+                  </div>
+                  <div className="flex max-w-2xl items-center gap-3 pt-1">
+                    <span className="text-sm font-medium text-gray-200">
+                      Show costs in Watch
+                    </span>
+                    <Toggle
+                      checked={aiDraft.openai_show_costs}
+                      onChange={() =>
+                        saveAi({
+                          openai_show_costs: !aiDraft.openai_show_costs,
+                        })
+                      }
+                    />
+                  </div>
+                  <p className="max-w-2xl text-xs text-gray-500">
+                    When on, summary and chat replies show a subtle cost tag.
+                    Cost tracking works best with OpenRouter; other providers may not report usage.
+                  </p>
+                  <div className="mt-4 max-w-2xl space-y-3 border-t border-ink-800 pt-4">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium text-gray-200">
+                          Warn if weekly spend exceeds
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-sm text-gray-500">$</span>
+                          <input
+                            type="number"
+                            min={0.01}
+                            max={100000}
+                            step={0.01}
+                            inputMode="decimal"
+                            value={aiDraft.openai_weekly_budget_usd ?? ""}
+                            onChange={(e) => {
+                              const raw = e.target.value.trim();
+                              setAiDraft((d) => ({
+                                ...d,
+                                openai_weekly_budget_usd:
+                                  raw === "" ? null : Number(raw),
+                              }));
+                            }}
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim();
+                              if (raw === "") {
+                                void saveAi({ openai_weekly_budget_usd: null });
+                                return;
+                              }
+                              const n = Number(raw);
+                              if (!Number.isFinite(n) || n <= 0) {
+                                setAiDraft((d) => ({
+                                  ...d,
+                                  openai_weekly_budget_usd:
+                                    appSettings?.ai.openai_weekly_budget_usd ??
+                                    null,
+                                }));
+                                return;
+                              }
+                              void saveAi({ openai_weekly_budget_usd: n });
+                            }}
+                            placeholder="e.g. 1"
+                            aria-label="Weekly budget in USD"
+                            className={`${INPUT_COMPACT} w-28`}
+                          />
+                        </span>
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Uses the rolling last 7 days total. Leave blank for no limit.
+                    </p>
+                    <div
+                      className={`flex max-w-2xl items-center gap-3 ${
+                        aiDraft.openai_weekly_budget_usd == null
+                          ? "opacity-50"
+                          : ""
+                      }`}
+                    >
+                      <span className="text-sm font-medium text-gray-200">
+                        Stop API calls when exceeded
+                      </span>
+                      <Toggle
+                        checked={aiDraft.openai_budget_hard_limit}
+                        onChange={() => {
+                          if (aiDraft.openai_weekly_budget_usd == null) return;
+                          saveAi({
+                            openai_budget_hard_limit:
+                              !aiDraft.openai_budget_hard_limit,
+                          });
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      When on, further API calls are blocked and the AI queue pauses
+                      once the weekly budget is hit. Local Ollama is unaffected.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </Section>
         </>

@@ -13,10 +13,13 @@ from ..services.ai import embeddings, recommend, worker
 from ..services.ai.provider import (
     build_status,
     invalidate_resolved_url,
+    list_openai_embedding_models,
+    list_openai_models,
     list_openrouter_embedding_models,
     list_openrouter_models,
     openrouter_preset_list,
     test_connection,
+    test_openai_connection,
     test_openrouter_connection,
 )
 from .videos import _to_read
@@ -133,6 +136,27 @@ class OpenRouterModelsResponse(BaseModel):
     presets: list[dict[str, str]] = Field(default_factory=list)
     models: list[OpenRouterModelRow] = Field(default_factory=list)
     embedding_models: list[OpenRouterModelRow] = Field(default_factory=list)
+
+
+class OpenAIModelRow(BaseModel):
+    id: str
+    name: str = ""
+    prompt_per_million: Optional[float] = None
+    completion_per_million: Optional[float] = None
+
+
+def _openai_model_row(row: dict[str, Any]) -> OpenAIModelRow:
+    return OpenAIModelRow.model_validate(row)
+
+
+class OpenAIModelsResponse(BaseModel):
+    models: list[OpenAIModelRow] = Field(default_factory=list)
+    embedding_models: list[OpenAIModelRow] = Field(default_factory=list)
+
+
+class OpenAITestRequest(BaseModel):
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
 
 
 class AiApplyWorkloadRequest(BaseModel):
@@ -280,6 +304,28 @@ def ai_openrouter_models():
         presets=openrouter_preset_list(),
         models=[_openrouter_model_row(m) for m in models],
         embedding_models=[_openrouter_model_row(m) for m in embed_models],
+    )
+
+
+@router.post("/openai/test")
+def ai_openai_test(payload: OpenAITestRequest = OpenAITestRequest()):
+    return test_openai_connection(payload.api_key, payload.base_url)
+
+
+@router.get("/openai/models", response_model=OpenAIModelsResponse)
+def ai_openai_models():
+    try:
+        models = list_openai_models()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc) or "Could not list models") from exc
+    embed_models: list[dict[str, Any]] = []
+    try:
+        embed_models = list_openai_embedding_models()
+    except Exception:  # noqa: BLE001
+        embed_models = []
+    return OpenAIModelsResponse(
+        models=[_openai_model_row(m) for m in models],
+        embedding_models=[_openai_model_row(m) for m in embed_models],
     )
 
 

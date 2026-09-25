@@ -95,6 +95,10 @@ export default function Settings() {
   const [openRouterCosts, setOpenRouterCosts] = useState<OpenRouterCosts | null>(
     null
   );
+  const [openAiTesting, setOpenAiTesting] = useState(false);
+  const [openAiKeyDraft, setOpenAiKeyDraft] = useState("");
+  const [openAiModels, setOpenAiModels] = useState<OpenAiModel[]>([]);
+  const [openAiEmbedModels, setOpenAiEmbedModels] = useState<OpenAiModel[]>([]);
   const [aiProviderPane, setAiProviderPane] = useState<AiProviderPane>("local");
   const aiProviderPaneFromBackendRef = useRef(false);
   const [aiPane, setAiPane] = useState<AiPane>(() => {
@@ -906,6 +910,14 @@ export default function Settings() {
     openRouterEmbedModels,
     setOpenRouterEmbedModels,
     openRouterCosts,
+    openAiTesting,
+    setOpenAiTesting,
+    openAiKeyDraft,
+    setOpenAiKeyDraft,
+    openAiModels,
+    setOpenAiModels,
+    openAiEmbedModels,
+    setOpenAiEmbedModels,
     embedCustom,
     setEmbedCustom,
     chatCustom,

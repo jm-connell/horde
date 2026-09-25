@@ -11,7 +11,7 @@ AI_DEFAULTS: dict[str, Any] = {
     "base_url": "",
     "embed_model": "nomic-embed-text",
     "chat_model": "llama3.2:3b",
-    # Optional OpenRouter LLM backend (summaries, chat, tags, duplicate LLM).
+    # Optional OpenRouter LLM backend (kept for backward compatibility).
     "openrouter_enabled": False,
     "openrouter_api_key": "",
     "openrouter_model": "google/gemini-2.5-flash-lite",
@@ -26,6 +26,21 @@ AI_DEFAULTS: dict[str, Any] = {
     "openrouter_weekly_budget_usd": None,
     # When true and weekly spend >= budget, block further OpenRouter calls.
     "openrouter_budget_hard_limit": False,
+    # Optional OpenAI-compatible API backend (summaries, chat, tags, duplicate LLM, embeddings).
+    # Works with OpenRouter, OpenAI, vLLM, TGI, LM Studio, Ollama (OpenAI compat), etc.
+    "openai_enabled": False,
+    "openai_base_url": "https://openrouter.ai/api/v1",
+    "openai_api_key": "",
+    "openai_chat_model": "google/gemini-2.5-flash-lite",
+    "openai_embed_model": "openai/text-embedding-3-small",
+    # Show per-response cost chips in Watch UI (Settings totals always show).
+    # Only meaningful for OpenRouter; other providers don't return usage costs.
+    "openai_show_costs": False,
+    # Soft/hard weekly spend limit (rolling 7 days). null = off.
+    # Only tracked for OpenRouter; other providers don't report costs.
+    "openai_weekly_budget_usd": None,
+    # When true and weekly spend >= budget, block further API calls.
+    "openai_budget_hard_limit": False,
     # on_download | on_request | timer | set_time
     "schedule": "on_download",
     "timer_hours": 6,
@@ -76,6 +91,21 @@ def normalize_openrouter_scope(value: Any) -> str:
 def normalize_openrouter_embed_model(value: Any) -> str:
     raw = str(value or "").strip()
     return raw or str(AI_DEFAULTS["openrouter_embed_model"])
+
+
+def normalize_openai_base_url(value: Any) -> str:
+    raw = str(value or "").strip().rstrip("/")
+    return raw or "https://openrouter.ai/api/v1"
+
+
+def normalize_openai_chat_model(value: Any) -> str:
+    raw = str(value or "").strip()
+    return raw or "google/gemini-2.5-flash-lite"
+
+
+def normalize_openai_embed_model(value: Any) -> str:
+    raw = str(value or "").strip()
+    return raw or "openai/text-embedding-3-small"
 
 
 def clamp_category_min_score(value: Any) -> float:
@@ -221,6 +251,24 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     )
     merged["openrouter_budget_hard_limit"] = bool(
         merged.get("openrouter_budget_hard_limit")
+    )
+    merged["openai_base_url"] = normalize_openai_base_url(
+        merged.get("openai_base_url")
+    )
+    merged["openai_chat_model"] = normalize_openai_chat_model(
+        merged.get("openai_chat_model")
+    )
+    merged["openai_embed_model"] = normalize_openai_embed_model(
+        merged.get("openai_embed_model")
+    )
+    merged["openai_show_costs"] = bool(
+        merged.get("openai_show_costs", False)
+    )
+    merged["openai_weekly_budget_usd"] = clamp_weekly_budget_usd(
+        merged.get("openai_weekly_budget_usd")
+    )
+    merged["openai_budget_hard_limit"] = bool(
+        merged.get("openai_budget_hard_limit")
     )
     return merged
 

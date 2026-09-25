@@ -10,7 +10,7 @@ export type LegacySettingsTab = "downloads";
 
 export type AiPane = "providers" | "features" | "jobs";
 
-export type AiProviderPane = "local" | "openrouter";
+export type AiProviderPane = "local" | "openrouter" | "openai";
 
 export type AiProcessAction =
   | "all_recent"

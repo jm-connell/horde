@@ -1,4 +1,4 @@
-import type { OpenRouterCosts } from "../../types";
+import type { OpenRouterCosts, OpenAiModel } from "../../types";
 import { formatUsdCost } from "../../utils";
 
 type ProviderHints = {
@@ -10,9 +10,14 @@ type ProviderHints = {
   openrouter_scope?: string | null;
   openrouter_model?: string | null;
   ollama_prefer_embeddings?: boolean;
+  openai_enabled?: boolean;
+  openai_api_key_set?: boolean;
+  openai_base_url?: string | null;
+  openai_chat_model?: string | null;
+  openai_embed_model?: string | null;
 };
 
-/** Whether Horde is actually sending work to Ollama (vs OpenRouter-only). */
+/** Whether Horde is actually sending work to Ollama (vs OpenRouter/OpenAI-only). */
 export function ollamaIsUsed(s: ProviderHints): boolean {
   if (s.embed_backend === "ollama" || s.llm_backend === "ollama") {
     return true;
@@ -23,6 +28,10 @@ export function ollamaIsUsed(s: ProviderHints): boolean {
     s.openrouter_scope === "all" &&
     !s.ollama_prefer_embeddings;
   if (openRouterOwnsAll) return false;
+  const openAiOwnsAll =
+    Boolean(s.openai_enabled) &&
+    Boolean(s.openai_api_key_set);
+  if (openAiOwnsAll) return false;
   if (s.ollama_prefer_embeddings) return true;
   return s.enabled === true;
 }
@@ -33,6 +42,14 @@ export function openrouterIsUsed(s: ProviderHints): boolean {
     return true;
   }
   return Boolean(s.openrouter_enabled && s.openrouter_api_key_set);
+}
+
+/** Whether OpenAI-compatible API is the active LLM and/or embed backend. */
+export function openaiIsUsed(s: ProviderHints): boolean {
+  if (s.llm_backend === "openai_compatible" || s.embed_backend === "openai_compatible") {
+    return true;
+  }
+  return Boolean(s.openai_enabled && s.openai_api_key_set);
 }
 
 /** Model + task scope for the compact System AI OpenRouter row. */

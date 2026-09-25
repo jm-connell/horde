@@ -325,6 +325,7 @@ export interface AiSettings {
   base_url: string;
   embed_model: string;
   chat_model: string;
+  // OpenRouter (legacy, kept for backward compatibility)
   openrouter_enabled: boolean;
   /** Masked key from the API; empty when unset. */
   openrouter_api_key: string;
@@ -339,6 +340,20 @@ export interface AiSettings {
   openrouter_weekly_budget_usd: number | null;
   /** When true and weekly spend >= budget, block further OpenRouter calls. */
   openrouter_budget_hard_limit: boolean;
+  // OpenAI-compatible API (OpenRouter, OpenAI, vLLM, TGI, LM Studio, etc.)
+  openai_enabled: boolean;
+  openai_base_url: string;
+  /** Masked key from the API; empty when unset. */
+  openai_api_key: string;
+  openai_api_key_set: boolean;
+  openai_chat_model: string;
+  openai_embed_model: string;
+  /** When false, hide per-response cost chips in Watch (Settings totals still show). */
+  openai_show_costs: boolean;
+  /** Soft/hard weekly spend limit (rolling 7 days). null = off. */
+  openai_weekly_budget_usd: number | null;
+  /** When true and weekly spend >= budget, block further API calls. */
+  openai_budget_hard_limit: boolean;
   schedule: AiSchedule;
   timer_hours: number;
   schedule_time: string;
@@ -396,6 +411,14 @@ export interface OpenRouterModel {
   completion_per_million?: number | null;
 }
 
+/** OpenAI-compatible catalog row from GET /api/ai/openai/models. */
+export interface OpenAiModel {
+  id: string;
+  name: string;
+  prompt_per_million?: number | null;
+  completion_per_million?: number | null;
+}
+
 export interface AppSettings {
   progress_expiry_days: number;
   metadata_sync_interval_hours: number;
@@ -445,6 +468,7 @@ export interface AiStatus {
   invent_sample_size?: number;
   invent_budget_chars?: number;
   models_match_profile?: boolean;
+  // OpenRouter (legacy)
   openrouter_enabled?: boolean;
   openrouter_reachable?: boolean;
   openrouter_model?: string;
@@ -452,6 +476,13 @@ export interface AiStatus {
   openrouter_scope?: "specialized" | "all";
   openrouter_embed_model?: string;
   ollama_prefer_embeddings?: boolean;
+  // OpenAI-compatible API
+  openai_enabled?: boolean;
+  openai_reachable?: boolean;
+  openai_base_url?: string;
+  openai_chat_model?: string;
+  openai_embed_model?: string;
+  openai_api_key_set?: boolean;
   llm_backend?: string | null;
   embed_backend?: string | null;
 }

@@ -15,6 +15,7 @@ import type {
   DownloadQueueStatus,
   DuplicateGroup,
   ImportScanResult,
+  OpenAiModel,
   OpenRouterCosts,
   OpenRouterModel,
   Playlist,
@@ -547,6 +548,29 @@ export const api = {
 
   getOpenRouterCosts(): Promise<OpenRouterCosts> {
     return request<OpenRouterCosts>("/api/ai/openrouter/costs");
+  },
+
+  testOpenAiConnection(
+    api_key?: string,
+    base_url?: string
+  ): Promise<{
+    ok: boolean;
+    detail?: string;
+    model_count?: number;
+    base_url?: string;
+  }> {
+    return request("/api/ai/openai/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: api_key || null, base_url: base_url || null }),
+    });
+  },
+
+  getOpenAiModels(): Promise<{
+    models: OpenAiModel[];
+    embedding_models?: OpenAiModel[];
+  }> {
+    return request("/api/ai/openai/models");
   },
 
   applyAiWorkload(profile?: "light" | "normal" | "heavy"): Promise<{

@@ -7,8 +7,13 @@ from ..services import app_settings
 from ..services.ai.provider import (
     invalidate_resolved_url,
     mask_openrouter_api_key,
+    mask_openai_api_key,
     normalize_openrouter_model,
     openrouter_api_key_set,
+    openai_api_key_set,
+    normalize_openai_base_url,
+    normalize_openai_chat_model,
+    normalize_openai_embed_model,
 )
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -20,6 +25,7 @@ class AiSettingsRead(BaseModel):
     base_url: str = ""
     embed_model: str = "nomic-embed-text"
     chat_model: str = "llama3.2:3b"
+    # OpenRouter (legacy, kept for backward compatibility)
     openrouter_enabled: bool = False
     openrouter_api_key: str = ""
     openrouter_api_key_set: bool = False
@@ -30,6 +36,16 @@ class AiSettingsRead(BaseModel):
     openrouter_show_costs: bool = False
     openrouter_weekly_budget_usd: Optional[float] = None
     openrouter_budget_hard_limit: bool = False
+    # OpenAI-compatible API (OpenRouter, OpenAI, vLLM, TGI, LM Studio, etc.)
+    openai_enabled: bool = False
+    openai_base_url: str = "https://openrouter.ai/api/v1"
+    openai_api_key: str = ""
+    openai_api_key_set: bool = False
+    openai_chat_model: str = "google/gemini-2.5-flash-lite"
+    openai_embed_model: str = "openai/text-embedding-3-small"
+    openai_show_costs: bool = False
+    openai_weekly_budget_usd: Optional[float] = None
+    openai_budget_hard_limit: bool = False
     schedule: Literal["on_download", "on_request", "timer", "set_time"] = "on_download"
     timer_hours: float = 6
     schedule_time: str = "03:00"
@@ -55,6 +71,7 @@ class AiSettingsUpdate(BaseModel):
     base_url: Optional[str] = None
     embed_model: Optional[str] = None
     chat_model: Optional[str] = None
+    # OpenRouter (legacy)
     openrouter_enabled: Optional[bool] = None
     openrouter_api_key: Optional[str] = None
     openrouter_model: Optional[str] = None
@@ -62,9 +79,17 @@ class AiSettingsUpdate(BaseModel):
     openrouter_embed_model: Optional[str] = None
     ollama_prefer_embeddings: Optional[bool] = None
     openrouter_show_costs: Optional[bool] = None
-    # null clears; 0 / empty also cleared in clamp_weekly_budget_usd.
     openrouter_weekly_budget_usd: Optional[float] = None
     openrouter_budget_hard_limit: Optional[bool] = None
+    # OpenAI-compatible API
+    openai_enabled: Optional[bool] = None
+    openai_base_url: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    openai_chat_model: Optional[str] = None
+    openai_embed_model: Optional[str] = None
+    openai_show_costs: Optional[bool] = None
+    openai_weekly_budget_usd: Optional[float] = None
+    openai_budget_hard_limit: Optional[bool] = None
     schedule: Optional[Literal["on_download", "on_request", "timer", "set_time"]] = None
     timer_hours: Optional[float] = Field(default=None, ge=0.25, le=168)
     schedule_time: Optional[str] = None
@@ -140,9 +165,10 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
         )
     if "vram_gb" in filtered:
         filtered["vram_gb"] = app_settings.clamp_vram_gb(filtered["vram_gb"])
-    stored_key = str(merged.get("openrouter_api_key") or "")
-    filtered["openrouter_api_key"] = mask_openrouter_api_key(stored_key)
-    filtered["openrouter_api_key_set"] = openrouter_api_key_set(stored_key)
+    # OpenRouter fields
+    stored_or_key = str(merged.get("openrouter_api_key") or "")
+    filtered["openrouter_api_key"] = mask_openrouter_api_key(stored_or_key)
+    filtered["openrouter_api_key_set"] = openrouter_api_key_set(stored_or_key)
     filtered["openrouter_model"] = normalize_openrouter_model(
         filtered.get("openrouter_model")
     )
@@ -167,6 +193,30 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     )
     filtered["openrouter_budget_hard_limit"] = bool(
         filtered.get("openrouter_budget_hard_limit")
+    )
+    # OpenAI-compatible API fields
+    stored_openai_key = str(merged.get("openai_api_key") or "")
+    filtered["openai_api_key"] = mask_openai_api_key(stored_openai_key)
+    filtered["openai_api_key_set"] = openai_api_key_set(stored_openai_key)
+    filtered["openai_base_url"] = normalize_openai_base_url(
+        filtered.get("openai_base_url")
+    )
+    filtered["openai_chat_model"] = normalize_openai_chat_model(
+        filtered.get("openai_chat_model")
+    )
+    filtered["openai_embed_model"] = normalize_openai_embed_model(
+        filtered.get("openai_embed_model")
+    )
+    filtered["openai_show_costs"] = bool(
+        filtered.get("openai_show_costs", False)
+    )
+    filtered["openai_weekly_budget_usd"] = (
+        app_settings.clamp_weekly_budget_usd(
+            filtered.get("openai_weekly_budget_usd")
+        )
+    )
+    filtered["openai_budget_hard_limit"] = bool(
+        filtered.get("openai_budget_hard_limit")
     )
     return AiSettingsRead(**filtered)
 
@@ -235,6 +285,12 @@ def update_settings(payload: AppSettingsUpdate):
                     ai_updates["openrouter_weekly_budget_usd"]
                 )
             )
+        if "openai_weekly_budget_usd" in ai_updates:
+            ai_updates["openai_weekly_budget_usd"] = (
+                app_settings.clamp_weekly_budget_usd(
+                    ai_updates["openai_weekly_budget_usd"]
+                )
+            )
         if "summary_length" in ai_updates:
             ai_updates["summary_length"] = app_settings.normalize_summary_length(
                 ai_updates["summary_length"]
@@ -274,6 +330,32 @@ def update_settings(payload: AppSettingsUpdate):
                     del ai_updates["openrouter_api_key"]
                 else:
                     ai_updates["openrouter_api_key"] = raw.strip()
+        if "openai_model" in ai_updates:
+            # backwards compat
+            ai_updates["openai_chat_model"] = ai_updates.pop("openai_model")
+        if "openai_chat_model" in ai_updates:
+            ai_updates["openai_chat_model"] = normalize_openai_chat_model(
+                ai_updates["openai_chat_model"]
+            )
+        if "openai_base_url" in ai_updates:
+            ai_updates["openai_base_url"] = normalize_openai_base_url(
+                ai_updates["openai_base_url"]
+            )
+        if "openai_embed_model" in ai_updates:
+            ai_updates["openai_embed_model"] = normalize_openai_embed_model(
+                ai_updates["openai_embed_model"]
+            )
+        if "openai_api_key" in ai_updates:
+            key = ai_updates["openai_api_key"]
+            if key is None:
+                del ai_updates["openai_api_key"]
+            else:
+                raw = str(key)
+                # Ignore masked placeholders from the Settings form.
+                if raw.startswith("••••") or raw.startswith("****"):
+                    del ai_updates["openai_api_key"]
+                else:
+                    ai_updates["openai_api_key"] = raw.strip()
         # Applying a workload profile resolves models + match score for Ollama GPU.
         if "workload_profile" in ai_updates:
             from ..services.ai import workload as ai_workload
@@ -292,6 +374,11 @@ def update_settings(payload: AppSettingsUpdate):
                 "openrouter_scope",
                 "openrouter_embed_model",
                 "ollama_prefer_embeddings",
+                "openai_enabled",
+                "openai_api_key",
+                "openai_base_url",
+                "openai_chat_model",
+                "openai_embed_model",
             )
         ):
             from ..services.ai import worker as ai_worker

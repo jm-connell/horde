@@ -315,6 +315,22 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                     : "No API key"}
               </StatusRow>
             )}
+            {aiStatus?.openai_enabled && (
+              <StatusRow label="OpenAI API" tip={STATUS_TIPS.openrouter}>
+                {!aiStatus.openai_enabled
+                  ? "Disabled"
+                  : aiStatus.openai_reachable
+                    ? "Connected"
+                    : aiStatus.openai_api_key_set
+                      ? "Configured"
+                      : "No API key"}
+                {aiStatus.openai_enabled && !aiStatus.openai_reachable && (
+                  <div className="mt-0.5 max-w-xs text-xs text-red-400">
+                    OpenAI-compatible API not reachable
+                  </div>
+                )}
+              </StatusRow>
+            )}
             <StatusRow label="Cookies" tip={STATUS_TIPS.cookies}>
               {health.youtube?.cookies_configured
                 ? "Configured"
