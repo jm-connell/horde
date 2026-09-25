@@ -1,11 +1,21 @@
 """Catch-up enqueue must tolerate SQLite naive timestamps."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from sqlmodel import select
 
 from app.models import AiJob, AiJobKind, AiJobStatus, VideoAiMeta, utcnow
 from app.services.ai import embeddings, text as ai_text, worker
+
+
+def _store_naive_tags_enriched_at(session, video_id: int) -> None:
+    """Write the legacy no-offset form SQLite already has on older libraries."""
+    session.commit()
+    session.connection().exec_driver_sql(
+        "UPDATE video_ai_meta SET tags_enriched_at = ? WHERE video_id = ?",
+        ("2020-01-01 12:00:00", video_id),
+    )
+    session.commit()
 
 
 def _ai(**overrides):
@@ -25,13 +35,8 @@ def test_enqueue_all_recent_compares_naive_tags_enriched_at(
     add_video, session, monkeypatch
 ):
     video = add_video(added_at=utcnow() - timedelta(days=1))
-    session.add(
-        VideoAiMeta(
-            video_id=video.id,
-            tags_enriched_at=datetime(2020, 1, 1, 12, 0, 0),
-        )
-    )
-    session.commit()
+    session.add(VideoAiMeta(video_id=video.id))
+    _store_naive_tags_enriched_at(session, video.id)
 
     captured: list[tuple] = []
     monkeypatch.setattr(
@@ -51,14 +56,8 @@ def test_enqueue_missing_tags_compares_naive_tags_enriched_at(
     add_video, session, monkeypatch
 ):
     video = add_video()
-    session.add(
-        VideoAiMeta(
-            video_id=video.id,
-            tags_enriched_at=datetime(2020, 1, 1, 12, 0, 0),
-            updated_at=datetime.now(timezone.utc),
-        )
-    )
-    session.commit()
+    session.add(VideoAiMeta(video_id=video.id))
+    _store_naive_tags_enriched_at(session, video.id)
 
     captured: list[tuple] = []
     monkeypatch.setattr(
