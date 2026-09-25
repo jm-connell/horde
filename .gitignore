@@ -7,6 +7,12 @@ venv/
 # Node
 node_modules/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+
+# Browser-test runtime (throwaway sqlite and media)
+e2e/.runtime/
 
 # App data
 data/

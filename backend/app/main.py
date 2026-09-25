@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 from contextlib import asynccontextmanager
@@ -53,15 +54,35 @@ from .services.job_metadata import (
     stop_job_metadata_worker,
 )
 
+def _frontend_dir() -> Path:
+    """Production image uses backend/static. Browser e2e points at frontend/dist."""
+    override = os.environ.get("HORDE_FRONTEND_DIR", "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path(__file__).resolve().parent.parent / "static"
+
+
 # Static frontend build copied next to the backend in the Docker image.
-FRONTEND_DIR = Path(__file__).resolve().parent.parent / "static"
+FRONTEND_DIR = _frontend_dir()
 WIKI_DIR = FRONTEND_DIR / "wiki"
+
+
+def _e2e_browser() -> bool:
+    from .e2e_mode import enabled
+
+    return enabled()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_dirs()
     init_db()
+    if _e2e_browser():
+        from .e2e_seed import prepare
+
+        prepare(os.environ.get("HORDE_E2E_MODE", "app"))
+        yield
+        return
     cleanup_orphans()
     from .services.ytdlp_common import ensure_plugins_loaded
 
@@ -304,6 +325,17 @@ def updates(refresh: bool = False):
     from .services.updates import check_for_updates
 
     return check_for_updates(refresh=refresh)
+
+
+if _e2e_browser():
+
+    @app.post("/api/e2e/reset")
+    def e2e_reset():
+        """Restore browser-test data. Not mounted unless HORDE_E2E=1."""
+        from .e2e_seed import prepare
+
+        prepare(os.environ.get("HORDE_E2E_MODE", "app"))
+        return {"ok": True}
 
 
 if FRONTEND_DIR.exists():

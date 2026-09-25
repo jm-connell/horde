@@ -64,7 +64,22 @@ def check_for_updates(*, refresh: bool = False) -> dict[str, Any]:
     """Return update status. Soft-fails so the UI can stay quiet offline."""
     global _cache, _cache_at
 
+    from ..e2e_mode import enabled as e2e_browser
+
     current = resolve_git_sha()
+    if e2e_browser():
+        # System settings polls this. Keep the suite offline.
+        return {
+            "repo": HORDE_GITHUB_REPO,
+            "current_sha": current,
+            "current_short": short_git_sha(current),
+            "latest_sha": None,
+            "latest_short": None,
+            "latest_html_url": None,
+            "update_available": False,
+            "checked_at": _utcnow_iso(),
+            "error": None,
+        }
     repo = HORDE_GITHUB_REPO
     now = time.monotonic()
 

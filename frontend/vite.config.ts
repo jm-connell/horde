@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "node",
+    // Playwright specs live next to the app but are not Vitest tests.
+    exclude: ["e2e/**", "**/node_modules/**", "**/dist/**"],
   },
   optimizeDeps: {
     include: ["shaka-player/dist/shaka-player.dash.js"],

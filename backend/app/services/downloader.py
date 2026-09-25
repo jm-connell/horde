@@ -591,6 +591,11 @@ class DownloadQueue:
             )
 
     def _dispatch(self) -> None:
+        from ..e2e_mode import enabled as e2e_browser
+
+        # Browser tests seed a queued job. Never start yt-dlp from that process.
+        if e2e_browser():
+            return
         with self._lock:
             if self._global_paused:
                 return

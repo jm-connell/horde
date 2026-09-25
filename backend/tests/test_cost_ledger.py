@@ -1,25 +1,19 @@
 """OpenRouter cost ledger windows must tolerate SQLite naive timestamps."""
 
-from datetime import datetime, timezone
-
 from app.models import OpenRouterUsage
 from app.services.ai import cost_ledger
 
 
 def test_totals_compares_naive_and_aware_created_at(session):
-    session.add(
-        OpenRouterUsage(
-            kind="summary",
-            cost=0.01,
-            created_at=datetime(2020, 1, 1, 12, 0, 0),
-        )
-    )
-    session.add(
-        OpenRouterUsage(
-            kind="chat",
-            cost=0.02,
-            created_at=datetime.now(timezone.utc),
-        )
+    old = OpenRouterUsage(kind="summary", cost=0.01)
+    recent = OpenRouterUsage(kind="chat", cost=0.02)
+    session.add(old)
+    session.add(recent)
+    session.commit()
+    # Older libraries stored this column without an offset.
+    session.connection().exec_driver_sql(
+        "UPDATE openrouter_usage SET created_at = ? WHERE id = ?",
+        ("2020-01-01 12:00:00", old.id),
     )
     session.commit()
 

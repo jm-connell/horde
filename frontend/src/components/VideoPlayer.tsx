@@ -2310,6 +2310,7 @@ export default function VideoPlayer({
                 type="button"
                 onClick={togglePlay}
                 className="ui-player-chrome text-xl leading-none hover:text-accent"
+                aria-label={playing ? "Pause" : "Play"}
               >
                 {playing ? "❚❚" : "►"}
               </button>

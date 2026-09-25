@@ -12,12 +12,13 @@ This is not a substitute for playing a real video on your LAN. The player still 
 | **Backend API** | pytest + FastAPI `TestClient` on a temp SQLite + temp `DOWNLOADS_DIR` | Yes | Library, review, playlists, settings, download enqueue (yt-dlp stubbed), Range streaming |
 | **Frontend unit** | Vitest (node) | Yes | Formatters, presets, catalog progress copy, URL helpers |
 | **Frontend build** | `tsc -b && vite build` | Yes | Type errors and a broken production bundle |
+| **Browser UI** | Playwright (Chromium) against the built SPA + FastAPI | Yes | Nav, library, history, download form, playlists, import, watch chrome, settings, setup wizard |
 | **Wiki** | `mkdocs build --strict` | Yes | Broken nav / missing Markdown pages |
 | **Container** | `docker build` of the repo `Dockerfile` | Yes | The TrueNAS/Dockge artifact (frontend + wiki + Python image) |
-| **Browser E2E / player** | Not in CI | No | Shaka, mini-player reparenting, Cast, iOS — still [manual](../reference/video-player-smoke.md) |
+| **Player decode / Cast** | Manual | No | Shaka, DASH preview, mini-player reparenting, Cast, iOS — still [manual](../reference/video-player-smoke.md) |
 | **Live YouTube / Ollama** | Not in CI | No | Bot checks, cookies, GPU models — flaky and network-bound |
 
-CI **must not** call YouTube, OpenRouter, or a real Ollama. Download tests stub `extract_preview`; AI enqueue is a no-op. That keeps the suite deterministic and under a minute for the Python/Node jobs.
+CI **must not** call YouTube, OpenRouter, or a real Ollama. Download tests stub `extract_preview`; AI enqueue is a no-op. Playwright sets `HORDE_E2E=1`, which skips background workers, returns a synthetic download preview, and refuses to dispatch yt-dlp. That keeps the suite deterministic and offline.
 
 !!! tip "Write a test when you fix a bug"
     If something broke in production (queue pause, device downloads, progress expiry, settings merge, update wiping host paths), add a pytest or Vitest case next to the fix. The existing files under `backend/tests/` and `frontend/src/**/*.test.ts` are the pattern.
@@ -40,6 +41,14 @@ cd frontend
 npm ci   # or npm install
 npm test
 npm run build
+```
+
+Browser UI (from `frontend/`, after the Python deps above are installed). `npm run e2e` builds the SPA, then Playwright serves it with `e2e/serve.py` on ports 8091 (seeded library) and 8092 (setup wizard). `npm run e2e:run` skips the build when `frontend/dist` is already current.
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run e2e
 ```
 
 Wiki (from the repo root):
@@ -67,7 +76,7 @@ The workflow file is `.github/workflows/ci.yml`. It runs on:
 | **`pull_request`** | Opening or updating a PR (including forks) |
 | **`workflow_dispatch`** | **Actions → CI → Run workflow** after a large local change if you want a fresh run without a new commit |
 
-Jobs (parallel): **backend** (pytest), **frontend** (Vitest + production build), **docs** (MkDocs `--strict`), **image** (`docker build` of the single-container app).
+Jobs (parallel): **backend** (pytest), **frontend** (Vitest + production build), **e2e** (Playwright against the built SPA), **docs** (MkDocs `--strict`), **image** (`docker build` of the single-container app).
 
 A red X on the commit or PR means “do not merge until it is green.” Open the failed job log; pytest and Vitest names map to files under `backend/tests/` and `frontend/src/`.
 
@@ -82,7 +91,7 @@ A red X on the commit or PR means “do not merge until it is green.” Open the
 On GitHub: **Settings → Branches → Add branch protection rule** for `main`.
 
 - Require a pull request before merging (if you want that workflow)
-- **Require status checks to pass**: `backend`, `frontend`, `docs`, `image`
+- **Require status checks to pass**: `backend`, `frontend`, `e2e`, `docs`, `image`
 
 Without protection, CI still **runs and reports**; it just will not physically stop a merge. For a homelab repo that is often enough if you glance at the checks.
 
@@ -99,7 +108,7 @@ def test_example(client, add_video):
 
 Stub outbound work with `monkeypatch` (see `test_api_downloads.py` for `extract_preview`). Do not start uvicorn or Vite inside pytest.
 
-Frontend: colocate `*.test.ts` next to the pure helper. Vitest is configured with `environment: "node"` — skip tests that need `window` / a real `<video>` unless you add a jsdom (or Playwright) job later.
+Frontend: colocate `*.test.ts` next to the pure helper. Vitest is configured with `environment: "node"` — keep it for formatters, URL parsing, and layout math. Page chrome belongs in `frontend/e2e/` (Playwright), which drives the production bundle and must stay offline.
 
 ## Related
 
