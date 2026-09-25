@@ -2288,6 +2288,7 @@ export default function VideoPlayer({
           >
             <div
               ref={scrubberRef}
+              data-horde="seek"
               className="relative -my-1.5 flex h-4 cursor-pointer touch-none items-center"
               onPointerDown={onScrubPointerDown}
               onPointerMove={onScrubPointerMove}

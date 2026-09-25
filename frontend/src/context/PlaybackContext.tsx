@@ -10,7 +10,6 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   api,
-  previewManifestUrl,
   previewStreamUrl,
   previewSubtitleUrl,
   streamUrl,
@@ -27,6 +26,7 @@ import {
   resolveLibraryChapters,
   type Chapter,
 } from "../utils";
+import { streamPlaybackTarget } from "../utils/streamPlayback";
 import { shouldSuspendPlaybackForWatch } from "../utils/watchHandoff";
 import {
   clampMiniPos,
@@ -849,6 +849,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     current != null
       ? `${streamUrl(current.id)}?s=${current.file_size ?? 0}&h=${current.height_px ?? 0}`
       : "";
+  const streamTarget = stream != null ? streamPlaybackTarget(stream) : null;
 
   // Distinct keys so DASH (Shaka/MSE) does not reuse the same VideoPlayer
   // instance as library progressive playback, or as a different preview URL.
@@ -916,21 +917,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
       />
-    ) : stream != null ? (
+    ) : stream != null && streamTarget != null ? (
       <VideoPlayer
         key={`stream:${stream.url}`}
-        src={previewManifestUrl(stream.url)}
-        streamType="dash"
+        src={streamTarget?.src ?? ""}
+        streamType={streamTarget?.streamType ?? "dash"}
         live={stream.live === true}
         liveHls={stream.liveManifest === "hls"}
         progressiveFallbackSrc={
-          stream.live ? undefined : previewStreamUrl(stream.url)
+          stream.live || streamTarget?.streamType === "file"
+            ? undefined
+            : previewStreamUrl(stream.url)
         }
-        mimeType={
-          stream.liveManifest === "hls"
-            ? "application/vnd.apple.mpegurl"
-            : "application/dash+xml"
-        }
+        mimeType={streamTarget?.mimeType}
         poster={stream.poster}
         mode={effectiveMode}
         onModeChange={setMode}

@@ -300,11 +300,19 @@ async def _head_upstream(
     )
 
 
-@router.get("/meta", response_model=StreamPreviewMeta)
-def preview_meta(url: str = Query(...), session: Session = Depends(get_session)):
-    cleaned = _require_video_url(url)
+def _e2e_fixture_meta(url: str):
+    from ..e2e_mode import enabled as e2e_browser
+
+    if not e2e_browser():
+        return None
+    from ..e2e_live import fixture_meta
+
+    return fixture_meta(url)
+
+
+def _extract_preview_meta(cleaned: str) -> dict:
     try:
-        meta = stream_preview.extract_stream_preview_meta(cleaned)
+        return stream_preview.extract_stream_preview_meta(cleaned)
     except MembersOnlyError as exc:
         raise HTTPException(
             status_code=400,
@@ -323,6 +331,14 @@ def preview_meta(url: str = Query(...), session: Session = Depends(get_session))
             logger.exception("stream preview meta failed for %r", cleaned)
             raise HTTPException(status_code=500, detail=detail) from exc
         raise HTTPException(status_code=400, detail=detail) from exc
+
+
+@router.get("/meta", response_model=StreamPreviewMeta)
+def preview_meta(url: str = Query(...), session: Session = Depends(get_session)):
+    cleaned = _require_video_url(url)
+    meta = _e2e_fixture_meta(cleaned)
+    if meta is None:
+        meta = _extract_preview_meta(cleaned)
 
     library_video_id = None
     yt_id = meta.get("id")
@@ -347,7 +363,31 @@ def preview_meta(url: str = Query(...), session: Session = Depends(get_session))
         library_video_id=library_video_id,
         available_presets=meta.get("available_presets") or [],
         subtitles=meta.get("subtitles") or [],
+        is_live=bool(meta.get("is_live")),
+        live_manifest=meta.get("live_manifest"),
     )
+
+
+@router.get("/stream")
+async def preview_stream(request: Request, url: str = Query(...)):
+    """Legacy progressive (<=720p) proxy — kept as fallback."""
+    cleaned = _require_video_url(url)
+    from ..e2e_mode import enabled as e2e_browser
+
+    if e2e_browser():
+        from ..e2e_live import fixture_stream
+
+        served = fixture_stream(request, cleaned)
+        if served is not None:
+            return served
+    try:
+        resolved = stream_preview.resolve_preview_stream(cleaned)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=400, detail=f"Could not open preview stream: {exc}"
+        ) from exc
+
+    return await _proxy_upstream(request, resolved, stream_url=cleaned)
 
 
 @router.get("/subtitles")
@@ -594,17 +634,3 @@ async def preview_media_head(
     return await _head_upstream(
         request, resolved, allow_refresh=(token, itag)
     )
-
-
-@router.get("/stream")
-async def preview_stream(request: Request, url: str = Query(...)):
-    """Legacy progressive (<=720p) proxy — kept as fallback."""
-    cleaned = _require_video_url(url)
-    try:
-        resolved = stream_preview.resolve_preview_stream(cleaned)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=400, detail=f"Could not open preview stream: {exc}"
-        ) from exc
-
-    return await _proxy_upstream(request, resolved, stream_url=cleaned)
