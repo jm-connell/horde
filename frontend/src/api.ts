@@ -8,6 +8,7 @@ import type {
   ChannelCatalogStatus,
   ChannelFeedPage,
   ChannelStat,
+  LiveChannel,
   DownloadBulkResult,
   DownloadJob,
   DownloadOverrides,
@@ -258,6 +259,10 @@ export const api = {
 
   ensureSprites(id: number): Promise<{ status: "ready" | "generating" }> {
     return request(`/api/videos/${id}/sprites/generate`, { method: "POST" });
+  },
+
+  listLiveChannels(): Promise<{ enabled: boolean; items: LiveChannel[] }> {
+    return request("/api/channels/live");
   },
 
   listChannels(params: ChannelQuery = {}): Promise<ChannelStat[]> {

@@ -46,6 +46,15 @@ Saved watch position resets after this many days of **inactivity**.
 | `channelSort` | `recent_download` | `recent_download` \| `video_count` \| `alphabetical` \| `subscriber_count` |
 | `channelOrder` | `desc` | `asc` \| `desc` |
 
+## Livestreams
+
+| Setting | Key | Default | Notes |
+|---------|-----|---------|--------|
+| Show live channels | `showLiveChannels` | `false` | Collapsible row under the navigation bar. Off skips the background YouTube check |
+| Live row expanded | `liveBarExpanded` | `true` | Remembers whether the channel bubbles are open. Not shown as its own control |
+
+Only channels already in the library, and only streams that are on the air right now. See [Channels — Live now](../guides/channels.md#live-now).
+
 ## Downloads
 
 Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Library).

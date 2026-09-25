@@ -82,6 +82,14 @@ Members-only, age-restricted, and private IDs go to `channel_catalog_skips`. Run
 
 Every **15 minutes** (first pass ~60s after startup), for each channel with autodownload enabled, run a feed-head sync of the newest uploads and enqueue matching videos into the download queue. Enabling autodownload from a channel page also syncs immediately. Jobs are created from catalog metadata (no per-video preview extract). See [Channels](../guides/channels.md#autodownload).
 
+## Live channel probe
+
+**Start:** `start_live_channel_worker()` after autodownload. The thread sleeps until **Settings → Library → Show live channels** is on.
+
+The worker walks library channels that have a YouTube URL, one extract at a time through the shared extract gate (background priority). Each probe hits that channel’s `/live` tab. A channel that is on the air is kept in an in-memory list (`GET /api/channels/live`); “not currently live” is a normal result and is not recorded as an extract failure. Confirmed-live channels are rechecked about every **3 minutes**, quiet channels about every **8 minutes**. The navigation row reads that cache. It does not call YouTube itself.
+
+Livestreams are still not downloaded while they are live. Playback is a separate preview path: the live DASH (or HLS) manifest is rewritten through Horde so the player can seek inside YouTube’s DVR window.
+
 ## Subtitle retry
 
 **Start:** `start_subtitle_retry_worker()` after autodownload.

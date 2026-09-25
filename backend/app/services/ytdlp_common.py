@@ -738,8 +738,12 @@ def extract_info_gated(
     channel: Optional[str] = None,
     cookie_retry: bool = True,
     priority: int = EXTRACT_PRIORITY_DOWNLOAD,
+    record_errors: bool = True,
 ) -> dict[str, Any]:
     """Run yt-dlp extract_info with global spacing + short result cache.
+
+    ``record_errors=False`` skips the health-panel failure record. Channel live
+    probes use it because "not currently live" is a normal result, not an outage.
 
     Feed cards, download previews, and stream previews all share this gate so
     scrolling a channel feed cannot open dozens of parallel YouTube sessions.
@@ -779,6 +783,8 @@ def extract_info_gated(
     ensure_plugins_loaded()
 
     def _record_failure(exc: BaseException) -> None:
+        if not record_errors:
+            return
         kind, message = classify_ytdlp_error(
             exc, url=url, title=title, channel=channel
         )
