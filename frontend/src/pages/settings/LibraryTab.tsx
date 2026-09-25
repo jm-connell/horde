@@ -211,6 +211,39 @@ export default function LibraryTab() {
       </Section>
 
       <Section
+        title="Livestreams"
+        description="Channels in your library that are on the air right now."
+        hidden={
+          !!q &&
+          !match(
+            "live",
+            "livestream",
+            "livestreams",
+            "live channels",
+            "on air",
+            "streaming"
+          )
+        }
+      >
+        <SettingRow
+          title="Show live channels"
+          description="A collapsible row under the navigation bar. Horde checks your YouTube channels in the background. Nothing is downloaded while a stream is still live. Playback can seek back through the part YouTube still offers."
+          hidden={
+            !!q &&
+            !match("live", "livestream", "livestreams", "live channels", "on air")
+          }
+          control={
+            <Toggle
+              checked={settings.showLiveChannels}
+              onChange={() =>
+                update({ showLiveChannels: !settings.showLiveChannels })
+              }
+            />
+          }
+        />
+      </Section>
+
+      <Section
         title="Downloads"
         description="Background download queue and navigation preferences."
         hidden={

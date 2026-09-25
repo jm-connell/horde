@@ -146,6 +146,9 @@ class StreamPreviewMeta(BaseModel):
     library_video_id: Optional[int] = None
     available_presets: list[str] = []
     subtitles: list[SubtitleTrack] = []
+    is_live: bool = False
+    # dash | hls | null — which live manifest playback should load.
+    live_manifest: Optional[str] = None
 
 
 class DownloadJobRead(BaseModel):
@@ -223,6 +226,20 @@ class ChannelStat(BaseModel):
     last_download_at: Optional[datetime] = None
     subscriber_count: Optional[int] = None
     channel_url: Optional[str] = None
+
+
+class LiveChannelRead(BaseModel):
+    channel: str
+    channel_url: str
+    video_id: str
+    url: str
+    title: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+
+
+class LiveChannelsResponse(BaseModel):
+    enabled: bool
+    items: list[LiveChannelRead] = []
 
 
 class ChannelSearchHit(BaseModel):

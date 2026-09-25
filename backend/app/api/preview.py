@@ -15,6 +15,7 @@ from starlette.background import BackgroundTask
 from ..database import get_session
 from ..schemas import StreamPreviewMeta
 from ..services import library, stream_preview
+from ..services import live_manifest
 from ..services.url_clean import _youtube_video_id, clean_url
 from ..services.ytdlp_common import (
     ERROR_KIND_UNKNOWN,
@@ -433,11 +434,25 @@ async def preview_subtitles(
     )
 
 
+def _manifest_bytes_response(
+    request: Request, body: bytes, media_type: str
+) -> Response:
+    headers = {"Cache-Control": "no-store"}
+    if request.method == "HEAD":
+        headers["Content-Length"] = str(len(body))
+        return Response(status_code=200, media_type=media_type, headers=headers)
+    return Response(content=body, media_type=media_type, headers=headers)
+
+
 @router.api_route("/manifest", methods=["GET", "HEAD"])
 def preview_manifest(request: Request, url: str = Query(...)):
-    """DASH MPD for adaptive high-res preview streaming."""
+    """DASH MPD for adaptive preview, or a rewritten live manifest."""
     cleaned = _require_video_url(url)
     try:
+        rendered = stream_preview.try_render_live_manifest(cleaned)
+        if rendered is not None:
+            body, media_type = rendered
+            return _manifest_bytes_response(request, body, media_type)
         session = stream_preview.resolve_preview_manifest(cleaned)
         xml = stream_preview.build_dash_manifest(session)
     except Exception as exc:  # noqa: BLE001
@@ -449,20 +464,78 @@ def preview_manifest(request: Request, url: str = Query(...)):
             ),
         ) from exc
 
-    headers = {"Cache-Control": "no-store"}
+    return _manifest_bytes_response(request, xml.encode("utf-8"), "application/dash+xml")
+
+
+@router.api_route("/live-media", methods=["GET", "HEAD"])
+async def preview_live_media(
+    request: Request,
+    token: str = Query(...),
+    u: str = Query(...),
+    kind: str = Query(""),
+):
+    """Proxy one live segment or child playlist from a rewritten manifest."""
+    if not token.strip() or not u.strip():
+        raise HTTPException(status_code=400, detail="token and u are required")
+    try:
+        resolved = live_manifest.resolve_upstream(token, u)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    playlist = kind == "playlist" or live_manifest.is_playlist_url(u)
+    if playlist:
+        return await _proxy_live_playlist(
+            request, resolved["direct_url"], dict(resolved.get("http_headers") or {}), token
+        )
     if request.method == "HEAD":
-        # Shaka / browsers probe with HEAD; body is omitted by the server.
-        headers["Content-Length"] = str(len(xml.encode("utf-8")))
+        return await _head_upstream(request, resolved)
+    return await _proxy_upstream(request, resolved)
+
+
+async def _proxy_live_playlist(
+    request: Request,
+    upstream: str,
+    headers: dict[str, str],
+    token: str,
+) -> Response:
+    client = get_preview_client()
+    upstream_headers = dict(headers)
+    range_header = request.headers.get("range")
+    if range_header:
+        upstream_headers["Range"] = range_header
+    try:
+        resp = await client.get(upstream, headers=upstream_headers)
+    except httpx.HTTPError as exc:
+        logger.warning("Live playlist fetch failed: %s", exc)
+        raise HTTPException(
+            status_code=502, detail=f"Upstream playlist failed: {exc}"
+        ) from exc
+    final = str(resp.url)
+    if not live_manifest.allowed_upstream(final):
+        raise HTTPException(status_code=400, detail="upstream host is not allowed")
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream returned {resp.status_code}",
+        )
+    text = live_manifest.rewrite_hls(resp.text, final, token)
+    body = text.encode("utf-8")
+    out_headers = {
+        "Cache-Control": "no-store",
+        "Content-Length": str(len(body)),
+    }
+    if request.method == "HEAD":
         return Response(
             status_code=200,
-            media_type="application/dash+xml",
-            headers=headers,
+            media_type="application/vnd.apple.mpegurl",
+            headers=out_headers,
         )
-
     return Response(
-        content=xml,
-        media_type="application/dash+xml",
-        headers=headers,
+        content=body,
+        media_type="application/vnd.apple.mpegurl",
+        headers=out_headers,
     )
 
 

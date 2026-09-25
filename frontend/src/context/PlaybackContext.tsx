@@ -45,6 +45,9 @@ export interface StreamSession {
   /** Channel query for expand / back navigation. */
   channelParam?: string | null;
   subtitles?: SubtitleTrack[];
+  /** Active livestream. The player keeps the DVR timeline and normal controls. */
+  live?: boolean;
+  liveManifest?: "dash" | "hls" | null;
 }
 
 export type MiniPlayerRect = {
@@ -918,8 +921,16 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         key={`stream:${stream.url}`}
         src={previewManifestUrl(stream.url)}
         streamType="dash"
-        progressiveFallbackSrc={previewStreamUrl(stream.url)}
-        mimeType="application/dash+xml"
+        live={stream.live === true}
+        liveHls={stream.liveManifest === "hls"}
+        progressiveFallbackSrc={
+          stream.live ? undefined : previewStreamUrl(stream.url)
+        }
+        mimeType={
+          stream.liveManifest === "hls"
+            ? "application/vnd.apple.mpegurl"
+            : "application/dash+xml"
+        }
         poster={stream.poster}
         mode={effectiveMode}
         onModeChange={setMode}

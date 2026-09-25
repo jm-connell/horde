@@ -33,6 +33,13 @@ import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 import type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
 import { scrubPositionFromClientX } from "./playerSeek";
 import {
+  atLiveEdge,
+  clampSeek,
+  liveEdgeTarget,
+  readSeekWindow,
+  type SeekWindow,
+} from "./liveTimeline";
+import {
   abrRestrictions,
   qualityMenuLabel,
   streamQualityToChoice,
@@ -146,6 +153,10 @@ interface Props {
   src: string;
   /** Progressive local/remote file (default) or adaptive DASH manifest. */
   streamType?: StreamType;
+  /** Active livestream. The timeline is the DVR window, not a finished file. */
+  live?: boolean;
+  /** Live manifest is HLS, so Shaka loads the full build instead of DASH-only. */
+  liveHls?: boolean;
   /**
    * Progressive (<=720p) URL used when DASH is unsupported or fails critically.
    * Typically `/api/preview/stream?url=...`.
@@ -208,6 +219,8 @@ interface Props {
 export default function VideoPlayer({
   src,
   streamType = "file",
+  live = false,
+  liveHls = false,
   progressiveFallbackSrc,
   videoId,
   mimeType = "video/mp4",
@@ -264,6 +277,11 @@ export default function VideoPlayer({
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [liveWindow, setLiveWindow] = useState<SeekWindow | null>(null);
+  const liveRef = useRef(live);
+  const liveWindowRef = useRef<SeekWindow | null>(null);
+  liveRef.current = live;
+  liveWindowRef.current = liveWindow;
   const [volume, setVolume] = useState(volumeProp ?? 1);
   const [muted, setMuted] = useState(false);
   const [captionLang, setCaptionLang] = useState<string | null>(null);
@@ -460,7 +478,7 @@ export default function VideoPlayer({
   }, []);
 
   const enterCompatMode = useCallback(() => {
-    if (!progressiveFallbackSrc) return false;
+    if (live || !progressiveFallbackSrc) return false;
     const el = videoRef.current;
     if (el && Number.isFinite(el.currentTime) && el.currentTime > 1) {
       pendingSeekRef.current = el.currentTime;
@@ -474,7 +492,7 @@ export default function VideoPlayer({
     setBuffering(true);
     showQualityNotice("Reduced quality (compatibility mode)");
     return true;
-  }, [progressiveFallbackSrc, showQualityNotice]);
+  }, [live, progressiveFallbackSrc, showQualityNotice]);
 
   useEffect(() => {
     suppressedSegmentsRef.current.clear();
@@ -516,9 +534,35 @@ export default function VideoPlayer({
     };
   }, []);
 
+  useEffect(() => {
+    if (!live) {
+      setLiveWindow(null);
+      return;
+    }
+    const tick = () => {
+      const next = readSeekWindow(videoRef.current?.seekable ?? null);
+      if (!next) return;
+      setLiveWindow((prev) => {
+        if (
+          prev &&
+          Math.abs(prev.start - next.start) < 0.25 &&
+          Math.abs(prev.end - next.end) < 0.25
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [live, src]);
+
   useShakaDashLoad({
     src,
     effectiveStreamType,
+    live,
+    liveHls,
     dashReloadToken,
     mediaSuspended,
     videoRef,
@@ -1001,7 +1045,11 @@ export default function VideoPlayer({
 
   const seekTo = useCallback(
     (sec: number) => {
-      const t = Math.max(0, sec);
+      const bounds = liveRef.current
+        ? readSeekWindow(videoRef.current?.seekable ?? null) ??
+          liveWindowRef.current
+        : null;
+      const t = bounds ? clampSeek(sec, bounds) : Math.max(0, sec);
       const from = Math.max(
         videoRef.current?.currentTime ?? 0,
         prevTimeRef.current,
@@ -1267,14 +1315,18 @@ export default function VideoPlayer({
     (clientX: number, hoverOnly = false) => {
       const el = scrubberRef.current;
       if (!el) return;
+      const seekWindow = liveRef.current ? liveWindowRef.current : null;
+      const start = seekWindow?.start ?? 0;
+      const end = seekWindow ? seekWindow.end : duration;
       const pos = scrubPositionFromClientX(
         clientX,
         el.getBoundingClientRect(),
-        duration,
+        end - start,
       );
       if (!pos) return;
-      setScrubHover(pos);
-      if (!hoverOnly) seekTo(pos.time);
+      const absolute = start + pos.time;
+      setScrubHover({ time: absolute, pct: pos.pct });
+      if (!hoverOnly) seekTo(absolute);
     },
     [duration, seekTo],
   );
@@ -1356,8 +1408,10 @@ export default function VideoPlayer({
       } else if (e.key === "Escape" && mode === "windowed") {
         onModeChange(modeBeforeWindowed.current);
       } else if (e.key === "ArrowRight" && videoRef.current) {
+        if (liveRef.current) e.preventDefault();
         seekTo(videoRef.current.currentTime + 5);
       } else if (e.key === "ArrowLeft" && videoRef.current) {
+        if (liveRef.current) e.preventDefault();
         seekTo(videoRef.current.currentTime - 5);
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
@@ -1411,8 +1465,11 @@ export default function VideoPlayer({
   const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const t = Number(e.target.value);
     seekTo(t);
-    if (duration > 0) {
-      setScrubHover({ time: t, pct: (t / duration) * 100 });
+    const seekWindow = liveRef.current ? liveWindowRef.current : null;
+    const start = seekWindow?.start ?? 0;
+    const span = (seekWindow ? seekWindow.end : duration) - start;
+    if (span > 0) {
+      setScrubHover({ time: t, pct: ((t - start) / span) * 100 });
     }
   };
 
@@ -1837,10 +1894,26 @@ export default function VideoPlayer({
 
   useEffect(() => () => clearHideControlsTimer(), [clearHideControlsTimer]);
 
-  const progressPct = duration > 0 ? (current / duration) * 100 : 0;
+  const timeline = live ? liveWindow : null;
+  const timelineStart = timeline?.start ?? 0;
+  const timelineEnd = timeline ? timeline.end : duration;
+  const timelineSpan = timelineEnd - timelineStart;
+  const progressPct =
+    timelineSpan > 0
+      ? Math.min(
+          100,
+          Math.max(0, ((current - timelineStart) / timelineSpan) * 100),
+        )
+      : 0;
+  const clockCurrent = timeline
+    ? Math.max(0, current - timelineStart)
+    : current;
+  const clockDuration = timeline ? timelineSpan : duration;
+  const scrubClock = (time: number) =>
+    timeline ? Math.max(0, time - timelineStart) : time;
 
   const scrubPreview =
-    scrubHover && duration > 0
+    scrubHover && timelineSpan > 0
       ? (() => {
           const { time, pct } = scrubHover;
           let tileStyle: React.CSSProperties | undefined;
@@ -2053,12 +2126,22 @@ export default function VideoPlayer({
           onCanPlay={hideBuffering}
           onLoadedMetadata={(e) => {
             const el = e.currentTarget;
-            setDuration(el.duration);
+            if (live) {
+              const next = readSeekWindow(el.seekable);
+              if (next) setLiveWindow(next);
+            } else if (Number.isFinite(el.duration)) {
+              setDuration(el.duration);
+            }
             if (el.videoWidth > 0 && el.videoHeight > 0) {
               setVideoAspect(el.videoWidth / el.videoHeight);
             }
             const seekTarget = pendingSeekRef.current;
-            if (seekTarget > 1 && seekTarget < el.duration) {
+            if (
+              !live &&
+              seekTarget > 1 &&
+              Number.isFinite(el.duration) &&
+              seekTarget < el.duration
+            ) {
               el.currentTime = seekTarget;
             }
             pendingSeekRef.current = 0;
@@ -2234,12 +2317,12 @@ export default function VideoPlayer({
                       {hoveredChapter ? (
                         <>
                           <span className="font-mono text-accent">
-                            {formatTimestamp(hoveredChapter.startSec)}
+                            {formatTimestamp(scrubClock(hoveredChapter.startSec))}
                           </span>{" "}
                           {hoveredChapter.title}
                         </>
                       ) : (
-                        formatTimestamp(scrubPreview.time)
+                        formatTimestamp(scrubClock(scrubPreview.time))
                       )}
                     </span>
                   </div>
@@ -2247,10 +2330,14 @@ export default function VideoPlayer({
               )}
               <input
                 type="range"
-                min={0}
-                max={duration || 0}
+                min={timelineStart}
+                max={timelineSpan > 0 ? timelineEnd : 0}
                 step={0.1}
-                value={current}
+                value={
+                  timelineSpan > 0
+                    ? Math.min(timelineEnd, Math.max(timelineStart, current))
+                    : 0
+                }
                 onChange={onSeek}
                 className="pointer-events-none accent-scrubber w-full"
                 aria-label="Seek"
@@ -2259,7 +2346,7 @@ export default function VideoPlayer({
                 }}
               />
               {/* Chapter markers */}
-              {chapters.length > 0 && duration > 0 && (
+              {chapters.length > 0 && timelineSpan > 0 && (
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-full">
                   {chapters.slice(1).map((ch, i) => {
                     const chapterIndex = i + 1;
@@ -2268,12 +2355,15 @@ export default function VideoPlayer({
                       chapterIndex,
                       current,
                     );
+                    const pct =
+                      ((ch.startSec - timelineStart) / timelineSpan) * 100;
+                    if (pct < 0 || pct > 100) return null;
                     return (
                       <button
                         key={ch.startSec}
                         type="button"
                         className="group pointer-events-auto absolute top-1/2 z-10 h-4 w-3 -translate-x-1/2 -translate-y-1/2"
-                        style={{ left: `${(ch.startSec / duration) * 100}%` }}
+                        style={{ left: `${pct}%` }}
                         onPointerEnter={() => setHoveredChapterSec(ch.startSec)}
                         onPointerLeave={() => setHoveredChapterSec(null)}
                         onPointerDown={(e) => {
@@ -2285,7 +2375,7 @@ export default function VideoPlayer({
                           e.preventDefault();
                           e.stopPropagation();
                         }}
-                        title={`${formatTimestamp(ch.startSec)} — ${ch.title}`}
+                        title={`${formatTimestamp(scrubClock(ch.startSec))} — ${ch.title}`}
                       >
                         <span
                           className={`absolute left-1/2 top-1/2 block h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors ${
@@ -2369,8 +2459,26 @@ export default function VideoPlayer({
                 </div>
               )}
 
-              <span className="text-xs tabular-nums text-gray-300">
-                {formatDuration(current)} / {formatDuration(duration)}
+              <span className="flex items-center gap-2 text-xs tabular-nums text-gray-300">
+                {formatDuration(clockCurrent)} / {formatDuration(clockDuration)}
+                {timeline && (
+                  <button
+                    type="button"
+                    onClick={() => seekTo(liveEdgeTarget(timeline))}
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide ${
+                      atLiveEdge(current, timeline)
+                        ? "bg-red-600 text-white"
+                        : "border border-red-500/80 text-red-300"
+                    }`}
+                    title={
+                      atLiveEdge(current, timeline)
+                        ? "At the live edge"
+                        : "Jump to live"
+                    }
+                  >
+                    LIVE
+                  </button>
+                )}
                 {chapters.length > 0 &&
                   (() => {
                     const ch = activeChapterAt(chapters, current);

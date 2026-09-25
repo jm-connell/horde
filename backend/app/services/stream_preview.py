@@ -29,6 +29,7 @@ from .ytdlp_common import (
     youtube_extractor_args,
 )
 from .ytdlp_extract import _best_thumbnail_url
+from . import live_manifest
 from .ytdlp_formats import _available_presets, pick_original_audio_format
 
 
@@ -635,6 +636,40 @@ def _segment_base_xml(rep: dict[str, Any]) -> list[str]:
     ]
 
 
+def _live_manifest_kind(info: dict[str, Any]) -> Optional[str]:
+    if not live_manifest.info_is_live(info):
+        return None
+    try:
+        _url, kind, _headers = live_manifest.pick_live_manifest(info)
+    except ValueError:
+        return None
+    return kind
+
+
+def try_render_live_manifest(url: str) -> Optional[tuple[bytes, str]]:
+    """Rewritten live manifest, or None when the video is not currently live.
+
+    A 403 on the manifest URL refreshes the yt-dlp extract once. CDN links
+    for a live stream expire faster than a VOD preview session.
+    """
+    info = _extract_preview_info(url)
+    if not live_manifest.info_is_live(info):
+        return None
+
+    def _render(current: dict[str, Any]) -> tuple[bytes, str]:
+        return live_manifest.render(current, source_url=url)
+
+    try:
+        return _render(info)
+    except live_manifest.ManifestFetchError as exc:
+        if exc.status_code not in (401, 403, 404):
+            raise
+        info = _extract_preview_info(url, force=True)
+        if not live_manifest.info_is_live(info):
+            return None
+        return _render(info)
+
+
 def extract_stream_preview_meta(url: str) -> dict[str, Any]:
     """Metadata for the in-app preview page (includes description for chapters)."""
     info = _extract_preview_info(url)
@@ -676,6 +711,8 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
         "preview_height": preview_height,
         "available_presets": _available_presets(info),
         "subtitles": subtitles,
+        "is_live": live_manifest.info_is_live(info),
+        "live_manifest": _live_manifest_kind(info),
     }
 
 
