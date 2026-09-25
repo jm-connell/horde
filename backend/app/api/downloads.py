@@ -145,6 +145,22 @@ def list_presets():
 def preview_download(url: str):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
+    from ..e2e_mode import enabled as e2e_browser
+
+    if e2e_browser():
+        # Let the download form render a preview without calling yt-dlp.
+        return DownloadPreview(
+            is_playlist=False,
+            title="E2E preview clip",
+            channel="Northwind",
+            channel_url=None,
+            thumbnail_url=None,
+            entry_count=1,
+            view_count=10,
+            published_at=None,
+            available_presets=["720p", "1080p"],
+            preset_sizes={"720p": 1_000_000, "1080p": 4_000_000},
+        )
     cleaned = clean_url(url, keep_playlist=True)
     try:
         return downloader.extract_preview(cleaned)

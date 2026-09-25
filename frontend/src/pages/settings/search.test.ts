@@ -21,6 +21,9 @@ describe("settings search routing", () => {
     expect(firstMatchingTab("self promo")).toBe("playback");
     expect(firstMatchingTab("filler")).toBe("playback");
     expect(firstMatchingTab("ask to skip")).toBe("playback");
+    expect(firstMatchingTab("comet")).toBe("appearance");
+    expect(firstMatchingTab("leapfrog")).toBe("appearance");
+    expect(firstMatchingTab("equalizer")).toBe("appearance");
     expect(firstMatchingTab("custom css")).toBe("appearance");
     expect(firstMatchingTab("enable custom css")).toBe("appearance");
     expect(firstMatchingTab("jellyfin")).toBe("appearance");

@@ -10,7 +10,7 @@ After changes to `VideoPlayer.tsx`, `useShakaDash`, or player overlays, verify o
 6. Captions on / off with a multi-track video
 7. Cast button still mounts (Chromecast / AirPlay affordances present)
 
-No Playwright coverage for these paths yet — manual smoke is the gate after player changes. Automated CI covers API/library/queue/settings regressions and the production image build; it does **not** drive the browser player. See [Automated testing](../getting-started/testing.md) and [Local development](../getting-started/local-dev.md).
+Playwright covers watch-page chrome (metadata, chapters, theater, speed, mute) with a one-frame file. It does not decode DASH, reparent the mini-player, or mount Cast. Manual smoke is still the gate for those paths. See [Automated testing](../getting-started/testing.md) and [Local development](../getting-started/local-dev.md).
 
 ## Related
 

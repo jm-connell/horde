@@ -104,7 +104,7 @@ Scanner import extensions: **`.mp4`**, **`.mkv`**, **`.webm`**. Fallback poll in
 
 ## Tests
 
-See **[Automated testing](testing.md)** for the intended layers (pytest API tests, Vitest, MkDocs, Docker image), local commands, and how GitHub Actions runs the same jobs on every **push**, **pull request**, and manual **Run workflow**.
+See **[Automated testing](testing.md)** for the intended layers (pytest API tests, Vitest, Playwright, MkDocs, Docker image), local commands, and how GitHub Actions runs the same jobs on every **push**, **pull request**, and manual **Run workflow**.
 
 Backend (from `backend/`, with the repo venv activated):
 
@@ -119,6 +119,8 @@ Frontend:
 cd frontend
 npm install
 npm test
+npx playwright install chromium
+npm run e2e
 ```
 
 CI is `.github/workflows/ci.yml`.
