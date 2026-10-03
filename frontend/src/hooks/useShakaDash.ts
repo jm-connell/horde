@@ -33,6 +33,10 @@ import type { StreamType } from "../components/videoPlayerTypes";
 export interface UseShakaDashArgs {
   src: string;
   effectiveStreamType: StreamType;
+  /** Livestream DVR: keep backward seeks, and do not snap back to the live edge. */
+  live?: boolean;
+  /** HLS live manifests need the full Shaka build; DASH uses the smaller one. */
+  liveHls?: boolean;
   dashReloadToken: number;
   /** Drop the live DASH session without unmounting the player chrome. */
   mediaSuspended?: boolean;
@@ -59,6 +63,8 @@ export interface UseShakaDashArgs {
 export function useShakaDashLoad({
   src,
   effectiveStreamType,
+  live = false,
+  liveHls = false,
   dashReloadToken,
   mediaSuspended = false,
   videoRef,
@@ -118,7 +124,9 @@ export function useShakaDashLoad({
         await destroyQueueRef.current;
         if (cancelled || !videoRef.current) return;
 
-        const mod = await import("shaka-player/dist/shaka-player.dash.js");
+        const mod = liveHls
+          ? await import("shaka-player/dist/shaka-player.compiled.js")
+          : await import("shaka-player/dist/shaka-player.dash.js");
         const shaka = mod as unknown as ShakaNamespace;
         if (cancelled || !videoRef.current) return;
 
@@ -171,9 +179,18 @@ export function useShakaDashLoad({
 
         p.configure({
           streaming: {
-            bufferingGoal: 30,
-            rebufferingGoal: 4,
-            bufferBehind: 60,
+            bufferingGoal: live ? 24 : 30,
+            rebufferingGoal: live ? 2 : 4,
+            // A few minutes behind the playhead stay buffered so 5s seeks
+            // are instant. Older DVR seeks rebuffer from the manifest window.
+            bufferBehind: live ? 180 : 60,
+            ...(live
+              ? {
+                  // Default live-sync speeds up or jumps to the edge after a
+                  // backward seek. Leave the playhead where the viewer put it.
+                  liveSync: { enabled: false },
+                }
+              : {}),
             stallEnabled: true,
             stallThreshold: 1,
             stallSkip: 0.1,
@@ -297,6 +314,8 @@ export function useShakaDashLoad({
   }, [
     src,
     effectiveStreamType,
+    live,
+    liveHls,
     dashReloadToken,
     mediaSuspended,
     enterCompatMode,
