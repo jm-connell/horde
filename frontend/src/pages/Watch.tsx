@@ -243,12 +243,14 @@ export default function Watch() {
       sourceUrl: source.meta.source_url,
       channelParam: channelParam || source.meta.channel,
       subtitles: source.meta.subtitles ?? [],
+      live: source.meta.is_live === true,
+      liveManifest: source.meta.live_manifest ?? null,
     });
   }, [source, channelParam, playStream]);
 
   // Resolve download presets for stream
   useEffect(() => {
-    if (source?.kind !== "stream") return;
+    if (source?.kind !== "stream" || source.meta.is_live) return;
     const { url, meta } = source;
     let cancelled = false;
     const applyPresets = (presetsList: string[]) => {
@@ -650,7 +652,7 @@ export default function Watch() {
   };
 
   async function handleStreamDownload() {
-    if (source?.kind !== "stream" || queuing) return;
+    if (source?.kind !== "stream" || source.meta.is_live || queuing) return;
     setPresetMenuOpen(false);
     setQueuing(true);
     try {
@@ -993,7 +995,12 @@ export default function Watch() {
                   {isLibrary && (
                     <span>{formatSize(source.video.file_size)}</span>
                   )}
-                  {!isLibrary && source.meta.duration != null && (
+                  {!isLibrary && source.meta.is_live && (
+                    <span className="font-medium text-red-400">Live</span>
+                  )}
+                  {!isLibrary &&
+                    !source.meta.is_live &&
+                    source.meta.duration != null && (
                     <span>{formatDuration(source.meta.duration)}</span>
                   )}
                   {!isLibrary && source.meta.view_count != null && (
@@ -1021,7 +1028,12 @@ export default function Watch() {
                         {Math.round(source.video.frame_rate)}fps
                       </span>
                     )}
-                  {!isLibrary && !downloadActive && (
+                  {!isLibrary && source.meta.is_live && !downloadActive && (
+                    <span className="text-xs text-gray-500">
+                      Livestreams are saved after they end.
+                    </span>
+                  )}
+                  {!isLibrary && !source.meta.is_live && !downloadActive && (
                     <div className="relative" ref={downloadMenuRef}>
                       <div className="inline-flex overflow-hidden rounded-lg bg-accent text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60">
                         <button

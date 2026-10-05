@@ -81,6 +81,8 @@ Keyboard shortcuts live in the [player guide](guides/player.md) and the [shortcu
 
 You can play a remote YouTube URL in the same shell (`/watch?url=…`) to preview before committing disk. Adaptive DASH when available. This path is **somewhat fragile** and quality can vary from video to video. Streaming is not the primary focus — preview, then download. When a download started from preview **completes**, Horde hands off to the local file and keeps your place where it can.
 
+With **Show live channels** on (Settings → Library), a collapsible row under the navigation lists library channels that are on the air. Those open in the same player, including seeking back through the current DVR window. Horde does not download a stream until it has ended.
+
 ## Playlists
 
 Create your own lists, import a YouTube playlist in one shot, or **subscribe** so new parts append on a schedule (about hourly). Sync never deletes files. Add videos from the playlist page, from library bulk select, or from recent downloads.

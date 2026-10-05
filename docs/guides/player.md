@@ -71,6 +71,12 @@ Stream preview uses adaptive **DASH** (Shaka) when available. Quality choices:
 
 Library files typically play as progressive local media; if DASH fails on a stream, Horde falls back to a progressive URL when possible.
 
+## Livestreams
+
+A channel that is on the air plays in this same player. The timeline is the seekable DVR window YouTube still offers: drag it, or use ++arrow-left++ / ++arrow-right++ for **5 seconds**. Pause, speed, volume, captions, chapters, theater, windowed, and the mini player stay available. **LIVE** on the time readout jumps back to the edge when you have seeked backward. A livestream with no DASH or HLS manifest plays the progressive file, and the timeline is still that file's seekable range.
+
+Seeking cannot go past the live edge, and it cannot go further back than that DVR window. SponsorBlock and a download button apply after the stream has finished and is a normal video.
+
 ## Picture-in-Picture
 
 Use the PiP control (or browser PiP) to keep video visible while browsing. When PiP (or iOS native fullscreen) owns the pixels, Horde switches to native text tracks so captions still work.

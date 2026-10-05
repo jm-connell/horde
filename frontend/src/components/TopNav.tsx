@@ -11,6 +11,7 @@ import {
   notifyImportQueueChanged,
 } from "../utils/importQueue";
 import Collapse from "./Collapse";
+import LiveChannelBar from "./LiveChannelBar";
 import LiquidNav from "./LiquidNav";
 import YoutubeSearchChip from "./YoutubeSearchChip";
 
@@ -42,7 +43,7 @@ export default function TopNav() {
   const [navH, setNavH] = useState(56);
   const { activeCount } = useDownloads();
   const { search, setSearch, commitSearch } = useSearch();
-  const [settings] = useSettings();
+  const [settings, updateSettings] = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
   const { mode, videoFrameInset } = usePlayback();
@@ -454,6 +455,14 @@ export default function TopNav() {
             </div>
           )}
         </div>
+        <LiveChannelBar
+          enabled={settings.showLiveChannels}
+          expanded={settings.liveBarExpanded}
+          inset={isTheaterWide ? videoFrameInset : null}
+          onToggle={() =>
+            updateSettings({ liveBarExpanded: !settings.liveBarExpanded })
+          }
+        />
       </header>
       {useHamburger && menuRendered && (
         <>

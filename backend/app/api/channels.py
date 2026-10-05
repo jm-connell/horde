@@ -24,8 +24,11 @@ from ..schemas import (
     ChannelSearchHit,
     ChannelSearchResponse,
     ChannelStat,
+    LiveChannelRead,
+    LiveChannelsResponse,
 )
 from ..services import channel_autodownload, channel_catalog, downloader, feed_meta_cache, library
+from ..services import live_channels
 from ..services import app_settings as app_settings_svc
 from ..services.ytdlp_common import cookie_configured, is_members_only_entry
 from ..services.ytdlp_extract import (
@@ -35,6 +38,22 @@ from ..services.ytdlp_extract import (
 from .video_serialize import to_read
 
 router = APIRouter(prefix="/api", tags=["channels"])
+
+@router.get("/channels/live", response_model=LiveChannelsResponse)
+def list_live_channels():
+    """Channels in the library that are streaming right now.
+
+    Empty when the navigation toggle is off. The list is filled by a background
+    probe; this route does not call YouTube.
+    """
+    enabled = live_channels.listing_enabled()
+    if not enabled:
+        return LiveChannelsResponse(enabled=False, items=[])
+    return LiveChannelsResponse(
+        enabled=True,
+        items=[LiveChannelRead(**row) for row in live_channels.snapshot()],
+    )
+
 
 @router.get("/channels", response_model=list[ChannelStat])
 def list_channels(

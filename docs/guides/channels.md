@@ -72,6 +72,14 @@ YouTube channel pages have an **Autodownload** button in the header. It opens a 
 
 The modal always warns that this can use a lot of storage. **All previous** is limited by the [catalog max videos](#max-videos-per-channel) cap (default 1000) and shows a stronger warning.
 
+## Live now
+
+**Settings → Library → Show live channels** adds a collapsible row under the top navigation. Horde checks YouTube channels already in your library and lists the ones that are on the air, as small channel bubbles. Past streams stay out of that row.
+
+Open a bubble to watch in the normal player. You can pause, change speed, use captions and chapters when the stream has them, and seek backward with the timeline or the arrow keys (5 seconds). How far back you can go is the DVR window YouTube still publishes, not the whole history of the channel. A **LIVE** control jumps back to the edge.
+
+Horde does not download a stream while it is still live. Finished recordings follow the autodownload rule above.
+
 After autodownload is on, the header button stays highlighted and reopens the same modal so you can change settings or turn it off. Turning it off does **not** cancel jobs already in the download queue.
 
 Horde finds new uploads from the channel catalog (opening the feed, periodic catalog refresh, and a dedicated autodownload poll every 15 minutes). YouTube Shorts are not autodownloaded.

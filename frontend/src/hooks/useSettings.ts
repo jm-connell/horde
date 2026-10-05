@@ -201,6 +201,10 @@ export interface Settings {
   lastCustomChannel: string;
   showContinueWatching: boolean;
   showDownloadNavBadge: boolean;
+  /** Collapsible row of channels that are live right now. */
+  showLiveChannels: boolean;
+  /** Whether that row is expanded to channel bubbles. */
+  liveBarExpanded: boolean;
   normalizeVolumeOnDownload: boolean;
   downloadVideoCodec: DownloadVideoCodec;
   channelSort: ChannelSort;
@@ -281,6 +285,8 @@ const DEFAULTS: Settings = {
   lastCustomChannel: "",
   showContinueWatching: true,
   showDownloadNavBadge: true,
+  showLiveChannels: false,
+  liveBarExpanded: true,
   normalizeVolumeOnDownload: true,
   downloadVideoCodec: "av1",
   channelSort: "recent_download",
@@ -348,6 +354,8 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "playbackMode",
   "showContinueWatching",
   "showDownloadNavBadge",
+  "showLiveChannels",
+  "liveBarExpanded",
   "normalizeVolumeOnDownload",
   "downloadVideoCodec",
   "channelSort",
@@ -952,6 +960,14 @@ function normalizeSettings(
     ),
     previewMuted: normalizeBool(parsed.previewMuted, DEFAULTS.previewMuted),
     downloadVideoCodec: normalizeDownloadVideoCodec(parsed.downloadVideoCodec),
+    showLiveChannels: normalizeBool(
+      parsed.showLiveChannels,
+      DEFAULTS.showLiveChannels
+    ),
+    liveBarExpanded: normalizeBool(
+      parsed.liveBarExpanded,
+      DEFAULTS.liveBarExpanded
+    ),
     ...normalizeFontSettings(parsed),
   };
 }
