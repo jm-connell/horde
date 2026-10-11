@@ -27,6 +27,7 @@ import {
   resolveLibraryChapters,
   type Chapter,
 } from "../utils";
+import { mergePlayingVideo } from "../utils/playingVideo";
 import { shouldSuspendPlaybackForWatch } from "../utils/watchHandoff";
 import {
   clampMiniPos,
@@ -714,17 +715,24 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   );
 
   const refreshCurrentVideo = useCallback(() => {
-    if (!current) return;
+    if (current?.id == null) return;
+    const id = current.id;
     api
-      .getVideo(current.id)
-      .then(setCurrent)
+      .getVideo(id)
+      .then((video) => {
+        setCurrent((prev) => {
+          if (!prev) return prev;
+          return mergePlayingVideo(prev, video) ?? prev;
+        });
+      })
       .catch(() => undefined);
-  }, [current]);
+  }, [current?.id]);
 
   const updateCurrentVideo = useCallback((video: Video) => {
-    setCurrent((prev) =>
-      prev?.id === video.id ? { ...prev, ...video } : prev,
-    );
+    setCurrent((prev) => {
+      if (!prev) return prev;
+      return mergePlayingVideo(prev, video) ?? prev;
+    });
   }, []);
 
   useEffect(() => {

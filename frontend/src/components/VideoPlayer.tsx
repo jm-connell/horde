@@ -38,6 +38,7 @@ import {
   streamQualityToChoice,
   type QualityChoice,
 } from "./videoPlayerQuality";
+import { shouldApplyResumePosition } from "./videoPlayerResume";
 import {
   sponsorSegmentKey,
   suppressSponsorSegmentsOnBackwardSeek,
@@ -355,6 +356,8 @@ export default function VideoPlayer({
   const prevTimeRef = useRef(0);
   const isSeekingRef = useRef(false);
   const pendingSeekRef = useRef(initialPosition);
+  /** Src we last treated as a new playback target for the resume seek. */
+  const resumeSourceRef = useRef<string | null>(null);
   const [buffering, setBuffering] = useState(true);
   const bufferingShowTimer = useRef<number | null>(null);
   const mediaSuspendedRef = useRef(mediaSuspended);
@@ -419,8 +422,23 @@ export default function VideoPlayer({
     compatMode && progressiveFallbackSrc ? progressiveFallbackSrc : src;
 
   useEffect(() => {
-    pendingSeekRef.current = initialPosition;
     const el = videoRef.current;
+    const sourceChanged = resumeSourceRef.current !== src;
+    if (sourceChanged) resumeSourceRef.current = src;
+    // Once this file is playing, ignore resume updates. Preview generation
+    // (and other background jobs) refresh the video row and republish a
+    // saved position that lags the playhead by 1-2s about every 5s.
+    if (
+      !shouldApplyResumePosition({
+        currentTime: el?.currentTime ?? 0,
+        resumeAt: initialPosition,
+        sourceChanged,
+      })
+    ) {
+      if (sourceChanged) pendingSeekRef.current = 0;
+      return;
+    }
+    pendingSeekRef.current = initialPosition;
     if (!el || initialPosition <= 1) return;
     // Do not treat a leftover Shaka MediaSource as "already loaded" file
     // metadata — seeking/playing on it hangs after preview → library handoff.
