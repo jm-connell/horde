@@ -81,8 +81,13 @@ export function usePlaybackHealth({
         const tracks = player.getVariantTracks() ?? [];
         const active = tracks.find((t) => t.active);
         const currentQuality = active ? trackQuality(active) : 2160;
+        // Step down a single rung. Jumping straight to a low rung (the old
+        // `?? 480` fallback) over-corrected badly: a brief hiccup on a 2160p
+        // AV1 stream could pin Auto to 1080p/480p even though a milder step
+        // plays perfectly.
         const nextQuality =
-          QUALITY_STEPS.find((q) => q < currentQuality) ?? 480;
+          QUALITY_STEPS.find((q) => q < currentQuality) ??
+          QUALITY_STEPS[QUALITY_STEPS.length - 1];
         const isAv1 = (active?.videoCodec ?? "")
           .toLowerCase()
           .startsWith("av01");

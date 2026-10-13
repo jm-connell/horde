@@ -201,7 +201,14 @@ export async function probeDecodeSupport(): Promise<DecodeSupport> {
 }
 
 const DOWNGRADE_KEY = "horde.decode-downgrade.v1";
-const DOWNGRADE_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * Auto-downgrades are a short-lived safety net, not a permanent verdict.
+ * A decoder that dropped frames once (background tab, thermal throttling,
+ * a transient 4K AV1 hiccup) should not pin Auto to 480p for a whole day.
+ */
+const DOWNGRADE_TTL_MS = 30 * 60 * 1000;
+/** A downgrade this fresh is trusted to cap the next load without re-probing. */
+const DOWNGRADE_TRUST_MS = 10 * 60 * 1000;
 
 export type DowngradeRecord = {
   maxHeight: number;
@@ -237,6 +244,18 @@ export function writeDowngrade(record: Omit<DowngradeRecord, "at">): void {
   } catch {
     // ignore
   }
+}
+
+/**
+ * True when a recorded downgrade is recent enough to still reflect reality.
+ * Older records are ignored for Auto so a one-off stall cannot pin quality
+ * for the rest of the session; the health monitor will re-downgrade if the
+ * problem is real.
+ */
+export function isDowngradeFresh(record: DowngradeRecord | null): boolean {
+  if (!record) return false;
+  if (typeof record.at !== "number") return false;
+  return Date.now() - record.at <= DOWNGRADE_TRUST_MS;
 }
 
 /** Clear a persisted auto-downgrade (e.g. user explicitly picks 4K / AV1). */

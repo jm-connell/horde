@@ -18,6 +18,7 @@ import type {
 } from "shaka-player/dist/shaka-player.dash.js";
 import {
   probeDecodeSupport,
+  isDowngradeFresh,
   readBandwidthEstimate,
   readDowngrade,
   trackQuality,
@@ -29,6 +30,22 @@ import {
   type QualityChoice,
 } from "../components/videoPlayerQuality";
 import type { StreamType } from "../components/videoPlayerTypes";
+
+/**
+ * Rough bitrate budget for a ladder height, used to seed Shaka's ABR with an
+ * optimistic starting estimate. Values are slightly above YouTube's typical
+ * bitrate for that rung so ABR begins near the device ceiling and steps down
+ * only if the network actually objects.
+ */
+function bandwidthForHeight(height: number): number {
+  if (!Number.isFinite(height) || height <= 0) return 8_000_000;
+  if (height >= 2160) return 22_000_000;
+  if (height >= 1440) return 14_000_000;
+  if (height >= 1080) return 8_000_000;
+  if (height >= 720) return 4_500_000;
+  if (height >= 480) return 2_500_000;
+  return 1_500_000;
+}
 
 export interface UseShakaDashArgs {
   src: string;
@@ -148,15 +165,27 @@ export function useShakaDashLoad({
         if (cancelled || !videoRef.current) return;
 
         const downgrade = readDowngrade();
+        // Only honor a *recent* downgrade for Auto. A stale record (an old
+        // stall, a background tab, a thermal blip) must not cap this session —
+        // the health monitor re-downgrades within seconds if the problem is
+        // genuinely still present.
+        const trustedDowngrade = isDowngradeFresh(downgrade) ? downgrade : null;
         // Allow the full supported ladder (incl. 4K AV1). Health monitor
         // downgrades if the decoder starts dropping frames.
         const maxHeight = Math.min(
           caps.maxSupportedHeight,
-          downgrade?.maxHeight ?? Infinity
+          trustedDowngrade?.maxHeight ?? Infinity
         );
         capabilityMaxHeightRef.current = maxHeight;
-        const preferAv1 = caps.av1Supported && !downgrade?.blacklistAv1;
-        const bwEstimate = persistedBw ?? 5_000_000;
+        const preferAv1 = caps.av1Supported && !trustedDowngrade?.blacklistAv1;
+        // Seed ABR optimistically from the device ceiling rather than a
+        // pessimistic cold-start. Starting at ~5 Mbps made Auto open at 480p
+        // and it often never climbed back up on shorter streams. We would
+        // rather start high and let ABR step down on real congestion.
+        const bwEstimate = Math.max(
+          persistedBw ?? 0,
+          bandwidthForHeight(maxHeight)
+        );
         const initialChoice = qualityChoiceRef.current;
 
         shaka.polyfill.installAll();
@@ -190,7 +219,13 @@ export function useShakaDashLoad({
           abr: {
             enabled: abrEnabled,
             defaultBandwidthEstimate: bwEstimate,
-            switchInterval: 8,
+            // Re-evaluate more often than the old 8s so Auto climbs back up
+            // quickly instead of sitting at a low rung for most of a video.
+            switchInterval: 4,
+            // Prefer stepping up when there is headroom; the health monitor
+            // still steps down on real decode problems.
+            bandwidthUpgradeTarget: 0.85,
+            bandwidthDowngradeTarget: 0.95,
           },
           preferredVideoCodecs: preferAv1 ? ["av01", "avc1"] : ["avc1"],
           restrictions: {
