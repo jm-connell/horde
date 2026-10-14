@@ -18,6 +18,7 @@ export default function LibraryBulkBar({
   onSaveNote,
   onRefreshMetadata,
   onDownload,
+  onSaveFiles,
   onDelete,
   onCancel,
 }: {
@@ -35,6 +36,7 @@ export default function LibraryBulkBar({
   onSaveNote: () => void;
   onRefreshMetadata: () => void;
   onDownload: () => void;
+  onSaveFiles: () => void;
   onDelete: () => void | Promise<void>;
   onCancel: () => void;
 }) {
@@ -155,6 +157,14 @@ export default function LibraryBulkBar({
             className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
           >
             Download
+          </button>
+
+          <button
+            onClick={onSaveFiles}
+            title="Save the video files to your device's downloads folder"
+            className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-400 hover:border-accent hover:text-gray-200"
+          >
+            Save files
           </button>
 
           <button

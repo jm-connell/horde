@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { connectivity } from "../offline/connectivity";
 import type { ViewMode } from "../components/videoPlayerTypes";
 import {
   applyUiFont,
@@ -1134,7 +1135,18 @@ function ensureServerHydration(): Promise<void> {
   if (serverHydrated) return Promise.resolve();
   if (serverHydratePromise) return serverHydratePromise;
 
-  serverHydratePromise = api
+  // On a dead or very slow connection, don't hold the boot screen until the
+  // request times out: release it as soon as offline mode kicks in.
+  const offlineGate = new Promise<void>((resolve) => {
+    if (connectivity.offlineMode) return resolve();
+    const unsub = connectivity.subscribe(() => {
+      if (!connectivity.offlineMode) return;
+      unsub();
+      resolve();
+    });
+  });
+
+  const hydrate = api
     .getAppSettings()
     .then((remote) => {
       setupCompletedFlag = remote.setup_completed === true;
@@ -1180,10 +1192,11 @@ function ensureServerHydration(): Promise<void> {
         );
       }
     })
-    .catch(() => undefined)
-    .finally(() => {
-      serverHydrated = true;
-    });
+    .catch(() => undefined);
+
+  serverHydratePromise = Promise.race([hydrate, offlineGate]).finally(() => {
+    serverHydrated = true;
+  });
 
   return serverHydratePromise;
 }

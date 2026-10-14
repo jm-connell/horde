@@ -131,10 +131,10 @@ Pause-all stops claiming new yt-dlp downloads; an encode that already started ke
 3. Choose a preset (and optional volume normalize).
 4. Choose a **destination**:
    - **Save to library** (default) — archives on the server under Channel/Year and appears in Library.
-   - **Download to this device** — Horde still fetches/merges on the server into a temporary folder, then your browser saves the file. It is **not** kept in the library; dismissing the job card deletes the temp file.
+   - **Offline (this device)** — Horde still fetches/merges on the server into a temporary folder, then the app saves it into [offline storage](offline.md) on this device, playable from the **Offline** page. It is **not** kept in the library; dismissing the job card deletes the server's temp file (the offline copy stays). Without HTTPS the browser saves the file instead.
 5. Submit — cards appear immediately (`Working…` until metadata fills). Already queued, downloading, or library videos toast instead of adding a second job.
 
-Completed library downloads land in the [Library](library.md), organized by channel/year on disk ([storage layout](../ops/storage-layout.md)). Device jobs show a **Save again** action on the card if the browser download was missed.
+Completed library downloads land in the [Library](library.md), organized by channel/year on disk ([storage layout](../ops/storage-layout.md)). Device jobs show **Watch** once saved offline, and a **Save file** action to also save the raw file to the device.
 
 Playlist URLs are library-only (device destination is hidden). When Horde detects a playlist you choose one of three actions:
 

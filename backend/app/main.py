@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import (
@@ -182,6 +182,12 @@ def _pot_provider_status() -> Optional[dict[str, Any]]:
         }
 
 
+@app.get("/api/ping")
+def ping():
+    """Connectivity probe for the PWA: no DB or disk work, never cached."""
+    return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/health")
 def health():
     from .models import DownloadJob, JobStatus, Video
@@ -338,25 +344,61 @@ if _e2e_browser():
         return {"ok": True}
 
 
-if FRONTEND_DIR.exists():
-    app.mount(
+class _ImmutableStaticFiles(StaticFiles):
+    """Vite emits content-hashed asset names, so they never change in place."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code in (200, 206, 304):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
+# Files the browser / service worker must revalidate on every load so app
+# updates are picked up promptly. Everything else at the root (icons) may be
+# cached briefly.
+_REVALIDATE_FILES = {"index.html", "sw.js", "manifest.json"}
+
+
+def _spa_file_response(path: Path) -> FileResponse:
+    response = FileResponse(path)
+    if path.name in _REVALIDATE_FILES:
+        response.headers["Cache-Control"] = "no-cache"
+    else:
+        response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+def mount_frontend(target: FastAPI, frontend_dir: Path, wiki_dir: Path) -> None:
+    """Serve the built React app (and wiki) from ``frontend_dir``."""
+    target.mount(
         "/assets",
-        StaticFiles(directory=FRONTEND_DIR / "assets"),
+        _ImmutableStaticFiles(directory=frontend_dir / "assets"),
         name="assets",
     )
 
     # Mount before the SPA catch-all so /wiki/ is not swallowed by index.html.
-    if WIKI_DIR.is_dir():
-        app.mount(
+    if wiki_dir.is_dir():
+        target.mount(
             "/wiki",
-            StaticFiles(directory=WIKI_DIR, html=True),
+            StaticFiles(directory=wiki_dir, html=True),
             name="wiki",
         )
 
-    @app.get("/{full_path:path}")
+    root = frontend_dir.resolve()
+
+    @target.get("/{full_path:path}", include_in_schema=False)
     def serve_spa(full_path: str):
         # Serve real files when present, otherwise fall back to the SPA entry.
-        candidate = FRONTEND_DIR / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(FRONTEND_DIR / "index.html")
+        candidate = (frontend_dir / full_path).resolve()
+        if full_path and candidate.is_file() and candidate.is_relative_to(root):
+            return _spa_file_response(candidate)
+        if full_path.startswith("api/") or full_path == "sw.js":
+            # Unknown API routes / missing worker must not look like a page:
+            # the service worker would cache index.html as JSON or a script.
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        return _spa_file_response(frontend_dir / "index.html")
+
+
+if FRONTEND_DIR.exists():
+    mount_frontend(app, FRONTEND_DIR, WIKI_DIR)

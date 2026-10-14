@@ -13,6 +13,8 @@ import {
   listThumbnailUrl,
   triggerBrowserDownload,
 } from "../api";
+import { offlineManager } from "../offline/manager";
+import { useOfflineItem } from "../offline/hooks";
 import { useDownloads, jobStatus } from "../context/DownloadContext";
 import { useToast } from "../context/ToastContext";
 import { downloadErrorHint, downloadErrorLabel } from "../downloadErrors";
@@ -107,6 +109,9 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   );
   const videoId = live?.video_id ?? job.video_id;
   const isDeviceJob = (live?.destination ?? job.destination) === "device";
+  const { item: offlineItem, progress: offlineProgress } = useOfflineItem(
+    isDeviceJob ? -job.id : null,
+  );
   const videoGone = isLibraryVideoGone(
     isDeviceJob,
     job.video_missing,
@@ -519,7 +524,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
             )}
             {isDeviceJob && (
               <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-                This device
+                Offline
               </span>
             )}
           </span>
@@ -632,6 +637,31 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               ref={setActionRow}
               className="mt-3 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-hidden sm:gap-2"
             >
+              {completed && isDeviceJob && offlineItem?.status === "complete" && (
+                <Link
+                  to={`/watch/${-job.id}`}
+                  className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
+                >
+                  Watch
+                </Link>
+              )}
+              {completed &&
+                isDeviceJob &&
+                (offlineItem?.status === "queued" ||
+                  offlineItem?.status === "downloading") && (
+                  <span className="shrink-0 whitespace-nowrap text-xs text-gray-400 sm:text-sm">
+                    Saving offline {Math.round(offlineProgress * 100)}%
+                  </span>
+                )}
+              {completed && isDeviceJob && offlineItem?.status === "error" && (
+                <button
+                  type="button"
+                  onClick={() => void offlineManager.downloadJob(job)}
+                  className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25"
+                >
+                  Retry
+                </button>
+              )}
               {completed && isDeviceJob && (
                 <button
                   type="button"
@@ -640,7 +670,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   }
                   className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
                 >
-                  Save again
+                  Save file
                 </button>
               )}
               {inLibrary && videoId != null && (

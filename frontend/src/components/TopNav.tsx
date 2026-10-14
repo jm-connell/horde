@@ -11,17 +11,34 @@ import {
   notifyImportQueueChanged,
 } from "../utils/importQueue";
 import Collapse from "./Collapse";
+import ConnectionTag from "./ConnectionTag";
+import { DownloadIcon, ProgressRing } from "./OfflineDownloadButton";
+import {
+  itemProgress,
+  useConnectivity,
+  useOfflineDownloads,
+} from "../offline/hooks";
 import LiquidNav from "./LiquidNav";
 import YoutubeSearchChip from "./YoutubeSearchChip";
 
-const NAV_LINKS = [
+interface NavLinkDef {
+  to: string;
+  label: string;
+  end: boolean;
+  /** Needs the server; dimmed in offline mode. */
+  serverOnly?: boolean;
+}
+
+const BASE_LINKS: NavLinkDef[] = [
   { to: "/", label: "Home", end: true },
-  { to: "/playlists", label: "Playlists", end: false },
-  { to: "/history", label: "History", end: false },
-  { to: "/download", label: "Download", end: false },
-  { to: "/import", label: "Import", end: false },
+  { to: "/playlists", label: "Playlists", end: false, serverOnly: true },
+  { to: "/history", label: "History", end: false, serverOnly: true },
+  { to: "/download", label: "Download", end: false, serverOnly: true },
+  { to: "/import", label: "Import", end: false, serverOnly: true },
   { to: "/settings", label: "Settings", end: false },
 ];
+
+const OFFLINE_LINK: NavLinkDef = { to: "/offline", label: "Offline", end: false };
 
 const ICON_BTN =
   "ui-nav-icon relative z-10 shrink-0 bg-transparent p-1.5 text-gray-300 hover:text-gray-100";
@@ -47,6 +64,21 @@ export default function TopNav() {
   const navigate = useNavigate();
   const { mode, videoFrameInset } = usePlayback();
   const isMobile = useIsMobile();
+  const net = useConnectivity();
+  const offlineMode = net.status === "offline";
+  const offlineSnap = useOfflineDownloads();
+  const hasOfflineItems = offlineSnap.items.length > 0;
+  const activeOffline = offlineSnap.items.find(
+    (i) => i.status === "downloading" || i.status === "queued",
+  );
+  const activeOfflineProgress = itemProgress(
+    activeOffline,
+    offlineSnap.liveBytes,
+  ).progress;
+  const NAV_LINKS: NavLinkDef[] =
+    hasOfflineItems || offlineMode
+      ? [...BASE_LINKS.slice(0, 3), OFFLINE_LINK, ...BASE_LINKS.slice(3)]
+      : BASE_LINKS;
   // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
   const isTheaterWide =
     !isMobile && mode === "theater" && location.pathname.startsWith("/watch");
@@ -55,6 +87,7 @@ export default function TopNav() {
   const headerRef = useRef<HTMLElement>(null);
   const headerRowRef = useRef<HTMLDivElement>(null);
   const brandRef = useRef<HTMLAnchorElement>(null);
+  const tagRef = useRef<HTMLDivElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const menuPanelRef = useRef<HTMLElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -166,10 +199,12 @@ export default function TopNav() {
       const row = headerRowRef.current;
       if (!measure || !row) return;
       const brandW = brandRef.current?.offsetWidth ?? 110;
+      const tagW = tagRef.current?.offsetWidth ?? 0;
       const gap = 16;
       const menuW = 48;
       const searchW = 48;
-      const available = row.clientWidth - brandW - menuW - searchW - gap * 3;
+      const available =
+        row.clientWidth - brandW - tagW - menuW - searchW - gap * 3;
       setUseHamburger(measure.scrollWidth > available - 4);
     };
     check();
@@ -181,7 +216,15 @@ export default function TopNav() {
       ro.disconnect();
       window.removeEventListener("resize", check);
     };
-  }, [settings.fontSize, importCount, showDownloadBadge, activeCount]);
+  }, [
+    settings.fontSize,
+    importCount,
+    showDownloadBadge,
+    activeCount,
+    net.status,
+    net.offerOffline,
+    NAV_LINKS.length,
+  ]);
 
   useLayoutEffect(() => {
     const el = headerRef.current;
@@ -276,7 +319,21 @@ export default function TopNav() {
         ? downloadBadge
         : null;
 
+  const disabledLink = (link: NavLinkDef, mobile: boolean) => (
+    <span
+      key={link.to}
+      aria-disabled="true"
+      title="Unavailable while offline"
+      className={`relative z-10 cursor-not-allowed rounded-lg px-4 text-sm font-medium whitespace-nowrap text-gray-600 ${
+        mobile ? "block py-3" : "py-2"
+      }`}
+    >
+      {link.label}
+    </span>
+  );
+
   const desktopLinks = NAV_LINKS.map((link) => {
+    if (offlineMode && link.serverOnly) return disabledLink(link, false);
     const active = isLinkActive(location.pathname, link.to, link.end);
     return (
       <NavLink
@@ -326,6 +383,10 @@ export default function TopNav() {
               HORDE
             </span>
           </NavLink>
+
+          <div ref={tagRef} className="flex shrink-0 empty:hidden">
+            <ConnectionTag />
+          </div>
 
           <div
             ref={measureRef}
@@ -378,6 +439,27 @@ export default function TopNav() {
                   />
                   <YoutubeSearchChip />
                 </div>
+              )}
+              {!searchOpen && (hasOfflineItems || offlineMode) && (
+                <NavLink
+                  to="/offline"
+                  className={ICON_BTN}
+                  aria-label={
+                    activeOffline
+                      ? `Offline downloads (${Math.round(activeOfflineProgress * 100)}%)`
+                      : "Offline downloads"
+                  }
+                  data-horde="nav-offline"
+                >
+                  {activeOffline ? (
+                    <ProgressRing
+                      progress={activeOfflineProgress}
+                      className="h-5 w-5 text-accent"
+                    />
+                  ) : (
+                    <DownloadIcon className="h-5 w-5" />
+                  )}
+                </NavLink>
               )}
               <button
                 type="button"
@@ -485,6 +567,9 @@ export default function TopNav() {
                   dependency={location.pathname}
                 >
                   {NAV_LINKS.map((link) => {
+                    if (offlineMode && link.serverOnly) {
+                      return disabledLink(link, true);
+                    }
                     const active = isLinkActive(
                       location.pathname,
                       link.to,

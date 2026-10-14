@@ -12,6 +12,7 @@ import LoadingIndicator from "../components/LoadingIndicator";
 import { MenuFlyout, MenuScroll } from "../components/MenuFlyout";
 import PlaybackQueue from "../components/PlaybackQueue";
 import ThemedSelect from "../components/ThemedSelect";
+import OfflineDownloadButton from "../components/OfflineDownloadButton";
 import VideoActionsMenu from "../components/VideoActionsMenu";
 import VideoAiPanel from "../components/VideoAiPanel";
 import VideoCard from "../components/VideoCard";
@@ -158,7 +159,8 @@ export default function Watch() {
 
   // --- Load library video ---
   useEffect(() => {
-    if (!Number.isFinite(libraryId) || libraryId <= 0) return;
+    // Negative ids are offline-only device downloads (see offline/manager).
+    if (!Number.isFinite(libraryId) || libraryId === 0) return;
     let cancelled = false;
     suspendPlaybackMedia({ videoId: libraryId });
     setLoading(true);
@@ -193,7 +195,7 @@ export default function Watch() {
 
   // --- Load stream meta ---
   useEffect(() => {
-    if (Number.isFinite(libraryId) && libraryId > 0) return;
+    if (Number.isFinite(libraryId) && libraryId !== 0) return;
     if (!streamUrlParam) {
       setError("Missing video URL");
       setLoading(false);
@@ -1248,14 +1250,21 @@ export default function Watch() {
             )}
 
             {isLibrary && (
-              <div className="mt-5 flex gap-2">
+              <div className="mt-5 flex flex-wrap gap-2 whitespace-nowrap">
                 <Link
                   to="/"
+                  aria-label={isMobile ? "Back to library" : undefined}
                   className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
                 >
-                  ← Back to library
+                  {/* Phones: icon only, so the Download button fits the row. */}
+                  {isMobile ? "←" : "← Back to library"}
                 </Link>
-                <AddToPlaylist videoId={source.video.id} />
+                {source.video.id > 0 && (
+                  <AddToPlaylist videoId={source.video.id} />
+                )}
+                {/* Phones get a dedicated button; desktop uses the ••• menu. */}
+                {isMobile && <OfflineDownloadButton video={source.video} />}
+                {source.video.id > 0 && (
                 <VideoActionsMenu
                   video={source.video}
                   onEdit={() => {
@@ -1271,6 +1280,7 @@ export default function Watch() {
                   onDelete={onDelete}
                   onVideoUpdated={setVideo}
                 />
+                )}
               </div>
             )}
 

@@ -16,6 +16,8 @@ import Watch from "./pages/Watch";
 import Settings from "./pages/Settings";
 import Setup from "./pages/Setup";
 import Playlists from "./pages/Playlists";
+import OfflinePage from "./pages/Offline";
+import ConnectionTag from "./components/ConnectionTag";
 import TopNav from "./components/TopNav";
 import BackgroundEffect from "./components/BackgroundEffect";
 import LoadingIndicator from "./components/LoadingIndicator";
@@ -76,6 +78,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Library />} />
         <Route path="/history" element={<History />} />
+        <Route path="/offline" element={<OfflinePage />} />
         <Route path="/download" element={<Download />} />
         <Route path="/playlists" element={<Playlists />} />
         <Route path="/playlists/:id" element={<PlaylistOpenRedirect />} />
@@ -98,6 +101,8 @@ function AppShell() {
     return (
       <div className="relative min-h-full overflow-x-hidden">
         <BackgroundEffect />
+        {/* Boot can stall on a bad connection: surface the offline offer. */}
+        <ConnectionTag floating />
         <LoadingIndicator label="Loading" />
       </div>
     );
