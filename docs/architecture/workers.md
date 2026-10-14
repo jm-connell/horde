@@ -23,6 +23,14 @@ Discovers importable video extensions, ignores intermediate `.part` / `.fNNN` / 
 - Metadata extracts share the yt-dlp extract gate with preview/feed (1 + 1.25s spacing; interactive preview jumps background fills).
 - See [Download pipeline](downloads-pipeline.md) and [Troubleshooting](../ops/troubleshooting.md#download-error_kind-values).
 
+## H.264 copies { #compat-jobs }
+
+`compat_rendition.py` owns a small thread pool for `compat` (sidecar) and `convert` (in-place) jobs. It shares the ffmpeg cap (`MAX_FFMPEG_CONCURRENCY`, else **2** with a GPU H.264 encoder, otherwise **1**). Jobs are idempotent per video, queued in memory, and only their outcome is persisted (`compat_path`, `compat_size`, `compat_source`, `compat_error` on `videos`). A viewer-requested copy jumps ahead of a bulk backfill. Queued jobs are lost on restart; **Create N copies** in Settings → Library re-queues whatever is still missing. Cancel drops queued jobs and signals running ones. Details: [H.264 sidecar](downloads-pipeline.md#h264-sidecar).
+
+### Codec probe backfill
+
+**Start:** `start_probe_backfill()` in app lifespan (stopped on shutdown). After a 10 s delay it ffprobes `ready` videos whose `media_probed_at` is empty, 25 at a time with a short pause, and stores the codec columns. It exits when nothing is left; unreadable files (NAS offline, mid-move) are skipped until the next boot.
+
 ## Job metadata
 
 **Start:** `start_job_metadata_worker()` after subtitle retry.

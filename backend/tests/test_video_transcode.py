@@ -11,19 +11,20 @@ def test_encode_target_av1_never_encodes():
     assert encode_target("av1", "h264", 1080) is None
 
 
-def test_encode_target_h264_skips_when_already_avc():
-    assert encode_target("h264", "h264", 1080) is None
-    assert encode_target("h264", "avc1", 720) is None
-    assert encode_target("h264", "av1", 1080) == "h264"
-    assert encode_target("h264", "av1", 2160) == "h264"
+def test_encode_target_h264_convert_skips_when_already_avc():
+    assert encode_target("h264_convert", "h264", 1080) is None
+    assert encode_target("h264_convert", "avc1", 720) is None
+    assert encode_target("h264_convert", "av1", 1080) == "h264"
+    assert encode_target("h264_convert", "av1", 2160) == "h264"
+    # Legacy job values map onto h264_convert.
+    assert encode_target("h264", "vp9", 2160) == "h264"
+    assert encode_target("h265", "av1", 2160) == "h264"
 
 
-def test_encode_target_h265_skips_1080p_h264():
-    assert encode_target("h265", "h264", 1080) is None
-    assert encode_target("hevc", "hvc1", 2160) is None
-    assert encode_target("h265", "av1", 1080) == "h264"
-    assert encode_target("h265", "av1", 2160) == "h265"
-    assert encode_target("h265", "vp9", 1440) == "h265"
+def test_encode_target_never_rewrites_in_other_modes():
+    for mode in ("h264_native", "sidecar"):
+        assert encode_target(mode, "av1", 2160) is None
+        assert encode_target(mode, "vp9", 1080) is None
 
 
 def test_encode_target_audio_preset_skipped():

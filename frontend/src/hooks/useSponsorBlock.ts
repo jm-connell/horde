@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SponsorBlockCategory } from "../sponsorBlock";
+import { connectivity } from "../offline/connectivity";
+import { getAllItems, type OfflineSponsorSegment } from "../offline/db";
 
 export interface SponsorSegment {
   startSec: number;
@@ -17,6 +19,23 @@ export function extractYouTubeId(
       text.match(/youtu\.be\/([A-Za-z0-9_-]{11})/) ||
       text.match(/\[([A-Za-z0-9_-]{11})\]/);
     if (m) return m[1];
+  }
+  return null;
+}
+
+/** Segments saved with a downloaded copy of this YouTube video, if any. */
+async function offlineSponsorSegments(
+  ytId: string
+): Promise<OfflineSponsorSegment[] | null> {
+  try {
+    for (const item of await getAllItems()) {
+      if (!item.sponsorSegments) continue;
+      if (extractYouTubeId(item.video.source_url, item.video.file_path) === ytId) {
+        return item.sponsorSegments;
+      }
+    }
+  } catch {
+    // IndexedDB unavailable
   }
   return null;
 }
@@ -47,6 +66,20 @@ export function useSponsorBlock(
     let cancelled = false;
     const allowed = new Set(cats);
     const encoded = encodeURIComponent(JSON.stringify(cats));
+    const useOffline = () =>
+      offlineSponsorSegments(ytId).then((segs) => {
+        if (cancelled || !segs) return false;
+        setSegments(segs.filter((s) => allowed.has(s.category as SponsorBlockCategory)));
+        return true;
+      });
+    if (connectivity.offlineMode) {
+      void useOffline().then((ok) => {
+        if (!ok && !cancelled) setSegments([]);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
     fetch(
       `https://sponsor.ajay.app/api/skipSegments?videoID=${ytId}&categories=${encoded}`
     )
@@ -70,9 +103,11 @@ export function useSponsorBlock(
           );
         }
       )
-      .catch(() => {
-        if (!cancelled) setSegments([]);
-      });
+      .catch(() =>
+        useOffline().then((ok) => {
+          if (!ok && !cancelled) setSegments([]);
+        }),
+      );
 
     return () => {
       cancelled = true;

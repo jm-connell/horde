@@ -24,8 +24,8 @@ test("download form previews a link and switches destination", async ({
   await page.getByRole("option", { name: /1080p/ }).click();
   await expect(page.getByRole("button", { name: "Quality" })).toContainText("1080p");
 
-  await page.getByRole("button", { name: "Download to this device" }).click();
-  await expect(page.getByRole("button", { name: "Save to device" })).toBeVisible();
+  await page.getByRole("button", { name: "Offline (this device)" }).click();
+  await expect(page.getByRole("button", { name: "Download offline" })).toBeVisible();
   await page.getByRole("button", { name: "Save to library" }).click();
   await expect(download).toBeVisible();
   await expect(page.getByRole("button", { name: "Paste" })).toBeVisible();

@@ -8,8 +8,8 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 
 | Table | Purpose |
 |-------|---------|
-| `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags, yt-dlp `source_chapters`, caption retry (`subtitles_pending`, `subtitles_retry_after`, `subtitles_fetch_attempts`) |
-| `download_jobs` | Queue rows: URL, quality, probed `height_px`, progress, pause, loudnorm, optional replace target, `error` + typed `error_kind` |
+| `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags, yt-dlp `source_chapters`, caption retry (`subtitles_pending`, `subtitles_retry_after`, `subtitles_fetch_attempts`), probed media info (`vcodec`, `acodec`, `codec_string` RFC 6381, `bit_depth`, `is_hdr`, `media_probed_at`), H.264 sidecar (`compat_path`, `compat_size`, `compat_source` = `youtube`\|`transcode`, `compat_error`) |
+| `download_jobs` | Queue rows: URL, quality, `video_codec` (playback mode), probed `height_px`, progress, pause, loudnorm, optional replace target, `error` + typed `error_kind` |
 | `playlists` | User, imported, or subscribed YouTube playlists (`subscribed`, `quality_preset`, `last_synced_at`, `sync_error`, list `position`, optional `cover_video_id` / `cover_path`) |
 | `playlist_items` | Ordered video membership |
 

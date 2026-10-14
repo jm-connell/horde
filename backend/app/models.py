@@ -92,6 +92,22 @@ class Video(SQLModel, table=True):
     # JSON list of yt-dlp native chapters: [{"start_sec": float, "title": str}].
     source_chapters: str = Field(default="[]")
 
+    # Actual stream info from ffprobe (not the requested download mode).
+    # vcodec/acodec are families ("av1", "vp9", "h264", "hevc", "aac", "opus").
+    vcodec: Optional[str] = None
+    acodec: Optional[str] = None
+    # RFC 6381 codec string for MediaCapabilities, e.g. "av01.0.08M.08".
+    codec_string: Optional[str] = None
+    bit_depth: Optional[int] = None
+    is_hdr: bool = Field(default=False)
+    media_probed_at: Optional[datetime] = None
+    # ≤1080p H.264 + AAC sidecar for devices that cannot decode the original.
+    # Path relative to DOWNLOADS_DIR; "youtube" (native download) or "transcode".
+    compat_path: Optional[str] = None
+    compat_size: Optional[int] = None
+    compat_source: Optional[str] = None
+    compat_error: Optional[str] = None
+
 
 class DownloadJob(SQLModel, table=True):
     __tablename__ = "download_jobs"

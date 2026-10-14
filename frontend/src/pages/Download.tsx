@@ -303,7 +303,7 @@ export default function Download() {
     }
     const approx = formatApproxSize(selectedPresetSize);
     if (toDevice) {
-      return approx ? `Save to device (${approx})` : "Save to device";
+      return approx ? `Download offline (${approx})` : "Download offline";
     }
     return approx ? `Download (${approx})` : "Download";
   }, [submitting, selectedPresetSize, toDevice, isBulkList, urlList.length]);
@@ -874,13 +874,13 @@ export default function Download() {
                     : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-500"
                 }`}
               >
-                Download to this device
+                Offline (this device)
               </button>
             </div>
             {toDevice && (
               <p className="mt-2 text-xs text-gray-500">
-                Horde fetches the file then saves it to your browser. It is not
-                kept in the library.
+                Saved inside Horde on this device for offline viewing; not added
+                to the library.
               </p>
             )}
           </div>

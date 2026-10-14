@@ -65,6 +65,7 @@ nav:
       - Import & review: guides/import-review.md
       - Playlists: guides/playlists.md
       - History & continue watching: guides/history.md
+      - Offline & installed app: guides/offline.md
       - AI features: guides/ai-features.md
   - Settings:
       - Overview: settings/index.md

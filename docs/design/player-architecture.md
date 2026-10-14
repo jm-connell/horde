@@ -31,11 +31,15 @@ Moving the same DOM node keeps the media element alive: **no reload, no seek res
 
 ## Shaka DASH for stream preview
 
-**Downloaded library files** play as progressive media from Horde’s static/range endpoints. After download, Horde remuxes to **MP4 + AAC + faststart**. The default archive **copies** the video bitstream (AV1 stays AV1). Settings → Library **Archive video codec** (beta) can instead transcode 1440p/4K to H.264 or H.265. That is not an on-the-fly stream transcode.
+**Downloaded library files** play as progressive media from Horde’s static/range endpoints. After download, Horde remuxes to **MP4 + AAC + faststart**. The default archive **copies** the video bitstream (AV1 stays AV1).
+
+Each video can have two files: the **original** and an optional ≤1080p **H.264 sidecar** (`<stem>.horde-h264.mp4`). The client, not the server, chooses. It asks `MediaCapabilities.decodingInfo` about the original's real codec string (stored from ffprobe) and plays the original if that is smooth, the sidecar via `?rendition=compat` if the original is unsupported or rough and a copy exists. With no playable file, `CompatGate` covers the player: in `sidecar` mode it requests the copy automatically and polls progress, otherwise it offers **Create compatible copy** or **Try playing the original anyway**. A playback error on the original falls back the same way. [Offline saves](../guides/offline.md) run the same choice and store that rendition.
+
+Copies are produced ahead of time (a YouTube H.264 download or an ffmpeg encode), so this is still **not** a live per-client transcode, HLS ladder, or adaptive stream. See [Playback compatibility](../guides/downloads.md#compatibility-codecs).
 
 **In-app YouTube stream preview** (watch before download) uses a different path: the backend exposes preview APIs (`stream_preview` + `api/preview.py`), and the client loads **Shaka Player** via `useShakaDash` for adaptive **DASH** when available. If DASH is unsupported or fails critically, playback falls back to a progressive (≤720p-class) proxy URL. Preview → library download handoff remounts the player (and the `<video>` element) so the file URL is never applied to an element that still has Shaka’s MediaSource attached.
 
-That split keeps archive watching simple (one file, one codec path) while preview can adapt bitrate on live extracts. Subtitle handling differs slightly under MSE/Shaka (cues rendered via overlays / text tracks as needed) compared to native library playback.
+That split keeps archive watching simple (one file per rendition, no server work while watching) while preview can adapt bitrate on live extracts. Subtitle handling differs slightly under MSE/Shaka (cues rendered via overlays / text tracks as needed) compared to native library playback.
 
 After player refactors, use the [Video player smoke checklist](../reference/video-player-smoke.md).
 

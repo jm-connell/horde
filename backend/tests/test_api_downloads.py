@@ -127,11 +127,24 @@ def test_enqueue_stamps_video_codec(client):
         json={
             "url": "https://youtu.be/dQw4w9WgXcQ",
             "quality_preset": "1080p",
+            "video_codec": "sidecar",
+        },
+    )
+    assert created.status_code == 200
+    assert created.json()["video_codec"] == "sidecar"
+
+
+def test_enqueue_maps_legacy_video_codec(client):
+    created = client.post(
+        "/api/downloads",
+        json={
+            "url": "https://youtu.be/dQw4w9WgXcQ",
+            "quality_preset": "1080p",
             "video_codec": "h265",
         },
     )
     assert created.status_code == 200
-    assert created.json()["video_codec"] == "h265"
+    assert created.json()["video_codec"] == "h264_convert"
 
 
 def _failed_job(init_db, **fields):

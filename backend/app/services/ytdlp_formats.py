@@ -15,16 +15,70 @@ _AV1 = "[vcodec~='^(av01|av1)']"
 _H264 = "[vcodec~='^(avc1|avc|h264)']"
 _AAC = "[acodec~='^(mp4a|aac)']"
 
-VIDEO_CODECS = ("av1", "h264", "h265")
+# Playback-compatibility modes (stored as ``download_video_codec`` / job.video_codec):
+#   av1          AV1/VP9 originals only (smallest, newest devices).
+#   h264_native  YouTube's own H.264 stream, capped at 1080p, never re-encoded.
+#   h264_convert ≤1080p native H.264; higher tiers download AV1 and re-encode to
+#                H.264 at source resolution (replaces the original).
+#   sidecar      AV1 original + a second ≤1080p H.264 file next to it.
+VIDEO_CODECS = ("av1", "h264_native", "h264_convert", "sidecar")
+
+# Legacy values: "h264" / "h265" were per-download transcode targets.
+_MODE_ALIASES = {
+    "av1": "av1",
+    "av01": "av1",
+    "h264native": "h264_native",
+    "native": "h264_native",
+    "h264convert": "h264_convert",
+    "h264": "h264_convert",
+    "avc": "h264_convert",
+    "avc1": "h264_convert",
+    "avc3": "h264_convert",
+    "h265": "h264_convert",
+    "hevc": "h264_convert",
+    "hev1": "h264_convert",
+    "hvc1": "h264_convert",
+    "sidecar": "sidecar",
+    "dual": "sidecar",
+    "av1h264": "sidecar",
+}
+
+# Default H.264 copy short-side cap (YouTube's own H.264 tops out here, so new
+# downloads need no encode). "source" copies go up to H264_MAX_SHORT_SIDE.
+COMPAT_MAX_HEIGHT = 1080
+# H.264 level 5.2 / NVENC limit is 4096 wide: 8K sources still get a 4K copy.
+H264_MAX_SHORT_SIDE = 2160
+COMPAT_RESOLUTIONS = ("1080p", "source")
+
+
+def normalize_compat_resolution(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    return "source" if raw in {"source", "full", "original", "max"} else "1080p"
+
+
+def compat_copy_cap() -> int:
+    """Short-side cap for H.264 copies from the UI setting (1080 or 2160)."""
+    try:
+        from .app_settings import load
+
+        ui = (load() or {}).get("ui") or {}
+        mode = normalize_compat_resolution(ui.get("compat_copy_resolution"))
+    except Exception:  # noqa: BLE001
+        mode = "1080p"
+    return H264_MAX_SHORT_SIDE if mode == "source" else COMPAT_MAX_HEIGHT
 
 
 def normalize_video_codec(value: Any) -> str:
-    raw = str(value or "av1").strip().lower().replace("-", "").replace(".", "")
-    if raw in {"h264", "avc", "avc1", "avc3"}:
-        return "h264"
-    if raw in {"h265", "hevc", "hev1", "hvc1"}:
-        return "h265"
-    return "av1"
+    raw = (
+        str(value or "av1")
+        .strip()
+        .lower()
+        .replace("-", "")
+        .replace(".", "")
+        .replace("_", "")
+        .replace("+", "")
+    )
+    return _MODE_ALIASES.get(raw, "av1")
 
 
 def default_download_video_codec() -> str:
@@ -94,15 +148,43 @@ def is_audio_preset(preset: str) -> bool:
 
 
 def uses_native_h264(preset: str, codec: str) -> bool:
-    """True when we should grab YouTube avc1 (≤1080p) instead of AV1-for-transcode."""
+    """True when we should grab YouTube avc1 (≤1080p) instead of AV1."""
     if is_audio_preset(preset):
         return False
-    if normalize_video_codec(codec) == "av1":
+    mode = normalize_video_codec(codec)
+    if mode == "h264_native":
+        return True
+    if mode != "h264_convert":
         return False
     max_h = PRESET_MAX_HEIGHT.get(preset)
     if max_h is None:
         return False
     return max_h <= 1080
+
+
+def effective_max_height(preset: str, codec: str = "av1") -> Optional[int]:
+    """Preset height cap after the compat mode is applied (native H.264 tops out at 1080p)."""
+    max_h = PRESET_MAX_HEIGHT.get(preset)
+    if is_audio_preset(preset):
+        return max_h
+    if normalize_video_codec(codec) == "h264_native":
+        return min(max_h or COMPAT_MAX_HEIGHT, COMPAT_MAX_HEIGHT)
+    return max_h
+
+
+def compat_format_spec(max_height: Optional[int] = None, *, vertical: bool = False) -> str:
+    """yt-dlp selector for the native H.264 sidecar (≤1080p avc1 + AAC when offered).
+
+    ``max_height`` is the short-side cap; vertical video caps width instead so a
+    1080×1920 Short keeps its 1080 short side.
+    """
+    cap = min(max_height or COMPAT_MAX_HEIGHT, COMPAT_MAX_HEIGHT)
+    h = f"[width<={cap}]" if vertical else f"[height<={cap}]"
+    return (
+        f"bv*{h}{_H264}+ba{_AAC}/"
+        f"bv*{h}{_H264}+ba/"
+        f"b{h}{_H264}"
+    )
 
 
 def format_sort_for(preset: str, codec: str = "av1") -> list[str]:
@@ -111,15 +193,18 @@ def format_sort_for(preset: str, codec: str = "av1") -> list[str]:
     return list(FORMAT_SORT)
 
 
-def _primary_spec(preset: str, *, h264: bool) -> str:
+def _primary_spec(preset: str, *, h264: bool, max_height: Optional[int] = None) -> str:
     pair = lambda filt: _pair(filt, h264=h264)
     audio = QUALITY_FORMATS.get(preset) if is_audio_preset(preset) else None
     if audio:
         return audio
-    if preset == "best":
+    if max_height is None and preset == "best":
         return pair("")
-    max_h = PRESET_MAX_HEIGHT.get(preset)
+    max_h = max_height
     if max_h:
+        if max_h != PRESET_MAX_HEIGHT.get(preset):
+            # Capped by the compat mode (e.g. 4K preset in H.264-native mode).
+            return pair(f"[height<={max_h}]")
         return pair(f"[height={max_h}]") + "/" + pair(f"[height<={max_h}]")
     return pair("")
 
@@ -127,8 +212,8 @@ def _primary_spec(preset: str, *, h264: bool) -> str:
 def format_chain(preset: str, codec: str = "av1") -> list[str]:
     """Build yt-dlp format selectors. Height-capped presets never fall back to unbounded best."""
     native = uses_native_h264(preset, codec)
-    primary = _primary_spec(preset, h264=native)
-    max_h = PRESET_MAX_HEIGHT.get(preset)
+    max_h = effective_max_height(preset, codec)
+    primary = _primary_spec(preset, h264=native, max_height=max_h)
     chain = [primary]
     vpref = "avc" if native else "av01"
     if max_h:

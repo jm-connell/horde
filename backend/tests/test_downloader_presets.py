@@ -31,23 +31,73 @@ def test_format_chain_best_and_audio():
 def test_format_chain_h264_1080_prefers_avc():
     from app.services.ytdlp_formats import format_chain, format_sort_for, uses_native_h264
 
-    assert uses_native_h264("1080p", "h264")
-    assert uses_native_h264("720p", "h265")
-    assert not uses_native_h264("2160p", "h264")
-    assert not uses_native_h264("2160p", "h265")
-    assert not uses_native_h264("best", "h264")
-    chain = format_chain("1080p", "h264")
+    assert uses_native_h264("1080p", "h264_convert")
+    assert uses_native_h264("720p", "h265")  # legacy → h264_convert
+    assert not uses_native_h264("2160p", "h264_convert")
+    assert not uses_native_h264("best", "h264_convert")
+    chain = format_chain("1080p", "h264_convert")
     assert any("avc1" in c or "h264" in c for c in chain)
-    assert "vcodec:h264" in format_sort_for("1080p", "h264")
+    assert "vcodec:h264" in format_sort_for("1080p", "h264_convert")
 
 
-def test_format_chain_4k_compat_still_prefers_av1_source():
+def test_format_chain_4k_convert_still_prefers_av1_source():
     from app.services.ytdlp_formats import format_chain, format_sort_for
 
-    for codec in ("h264", "h265"):
+    for codec in ("h264_convert", "h264", "h265"):
         chain = format_chain("2160p", codec)
         assert any("av01" in c for c in chain)
         assert "vcodec:av01" in format_sort_for("2160p", codec)
+
+
+def test_h264_native_caps_every_video_preset_at_1080():
+    from app.services.ytdlp_formats import (
+        effective_max_height,
+        format_chain,
+        format_sort_for,
+        uses_native_h264,
+    )
+
+    for preset in ("best", "2160p", "1440p", "1080p"):
+        assert uses_native_h264(preset, "h264_native")
+        assert effective_max_height(preset, "h264_native") == 1080
+        chain = format_chain(preset, "h264_native")
+        assert all("height<=1080" in c or "height=1080" in c for c in chain)
+        assert not any("height=2160" in c or "height<=2160" in c for c in chain)
+        assert "vcodec:h264" in format_sort_for(preset, "h264_native")
+    assert effective_max_height("720p", "h264_native") == 720
+    assert not uses_native_h264("audio", "h264_native")
+
+
+def test_sidecar_mode_downloads_av1_original():
+    from app.services.ytdlp_formats import format_chain, format_sort_for, uses_native_h264
+
+    assert not uses_native_h264("1080p", "sidecar")
+    assert any("av01" in c for c in format_chain("2160p", "sidecar"))
+    assert "vcodec:av01" in format_sort_for("best", "sidecar")
+
+
+def test_normalize_video_codec_modes_and_legacy():
+    from app.services.ytdlp_formats import normalize_video_codec
+
+    assert normalize_video_codec(None) == "av1"
+    assert normalize_video_codec("garbage") == "av1"
+    assert normalize_video_codec("sidecar") == "sidecar"
+    assert normalize_video_codec("h264_native") == "h264_native"
+    assert normalize_video_codec("h264-native") == "h264_native"
+    assert normalize_video_codec("h264_convert") == "h264_convert"
+    assert normalize_video_codec("h264") == "h264_convert"
+    assert normalize_video_codec("hevc") == "h264_convert"
+
+
+def test_compat_format_spec_is_avc_and_capped():
+    from app.services.ytdlp_formats import compat_format_spec
+
+    spec = compat_format_spec()
+    assert "height<=1080" in spec and "avc1" in spec
+    assert "height<=720" in compat_format_spec(720)
+    assert "height<=1080" in compat_format_spec(2160)
+    vertical = compat_format_spec(1080, vertical=True)
+    assert "width<=1080" in vertical and "height<=" not in vertical
 
 
 def test_quality_formats_prefer_av1_and_aac():

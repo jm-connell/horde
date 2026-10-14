@@ -5,6 +5,7 @@ import { useToast } from "../context/ToastContext";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import { MenuScroll } from "./MenuFlyout";
+import { useOfflineDownloadAction } from "./OfflineDownloadButton";
 import type { Video } from "../types";
 import { effectiveSourceUrl } from "../utils";
 
@@ -49,6 +50,17 @@ export default function VideoActionsMenu({
   const { flip, anchorRef } = useFlipMenu(open, 360);
   const canChangeResolution = Boolean(effectiveSourceUrl(video));
   const canNormalize = Boolean(effectiveSourceUrl(video) && onNormalizeVolume);
+  const offline = useOfflineDownloadAction(video);
+  const offlineLabel =
+    offline.status === "complete"
+      ? "Remove download"
+      : offline.status === "paused"
+        ? `Resume download (${offline.label.replace("Paused ", "")})`
+        : offline.item && offline.status !== "error"
+          ? `Cancel download (${Math.round(offline.progress * 100)}%)`
+          : offline.status === "error"
+            ? "Retry offline download"
+            : "Download for offline";
 
   useEffect(() => {
     if (!open) return;
@@ -152,8 +164,17 @@ export default function VideoActionsMenu({
               Normalize volume
             </button>
           )}
+          <button
+            onClick={() => {
+              setOpen(false);
+              void offline.onClick();
+            }}
+            className={itemClass}
+          >
+            {offlineLabel}
+          </button>
           <button onClick={downloadFile} className={itemClass}>
-            Download file
+            Save file to device
           </button>
           {video.source_url && (
             <a

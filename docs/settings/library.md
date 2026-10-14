@@ -54,11 +54,24 @@ Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Librar
 |---------|-----|---------|--------|
 | Show active download count in navigation | `showDownloadNavBadge` | `true` | Badge on Download while jobs are queued/running |
 | Normalize volume on download | `normalizeVolumeOnDownload` | `true` | Loudness normalization via ffmpeg on new downloads |
-| Archive video codec (beta) | `downloadVideoCodec` | `"av1"` | `av1` \| `h264` \| `h265`. Stamped onto every new download. Default is AV1. |
+| Playback compatibility | `downloadVideoCodec` | `"av1"` | `av1` \| `h264_native` \| `h264_convert` \| `sidecar` (server key `download_video_codec`). Stamped onto every new download as `video_codec`. Legacy `h264` / `h265` migrate to `h264_convert`. |
+| H.264 copy resolution | `compatCopyResolution` | `"1080p"` | `1080p` \| `source` (server key `compat_copy_resolution`). Short-side cap for H.264 copies: 1080 or full size up to 4K. See [copy resolution](../guides/downloads.md#how-the-sidecar-works). |
 
-**AV1** (default) is YouTube’s high-res codec: smallest files, best quality, no video encode, weaker device support. **H.264** is the largest files and the widest playback; 1440p/4K must be converted from AV1 because YouTube has no H.264 there. **H.265** is smaller 1440p/4K than H.264 after that same conversion. The server GPU (passed into the Horde process, not Ollama) speeds 1440p/4K encodes; without it, software transcode is very slow. Full tradeoffs: [Compatibility codecs (beta)](../guides/downloads.md#compatibility-codecs).
+The four modes, in the order the picker shows them:
 
-Settings → Library shows a **Recommended** hint from ffmpeg in the Horde process (NVENC/QSV/VAAPI), not from Ollama VRAM. Settings → System **GPU** / **None detected** is the same probe’s device visibility. If the GPU is visible but Horde cannot encode, pass the device into the **horde** container (see [GPU](../ops/environment.md#gpu) and [Compatibility codecs (beta)](../guides/downloads.md#compatibility-codecs)). Existing library files are unchanged until you redownload / change resolution.
+- **AV1 only** (default): YouTube's AV1/VP9, copied. Smallest files, no encode, newest devices only. A device that cannot play a video can still get a one-off H.264 copy from the player.
+- **H.264 only, up to 1080p** (`h264_native`): YouTube's own H.264. Every video preset is capped at 1080p, so 1440p/4K downloads are saved at 1080p. No conversion.
+- **H.264 only, full resolution** (`h264_convert`): native H.264 up to 1080p; 1440p/4K download AV1, then are re-encoded to H.264 at source resolution and replace the original. Heavy; a GPU is strongly advised.
+- **AV1 + H.264 copy** (`sidecar`): keeps the AV1 original and saves a ≤1080p H.264 copy beside it. For YouTube downloads the copy is YouTube's own H.264 (an extra download, not an encode); imports, existing videos, and videos without YouTube H.264 are encoded locally.
+
+Each card shows **Storage** and **Server work** pills. Above the cards, Settings → Library shows the detected GPU, the encoder Horde will use, and whether **this device** can play AV1. Amber warnings appear when a GPU-heavy mode is selected and ffmpeg in the Horde process has no GPU encoder (NVENC/QSV/VAAPI/AMF), or when a GPU is visible but ffmpeg cannot use it. That probe is the Horde container, not Ollama; Settings → System **GPU** / **None detected** is the same device visibility. Setup: [GPU](../ops/environment.md#gpu).
+
+Changing the mode only affects **new** downloads. Library actions appear under the picker:
+
+- **Create N copies**: backfills an H.264 copy for every video that would benefit (with an estimated size), using YouTube's H.264 when available and a local encode otherwise. Shows running/queued counts and a **Cancel**.
+- **Convert library to H.264** (only in `h264_convert`): re-encodes every AV1/VP9 original in place after a confirm step. This is destructive; the only way back is to download again.
+
+The summary line shows library size, how many copies exist and their size, and "checking codecs of N" while the one-time background probe of existing videos finishes. Full tradeoffs: [Playback compatibility](../guides/downloads.md#compatibility-codecs).
 
 ## Metadata and catalog
 

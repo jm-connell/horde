@@ -131,7 +131,8 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `channelOrder` | `"desc"` | string | `asc` \| `desc` | UI blob |
 | `showDownloadNavBadge` | `true` | bool | | UI blob |
 | `normalizeVolumeOnDownload` | `true` | bool | | UI blob |
-| `downloadVideoCodec` | `"av1"` | string | `av1` \| `h264` \| `h265` (beta; default AV1) | UI blob |
+| `downloadVideoCodec` | `"av1"` | string | `av1` \| `h264_native` \| `h264_convert` \| `sidecar` (legacy `h264`/`h265` → `h264_convert`) | UI blob (`download_video_codec`) |
+| `compatCopyResolution` | `"1080p"` | string | `1080p` \| `source`: H.264 copy short-side cap (1080, or up to 4K) | UI blob (`compat_copy_resolution`) |
 
 !!! note "`progressExpiryDays`"
     Present on the client `Settings` object (default `14`) but **not** in `SERVER_UI_KEYS`. Canonical store is top-level `progress_expiry_days`.

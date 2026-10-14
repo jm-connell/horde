@@ -38,6 +38,10 @@ import {
 } from "../hooks/useLibrarySort";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
+import { useOfflineMode } from "../offline/hooks";
+import { offlineManager } from "../offline/manager";
+import OfflinePage from "./Offline";
+import { HttpsNotice } from "../components/HttpsHelp";
 import type {
   ChannelAutodownload,
   ChannelFeedEntry,
@@ -171,7 +175,7 @@ function SearchResultSection({
   );
 }
 
-export default function Library() {
+function OnlineLibrary() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [otherVideos, setOtherVideos] = useState<Video[]>([]);
   const [streamResults, setStreamResults] = useState<ChannelFeedEntry[]>([]);
@@ -1134,6 +1138,21 @@ export default function Library() {
   };
 
   const bulkDownload = () => {
+    // Plain-http access has no offline storage: save the files instead.
+    if (offlineManager.getSnapshot().unsupported) {
+      showToast("Saving files instead — offline downloads need HTTPS");
+      bulkSaveFiles();
+      return;
+    }
+    const selected = videos.filter((v) => selectedIds.has(v.id));
+    selected.forEach((v) => void offlineManager.download(v));
+    showToast(
+      `Downloading ${selected.length} video${selected.length === 1 ? "" : "s"} for offline viewing`,
+    );
+    exitSelectMode();
+  };
+
+  const bulkSaveFiles = () => {
     const selected = videos.filter((v) => selectedIds.has(v.id));
     selected.forEach((v, i) => {
       setTimeout(() => {
@@ -1945,6 +1964,7 @@ export default function Library() {
             onSaveNote={bulkSaveNote}
             onRefreshMetadata={bulkRefreshMetadata}
             onDownload={bulkDownload}
+            onSaveFiles={bulkSaveFiles}
             onDelete={bulkDelete}
             onCancel={exitSelectMode}
           />
@@ -1994,5 +2014,16 @@ export default function Library() {
         />
       )}
     </div>
+  );
+}
+
+export default function Library() {
+  const offline = useOfflineMode();
+  if (offline) return <OfflinePage embedded />;
+  return (
+    <>
+      <HttpsNotice />
+      <OnlineLibrary />
+    </>
   );
 }

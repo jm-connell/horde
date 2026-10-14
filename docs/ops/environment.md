@@ -15,7 +15,7 @@ Horde is configured primarily through environment variables. Most values have se
 | `HOST` | `0.0.0.0` | Bind address for uvicorn. |
 | `PORT` | `8080` | Listen port **inside** the process/container. |
 | `MAX_DOWNLOAD_CONCURRENCY` | `2` | Max simultaneous yt-dlp download workers (FIFO queue). |
-| `MAX_FFMPEG_CONCURRENCY` | *(empty)* → **2** if a GPU encoder is available, else **1** | Max simultaneous remux/transcode/loudnorm workers. |
+| `MAX_FFMPEG_CONCURRENCY` | *(empty)* → **2** if a GPU encoder is available, else **1** | Max simultaneous remux/transcode/loudnorm/H.264-copy workers. |
 
 In Compose, Horde maps host **8686** → container **8080**. See [Ports & networking](ports-networking.md).
 
@@ -66,17 +66,19 @@ This is **not** the Ollama GPU. Passing a device into `ollama` (or running Ollam
 
 ### Do you need one?
 
-Horde does **not** require a GPU to download, browse, or play the library. Playback is the stored file; there is no live transcode while you watch.
+Horde does **not** require a GPU to download, browse, or play the library. Playback is a stored file (the original or an H.264 copy made ahead of time); there is no live transcode while you watch.
 
 | What you do | GPU? |
 |-------------|------|
-| Default **AV1** archives | No — bitstream is copied |
-| **H.264** at 1080p and below | No — YouTube already has H.264 |
-| **H.264 / H.265** at 1440p/4K | Optional: hardware encode is much faster; otherwise software can take a long time |
+| **AV1 only** (default) | No — bitstream is copied |
+| **H.264 only, up to 1080p** | No — YouTube already has H.264 |
+| **H.264 only, full resolution** | Strongly advised: every 1440p/4K download is re-encoded |
+| **AV1 + H.264 copy** | Helpful: new YouTube downloads need no encode, but copies of existing videos and imports are encoded |
+| One-off **Create compatible copy** | Optional: hardware encode is much faster; software takes minutes per 1080p video |
 | Local **Ollama** (tags, chat, search) | On the **Ollama** machine — or skip Ollama and use OpenRouter |
 | Everything else | No |
 
-Keep **Archive video codec → AV1** if you do not want encode work. Codec tradeoffs: [Compatibility codecs (beta)](../guides/downloads.md#compatibility-codecs).
+Keep **Playback compatibility → AV1 only** if you do not want encode work. Tradeoffs: [Playback compatibility](../guides/downloads.md#compatibility-codecs).
 
 ### Pass the GPU into Horde
 
@@ -112,18 +114,20 @@ On TrueNAS: install NVIDIA drivers in the TrueNAS UI, and do **not** isolate the
 
 Ollama passthrough is a **separate** uncomment on the `ollama` service. See [AI setup](ai-setup.md).
 
-### Archive transcode (beta) { #horde-encode-gpu }
+### Playback compatibility encoding { #horde-encode-gpu }
 
-H.264/H.265 conversion runs **inside the Horde container**, once per download — not while someone is watching, and not on the Ollama machine if that GPU lives elsewhere. The image installs **jellyfin-ffmpeg** when the Jellyfin repo is available so NVENC/QSV/VAAPI encoders exist; Debian ffmpeg is the fallback (software `libx264`/`libx265` only).
+H.264 encodes (copies, and `h264_convert` conversions) run **inside the Horde container** when a download finishes or a copy is requested — not while someone is watching, and not on the Ollama machine if that GPU lives elsewhere. The image installs **jellyfin-ffmpeg** when the Jellyfin repo is available so NVENC/QSV/VAAPI encoders exist; Debian ffmpeg is the fallback (software `libx264` only). Horde tries NVENC, QSV, VAAPI, AMF, VideoToolbox, then `libx264`.
 
 What you should see after passthrough:
 
 - Settings → System → Resources **GPU** shows name / util / VRAM (**None detected** is gone)
-- Settings → Library **Rec** / amber warnings come from ffmpeg in this process (`/api/system/stats` → `encode.hw_hevc`, `hw_h264`, `ffmpeg_has_hw_encoder`)
-- If **GPU** is filled but Library still warns that encode cannot use it, ffmpeg in this image cannot load NVENC/QSV/VAAPI
+- Settings → Library shows the encoder Horde picked (for example `h264_nvenc (GPU)`); the amber warnings come from ffmpeg in this process (`/api/system/stats` → `encode.hw_h264`, `ffmpeg_has_hw_encoder`)
+- If **GPU** is filled but Library still says Horde cannot use it for encoding, ffmpeg in this image cannot load NVENC/QSV/VAAPI
 - Ollama VRAM under AI is a different probe and may be a GPU on another PC
 
-AV1 archives never use the encode GPU. 1080p H.264 copies YouTube’s stream. Only 1440p/4K (and 1080p AV1/VP9 that must become H.264) hit the encoder.
+**GTX 16-series / RTX 20-series:** these NVIDIA cards encode H.264 fine but cannot decode AV1. Horde decodes AV1 on the CPU (dav1d) and encodes on the GPU, which is still several times faster than real time at 1080p. NVDEC is used for H.264/HEVC/VP9 sources.
+
+AV1-only and H.264-up-to-1080p modes never use the encode GPU. YouTube's own H.264 is downloaded, not encoded. Only `h264_convert`, copies for non-YouTube videos, and copies where YouTube has no H.264 hit the encoder. The ffmpeg pool is **2** workers with a GPU encoder, otherwise **1** (override with `MAX_FFMPEG_CONCURRENCY`).
 
 ## Example Compose fragment
 

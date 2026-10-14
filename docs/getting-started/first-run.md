@@ -19,9 +19,10 @@ You have Horde running (Docker or local dev). This page walks through the first 
 A **setup wizard** runs on first install (and after **Settings → System → Reset Horde**). It covers:
 
 1. LAN warning and a storage health snapshot (disk free + library count)
-2. Archive video codec and volume normalization
-3. Theme palette
-4. Optional AI (OpenRouter key or Ollama) — skip if you do not need it yet
+2. Volume normalization
+3. **Playback compatibility**: AV1 only, H.264 up to 1080p, H.264 full resolution, or AV1 + H.264 copy (shows your GPU/encoder and whether this device can play AV1)
+4. Theme palette
+5. Optional AI (OpenRouter key or Ollama) — skip if you do not need it yet
 
 **Use defaults** finishes immediately with built-in settings. You can change anything later under [Settings](../settings/index.md). Existing installs that already have `app_settings.json` are not sent through the wizard.
 
@@ -56,7 +57,7 @@ Sidecar metadata and thumbnails are stored with the app under `DATA_PATH` (`/app
 
 ## Browse the library
 
-After the job finishes, the video should appear in the [Library](../guides/library.md): channel sidebar, search, tags, and sorting. Click through to play in the built-in player (no live per-client transcode — the browser streams the archived MP4 with HTTP range requests). New downloads default to AV1. Settings → Library **Archive video codec** (beta) can store H.264 or H.265 instead.
+After the job finishes, the video should appear in the [Library](../guides/library.md): channel sidebar, search, tags, and sorting. Click through to play in the built-in player (no live per-client transcode — the browser streams the archived MP4 with HTTP range requests). New downloads default to AV1; if a device cannot decode it, the player offers an H.264 copy. Settings → Library **Playback compatibility** changes that policy (see [Playback compatibility](../guides/downloads.md#compatibility-codecs)).
 
 ## Optional: drop files for import
 

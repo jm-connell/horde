@@ -23,6 +23,14 @@ class ChapterRead(BaseModel):
     title: str
 
 
+class CompatState(BaseModel):
+    kind: str = "compat"
+    status: str  # none | queued | running | ready | error
+    stage: Optional[str] = None
+    progress: float = 0.0
+    error: Optional[str] = None
+
+
 class VideoRead(BaseModel):
     id: int
     title: str
@@ -43,6 +51,16 @@ class VideoRead(BaseModel):
     width_px: Optional[int]
     height_px: Optional[int]
     frame_rate: Optional[float]
+    # Actual on-disk stream (ffprobe), for client decode checks.
+    vcodec: Optional[str] = None
+    acodec: Optional[str] = None
+    codec_string: Optional[str] = None
+    bit_depth: Optional[int] = None
+    is_hdr: bool = False
+    # ≤1080p H.264 sidecar: compact lists only report has_compat.
+    has_compat: bool = False
+    compat_size: Optional[int] = None
+    compat: Optional["CompatState"] = None
     view_count: Optional[int]
     channel_subscriber_count: Optional[int]
     published_at: Optional[datetime]
@@ -181,12 +199,9 @@ class DownloadJobRead(BaseModel):
     @field_validator("video_codec", mode="before")
     @classmethod
     def _normalize_video_codec(cls, value: object) -> str:
-        raw = str(value or "av1").strip().lower().replace("-", "")
-        if raw in {"h264", "avc", "avc1"}:
-            return "h264"
-        if raw in {"h265", "hevc", "hev1", "hvc1"}:
-            return "h265"
-        return "av1"
+        from .services.ytdlp_formats import normalize_video_codec
+
+        return normalize_video_codec(value)
 
 
 class DownloadBulkResult(BaseModel):
@@ -367,6 +382,8 @@ class StorageStats(BaseModel):
     video_bytes: int
     thumbnail_bytes: int
     video_count: int
+    # H.264 sidecars (counted in total_bytes, not video_bytes).
+    compat_bytes: int = 0
 
 
 class ChannelRename(BaseModel):

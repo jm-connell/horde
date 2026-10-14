@@ -1,3 +1,5 @@
+import CompatGate from "../components/CompatGate";
+import { useLibraryRendition } from "../hooks/useLibraryRendition";
 import {
   createContext,
   useCallback,
@@ -842,10 +844,23 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     }
   }, [setMiniPos]);
 
+  const libraryRendition = useLibraryRendition(
+    current,
+    settings.downloadVideoCodec,
+    updateCurrentVideo,
+  );
+
+  // Query params bust the browser cache when the stored file is replaced.
   const streamSrc =
-    current != null
-      ? `${streamUrl(current.id)}?s=${current.file_size ?? 0}&h=${current.height_px ?? 0}`
-      : "";
+    current == null || libraryRendition.rendition == null
+      ? ""
+      : libraryRendition.rendition === "compat"
+        ? `${streamUrl(current.id, "compat")}&s=${current.compat_size ?? 0}`
+        : `${streamUrl(current.id)}?s=${current.file_size ?? 0}&h=${current.height_px ?? 0}`;
+  const compatBlocked =
+    current != null &&
+    !libraryRendition.checking &&
+    libraryRendition.rendition == null;
 
   // Distinct keys so DASH (Shaka/MSE) does not reuse the same VideoPlayer
   // instance as library progressive playback, or as a different preview URL.
@@ -856,7 +871,25 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         key="library"
         src={streamSrc}
         videoId={current.id}
-        mimeType={mimeFromPath(current.file_path)}
+        mimeType={
+          libraryRendition.rendition === "compat"
+            ? "video/mp4"
+            : mimeFromPath(current.file_path)
+        }
+        blockingOverlay={
+          compatBlocked ? (
+            <CompatGate
+              video={current}
+              compat={libraryRendition.compat}
+              originalFailed={libraryRendition.originalFailed}
+              isMini={!dock}
+              onRequest={libraryRendition.requestCompat}
+              onForceOriginal={libraryRendition.forceOriginal}
+              copyCap={settings.compatCopyResolution === "source" ? 2160 : 1080}
+            />
+          ) : undefined
+        }
+        onSourceError={libraryRendition.handleOriginalError}
         poster={thumbnailUrl(current)}
         mode={effectiveMode}
         onModeChange={setMode}

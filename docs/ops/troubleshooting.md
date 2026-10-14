@@ -23,7 +23,7 @@
 | `members` | Members-only |
 | `rate_limit` | HTTP 429 / temporary block. Caption (timedtext) 429s are retried automatically with backoff; the video file is still kept. |
 | `unavailable` | Removed, geo, no formats |
-| `postprocess` | Merge / subtitles / ffmpeg salvage or H.264/H.265 transcode failed |
+| `postprocess` | Merge / subtitles / ffmpeg salvage or `h264_convert` re-encode failed |
 | `cancelled` | User cancel |
 | `unknown` | Unclassified yt-dlp message |
 
@@ -113,9 +113,15 @@ In-app watch-before-download preview resolves progressive or adaptive formats vi
 
 Desktop Chrome can play **AV1/VP9 + Opus** remuxed into MP4. **Safari on iPhone cannot** — it needs AAC audio in MP4, and the `moov` atom at the start of the file. iPhone 15 Pro / Pro Max (A17) **can decode AV1**; the usual failure is Opus-in-MP4, not the video codec.
 
-Horde’s default archive is **AV1 + AAC** in MP4 with `faststart` (video copied). Playing a library file on the phone remuxes an older Opus file in place the first time. For devices that cannot decode AV1, set Settings → Library → **Archive video codec** (beta) to H.264 or H.265 and redownload. See [Compatibility codecs (beta)](../guides/downloads.md#compatibility-codecs).
+Horde’s default archive is **AV1 + AAC** in MP4 with `faststart` (video copied). Playing a library file on the phone remuxes an older Opus file in place the first time.
 
-**If it still fails:** the source may only offer VP9 (Safari has no VP9-in-MP4). Re-download so the AV1 (or H.264) selector runs. DevTools device mode still uses the desktop decoder and cannot reproduce this.
+## Video won't play on an iPad, older iPhone, Mac, or TV (AV1) { #av1-unsupported }
+
+M1/M2 iPads and Macs in Safari, iPhones before the 15 Pro, and many TVs and older PCs have no AV1 decoder. Horde checks the file's real codec against the device when you open a video. If it can't play, it plays the H.264 copy when one exists, or shows an overlay with **Create compatible copy** (a ≤1080p H.264 file saved beside the original, usually a few minutes; progress is shown and it starts automatically when ready).
+
+To avoid the overlay, set Settings → Library → **Playback compatibility** to **AV1 + H.264 copy** (new downloads get a copy automatically, and **Create N copies** backfills existing videos), or to an H.264 mode if no device you use can play AV1. If creating the copy fails, the overlay shows the error with **Try again**; on a box with no GPU encoder it can be slow (see [GPU](environment.md#gpu)). "Try playing the original anyway" forces the AV1 file and will likely show a black or frozen picture. See [Playback compatibility](../guides/downloads.md#compatibility-codecs).
+
+**If it still fails:** the source may only offer VP9 (Safari has no VP9-in-MP4). Re-download so the AV1 (or H.264) selector runs, or create a compatible copy. DevTools device mode still uses the desktop decoder and cannot reproduce this.
 
 ## Stale UI after update
 
@@ -152,9 +158,9 @@ If the old data directory still exists on disk, set `DATA_PATH` / `DOWNLOADS_PAT
 
 That means the `horde` container cannot probe a card. Horde still runs. Usual causes: GPU snippets in `docker-compose.yml` still commented out; TrueNAS isolated the GPU to another app; NVIDIA toolkit / `/dev/dri` missing; no GPU on the host.
 
-Horde does not need a GPU for default AV1 or 1080p H.264. See [GPU](environment.md#gpu) for when you need one and how to pass the device in.
+Horde does not need a GPU for AV1 only or H.264 up to 1080p. See [GPU](environment.md#gpu) for when you need one and how to pass the device in.
 
-If the GPU **name** appears but Library still warns that 1440p/4K will software-transcode, ffmpeg in this image cannot use NVENC/QSV/VAAPI — that is [archive transcode](environment.md#horde-encode-gpu), not a missing device.
+If the GPU **name** appears but Library still warns that 1440p/4K will be encoded on the CPU, ffmpeg in this image cannot use NVENC/QSV/VAAPI — that is [playback compatibility encoding](environment.md#horde-encode-gpu), not a missing device.
 
 ## Wiki missing in local development
 

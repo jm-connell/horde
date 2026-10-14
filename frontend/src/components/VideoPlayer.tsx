@@ -203,6 +203,10 @@ interface Props {
    * Used so a newly clicked preview can load without waiting on the current one.
    */
   mediaSuspended?: boolean;
+  /** Covers the video (e.g. "this device can't decode AV1"); src may be "". */
+  blockingOverlay?: React.ReactNode;
+  /** Library file failed to decode; return true when the caller recovers. */
+  onSourceError?: () => boolean;
 }
 
 export default function VideoPlayer({
@@ -247,6 +251,8 @@ export default function VideoPlayer({
   onActiveQualityChange,
   onFrameInsetChange,
   mediaSuspended = false,
+  blockingOverlay,
+  onSourceError,
 }: Props) {
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
@@ -1940,7 +1946,7 @@ export default function VideoPlayer({
         <video
           key={effectiveStreamType === "dash" ? "dash" : "file"}
           ref={videoRef}
-          src={effectiveStreamType === "dash" ? undefined : effectiveSrc}
+          src={effectiveStreamType === "dash" ? undefined : effectiveSrc || undefined}
           playsInline
           {...{ "x-webkit-airplay": "allow" }}
           controls={false}
@@ -2082,8 +2088,9 @@ export default function VideoPlayer({
               );
               return;
             }
+            if (!effectiveSrc || onSourceError?.()) return;
             setMediaError(
-              "This video could not be played. iPhone Safari needs AV1 (or H.264) with AAC audio in MP4.",
+              "This video could not be played. Check your connection and try again.",
             );
           }}
           onPointerDown={isMini ? undefined : onVideoPointerDown}
@@ -2119,8 +2126,10 @@ export default function VideoPlayer({
           />
         )}
 
+        {blockingOverlay}
+
         <PlayerOverlays
-          buffering={buffering}
+          buffering={buffering && !blockingOverlay}
           mediaError={mediaError}
           casting={chromecast.casting}
           castDeviceName={castDeviceName}

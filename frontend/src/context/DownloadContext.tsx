@@ -14,6 +14,7 @@ import {
   triggerBrowserDownload,
 } from "../api";
 import { downloadErrorToast } from "../downloadErrors";
+import { offlineManager } from "../offline/manager";
 import { useSettings } from "../hooks/useSettings";
 import { subscribeToQueue } from "../hooks/useJobEvents";
 import type {
@@ -124,6 +125,19 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     Set<(videoId: number | null, event?: ProgressEvent) => void>
   >(new Set());
 
+  const saveDeviceJob = useCallback(
+    (job: DownloadJob) => {
+      deviceSaved.current.add(job.id);
+      if (offlineManager.getSnapshot().unsupported) {
+        triggerBrowserDownload(deviceDownloadFileUrl(job.id));
+        return;
+      }
+      showToast(`Saving \u201c${job.title || "video"}\u201d for offline viewing`);
+      void offlineManager.downloadJob(job).catch(() => undefined);
+    },
+    [showToast],
+  );
+
   const refreshJob = useCallback((jobId: number) => {
     api
       .getJob(jobId)
@@ -144,22 +158,26 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
             fresh.destination === "device" &&
             !deviceSaved.current.has(jobId)
           ) {
-            deviceSaved.current.add(jobId);
-            triggerBrowserDownload(deviceDownloadFileUrl(jobId));
+            saveDeviceJob(fresh);
           }
         }
       })
       .catch(() => undefined);
-  }, []);
+  }, [saveDeviceJob]);
 
   const maybeSaveDeviceFile = useCallback(
     (jobId: number, destination?: string) => {
       if (destination !== "device") return;
       if (deviceSaved.current.has(jobId)) return;
-      deviceSaved.current.add(jobId);
-      triggerBrowserDownload(deviceDownloadFileUrl(jobId));
+      api
+        .getJob(jobId)
+        .then((fresh) => {
+          if (deviceSaved.current.has(jobId)) return;
+          if (fresh.status === "completed") saveDeviceJob(fresh);
+        })
+        .catch(() => undefined);
     },
-    [],
+    [saveDeviceJob],
   );
 
   const handleQueueEvent = useCallback(

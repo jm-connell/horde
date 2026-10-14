@@ -183,6 +183,7 @@ def app(init_db, monkeypatch):
         system,
         videos,
         setup,
+        compat,
     )
     from app.database import get_session
     from app.main import health
@@ -201,6 +202,7 @@ def app(init_db, monkeypatch):
 
     test_app = FastAPI(title="Horde test")
     test_app.include_router(videos.router)
+    test_app.include_router(compat.router)
     test_app.include_router(channels.router)
     test_app.include_router(downloads.router)
     test_app.include_router(preview.router)

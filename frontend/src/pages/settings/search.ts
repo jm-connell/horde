@@ -97,7 +97,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "library",
     keywords:
-      "download count navigation badge normalize volume loudness downloads compatibility av1 h264 h265 hevc codec transcode format beta",
+      "download count navigation badge normalize volume loudness downloads compatibility av1 h264 h265 hevc codec transcode format sidecar gpu nvenc playback compatibility convert",
   },
   // AI
   {

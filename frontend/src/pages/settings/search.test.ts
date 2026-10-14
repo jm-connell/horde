@@ -39,7 +39,7 @@ describe("settings search routing", () => {
     expect(firstMatchingTab("youtube video search")).toBe("library");
     expect(firstMatchingTab("av1")).toBe("library");
     expect(firstMatchingTab("h265")).toBe("library");
-    expect(firstMatchingTab("beta")).toBe("library");
+    expect(firstMatchingTab("sidecar")).toBe("library");
     expect(firstMatchingTab("hover preview")).toBe("playback");
     expect(firstMatchingTab("thumbnail preview")).toBe("playback");
     expect(firstMatchingTab("preview when centered")).toBe("playback");

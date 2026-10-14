@@ -18,7 +18,7 @@ The container listens on **8080** by default (API + SPA + wiki). Map that port i
 
 ## Why does Settings say GPU: none detected?
 
-The **GPU** card under Settings → System → Resources only sees devices inside the **`horde` container**. Stock compose leaves passthrough commented out, so **None detected** is normal. Horde does not need a GPU to download, browse, or play the library (default AV1 copies the bitstream; 1080p H.264 does too). A GPU on this host only speeds 1440p/4K H.264/H.265 archive transcode. Local Ollama is a separate pass-through (or another machine). How to connect one: [GPU](../ops/environment.md#gpu).
+The **GPU** card under Settings → System → Resources only sees devices inside the **`horde` container**. Stock compose leaves passthrough commented out, so **None detected** is normal. Horde does not need a GPU to download, browse, or play the library (AV1-only and H.264-up-to-1080p modes copy the stream). A GPU on this host only speeds up H.264 encodes: compatibility copies of existing videos and imports, and full-resolution H.264 conversion. Local Ollama is a separate pass-through (or another machine). How to connect one: [GPU](../ops/environment.md#gpu).
 
 ## Is it YouTube only?
 

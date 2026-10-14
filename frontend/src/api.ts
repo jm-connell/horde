@@ -25,6 +25,8 @@ import type {
   StreamPreviewMeta,
   SystemActivity,
   SystemStats,
+  CompatState,
+  CompatSummary,
   TagStat,
   UpdateCheck,
   Video,
@@ -32,6 +34,8 @@ import type {
   SpriteMeta,
   VideoAiChatMessage,
 } from "./types";
+import { connectivity } from "./offline/connectivity";
+import { getItem as getOfflineItem, putPendingProgress } from "./offline/db";
 
 export class ApiError extends Error {
   errorKind?: string;
@@ -50,16 +54,35 @@ export class ApiError extends Error {
   }
 }
 
+/** Thrown without touching the network while the app is in offline mode. */
+export function offlineError(): ApiError {
+  return new ApiError("You're offline", { code: "offline", status: 0 });
+}
+
+export function isOfflineError(err: unknown): boolean {
+  return err instanceof ApiError && err.code === "offline";
+}
+
+/** fetch() rejected (no response at all), as opposed to an HTTP error. */
+function isNetworkFailure(err: unknown): boolean {
+  return err instanceof TypeError || isOfflineError(err);
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  // Offline mode: fail fast instead of hanging on a dead/slow connection.
+  if (connectivity.offlineMode) throw offlineError();
   let resp: Response;
+  const t0 = performance.now();
   try {
     resp = await fetch(url, init);
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw err;
     }
+    connectivity.reportRequest(performance.now() - t0, true);
     throw err;
   }
+  connectivity.reportRequest(performance.now() - t0, false);
   if (!resp.ok) {
     let detail: unknown = resp.statusText;
     try {
@@ -87,6 +110,21 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   }
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
+}
+
+/** Event the offline manager listens for to keep resume positions current. */
+export const OFFLINE_PROGRESS_EVENT = "horde:offline-progress";
+
+function notifyOfflineProgress(videoId: number, positionSec: number): void {
+  window.dispatchEvent(
+    new CustomEvent(OFFLINE_PROGRESS_EVENT, { detail: { videoId, positionSec } }),
+  );
+}
+
+async function offlineVideo(id: number): Promise<Video> {
+  const item = await getOfflineItem(id).catch(() => undefined);
+  if (!item) throw new ApiError("Video not found", { status: 404 });
+  return item.video;
 }
 
 export interface LibraryQuery {
@@ -128,7 +166,27 @@ export const api = {
     );
   },
 
-  saveProgress(id: number, positionSec: number): Promise<void> {
+  async saveProgress(id: number, positionSec: number): Promise<void> {
+    notifyOfflineProgress(id, positionSec);
+    // Offline-only device downloads have no server record.
+    if (id < 0) return;
+    try {
+      await request<void>(`/api/videos/${id}/progress`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position_sec: positionSec }),
+      });
+    } catch (err) {
+      if (!isNetworkFailure(err)) throw err;
+      // Sync when the connection is back (offline/manager flushes these).
+      await putPendingProgress({ videoId: id, positionSec, at: Date.now() }).catch(
+        () => undefined,
+      );
+    }
+  },
+
+  /** Raw progress PATCH, used when flushing progress saved while offline. */
+  syncProgress(id: number, positionSec: number): Promise<void> {
     return request<void>(`/api/videos/${id}/progress`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -136,8 +194,17 @@ export const api = {
     });
   },
 
-  getVideo(id: number): Promise<Video> {
-    return request<Video>(`/api/videos/${id}`);
+  /** Falls back to the downloaded copy when offline or unreachable. */
+  async getVideo(id: number): Promise<Video> {
+    if (id < 0) return offlineVideo(id);
+    try {
+      return await request<Video>(`/api/videos/${id}`);
+    } catch (err) {
+      if (!isNetworkFailure(err)) throw err;
+      const local = await getOfflineItem(id).catch(() => undefined);
+      if (local) return local.video;
+      throw err;
+    }
   },
 
   getRelatedVideos(
@@ -577,6 +644,42 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
+    });
+  },
+
+  getCompat(videoId: number): Promise<CompatState> {
+    return request<CompatState>(`/api/videos/${videoId}/compat`);
+  },
+
+  requestCompat(videoId: number): Promise<CompatState> {
+    return request<CompatState>(`/api/videos/${videoId}/compat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prefer_download: true }),
+    });
+  },
+
+  getCompatSummary(): Promise<CompatSummary> {
+    return request<CompatSummary>("/api/compat/summary");
+  },
+
+  startCompatBackfill(): Promise<{ queued: number; already_queued: number }> {
+    return request("/api/compat/backfill", { method: "POST" });
+  },
+
+  convertLibraryToH264(): Promise<{ queued: number; already_queued: number }> {
+    return request("/api/compat/convert-library", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: true }),
+    });
+  },
+
+  cancelCompatJobs(kind?: "compat" | "convert"): Promise<{ cancelled: number }> {
+    return request("/api/compat/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(kind ? { kind } : {}),
     });
   },
 
@@ -1117,8 +1220,12 @@ export function absoluteUrl(path: string): string {
   return new URL(path, window.location.origin).href;
 }
 
-export function streamUrl(id: number): string {
-  return `/api/videos/${id}/stream`;
+export type Rendition = "original" | "compat";
+
+export function streamUrl(id: number, rendition: Rendition = "original"): string {
+  return rendition === "compat"
+    ? `/api/videos/${id}/stream?rendition=compat`
+    : `/api/videos/${id}/stream`;
 }
 
 export function previewStreamUrl(url: string): string {

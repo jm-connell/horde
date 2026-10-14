@@ -33,9 +33,13 @@ from .ytdlp_formats import (
     _has_audio,
     _height_to_tier,
     _video_heights,
+    PRESET_MAX_HEIGHT,
+    compat_copy_cap,
+    compat_format_spec,
     default_download_video_codec,
     format_chain,
     format_sort_for,
+    is_audio_preset,
 )
 
 
@@ -211,6 +215,20 @@ def _estimate_preset_sizes(
                     size = None
                 if size:
                     break
+            if size and codec == "sidecar" and not is_audio_preset(preset):
+                try:
+                    extra = _estimate_preset_bytes(
+                        ydl, work, compat_format_spec(PRESET_MAX_HEIGHT.get(preset))
+                    )
+                except Exception:  # noqa: BLE001
+                    extra = None
+                # Full-res copies of >1080p tiers are encoded here at roughly
+                # the AV1 size × 2 (H.264 needs ~2× the bits at 1440p/4K).
+                cap_h = PRESET_MAX_HEIGHT.get(preset)
+                if compat_copy_cap() > 1080 and (cap_h is None or cap_h > 1080):
+                    extra = size * 2
+                if extra:
+                    size += extra
             if size:
                 sizes[preset] = size
     return sizes

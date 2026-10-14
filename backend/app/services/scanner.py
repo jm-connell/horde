@@ -24,7 +24,12 @@ from .metadata import (
     probe_frame_rate,
     probe_is_playable,
 )
-from .paths import find_video_by_path, is_manual_import, to_rel_path
+from .paths import (
+    COMPAT_SIDECAR_TOKEN,
+    find_video_by_path,
+    is_manual_import,
+    to_rel_path,
+)
 from .thumbnails import unlink_for_video, write_list_thumbnail
 
 _scan_lock = threading.Lock()
@@ -91,6 +96,9 @@ def _is_media(path: Path) -> bool:
     if ".norm." in name or name.endswith(".norm.mp4"):
         return False
     if ".compat." in name or name.endswith(".compat.mp4"):
+        return False
+    # H.264 compatibility sidecars (and their temps) belong to another video.
+    if COMPAT_SIDECAR_TOKEN in name:
         return False
     return True
 
@@ -165,6 +173,9 @@ def ingest_media_file(
             needs_review=True,
             status=VideoStatus.ready,
         )
+        from .media_info import apply_stream_info, probe_stream_info
+
+        apply_stream_info(video, probe_stream_info(path))
         session.add(video)
         try:
             session.commit()
