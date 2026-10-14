@@ -84,6 +84,16 @@ _VIDEO_COLUMNS = [
     ("subtitles_fetch_attempts", "INTEGER DEFAULT 0"),
     ("sprite_path", "VARCHAR"),
     ("source_chapters", "VARCHAR DEFAULT '[]'"),
+    ("vcodec", "VARCHAR"),
+    ("acodec", "VARCHAR"),
+    ("codec_string", "VARCHAR"),
+    ("bit_depth", "INTEGER"),
+    ("is_hdr", "BOOLEAN DEFAULT 0"),
+    ("media_probed_at", "VARCHAR"),
+    ("compat_path", "VARCHAR"),
+    ("compat_size", "INTEGER"),
+    ("compat_source", "VARCHAR"),
+    ("compat_error", "VARCHAR"),
 ]
 
 _DOWNLOAD_JOB_COLUMNS = [

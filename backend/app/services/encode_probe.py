@@ -160,6 +160,29 @@ def _run_ffmpeg(args: list[str], timeout: float = 8.0) -> str:
     return (result.stdout or "") + "\n" + (result.stderr or "")
 
 
+_filters_lock = threading.Lock()
+_filters_cache: Optional[frozenset[str]] = None
+
+
+def parse_ffmpeg_filters(text: str) -> frozenset[str]:
+    """Parse `ffmpeg -filters` rows like ' ... zscale  V->V  Apply resizing'."""
+    names: set[str] = set()
+    for raw in text.splitlines():
+        parts = raw.split()
+        if len(parts) >= 3 and "->" in parts[2]:
+            names.add(parts[1])
+    return frozenset(names)
+
+
+def list_filters() -> frozenset[str]:
+    """ffmpeg filter names (cached for the process; the binary does not change)."""
+    global _filters_cache
+    with _filters_lock:
+        if _filters_cache is None:
+            _filters_cache = parse_ffmpeg_filters(_run_ffmpeg(["-hide_banner", "-filters"]))
+        return _filters_cache
+
+
 def list_encoders() -> frozenset[str]:
     return parse_ffmpeg_encoders(_run_ffmpeg(["-hide_banner", "-encoders"]))
 

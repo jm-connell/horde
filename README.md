@@ -32,7 +32,8 @@ on the host. Interactive API docs: `/docs`.
   watching.
 - **Player** — standard / theater / windowed, mini player, PiP, Chromecast,
   SponsorBlock, chapters, subtitles. Optional YouTube stream preview (fragile;
-  no transcoding — the browser plays the original file).
+  no live transcoding — the browser plays the original, or a pre-made
+  ≤1080p H.264 copy on devices that can't decode AV1).
 - **Playlists** — your own lists or imported YouTube playlists.
 - **AI** (optional) — Ollama and/or OpenRouter for embeddings, tags, summaries,
   chat, recommendations, and duplicate help.
@@ -208,7 +209,7 @@ MkDocs Material. The same site is deployed to GitHub Pages from `main`.
 
 ## Notes
 
-- Optional H.264/H.265 transcode after download (beta) when Settings → Library archive codec is not AV1 (the default). Playback still depends on the browser for the stored file.
+- Playback compatibility (Settings → Library): AV1 only (default), H.264 up to 1080p, H.264 full resolution (converts 1440p/4K, replacing originals), or AV1 + a ≤1080p H.264 copy beside the original. The player picks whichever file the device can decode. H.264 encodes use a GPU encoder when passed into the container, otherwise software.
 - Channel catalogs (index remote uploads for feed search and stream preview)
   are YouTube-only. Non-YouTube yt-dlp URLs still download.
 - Health: `GET /api/health` (version, yt-dlp, POT, wiki, library count).

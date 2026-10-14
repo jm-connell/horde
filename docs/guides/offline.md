@@ -30,6 +30,8 @@ updates are fetched in the background and apply on the next launch.
 | Library select mode | Select videos → **Download** |
 | Download page | Destination **Offline (this device)** — Horde fetches the URL with yt-dlp, then the app saves it offline (not added to the library) |
 
+Horde saves the file this device can actually play: the original when the device decodes it smoothly, otherwise the ≤1080p H.264 copy. If neither exists yet (an AV1 video on a device without AV1 decode), Horde starts creating the copy and asks you to save it again once it finishes. See [Playback compatibility](downloads.md#compatibility-codecs).
+
 Downloads run one at a time in the background while Horde is open. Video data
 is fetched in 4 MB pieces, so a dropped connection resumes where it stopped
 instead of starting over. Thumbnails, subtitles, chapters and SponsorBlock

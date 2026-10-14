@@ -150,9 +150,9 @@ Or point Horde at Ollama on a GPU PC via `OLLAMA_BASE_URL` / Settings → AI. Se
 
 ### GPU (optional)
 
-Stock compose leaves GPU passthrough commented out, so Settings → System → Resources **GPU** shows **None detected**. That is expected. Horde does not need a GPU for default AV1 archives or 1080p H.264.
+Stock compose leaves GPU passthrough commented out, so Settings → System → Resources **GPU** shows **None detected**. That is expected. Horde does not need a GPU for AV1-only archives or H.264 up to 1080p.
 
-To pass a host NVIDIA / Intel / AMD device into the **`horde`** container (for 1440p/4K H.264/H.265 encode), uncomment the matching block in `docker-compose.yml` and recreate the stack. Do not isolate the GPU to another TrueNAS app. Full steps and whether you need it: [GPU](../ops/environment.md#gpu).
+To pass a host NVIDIA / Intel / AMD device into the **`horde`** container (for H.264 compatibility copies and 4K H.264 conversion), uncomment the matching block in `docker-compose.yml` and recreate the stack. Do not isolate the GPU to another TrueNAS app. Full steps and whether you need it: [GPU](../ops/environment.md#gpu).
 
 ## 6. Updating on TrueNAS
 

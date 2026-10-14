@@ -12,7 +12,7 @@ import {
 } from "./constants";
 import { LIBRARY_SORT_OPTIONS, type LibrarySort } from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
-import ArchiveCodecPicker from "./ArchiveCodecPicker";
+import PlaybackCompatPicker from "./PlaybackCompatPicker";
 
 export default function LibraryTab() {
   const {
@@ -228,7 +228,11 @@ export default function LibraryTab() {
             "hevc",
             "codec",
             "transcode",
-            "beta"
+            "sidecar",
+            "gpu",
+            "nvenc",
+            "playback compatibility",
+            "convert"
           )
         }
       >
@@ -275,14 +279,21 @@ export default function LibraryTab() {
                 "hevc",
                 "codec",
                 "transcode",
-                "beta"
+                "sidecar",
+                "gpu",
+                "nvenc",
+                "playback compatibility",
+                "convert"
               )
             }
           >
-            <ArchiveCodecPicker
-              codec={settings.downloadVideoCodec}
+            <PlaybackCompatPicker
+              mode={settings.downloadVideoCodec}
               onChange={(id) => update({ downloadVideoCodec: id })}
-              encode={systemStats?.encode}
+              copyResolution={settings.compatCopyResolution}
+              onCopyResolutionChange={(v) => update({ compatCopyResolution: v })}
+              stats={systemStats}
+              showLibraryActions
             />
           </div>
         </div>

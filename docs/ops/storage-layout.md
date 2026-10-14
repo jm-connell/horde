@@ -57,6 +57,19 @@ Temporary output for **Download to this device** jobs. Not indexed into the libr
 | `.fNNN.*` | Per-format fragments before merge (e.g. `.f401.mp4`) |
 | `.norm.*` / `*.norm.mp4` | Intermediate loudnorm output |
 | `.compat.*` / `*.compat.mp4` | Intermediate AAC/faststart remux |
+| `*.horde-h264.*` | H.264 compatibility copy and its temps ([below](#h264-sidecars)) |
+
+### H.264 sidecars { #h264-sidecars }
+
+Next to a video, Horde can keep an H.264 compatibility copy (see [Playback compatibility](../guides/downloads.md#compatibility-codecs)):
+
+| Pattern | Role |
+|---------|------|
+| `<stem>.horde-h264.mp4` | The finished copy (≤1080p, 8-bit H.264, AAC, faststart). Counted in storage stats (`compat_bytes`) |
+| `<stem>.horde-h264.dl.*` | Temp while YouTube's H.264 stream downloads |
+| `<stem>.horde-h264.enc.mp4` | Temp while a local encode runs |
+
+The scanner ignores any name containing `.horde-h264.`, so copies never appear as separate videos. Deleting a video deletes its copy; renaming a manual import moves it. Temps are safe to delete when no job is running. Back up copies only if you want to skip regenerating them; they are rebuildable.
 
 The scanner and cleanup logic ignore intermediate fragments so partial downloads do not appear as library videos.
 

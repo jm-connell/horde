@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import subprocess
@@ -160,6 +161,7 @@ def system_stats():
         "cpu_percent": cpu_ram["cpu_percent"],
         "cpu_model": cpu_ram["cpu_model"],
         "cpu_temp_c": cpu_ram["cpu_temp_c"],
+        "cpu_count": os.cpu_count(),
         "ram_used_bytes": cpu_ram["ram_used_bytes"],
         "ram_total_bytes": cpu_ram["ram_total_bytes"],
         "ram_percent": cpu_ram["ram_percent"],

@@ -10,18 +10,19 @@ import {
 } from "../hooks/useSettings";
 import type { HealthStats, SystemStats } from "../types";
 import { formatSize } from "../utils";
-import ArchiveCodecPicker from "./settings/ArchiveCodecPicker";
+import PlaybackCompatPicker from "./settings/PlaybackCompatPicker";
 import ThemePalettePicker from "./settings/ThemePalettePicker";
 import { Toggle } from "./settings/ui";
 import { INPUT, INPUT_KEY, PANEL_BTN } from "./settings/constants";
 
-const STEPS = ["welcome", "downloads", "look", "ai", "done"] as const;
+const STEPS = ["welcome", "downloads", "playback", "look", "ai", "done"] as const;
 type Step = (typeof STEPS)[number];
 type AiChoice = "skip" | "openrouter" | "ollama";
 
 const STEP_TITLE: Record<Step, string> = {
   welcome: "Welcome",
   downloads: "Downloads",
+  playback: "Playback compatibility",
   look: "Look",
   ai: "AI (optional)",
   done: "You’re set",
@@ -372,10 +373,21 @@ function WizardPanel({
                 }
               />
             </label>
-            <ArchiveCodecPicker
-              codec={settings.downloadVideoCodec}
+          </>
+        )}
+
+        {step === "playback" && (
+          <>
+            <p className="text-sm text-gray-400">
+              Decide which devices can play your library. You can change this
+              later in Settings → Library, and switching never deletes videos.
+            </p>
+            <PlaybackCompatPicker
+              mode={settings.downloadVideoCodec}
               onChange={(id) => update({ downloadVideoCodec: id })}
-              encode={systemStats?.encode}
+              copyResolution={settings.compatCopyResolution}
+              onCopyResolutionChange={(v) => update({ compatCopyResolution: v })}
+              stats={systemStats}
             />
           </>
         )}

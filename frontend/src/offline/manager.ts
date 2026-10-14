@@ -8,9 +8,15 @@
  * automatically while the app is in offline mode and resume afterwards.
  */
 import {
+  checkOriginalSupport,
+  chooseRendition,
+  codecLabel,
+} from "../utils/playbackRendition";
+import {
   OFFLINE_PROGRESS_EVENT,
   api,
   listThumbnailUrl,
+  streamUrl,
   subtitleUrl,
   thumbnailUrl,
 } from "../api";
@@ -166,10 +172,19 @@ class OfflineManager {
       if (existing.status === "paused") this.resume(video.id);
       return;
     }
+    // Store the file this device can actually decode (the service worker
+    // answers /stream for this id regardless of ?rendition).
+    const choice = chooseRendition(await checkOriginalSupport(video), video);
+    if (choice.rendition === null) {
+      api.requestCompat(video.id).catch(() => undefined);
+      throw new Error(
+        `This device can’t play ${codecLabel(video)} video. Horde is making an H.264 copy — save it for offline again once that finishes.`,
+      );
+    }
     await this.enqueue({
       videoId: video.id,
       video,
-      sourceUrl: `/api/videos/${video.id}/stream`,
+      sourceUrl: streamUrl(video.id, choice.rendition),
     });
   }
 

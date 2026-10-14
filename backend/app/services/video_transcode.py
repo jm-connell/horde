@@ -1,4 +1,4 @@
-"""Permanent-file H.264/H.265 transcode after download (GPU when available)."""
+"""Permanent-file H.264 transcode after download (GPU when available)."""
 
 from __future__ import annotations
 
@@ -46,24 +46,16 @@ def encode_target(
     *,
     preset: str = "",
 ) -> Optional[str]:
-    """Return 'h264' or 'h265' when the file should be re-encoded, else None.
+    """Return 'h264' when the downloaded file should be re-encoded in place, else None.
 
-    H.265 at ≤1080p keeps native H.264 (already widely playable). 1080p AV1/VP9
-    in that mode is encoded to H.264, not HEVC.
+    Only the ``h264_convert`` mode rewrites originals. ≤1080p tiers already
+    download YouTube's native H.264, so this mainly fires for 1440p/4K AV1.
     """
     if preset and is_audio_preset(preset):
         return None
-    codec = normalize_video_codec(job_codec)
-    if codec == "av1":
+    if normalize_video_codec(job_codec) != "h264_convert":
         return None
-    if codec == "h264":
-        return None if is_h264_video(video_codec) else "h264"
-    # h265
-    if is_hevc_video(video_codec):
-        return None
-    if height is not None and height <= 1080:
-        return None if is_h264_video(video_codec) else "h264"
-    return "h265"
+    return None if is_h264_video(video_codec) else "h264"
 
 
 def ffmpeg_transcode_cmd(

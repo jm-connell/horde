@@ -77,6 +77,45 @@ export interface Video {
   chapters?: { start_sec: number; title: string }[];
   chapters_source?: "description" | "source" | "ai" | null;
   match_reason?: SearchMatchReason | null;
+  /** Actual stored stream (ffprobe): "av1" | "vp9" | "h264" | "hevc" | … */
+  vcodec?: string | null;
+  acodec?: string | null;
+  /** RFC 6381 codec string for MediaCapabilities, e.g. "av01.0.08M.08". */
+  codec_string?: string | null;
+  bit_depth?: number | null;
+  is_hdr?: boolean;
+  /** A ≤1080p H.264 sidecar exists (playable on nearly every device). */
+  has_compat?: boolean;
+  compat_size?: number | null;
+  /** Full rows only: sidecar job state. */
+  compat?: CompatState | null;
+}
+
+export type CompatStatus = "none" | "queued" | "running" | "ready" | "error";
+
+export interface CompatState {
+  kind: "compat" | "convert";
+  status: CompatStatus;
+  stage: "queued" | "downloading" | "encoding" | "finishing" | null;
+  progress: number;
+  error: string | null;
+}
+
+export interface CompatSummary {
+  videos: number;
+  library_bytes: number;
+  by_codec: Record<string, number>;
+  unprobed: number;
+  compat_ready: number;
+  compat_bytes: number;
+  compat_missing: number;
+  compat_missing_est_bytes: number;
+  convertible: number;
+  convertible_bytes: number;
+  queued: number;
+  running: number;
+  convert_queued: number;
+  convert_running: number;
 }
 
 export interface VideoUpdate {
@@ -512,6 +551,7 @@ export interface SystemStats {
   cpu_percent: number | null;
   cpu_model?: string | null;
   cpu_temp_c?: number | null;
+  cpu_count?: number | null;
   ram_used_bytes: number | null;
   ram_total_bytes: number | null;
   ram_percent: number | null;

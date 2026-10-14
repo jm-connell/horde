@@ -33,6 +33,9 @@ from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
 from .video_transcode import encode_target, transcode_video
+from . import compat_rendition
+from .compat_rendition import delete_compat_files
+from .media_info import apply_stream_info, needs_compat, probe_stream_info
 from .paths import find_video_by_path, to_rel_path
 from .url_clean import clean_url, youtube_video_id, youtube_thumbnail_url
 from .ytdlp_common import (
@@ -68,6 +71,8 @@ from .ytdlp_formats import (
     apply_audio_format_id,
     decode_available_presets,
     default_download_video_codec,
+    compat_copy_cap,
+    effective_max_height,
     format_sort_for,
     is_audio_preset,
     normalize_video_codec,
@@ -1356,10 +1361,11 @@ def _cleanup_partial_files(paths: set[str]) -> None:
 
 
 def _check_quality(
-    preset: str, height: Optional[int]
+    preset: str, height: Optional[int], video_codec: str = "av1"
 ) -> Optional[str]:
     """Return a warning string if actual height is below the requested cap tier."""
-    max_h = PRESET_MAX_HEIGHT.get(preset)
+    # H.264-native mode caps 1440p/4K presets at 1080p by design — not a warning.
+    max_h = effective_max_height(preset, video_codec)
     if max_h is None or height is None:
         return None
     # Allow a few pixels of encoder/probe variance (e.g. 1078 vs 1080).
@@ -1622,7 +1628,9 @@ def _complete_download(
         width = int(raw_w) if raw_w else None
         height = int(raw_h) if raw_h else None
 
-    quality_warning = _check_quality(quality_preset, int(height) if height else None)
+    quality_warning = _check_quality(
+        quality_preset, int(height) if height else None, video_codec
+    )
 
     # Ephemeral "to this device" — no library row, sprites, or AI.
     if destination == DownloadDestination.device.value:
@@ -1758,9 +1766,22 @@ def _complete_download(
         video.file_path = rel_path
         if notes_pending:
             video.notes = notes_pending
+        apply_stream_info(video, probe_stream_info(final_path))
+        # New original → any previous H.264 sidecar is stale.
+        if video.compat_path:
+            delete_compat_files(video)
+        video.compat_path = None
+        video.compat_size = None
+        video.compat_source = None
+        video.compat_error = None
 
         session.commit()
         session.refresh(video)
+        want_sidecar = (
+            video_codec == "sidecar"
+            and not is_audio_preset(quality_preset)
+            and needs_compat(video, compat_copy_cap())
+        )
 
         _remove_review_duplicates(session, info.get("id"), keep_id=video.id)
 
@@ -1796,6 +1817,16 @@ def _complete_download(
         info.get("thumbnail"),
         _list_thumbnail_url(info, info.get("id")),
     )
+
+    if want_sidecar:
+        try:
+            compat_rendition.enqueue(
+                video_id,
+                prefer_download=True,
+                reason="Sidecar mode: H.264 copy for older devices",
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("could not queue H.264 sidecar for video %s", video_id)
 
     snapshot = {
         "status": "completed",

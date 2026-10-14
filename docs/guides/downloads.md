@@ -21,76 +21,100 @@ After metadata loads, the UI may limit the preset list to formats actually avail
 
 When you queue with **Best available** (the channel download panel default), Horde still fetches the highest source tier, but the download queue stores and shows that **actual resolution** (for example **4K**) instead of the “best” label. Finished cards use the probed file height, never **Best available**.
 
-Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. Within a height, the **AV1** archive setting prefers **AV1 + AAC** over a higher-bitrate VP9/H.264 stream, then remuxes to MP4 with `faststart` (video is **copied**). If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
+Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. Within a height, the default **AV1** [playback mode](#compatibility-codecs) prefers **AV1 + AAC** over a higher-bitrate VP9/H.264 stream, then remuxes to MP4 with `faststart` (video is **copied**). If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.
 
-## Compatibility codecs (beta) { #compatibility-codecs }
+## Playback compatibility { #compatibility-codecs }
 
-Horde stores **one file per video** and plays it as a normal MP4 (HTTP range requests). There is **no live per-client transcode** like Plex. Whatever codec is in the file is what the browser or phone must decode. Settings → Library → Downloads → **Archive video codec** is **beta**. New downloads default to **AV1** (video copied, no encode). That choice is stamped onto every new job. Existing library files stay as they are until you [redownload / change resolution](#change-resolution-library).
+Horde stores **one original file per video** and plays it as a normal MP4 (HTTP range requests). There is **no live per-client transcode** like Plex: the browser or phone decodes the stored file itself. What Horde can do is keep a **second, H.264 file beside the original** and hand each device whichever one it can play. Pick the policy in Settings → Library → **Playback compatibility** (also a step in the [setup wizard](../getting-started/first-run.md)). It is stored as `downloadVideoCodec` and stamped onto every new download job (`video_codec`).
 
-### Why convert AV1 at all
+### Why AV1 is a problem
 
-YouTube now publishes its **highest resolutions as AV1** (and sometimes VP9). That is great for bandwidth: AV1 is smaller than H.264 at the same quality. The catch is **decode support**:
+YouTube publishes its **highest resolutions as AV1** (and sometimes VP9). That is great for bandwidth: AV1 is smaller than H.264 at the same quality. The catch is **decode support**:
 
-- Many recent desktop browsers can play AV1
-- A large set of phones, tablets, TVs, set-top boxes, and some Safari/Linux setups **cannot**
-- YouTube itself still offers **H.264 only up to 1080p**. There is no 1440p/4K H.264 (or H.265) stream to download. YouTube never ships HEVC for these videos
+- Current Chrome, Edge, and Firefox, most Android phones, iPhone 15 Pro and newer, and M3+ Macs/iPads decode AV1
+- M1/M2 iPads and Macs in Safari, older iPhones, many smart TVs, and older PCs **cannot**
+- YouTube offers **H.264 only up to 1080p**. There is no 1440p/4K H.264 (or H.265) stream to download. To get H.264 at 4K, Horde has to download the AV1 file and re-encode it
 
-So if you want **4K on a device that cannot play AV1**, Horde must **download the AV1 4K file and re-encode it** on your server to H.264 or H.265, then replace the library file. That conversion is lossy (a generation down from YouTube’s encode) and uses CPU or GPU. 1080p and below can usually skip that: YouTube already has H.264, which Horde copies.
+### The four modes
 
-Convert when playback clients cannot decode AV1. Keep AV1 when they can — it is the smallest, best-looking archive and costs almost nothing to store.
+| Mode | Value | What is stored | Storage | Server work | Devices |
+|------|-------|----------------|---------|-------------|---------|
+| **AV1 only** (default) | `av1` | YouTube's AV1/VP9, copied (remux only) | Smallest | None | Recent devices only |
+| **H.264 only, up to 1080p** | `h264_native` | YouTube's own H.264; every video preset is capped at 1080p (1440p/4K are saved at 1080p) | About 1.5-2x AV1 | None (stream copied) | Nearly everything |
+| **H.264 only, full resolution** | `h264_convert` | Native H.264 at 1080p and below; 1440p/4K download AV1, then are **re-encoded to H.264 at source resolution**, replacing the original | About 2-3x AV1 at 4K | Heavy; GPU strongly advised | Nearly everything (but old devices often struggle with 4K H.264) |
+| **AV1 + H.264 copy** | `sidecar` | The AV1 original **plus** a ≤1080p H.264 copy next to it | AV1 plus roughly 50-150% | Low for new YouTube downloads; encode for old videos and imports | Everything: each device plays the best file it can |
 
-Choose the format for **who watches the library**, not for which GPU Ollama uses.
+Legacy values migrate automatically: `h264` and `h265` become `h264_convert`. **H.265 mode was removed.** YouTube never ships HEVC for these videos, so it only ever added an encode.
 
-### AV1
+Audio-only presets are unaffected by all four modes.
 
-YouTube’s default for 1440p/4K, and often 1080p as well. Horde **copies** the video bitstream and only remuxes to MP4 + AAC + `faststart` (Safari needs AAC audio and the `moov` atom at the start of the file; that remux is not a video transcode).
+!!! warning "H.264 full resolution replaces originals"
+    In `h264_convert`, 1440p/4K originals are overwritten by a lossy re-encode (a generation below YouTube's AV1). Changing the mode does not touch existing videos. The **Convert library to H.264** button (visible only in this mode) re-encodes every AV1/VP9 original in place after a confirm step. The only way back is to download the videos again.
 
-- **Files:** smallest
-- **Quality:** highest — no re-encode
-- **Server cost:** none beyond the remux
-- **Playback:** modern Chrome, Firefox, and Edge; recent flagship phones. Fails on many older devices and on some Linux/Safari setups
+### How the sidecar works
 
-Use this when every screen you care about can decode AV1.
+In `sidecar` mode (and whenever you create a copy by hand), the H.264 copy is saved as `<original stem>.horde-h264.mp4` in the same folder. It is 8-bit H.264 High + AAC with `faststart`, with the short side capped at 1080 (a vertical 1080x1920 video keeps its full 1080 width).
 
-### H.264
+**Copy resolution** (Settings → Library, and the wizard) controls how big copies get:
 
-The compatibility codec. Nearly every browser, phone, tablet, and TV can play it.
+| Copy resolution | 1080p and lower sources | 1440p / 4K sources | Cost |
+|---|---|---|---|
+| **Up to 1080p** (default) | YouTube's own H.264, same size | Scaled to 1080p (YouTube's 1080p H.264 for new downloads) | Light: mostly downloads, small encodes |
+| **Full resolution** | YouTube's own H.264, same size | Encoded here at full size, up to 4K (8K sources get a 4K copy, the H.264 limit) | Heavy: every 1440p/4K copy is a full encode, files roughly 2× the AV1 size. A GPU is strongly advised |
 
-- **Files:** largest, especially at 1440p/4K
-- **Quality:** YouTube’s own H.264 at 1080p and below (no encode). 1440p/4K is a transcode of AV1, so a bit softer/larger than keeping AV1
-- **Server cost:** none at ≤1080p; GPU or slow software encode at 1440p/4K
-- **Playback:** pick this when you do not control the client, or when Linux Chrome / older hardware must work
+The same setting applies to one-off copies in the other modes. Devices that can't decode AV1 are often too old for smooth 4K H.264 as well, so "Up to 1080p" is the safer default.
 
-At 1440p/4K Horde still downloads AV1 (the only high-res stream), then transcodes to H.264.
+- **YouTube videos:** Horde first downloads **YouTube's own avc1 stream** after the main file finishes. That is an extra download, not a conversion, so there is no quality loss and almost no server work. If YouTube has no H.264 for the video, it falls back to encoding locally.
+- **Everything else** (imports, non-YouTube sites, existing library videos): encoded locally from the original with ffmpeg.
+- Sidecars are counted in [storage stats](../ops/storage-layout.md#h264-sidecars), deleted with the video, and moved with it when you rename a manual import. Re-downloading or changing the resolution of a video removes its old copy.
+- A video that is already 8-bit H.264 within the copy resolution never gets a copy. Audio-only files never do either.
 
-### H.265 (HEVC)
+Settings → Library shows the library size, how many copies exist, and a **Create N copies** button that backfills existing videos (with an estimated size and a cancel button). Copies of existing videos use YouTube's H.264 when available, otherwise a local encode.
 
-A middle path **at 1440p/4K**: smaller than H.264, playable on more devices than AV1 (recent phones, tablets, TVs, Safari). Linux Chrome often still cannot play HEVC.
+### How the player picks a file
 
-- **Files:** smaller than H.264 at 1440p/4K. 1080p and below stay YouTube H.264 — transcoding those to HEVC would not help compatibility and would only burn the server
-- **Quality:** transcode of YouTube AV1 at 1440p/4K
-- **Server cost:** GPU encode when Horde’s ffmpeg has NVENC/QSV/VAAPI; otherwise very slow software encode
-- **Playback:** strong on recent Apple/Android hardware and many TVs; weaker on desktop Linux browsers
+Every video row stores the **real probed codec** (video and audio codec, RFC 6381 codec string, bit depth, HDR flag). Existing libraries are probed in the background shortly after startup.
 
-### How the server GPU affects transcoding
+When you open a video, the player asks the browser (`MediaCapabilities.decodingInfo`) about that exact codec string, resolution, and frame rate:
 
-Transcode runs **once, when the download finishes**, inside the **Horde** process on your NAS/PC — not while someone is watching, and **not** on the Ollama GPU if that is a different machine.
+| Browser says | Copy exists | Result |
+|--------------|-------------|--------|
+| Smooth | any | Plays the **original** |
+| Unsupported, or supported but not smooth | yes | Plays the **H.264 copy** |
+| Supported but not smooth | no | Plays the original (it may stutter) |
+| Unsupported | no | An overlay covers the player (see below) |
 
-| Host GPU situation | What 1440p/4K H.264/H.265 jobs do |
-|--------------------|-----------------------------------|
-| **NVIDIA** (NVENC), device passed into the `horde` container, jellyfin-ffmpeg in the image | Minutes per 4K file, encoder block (chat/LLM can still use CUDA) |
+The overlay depends on the mode. With **AV1 + H.264 copy**, Horde starts creating the copy automatically and shows progress, then switches to it when it is ready. In the other modes it offers **Create compatible copy** (a one-off for this video, which jumps the queue) and **Try playing the original anyway**. The copy stays saved for next time.
+
+[Offline saves](offline.md) store whichever file the device can play.
+
+### How the server GPU affects encoding
+
+Encoding runs **inside the Horde container**, never on the Ollama machine. It happens when a download finishes, when you request a copy, or during a bulk action; never as a live stream. It applies to `h264_convert`, to copies of non-YouTube videos, and to copies when YouTube has no H.264 stream.
+
+| Host GPU situation | What encode jobs do |
+|--------------------|---------------------|
+| **NVIDIA** (NVENC), device passed into the `horde` container, jellyfin-ffmpeg in the image | Minutes per 4K file |
 | **Intel** QSV / **AMD** VAAPI or AMF, `/dev/dri` on `horde` | Similar: hardware encode, much faster than CPU |
-| **GPU visible in System → Resources but Settings warns** | nvidia-smi/DRM see a card, but **this** ffmpeg cannot use it — pass the GPU into **`horde`**, not only Ollama, and use jellyfin-ffmpeg (Debian ffmpeg has no NVENC) |
-| **None detected**, no GPU, or GPU only on another PC for Ollama | **Software** `libx264` / `libx265`: 4K can take a long time (often hours). 1080p H.264 downloads still need no encode |
-| **AV1 setting** | GPU does not matter; video is copied |
+| **GPU visible in System → Resources but Settings warns** | A card is visible but **this** ffmpeg cannot use it. Pass the GPU into **`horde`**, not only Ollama, and use jellyfin-ffmpeg (Debian ffmpeg has no NVENC) |
+| **None detected**, or GPU only on another PC for Ollama | **Software** `libx264`: 4K can take hours per video. 1080p copies are far cheaper |
+| **AV1 only / H.264 up to 1080p** | GPU does not matter; nothing is encoded |
 
-Horde software-decodes the source AV1 (CPU, usually fine) and uses the GPU for the **encode** when an encoder is available. Settings → Library marks **Rec** from that same probe (`hw_hevc` / `hw_h264` on `/api/system/stats`), and shows an amber warning when 1440p/4K would fall back to software.
+Encoder pick order: NVENC → QSV → VAAPI → AMF → VideoToolbox → libx264. Settings → Library shows the detected GPU, the encoder Horde will use, and an amber warning when a GPU-heavy mode is selected with no GPU encoder (`h264_convert` warns that every 1440p/4K download will be converted on the CPU; `sidecar` warns that copies for existing videos and imports will be). It also shows whether **this device** can play AV1, and flags AV1-only mode if it cannot.
 
-Encoder pick order: NVENC → QSV → VAAPI/AMF → VideoToolbox → libx264/libx265.
+!!! note "GTX 16-series and RTX 20-series"
+    Turing cards (GTX 1650/1660 and RTX 20xx) can **encode** H.264 on the GPU but have **no AV1 decoder**. Horde decodes AV1 on the CPU (dav1d) and only encodes on the GPU, which is still several times faster than real time at 1080p. For H.264, HEVC, and VP9 sources it uses NVDEC. RTX 30-series and newer decode AV1 on the GPU too.
 
-Setup: [GPU](../ops/environment.md#gpu) (passthrough and when you need one). Encode details: [Archive transcode (beta)](../ops/environment.md#horde-encode-gpu).
+Other encoding details:
 
-Safari (including other browsers on iOS) still needs **AAC** in MP4 and `faststart`. That remux always runs; it is not the same as choosing H.264/H.265. Desktop Chrome’s device emulation is not a substitute for a real phone.
+- 8-bit `yuv420p`, H.264 High, short side scaled to ≤1080, AAC 160k stereo (audio is copied when it is already AAC).
+- **HDR** sources are tone-mapped to SDR (`zscale` + `tonemap=hable`) when Horde's ffmpeg has those filters.
+- If an encode fails, Horde retries without NVDEC, then without tone-mapping, before giving up. A washed-out copy beats no copy.
+- Copy jobs share the ffmpeg pool: `MAX_FFMPEG_CONCURRENCY`, or **2** with a GPU encoder and **1** without.
+
+Setup: [GPU](../ops/environment.md#gpu) (passthrough and when you need one). Encode details: [Playback compatibility encoding](../ops/environment.md#horde-encode-gpu).
+
+Safari (including other browsers on iOS) also needs **AAC** in MP4 and `faststart`. That remux always runs for every original; it is separate from the modes above. Desktop Chrome's device emulation is not a substitute for a real phone.
 
 ## Change resolution (in-progress)
 
@@ -107,7 +131,7 @@ Downloads run in a **FIFO** worker queue.
 | Knob | Default | Notes |
 |------|---------|--------|
 | `MAX_DOWNLOAD_CONCURRENCY` | **2** | Env var — how many yt-dlp downloads run at once |
-| `MAX_FFMPEG_CONCURRENCY` | **1** (or **2** with GPU) | Env var — remux / transcode / loudnorm overlap |
+| `MAX_FFMPEG_CONCURRENCY` | **1** (or **2** with GPU) | Env var — remux / encode / loudnorm / H.264 copy overlap |
 
 Set concurrency in the container environment ([Environment variables](../ops/environment.md)). Lower values (1–2) reduce YouTube IP flagging risk; see [YouTube access](../ops/youtube-access.md). After yt-dlp finishes, the next queued download can start while the last file is still remuxing or transcoding.
 
@@ -167,7 +191,7 @@ Toggle via the download options / `normalizeVolumeOnDownload` preference when su
 
 ## Progress and failures
 
-The queue panel shows status, percentage, and errors. After the file is on disk, the card names the current post-download step instead of a generic Processing label: **Merging** (yt-dlp combining video+audio), **Encoding audio** (Opus/Vorbis → AAC for Safari), **Remuxing** (MP4 / `faststart` without an audio re-encode), **Transcoding** (optional H.264/H.265), or **Normalizing** (optional loudnorm). Failures carry a typed **`error_kind`** (bot check, PO token, age-restricted/private, members-only, rate limit, unavailable, post-process, etc.) with a short fix hint on the card; the Download URL field also shows a banner when link preview fails for the same reasons.
+The queue panel shows status, percentage, and errors. After the file is on disk, the card names the current post-download step instead of a generic Processing label: **Merging** (yt-dlp combining video+audio), **Encoding audio** (Opus/Vorbis → AAC for Safari), **Remuxing** (MP4 / `faststart` without an audio re-encode), **Transcoding** (H.264 conversion in `h264_convert` mode), or **Normalizing** (optional loudnorm). Failures carry a typed **`error_kind`** (bot check, PO token, age-restricted/private, members-only, rate limit, unavailable, post-process, etc.) with a short fix hint on the card; the Download URL field also shows a banner when link preview fails for the same reasons.
 
 Failed jobs can be retried from the card. Retry **requeues the same job** (it does not create a second queue entry), so extra clicks while it is already queued or downloading are ignored. Active download paths are marked so the [import scanner](import-review.md) does not race the same files.
 

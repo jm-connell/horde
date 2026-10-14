@@ -14,10 +14,11 @@ URL
     -> ffmpeg slot (1, or 2 with a GPU encoder; MAX_FFMPEG_CONCURRENCY)
     -> library: Channel/YYYY/Title [id].ext
        device:  _device/{job_id}/Title [id].ext (ephemeral)
-    -> optional loudnorm / H.264/H.265 transcode (ffmpeg slot; bar uses out_time)
+    -> optional loudnorm / h264_convert re-encode (ffmpeg slot; bar uses out_time)
     -> library only: FFmpegSubtitlesConvertor -> .vtt, thumbnails + sprites, Video row
     -> device: browser GET /api/downloads/{id}/file; delete on dismiss
     -> library: optional AI enqueue (embed / tags / summary)
+    -> sidecar mode: queue the H.264 copy (compat job, see below)
 ```
 
 ## Module split
@@ -33,7 +34,9 @@ Download-related code is split for maintainability (façades may still re-export
 | `ytdlp_formats.py` | Quality preset / format-chain helpers; original-language audio picker |
 | `mp4_compat.py` | Copy-video remux to MP4: AAC audio + `faststart` for Safari |
 | `encode_probe.py` | ffmpeg encoder inventory in the Horde process |
-| `video_transcode.py` | Optional GPU/software H.264/H.265 encode after remux |
+| `video_transcode.py` | GPU/software H.264 encode for `h264_convert` and library conversion |
+| `compat_rendition.py` | H.264 sidecar + in-place convert jobs, ffmpeg command, retry ladder, startup probe backfill |
+| `media_info.py` | ffprobe summary stored on the video row (codec, codec string, bit depth, HDR); `needs_compat` |
 | `stream_preview.py` | In-app progressive + DASH preview caches/manifests |
 | `ytdlp_common.py` | Cookies, POT, extract gate, error classification |
 
@@ -43,7 +46,7 @@ Download-related code is split for maintainability (façades may still re-export
 
 ## yt-dlp
 
-- Format presets: `best`, height caps (`2160p`…`480p`), `audio`. Default selectors prefer AV1 then AAC; `format_sort` is `res`, `fps`, `hdr:12`, `vcodec:av01`, `lang`, `acodec:mp4a`, `vbr`, `abr`. After download-meta extract, Horde pins the original-language audio `format_id` (same scoring as stream preview) so autodubs lose to the source track. A Settings **archive video codec** (beta) of H.264/H.265 uses YouTube `avc1` at ≤1080p and still prefers AV1 as the source at 1440p/4K, then transcodes. Existing library files are not rewritten.
+- Format presets: `best`, height caps (`2160p`…`480p`), `audio`. Default selectors prefer AV1 then AAC; `format_sort` is `res`, `fps`, `hdr:12`, `vcodec:av01`, `lang`, `acodec:mp4a`, `vbr`, `abr`. After download-meta extract, Horde pins the original-language audio `format_id` (same scoring as stream preview) so autodubs lose to the source track. The Settings **playback compatibility** mode (`video_codec` on the job) picks the selector: `av1` as above; `h264_native` uses YouTube `avc1` and caps every video preset at 1080p; `h264_convert` uses `avc1` at ≤1080p and AV1 at 1440p/4K, then re-encodes; `sidecar` downloads AV1 like `av1` and fetches a second H.264 file afterwards. Legacy `h264`/`h265` normalize to `h264_convert`. Existing library files are not rewritten.
 - Output template under `DOWNLOADS_DIR`:
 
   ```text
@@ -54,7 +57,7 @@ Download-related code is split for maintainability (façades may still re-export
 - `POST /api/downloads` and `/bulk` insert a job and return immediately (catalog autodownload already did this). Title/presets fill on a background worker that uses the **low-priority** extract gate. Interactive `GET /preview` jumps that gate. Preview, download-meta, and stream preview share the same `url` cache key.
 - Duplicate checks are by **video identity** (YouTube id, else cleaned URL): already queued, already downloading, or still in the library. Paste does not set `replace_video_id`. Library/Watch redownload still can. Cancelled / failed / deleted-then-readded are not duplicates.
 - Metadata extracts share the same global extract gate (1 + 1.25s spacing, priority waiters) as preview/feed extracts so concurrent browsing does not stampede YouTube.
-- Progress hooks update an in-memory `progress_store` consumed by **one** `GET /api/downloads/events` stream (plus per-job `/{id}/events` for Watch). Percent during download is combined bytes; during remux/transcode/loudnorm it is ffmpeg `out_time` (not clamped to 99). yt-dlp merge and Horde’s MP4 compat / transcode / loudnorm flip to `processing` with a `stage` token.
+- Progress hooks update an in-memory `progress_store` consumed by **one** `GET /api/downloads/events` stream (plus per-job `/{id}/events` for Watch). Percent during download is combined bytes; during remux/transcode/loudnorm it is ffmpeg `out_time` (not clamped to 99). yt-dlp merge and Horde’s MP4 remux / transcode / loudnorm flip to `processing` with a `stage` token.
 - Preview `preset_sizes` walk the same `format_chain` + `format_sort` as the downloader and sum each selected format’s components (`filesize` / `filesize_approx` / bitrate×duration), so 4K DASH is not labeled with a progressive mux or audio-only size.
 - The download slot is released after yt-dlp; ffmpeg remux/transcode/loudnorm use a separate cap (**1**, or **2** if a GPU encoder is available). Pause does not kill an in-flight encode. Cancel kills the ffmpeg process.
 - Failures set `DownloadJob.error` plus a typed `error_kind` (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `cancelled`, `unknown`) for actionable UI. Cancel races are coerced off `status=error`.
@@ -72,12 +75,25 @@ Global queue pause is persisted as `download_queue_paused` in app settings so it
 |------|--------|
 | **FFmpegSubtitlesConvertor** | yt-dlp postprocessor → WebVTT sidecars. Timedtext **429**s keep `subtitles_pending` and retry with backoff ([subtitle retry](workers.md#subtitle-retry)) instead of giving up. |
 | **mp4 compat** | Video-copy remux: AAC audio if needed, `+faststart`. Keeps AV1/4K on the AV1 setting. |
-| **compat transcode** | When the job’s `video_codec` is h264/h265 and the file is not already that codec (H.265 skips encode at ≤1080p H.264). GPU NVENC/QSV/VAAPI when the Horde process can use it; otherwise software. |
+| **convert** | Only for `h264_convert`: when the finished file is not already 8-bit H.264 (the ≤1080p native case skips the encode). GPU NVENC/QSV/VAAPI when the Horde process can use it; otherwise software. Replaces the original. |
+| **H.264 sidecar** | Only for `sidecar` (video presets): after the row is ready and finalize is queued, a `compat` job is enqueued if `needs_compat`. See below. |
+| **probe** | Every finished file is ffprobed into the `videos` row (`vcodec`, `acodec`, `codec_string`, `bit_depth`, `is_hdr`, `media_probed_at`). A new original also clears any previous sidecar. |
 | **loudnorm** | Optional EBU-ish loudness (`I=-16:TP=-1.5:LRA=11`) when the job requests normalize; keeps AAC + faststart |
 | **Thumbnails** | Cached under `DATA_DIR/thumbnails` |
 | **Sprites** | Seek-preview sheet + JSON under `DATA_DIR/sprites` |
 
 Probe helpers fill duration, dimensions, playability before the row is marked ready.
+
+### H.264 sidecar { #h264-sidecar }
+
+`compat_rendition.py` runs two job kinds on one small pool (the ffmpeg cap above):
+
+1. **`compat`** writes `<stem>.horde-h264.mp4` beside the original. For YouTube sources it first runs yt-dlp with `compat_format_spec` (avc1 ≤1080p by short side + the original-language AAC track) into `<stem>.horde-h264.dl.*`. If YouTube has no avc1 stream, or that fails, it encodes locally into `<stem>.horde-h264.enc.mp4` (NVENC → QSV → VAAPI → AMF → VideoToolbox → libx264). The result goes through the Safari remux, is renamed into place, and `compat_path` / `compat_size` / `compat_source` (`youtube` or `transcode`) are saved on the row. Failures save `compat_error`.
+2. **`convert`** re-encodes the original in place to H.264 at source resolution (`h264_convert` library action). A ≤1080p H.264 result makes any existing sidecar redundant, and it is deleted.
+
+Encode details: 8-bit `yuv420p` High profile, short side ≤1080, AAC 160k stereo (copied when already AAC), `faststart`, HDR tone-mapped with `zscale` + `tonemap=hable` when ffmpeg has the filters. NVENC jobs use NVDEC for H.264/HEVC/VP9 sources; AV1 decodes on the CPU (dav1d) because GTX 16/RTX 20 cards have no AV1 decoder. On failure the **retry ladder** drops NVDEC, then tone-mapping, before erroring. Jobs are idempotent per video, in-memory progress is polled via the video row and `/api/videos/{id}/compat`, and viewer-requested jobs jump the queue.
+
+The scanner ignores any filename containing `.horde-h264.`, so copies and temps never become library videos.
 
 ## Video row
 

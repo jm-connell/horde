@@ -32,6 +32,22 @@ Clients typically use `EventSource` for downloads and fetch/stream readers for c
 
 Library (and preview) media endpoints support HTTP **Range** requests so the browser player and cast receivers can seek efficiently. CORS exposes `Content-Range` / `Accept-Ranges` for cross-origin cast. See [Ports & networking](../ops/ports-networking.md).
 
+`GET /api/videos/{id}/stream` and `/file` take an optional `?rendition=original|compat`. `compat` serves the H.264 sidecar (`404 compat_unavailable` when none exists; any other value is `400`). Without it the original is served.
+
+### H.264 compatibility copies
+
+| Route | Purpose |
+|-------|---------|
+| `GET /api/videos/{id}/compat` | Copy state: `status` (`none` \| `queued` \| `running` \| `ready` \| `error`), `stage` (`downloading` \| `encoding` \| `finishing`), `progress`, `error` |
+| `POST /api/videos/{id}/compat` | Create the copy for one video (body `prefer_download`, default `true`; `false` always encodes locally). Jumps the queue. `409` if the video is already ≤1080p 8-bit H.264 |
+| `DELETE /api/videos/{id}/compat` | Cancel any job, delete the sidecar file, clear the row fields |
+| `GET /api/compat/summary` | Library totals: size, codec counts, copies ready/missing (with estimated bytes), convertible originals, queue counts |
+| `POST /api/compat/backfill` | Queue copies for every ready, non-review video that would benefit |
+| `POST /api/compat/convert-library` | Re-encode all non-H.264 originals in place. Body must carry `confirm: true` (else `400`) |
+| `POST /api/compat/cancel` | Drop queued jobs and signal running ones (body `kind`: `compat` \| `convert`, optional) |
+
+Video payloads carry the probed codec fields, `has_compat` on lists, and `compat` (state) on detail. `GET /api/stats/storage` includes `compat_bytes` in its totals.
+
 ### List vs. detail video payloads
 
 `GET /api/videos` (including `continue_watching`, search, and `watched_only`) and `GET /api/videos/{id}/related` return **card-sized** payloads (no description/chapters/AI meta, no disk stats). Fetch `GET /api/videos/{id}` for the full detail record.

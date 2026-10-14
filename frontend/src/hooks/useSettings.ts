@@ -144,7 +144,16 @@ export type StreamQuality =
   | "720"
   | "480";
 
-export type DownloadVideoCodec = "av1" | "h264" | "h265";
+/**
+ * Playback-compatibility mode (persisted as `download_video_codec`):
+ * - av1: AV1/VP9 originals only (smallest; newest devices).
+ * - h264_native: YouTube's H.264, capped at 1080p, never converted.
+ * - h264_convert: H.264 at full resolution; >1080p converted on this server.
+ * - sidecar: AV1 original + a ≤1080p H.264 copy beside it.
+ */
+export type DownloadVideoCodec = "av1" | "h264_native" | "h264_convert" | "sidecar";
+
+export type CompatCopyResolution = "1080p" | "source";
 
 export interface Settings {
   theme: Theme;
@@ -204,6 +213,8 @@ export interface Settings {
   showDownloadNavBadge: boolean;
   normalizeVolumeOnDownload: boolean;
   downloadVideoCodec: DownloadVideoCodec;
+  /** Short-side cap for H.264 copies: 1080p (cheap) or source (up to 4K). */
+  compatCopyResolution: CompatCopyResolution;
   channelSort: ChannelSort;
   channelOrder: "asc" | "desc";
   defaultLibrarySort: LibrarySort;
@@ -284,6 +295,7 @@ const DEFAULTS: Settings = {
   showDownloadNavBadge: true,
   normalizeVolumeOnDownload: true,
   downloadVideoCodec: "av1",
+  compatCopyResolution: "1080p",
   channelSort: "recent_download",
   channelOrder: "desc",
   defaultLibrarySort: "added_at",
@@ -351,6 +363,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "showDownloadNavBadge",
   "normalizeVolumeOnDownload",
   "downloadVideoCodec",
+  "compatCopyResolution",
   "channelSort",
   "channelOrder",
   "defaultLibrarySort",
@@ -652,14 +665,18 @@ function normalizeBool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-function normalizeDownloadVideoCodec(value: unknown): DownloadVideoCodec {
+export function normalizeDownloadVideoCodec(value: unknown): DownloadVideoCodec {
   const raw = String(value ?? "")
     .trim()
     .toLowerCase()
-    .replace(/[-.]/g, "");
-  if (raw === "h264" || raw === "avc" || raw === "avc1") return "h264";
-  if (raw === "h265" || raw === "hevc" || raw === "hvc1" || raw === "hev1") {
-    return "h265";
+    .replace(/[-._+]/g, "");
+  if (raw === "sidecar" || raw === "dual" || raw === "av1h264") return "sidecar";
+  if (raw === "h264native" || raw === "native") return "h264_native";
+  // Legacy "h264" / "h265" were per-download transcode targets.
+  if (
+    ["h264convert", "h264", "avc", "avc1", "h265", "hevc", "hvc1", "hev1"].includes(raw)
+  ) {
+    return "h264_convert";
   }
   return "av1";
 }
@@ -953,6 +970,8 @@ function normalizeSettings(
     ),
     previewMuted: normalizeBool(parsed.previewMuted, DEFAULTS.previewMuted),
     downloadVideoCodec: normalizeDownloadVideoCodec(parsed.downloadVideoCodec),
+    compatCopyResolution:
+      parsed.compatCopyResolution === "source" ? "source" : "1080p",
     ...normalizeFontSettings(parsed),
   };
 }

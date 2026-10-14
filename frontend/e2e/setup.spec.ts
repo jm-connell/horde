@@ -24,12 +24,24 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Downloads" })).toBeVisible();
   await expect(page.getByText("Normalize volume on download")).toBeVisible();
-  await page.getByRole("button", { name: "H.264" }).click();
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: "Welcome" })).toBeVisible();
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Downloads" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByRole("heading", { name: "Playback compatibility" })).toBeVisible();
+  const picker = page.getByRole("radiogroup", { name: "Playback compatibility" });
+  await expect(picker.getByRole("radio", { name: /AV1 only/ })).toBeVisible();
+  const sidecar = picker.getByRole("radio", { name: /AV1 \+ H\.264 copy/ });
+  await sidecar.click();
+  await expect(sidecar).toHaveAttribute("aria-checked", "true");
+
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page.getByRole("heading", { name: "Downloads" })).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(sidecar).toHaveAttribute("aria-checked", "true");
 
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Look" })).toBeVisible();
@@ -45,6 +57,8 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await page.getByRole("button", { name: "Skip", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: /You.re set/ })).toBeVisible();
+  const settings = await (await page.request.get("/api/settings")).json();
+  expect(JSON.stringify(settings)).toContain('"sidecar"');
   await page.getByRole("button", { name: "Go to Downloads" }).click();
   await expect(page).toHaveURL(/\/download$/);
   await expect(page.getByRole("heading", { name: "Download", level: 1 })).toBeVisible();

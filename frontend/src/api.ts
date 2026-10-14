@@ -25,6 +25,8 @@ import type {
   StreamPreviewMeta,
   SystemActivity,
   SystemStats,
+  CompatState,
+  CompatSummary,
   TagStat,
   UpdateCheck,
   Video,
@@ -645,6 +647,42 @@ export const api = {
     });
   },
 
+  getCompat(videoId: number): Promise<CompatState> {
+    return request<CompatState>(`/api/videos/${videoId}/compat`);
+  },
+
+  requestCompat(videoId: number): Promise<CompatState> {
+    return request<CompatState>(`/api/videos/${videoId}/compat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prefer_download: true }),
+    });
+  },
+
+  getCompatSummary(): Promise<CompatSummary> {
+    return request<CompatSummary>("/api/compat/summary");
+  },
+
+  startCompatBackfill(): Promise<{ queued: number; already_queued: number }> {
+    return request("/api/compat/backfill", { method: "POST" });
+  },
+
+  convertLibraryToH264(): Promise<{ queued: number; already_queued: number }> {
+    return request("/api/compat/convert-library", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: true }),
+    });
+  },
+
+  cancelCompatJobs(kind?: "compat" | "convert"): Promise<{ cancelled: number }> {
+    return request("/api/compat/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(kind ? { kind } : {}),
+    });
+  },
+
   getSystemStats(): Promise<SystemStats> {
     return request<SystemStats>("/api/system/stats");
   },
@@ -1182,8 +1220,12 @@ export function absoluteUrl(path: string): string {
   return new URL(path, window.location.origin).href;
 }
 
-export function streamUrl(id: number): string {
-  return `/api/videos/${id}/stream`;
+export type Rendition = "original" | "compat";
+
+export function streamUrl(id: number, rendition: Rendition = "original"): string {
+  return rendition === "compat"
+    ? `/api/videos/${id}/stream?rendition=compat`
+    : `/api/videos/${id}/stream`;
 }
 
 export function previewStreamUrl(url: string): string {

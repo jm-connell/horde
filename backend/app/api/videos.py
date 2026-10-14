@@ -41,6 +41,7 @@ from ..services.metadata import (
     sprites_exist,
 )
 from ..services.paths import (
+    resolve_compat_path,
     is_manual_import,
     manual_import_rel_path,
     rename_video_file,
@@ -143,14 +144,21 @@ def storage_stats(session: Session = Depends(get_session)):
     video_count = session.exec(
         select(func.count(Video.id)).where(Video.needs_review == False)  # noqa: E712
     ).one()
+    compat_bytes = session.exec(
+        select(func.coalesce(func.sum(Video.compat_size), 0)).where(
+            Video.needs_review == False,  # noqa: E712
+            Video.compat_path != None,  # noqa: E711
+        )
+    ).one()
     thumbnail_bytes = 0
     if THUMBNAILS_DIR.exists():
         thumbnail_bytes = sum(
             f.stat().st_size for f in THUMBNAILS_DIR.glob("*") if f.is_file()
         )
     return StorageStats(
-        total_bytes=int(video_bytes) + thumbnail_bytes,
+        total_bytes=int(video_bytes) + int(compat_bytes) + thumbnail_bytes,
         video_bytes=int(video_bytes),
+        compat_bytes=int(compat_bytes),
         thumbnail_bytes=thumbnail_bytes,
         video_count=int(video_count),
     )
@@ -366,6 +374,9 @@ def _delete_media_files(video: Video) -> None:
     media = DOWNLOADS_DIR / video.file_path
     if media.exists():
         media.unlink(missing_ok=True)
+    compat = resolve_compat_path(video)
+    if compat is not None:
+        compat.unlink(missing_ok=True)
     for track in library.parse_subtitles(video.subtitles):
         sub = DOWNLOADS_DIR / track.get("path", "")
         if sub.exists():
@@ -774,18 +785,33 @@ def get_subtitle(video_id: int, lang: str, session: Session = Depends(get_sessio
 _RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
 
 
+def _resolve_rendition(video: Video, rendition: Optional[str]) -> Optional[Path]:
+    """Sidecar path for ``rendition=compat``; None means serve the original."""
+    if rendition in (None, "", "original"):
+        return None
+    if rendition != "compat":
+        raise HTTPException(status_code=400, detail="Unknown rendition")
+    path = resolve_compat_path(video)
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="compat_unavailable")
+    return path
+
+
 @router.get("/videos/{video_id}/stream")
 def stream_video(
     video_id: int,
     request: Request,
+    rendition: Optional[str] = None,
     session: Session = Depends(get_session),
 ):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    path = _resolve_media(video)
+    compat = _resolve_rendition(video, rendition)
+    path = compat or _resolve_media(video)
     ua = request.headers.get("user-agent") or ""
-    if apple_webkit_playback(ua):
+    # Sidecars are written Safari-ready (AAC + faststart); only originals remux.
+    if compat is None and apple_webkit_playback(ua):
         remuxed = ensure_safari_mp4(path)
         try:
             new_size = remuxed.stat().st_size
@@ -853,11 +879,17 @@ def stream_video(
 
 
 @router.get("/videos/{video_id}/file")
-def download_video_file(video_id: int, session: Session = Depends(get_session)):
+def download_video_file(
+    video_id: int,
+    rendition: Optional[str] = None,
+    session: Session = Depends(get_session),
+):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    path = _resolve_media(video)
+    compat = _resolve_rendition(video, rendition)
+    path = compat or _resolve_media(video)
     content_type = CONTENT_TYPES.get(path.suffix.lower(), "application/octet-stream")
-    filename = f"{_safe_filename(video.title)}{path.suffix.lower()}"
+    tag = " (H.264)" if compat is not None else ""
+    filename = f"{_safe_filename(video.title)}{tag}{path.suffix.lower()}"
     return FileResponse(path, media_type=content_type, filename=filename)

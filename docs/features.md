@@ -13,7 +13,7 @@ Paste a [yt-dlp](https://github.com/yt-dlp/yt-dlp)-supported URL (YouTube is the
 
 Presets range from **best** (highest AV1 when YouTube offers it) through height caps (2160p down to 480p) and audio-only. After metadata loads, the UI can hide formats the source does not actually have. Horde does **not** download YouTube Shorts.
 
-Files land as **one file per video**. Default archive codec is **AV1** (copied, remuxed to MP4 + AAC). Optional H.264/H.265 conversion after download is beta — there is still no Plex-style live transcode; playback is whatever the browser can decode.
+Files land as **one original file per video**. The default is **AV1** (copied, remuxed to MP4 + AAC). **Playback compatibility** can instead download YouTube's H.264, convert to H.264, or keep a ≤1080p H.264 copy beside the AV1 original; each device then plays the file it can decode. There is still no Plex-style live transcode.
 
 Full guide: [Downloads](guides/downloads.md).
 

@@ -21,6 +21,7 @@ from .database import engine, init_db
 from .api import (
     ai,
     app_settings,
+    compat,
     backgrounds,
     channels,
     downloads,
@@ -102,10 +103,14 @@ async def lifespan(app: FastAPI):
     start_autodownload_worker()
     start_subtitle_retry_worker()
     start_job_metadata_worker()
+    from .services.compat_rendition import start_probe_backfill, stop_probe_backfill
+
+    start_probe_backfill()
 
     try:
         yield
     finally:
+        stop_probe_backfill()
         stop_job_metadata_worker()
         stop_subtitle_retry_worker()
         stop_autodownload_worker()
@@ -128,6 +133,7 @@ app.add_middleware(
 )
 
 app.include_router(videos.router)
+app.include_router(compat.router)
 app.include_router(channels.router)
 app.include_router(downloads.router)
 app.include_router(preview.router)

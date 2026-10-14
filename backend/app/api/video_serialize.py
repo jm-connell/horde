@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, SPRITES_DIR
 from ..models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc
-from ..schemas import ChapterRead, VideoRead
+from ..schemas import ChapterRead, CompatState, VideoRead
 from ..services import chapters as chapters_svc, library
 from ..services.metadata import sprites_exist
 
@@ -20,6 +20,25 @@ def safe_filename(name: str) -> str:
     """Strip characters that break Content-Disposition or filesystems."""
     cleaned = re.sub(r'[\\/:*?"<>|]', "_", name).strip()
     return cleaned or "video"
+
+
+def _media_fields(video: Video, *, full: bool) -> dict:
+    fields = {
+        "vcodec": video.vcodec,
+        "acodec": video.acodec,
+        "codec_string": video.codec_string,
+        "bit_depth": video.bit_depth,
+        "is_hdr": bool(video.is_hdr),
+        "has_compat": bool(video.compat_path),
+        "compat_size": video.compat_size,
+    }
+    if full and video.id is not None:
+        from ..services.compat_rendition import compat_status
+
+        state = compat_status(video)
+        fields["compat"] = CompatState(**state)
+        fields["has_compat"] = state["status"] == "ready"
+    return fields
 
 
 def to_read(
@@ -49,6 +68,7 @@ def to_read(
             width_px=video.width_px,
             height_px=video.height_px,
             frame_rate=video.frame_rate,
+            **_media_fields(video, full=False),
             view_count=video.view_count,
             channel_subscriber_count=video.channel_subscriber_count,
             published_at=as_utc(video.published_at),
@@ -152,6 +172,7 @@ def to_read(
         width_px=video.width_px,
         height_px=video.height_px,
         frame_rate=video.frame_rate,
+        **_media_fields(video, full=True),
         view_count=video.view_count,
         channel_subscriber_count=video.channel_subscriber_count,
         published_at=as_utc(video.published_at),
