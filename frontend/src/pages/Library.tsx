@@ -41,6 +41,7 @@ import { useToast } from "../context/ToastContext";
 import { useOfflineMode } from "../offline/hooks";
 import { offlineManager } from "../offline/manager";
 import OfflinePage from "./Offline";
+import { HttpsNotice } from "../components/HttpsHelp";
 import type {
   ChannelAutodownload,
   ChannelFeedEntry,
@@ -1139,6 +1140,7 @@ function OnlineLibrary() {
   const bulkDownload = () => {
     // Plain-http access has no offline storage: save the files instead.
     if (offlineManager.getSnapshot().unsupported) {
+      showToast("Saving files instead — offline downloads need HTTPS");
       bulkSaveFiles();
       return;
     }
@@ -2017,5 +2019,11 @@ function OnlineLibrary() {
 
 export default function Library() {
   const offline = useOfflineMode();
-  return offline ? <OfflinePage embedded /> : <OnlineLibrary />;
+  if (offline) return <OfflinePage embedded />;
+  return (
+    <>
+      <HttpsNotice />
+      <OnlineLibrary />
+    </>
+  );
 }

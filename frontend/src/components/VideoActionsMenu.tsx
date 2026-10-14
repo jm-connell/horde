@@ -164,17 +164,15 @@ export default function VideoActionsMenu({
               Normalize volume
             </button>
           )}
-          {offline.supported && (
-            <button
-              onClick={() => {
-                setOpen(false);
-                void offline.onClick();
-              }}
-              className={itemClass}
-            >
-              {offlineLabel}
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setOpen(false);
+              void offline.onClick();
+            }}
+            className={itemClass}
+          >
+            {offlineLabel}
+          </button>
           <button onClick={downloadFile} className={itemClass}>
             Save file to device
           </button>

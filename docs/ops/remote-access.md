@@ -18,6 +18,11 @@ Reach Horde as if you were on the LAN. No public port, no reverse proxy required
 2. Leave Compose publishing `8686:8080` on the LAN (or bind to a LAN IP only — see [Compose bind tip](#compose-bind-tip) below).
 3. From a device on the same Tailnet, open `http://<tailscale-hostname-or-ip>:8686` (or your MagicDNS name).
 
+!!! tip "Want offline videos and the installable app?"
+    Those need an **https://** address. Tailscale can provide one for free on
+    your private tailnet with `tailscale serve`. See
+    [Offline & installed app → Setting up HTTPS](../guides/offline.md#https).
+
 Chromecast and similar receivers usually live on the home LAN, not on Tailscale. Prefer casting while you are on the same LAN as Horde; remote VPN access is for the browser UI and downloads admin.
 
 WireGuard works the same way: join the LAN (or route to it), then use the Horde LAN URL. Horde does not need WireGuard-specific config.

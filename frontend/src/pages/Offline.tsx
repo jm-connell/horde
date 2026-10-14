@@ -9,6 +9,7 @@ import {
   useOfflineDownloads,
 } from "../offline/hooks";
 import { offlineManager } from "../offline/manager";
+import HttpsHelp from "../components/HttpsHelp";
 import { formatDuration, formatSize } from "../utils";
 
 function thumbUrl(item: OfflineItem): string {
@@ -224,9 +225,11 @@ export default function OfflinePage({ embedded = false }: { embedded?: boolean }
       <p className="mb-5 text-xs text-gray-500">{summary}</p>
 
       {snap.unsupported ? (
-        <div className="ui-panel rounded-lg border border-ink-700 bg-ink-900 p-4 text-sm text-gray-300">
-          Offline downloads aren't available here. They need a secure (HTTPS)
-          connection and a browser that supports IndexedDB and the Cache API.
+        <div className="ui-panel rounded-lg border border-amber-500/30 bg-ink-900 p-4">
+          <p className="mb-2 font-medium text-gray-100">
+            Offline downloads aren&apos;t available on this connection
+          </p>
+          <HttpsHelp />
         </div>
       ) : null}
 

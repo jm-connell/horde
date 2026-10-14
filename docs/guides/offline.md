@@ -6,11 +6,10 @@ connection: the app loads instantly from a local copy, and videos you
 YouTube app's downloads work.
 
 !!! warning "Requires HTTPS"
-    Browsers only allow the service worker and offline storage on **HTTPS**
-    (or `localhost`). Opened as plain `http://192.168.x.x:8080`, Horde still
-    works normally but the offline features are hidden and downloads fall
-    back to saving files. See [Remote access](../ops/remote-access.md) for
-    HTTPS options (Tailscale `serve`, Caddy).
+    These features only work when Horde is opened at an **https://** address
+    (or on `localhost`). Over plain `http://192.168.x.x:8686` Horde works
+    normally, but downloads fall back to saving files and the app isn't
+    cached. See [Setting up HTTPS](#https) below.
 
 ## Install the app
 
@@ -74,3 +73,68 @@ If **you** chose *Go offline*, it stays offline until you tap the tag.
 
 Downloaded videos always play from local storage, even when online, which
 saves bandwidth on a slow or metered connection.
+
+## Setting up HTTPS {#https}
+
+### Why it's needed
+
+Offline features are built on a browser feature called a **service
+worker**: a small script the browser keeps on your device that can answer
+the app's requests itself, from local storage, when the server is slow or
+unreachable. Because a service worker can intercept everything a site
+loads, browsers only allow one on **secure (https://) addresses**, so a
+network attacker can't install a malicious one. Offline video storage has
+the same rule.
+
+`http://localhost` counts as secure, which is why it works on the machine
+running Horde. A LAN address like `http://192.168.1.20:8686` or a plain
+Tailscale IP does not. The certificate must also be **valid and trusted**:
+a self-signed certificate the browser warns about isn't enough.
+
+Horde itself doesn't need any changes. Put something that speaks HTTPS in
+front of it.
+
+### Option 1: Tailscale HTTPS (easiest, private)
+
+If you already reach Horde over [Tailscale](../ops/remote-access.md#tailscale),
+Tailscale can give it a real certificate on your private tailnet:
+
+1. In the [Tailscale admin console](https://login.tailscale.com/admin/dns),
+   open **DNS**, make sure **MagicDNS** is on, and click **Enable HTTPS**
+   (under *HTTPS Certificates*).
+2. On the machine running Tailscale that can reach Horde (usually the
+   Docker / TrueNAS host), run:
+
+    ```bash
+    tailscale serve --bg 8686
+    ```
+
+    If Tailscale runs somewhere else on your LAN, point it at Horde's
+    address instead: `tailscale serve --bg http://192.168.1.20:8686`.
+
+3. Open the `https://<machine-name>.<tailnet-name>.ts.net` URL that the
+   command prints. The first load can take a few seconds while the
+   certificate is issued.
+4. Install the app from that https URL (see [Install the app](#install-the-app)).
+   An app installed from the old `http://` address won't get offline
+   features, so remove it and re-add it from the https URL.
+
+This stays private to your tailnet: nothing is exposed to the internet.
+
+!!! tip "TrueNAS Tailscale app"
+    If Tailscale runs as a TrueNAS app (in a container), run `tailscale serve`
+    inside that app's shell, using Horde's LAN address as in step 2.
+
+### Option 2: Reverse proxy with a certificate
+
+Any reverse proxy with a trusted certificate works, for example
+[Caddy](../ops/remote-access.md#caddy-basic-auth), Nginx Proxy Manager or
+Traefik. Horde has **no login**, so if the hostname is reachable from the
+internet, put authentication on the proxy as the remote-access guide
+describes.
+
+### Check that it worked
+
+Open Horde at the https address. The amber "offline videos & the
+installable app are off" notice on Home should be gone, and a video's
+**Download** button should start a download instead of explaining HTTPS.

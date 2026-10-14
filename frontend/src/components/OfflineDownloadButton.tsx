@@ -1,4 +1,6 @@
+import { downloadFileUrl, triggerBrowserDownload } from "../api";
 import { useConfirm } from "../context/ConfirmContext";
+import HttpsHelp from "./HttpsHelp";
 import { useToast } from "../context/ToastContext";
 import {
   useOfflineDownloads,
@@ -95,6 +97,17 @@ export function useOfflineDownloadAction(video: Video) {
             : `${Math.round(progress * 100)}%`;
 
   const onClick = async () => {
+    if (!supported) {
+      // Plain http: explain why, and offer the old file save instead.
+      const save = await confirm({
+        title: "Offline downloads need HTTPS",
+        body: <HttpsHelp />,
+        confirmLabel: "Save file instead",
+        cancelLabel: "Close",
+      });
+      if (save && video.id > 0) triggerBrowserDownload(downloadFileUrl(video.id));
+      return;
+    }
     if (!item || status === "error") {
       if (offline) {
         showToast("Reconnect to download videos");
@@ -139,9 +152,8 @@ export default function OfflineDownloadButton({
   video: Video;
   className?: string;
 }) {
-  const { item, status, progress, label, onClick, supported } =
+  const { item, status, progress, label, onClick } =
     useOfflineDownloadAction(video);
-  if (!supported) return null;
   const done = status === "complete";
   const active = item && !done && status !== "error";
   return (
