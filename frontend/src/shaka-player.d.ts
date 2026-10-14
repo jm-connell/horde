@@ -108,3 +108,6 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
   export const Player: ShakaNamespace["Player"];
   export const polyfill: ShakaNamespace["polyfill"];
 }
+
+/** Full build, used for livestream HLS. Typed as any and cast at the call site. */
+declare module "shaka-player/dist/shaka-player.compiled.js";

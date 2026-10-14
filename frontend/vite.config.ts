@@ -10,7 +10,10 @@ export default defineConfig({
     exclude: ["e2e/**", "**/node_modules/**", "**/dist/**"],
   },
   optimizeDeps: {
-    include: ["shaka-player/dist/shaka-player.dash.js"],
+    include: [
+      "shaka-player/dist/shaka-player.dash.js",
+      "shaka-player/dist/shaka-player.compiled.js",
+    ],
   },
   server: {
     proxy: {

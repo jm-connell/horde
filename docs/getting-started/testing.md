@@ -18,7 +18,7 @@ This is not a substitute for playing a real video on your LAN. The player still 
 | **Player decode / Cast** | Manual | No | Shaka, DASH preview, mini-player reparenting, Cast, iOS — still [manual](../reference/video-player-smoke.md) |
 | **Live YouTube / Ollama** | Not in CI | No | Bot checks, cookies, GPU models — flaky and network-bound |
 
-CI **must not** call YouTube, OpenRouter, or a real Ollama. Download tests stub `extract_preview`; AI enqueue is a no-op. Playwright sets `HORDE_E2E=1`, which skips background workers, returns a synthetic download preview, and refuses to dispatch yt-dlp. That keeps the suite deterministic and offline.
+CI **must not** call YouTube, OpenRouter, or a real Ollama. Download tests stub `extract_preview`; AI enqueue is a no-op. Playwright sets `HORDE_E2E=1`, which skips background workers, returns a synthetic download preview, and refuses to dispatch yt-dlp. The live-channel spec uses one in-memory “on air” row and a local MP4 as the DVR window, so timeline drags and 5-second arrow seeks run without a livestream. That keeps the suite deterministic and offline.
 
 !!! tip "Write a test when you fix a bug"
     If something broke in production (queue pause, device downloads, progress expiry, settings merge, update wiping host paths), add a pytest or Vitest case next to the fix. The existing files under `backend/tests/` and `frontend/src/**/*.test.ts` are the pattern.

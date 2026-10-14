@@ -259,6 +259,15 @@ export interface DownloadPreview {
   preset_sizes: Record<string, number>;
 }
 
+export interface LiveChannel {
+  channel: string;
+  channel_url: string;
+  video_id: string;
+  url: string;
+  title: string | null;
+  thumbnail_url: string | null;
+}
+
 export interface StreamPreviewMeta {
   id: string | null;
   title: string | null;
@@ -273,6 +282,8 @@ export interface StreamPreviewMeta {
   library_video_id: number | null;
   available_presets: string[];
   subtitles: SubtitleTrack[];
+  is_live?: boolean;
+  live_manifest?: "dash" | "hls" | null;
 }
 
 export interface DownloadOverrides {

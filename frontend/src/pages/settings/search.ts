@@ -99,6 +99,11 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     keywords:
       "download count navigation badge normalize volume loudness downloads compatibility av1 h264 h265 hevc codec transcode format beta",
   },
+  {
+    tab: "library",
+    keywords:
+      "livestream livestreams live channels on air currently streaming live bar",
+  },
   // AI
   {
     tab: "ai",

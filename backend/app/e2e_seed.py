@@ -2,7 +2,8 @@
 
 Imported only when ``HORDE_E2E`` is set. The seeded library has no YouTube URLs,
 AI is off, and download dispatch is a no-op, so the suite never calls YouTube,
-OpenRouter, or Ollama.
+OpenRouter, or Ollama. One synthetic on-air channel is planted in memory for
+the live-bar browser test; its media is a local file.
 """
 
 from __future__ import annotations
@@ -49,6 +50,9 @@ def prepare(mode: str) -> None:
         return
 
     _seed_library(DOWNLOADS_DIR)
+    from . import e2e_live
+
+    e2e_live.plant()
 
 
 def _empty_dir(path: Path) -> None:

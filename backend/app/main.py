@@ -45,6 +45,10 @@ from .services.channel_autodownload import (
     start_autodownload_worker,
     stop_autodownload_worker,
 )
+from .services.live_channels import (
+    start_live_channel_worker,
+    stop_live_channel_worker,
+)
 from .services.subtitle_retry import (
     start_subtitle_retry_worker,
     stop_subtitle_retry_worker,
@@ -100,6 +104,7 @@ async def lifespan(app: FastAPI):
     start_ai_worker()
     start_catalog_worker()
     start_autodownload_worker()
+    start_live_channel_worker()
     start_subtitle_retry_worker()
     start_job_metadata_worker()
 
@@ -108,6 +113,7 @@ async def lifespan(app: FastAPI):
     finally:
         stop_job_metadata_worker()
         stop_subtitle_retry_worker()
+        stop_live_channel_worker()
         stop_autodownload_worker()
         stop_catalog_worker()
         stop_ai_worker()
