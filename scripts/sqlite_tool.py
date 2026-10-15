@@ -7,8 +7,8 @@ Commands:
   backup DST [SRC]  Consistent online backup (sqlite3 backup API) of SRC into
                     DST, then PRAGMA integrity_check on the copy. SRC defaults
                     to $DATA_DIR/horde.db.
-  ledger [DB]       Print the applied schema_migrations ids, comma separated
-                    ("none" when the table is missing or empty).
+  revision [DB]     Print the Alembic revision (alembic_version.version_num), or
+                    "none" when the table is missing (a pre-Alembic database).
 """
 
 from __future__ import annotations
@@ -52,24 +52,25 @@ def backup(dst: str, src: str) -> None:
     print("ok")
 
 
-def ledger(db: str) -> None:
+def revision(db: str) -> None:
+    """Alembic revision stored in alembic_version ("none" before Alembic)."""
     _require_file(db)
     conn = sqlite3.connect(db, timeout=30)
     try:
-        rows = conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
+        row = conn.execute("SELECT version_num FROM alembic_version").fetchone()
     except sqlite3.OperationalError:
-        rows = []
+        row = None  # no alembic_version table: a pre-Alembic database
     finally:
         conn.close()
-    print(",".join(str(r[0]) for r in rows) or "none")
+    print(row[0] if row and row[0] else "none")
 
 
 def main(argv: list[str]) -> int:
     if len(argv) >= 2 and argv[0] == "backup":
         backup(argv[1], argv[2] if len(argv) > 2 else _default_db())
         return 0
-    if argv and argv[0] == "ledger":
-        ledger(argv[1] if len(argv) > 1 else _default_db())
+    if argv and argv[0] == "revision":
+        revision(argv[1] if len(argv) > 1 else _default_db())
         return 0
     print(__doc__, file=sys.stderr)
     return 2

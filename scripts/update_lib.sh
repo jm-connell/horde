@@ -294,9 +294,11 @@ horde_prune_backups() {
 }
 
 # Decide whether the database must be restored when going back to the previous
-# release: only when the migration ledger changed. Additive column changes do
-# not appear in the ledger and old code tolerates extra columns.
-horde_ledger_changed() {
+# release: only when the Alembic revision changed. "none" (no alembic_version
+# table, a pre-Alembic database) -> a revision counts as a change too, because
+# that is the Alembic adoption migrating the schema. An unknown (empty) revision
+# before the update means no decision can be made.
+horde_schema_changed() {
   local before="$1" after="$2"
   [[ -n "$before" && -n "$after" && "$before" != "$after" ]]
 }

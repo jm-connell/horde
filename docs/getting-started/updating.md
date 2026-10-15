@@ -63,14 +63,14 @@ Every update writes `.local/update-backups/<timestamp>/` (gitignored) containing
 
 ## Rollback
 
-`update.sh` remembers where it came from in `.local/update-state.env`: the previous git commit, the previous image id, the database backup and the schema-migration ledger before the update.
+`update.sh` remembers where it came from in `.local/update-state.env`: the previous git commit, the previous image id, the database backup and the Alembic schema revision before the update.
 
 **Automatic.** If the new container is not healthy within `HORDE_HEALTH_TIMEOUT_SEC`, `update.sh`:
 
 1. keeps the failed container's log in the backup folder (`failed-container.log`),
 2. retags the previous image as `horde:latest`,
 3. moves the git checkout back to the previous commit (the branch pointer moves back; the next `update.sh` fast-forwards again),
-4. restores the database backup **only if a schema migration ran** (the `schema_migrations` ledger differs from before the update). Restoring discards everything written since the backup — minutes at most for an automatic rollback — and the newer file is kept as `horde.db.pre-rollback-<timestamp>` next to it. Purely additive column changes do not trigger a restore because the previous version ignores unknown columns,
+4. restores the database backup **only if a schema migration ran** (the Alembic revision (`alembic_version`) differs from before the update, or the database had no `alembic_version` table before (the first Alembic adoption)). Restoring discards everything written since the backup — minutes at most for an automatic rollback — and the newer file is kept as `horde.db.pre-rollback-<timestamp>` next to it. An unchanged revision never triggers a restore,
 5. recreates the containers without building or pulling, and exits non-zero with a clear message.
 
 **Manual.** To undo an update that is healthy but wrong:

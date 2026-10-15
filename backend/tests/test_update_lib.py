@@ -355,16 +355,25 @@ def test_prune_backups_keeps_newest_n(tmp_path):
     assert len(list(root.iterdir())) == 2
 
 
-def test_ledger_changed_decides_database_restore():
+def test_schema_changed_decides_database_restore():
     out = _check(
         """
-        horde_ledger_changed "a,b" "a,b,c" && echo changed1
-        horde_ledger_changed "a,b" "a,b" || echo same
-        horde_ledger_changed "" "a" || echo unknown_before
-        horde_ledger_changed "none" "none" || echo none_none
+        horde_schema_changed "0001" "0002" && echo changed
+        horde_schema_changed "0002" "0002" || echo same
+        horde_schema_changed "none" "0001" && echo adoption
+        horde_schema_changed "none" "none" || echo none_none
+        horde_schema_changed "" "0001" || echo unknown_before
+        horde_schema_changed "0001" "unreadable" && echo unreadable
         """
     )
-    assert out.split() == ["changed1", "same", "unknown_before", "none_none"]
+    assert out.split() == [
+        "changed",
+        "same",
+        "adoption",
+        "none_none",
+        "unknown_before",
+        "unreadable",
+    ]
 
 
 def test_version_string_uses_nearest_release_tag(stack):
@@ -378,15 +387,16 @@ def test_version_string_uses_nearest_release_tag(stack):
     assert _check("horde_version_string", cwd=work).startswith("1.4.0-1-g")
 
 
-def _make_db(path: Path, ledger: list[str]) -> sqlite3.Connection:
+def _make_db(path: Path, revision: str) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.execute("PRAGMA journal_mode=WAL")
+    # The legacy ledger stays in the file but no longer changes; it must be ignored.
     conn.execute(
         "CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT)"
     )
-    conn.executemany(
-        "INSERT INTO schema_migrations VALUES (?, 'now')", [(i,) for i in ledger]
-    )
+    conn.execute("INSERT INTO schema_migrations VALUES ('2026_07_legacy', 'now')")
+    conn.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+    conn.execute("INSERT INTO alembic_version VALUES (?)", (revision,))
     conn.execute("CREATE TABLE video (id INTEGER PRIMARY KEY, title TEXT)")
     conn.execute("INSERT INTO video (title) VALUES ('kept')")
     conn.commit()
@@ -404,7 +414,7 @@ def _tool(*args: str) -> subprocess.CompletedProcess[str]:
 
 def test_sqlite_tool_backs_up_a_live_wal_database(tmp_path):
     db = tmp_path / "horde.db"
-    live = _make_db(db, ["2026_07_additive_columns", "2026_08_next"])
+    live = _make_db(db, "0002_integrity")
     # A write still sitting in the WAL (connection open, app "running") must be in the copy.
     live.execute("INSERT INTO video (title) VALUES ('only in wal')")
     live.commit()
@@ -421,19 +431,23 @@ def test_sqlite_tool_backs_up_a_live_wal_database(tmp_path):
     copy.close()
     assert titles == ["kept", "only in wal"]
 
-    ledger = _tool("ledger", str(dest))
-    assert ledger.stdout.strip() == "2026_07_additive_columns,2026_08_next"
+    assert _tool("revision", str(dest)).stdout.strip() == "0002_integrity"
 
 
-def test_sqlite_tool_ledger_handles_legacy_and_missing_databases(tmp_path):
+def test_sqlite_tool_revision_handles_legacy_and_missing_databases(tmp_path):
     legacy = tmp_path / "legacy.db"
     conn = sqlite3.connect(legacy)
     conn.execute("CREATE TABLE video (id INTEGER)")
     conn.commit()
     conn.close()
-    assert _tool("ledger", str(legacy)).stdout.strip() == "none"
+    # Only the legacy ledger, no alembic_version: a pre-Alembic database.
+    conn = sqlite3.connect(legacy)
+    conn.execute("CREATE TABLE schema_migrations (id TEXT)")
+    conn.commit()
+    conn.close()
+    assert _tool("revision", str(legacy)).stdout.strip() == "none"
 
-    missing = _tool("ledger", str(tmp_path / "nope.db"))
+    missing = _tool("revision", str(tmp_path / "nope.db"))
     assert missing.returncode != 0
     assert not (tmp_path / "nope.db").exists(), "must not create an empty database"
     assert (

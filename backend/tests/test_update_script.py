@@ -1,7 +1,7 @@
 """update.sh end to end with a fake ``docker``/``curl``: ordering and rollback rules.
 
 The fake docker keeps a tiny state machine (which image is ``horde:latest``, whether
-the running version is healthy, what the migration ledger says) and appends every
+the running version is healthy, what the schema revision says) and appends every
 call to a log so the tests can assert what happened and in which order.
 """
 
@@ -66,18 +66,18 @@ if cmd == "exec":
     if tool[:1] == ["backup"]:
         state["backup_made"] = True
         save(); out("ok\n")
-    if tool[:1] == ["ledger"]:
-        out(state["ledger"] + "\n")
+    if tool[:1] == ["revision"]:
+        out(state["revision"] + "\n")
     out()
 if cmd == "cp":
     Path(args[-1]).write_text("backup-of-db")
     out()
 if cmd == "run":
     fmt = " ".join(args)
-    if "--entrypoint python" in fmt:  # sqlite_tool.py ledger in a one-off container
-        out(state["ledger"] + "\n")
+    if "--entrypoint python" in fmt:  # sqlite_tool.py revision in a one-off container
+        out(state["revision"] + "\n")
     if "pre-rollback" in fmt or "--entrypoint sh" in fmt:  # restore_database
-        state["ledger"] = state["ledger_before"]
+        state["revision"] = state["revision_before"]
         state["restored"] = True
         save(); out()
     out()
@@ -103,7 +103,7 @@ if cmd == "compose":
         state["running_image"] = image
         state["healthy"] = image != "sha256:new" or state["new_is_healthy"]
         if image == "sha256:new":
-            state["ledger"] = state["ledger_new"]
+            state["revision"] = state["revision_new"]
         save(); out()
     out()
 sys.exit(0)
@@ -190,9 +190,9 @@ class Harness:
             "healthy": True,
             "images": ["sha256:old"],
             "tags": {"horde:latest": "sha256:old"},
-            "ledger": "m1",
-            "ledger_before": "m1",
-            "ledger_new": "m1",
+            "revision": "0001",
+            "revision_before": "0001",
+            "revision_new": "0001",
             "new_is_healthy": True,
         }
         (self.dir / "state.json").write_text(json.dumps(state))
@@ -273,7 +273,7 @@ def test_update_backs_up_before_recreate_and_tags_images(harness):
 
 def test_unhealthy_update_rolls_back_code_and_image_without_touching_db(harness):
     harness.publish()
-    harness.set(new_is_healthy=False)  # same ledger: no migration ran
+    harness.set(new_is_healthy=False)  # same revision: no migration ran
 
     result = harness.run()
 
@@ -295,7 +295,7 @@ def test_unhealthy_update_rolls_back_code_and_image_without_touching_db(harness)
 
 def test_unhealthy_update_that_migrated_restores_the_database_backup(harness):
     harness.publish()
-    harness.set(new_is_healthy=False, ledger_new="m1,m2")
+    harness.set(new_is_healthy=False, revision_new="0002")
 
     result = harness.run()
 
@@ -304,7 +304,7 @@ def test_unhealthy_update_that_migrated_restores_the_database_backup(harness):
     assert "RESTORING DATABASE" in result.stderr
     state = harness.read_state()
     assert state["restored"] is True
-    assert state["ledger"] == "m1"
+    assert state["revision"] == "0001"
     assert state["tags"]["horde:latest"] == "sha256:old"
 
 
@@ -322,7 +322,7 @@ def test_auto_rollback_can_be_disabled(harness):
 
 def test_manual_rollback_warns_before_discarding_data_after_a_migration(harness):
     v2 = harness.publish()
-    harness.set(ledger_new="m1,m2")
+    harness.set(revision_new="0002")
     assert harness.run().returncode == 0
     assert _git(harness.work, "rev-parse", "HEAD") == v2
 
@@ -373,3 +373,15 @@ def test_database_that_cannot_be_backed_up_aborts_unless_skipped(harness):
     result = harness.run(HORDE_SKIP_DB_BACKUP="1")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "WITHOUT a database backup" in result.stderr
+
+
+def test_first_alembic_adoption_counts_as_a_migration(harness):
+    harness.publish()
+    harness.set(revision="none", revision_before="none", revision_new="0001_baseline")
+    harness.set(new_is_healthy=False)
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "A database schema migration ran" in result.stderr
+    assert harness.read_state()["restored"] is True

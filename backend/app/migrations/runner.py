@@ -149,7 +149,8 @@ def _too_new_message(found: str, head: str | None) -> str:
         "has migrated this database and the application was then rolled back "
         "or downgraded. Refusing to start so the data is not damaged. Either "
         "update Horde to the newer version again, or roll back the data with "
-        "the matching backup: run `./update.sh --rollback`, or restore "
+        "the matching backup: run `./update.sh --rollback --restore-db` (the "
+        "update script backs up the database before every update), or restore "
         "horde.db from a backup taken before the upgrade (Horde also writes "
         "copies to DATA_DIR/backups/ before migrating)."
     )

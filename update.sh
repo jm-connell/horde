@@ -259,11 +259,11 @@ tool_in_image() {
 }
 
 # SQLite online backup (no downtime, consistent even in WAL mode) into
-# $BACKUP_DIR/horde.db. Also records the migration ledger before the update.
+# $BACKUP_DIR/horde.db. Also records the schema revision before the update.
 DB_BACKUP_PATH=""
-LEDGER_BEFORE=""
+REVISION_BEFORE=""
 backup_database() {
-  local cid out ledger=""
+  local cid out revision=""
   local dest="$BACKUP_DIR/horde.db"
   if [[ -z "$LIVE_DATA" || ! -f "${LIVE_DATA}/horde.db" ]]; then
     echo "No existing database to back up (fresh install)."
@@ -274,10 +274,10 @@ backup_database() {
     && out="$(tool_in_container "$cid" backup /tmp/horde-update-backup.db 2>&1)" \
     && docker_bin cp "${cid}:/tmp/horde-update-backup.db" "$dest" >/dev/null; then
     docker_bin exec "$cid" rm -f /tmp/horde-update-backup.db >/dev/null 2>&1 || true
-    ledger="$(tool_in_container "$cid" ledger 2>/dev/null || true)"
+    revision="$(tool_in_container "$cid" revision 2>/dev/null || true)"
   elif command -v python3 >/dev/null 2>&1 \
     && out="$(python3 "$ROOT/scripts/sqlite_tool.py" backup "$dest" "${LIVE_DATA}/horde.db" 2>&1)"; then
-    ledger="$(python3 "$ROOT/scripts/sqlite_tool.py" ledger "${LIVE_DATA}/horde.db" 2>/dev/null || true)"
+    revision="$(python3 "$ROOT/scripts/sqlite_tool.py" revision "${LIVE_DATA}/horde.db" 2>/dev/null || true)"
   else
     echo "Could not back up ${LIVE_DATA}/horde.db: ${out:-no running container and no python3 on the host}" >&2
     if [[ "${HORDE_SKIP_DB_BACKUP:-}" == "1" ]]; then
@@ -289,7 +289,7 @@ backup_database() {
   fi
   echo "  database backup: ${dest} ($(du -h "$dest" | cut -f1)), integrity ok"
   DB_BACKUP_PATH="$dest"
-  LEDGER_BEFORE="${ledger:-none}"
+  REVISION_BEFORE="${revision:-none}"
 }
 
 # Put the previous image back as the horde image and recreate the container.
@@ -320,16 +320,16 @@ restore_database() {
 }
 
 # Roll back to the state recorded by the last update. $1 = reason shown to the
-# user, $2 = "auto" (restore the DB when the ledger changed) or "manual".
+# user, $2 = "auto" (restore the DB when the schema revision changed) or "manual".
 perform_rollback() {
   local reason="$1" how="$2"
-  local prev_image prev_sha prev_branch backup ledger_before ledger_after new_image restore=0
+  local prev_image prev_sha prev_branch backup revision_before revision_after new_image restore=0
 
   prev_image="$(state_get PREV_IMAGE_ID)"
   prev_sha="$(state_get PREV_GIT_SHA)"
   prev_branch="$(state_get GIT_BRANCH)"
   backup="$(state_get DB_BACKUP)"
-  ledger_before="$(state_get LEDGER_BEFORE)"
+  revision_before="$(state_get REVISION_BEFORE)"
   new_image="$(state_get NEW_IMAGE_ID)"
 
   echo
@@ -340,20 +340,21 @@ perform_rollback() {
     return 2
   fi
 
-  # Did a schema migration run? Compare the ledger recorded before the update
-  # with the one in the live database now.
-  if [[ -n "$LIVE_DATA" && -f "${LIVE_DATA}/horde.db" && -n "$ledger_before" ]]; then
+  # Did a schema migration run? Compare the Alembic revision recorded before
+  # the update with the one in the live database now (no revision table before
+  # = "none", so the Alembic adoption counts as a migration too).
+  if [[ -n "$LIVE_DATA" && -f "${LIVE_DATA}/horde.db" && -n "$revision_before" ]]; then
     compose stop horde >/dev/null 2>&1 || true
-    ledger_after="$(tool_in_image "${new_image:-$prev_image}" "$LIVE_DATA" ledger 2>/dev/null || true)"
-    if [[ -z "$ledger_after" ]]; then
-      # An unreadable ledger means the failed version may have damaged the schema.
-      echo "Could not read the migration ledger of the current database." >&2
-      ledger_after="unreadable"
+    revision_after="$(tool_in_image "${new_image:-$prev_image}" "$LIVE_DATA" revision 2>/dev/null || true)"
+    if [[ -z "$revision_after" ]]; then
+      # An unreadable revision means the failed version may have damaged the schema.
+      echo "Could not read the schema revision of the current database." >&2
+      revision_after="unreadable"
     fi
-    if horde_ledger_changed "$ledger_before" "$ledger_after"; then
+    if horde_schema_changed "$revision_before" "$revision_after"; then
       echo "A database schema migration ran during the update:" >&2
-      echo "  before: ${ledger_before}" >&2
-      echo "  after:  ${ledger_after}" >&2
+      echo "  before: ${revision_before}" >&2
+      echo "  after:  ${revision_after}" >&2
       if [[ "$how" == "auto" || "$RESTORE_DB" -eq 1 ]]; then
         if [[ -f "$backup" ]]; then
           restore=1
@@ -361,9 +362,10 @@ perform_rollback() {
           echo "  ... but the backup ${backup:-<none>} is missing; cannot restore." >&2
         fi
       else
-        echo "  The previous version may not start on the migrated database." >&2
+        echo "  The previous version will refuse to start on the migrated database (\"schema is at revision ... which this version of Horde does not know\")." >&2
         echo "  To also restore the pre-update backup (this DISCARDS everything written since):" >&2
         echo "    bash update.sh --rollback --restore-db" >&2
+        echo "  (Horde also keeps its own pre-migration copies in DATA_PATH/backups/.)" >&2
       fi
     else
       echo "No schema migration ran; the database is left untouched."
@@ -514,7 +516,7 @@ backup_database
 mkdir -p "$(dirname "$STATE_FILE")"
 rm -f "$STATE_FILE"
 state_set DB_BACKUP "$DB_BACKUP_PATH"
-state_set LEDGER_BEFORE "$LEDGER_BEFORE"
+state_set REVISION_BEFORE "$REVISION_BEFORE"
 state_set UPDATED_AT "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 state_set GIT_BRANCH "$PREV_BRANCH"
 state_set PREV_GIT_SHA "$PREV_SHA"
@@ -576,9 +578,9 @@ if ! wait_for_health; then
   exit 1
 fi
 
-# Record the migration ledger the new version produced (for a later --rollback).
+# Record the schema revision the new version produced (for a later --rollback).
 if cid="$(resolve_horde_container)"; then
-  state_set LEDGER_AFTER "$(tool_in_container "$cid" ledger 2>/dev/null || true)"
+  state_set REVISION_AFTER "$(tool_in_container "$cid" revision 2>/dev/null || true)"
 fi
 
 echo
