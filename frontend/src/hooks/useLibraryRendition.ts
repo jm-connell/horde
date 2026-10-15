@@ -29,6 +29,26 @@ export type LibraryRenditionState = {
 };
 
 const POLL_MS = 2000;
+/** How many times a vanished Safari-prep job is re-requested before giving up. */
+export const SAFARI_PREP_MAX_RETRIES = 3;
+
+export type SafariPrepStep = "ready" | "wait" | "retry" | "fail";
+
+/**
+ * What to do with a poll result while preparing a file for Safari. `none` means the
+ * job is gone (cancelled, or a different job held the slot) but the file still
+ * needs prep, so ask again a few times, then fall through and let the player try.
+ */
+export function nextSafariPrepStep(
+  status: string,
+  retriesUsed: number
+): SafariPrepStep {
+  if (status === "ready") return "ready";
+  if (status === "queued" || status === "running") return "wait";
+  if (status === "none" && retriesUsed < SAFARI_PREP_MAX_RETRIES)
+    return "retry";
+  return "fail";
+}
 
 export function useLibraryRendition(
   video: Video | null,
@@ -82,6 +102,7 @@ export function useLibraryRendition(
   // first and wait; if the request fails, fall through and try to play anyway.
   const [safariPrep, setSafariPrep] = useState<CompatState | null>(null);
   const [safariFailed, setSafariFailed] = useState(false);
+  const safariRetries = useRef(0);
   const wantsSafariPrep =
     !checking &&
     videoId != null &&
@@ -94,6 +115,7 @@ export function useLibraryRendition(
   useEffect(() => {
     setSafariPrep(null);
     setSafariFailed(false);
+    safariRetries.current = 0;
   }, [videoId, video?.file_path]);
 
   useEffect(() => {
@@ -124,9 +146,16 @@ export function useLibraryRendition(
       api
         .getSafariPrep(videoId)
         .then((state) => {
+          const step = nextSafariPrepStep(state.status, safariRetries.current);
+          if (step === "retry") {
+            // Re-issue the request: clearing the state lets the request effect run.
+            safariRetries.current += 1;
+            setSafariPrep(null);
+            return;
+          }
           setSafariPrep(state);
-          if (state.status === "error") setSafariFailed(true);
-          if (state.status === "ready") {
+          if (step === "fail") setSafariFailed(true);
+          if (step === "ready") {
             api
               .getVideo(videoId)
               .then((v) => readyRef.current(v))
