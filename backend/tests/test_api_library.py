@@ -455,3 +455,37 @@ def test_duplicate_groups_by_youtube_id(client, add_video):
     yt_groups = [g for g in groups if g["match_type"] == "youtube_id"]
     assert len(yt_groups) == 1
     assert {v["title"] for v in yt_groups[0]["videos"]} == {"Copy A", "Copy B"}
+
+
+def test_stream_range_forms(client, add_video):
+    payload = bytes(range(200))
+    video = add_video(title="Ranges", write_file=True, file_bytes=payload)
+    url = f"/api/videos/{video.id}/stream"
+
+    def get(value: str):
+        return client.get(url, headers={"Range": value})
+
+    suffix = get("bytes=-50")
+    assert suffix.status_code == 206
+    assert suffix.content == payload[-50:]
+    assert suffix.headers["Content-Range"] == "bytes 150-199/200"
+    assert suffix.headers["Content-Length"] == "50"
+
+    open_ended = get("bytes=190-")
+    assert open_ended.status_code == 206
+    assert open_ended.content == payload[190:]
+    assert open_ended.headers["Content-Range"] == "bytes 190-199/200"
+
+    bounded = get("bytes=10-19")
+    assert bounded.content == payload[10:20]
+
+    clamped = get("bytes=190-5000")
+    assert clamped.content == payload[190:]
+
+    oversized_suffix = get("bytes=-5000")
+    assert oversized_suffix.status_code == 206
+    assert oversized_suffix.content == payload
+    assert oversized_suffix.headers["Content-Range"] == "bytes 0-199/200"
+
+    for bad in ("bytes=-", "bytes=-0", "bytes=200-", "bytes=50-10", "bytes=a-b"):
+        assert get(bad).status_code == 416, bad

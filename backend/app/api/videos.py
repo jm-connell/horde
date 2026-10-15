@@ -817,9 +817,19 @@ def stream_video(
     if match is None:
         raise HTTPException(status_code=416, detail="Invalid range")
 
-    start = int(match.group(1)) if match.group(1) else 0
-    end = int(match.group(2)) if match.group(2) else file_size - 1
-    end = min(end, file_size - 1)
+    first, last = match.group(1), match.group(2)
+    if not first and not last:
+        raise HTTPException(status_code=416, detail="Invalid range")
+    if not first:
+        # Suffix range "-N": the last N bytes (all of them when N > size).
+        suffix_len = int(last)
+        if suffix_len == 0 or file_size == 0:
+            raise HTTPException(status_code=416, detail="Range not satisfiable")
+        start = max(0, file_size - suffix_len)
+        end = file_size - 1
+    else:
+        start = int(first)
+        end = min(int(last), file_size - 1) if last else file_size - 1
     if start > end:
         raise HTTPException(status_code=416, detail="Range not satisfiable")
 
