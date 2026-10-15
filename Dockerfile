@@ -56,8 +56,9 @@ RUN set -eux; \
         fpr="$(gpg --show-keys --with-colons /tmp/jellyfin.key | awk -F: '/^fpr:/ {print $10; exit}')"; \
         test -n "${fpr}"; \
         echo "Jellyfin repository signing key fingerprint: ${fpr}"; \
-        if [ -n "${JELLYFIN_GPG_FPR}" ] && [ "${fpr}" != "${JELLYFIN_GPG_FPR}" ]; then \
-          echo "Jellyfin key fingerprint mismatch: expected ${JELLYFIN_GPG_FPR}" >&2; \
+        expected="${JELLYFIN_GPG_FPR:-4918AABC486CA052358D778D49023CD01DE21A7B}"; \
+        if [ "${fpr}" != "${expected}" ]; then \
+          echo "Jellyfin key fingerprint mismatch: got ${fpr}, expected ${expected}" >&2; \
           exit 1; \
         fi; \
         gpg --dearmor < /tmp/jellyfin.key > /etc/apt/keyrings/jellyfin.gpg; \
