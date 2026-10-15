@@ -7,7 +7,13 @@ import {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
-import { absoluteUrl, api, spritesImageUrl, streamUrl } from "../api";
+import {
+  absoluteUrl,
+  api,
+  spritesImageUrl,
+  streamUrl,
+  withMediaToken,
+} from "../api";
 import PlayerOverlays from "./PlayerOverlays";
 import SubtitleOverlay from "./SubtitleOverlay";
 import { MenuFlyout } from "./MenuFlyout";
@@ -270,7 +276,12 @@ export default function VideoPlayer({
   const shakaPlayerRef = useRef<ShakaPlayer | null>(null);
   const capabilityMaxHeightRef = useRef<number>(2160);
   const chromecast = useChromecast();
-  const airplay = useAirPlay(videoRef, src);
+  const signedAirPlaySrc = useCallback(async () => {
+    if (videoId == null) return null;
+    const { token } = await api.getMediaToken(videoId);
+    return withMediaToken(src, token);
+  }, [videoId, src]);
+  const airplay = useAirPlay(videoRef, src, signedAirPlaySrc);
   const autoplayRelatedId = useId();
   // Destructured so hook dependency arrays list the stable callbacks rather
   // than the whole (per-render) hook result objects.
@@ -854,15 +865,18 @@ export default function VideoPlayer({
     if (!v || videoId == null) return;
     v.pause();
     try {
+      // The receiver fetches these itself and sends no cookie: sign them.
+      const { token } = await api.getMediaToken(videoId);
+      const signed = (path: string) => absoluteUrl(withMediaToken(path, token));
       await castChromecastMedia({
-        contentUrl: absoluteUrl(streamUrl(videoId)),
+        contentUrl: signed(streamUrl(videoId)),
         mimeType,
         title: title ?? "Video",
-        posterUrl: poster ? absoluteUrl(poster) : null,
+        posterUrl: poster ? signed(poster) : null,
         currentTime: v.currentTime,
         subtitles: tracks.map((t) => ({
           lang: t.lang,
-          src: absoluteUrl(t.src),
+          src: signed(t.src),
         })),
         activeSubtitleLang: captionLang,
       });
