@@ -6,10 +6,12 @@ name: yt-dlp bump
 #
 # Two jobs, so freshly published package code never runs next to a write token:
 #   bump  installs the new lock and runs the tests and pip-audit with read-only
-#         permissions and no persisted credentials, then uploads the two changed
-#         files as an artifact;
-#   pr    (write permissions) never installs or runs anything from PyPI. It
-#         validates the artifact, commits it and opens the pull request.
+#         permissions and no persisted credentials, then uploads the changed
+#         requirements.txt as an artifact;
+#   pr    (write permissions) never installs or runs package code. It validates
+#         the artifact (only the yt-dlp pin may change) and regenerates the lock
+#         itself with uv, which only resolves, then commits and opens the PR.
+#         The lock built by the other job is not trusted.
 #
 # Pull requests created with the default GITHUB_TOKEN do not start other
 # workflows. Add a fine-grained PAT (contents + pull requests: write) as the
@@ -91,11 +93,11 @@ jobs:
           PYTHONPATH=. pytest -q
           pip-audit -r requirements.lock --no-deps --disable-pip
 
-      - name: Hand the two changed files to the next job
+      - name: Hand the changed requirements.txt to the next job
         if: steps.version.outputs.bump == 'true'
         run: |
           mkdir bump-out
-          cp backend/requirements.txt backend/requirements.lock bump-out/
+          cp backend/requirements.txt bump-out/
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: steps.version.outputs.bump == 'true'
         with:
@@ -129,13 +131,22 @@ jobs:
             [[ "${v}" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "::error::unexpected version string"; exit 1; }
           done
           cp bump-in/requirements.txt backend/requirements.txt
-          cp bump-in/requirements.lock backend/requirements.lock
           # requirements.txt must differ from main by exactly the yt-dlp pin.
           changed="$(git diff --numstat -- backend/requirements.txt | cut -f1,2)"
           if [ "${changed}" != "$(printf '1\t1')" ] || ! git diff -U0 -- backend/requirements.txt | grep -q "^+yt-dlp==${LATEST}\$"; then
             echo "::error::the artifact changes more than the yt-dlp pin"; exit 1
           fi
           git diff --stat
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Regenerate the lock (resolution only, no package code runs)
+        run: |
+          python -m pip install uv==0.13.1
+          uv pip compile --generate-hashes --python-version 3.12 \
+            backend/requirements.txt -o backend/requirements.lock \
+            --upgrade-package yt-dlp
+          git diff --stat -- backend/requirements.lock
       - name: Open the pull request
         run: |
           git config user.name "github-actions[bot]"
