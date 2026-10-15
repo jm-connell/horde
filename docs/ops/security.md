@@ -54,8 +54,11 @@ Horde downloads things for you: thumbnails from a URL, and yt-dlp link checks, p
 
 If you download from LAN sources (a NAS, a local media server), set `HORDE_ALLOW_PRIVATE_URLS=1`. The scheme rule stays in force.
 
-!!! note "Not covered"
-    The Ollama address in Settings → AI is a LAN host by design and is not filtered. yt-dlp resolves hostnames itself, so a DNS server that answers differently the second time can still slip past the pre-check for yt-dlp calls; thumbnail fetches pin the validated address and are not affected.
+Where the check applies:
+
+- **Validated, per hop:** thumbnail fetches (connection pinned to the checked address, redirects re-checked, hosts that do not resolve are refused) and every URL the preview proxy fetches on an extractor's behalf: media, subtitles, manifests and the DASH index probe (redirects re-checked).
+- **Pre-flight only:** URLs handed to yt-dlp (downloads, link checks, playlist and channel reads) are checked before the call, and the download queue re-checks each job before it starts. yt-dlp then resolves hostnames and follows redirects **itself**; those internal requests are not validated, so a DNS server that answers differently the second time, or a redirect inside yt-dlp, can still reach an internal address.
+- **Not filtered:** the Ollama address in Settings → AI is a LAN host by design (an admin-only setting).
 
 ## Upload limits { #upload-limits }
 
