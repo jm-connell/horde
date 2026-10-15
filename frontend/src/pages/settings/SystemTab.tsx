@@ -29,7 +29,7 @@ function LastExtractFailure({
       {copy.target ? (
         <div className="mt-0.5 text-xs text-gray-200">{copy.target}</div>
       ) : null}
-      <div className="mt-0.5 text-xs text-gray-500">{copy.message}</div>
+      <div className="mt-0.5 text-xs text-muted">{copy.message}</div>
     </>
   );
 }
@@ -94,7 +94,7 @@ export default function SystemTab() {
               <p className="text-sm text-gray-200">
                 A newer version is available
                 {updateCheck.current_short && updateCheck.latest_short ? (
-                  <span className="text-gray-500">
+                  <span className="text-muted">
                     {" "}
                     (
                     <span className="font-mono">
@@ -109,7 +109,7 @@ export default function SystemTab() {
                 ) : null}
               </p>
               <details className="mt-2">
-                <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-400">
+                <summary className="cursor-pointer text-xs text-muted hover:text-gray-400">
                   How to update
                 </summary>
                 <div className="mt-2 space-y-2 text-xs text-gray-400">
@@ -139,7 +139,7 @@ bash update.sh`}
                     </a>
                   )}
                   <details className="mt-1">
-                    <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-400">
+                    <summary className="cursor-pointer text-xs text-muted hover:text-gray-400">
                       Advanced: manual commands
                     </summary>
                     <pre className="mt-2 overflow-x-auto rounded bg-ink-900/80 p-2 font-mono text-[11px] leading-relaxed text-gray-300">
@@ -156,7 +156,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                 type="button"
                 disabled={updateChecking}
                 onClick={() => void refreshUpdates(true)}
-                className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-50"
+                className="text-xs text-muted hover:text-gray-300 disabled:opacity-50"
               >
                 {updateChecking ? "Checking…" : "Check again"}
               </button>
@@ -167,7 +167,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                   saveDismissedUpdateSha(updateCheck.latest_sha);
                   setDismissedUpdateSha(updateCheck.latest_sha);
                 }}
-                className="text-xs text-gray-500 hover:text-gray-300"
+                className="text-xs text-muted hover:text-gray-300"
               >
                 Dismiss
               </button>
@@ -186,13 +186,13 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
             <span className="text-2xl font-bold text-gray-100">
               {formatSize(storage.total_bytes) || "0 B"}
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-muted">
               {storage.video_count} video
               {storage.video_count === 1 ? "" : "s"}
             </span>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Calculating...</p>
+          <p className="text-sm text-muted">Calculating...</p>
         )}
       </Section>
 
@@ -214,7 +214,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
           )
         }
       >
-        <p className="mb-3 max-w-2xl text-xs text-gray-500">
+        <p className="mb-3 max-w-2xl text-xs text-muted">
           CPU, RAM, and GPU as seen from this Horde process. AI workload sizing
           uses the Ollama machine instead (see AI → Providers).
         </p>
@@ -254,7 +254,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
             >
               {health.horde_version ?? "unknown"}
               {updateCheck && !updateCheck.error ? (
-                <span className="ml-2 font-sans text-gray-500">
+                <span className="ml-2 font-sans text-muted">
                   {updateCheck.update_available
                     ? "· update available"
                     : health.horde_version && health.horde_version !== "unknown"
@@ -415,7 +415,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
           {(appSettings?.channel_catalog_enabled ?? true) && (
             <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-3">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted">
                   Channel catalog
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -529,7 +529,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                     ))}
                   {!catalogStatus.running &&
                     catalogStatus.queue_depth === 0 && (
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted">
                         Idle
                         {catalogStatus.catalogs.filter(
                           (c) => c.status === "ready"
@@ -544,7 +544,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                     )}
                 </dl>
               ) : (
-                <p className="text-sm text-gray-500">Loading…</p>
+                <p className="text-sm text-muted">Loading…</p>
               )}
             </div>
           )}
@@ -552,7 +552,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
           {aiStatus && (
             <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-3">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted">
                   AI
                 </p>
               </div>
@@ -579,7 +579,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
 
           {metadataSyncStatus?.running && (
             <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
                 Metadata sync
               </p>
               <p className="text-sm text-gray-300">
@@ -615,7 +615,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
             )
           }
         >
-          <p className="mb-3 text-xs text-gray-500">
+          <p className="mb-3 text-xs text-muted">
             Product wiki and interactive API reference for Horde.
           </p>
           <div className="flex flex-wrap gap-3">
@@ -698,7 +698,7 @@ function ResetHordePanel() {
 
   return (
     <>
-      <p className="mb-3 text-xs text-gray-500">
+      <p className="mb-3 text-xs text-muted">
         Restore factory settings and run the setup wizard again. Media volumes
         and Docker environment variables are not changed unless you erase the
         library.
@@ -744,7 +744,7 @@ function ResetHordePanel() {
                     />
                     <span>
                       Erase all media
-                      <span className="mt-0.5 block text-xs text-gray-500">
+                      <span className="mt-0.5 block text-xs text-muted">
                         Permanently delete {videoCount} video
                         {videoCount === 1 ? "" : "s"}
                         {storage?.total_bytes
@@ -756,12 +756,12 @@ function ResetHordePanel() {
                     </span>
                   </label>
                   <Collapse open={!eraseMedia}>
-                    <p className="pt-3 text-xs text-gray-500">
+                    <p className="pt-3 text-xs text-muted">
                       Library files, playlists, and watch progress stay on disk.
                     </p>
                   </Collapse>
                   <div className="pt-4">
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted">
                       Type{" "}
                       <span className="font-mono text-gray-300">
                         {expectedPhrase}

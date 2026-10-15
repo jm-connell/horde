@@ -89,7 +89,7 @@ export default function History() {
       {loading ? (
         <LoadingIndicator />
       ) : videos.length === 0 ? (
-        <div className="py-20 text-center text-gray-500">
+        <div className="py-20 text-center text-muted">
           <p className="text-lg">No watch history yet.</p>
           <p className="mt-1 text-sm">Videos you watch will appear here.</p>
         </div>
@@ -112,7 +112,7 @@ export default function History() {
                   <div key={v.id} className="flex flex-col gap-1">
                     <VideoCard video={v} />
                     {v.last_watched_at && (
-                      <p className="px-1 text-xs text-gray-500">
+                      <p className="px-1 text-xs text-muted">
                         {formatTime(v.last_watched_at)}
                       </p>
                     )}

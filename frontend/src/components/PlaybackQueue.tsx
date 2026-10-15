@@ -61,7 +61,7 @@ export default function PlaybackQueue({
           </button>
           <button
             onClick={clearQueue}
-            className="shrink-0 text-xs text-gray-500 hover:text-accent"
+            className="shrink-0 text-xs text-muted hover:text-accent"
           >
             Clear
           </button>
@@ -73,7 +73,7 @@ export default function PlaybackQueue({
           </h3>
           <button
             onClick={clearQueue}
-            className="text-xs text-gray-500 hover:text-accent"
+            className="text-xs text-muted hover:text-accent"
           >
             Clear
           </button>
@@ -105,7 +105,7 @@ export default function PlaybackQueue({
                 className="flex items-center gap-2 rounded-lg p-1 hover:bg-ink-800"
               >
                 <span
-                  className="shrink-0 cursor-grab px-1 text-gray-600 active:cursor-grabbing"
+                  className="shrink-0 cursor-grab px-1 text-muted active:cursor-grabbing"
                   title="Drag to reorder"
                 >
                   ⠿
@@ -129,7 +129,7 @@ export default function PlaybackQueue({
                 </button>
                 <button
                   onClick={() => removeFromQueue(v.id)}
-                  className="shrink-0 px-2 text-gray-500 hover:text-accent"
+                  className="shrink-0 px-2 text-muted hover:text-accent"
                   title="Remove"
                 >
                   ✕

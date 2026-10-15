@@ -580,7 +580,7 @@ export default function ChannelFeed({
 
   if (!channelUrl && libraryEntries.length === 0 && !loading) {
     return (
-      <div className="py-20 text-center text-gray-500">
+      <div className="py-20 text-center text-muted">
         <p className="text-lg">Channel feed unavailable</p>
         <p className="mt-1 text-sm">
           No YouTube URL is known for this channel yet. Download a video from
@@ -606,7 +606,7 @@ export default function ChannelFeed({
 
       {showSearchBanner && (
         <div
-          className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500"
+          className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted"
           role="status"
           aria-live="polite"
         >
@@ -641,7 +641,7 @@ export default function ChannelFeed({
       ) : showFeedLoading ? (
         <LoadingIndicator label="Loading channel feed" />
       ) : filteredEntries.length === 0 ? (
-        <div className="py-20 text-center text-gray-500">
+        <div className="py-20 text-center text-muted">
           <p className="text-lg">No videos found</p>
           <p className="mt-1 text-sm">
             {feedSearch

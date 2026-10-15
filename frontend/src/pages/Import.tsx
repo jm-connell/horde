@@ -310,7 +310,7 @@ export default function Import() {
         <p className="text-sm text-gray-300">
           Drop .mp4, .mkv, or .webm files here
         </p>
-        <p className="mt-1 text-xs text-gray-500">or</p>
+        <p className="mt-1 text-xs text-muted">or</p>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -343,7 +343,7 @@ export default function Import() {
                 <span className="min-w-0 truncate text-gray-300">
                   {u.name}
                   {u.size > 0 && (
-                    <span className="ml-2 text-gray-500">
+                    <span className="ml-2 text-muted">
                       {formatSize(u.size)}
                     </span>
                   )}
@@ -354,7 +354,7 @@ export default function Import() {
                       ? "shrink-0 text-red-400"
                       : u.status === "done"
                         ? "shrink-0 text-accent"
-                        : "shrink-0 text-gray-500"
+                        : "shrink-0 text-muted"
                   }
                 >
                   {u.status === "error"
@@ -390,7 +390,7 @@ export default function Import() {
       {loading ? (
         <LoadingIndicator />
       ) : items.length === 0 && visibleGroups.length === 0 ? (
-        <div className="py-12 text-center text-gray-500">
+        <div className="py-12 text-center text-muted">
           <p className="text-lg">Nothing to import.</p>
           <p className="mt-1 text-sm">
             Drop files above or scan the media folder.
@@ -456,7 +456,7 @@ export default function Import() {
                       >
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted">
                               Duplicate group
                             </p>
                             {label && (
@@ -475,7 +475,7 @@ export default function Import() {
                               </span>
                             )}
                             {group.ai_score != null && (
-                              <span className="text-[11px] text-gray-500">
+                              <span className="text-[11px] text-muted">
                                 score {group.ai_score.toFixed(2)}
                               </span>
                             )}
@@ -483,7 +483,7 @@ export default function Import() {
                           <button
                             type="button"
                             onClick={() => dismissGroup(group)}
-                            className="text-xs text-gray-500 hover:text-gray-300"
+                            className="text-xs text-muted hover:text-gray-300"
                             title="Hide this group on this browser"
                           >
                             Not a duplicate
@@ -507,7 +507,7 @@ export default function Import() {
                                 >
                                   {v.title}
                                 </Link>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted">
                                   {v.channel} · {v.file_path}
                                 </p>
                               </div>

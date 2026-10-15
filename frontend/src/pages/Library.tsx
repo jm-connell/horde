@@ -143,7 +143,7 @@ function SearchResultSection({
           onClick={() => setOpen((v) => !v)}
         >
           <span
-            className={`inline-block text-[0.65rem] leading-none text-gray-500 transition-transform ${
+            className={`inline-block text-[0.65rem] leading-none text-muted transition-transform ${
               open ? "" : "-rotate-90"
             }`}
             aria-hidden
@@ -152,9 +152,7 @@ function SearchResultSection({
           </span>
           <span>
             {title}
-            {!loading && (
-              <span className="ml-1.5 text-gray-500">({count})</span>
-            )}
+            {!loading && <span className="ml-1.5 text-muted">({count})</span>}
           </span>
         </button>
         <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
@@ -168,7 +166,7 @@ function SearchResultSection({
             {footer}
           </>
         ) : (
-          <p className="py-6 text-center text-sm text-gray-500" role="status">
+          <p className="py-6 text-center text-sm text-muted" role="status">
             {emptyText}
           </p>
         )}
@@ -1275,7 +1273,7 @@ function OnlineLibrary() {
           >
             <div className="ui-panel ui-panel-legible flex max-h-full w-56 flex-col overflow-hidden rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
               <div className="mb-2 flex shrink-0 items-center px-2 pt-1">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
                   Channels
                 </h2>
               </div>
@@ -1308,11 +1306,11 @@ function OnlineLibrary() {
                 <button
                   onClick={closeSidebar}
                   title="Collapse sidebar"
-                  className="ui-interactive flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-base text-gray-500 hover:bg-ink-800 hover:text-accent"
+                  className="ui-interactive flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-base text-muted hover:bg-ink-800 hover:text-accent"
                 >
                   ‹
                 </button>
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
                   Channels
                 </h2>
               </div>
@@ -1338,7 +1336,7 @@ function OnlineLibrary() {
                   ? "Collapse sidebar"
                   : "Expand channels"
               }
-              className="ui-panel ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-gray-500 ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
+              className="ui-panel ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-muted ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
             >
               {narrowViewport && sidebarOverlayOpen ? "‹" : "›"}
             </button>
@@ -1378,7 +1376,7 @@ function OnlineLibrary() {
                     setRenaming(activeChannel);
                   }}
                   title="Rename channel"
-                  className="text-base text-gray-500 opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+                  className="text-base text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
                 >
                   ✎
                 </button>
@@ -1500,7 +1498,7 @@ function OnlineLibrary() {
                     value={feedSearch}
                     onChange={(e) => setFeedSearch(e.target.value)}
                     placeholder="Search this channel"
-                    className={`ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:pl-4 ${
+                    className={`ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent sm:pl-4 ${
                       isYoutubeChannelUrl(activeChannelUrl)
                         ? "pr-8"
                         : "pr-3 sm:pr-4"
@@ -1612,7 +1610,7 @@ function OnlineLibrary() {
                     className={`ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs ${
                       catalogProgress.status === "error"
                         ? "text-red-400"
-                        : "text-gray-500"
+                        : "text-muted"
                     }`}
                     title={catalogProgress.lastError || undefined}
                   >
@@ -1637,7 +1635,7 @@ function OnlineLibrary() {
                       }
                     }}
                     placeholder="Search"
-                    className="ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 pr-8 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent sm:pl-4"
+                    className="ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent sm:pl-4"
                   />
                   <YoutubeSearchChip />
                 </div>
@@ -1737,7 +1735,7 @@ function OnlineLibrary() {
                         className="ui-panel ui-interactive rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
                       >
                         #{t.tag}
-                        <span className="ml-1.5 text-gray-500">{t.count}</span>
+                        <span className="ml-1.5 text-muted">{t.count}</span>
                       </button>
                     ))}
                   {hiddenTagCount > 0 && (
@@ -1756,7 +1754,7 @@ function OnlineLibrary() {
         )}
 
         {onChannelPage && feedSort === "popular" && (
-          <p className="mb-4 text-xs text-gray-600">
+          <p className="mb-4 text-xs text-muted">
             Popularity is based on loaded videos, not full channel history
             (YouTube limitation).
           </p>
@@ -1802,7 +1800,7 @@ function OnlineLibrary() {
           ) : loading ? (
             <LoadingIndicator />
           ) : !debouncedSearch && videos.length === 0 ? (
-            <div className="py-20 text-center text-gray-500">
+            <div className="py-20 text-center text-muted">
               <p className="text-lg">No videos yet.</p>
               <p className="mt-1 text-sm">
                 Paste a link on the Download page or drop files into your media
@@ -1863,7 +1861,7 @@ function OnlineLibrary() {
                 </div>
               </SearchResultSection>
               {youtubeLoading && youtubeVisible.length === 0 && (
-                <p className="text-center text-xs text-gray-600" role="status">
+                <p className="text-center text-xs text-muted" role="status">
                   {YOUTUBE_SEARCH_LOADING_LABEL}
                 </p>
               )}

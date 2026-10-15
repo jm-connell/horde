@@ -87,7 +87,7 @@ export default function AddToPlaylist({
       <FlipMenuPanel open={open} flip={flip} align="left" className="w-64">
         <MenuScroll className="max-h-48" revision={playlists.length}>
           {playlists.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-gray-500">No playlists yet.</p>
+            <p className="px-3 py-2 text-xs text-muted">No playlists yet.</p>
           ) : (
             playlists.map((p) => (
               <button

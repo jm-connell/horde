@@ -241,11 +241,11 @@ export default function RecommendedHome({
       {loading ? (
         <LoadingIndicator />
       ) : error ? (
-        <div className="py-16 text-center text-gray-500">
+        <div className="py-16 text-center text-muted">
           <p className="text-sm">{error}</p>
         </div>
       ) : feedVideos.length === 0 ? (
-        <div className="py-16 text-center text-gray-500">
+        <div className="py-16 text-center text-muted">
           <p className="text-lg">No recommendations yet.</p>
           <p className="mt-1 text-sm">
             {showForYou

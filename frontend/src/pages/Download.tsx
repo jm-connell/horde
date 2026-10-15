@@ -575,7 +575,7 @@ export default function Download() {
                 setUrl(e.target.value);
               }}
               placeholder="Video or playlist URL (YouTube, etc.)"
-              className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+              className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
             />
             <button
               type="button"
@@ -610,14 +610,14 @@ export default function Download() {
               Paste
             </button>
           </div>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-muted">
             Accepts comma-separated links.
           </p>
           {pasteHint && (
             <p className="mt-1 text-xs text-amber-200/90">{pasteHint}</p>
           )}
           {previewing && !isBulkList && (
-            <p className="mt-1 text-xs text-gray-500">Reading link...</p>
+            <p className="mt-1 text-xs text-muted">Reading link...</p>
           )}
           {!previewing && previewError && (
             <div className="mt-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-300">
@@ -646,7 +646,7 @@ export default function Download() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Auto-detected"
-                className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
               />
             </div>
             <Collapse open={!toDevice}>
@@ -707,9 +707,7 @@ export default function Download() {
                     <span className="block text-sm font-medium">{label}</span>
                     <span
                       className={`mt-1 block text-xs font-normal leading-relaxed ${
-                        playlistMode === mode
-                          ? "text-accent/80"
-                          : "text-gray-500"
+                        playlistMode === mode ? "text-accent/80" : "text-muted"
                       }`}
                     >
                       {hint}
@@ -732,7 +730,7 @@ export default function Download() {
                   value={playlistName}
                   onChange={(e) => setPlaylistName(e.target.value)}
                   placeholder="Playlist name"
-                  className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                  className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
                 />
               </div>
             )}
@@ -788,7 +786,7 @@ export default function Download() {
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <div className="flex h-full items-center justify-center text-xs text-gray-600">
+                            <div className="flex h-full items-center justify-center text-xs text-muted">
                               No preview
                             </div>
                           )}
@@ -797,7 +795,7 @@ export default function Download() {
                           <p className="line-clamp-2 text-sm text-gray-200">
                             {entry.title ?? "Untitled"}
                           </p>
-                          <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-gray-500">
+                          <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted">
                             {entry.channel && <span>{entry.channel}</span>}
                             {entry.view_count != null && (
                               <span>{formatViewCount(entry.view_count)}</span>
@@ -887,7 +885,7 @@ export default function Download() {
               </button>
             </div>
             {toDevice && (
-              <p className="mt-2 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-muted">
                 Saved inside Horde on this device for offline viewing; not added
                 to the library.
               </p>
@@ -1030,7 +1028,7 @@ export default function Download() {
               <button
                 type="button"
                 onClick={dismissFinishedJobs}
-                className="text-xs text-gray-500 hover:text-accent"
+                className="text-xs text-muted hover:text-accent"
               >
                 Clear all
               </button>

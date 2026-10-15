@@ -205,7 +205,7 @@ export default function PlaybackCompatPicker({
       <p className="text-sm font-medium text-gray-200">
         Playback compatibility
       </p>
-      <p className="mt-0.5 text-xs text-gray-500">
+      <p className="mt-0.5 text-xs text-muted">
         YouTube stores high-resolution video as AV1, which plays on most new
         devices but not on older iPads, iPhones, Macs and TVs. Pick how Horde
         balances storage, server work and device support.{" "}
@@ -236,7 +236,7 @@ export default function PlaybackCompatPicker({
             ) : stats ? (
               <span className="text-gray-300">None detected</span>
             ) : (
-              <span className="text-gray-500">Checking…</span>
+              <span className="text-muted">Checking…</span>
             )}
           </span>
           {stats?.encode && (
@@ -392,7 +392,7 @@ function CopyResolutionChoice({
           </button>
         ))}
       </div>
-      <p className="mt-1 text-xs text-gray-500">
+      <p className="mt-1 text-xs text-muted">
         {options.find((o) => o.id === value)?.hint}
       </p>
     </div>
@@ -474,7 +474,7 @@ function ModeWarnings({
       {out.map((w) => (
         <p
           key={w.text}
-          className={`text-xs ${w.tone === "warn" ? "text-amber-400/90" : "text-gray-500"}`}
+          className={`text-xs ${w.tone === "warn" ? "text-amber-400/90" : "text-muted"}`}
         >
           {w.text}
         </p>
@@ -582,7 +582,7 @@ function LibraryActions({
           <p className="text-sm text-gray-200">
             Create H.264 copies for the library
           </p>
-          <p className="text-gray-500">
+          <p className="text-muted">
             {summary.compat_missing > 0
               ? `${plural(summary.compat_missing, "video has", "videos have")} no H.264 copy. Estimated +${formatSize(summary.compat_missing_est_bytes)}, ` +
                 (hasGpuEncode
@@ -592,7 +592,7 @@ function LibraryActions({
               : "Every video already plays on older devices."}
           </p>
           {mode !== "sidecar" && summary.compat_missing > 0 && (
-            <p className="text-gray-500">
+            <p className="text-muted">
               Tip: with “AV1 + H.264 copy”, new downloads get one automatically.
             </p>
           )}
@@ -626,7 +626,7 @@ function LibraryActions({
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ink-700 pt-3">
           <div className="min-w-0">
             <p className="text-sm text-gray-200">Convert library to H.264</p>
-            <p className="text-gray-500">
+            <p className="text-muted">
               {summary.convertible > 0
                 ? `Re-encodes ${plural(summary.convertible, "AV1/VP9 original", "AV1/VP9 originals")} (${formatSize(summary.convertible_bytes)}) to H.264 at full resolution and replaces them. ` +
                   "Files usually grow 2–3× at 4K. The only way back is to download them again."

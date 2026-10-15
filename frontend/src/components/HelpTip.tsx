@@ -180,7 +180,7 @@ export default function HelpTip({
       ) : (
         <button
           type="button"
-          className="cursor-help text-gray-600 hover:text-gray-400"
+          className="cursor-help text-muted hover:text-gray-400"
           aria-label="More info"
           aria-describedby={open ? tipId : undefined}
           aria-expanded={open}

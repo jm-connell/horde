@@ -262,9 +262,9 @@ export default function VideoEditForm({
   const stats = [resLabel, sizeLabel, durLabel].filter(Boolean).join(" · ");
 
   const inputClass =
-    "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent";
+    "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent";
   const labelClass =
-    "mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500";
+    "mb-1 block text-xs font-medium uppercase tracking-wide text-muted";
 
   const activeCand = candidates[candIndex];
   const previewSrc = activeCand
@@ -313,7 +313,7 @@ export default function VideoEditForm({
               </>
             )}
           </div>
-          <div className="mt-3 space-y-1 text-xs text-gray-500">
+          <div className="mt-3 space-y-1 text-xs text-muted">
             <p className="truncate" title={video.file_path}>
               {video.file_path}
             </p>

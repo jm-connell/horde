@@ -11,6 +11,9 @@ export default {
           700: "rgb(var(--ink-700) / <alpha-value>)",
           600: "rgb(var(--ink-600) / <alpha-value>)",
         },
+        // Secondary text that meets WCAG AA (4.5:1) on every theme surface;
+        // use instead of text-gray-500/600. Values live in index.css.
+        muted: "rgb(var(--text-muted) / <alpha-value>)",
         accent: {
           DEFAULT: "rgb(var(--accent) / <alpha-value>)",
           soft: "rgb(var(--accent-soft) / <alpha-value>)",

@@ -58,7 +58,7 @@ export default function ChannelDownloadEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-300"
+            className="text-muted hover:text-gray-300"
             aria-label="Close"
           >
             ×

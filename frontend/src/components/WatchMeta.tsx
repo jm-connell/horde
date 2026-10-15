@@ -69,7 +69,7 @@ function DescriptionBoxToggle({
       type="button"
       onClick={onToggle}
       ref={buttonRef}
-      className={`absolute right-3 z-[2] flex h-8 min-w-8 items-center justify-end text-gray-500/55 hover:text-accent ${
+      className={`absolute right-3 z-[2] flex h-8 min-w-8 items-center justify-end text-muted hover:text-accent ${
         corner === "top" ? "top-0" : "bottom-0"
       }`}
       aria-label={label}
@@ -428,7 +428,7 @@ export default function WatchMeta({
           {(showGenerateHeader || showAiChapterChrome) && (
             <div className="flex shrink-0 items-center gap-2">
               {showAiChapterChrome && (
-                <p className="text-[10px] leading-none text-gray-500">
+                <p className="text-[10px] leading-none text-muted">
                   AI generated chapters (experimental)
                 </p>
               )}

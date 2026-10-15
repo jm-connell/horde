@@ -116,7 +116,7 @@ function FeedMetaRow({
         className="min-w-0 truncate text-xs leading-4 text-gray-400"
       />
       <span
-        className="block min-h-4 min-w-0 truncate text-xs leading-4 text-gray-500"
+        className="block min-h-4 min-w-0 truncate text-xs leading-4 text-muted"
         title={
           likeTip
             ? `${stats}${stats ? " · " : ""}${likeTip}`
@@ -145,7 +145,7 @@ function FeedMetaRow({
           </button>
         )}
         {maxRes ? (
-          <span className="ml-auto shrink-0 text-[10px] font-medium text-gray-500">
+          <span className="ml-auto shrink-0 text-[10px] font-medium text-muted">
             {maxRes}
           </span>
         ) : null}
@@ -385,7 +385,7 @@ export default function ChannelFeedCard({
               />
             </span>
             <p
-              className="truncate text-xs leading-4 text-gray-500"
+              className="truncate text-xs leading-4 text-muted"
               title={
                 listLikeTip
                   ? `${listStats}${listStats ? " · " : ""}${listLikeTip}`
@@ -415,7 +415,7 @@ export default function ChannelFeedCard({
               </span>
             )}
             {maxRes && (
-              <span className="pb-0.5 text-[10px] font-medium text-gray-500">
+              <span className="pb-0.5 text-[10px] font-medium text-muted">
                 {maxRes}
               </span>
             )}

@@ -157,7 +157,7 @@ export default function AppearanceTab() {
         )}
         <Collapse open={settings.theme === "custom"}>
           <div className="mt-4 max-w-xl space-y-3 rounded-lg border border-ink-700 bg-ink-950 p-4">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted">
               Pick your own accent and background. Surface colors are derived
               automatically.
             </p>
@@ -274,7 +274,7 @@ export default function AppearanceTab() {
             }
           >
             <p className="mb-2 text-sm font-medium text-gray-200">Font size</p>
-            <p className="mb-3 text-xs text-gray-500">
+            <p className="mb-3 text-xs text-muted">
               Scales text across the app without extreme zoom steps.
             </p>
             <div data-font-size-control className="flex flex-wrap gap-2">
@@ -358,7 +358,7 @@ export default function AppearanceTab() {
                   })();
                 }}
               />
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted">
                 Saved fonts are added to the dropdown permanently and stored
                 with your Horde data.
               </p>
@@ -435,7 +435,7 @@ export default function AppearanceTab() {
               }
               className="w-[12rem] min-w-[11rem]"
             />
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-muted">
               {
                 BACKGROUND_EFFECT_OPTIONS.find(
                   (o) => o.value === settings.backgroundEffect
@@ -461,7 +461,7 @@ export default function AppearanceTab() {
                 }
                 className="w-[12rem] min-w-[11rem]"
               />
-              <p className="mt-2 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-muted">
                 {
                   BACKGROUND_EFFECT_OPTIONS.find(
                     (o) => o.value === settings.backgroundEffect
@@ -471,7 +471,7 @@ export default function AppearanceTab() {
             </div>
 
             <label className="block">
-              <span className="mb-1 block text-xs text-gray-500">
+              <span className="mb-1 block text-xs text-muted">
                 Image or GIF / WebM
               </span>
               <input
@@ -486,9 +486,9 @@ export default function AppearanceTab() {
                 className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border file:border-ink-700 file:bg-ink-900 file:px-3 file:py-1.5 file:text-sm file:text-gray-200 hover:file:border-accent"
               />
               {bgUploading ? (
-                <p className="mt-1 text-xs text-gray-500">Uploading…</p>
+                <p className="mt-1 text-xs text-muted">Uploading…</p>
               ) : lastUploadedName ? (
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-muted">
                   Uploaded: {lastUploadedName}
                 </p>
               ) : null}
@@ -576,7 +576,7 @@ export default function AppearanceTab() {
             <label className="block">
               <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                 <span>Blur</span>
-                <span className="tabular-nums text-gray-500">
+                <span className="tabular-nums text-muted">
                   {Math.round(settings.customBackgroundBlur)}px
                 </span>
               </span>
@@ -610,7 +610,7 @@ export default function AppearanceTab() {
               <label className="block min-w-[12rem] flex-1">
                 <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                   <span>Tint opacity</span>
-                  <span className="tabular-nums text-gray-500">
+                  <span className="tabular-nums text-muted">
                     {Math.round(settings.customBackgroundTintOpacity * 100)}%
                   </span>
                 </span>
@@ -676,7 +676,7 @@ export default function AppearanceTab() {
                   }
                   className="w-[12rem] min-w-[11rem]"
                 />
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-muted">
                   {
                     BACKGROUND_EFFECT_OPTIONS.find(
                       (o) => o.value === settings.backgroundEffect
@@ -725,7 +725,7 @@ export default function AppearanceTab() {
             <label className="block">
               <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                 <span>Intensity</span>
-                <span className="tabular-nums text-gray-500">
+                <span className="tabular-nums text-muted">
                   {Math.round(settings.backgroundOpacity * 100)}%
                 </span>
               </span>
@@ -745,7 +745,7 @@ export default function AppearanceTab() {
             <label className="block">
               <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                 <span>Speed</span>
-                <span className="tabular-nums text-gray-500">
+                <span className="tabular-nums text-muted">
                   {settings.backgroundEffectSpeed.toFixed(2)}x
                 </span>
               </span>
@@ -767,7 +767,7 @@ export default function AppearanceTab() {
             <label className="block">
               <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                 <span>Size</span>
-                <span className="tabular-nums text-gray-500">
+                <span className="tabular-nums text-muted">
                   {settings.backgroundEffectSize.toFixed(2)}x
                 </span>
               </span>
@@ -889,7 +889,7 @@ export default function AppearanceTab() {
                   </Chip>
                 ))}
               </div>
-              <p className="mt-2 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-muted">
                 {
                   NAV_INDICATOR_OPTIONS.find(
                     (o) => o.value === settings.navIndicator
@@ -952,7 +952,7 @@ export default function AppearanceTab() {
                   </Chip>
                 ))}
               </div>
-              <p className="mt-2 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-muted">
                 {
                   HOVER_MOTION_OPTIONS.find(
                     (o) => o.value === settings.hoverMotion
@@ -981,14 +981,14 @@ export default function AppearanceTab() {
             }
           >
             <p className="mb-1 text-sm font-medium text-gray-200">Panels</p>
-            <p className="mb-3 text-xs text-gray-500">
+            <p className="mb-3 text-xs text-muted">
               Let background effects show through cards and chrome.
             </p>
             <div className="space-y-3">
               <label className="block">
                 <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                   <span>Transparency</span>
-                  <span className="tabular-nums text-gray-500">
+                  <span className="tabular-nums text-muted">
                     {Math.round(settings.translucentPanelStrength * 100)}%
                   </span>
                 </span>
@@ -1010,7 +1010,7 @@ export default function AppearanceTab() {
               <label className="block">
                 <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                   <span>Blur</span>
-                  <span className="tabular-nums text-gray-500">
+                  <span className="tabular-nums text-muted">
                     {Math.round(settings.translucentPanelBlur * 100)}%
                   </span>
                 </span>
@@ -1061,7 +1061,7 @@ export default function AppearanceTab() {
                   <label className="block min-w-[12rem] flex-1">
                     <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                       <span>Strength</span>
-                      <span className="tabular-nums text-gray-500">
+                      <span className="tabular-nums text-muted">
                         {Math.round(
                           settings.translucentPanelTintStrength * 100
                         )}
@@ -1133,7 +1133,7 @@ export default function AppearanceTab() {
                 </Chip>
               ))}
             </div>
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-muted">
               {selectedLoading
                 ? `${selectedLoading.label} — ${selectedLoading.description}`
                 : null}

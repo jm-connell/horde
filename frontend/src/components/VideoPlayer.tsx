@@ -2655,7 +2655,7 @@ export default function VideoPlayer({
                   {upNext.title}
                 </p>
                 {upNext.channel && (
-                  <p className="mt-0.5 truncate text-xs text-gray-500">
+                  <p className="mt-0.5 truncate text-xs text-muted">
                     {upNext.channel}
                   </p>
                 )}

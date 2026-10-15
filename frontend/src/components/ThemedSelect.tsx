@@ -119,7 +119,7 @@ export default function ThemedSelect<T extends string>({
   const optionList = (
     <ul id={listId} role="listbox">
       {visible.length === 0 ? (
-        <li className="px-3 py-2 text-sm text-gray-500">No matching models</li>
+        <li className="px-3 py-2 text-sm text-muted">No matching models</li>
       ) : (
         visible.map((opt, i) => {
           const active = opt.value === value;
@@ -133,7 +133,7 @@ export default function ThemedSelect<T extends string>({
               {showGroup ? (
                 <li
                   role="presentation"
-                  className="sticky top-0 z-[1] border-b border-ink-800 bg-ink-900 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-gray-500"
+                  className="sticky top-0 z-[1] border-b border-ink-800 bg-ink-900 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted"
                 >
                   {opt.group}
                 </li>
@@ -159,7 +159,7 @@ export default function ThemedSelect<T extends string>({
                   {opt.hint ? (
                     <span
                       className={`shrink-0 tabular-nums ${
-                        active ? "text-accent/80" : "text-gray-500"
+                        active ? "text-accent/80" : "text-muted"
                       } ${compact ? "text-[10px]" : "text-xs"}`}
                       title="USD per 1M tokens"
                     >
@@ -255,13 +255,13 @@ export default function ThemedSelect<T extends string>({
           />
           {!query && selected?.hint ? (
             <span
-              className="shrink-0 text-xs tabular-nums text-gray-500"
+              className="shrink-0 text-xs tabular-nums text-muted"
               title="USD per 1M tokens"
             >
               {selected.hint}
             </span>
           ) : null}
-          <span className="shrink-0 text-gray-500" aria-hidden>
+          <span className="shrink-0 text-muted" aria-hidden>
             ▾
           </span>
         </div>
@@ -284,13 +284,13 @@ export default function ThemedSelect<T extends string>({
           <span className="min-w-0 truncate">{selected?.label ?? value}</span>
           {selected?.hint ? (
             <span
-              className="shrink-0 text-xs tabular-nums text-gray-500"
+              className="shrink-0 text-xs tabular-nums text-muted"
               title="USD per 1M tokens"
             >
               {selected.hint}
             </span>
           ) : null}
-          <span className="shrink-0 text-gray-500" aria-hidden>
+          <span className="shrink-0 text-muted" aria-hidden>
             ▾
           </span>
         </button>

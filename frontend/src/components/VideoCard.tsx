@@ -274,12 +274,12 @@ export default function VideoCard({
             <>
               <div className="flex min-w-0 flex-wrap items-center gap-x-2">
                 {dateLabel ? (
-                  <span className="shrink-0 text-xs leading-4 text-gray-500">
+                  <span className="shrink-0 text-xs leading-4 text-muted">
                     {dateLabel}
                   </span>
                 ) : null}
                 {viewLabel ? (
-                  <span className="shrink-0 text-xs leading-4 text-gray-500">
+                  <span className="shrink-0 text-xs leading-4 text-muted">
                     {viewLabel}
                   </span>
                 ) : null}
@@ -290,7 +290,7 @@ export default function VideoCard({
                   className="min-w-0 break-words text-xs leading-4 text-gray-400 hover:text-accent"
                 />
                 {resolution ? (
-                  <span className="ml-auto shrink-0 pt-0.5 text-[10px] font-medium text-gray-500">
+                  <span className="ml-auto shrink-0 pt-0.5 text-[10px] font-medium text-muted">
                     {resolution}
                   </span>
                 ) : null}
@@ -305,17 +305,17 @@ export default function VideoCard({
                 />
               ) : null}
               {dateLabel ? (
-                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-500">
+                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-muted">
                   {dateLabel}
                 </span>
               ) : null}
               {viewLabel ? (
-                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-500">
+                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-muted">
                   {viewLabel}
                 </span>
               ) : null}
               {resolution ? (
-                <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] font-medium text-gray-500">
+                <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] font-medium text-muted">
                   {resolution}
                 </span>
               ) : null}

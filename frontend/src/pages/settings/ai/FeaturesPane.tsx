@@ -250,7 +250,7 @@ export default function FeaturesPane() {
                   }}
                   className={INPUT_COMPACT}
                 />
-                <span className="text-xs text-gray-500">days</span>
+                <span className="text-xs text-muted">days</span>
               </div>
             }
           />

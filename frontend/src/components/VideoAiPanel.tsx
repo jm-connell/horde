@@ -150,7 +150,7 @@ export default function VideoAiPanel({
                 className={
                   activeTab === "summary"
                     ? "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent"
-                    : "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600 hover:text-gray-400"
+                    : "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted hover:text-gray-400"
                 }
               >
                 Summary
@@ -164,7 +164,7 @@ export default function VideoAiPanel({
                 className={
                   activeTab === "chat"
                     ? "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent"
-                    : "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600 hover:text-gray-400"
+                    : "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted hover:text-gray-400"
                 }
               >
                 Chat
@@ -192,7 +192,7 @@ export default function VideoAiPanel({
                   </div>
                 ) : (
                   <div className="flex flex-col items-start gap-3 py-2">
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted">
                       No summary yet. Summaries are generated from captions and
                       video metadata.
                     </p>

@@ -81,7 +81,7 @@ function DownloadingRow({
           {item.video.title}
         </p>
         {item.video.channel ? (
-          <p className="truncate text-xs text-gray-500">{item.video.channel}</p>
+          <p className="truncate text-xs text-muted">{item.video.channel}</p>
         ) : null}
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink-700">
           <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
@@ -167,7 +167,7 @@ function DownloadedCard({
           {v.title}
         </p>
         {v.channel ? (
-          <p className="truncate text-xs text-gray-500">{v.channel}</p>
+          <p className="truncate text-xs text-muted">{v.channel}</p>
         ) : null}
       </Link>
       <button
@@ -175,7 +175,7 @@ function DownloadedCard({
         aria-label={`Remove ${v.title} from this device`}
         title="Remove download"
         onClick={() => onRemove(item)}
-        className="absolute bottom-0 right-0 rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400"
+        className="absolute bottom-0 right-0 rounded-lg p-1.5 text-muted hover:bg-red-500/10 hover:text-red-400"
       >
         <svg
           viewBox="0 0 24 24"
@@ -265,7 +265,7 @@ export default function OfflinePage({
           Offline videos
         </h1>
       )}
-      <p className="mb-5 text-xs text-gray-500">{summary}</p>
+      <p className="mb-5 text-xs text-muted">{summary}</p>
 
       {snap.unsupported ? (
         <div className="ui-panel rounded-lg border border-amber-500/30 bg-ink-900 p-4">
@@ -279,7 +279,7 @@ export default function OfflinePage({
       {!snap.unsupported && snap.ready && snap.items.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-lg text-gray-200">No downloads yet</p>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-muted">
             Tap Download on any video to save it for offline viewing.
           </p>
         </div>

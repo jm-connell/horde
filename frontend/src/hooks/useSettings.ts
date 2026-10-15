@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { connectivity } from "../offline/connectivity";
 import { getJson, setJson } from "../storage";
+import { mutedTextFor } from "../utils/contrast";
 import type { ViewMode } from "../components/videoPlayerTypes";
 import {
   applyUiFont,
@@ -383,6 +384,7 @@ const THEME_CSS_VARS = [
   "--accent",
   "--accent-soft",
   "--accent-deep",
+  "--text-muted",
 ] as const;
 
 type Rgb = [number, number, number];
@@ -429,6 +431,17 @@ function applyCustomColors(colors: CustomColors): void {
   const white: Rgb = [255, 255, 255];
   const black: Rgb = [0, 0, 0];
 
+  const surfaces = [
+    bg,
+    mixRgb(bg, white, 0.08),
+    mixRgb(bg, white, 0.14),
+    mixRgb(bg, white, 0.22),
+  ];
+  // Secondary text that stays AA-legible on whatever background was picked.
+  root.style.setProperty(
+    "--text-muted",
+    rgbString(mutedTextFor(surfaces, mixRgb(bg, white, 0.22)))
+  );
   root.style.setProperty("--ink-950", rgbString(bg));
   root.style.setProperty("--ink-900", rgbString(mixRgb(bg, white, 0.08)));
   root.style.setProperty("--ink-800", rgbString(mixRgb(bg, white, 0.14)));

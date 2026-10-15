@@ -88,7 +88,7 @@ export default function LibraryBulkBar({
             >
               <MenuScroll className="max-h-56" revision={playlists.length}>
                 {playlists.length === 0 ? (
-                  <p className="px-3 py-2 text-xs text-gray-500">
+                  <p className="px-3 py-2 text-xs text-muted">
                     No playlists yet.
                   </p>
                 ) : (
@@ -119,7 +119,7 @@ export default function LibraryBulkBar({
             >
               <div className="p-3">
                 <div className="mb-1 flex items-baseline justify-between gap-2">
-                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted">
                     Note
                   </span>
                 </div>
@@ -176,7 +176,7 @@ export default function LibraryBulkBar({
           <button
             type="button"
             onClick={onCancel}
-            className="ml-auto text-xs text-gray-500 hover:text-accent"
+            className="ml-auto text-xs text-muted hover:text-accent"
           >
             Cancel
           </button>

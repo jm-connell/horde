@@ -438,7 +438,7 @@ export default function TopNav() {
                     placeholder="Search"
                     enterKeyHint="search"
                     aria-label="Search library"
-                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
                   />
                   <YoutubeSearchChip />
                 </div>

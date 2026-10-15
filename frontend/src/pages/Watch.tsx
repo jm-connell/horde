@@ -846,12 +846,12 @@ export default function Watch() {
                   {v.title}
                 </p>
                 {v.channel && (
-                  <p className="mt-0.5 truncate text-xs text-gray-500">
+                  <p className="mt-0.5 truncate text-xs text-muted">
                     {v.channel}
                   </p>
                 )}
                 {v.duration_sec != null && (
-                  <p className="mt-0.5 text-xs text-gray-600">
+                  <p className="mt-0.5 text-xs text-muted">
                     {formatDuration(v.duration_sec)}
                   </p>
                 )}
@@ -861,7 +861,7 @@ export default function Watch() {
         })}
       </div>
       <div ref={relatedSentinelRef} className="h-2" />
-      {relatedLoading && <p className="text-xs text-gray-500">Loading more…</p>}
+      {relatedLoading && <p className="text-xs text-muted">Loading more…</p>}
     </div>
   ) : null;
 
@@ -1001,11 +1001,11 @@ export default function Watch() {
                     <span>{formatViewCount(source.meta.view_count)}</span>
                   )}
                   {resolution && (
-                    <span className="text-xs text-gray-500">{resolution}</span>
+                    <span className="text-xs text-muted">{resolution}</span>
                   )}
                   {processingLabel && (
                     <span
-                      className="inline-flex items-center gap-0.5 text-[11px] text-gray-600"
+                      className="inline-flex items-center gap-0.5 text-[11px] text-muted"
                       role="status"
                       aria-live="polite"
                     >
@@ -1018,7 +1018,7 @@ export default function Watch() {
                   {isLibrary &&
                     source.video.frame_rate &&
                     source.video.frame_rate > 60 && (
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-muted">
                         {Math.round(source.video.frame_rate)}fps
                       </span>
                     )}
@@ -1112,7 +1112,7 @@ export default function Watch() {
                       </span>
                       {(live?.downloaded_bytes != null ||
                         live?.total_bytes != null) && (
-                        <span className="text-[10px] text-gray-600">
+                        <span className="text-[10px] text-muted">
                           {live.downloaded_bytes != null
                             ? formatSize(live.downloaded_bytes)
                             : "…"}
@@ -1322,7 +1322,7 @@ export default function Watch() {
               are kept. Playback may be unavailable until the download finishes.
             </p>
             {source.kind === "library" && source.video.height_px != null && (
-              <p className="mb-3 text-xs text-gray-500">
+              <p className="mb-3 text-xs text-muted">
                 Current file:{" "}
                 <span className="text-gray-300">
                   {formatResolution(source.video.height_px) ||
@@ -1347,7 +1347,7 @@ export default function Watch() {
               className="mb-2 w-full"
               buttonClassName="w-full px-3 py-2.5"
             />
-            <p className="mb-6 text-xs text-gray-500">
+            <p className="mb-6 text-xs text-muted">
               YouTube (and other sites) may not offer the selected tier. If the
               downloaded file is lower, Horde shows a toast when the job
               finishes.

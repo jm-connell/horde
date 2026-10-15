@@ -86,7 +86,7 @@ export default function ChannelDownloadPanel({
       onClick={onDismiss}
       title="Hide download panel"
       aria-label="Hide download panel"
-      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-sm text-gray-500 hover:bg-ink-800 hover:text-gray-300"
+      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-sm text-muted hover:bg-ink-800 hover:text-gray-300"
     >
       ×
     </button>
@@ -169,7 +169,7 @@ export default function ChannelDownloadPanel({
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-[10px] text-gray-600">
+                    <div className="flex h-full items-center justify-center text-[10px] text-muted">
                       No preview
                     </div>
                   )}
@@ -178,9 +178,7 @@ export default function ChannelDownloadPanel({
                   <p className="line-clamp-2 text-sm font-medium text-gray-100">
                     {item.title || item.entry.title || "Untitled"}
                   </p>
-                  <p className="truncate text-xs text-gray-500">
-                    {item.channel}
-                  </p>
+                  <p className="truncate text-xs text-muted">{item.channel}</p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <ThemedSelect
                       aria-label="Download resolution"
@@ -197,13 +195,13 @@ export default function ChannelDownloadPanel({
                       buttonClassName="w-full"
                     />
                     {sizeLabel && (
-                      <span className="text-xs text-gray-500">{sizeLabel}</span>
+                      <span className="text-xs text-muted">{sizeLabel}</span>
                     )}
                   </div>
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-muted">
                   {item.submitting
                     ? "Starting…"
                     : hiddenCount > 0
@@ -230,7 +228,7 @@ export default function ChannelDownloadPanel({
                     type="button"
                     onClick={() => onCancel(item.tempId)}
                     disabled={item.submitting}
-                    className="rounded-md px-2 py-1 text-xs text-gray-500 hover:text-red-400 disabled:opacity-50"
+                    className="rounded-md px-2 py-1 text-xs text-muted hover:text-red-400 disabled:opacity-50"
                   >
                     Cancel
                   </button>

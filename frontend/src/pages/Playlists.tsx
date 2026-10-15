@@ -175,7 +175,7 @@ export default function Playlists() {
                 className="w-44 shrink-0"
                 buttonClassName="w-full py-2"
               />
-              <p className="min-w-[10rem] flex-1 text-xs leading-snug text-gray-500">
+              <p className="min-w-[10rem] flex-1 text-xs leading-snug text-muted">
                 Horde periodically checks for and downloads new playlist videos.
               </p>
             </div>
@@ -188,7 +188,7 @@ export default function Playlists() {
       {loading ? (
         <LoadingIndicator />
       ) : playlists.length === 0 ? (
-        <p className="py-20 text-center text-gray-500">No playlists yet.</p>
+        <p className="py-20 text-center text-muted">No playlists yet.</p>
       ) : (
         <div className="space-y-2">
           {playlists.map((p) => (

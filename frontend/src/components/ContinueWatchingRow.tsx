@@ -90,7 +90,7 @@ export default function ContinueWatchingRow({
         </h2>
         <button
           onClick={() => onDismissAll(videos.map((v) => v.id))}
-          className="text-xs text-gray-500 hover:text-accent"
+          className="text-xs text-muted hover:text-accent"
         >
           Clear all
         </button>

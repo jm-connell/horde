@@ -67,7 +67,7 @@ export default function JobsPane() {
             indexBusy={aiProcessingAction === "embeds"}
           />
         ) : (
-          <p className="text-sm text-gray-500">Loading…</p>
+          <p className="text-sm text-muted">Loading…</p>
         )}
         {aiStatus?.paused && (
           <p className="mt-2 text-xs text-amber-400/90">
@@ -132,7 +132,7 @@ export default function JobsPane() {
                     <p className="truncate text-gray-200">
                       {job.title || job.kind.replace(/_/g, " ")}
                     </p>
-                    <p className="truncate text-gray-500">
+                    <p className="truncate text-muted">
                       {job.kind.replace(/_/g, " ")}
                       {job.attempts > 0 ? ` · ${job.attempts} attempts` : ""}
                     </p>
@@ -213,7 +213,7 @@ export default function JobsPane() {
             className="w-full max-w-sm"
             buttonClassName="w-full"
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted">
             {
               AI_SCHEDULE_OPTIONS.find((o) => o.value === aiDraft.schedule)
                 ?.description
@@ -221,7 +221,7 @@ export default function JobsPane() {
           </p>
           {aiDraft.schedule === "timer" && (
             <label className="block">
-              <span className="mb-1 block text-xs text-gray-500">
+              <span className="mb-1 block text-xs text-muted">
                 Timer interval (hours)
               </span>
               <input
@@ -247,7 +247,7 @@ export default function JobsPane() {
           )}
           {aiDraft.schedule === "set_time" && (
             <label className="block">
-              <span className="mb-1 block text-xs text-gray-500">
+              <span className="mb-1 block text-xs text-muted">
                 Daily run time (local)
               </span>
               <input
@@ -294,7 +294,7 @@ export default function JobsPane() {
         <div className="space-y-3">
           <div>
             <p className="mb-2 text-sm font-medium text-gray-200">Catch up</p>
-            <p className="mb-3 text-xs text-gray-500">
+            <p className="mb-3 text-xs text-muted">
               Queue missing search indexes and AI tags, then refresh categories.
             </p>
             <div className="ui-panel mb-3 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
@@ -341,7 +341,7 @@ export default function JobsPane() {
               type="button"
               onClick={() => setIndividualStepsOpen((o) => !o)}
               aria-expanded={stepsOpen}
-              className="mb-2 inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-300"
+              className="mb-2 inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted hover:text-gray-300"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -362,7 +362,7 @@ export default function JobsPane() {
             <Collapse open={stepsOpen}>
               <div className="space-y-4">
                 <div>
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted">
                     Search index
                   </p>
                   <div className="divide-y divide-ink-800">
@@ -384,7 +384,7 @@ export default function JobsPane() {
                   </div>
                 </div>
                 <div>
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted">
                     Tags
                   </p>
                   <div className="divide-y divide-ink-800">
@@ -406,7 +406,7 @@ export default function JobsPane() {
                   </div>
                 </div>
                 <div>
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted">
                     Categories
                   </p>
                   <div className="divide-y divide-ink-800">

@@ -174,8 +174,8 @@ export default function AiMarkdown({
                 key: `${block.kind}-${i}`,
                 className:
                   block.kind === "ol"
-                    ? "list-decimal space-y-1.5 pl-5 leading-relaxed marker:text-gray-500"
-                    : "list-disc space-y-1.5 pl-5 leading-relaxed marker:text-gray-500",
+                    ? "list-decimal space-y-1.5 pl-5 leading-relaxed marker:text-muted"
+                    : "list-disc space-y-1.5 pl-5 leading-relaxed marker:text-muted",
               },
               block.items.map((item, j) =>
                 createElement(

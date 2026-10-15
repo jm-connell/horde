@@ -129,10 +129,10 @@ export default function LibraryTab() {
         </div>
 
         <div className="mt-6 border-t border-ink-700 pt-6">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Progress expiry
           </h3>
-          <p className="mb-3 text-xs text-gray-500">
+          <p className="mb-3 text-xs text-muted">
             Saved watch position resets after this many days of inactivity. The
             continue watching row hides videos after 7 days (fixed, not
             configurable).
@@ -160,10 +160,10 @@ export default function LibraryTab() {
         </div>
 
         <div className="mt-6 border-t border-ink-700 pt-6">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Default video sort
           </h3>
-          <p className="mb-3 text-xs text-gray-500">
+          <p className="mb-3 text-xs text-muted">
             Used when you open the library or after a temporary sort expires (3
             hours).
           </p>
@@ -185,7 +185,7 @@ export default function LibraryTab() {
         </div>
 
         <div className="mt-6 border-t border-ink-700 pt-6">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Channel list order (sidebar)
           </h3>
           <div className="mb-3 flex flex-wrap gap-2">
@@ -385,7 +385,7 @@ export default function LibraryTab() {
           <div>
             <label
               htmlFor="settings-catalog-max"
-              className="mb-1 flex items-center gap-1.5 text-xs text-gray-500"
+              className="mb-1 flex items-center gap-1.5 text-xs text-muted"
             >
               Max videos per channel
               <HelpTip text={CATALOG_MAX_TIP} />
@@ -420,7 +420,7 @@ export default function LibraryTab() {
                 }}
                 className={INPUT_COMPACT}
               />
-              <span className="text-xs text-gray-500">100–5000</span>
+              <span className="text-xs text-muted">100–5000</span>
             </div>
             {parseInt(catalogMaxInput, 10) > 1000 && (
               <p className="mt-1.5 text-xs text-amber-400/90">
@@ -432,7 +432,7 @@ export default function LibraryTab() {
           <div>
             <label
               htmlFor="settings-metadata-interval"
-              className="mb-1 flex items-center gap-1.5 text-xs text-gray-500"
+              className="mb-1 flex items-center gap-1.5 text-xs text-muted"
             >
               Metadata / catalog refresh interval (hours)
               <HelpTip text={METADATA_INTERVAL_TIP} />

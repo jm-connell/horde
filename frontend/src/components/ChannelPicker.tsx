@@ -17,7 +17,7 @@ const COMBOBOX_THRESHOLD = 30;
 const CUSTOM = "__custom__";
 
 const inputClass =
-  "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent";
+  "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent";
 
 export default function ChannelPicker({
   value,
@@ -218,7 +218,7 @@ function Combobox({
         aria-autocomplete="list"
       />
       {tabSuggestion && open && (
-        <p className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+        <p className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
           Tab · {tabSuggestion}
         </p>
       )}

@@ -49,7 +49,7 @@ export default function ChaptersList({
               className="ui-interactive flex w-full min-w-0 items-baseline gap-1.5 rounded-lg px-3 py-1 text-left text-sm text-gray-300 hover:bg-ink-800 hover:text-accent"
             >
               <span
-                className={`shrink-0 font-mono text-[11px] tabular-nums leading-none text-gray-500 ${
+                className={`shrink-0 font-mono text-[11px] tabular-nums leading-none text-muted ${
                   hourLong ? "w-[7ch]" : "w-[5ch]"
                 }`}
               >

@@ -33,7 +33,7 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
           <span className="block truncate text-xs text-gray-200">
             {job.title || (job.video_id == null ? kindLabel : "Untitled")}
           </span>
-          <span className="block truncate text-[11px] text-gray-500">
+          <span className="block truncate text-[11px] text-muted">
             {[
               job.channel,
               kindLabel,
@@ -43,7 +43,7 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
               .join(" · ")}
           </span>
           {job.model && (
-            <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-500">
+            <span className="mt-0.5 block truncate font-mono text-[10px] text-muted">
               {job.model}
             </span>
           )}
@@ -167,7 +167,7 @@ export default function AiQueueStatus({
                 {indexBusy ? "Queuing…" : "Index missing"}
               </button>
             ) : (
-              <span className="text-xs text-gray-500">Idle</span>
+              <span className="text-xs text-muted">Idle</span>
             )}
           </dd>
         </div>

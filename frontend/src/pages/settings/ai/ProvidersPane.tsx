@@ -154,7 +154,7 @@ export default function ProvidersPane() {
             </p>
           )}
           {aiStatus && aiStatus.models_match_profile === false && (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted">
               Local AI models customized in Advanced — re-apply a workload to
               reset them for the Ollama GPU.
             </p>
@@ -356,7 +356,7 @@ export default function ProvidersPane() {
                       )}
                   </div>
                 </div>
-                <p className="max-w-2xl text-xs text-gray-500">
+                <p className="max-w-2xl text-xs text-muted">
                   Point to your Ollama instance for embeddings and local LLM
                   fallback. Leave the URL blank to attempt auto-discover (but
                   don't count on it). AI processing is done on the Ollama
@@ -412,7 +412,7 @@ export default function ProvidersPane() {
                     />
                   </div>
                   {aiStatus?.gpu_source === "override" && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted">
                       Using your Ollama VRAM override for model sizing. Re-apply
                       a workload after changing it.
                     </p>
@@ -441,7 +441,7 @@ export default function ProvidersPane() {
               aria-disabled={localAiUnused || undefined}
             >
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="min-w-0 text-xs text-gray-500">
+                <p className="min-w-0 text-xs text-muted">
                   Optional overrides. Workload already picks models for the
                   Ollama GPU.
                 </p>
@@ -474,7 +474,7 @@ export default function ProvidersPane() {
               <Collapse open={advancedModelsOpen || Boolean(q)}>
                 <div className="max-w-md space-y-3 pb-1">
                   <label className="block">
-                    <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className="mb-1 flex items-center gap-1.5 text-xs text-muted">
                       Embedding model
                       <HelpTip text={EMBED_MODEL_TIP} />
                     </span>
@@ -511,7 +511,7 @@ export default function ProvidersPane() {
                     )}
                   </label>
                   <label className="block">
-                    <span className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className="mb-1 flex items-center gap-1.5 text-xs text-muted">
                       Chat model (tags, categories, duplicates)
                       <HelpTip text={CHAT_MODEL_TIP} />
                     </span>
@@ -594,7 +594,7 @@ export default function ProvidersPane() {
                   }
                 />
               </div>
-              <p className="max-w-2xl text-xs text-gray-500">
+              <p className="max-w-2xl text-xs text-muted">
                 Optional cloud LLM for{" "}
                 <span className="text-gray-400">
                   summaries, chat, tag enrichment, and duplicate confirmation
@@ -680,7 +680,7 @@ export default function ProvidersPane() {
                       );
                     })}
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted">
                     {aiDraft.openrouter_scope === "all"
                       ? "All AI tasks go through OpenRouter (unless Local AI overrides embeddings)."
                       : "Only summaries, chat, tags, and duplicate confirmation use OpenRouter."}
@@ -784,7 +784,7 @@ export default function ProvidersPane() {
                   {aiDraft.openrouter_api_key_set && (
                     <button
                       type="button"
-                      className="text-xs text-gray-500 underline-offset-2 hover:text-gray-300 hover:underline"
+                      className="text-xs text-muted underline-offset-2 hover:text-gray-300 hover:underline"
                       onClick={async () => {
                         const ok = await confirm({
                           title: "Clear saved OpenRouter key?",
@@ -837,17 +837,17 @@ export default function ProvidersPane() {
                                   {preset.label}
                                 </span>
                                 {recommended ? (
-                                  <span className="rounded-full px-1.5 py-px text-[10px] font-medium tracking-wide text-gray-500 ring-1 ring-ink-600">
+                                  <span className="rounded-full px-1.5 py-px text-[10px] font-medium tracking-wide text-muted ring-1 ring-ink-600">
                                     Recommended
                                   </span>
                                 ) : null}
                               </span>
-                              <span className="mt-0.5 block truncate text-[11px] text-gray-500">
+                              <span className="mt-0.5 block truncate text-[11px] text-muted">
                                 {preset.model}
                               </span>
                               {price ? (
                                 <span
-                                  className="mt-0.5 block text-[11px] tabular-nums text-gray-500"
+                                  className="mt-0.5 block text-[11px] tabular-nums text-muted"
                                   title="USD per 1M tokens"
                                 >
                                   {price}
@@ -877,7 +877,7 @@ export default function ProvidersPane() {
                           void saveAi({ openrouter_model: value })
                         }
                       />
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted">
                         Text chat models only. Type to search. Prices are USD
                         per 1M input / output tokens.
                       </p>
@@ -914,7 +914,7 @@ export default function ProvidersPane() {
                           }
                         }}
                       />
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted">
                         Used for search indexes, related videos, and category
                         shelves when Tasks is All. Changing this requires a
                         reindex.
@@ -934,7 +934,7 @@ export default function ProvidersPane() {
                       }
                     />
                   </div>
-                  <p className="max-w-2xl text-xs text-gray-500">
+                  <p className="max-w-2xl text-xs text-muted">
                     When on, summary and chat replies show a subtle OpenRouter
                     cost tag. Settings totals below always track usage.
                   </p>
@@ -985,7 +985,7 @@ export default function ProvidersPane() {
                       : undefined
                   }
                 >
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted">
                     {row.label}
                   </p>
                   <p
@@ -1000,7 +1000,7 @@ export default function ProvidersPane() {
                 </div>
               ))}
             </div>
-            <p className="mt-2 max-w-2xl text-xs text-gray-500">
+            <p className="mt-2 max-w-2xl text-xs text-muted">
               Totals are recorded locally from OpenRouter usage responses. They
               may differ slightly from the OpenRouter dashboard.
             </p>
@@ -1012,7 +1012,7 @@ export default function ProvidersPane() {
                     Warn if weekly spend exceeds
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="text-sm text-gray-500">$</span>
+                    <span className="text-sm text-muted">$</span>
                     <input
                       type="number"
                       min={0.01}
@@ -1053,7 +1053,7 @@ export default function ProvidersPane() {
                   </span>
                 </label>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted">
                 Uses the rolling last 7 days total. Leave blank for no limit.
                 You&apos;ll get a toast and a banner when spend crosses this
                 amount.
@@ -1079,7 +1079,7 @@ export default function ProvidersPane() {
                   }}
                 />
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted">
                 When on, further OpenRouter calls are blocked and the AI queue
                 pauses once the weekly budget is hit. Local Ollama is
                 unaffected.

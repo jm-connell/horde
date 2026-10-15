@@ -248,7 +248,7 @@ export default function VideoAiChat({
       {threadCostLabel && (
         <div className="flex items-center justify-end border-b border-ink-800/80 px-3 py-1">
           <span
-            className="text-[10px] tabular-nums text-gray-600"
+            className="text-[10px] tabular-nums text-muted"
             title={threadModel || undefined}
             aria-label={`Chat cost ${threadCostLabel}${threadModel ? ` (${threadModel})` : ""}`}
           >
@@ -268,7 +268,7 @@ export default function VideoAiChat({
         {!loading && showSeed && (
           <div className="flex justify-start">
             <div className="w-fit max-w-[90%] rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-400">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
                 From summary
               </p>
               <AiMarkdown
@@ -279,7 +279,7 @@ export default function VideoAiChat({
           </div>
         )}
         {!loading && !showSeed && messages.length === 0 && !sending && (
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted">
             Ask this video anything
             {!hasSubtitles
               ? " — captions not available, answers will use title and description only."
@@ -311,12 +311,12 @@ export default function VideoAiChat({
                 }
               >
                 <div className="mb-0.5 flex items-center justify-between gap-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                     {m.role === "user" ? "You" : "Video"}
                   </p>
                   {costLabel && (
                     <span
-                      className="text-[10px] tabular-nums text-gray-600"
+                      className="text-[10px] tabular-nums text-muted"
                       title={m.model || undefined}
                       aria-label={`Reply cost ${costLabel}${m.model ? ` (${m.model})` : ""}`}
                     >
@@ -363,7 +363,7 @@ export default function VideoAiChat({
             rows={2}
             disabled={sending}
             placeholder="Ask this video…"
-            className="horde-scrollbar min-h-[2.5rem] flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:border-accent focus:outline-none"
+            className="horde-scrollbar min-h-[2.5rem] flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-200 placeholder:text-muted focus:border-accent focus:outline-none"
           />
           {sending ? (
             <button

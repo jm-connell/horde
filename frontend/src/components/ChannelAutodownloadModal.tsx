@@ -92,12 +92,12 @@ export default function ChannelAutodownloadModal({
             >
               Autodownload
             </h2>
-            <p className="mt-0.5 text-sm text-gray-500">{channel}</p>
+            <p className="mt-0.5 text-sm text-muted">{channel}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-300"
+            className="text-muted hover:text-gray-300"
             aria-label="Close"
           >
             ×
@@ -182,7 +182,7 @@ export default function ChannelAutodownloadModal({
               <p className="text-sm font-medium text-gray-200">
                 Include completed livestreams
               </p>
-              <p className="mt-0.5 text-xs text-gray-500">
+              <p className="mt-0.5 text-xs text-muted">
                 Livestreams are never downloaded while live or upcoming. When
                 this is on, finished stream recordings are included.
               </p>
@@ -195,7 +195,7 @@ export default function ChannelAutodownloadModal({
         </div>
 
         {policy.pending_estimate > 0 && (
-          <p className="mb-4 text-xs text-gray-500">
+          <p className="mb-4 text-xs text-muted">
             About {policy.pending_estimate} catalog video
             {policy.pending_estimate === 1 ? "" : "s"} not already in your
             library would be queued with the current previous-video setting.

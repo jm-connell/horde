@@ -268,7 +268,7 @@ export default function PlaylistAddVideo({
           }`}
         >
           <p className="truncate text-sm font-medium text-gray-100">{title}</p>
-          <p className="truncate text-xs text-gray-500">{meta || item.url}</p>
+          <p className="truncate text-xs text-muted">{meta || item.url}</p>
         </button>
       </li>
     );
@@ -390,7 +390,7 @@ export default function PlaylistAddVideo({
                 onClick={close}
                 title="Close"
                 aria-label="Close add video"
-                className={`absolute right-0.5 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-sm text-gray-500 transition-opacity duration-200 ease-out hover:bg-ink-800 hover:text-accent motion-reduce:transition-none ${
+                className={`absolute right-0.5 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-sm text-muted transition-opacity duration-200 ease-out hover:bg-ink-800 hover:text-accent motion-reduce:transition-none ${
                   open ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
               >
@@ -405,13 +405,13 @@ export default function PlaylistAddVideo({
               className="mt-1 max-h-64 w-full overflow-y-auto rounded-lg bg-ink-950 ring-1 ring-ink-800 horde-scrollbar"
             >
               {loadingLibrary ? (
-                <li className="px-3 py-2 text-sm text-gray-500">Searching…</li>
+                <li className="px-3 py-2 text-sm text-muted">Searching…</li>
               ) : alreadyInPlaylist ? (
-                <li className="px-3 py-2 text-sm text-gray-500">
+                <li className="px-3 py-2 text-sm text-muted">
                   Already in this playlist
                 </li>
               ) : suggestions.length === 0 ? (
-                <li className="px-3 py-2 text-sm text-gray-500">
+                <li className="px-3 py-2 text-sm text-muted">
                   {looksLikeDownloadUrl(query) && linkPreviewing
                     ? "Looking up…"
                     : "No matching videos"}
@@ -446,9 +446,7 @@ export default function PlaylistAddVideo({
                           {item.video.title}
                         </p>
                         {meta ? (
-                          <p className="truncate text-xs text-gray-500">
-                            {meta}
-                          </p>
+                          <p className="truncate text-xs text-muted">{meta}</p>
                         ) : null}
                       </button>
                     </li>

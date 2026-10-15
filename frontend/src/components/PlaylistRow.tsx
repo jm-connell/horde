@@ -372,7 +372,7 @@ export default function PlaylistRow({
                 </span>
               )}
             </h3>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted">
               {videoCount} video{videoCount === 1 ? "" : "s"}
               {sourceHint}
               {playlist.subscribed && playlist.last_synced_at
@@ -425,9 +425,7 @@ export default function PlaylistRow({
           {loading && !current ? (
             <LoadingIndicator className="py-8" />
           ) : loadError ? (
-            <p className="py-6 text-center text-sm text-gray-500">
-              {loadError}
-            </p>
+            <p className="py-6 text-center text-sm text-muted">{loadError}</p>
           ) : (
             <>
               <div className="flex flex-wrap items-start gap-2">
@@ -517,7 +515,7 @@ export default function PlaylistRow({
               {editing && (
                 <div className="mt-4">
                   <div className="mb-2 flex items-baseline justify-between gap-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
                       Cover
                     </p>
                     {coverPinned && (
@@ -585,7 +583,7 @@ export default function PlaylistRow({
                       className={`flex aspect-video w-20 shrink-0 flex-col items-center justify-center rounded-md border border-dashed text-[10px] uppercase tracking-wide ${
                         playlist.has_custom_cover
                           ? "border-accent text-accent"
-                          : "border-ink-600 text-gray-500 hover:border-ink-500 hover:text-gray-300"
+                          : "border-ink-600 text-muted hover:border-ink-500 hover:text-gray-300"
                       }`}
                     >
                       {playlist.has_custom_cover ? "Custom" : "Upload"}
@@ -609,7 +607,7 @@ export default function PlaylistRow({
 
               <div className="mt-3 space-y-2">
                 {!current || current.videos.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-gray-500">
+                  <p className="py-8 text-center text-sm text-muted">
                     {youtubeImported
                       ? "Videos will appear here as they finish downloading."
                       : "No videos yet. Search your library or paste a download link."}
@@ -657,7 +655,7 @@ export default function PlaylistRow({
                             setVideoDragOver(null);
                           }}
                         />
-                        <span className="w-6 shrink-0 text-center text-sm text-gray-500">
+                        <span className="w-6 shrink-0 text-center text-sm text-muted">
                           {i + 1}
                         </span>
                         <Link
@@ -677,7 +675,7 @@ export default function PlaylistRow({
                             <p className="truncate text-sm font-medium text-gray-100">
                               {v.title}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted">
                               {v.channel} · {formatDuration(v.duration_sec)}
                             </p>
                           </div>
@@ -693,7 +691,7 @@ export default function PlaylistRow({
                         <button
                           type="button"
                           onClick={() => remove(v.id)}
-                          className="shrink-0 px-2 text-gray-500 hover:text-accent"
+                          className="shrink-0 px-2 text-muted hover:text-accent"
                           title="Remove from playlist"
                         >
                           ✕

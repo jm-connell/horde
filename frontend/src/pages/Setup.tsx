@@ -310,7 +310,7 @@ function WizardPanel({
       <h1 className="text-2xl font-semibold text-gray-100">
         {STEP_TITLE[step]}
       </h1>
-      <p className="mt-1 text-xs text-gray-500">
+      <p className="mt-1 text-xs text-muted">
         Step {stepIndex + 1} of {STEPS.length}
       </p>
 
@@ -345,7 +345,7 @@ function WizardPanel({
               </p>
             </div>
             {health?.wiki_available ? (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted">
                 Docs stay available at{" "}
                 <a
                   href="/wiki/"
@@ -372,7 +372,7 @@ function WizardPanel({
                 <span className="block text-sm font-medium text-gray-200">
                   Normalize volume on download
                 </span>
-                <span className="block text-xs text-gray-500">
+                <span className="block text-xs text-muted">
                   Apply loudness normalization when saving new videos (requires
                   ffmpeg).
                 </span>
@@ -453,7 +453,7 @@ function WizardPanel({
             </div>
             <Collapse open={aiChoice === "openrouter"}>
               <div className="space-y-2 pt-2">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted">
                   Cloud LLM for summaries, tags, and chat. The key is stored on
                   this Horde server.
                 </p>
@@ -479,7 +479,7 @@ function WizardPanel({
             </Collapse>
             <Collapse open={aiChoice === "ollama"}>
               <div className="space-y-2 pt-2">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted">
                   Leave the URL blank to use the default (Docker Compose{" "}
                   <span className="font-mono">ai</span> profile, or localhost).
                 </p>

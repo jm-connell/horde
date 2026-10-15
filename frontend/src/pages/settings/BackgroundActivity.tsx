@@ -84,13 +84,13 @@ function RunningRow({ task, now }: { task: ActivityTask; now: number }) {
             </p>
           )}
           {task.reason && (
-            <p className="mt-0.5 text-xs text-gray-500">{task.reason}</p>
+            <p className="mt-0.5 text-xs text-muted">{task.reason}</p>
           )}
         </div>
         <div className="shrink-0 text-right text-xs tabular-nums text-gray-400">
           {formatElapsed(task.started_at, now / 1000)}
           {task.total != null && task.done != null && (
-            <div className="text-gray-500">
+            <div className="text-muted">
               {task.done}/{task.total}
             </div>
           )}
@@ -115,7 +115,7 @@ function RecentRow({ task }: { task: ActivityTask }) {
               failed
                 ? "text-red-300"
                 : cancelled
-                  ? "text-gray-500"
+                  ? "text-muted"
                   : "text-gray-300"
             }
           >
@@ -123,20 +123,20 @@ function RecentRow({ task }: { task: ActivityTask }) {
           </span>
         </div>
         {task.detail && (
-          <p className="mt-0.5 truncate text-gray-500">{task.detail}</p>
+          <p className="mt-0.5 truncate text-muted">{task.detail}</p>
         )}
         {failed && task.error && (
           <p className="mt-0.5 text-red-400">{task.error}</p>
         )}
       </div>
-      <div className="shrink-0 text-right tabular-nums text-gray-500">
+      <div className="shrink-0 text-right tabular-nums text-muted">
         {formatElapsed(task.started_at, task.finished_at)}
         <div
           className={
             failed
               ? "text-red-400"
               : cancelled
-                ? "text-gray-600"
+                ? "text-muted"
                 : "text-emerald-500/80"
           }
         >
@@ -160,7 +160,7 @@ export default function BackgroundActivity({
   }, []);
 
   if (!activity) {
-    return <p className="text-sm text-gray-500">Loading activity…</p>;
+    return <p className="text-sm text-muted">Loading activity…</p>;
   }
 
   const running = activity.running ?? [];
@@ -212,7 +212,7 @@ export default function BackgroundActivity({
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           When Horde runs ffmpeg, downloads, AI jobs, or folder scans, they show
           up here with why they started.
         </p>
@@ -220,7 +220,7 @@ export default function BackgroundActivity({
 
       {recent.length > 0 && (
         <div className="border-t border-ink-800 pt-3">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
             Recent activity
           </p>
           <div className="group isolate relative">

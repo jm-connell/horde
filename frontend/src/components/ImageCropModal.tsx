@@ -378,7 +378,7 @@ export default function ImageCropModal({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="text-gray-500 hover:text-gray-300 disabled:opacity-50"
+            className="text-muted hover:text-gray-300 disabled:opacity-50"
             aria-label="Close"
           >
             ×
@@ -448,7 +448,7 @@ export default function ImageCropModal({
           <div>
             <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
               <span>Zoom</span>
-              <span className="tabular-nums text-gray-500">
+              <span className="tabular-nums text-muted">
                 {crop.zoom.toFixed(2)}×
               </span>
             </span>
@@ -509,7 +509,7 @@ export default function ImageCropModal({
           <div>
             <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
               <span>Rotate</span>
-              <span className="tabular-nums text-gray-500">
+              <span className="tabular-nums text-muted">
                 {Math.round(crop.rotationDeg)}°
               </span>
             </span>

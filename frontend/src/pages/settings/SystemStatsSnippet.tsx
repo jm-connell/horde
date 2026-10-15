@@ -7,7 +7,7 @@ export default function SystemStatsSnippet({
   stats: SystemStats | null;
 }) {
   if (!stats) {
-    return <p className="text-sm text-gray-500">Loading…</p>;
+    return <p className="text-sm text-muted">Loading…</p>;
   }
 
   const cards: { label: string; value: React.ReactNode }[] = [];
@@ -87,7 +87,7 @@ export default function SystemStatsSnippet({
           <span className="block">{gpuLines.join(" · ")}</span>
         )}
         {gpuVram && (
-          <span className="block text-xs text-gray-500">VRAM {gpuVram}</span>
+          <span className="block text-xs text-muted">VRAM {gpuVram}</span>
         )}
       </>
     ) : (
@@ -110,7 +110,7 @@ export default function SystemStatsSnippet({
         <>
           {formatSize(stats.disk.used_bytes)} /{" "}
           {formatSize(stats.disk.total_bytes)}
-          <span className="block text-xs text-gray-500">
+          <span className="block text-xs text-muted">
             {formatSize(stats.disk.free_bytes)} free
           </span>
         </>
@@ -119,9 +119,7 @@ export default function SystemStatsSnippet({
   }
 
   if (cards.length === 0) {
-    return (
-      <p className="text-sm text-gray-500">No resource stats available.</p>
-    );
+    return <p className="text-sm text-muted">No resource stats available.</p>;
   }
 
   return (
@@ -131,7 +129,7 @@ export default function SystemStatsSnippet({
           key={c.label}
           className="rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5"
         >
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
             {c.label}
           </p>
           <div className="text-sm text-gray-200">{c.value}</div>
