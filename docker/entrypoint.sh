@@ -50,7 +50,9 @@ mkdir -p "$DATA_DIR" "$DOWNLOADS_DIR"
 # database). A recursive chown on every start is slow on large thumbnail
 # caches. Downloads are left alone: the host owns that mount.
 current_owner="$(stat -c '%u:%g' "$DATA_DIR")"
-stray="$(find "$DATA_DIR" -xdev \( ! -user "$PUID" -o ! -group "$PGID" \) -print -quit)"
+# `|| true`: a file vanishing mid-walk makes find exit non-zero; an empty result
+# then simply means "nothing found" and must not abort the start.
+stray="$(find "$DATA_DIR" -xdev \( ! -user "$PUID" -o ! -group "$PGID" \) -print -quit 2>/dev/null || true)"
 if [[ "$current_owner" != "$PUID:$PGID" || -n "$stray" ]]; then
   log "chown -R $PUID:$PGID $DATA_DIR (top level was $current_owner${stray:+, e.g. $stray})"
   if ! chown -R "$PUID:$PGID" "$DATA_DIR"; then
