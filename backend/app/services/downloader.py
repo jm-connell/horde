@@ -5,13 +5,12 @@ import shutil
 import subprocess
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY
@@ -27,7 +26,7 @@ from ..models import (
     VideoStatus,
 )
 from . import activity, compat_rendition, library, scanner
-from .downloads import artifacts
+from .downloads import artifacts, dbwrite
 from .downloads.artifacts import (
     cleanup_partial_files,
     is_intermediate_media,
@@ -679,7 +678,7 @@ class DownloadQueue:
                 validate_public_url(job_url)
             except UnsafeUrlError as exc:
                 logger.warning("Refusing download job %s: %s", job_id, exc)
-                _update_job(job_id, status=JobStatus.error, error=str(exc))
+                dbwrite.update_job(job_id, status=JobStatus.error, error=str(exc))
                 progress_store[job_id] = {"status": "error", "error": str(exc)}
                 return
             try:
@@ -868,54 +867,13 @@ class FfmpegQueue:
 ffmpeg_queue = FfmpegQueue()
 
 
-_DB_RETRY_ATTEMPTS = 5
-_DB_RETRY_BASE_DELAY = 0.25
-
-
-def _retry_db_locked[T](fn: Callable[[], T], *, what: str) -> T:
-    """Run a short DB write, retrying "database is locked" with backoff.
-
-    SQLite reports ``locked`` immediately (no busy wait) when a read
-    transaction cannot be upgraded because another writer got in first. The
-    work is idempotent (each attempt opens a fresh session), so retrying is safe.
-    """
-    for attempt in range(_DB_RETRY_ATTEMPTS):
-        try:
-            return fn()
-        except OperationalError as exc:
-            locked = "locked" in str(exc).lower() or "busy" in str(exc).lower()
-            if not locked or attempt == _DB_RETRY_ATTEMPTS - 1:
-                raise
-            delay = _DB_RETRY_BASE_DELAY * (2**attempt)
-            logger.warning(
-                "database locked writing %s (attempt %d); retrying in %.2fs",
-                what,
-                attempt + 1,
-                delay,
-            )
-            time.sleep(delay)
-    raise AssertionError("unreachable")  # pragma: no cover
-
-
-def _update_job(job_id: int, **fields: Any) -> None:
-    def write() -> None:
-        with Session(engine) as session:
-            job = session.get(DownloadJob, job_id)
-            if job is None:
-                return
-            for key, value in fields.items():
-                setattr(job, key, value)
-            session.add(job)
-            session.commit()
-
-    _retry_db_locked(write, what=f"job {job_id}")
-
-
 def _force_job_error(job_id: int, exc: BaseException) -> None:
     """Last resort for a worker that died: end the job in ``error``, never stuck."""
     kind, message = classify_ytdlp_error(exc)
     try:
-        _update_job(job_id, status=JobStatus.error, error=message, error_kind=kind)
+        dbwrite.update_job(
+            job_id, status=JobStatus.error, error=message, error_kind=kind
+        )
     except Exception:
         # The reaper requeues it if even this write cannot land.
         logger.exception("could not record failure of download job %s", job_id)
@@ -990,7 +948,7 @@ def _fail_postprocess_job(job_id: int, destination: str, exc: BaseException) -> 
         _mark_job_cancelled(job_id, destination)
         return
     kind, message = classify_ytdlp_error(exc)
-    _update_job(
+    dbwrite.update_job(
         job_id,
         status=JobStatus.error,
         error=message,
@@ -1777,7 +1735,7 @@ def _complete_download(
         if volume_warning:
             snapshot["volume_warning"] = volume_warning
 
-        _update_job(
+        dbwrite.update_job(
             job_id,
             status=JobStatus.completed,
             progress=100.0,
@@ -1793,7 +1751,7 @@ def _complete_download(
         return None
 
     try:
-        committed = _retry_db_locked(
+        committed = dbwrite.retry_db_locked(
             lambda: _commit_library_video(
                 job_id=job_id,
                 final_path=final_path,
@@ -1898,7 +1856,7 @@ def _complete_download(
     if volume_warning:
         snapshot["volume_warning"] = volume_warning
 
-    _update_job(
+    dbwrite.update_job(
         job_id,
         status=JobStatus.completed,
         progress=100.0,
@@ -2117,7 +2075,7 @@ def _run_download(
     if cancel.is_set():
         raise DownloadCancelled()
 
-    _update_job(
+    dbwrite.update_job(
         job_id,
         status=JobStatus.downloading,
         paused=False,
@@ -2480,7 +2438,7 @@ def _run_download(
             logger.exception("download job %s failed unexpectedly", job_id)
         else:
             logger.warning("download job %s failed (%s): %s", job_id, kind, message)
-        _update_job(
+        dbwrite.update_job(
             job_id,
             status=JobStatus.error,
             error=message,
@@ -2768,7 +2726,7 @@ def _attach_download_to_playlist(job_id: int, video_id: int | None) -> None:
         return
     try:
         with _playlist_attach_lock:
-            _retry_db_locked(
+            dbwrite.retry_db_locked(
                 lambda: _attach_once(job_id, video_id),
                 what=f"playlist attach for job {job_id}",
             )

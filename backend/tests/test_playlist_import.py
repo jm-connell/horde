@@ -10,6 +10,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadJob, JobStatus, Playlist, PlaylistItem
 from app.services import downloader
+from app.services.downloads import dbwrite
 
 
 def _url(n: int) -> str:
@@ -45,7 +46,7 @@ def _order(init_db, playlist_id) -> list[int]:
 
 
 def _finish(init_db, job_id: int, video_id: int) -> None:
-    downloader._update_job(
+    dbwrite.update_job(
         job_id, status=JobStatus.completed, video_id=video_id, progress=100.0
     )
     downloader._attach_download_to_playlist(job_id, video_id)
@@ -109,7 +110,7 @@ def test_failed_entry_does_not_block_later_ones(
         j1, j2 = (
             j.id for j in s.exec(select(DownloadJob).order_by(DownloadJob.id)).all()
         )
-    downloader._update_job(j1, status=JobStatus.error)
+    dbwrite.update_job(j1, status=JobStatus.error)
     v2 = add_video(yt_id="pppppppp002", title="V2", file_path="a/v2.mp4")
     _finish(init_db, j2, v2.id)
     assert _order(init_db, playlist) == [v2.id]
@@ -169,7 +170,7 @@ def test_attach_survives_unique_violation_race(
     downloader.run_playlist_entries(playlist, [_url(1)], "best")
     with Session(init_db["engine"]) as s:
         job_id = s.exec(select(DownloadJob)).one().id
-    downloader._update_job(job_id, status=JobStatus.completed, video_id=video.id)
+    dbwrite.update_job(job_id, status=JobStatus.completed, video_id=video.id)
 
     real_slot = downloader._attach_slot
 
@@ -257,7 +258,7 @@ def test_concurrent_completions_get_distinct_ordered_positions(
         for i in range(1, 7)
     ]
     for jid, v in zip(job_ids, videos, strict=True):
-        downloader._update_job(jid, status=JobStatus.completed, video_id=v.id)
+        dbwrite.update_job(jid, status=JobStatus.completed, video_id=v.id)
 
     barrier = threading.Barrier(len(job_ids))
 
@@ -290,7 +291,7 @@ def test_attach_failure_never_changes_job_status(
     downloader.run_playlist_entries(playlist, [_url(1)], "best")
     with Session(init_db["engine"]) as s:
         job_id = s.exec(select(DownloadJob)).one().id
-    downloader._update_job(job_id, status=JobStatus.completed, video_id=video.id)
+    dbwrite.update_job(job_id, status=JobStatus.completed, video_id=video.id)
 
     def boom(*_a, **_k):
         raise RuntimeError("database exploded")

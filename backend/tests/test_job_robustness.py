@@ -11,13 +11,14 @@ from ytdlp_fakes import FakeYtdlp, make_info, stub_media_probes
 
 from app.models import DownloadJob, JobStatus
 from app.services import downloader, job_metadata
+from app.services.downloads import dbwrite
 
 URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
 @pytest.fixture(autouse=True)
 def _no_db_retry_sleep(monkeypatch):
-    monkeypatch.setattr(downloader, "_DB_RETRY_BASE_DELAY", 0.0)
+    monkeypatch.setattr(dbwrite, "DB_RETRY_BASE_DELAY", 0.0)
 
 
 def _job(init_db, **fields) -> int:
@@ -66,14 +67,14 @@ def test_initial_status_write_failure_ends_in_error_not_downloading(
     monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
     q = downloader.DownloadQueue()
     job_id = _job(init_db)
-    real = downloader._update_job
+    real = dbwrite.update_job
 
     def flaky(jid, **fields):
         if fields.get("status") == JobStatus.downloading:
             raise OperationalError("UPDATE", {}, Exception("database is locked"))
         return real(jid, **fields)
 
-    monkeypatch.setattr(downloader, "_update_job", flaky)
+    monkeypatch.setattr(dbwrite, "update_job", flaky)
     _run_worker(q, job_id)
     assert _get(init_db, job_id).status == JobStatus.error
 
@@ -90,7 +91,7 @@ def test_locked_database_writes_are_retried(init_db, monkeypatch):
         return real_commit(self)
 
     monkeypatch.setattr(Session, "commit", commit)
-    downloader._update_job(job_id, progress=42.0)
+    dbwrite.update_job(job_id, progress=42.0)
     monkeypatch.undo()
     assert _get(init_db, job_id).progress == 42.0
     assert calls["n"] == 4
@@ -106,7 +107,7 @@ def test_non_lock_database_errors_are_not_retried(init_db, monkeypatch):
 
     monkeypatch.setattr(Session, "commit", commit)
     with pytest.raises(OperationalError):
-        downloader._update_job(job_id, progress=1.0)
+        dbwrite.update_job(job_id, progress=1.0)
     assert calls["n"] == 1
 
 
