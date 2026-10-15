@@ -470,7 +470,10 @@ async def preview_subtitles(
     )
 
 
-@router.api_route("/manifest", methods=["GET", "HEAD"])
+# One handler serves both verbs. HEAD stays out of the schema so the OpenAPI
+# document has a single operation id (api_route would emit it twice and warn).
+@router.head("/manifest", include_in_schema=False)
+@router.get("/manifest")
 def preview_manifest(request: Request, url: str = Query(...)):
     """DASH MPD for adaptive high-res preview streaming."""
     cleaned = _require_video_url(url)
