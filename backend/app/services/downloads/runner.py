@@ -2,8 +2,11 @@
 
 ``run_download`` fetches metadata, tries each format selector in turn (with one
 cookie retry), picks the finished file and hands it to the postprocess queue.
+The state of one run lives on ``DownloadRun``; each step of the loop is a small
+method so the control flow (what is retried, what ends the job) stays readable.
 """
 
+import enum
 import logging
 import threading
 from pathlib import Path
@@ -12,7 +15,7 @@ from typing import Any
 from sqlmodel import Session
 
 from ...database import engine
-from ...models import DownloadDestination, DownloadJob, JobStatus
+from ...models import DownloadJob, JobStatus
 from .. import activity, scanner
 from ..fsutil import safe_rel
 from ..outtmpl import windows_filenames_ok
@@ -73,6 +76,16 @@ from .staging import (
 
 logger = logging.getLogger(__name__)
 
+_MEMBERS_ONLY_SKIPPED = "Members-only video — skipped"
+
+
+class _Outcome(enum.Enum):
+    """What one pass over a format selector came to."""
+
+    FOUND = "found"  # a finished file is in ``final_path``
+    EMPTY = "empty"  # no usable file: try the next selector
+    SKIPPED = "skipped"  # the job was dropped (a YouTube Short)
+
 
 def handoff_postprocess(task: PostprocessTask) -> None:
     """Queue the finished download for remux/transcode/loudnorm and the library commit."""
@@ -84,411 +97,488 @@ def run_download(
     job_id: int,
     cancel_event: threading.Event | None = None,
     queue: DownloadQueue | None = None,
-) -> int | None:
-    import yt_dlp
-
-    queue = queue or download_queue
-    cancel = cancel_event or threading.Event()
-
+) -> None:
     spec = JobSpec.load(job_id)
     if spec is None:
-        return None
-    url = spec.url
-    quality_preset = spec.quality_preset
-    title_override = spec.title_override
-    channel_override = spec.channel_override
-    job_title = spec.title
-    job_channel = spec.channel
-    destination = spec.destination
-    video_codec = spec.video_codec
+        return
+    DownloadRun(
+        spec, cancel_event or threading.Event(), queue or download_queue
+    ).execute()
 
-    if destination == DownloadDestination.device.value:
-        device_job_dir(job_id).mkdir(parents=True, exist_ok=True)
-        staging: Path | None = None
-        out_root = device_job_dir(job_id)
-    else:
+
+class DownloadRun:
+    """One execution of a job's download stage, from queued to handed off (or ended)."""
+
+    def __init__(
+        self, spec: JobSpec, cancel: threading.Event, queue: DownloadQueue
+    ) -> None:
+        self.spec = spec
+        self.cancel = cancel
+        self.queue = queue
+        self.staging: Path | None = None
+        self.out_root: Path
+        self.active_paths: set[str] = set()
+        self.attempt_paths: set[str] = set()
+        self.marked: set[str] = set()
+        self.info: dict[str, Any] = {}
+        self.metadata_info: dict[str, Any] = {}
+        self.prepared: Path | None = None
+        self.final_path: Path | None = None
+        self.last_exc: Exception | None = None
+        self.ytdlp_logger = YtdlpLogger()
+        self.used_cookies = False
+        self.base_opts: dict[str, Any] = {}
+        self.fmt = ""
+        self.handed_off = False
+        self.act: activity.ActivityHandle
+
+    # -- the run ---------------------------------------------------------------
+
+    def execute(self) -> None:
+        self._open_workdir()
+        self._raise_if_cancelled()
+        dbwrite.update_job(
+            self.spec.job_id,
+            status=JobStatus.downloading,
+            paused=False,
+            error=None,
+            error_kind=None,
+        )
+        progress_store[self.spec.job_id] = {
+            "status": "downloading",
+            "progress": 0.0,
+            "destination": self.spec.destination,
+        }
+        self._raise_if_cancelled()
+        self._start_activity()
+        try:
+            self._download_and_hand_off()
+        except DownloadCancelled:
+            self._on_cancelled()
+        except Exception as exc:  # noqa: BLE001 - _on_error logs it and ends the job
+            self._on_error(exc)
+        finally:
+            self._release()
+
+    def _open_workdir(self) -> None:
+        if self.spec.is_device:
+            self.out_root = device_job_dir(self.spec.job_id)
+            self.out_root.mkdir(parents=True, exist_ok=True)
+            return
         # Library downloads never write into the library directly: a cancel or
         # failure must not touch the file a row already references.
-        staging = staging_dir(job_id)
-        staging.mkdir(parents=True, exist_ok=True)
-        out_root = staging
+        self.staging = staging_dir(self.spec.job_id)
+        self.staging.mkdir(parents=True, exist_ok=True)
+        self.out_root = self.staging
 
-    if cancel.is_set():
-        raise DownloadCancelled()
-
-    dbwrite.update_job(
-        job_id,
-        status=JobStatus.downloading,
-        paused=False,
-        error=None,
-        error_kind=None,
-    )
-    progress_store[job_id] = {
-        "status": "downloading",
-        "progress": 0.0,
-        "destination": destination,
-    }
-    if cancel.is_set():
-        raise DownloadCancelled()
-
-    active_paths: set[str] = set()
-    info: dict[str, Any] = {}
-    metadata_info: dict[str, Any] = {}
-    prepared: Path | None = None
-    final_path: Path | None = None
-    last_exc: Exception | None = None
-    ytdlp_logger = YtdlpLogger()
-    marked: set[str] = set()
-    handed_off = False
-
-    def mark_library_path(rel: str) -> None:
-        lib = library_rel(rel, staging)
-        if lib not in marked:
-            marked.add(lib)
-            scanner.mark_active(lib)
-
-    act = activity.start(
-        "download",
-        "Downloading video",
-        reason="Queued from the Download tab",
-        engine="yt-dlp",
-        detail=title_override or url,
-        total=100,
-        done=0,
-    )
-
-    used_cookies = url_cookie_required(url)
-    base_ydl_opts: dict[str, Any] = {
-        "progress_hooks": [make_progress_hook(job_id, cancel, act)],
-        "postprocessor_hooks": [make_postprocessor_hook(job_id, cancel, act)],
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-        "logger": ytdlp_logger,
-        "merge_output_format": "mp4",
-        "ignoreerrors": True,
-        "overwrites": True,
-        "windowsfilenames": windows_filenames_ok(out_root),
-        "format_sort": format_sort_for(quality_preset, video_codec),
-        "file_access_retries": 10,
-        "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
-        "extractor_args": youtube_extractor_args(),
-    }
-
-    try:
-        for fmt in format_chain(quality_preset, video_codec):
-            attempt_paths: set[str] = set()
-            ydl_opts = {**base_ydl_opts, "format": fmt}
-            if used_cookies:
-                ydl_opts = apply_cookie_opts(ydl_opts)
-            try:
-                # Share extract spacing with preview/meta so downloads don't
-                # stampede YouTube alongside feed browsing.
-                meta_opts: dict[str, Any] = {
-                    "quiet": True,
-                    "no_warnings": True,
-                    "skip_download": True,
-                    "logger": QuietYtdlpLogger(),
-                    "extractor_args": youtube_extractor_args(),
-                }
-                try:
-                    fetched = extract_info_gated(
-                        url,
-                        meta_opts,
-                        cache_key=url,
-                        title=title_override or job_title,
-                        channel=channel_override or job_channel,
-                        priority=EXTRACT_PRIORITY_DOWNLOAD,
-                    )
-                except Exception as exc:
-                    if is_members_only_error(exc):
-                        raise MembersOnlyError("Members-only video — skipped") from exc
-                    raise
-
-                if extract_used_cookies():
-                    used_cookies = True
-                    ydl_opts = apply_cookie_opts({**base_ydl_opts, "format": fmt})
-
-                fetched_info = fetched if isinstance(fetched, dict) else None
-                if is_members_only_entry(fetched_info) and not extract_has_media(
-                    fetched_info
-                ):
-                    raise MembersOnlyError("Members-only video — skipped")
-                if is_youtube_short_entry(
-                    {**(fetched_info or {}), "url": url, "webpage_url": url}
-                ):
-                    cleanup_partial_files(active_paths)
-                    with Session(engine) as session:
-                        job = session.get(DownloadJob, job_id)
-                        if job is not None:
-                            session.delete(job)
-                            session.commit()
-                    progress_store[job_id] = {
-                        "status": "skipped",
-                        "reason": "shorts",
-                        "url": url,
-                    }
-                    act.discard()
-                    return None
-                metadata_info = merge_info(metadata_info, fetched)
-                info = metadata_info
-                outtmpl, _ = download_outtmpl(
-                    destination, job_id, metadata_info, channel_override, out_root
-                )
-                base_ydl_opts["outtmpl"] = outtmpl
-                ydl_opts = {**ydl_opts, "outtmpl": outtmpl}
-                audio_fmt = pick_original_audio_format(metadata_info)
-                audio_id = str(audio_fmt.get("format_id") or "") if audio_fmt else ""
-                fmt_spec = (
-                    apply_audio_format_id([fmt], audio_id)[0] if audio_id else fmt
-                )
-                ydl_opts = {**ydl_opts, "format": fmt_spec}
-                if used_cookies:
-                    ydl_opts = apply_cookie_opts(ydl_opts)
-
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    if ytdlp_logger.members_only:
-                        raise MembersOnlyError("Members-only video — skipped")
-                    prepared = Path(ydl.prepare_filename(metadata_info))
-                    for candidate in (prepared, prepared.with_suffix(".mp4")):
-                        rel = safe_rel(candidate)
-                        if rel:
-                            attempt_paths.add(rel)
-                            active_paths.add(rel)
-                            mark_library_path(rel)
-
-                    progress_store[job_id] = {
-                        **progress_store.get(job_id, {}),
-                        "title": metadata_info.get("title"),
-                        "channel": metadata_info.get("uploader")
-                        or metadata_info.get("channel"),
-                    }
-
-                    try:
-                        downloaded = ydl.extract_info(url, download=True)
-                        if ytdlp_logger.members_only:
-                            raise MembersOnlyError("Members-only video — skipped")
-                        info = merge_info(metadata_info, downloaded)
-                        metadata_info = info
-                    except Exception as exc:
-                        last_exc = exc
-                        if should_retry_with_cookies(
-                            ydl_opts,
-                            exc,
-                            logger_members_only=ytdlp_logger.members_only,
-                        ):
-                            used_cookies = True
-                            remember_cookie_required(url)
-                            ytdlp_logger.members_only = False
-                            logger.info(
-                                "Retrying download with cookies after age/members gate: %s",
-                                url,
-                            )
-                            cookie_opts = apply_cookie_opts(
-                                {**base_ydl_opts, "format": fmt}
-                            )
-                            with yt_dlp.YoutubeDL(cookie_opts) as ydl_auth:
-                                prepared = Path(
-                                    ydl_auth.prepare_filename(metadata_info)
-                                )
-                                for candidate in (
-                                    prepared,
-                                    prepared.with_suffix(".mp4"),
-                                ):
-                                    rel = safe_rel(candidate)
-                                    if rel:
-                                        attempt_paths.add(rel)
-                                        active_paths.add(rel)
-                                        mark_library_path(rel)
-                                downloaded = ydl_auth.extract_info(url, download=True)
-                                if ytdlp_logger.members_only:
-                                    raise MembersOnlyError(
-                                        "Members-only video — skipped"
-                                    ) from exc
-                                info = merge_info(metadata_info, downloaded)
-                                metadata_info = info
-                        elif ytdlp_logger.members_only or is_members_only_error(exc):
-                            raise MembersOnlyError(
-                                "Members-only video — skipped"
-                            ) from exc
-                        elif not is_recoverable_download_error(exc):
-                            raise
-                        else:
-                            final_path = resolve_merged_video(prepared, active_paths)
-                            final_path = reject_unplayable(final_path, attempt_paths)
-                            if final_path is None:
-                                raise
-
-                    if final_path is None:
-                        final_path = resolve_merged_video(prepared, active_paths)
-                    if final_path is None and metadata_info:
-                        candidate = Path(ydl.prepare_filename(metadata_info))
-                        final_path = candidate.with_suffix(".mp4")
-                        if not final_path.exists():
-                            final_path = candidate if candidate.exists() else None
-
-                    final_path = reject_unplayable(final_path, attempt_paths)
-
-                if final_path is not None and final_path.exists():
-                    break
-            except MembersOnlyError:
-                raise
-            except Exception as exc:
-                last_exc = exc
-                if ytdlp_logger.members_only or is_members_only_error(exc):
-                    raise MembersOnlyError("Members-only video — skipped") from exc
-                recovered = resolve_merged_video(prepared, active_paths)
-                recovered = reject_unplayable(recovered, attempt_paths)
-                if recovered is not None:
-                    final_path = recovered
-                    break
-                if not (cancel.is_set() and queue.is_shutting_down()):
-                    cleanup_partial_files(attempt_paths)
-
-        if ytdlp_logger.members_only:
-            raise MembersOnlyError("Members-only video — skipped")
-        if final_path is None or not final_path.exists():
-            final_path = resolve_merged_video(prepared, active_paths)
-        final_path = reject_unplayable(final_path, active_paths)
-        if (
-            final_path is None
-            or not final_path.exists()
-            or final_path.stat().st_size <= 0
-        ):
-            raise last_exc or RuntimeError("Download produced no file")
-
-        if cancel.is_set():
+    def _raise_if_cancelled(self) -> None:
+        if self.cancel.is_set():
             raise DownloadCancelled()
 
-        effective_info = merge_info(as_info(metadata_info), as_info(info))
-        detail = str(title_override or effective_info.get("title") or url)
-        act.finish(detail=detail)
+    def _start_activity(self) -> None:
+        spec = self.spec
+        self.act = activity.start(
+            "download",
+            "Downloading video",
+            reason="Queued from the Download tab",
+            engine="yt-dlp",
+            detail=spec.title_override or spec.url,
+            total=100,
+            done=0,
+        )
+        self.used_cookies = url_cookie_required(spec.url)
+        self.base_opts = {
+            "progress_hooks": [make_progress_hook(spec.job_id, self.cancel, self.act)],
+            "postprocessor_hooks": [
+                make_postprocessor_hook(spec.job_id, self.cancel, self.act)
+            ],
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "logger": self.ytdlp_logger,
+            "merge_output_format": "mp4",
+            "ignoreerrors": True,
+            "overwrites": True,
+            "windowsfilenames": windows_filenames_ok(self.out_root),
+            "format_sort": format_sort_for(spec.quality_preset, spec.video_codec),
+            "file_access_retries": 10,
+            "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
+            "extractor_args": youtube_extractor_args(),
+        }
+
+    def _download_and_hand_off(self) -> None:
+        if self._run_formats():
+            return
+        self._members_only_check()
+        path = self._settled_final_path()
+        self._raise_if_cancelled()
+        self._hand_off(path)
+
+    def _members_only_check(self) -> None:
+        if self.ytdlp_logger.members_only:
+            raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED)
+
+    def _settled_final_path(self) -> Path:
+        """Pick the finished file after the attempts, or fail with the last error."""
+        path = self.final_path
+        if path is None or not path.exists():
+            path = resolve_merged_video(self.prepared, self.active_paths)
+        path = reject_unplayable(path, self.active_paths)
+        if path is None or not path.exists() or path.stat().st_size <= 0:
+            raise self.last_exc or RuntimeError("Download produced no file")
+        return path
+
+    # -- the attempt loop ------------------------------------------------------
+
+    def _run_formats(self) -> bool:
+        """Try each format selector until one yields a file; True if the job was skipped."""
+        for fmt in format_chain(self.spec.quality_preset, self.spec.video_codec):
+            self.attempt_paths = set()
+            try:
+                outcome = self._attempt(fmt)
+            except MembersOnlyError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - kept as last_exc, raised if nothing is recovered
+                if self._recovered_after_failure(exc):
+                    break
+                continue
+            if outcome is _Outcome.SKIPPED:
+                return True
+            if outcome is _Outcome.FOUND:
+                break
+        return False
+
+    def _recovered_after_failure(self, exc: Exception) -> bool:
+        """A failed attempt may still have left a finished file; else clean up."""
+        self.last_exc = exc
+        if self.ytdlp_logger.members_only or is_members_only_error(exc):
+            raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED) from exc
+        recovered = resolve_merged_video(self.prepared, self.active_paths)
+        recovered = reject_unplayable(recovered, self.attempt_paths)
+        if recovered is not None:
+            self.final_path = recovered
+            return True
+        if not (self.cancel.is_set() and self.queue.is_shutting_down()):
+            cleanup_partial_files(self.attempt_paths)
+        return False
+
+    def _attempt(self, fmt: str) -> _Outcome:
+        self.fmt = fmt
+        ydl_opts = self._opts_for(fmt)
+        fetched = self._fetch_metadata()
+        if extract_used_cookies():
+            self.used_cookies = True
+            ydl_opts = apply_cookie_opts({**self.base_opts, "format": fmt})
+        fetched_info = fetched if isinstance(fetched, dict) else None
+        if is_members_only_entry(fetched_info) and not extract_has_media(fetched_info):
+            raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED)
+        if self._is_short(fetched_info):
+            self._skip_short()
+            return _Outcome.SKIPPED
+        self.metadata_info = merge_info(self.metadata_info, fetched)
+        self.info = self.metadata_info
+        ydl_opts = self._download_opts(ydl_opts, fmt)
+        self._download(ydl_opts)
+        found = self.final_path is not None and self.final_path.exists()
+        return _Outcome.FOUND if found else _Outcome.EMPTY
+
+    def _opts_for(self, fmt: str) -> dict[str, Any]:
+        opts = {**self.base_opts, "format": fmt}
+        return apply_cookie_opts(opts) if self.used_cookies else opts
+
+    def _fetch_metadata(self) -> Any:
+        spec = self.spec
+        # Share extract spacing with preview/meta so downloads don't stampede
+        # YouTube alongside feed browsing.
+        meta_opts: dict[str, Any] = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "logger": QuietYtdlpLogger(),
+            "extractor_args": youtube_extractor_args(),
+        }
+        try:
+            return extract_info_gated(
+                spec.url,
+                meta_opts,
+                cache_key=spec.url,
+                title=spec.title_override or spec.title,
+                channel=spec.channel_override or spec.channel,
+                priority=EXTRACT_PRIORITY_DOWNLOAD,
+            )
+        except Exception as exc:
+            if is_members_only_error(exc):
+                raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED) from exc
+            raise
+
+    def _is_short(self, fetched_info: dict[str, Any] | None) -> bool:
+        url = self.spec.url
+        return is_youtube_short_entry(
+            {**(fetched_info or {}), "url": url, "webpage_url": url}
+        )
+
+    def _skip_short(self) -> None:
+        spec = self.spec
+        cleanup_partial_files(self.active_paths)
+        with Session(engine) as session:
+            job = session.get(DownloadJob, spec.job_id)
+            if job is not None:
+                session.delete(job)
+                session.commit()
+        progress_store[spec.job_id] = {
+            "status": "skipped",
+            "reason": "shorts",
+            "url": spec.url,
+        }
+        self.act.discard()
+
+    def _download_opts(self, ydl_opts: dict[str, Any], fmt: str) -> dict[str, Any]:
+        """The yt-dlp options for the real download, once the metadata is known."""
+        outtmpl, _ = download_outtmpl(
+            self.spec.destination,
+            self.spec.job_id,
+            self.metadata_info,
+            self.spec.channel_override,
+            self.out_root,
+        )
+        self.base_opts["outtmpl"] = outtmpl
+        audio_fmt = pick_original_audio_format(self.metadata_info)
+        audio_id = str(audio_fmt.get("format_id") or "") if audio_fmt else ""
+        fmt_spec = apply_audio_format_id([fmt], audio_id)[0] if audio_id else fmt
+        opts = {**ydl_opts, "outtmpl": outtmpl, "format": fmt_spec}
+        return apply_cookie_opts(opts) if self.used_cookies else opts
+
+    # -- one yt-dlp download ---------------------------------------------------
+
+    def _download(self, ydl_opts: dict[str, Any]) -> None:
+        import yt_dlp
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            self._members_only_check()
+            self._register_outputs(ydl)
+            progress_store[self.spec.job_id] = {
+                **progress_store.get(self.spec.job_id, {}),
+                "title": self.metadata_info.get("title"),
+                "channel": self.metadata_info.get("uploader")
+                or self.metadata_info.get("channel"),
+            }
+            try:
+                self._extract(ydl)
+            except Exception as exc:  # noqa: BLE001 - re-raised unless survivable
+                self._handle_download_error(exc, ydl_opts)
+            self._locate_output(ydl)
+
+    def _register_outputs(self, ydl: Any) -> None:
+        """Remember the files yt-dlp is about to write, and tell the scanner."""
+        self.prepared = Path(ydl.prepare_filename(self.metadata_info))
+        for candidate in (self.prepared, self.prepared.with_suffix(".mp4")):
+            rel = safe_rel(candidate)
+            if rel:
+                self.attempt_paths.add(rel)
+                self.active_paths.add(rel)
+                self._mark_library_path(rel)
+
+    def _mark_library_path(self, rel: str) -> None:
+        lib = library_rel(rel, self.staging)
+        if lib not in self.marked:
+            self.marked.add(lib)
+            scanner.mark_active(lib)
+
+    def _extract(self, ydl: Any) -> None:
+        downloaded = ydl.extract_info(self.spec.url, download=True)
+        self._members_only_check()
+        self._absorb(downloaded)
+
+    def _absorb(self, downloaded: Any) -> None:
+        self.info = merge_info(self.metadata_info, downloaded)
+        self.metadata_info = self.info
+
+    def _handle_download_error(self, exc: Exception, ydl_opts: dict[str, Any]) -> None:
+        """Decide what a failed ``extract_info`` means; raise unless it is survivable."""
+        self.last_exc = exc
+        if should_retry_with_cookies(
+            ydl_opts, exc, logger_members_only=self.ytdlp_logger.members_only
+        ):
+            self._retry_with_cookies(exc)
+        elif self.ytdlp_logger.members_only or is_members_only_error(exc):
+            raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED) from exc
+        elif not is_recoverable_download_error(exc):
+            raise exc
+        else:
+            self.final_path = resolve_merged_video(self.prepared, self.active_paths)
+            self.final_path = reject_unplayable(self.final_path, self.attempt_paths)
+            if self.final_path is None:
+                raise exc
+
+    def _retry_with_cookies(self, exc: Exception) -> None:
+        """Run the download again once with cookies, after an age/members gate."""
+        import yt_dlp
+
+        url = self.spec.url
+        self.used_cookies = True
+        remember_cookie_required(url)
+        self.ytdlp_logger.members_only = False
+        logger.info("Retrying download with cookies after age/members gate: %s", url)
+        cookie_opts = apply_cookie_opts({**self.base_opts, "format": self.fmt})
+        with yt_dlp.YoutubeDL(cookie_opts) as ydl_auth:
+            self._register_outputs(ydl_auth)
+            downloaded = ydl_auth.extract_info(url, download=True)
+            if self.ytdlp_logger.members_only:
+                raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED) from exc
+            self._absorb(downloaded)
+
+    def _locate_output(self, ydl: Any) -> None:
+        """Find the file the download wrote (yt-dlp may name it differently)."""
+        if self.final_path is None:
+            self.final_path = resolve_merged_video(self.prepared, self.active_paths)
+        if self.final_path is None and self.metadata_info:
+            candidate = Path(ydl.prepare_filename(self.metadata_info))
+            self.final_path = candidate.with_suffix(".mp4")
+            if not self.final_path.exists():
+                self.final_path = candidate if candidate.exists() else None
+        self.final_path = reject_unplayable(self.final_path, self.attempt_paths)
+
+    # -- hand-off --------------------------------------------------------------
+
+    def _effective_info(self) -> dict[str, Any]:
+        return merge_info(as_info(self.metadata_info), as_info(self.info))
+
+    def _hand_off(self, path: Path) -> None:
+        spec = self.spec
+        info = self._effective_info()
+        self.act.finish(
+            detail=str(spec.title_override or info.get("title") or spec.url)
+        )
         handoff_postprocess(
             PostprocessTask(
                 spec=spec,
-                final_path=final_path,
-                info=effective_info,
-                cancel_event=cancel,
-                staging_dir=staging,
-                active_marks=set(marked),
+                final_path=path,
+                info=info,
+                cancel_event=self.cancel,
+                staging_dir=self.staging,
+                active_marks=set(self.marked),
             )
         )
-        handed_off = True
-        return None
+        self.handed_off = True
 
-    except DownloadCancelled:
+    # -- endings ---------------------------------------------------------------
+
+    def _on_cancelled(self) -> None:
+        queue = self.queue
         stopping = queue.is_shutting_down()
         if not stopping:
             # On shutdown the staged fragments stay: the job resumes from them.
-            cleanup_partial_files(active_paths)
-        restarting = queue.is_quality_restart(job_id)
+            cleanup_partial_files(self.active_paths)
+        restarting = queue.is_quality_restart(self.spec.job_id)
         pausing = queue.is_paused()
-        lifecycle.mark_job_cancelled(queue, job_id, destination)
+        lifecycle.mark_job_cancelled(queue, self.spec.job_id, self.spec.destination)
         if restarting or pausing or stopping:
-            act.discard()
+            self.act.discard()
         else:
-            act.finish(status="cancelled")
-        return None
+            self.act.finish(status="cancelled")
 
-    except Exception as exc:
-        if cancel.is_set():
-            if not queue.is_shutting_down():
-                cleanup_partial_files(active_paths)
-            lifecycle.mark_job_cancelled(queue, job_id, destination)
-            act.finish(status="cancelled")
-            return None
-        recovered = resolve_merged_video(prepared, active_paths)
-        recovered = reject_unplayable(recovered, active_paths)
-        effective_info = merge_info(as_info(metadata_info), as_info(info))
+    def _on_error(self, exc: Exception) -> None:
+        if self.cancel.is_set():
+            if not self.queue.is_shutting_down():
+                cleanup_partial_files(self.active_paths)
+            lifecycle.mark_job_cancelled(
+                self.queue, self.spec.job_id, self.spec.destination
+            )
+            self.act.finish(status="cancelled")
+            return
+        if self._hand_off_recovered_file():
+            return
+        self._fail(exc)
+
+    def _hand_off_recovered_file(self) -> bool:
+        """A failure after yt-dlp finished the file still yields a download."""
+        recovered = resolve_merged_video(self.prepared, self.active_paths)
+        recovered = reject_unplayable(recovered, self.active_paths)
         if (
-            recovered is not None
-            and recovered.exists()
-            and recovered.stat().st_size > 0
-            and not cancel.is_set()
+            recovered is None
+            or not recovered.exists()
+            or recovered.stat().st_size <= 0
+            or self.cancel.is_set()
         ):
-            try:
-                detail = str(title_override or effective_info.get("title") or url)
-                act.finish(detail=detail)
-                handoff_postprocess(
-                    PostprocessTask(
-                        spec=spec,
-                        final_path=recovered,
-                        info=effective_info,
-                        cancel_event=cancel,
-                        staging_dir=staging,
-                        active_marks=set(marked),
-                    )
-                )
-                handed_off = True
-                return None
-            except Exception:
-                logger.warning(
-                    "could not hand recovered download %s to postprocess",
-                    job_id,
-                    exc_info=True,
-                )
+            return False
+        try:
+            self._hand_off(recovered)
+        except Exception:
+            logger.warning(
+                "could not hand recovered download %s to postprocess",
+                self.spec.job_id,
+                exc_info=True,
+            )
+            return False
+        return True
 
-        cleanup_partial_files(active_paths)
-        if destination == DownloadDestination.device.value:
-            cleanup_device_job_files(job_id)
-        prev = progress_store.get(job_id, {})
-        subject_title = (
-            title_override
-            or metadata_info.get("title")
-            or info.get("title")
-            or job_title
+    def _subject(self) -> tuple[Any, Any]:
+        """Title and channel to name the video in an error message."""
+        spec, meta, info = self.spec, self.metadata_info, self.info
+        title = (
+            spec.title_override or meta.get("title") or info.get("title") or spec.title
         )
-        subject_channel = (
-            channel_override
-            or metadata_info.get("uploader")
-            or metadata_info.get("channel")
+        channel = (
+            spec.channel_override
+            or meta.get("uploader")
+            or meta.get("channel")
             or info.get("uploader")
             or info.get("channel")
-            or job_channel
+            or spec.channel
         )
+        return title, channel
+
+    def _fail(self, exc: Exception) -> None:
+        spec = self.spec
+        cleanup_partial_files(self.active_paths)
+        if spec.is_device:
+            cleanup_device_job_files(spec.job_id)
+        prev = progress_store.get(spec.job_id, {})
+        title, channel = self._subject()
         kind, message = classify_ytdlp_error(
-            exc, url=url, title=subject_title, channel=subject_channel
+            exc, url=spec.url, title=title, channel=channel
         )
         if kind == ERROR_KIND_MEMBERS or is_members_only_error(exc):
             kind = ERROR_KIND_MEMBERS
             message = classify_ytdlp_error(
-                MembersOnlyError("Members-only video — skipped"),
-                url=url,
-                title=subject_title,
-                channel=subject_channel,
+                MembersOnlyError(_MEMBERS_ONLY_SKIPPED),
+                url=spec.url,
+                title=title,
+                channel=channel,
             )[1]
-            purge_members_only_url(url)
+            purge_members_only_url(spec.url)
         record_extract_failure(
-            kind, message, url=url, title=subject_title, channel=subject_channel
+            kind, message, url=spec.url, title=title, channel=channel
         )
         if kind == ERROR_KIND_UNKNOWN:
-            logger.exception("download job %s failed unexpectedly", job_id)
+            logger.exception("download job %s failed unexpectedly", spec.job_id)
         else:
-            logger.warning("download job %s failed (%s): %s", job_id, kind, message)
+            logger.warning(
+                "download job %s failed (%s): %s", spec.job_id, kind, message
+            )
         dbwrite.update_job(
-            job_id,
+            spec.job_id,
             status=JobStatus.error,
             error=message,
             error_kind=kind,
             device_file_path=None,
         )
-        progress_store[job_id] = {
+        progress_store[spec.job_id] = {
             "status": "error",
             "error": message,
             "error_kind": kind,
             "title": prev.get("title"),
             "channel": prev.get("channel"),
-            "destination": destination,
+            "destination": spec.destination,
         }
-        act.finish(status="failed", error=message[:500])
-        return None
-    finally:
+        self.act.finish(status="failed", error=message[:500])
+
+    def _release(self) -> None:
         # Ensure activity never leaks if an unexpected path skips finish.
-        if not act._closed:
-            act.discard()
-        if not handed_off:
+        self.act.discard()
+        if not self.handed_off:
             # The postprocess stage owns the marks and the staging dir once it
             # has the job; otherwise release them here.
-            for lib in marked:
+            for lib in self.marked:
                 scanner.unmark_active(lib)
-            discard_staging_unless_requeued(job_id)
+            discard_staging_unless_requeued(self.spec.job_id)
