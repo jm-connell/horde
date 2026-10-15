@@ -24,13 +24,13 @@ When an administrator adds or edits an account they pick its **type** in *Settin
 | Permission | Lets a member | Default |
 |------------|---------------|---------|
 | `delete_videos` | Delete videos and their files from the server, including bulk delete, and remove a video's H.264 playback copy | off |
-| `download` | Queue downloads, import playlists, set up channel auto-download, import or upload files | on |
+| `download` | Queue downloads, import playlists, set up channel auto-download (a channel's automatic download rule), import or upload files | on |
 | `offline_download` | Save videos to the device for offline viewing, and fetch files from the server | on |
 | `edit_metadata` | Edit titles, descriptions, notes, tags and thumbnails; rename channels | on |
 | `manage_playlists` | Create, edit and delete the shared playlists | on |
 | `use_ai` | AI chat and on-demand summaries, tags and chapters (these can cost money with a paid provider) | on |
 
-These are **admin only** and cannot be granted: managing users, server-wide settings, AI provider configuration and worker control, factory reset, library-wide compatibility conversion, background and font management, pausing the download queue, a forced update check and the bulk metadata refresh.
+These are **admin only** and cannot be granted: managing users, server-wide settings, AI provider configuration and worker control, factory reset, library-wide compatibility conversion, background and font management, pausing the download queue, a forced update check and the bulk metadata refresh. (Channel auto-download is *not* in this list: it needs only `download`.)
 
 Changes apply on the person's next request; they do not need to sign in again. The API answers a refused request with `403` and `code: "permission_denied"` (or `admin_required`); the app shows it as a message and hides the controls the account cannot use.
 
@@ -77,7 +77,7 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 
 ### Signed media URLs
 
-`GET /api/videos/{id}/media-token` (signed in) returns `{token, expires_at}`: an HMAC over `video id | expiry | user id` with the key in `DATA_DIR/secret_key` (created on first start, mode 600, never stored in the database or returned by the API). It is valid for 12 hours, for that one video, on the stream, subtitle and thumbnail routes only, and stops working when that user's password is changed or reset. A malformed token is a plain `401`. The app only uses these URLs when handing media to a Chromecast or AirPlay receiver; the page's own player keeps using the cookie. Back up `secret_key` with the rest of `DATA_DIR`; if it is lost a new one is made and outstanding tokens stop working. A key file shorter than 32 bytes is never used or silently replaced: Horde reports it and the cast links fail until you delete the file.
+`GET /api/videos/{id}/media-token` (signed in) returns `{token, expires_at}`: an HMAC over `video id | expiry | user id` with the key in `DATA_DIR/secret_key` (created on first start, mode 600, never stored in the database or returned by the API). It is valid for 12 hours, for that one video, on the stream, subtitle and thumbnail routes only, and stops working when that user's password is changed or reset. A malformed token is a plain `401`. The app only uses these URLs when handing media to a Chromecast or AirPlay receiver; the page's own player keeps using the cookie. Access logs redact the `mt=` value. Back up `secret_key` with the rest of `DATA_DIR`; if it is lost a new one is made and outstanding tokens stop working. A key file shorter than 32 bytes is never used or silently replaced: Horde reports it and the cast links fail until you delete the file.
 
 ## Behind a reverse proxy
 
@@ -92,5 +92,7 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
     With sign-in disabled, anyone who can reach the port is an administrator. If the proxy can be bypassed, so can every protection described on this page.
 
 ## What this does not do
+
+- **Signing out does not clear offline copies.** Videos saved for offline viewing live in the browser's cache and IndexedDB, which belong to the browser profile, not the account. On a shared device, remove them (*Offline* page) or use a separate browser profile.
 
 Horde has no email, password-reset links, single sign-on or two-factor authentication, and an account is a trust boundary for *history and preferences* more than a sandbox: members share the library and can see every video. The [security model](../design/no-auth.md) and [Security](security.md) cover the rest.

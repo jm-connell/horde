@@ -47,6 +47,7 @@ from .request_context import RequestIdMiddleware
 from .services import limits, uploads
 from .services.auth.accounts import AccountError
 from .services.auth.runtime import AuthConfig, AuthRuntime
+from .services.log_redaction import install_log_redaction
 from .services.metrics import RequestStats
 from .services.url_safety import UnsafeUrlError
 
@@ -468,6 +469,7 @@ def install_security(
     app.add_exception_handler(UnsafeUrlError, _unsafe_url_handler)
     app.add_exception_handler(CodedHTTPException, coded_http_exception_handler)
     app.add_exception_handler(AccountError, account_error_handler)
+    install_log_redaction()
     app.state.auth = AuthRuntime(config=auth_config or AuthConfig.from_env())
     app.state.extraction_gate = limits.new_extraction_gate()
     app.state.ytdlp_slots = limits.new_ytdlp_slots()
