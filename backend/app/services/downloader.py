@@ -23,7 +23,7 @@ from ..models import (
     VideoStatus,
 )
 from . import activity, compat_rendition, library, scanner
-from .downloads import artifacts, dbwrite, subtitles
+from .downloads import artifacts, dbwrite, lifecycle, subtitles
 from .downloads.artifacts import (
     cleanup_partial_files,
     reject_unplayable,
@@ -183,7 +183,7 @@ class DownloadQueue:
         self._restart_ids: set[int] = set()
         self._orphan_seen: dict[int, float] = {}
         # Shutdown: stop dispatching, cancel in-flight work and requeue it (see
-        # ``_mark_job_cancelled``) so the next boot resumes it.
+        # ``lifecycle.mark_job_cancelled``) so the next boot resumes it.
         self._shutting_down = False
         self._threads: set[threading.Thread] = set()
 
@@ -579,10 +579,10 @@ class DownloadQueue:
             try:
                 _run_download(job_id, cancel_event=cancel_event)
             except DownloadCancelled:
-                _mark_job_cancelled(job_id, destination)
+                lifecycle.mark_job_cancelled(self, job_id, destination)
         except Exception as exc:
             logger.exception("download worker for job %s crashed", job_id)
-            _force_job_error(job_id, exc)
+            lifecycle.force_job_error(job_id, exc)
         finally:
             with self._lock:
                 self._running.discard(job_id)
@@ -680,8 +680,8 @@ class FfmpegQueue:
             # Explicit: the download queue may not have been told to stop yet
             # (workers are signalled newest first), and a cancel would delete the
             # finished download that is waiting for its remux.
-            _mark_job_cancelled(
-                task.job_id, task.destination, task.final_path, requeue=True
+            lifecycle.mark_job_cancelled(
+                download_queue, task.job_id, task.destination, requeue=True
             )
         except Exception:
             logger.exception("could not requeue job %s at shutdown", task.job_id)
@@ -740,14 +740,12 @@ class FfmpegQueue:
                 staging_dir=task.staging_dir,
             )
         except DownloadCancelled:
-            _mark_job_cancelled(
-                task.job_id,
-                task.destination,
-                task.final_path,
-            )
+            lifecycle.mark_job_cancelled(download_queue, task.job_id, task.destination)
         except Exception as exc:
             logger.warning("postprocess of job %s failed", task.job_id, exc_info=True)
-            _fail_postprocess_job(task.job_id, task.destination, exc)
+            lifecycle.fail_postprocess_job(
+                download_queue, task.job_id, task.destination, exc
+            )
         finally:
             for lib in task.active_marks:
                 scanner.unmark_active(lib)
@@ -760,101 +758,6 @@ class FfmpegQueue:
 
 
 ffmpeg_queue = FfmpegQueue()
-
-
-def _force_job_error(job_id: int, exc: BaseException) -> None:
-    """Last resort for a worker that died: end the job in ``error``, never stuck."""
-    kind, message = classify_ytdlp_error(exc)
-    try:
-        dbwrite.update_job(
-            job_id, status=JobStatus.error, error=message, error_kind=kind
-        )
-    except Exception:
-        # The reaper requeues it if even this write cannot land.
-        logger.exception("could not record failure of download job %s", job_id)
-    progress_store[job_id] = {
-        "status": "error",
-        "error": message,
-        "error_kind": kind,
-    }
-    try:
-        discard_staging_unless_requeued(job_id)
-    except Exception:
-        logger.exception("could not clean staging for job %s", job_id)
-
-
-def _mark_job_cancelled(
-    job_id: int,
-    destination: str,
-    final_path: Path | None = None,
-    *,
-    requeue: bool = False,
-) -> None:
-    """End a job that was stopped. ``requeue`` puts it back in the queue instead."""
-    if destination == DownloadDestination.device.value:
-        cleanup_device_job_files(job_id)
-    with Session(engine) as session:
-        job = session.get(DownloadJob, job_id)
-        if job is None:
-            progress_store[job_id] = {
-                "status": "cancelled",
-                "error": "Cancelled",
-                "error_kind": ERROR_KIND_CANCELLED,
-            }
-            return
-        restarting = download_queue.take_quality_restart(job_id)
-        pausing = download_queue.is_paused()
-        # A job interrupted by shutdown goes back to the queue, like a pause, and
-        # resumes from its staged .part files on the next boot.
-        if restarting or pausing or requeue or download_queue.is_shutting_down():
-            job.status = JobStatus.queued
-            job.paused = pausing
-            job.progress = 0.0
-            job.error = None
-            job.error_kind = None
-            progress_store[job_id] = {
-                "status": "queued",
-                "progress": 0.0,
-                "title": job.title_override or job.title,
-                "channel": job.channel_override or job.channel,
-                "destination": destination,
-            }
-        else:
-            job.status = JobStatus.cancelled
-            job.error = "Cancelled"
-            job.error_kind = ERROR_KIND_CANCELLED
-            job.progress = 0.0
-            job.device_file_path = None
-            progress_store[job_id] = {
-                "status": "cancelled",
-                "error": "Cancelled",
-                "error_kind": ERROR_KIND_CANCELLED,
-                "destination": destination,
-            }
-        session.add(job)
-        session.commit()
-
-
-def _fail_postprocess_job(job_id: int, destination: str, exc: BaseException) -> None:
-    event = download_queue.cancel_event(job_id)
-    if isinstance(exc, (FfmpegCancelled, DownloadCancelled)) or (
-        event is not None and event.is_set()
-    ):
-        _mark_job_cancelled(job_id, destination)
-        return
-    kind, message = classify_ytdlp_error(exc)
-    dbwrite.update_job(
-        job_id,
-        status=JobStatus.error,
-        error=message,
-        error_kind=kind,
-    )
-    progress_store[job_id] = {
-        "status": "error",
-        "error": message,
-        "error_kind": kind,
-        "destination": destination,
-    }
 
 
 def _handoff_postprocess(
@@ -1846,7 +1749,7 @@ def _run_download(
             cleanup_partial_files(active_paths)
         restarting = download_queue.is_quality_restart(job_id)
         pausing = download_queue.is_paused()
-        _mark_job_cancelled(job_id, destination)
+        lifecycle.mark_job_cancelled(download_queue, job_id, destination)
         if restarting or pausing or stopping:
             act.discard()
         else:
@@ -1857,7 +1760,7 @@ def _run_download(
         if cancel.is_set():
             if not download_queue.is_shutting_down():
                 cleanup_partial_files(active_paths)
-            _mark_job_cancelled(job_id, destination)
+            lifecycle.mark_job_cancelled(download_queue, job_id, destination)
             act.finish(status="cancelled")
             return None
         recovered = resolve_merged_video(prepared, active_paths)
