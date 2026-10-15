@@ -20,7 +20,7 @@ Fix every review finding plus week-1, weeks 2–4 and months 2–3 items. Add au
   - others under /home/user/wt are merged and can be removed
 
 ## In flight
-1. **WP-G auth (`wp/auth`, tip 9c74f61, 22 commits on d2c71be): APPROVED by security review** (36-vector redirect test; all live attacks fixed).
+1. **WP-G auth (`wp/auth`, tip b6c9a5b, 22 commits on d2c71be; pushed as backup/wp-auth): APPROVED by security review** (36-vector redirect test; all live attacks fixed). History rewritten twice (text-only) so every commit passes; final tree identical to the approved one. ALL 22 commits pass ruff+format. Full pytest verified per commit for the first 16 (log $SP/percommit-auth2.log, older SHAs but same content except a noqa comment). Last 6 commits (efa36c6..b6c9a5b) were running in background -> $SP/percommit-auth3.log. If all green -> `git -C /home/user/horde merge --ff-only wp/auth && git push`.
    - History was rewritten so intermediate commits pass. The final tree is identical to the approved one.
    - A per-commit verification was running: log at `$SP/percommit-auth2.log`, script `$SP/percommit2.sh <range> <venv>`; it runs pytest under `setsid` in an archive copy.
    - If every line shows ruff ok, format ok and "N passed", fast-forward merge into the integration branch and push. If a commit fails, fix it with a scripted rebase that uses `edit` + amend. NEVER run tests under `rebase --exec`.
