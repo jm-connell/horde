@@ -13,6 +13,7 @@ import pytest
 from yt_dlp.utils import prepend_extension
 
 from app.services import downloader
+from app.services.downloads import artifacts
 from app.services.paths import (
     FRAGMENT_RE,
     belongs_to_stem,
@@ -80,7 +81,7 @@ def test_failed_download_cleanup_spares_sibling_videos(init_db, title):
     ]
     rel = (folder / f"{target}.mp4").relative_to(init_db["downloads"]).as_posix()
 
-    downloader._cleanup_download_artifacts({rel}, remove_final=True)
+    artifacts.cleanup_download_artifacts({rel}, remove_final=True)
 
     assert not any(p.exists() for p in mine)
     assert all(p.exists() for p in siblings)
@@ -99,10 +100,10 @@ def test_find_merged_video_never_adopts_a_sibling(init_db, title):
     # Nothing of ours exists yet, only fragments: there is no merged file.
     _touch(folder / f"{target}.f137.mp4")
     _touch(folder / f"{target}.f251.webm")
-    assert downloader._find_merged_video(prepared) is None
+    assert artifacts.find_merged_video(prepared) is None
 
     merged = _touch(folder / f"{target}.mkv", size=128)
-    assert downloader._find_merged_video(prepared) == merged
+    assert artifacts.find_merged_video(prepared) == merged
 
 
 def test_reject_unplayable_removes_only_the_failed_download(init_db, monkeypatch):
@@ -111,10 +112,10 @@ def test_reject_unplayable_removes_only_the_failed_download(init_db, monkeypatch
     sibling = _touch(folder / "Learn [sibling0001].mp4")
     broken = _touch(folder / f"{target}.mp4")
     part = _touch(folder / f"{target}.f137.mp4.part")
-    monkeypatch.setattr(downloader, "_validate_playable", lambda _p: False)
+    monkeypatch.setattr(artifacts, "validate_playable", lambda _p: False)
 
     rel = broken.relative_to(init_db["downloads"]).as_posix()
-    assert downloader._reject_unplayable(broken, {rel}) is None
+    assert artifacts.reject_unplayable(broken, {rel}) is None
 
     assert not broken.exists()
     assert not part.exists()

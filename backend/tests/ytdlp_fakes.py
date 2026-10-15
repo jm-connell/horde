@@ -18,6 +18,8 @@ from typing import Any
 import yt_dlp
 from yt_dlp.utils import prepend_extension
 
+from app.services.downloads import artifacts
+
 RealYoutubeDL = yt_dlp.YoutubeDL
 
 
@@ -165,7 +167,7 @@ class FakeYtdlp:
 
 def stub_media_probes(monkeypatch, downloader, *, playable: bool = True) -> None:
     """The fake media is zero bytes: stub everything that would run ffprobe/ffmpeg."""
-    monkeypatch.setattr(downloader, "_validate_playable", lambda _p: playable)
+    monkeypatch.setattr(artifacts, "validate_playable", lambda _p: playable)
     monkeypatch.setattr(downloader, "probe_duration", lambda _p: 12.0)
     monkeypatch.setattr(downloader, "probe_dimensions", lambda _p: (1280, 720))
     monkeypatch.setattr(downloader, "probe_stream_info", lambda _p: None)

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from app.services import downloader
+from app.services.downloads import artifacts
 from app.services.paths import video_stem
 
 
@@ -153,14 +154,14 @@ def test_available_presets_audio_without_abr_metadata():
 
 
 def test_is_intermediate_media():
-    assert downloader._is_intermediate_media("video.f137.mp4")
-    assert downloader._is_intermediate_media("video.part")
-    assert downloader._is_intermediate_media("video.norm.mp4")
-    assert downloader._is_intermediate_media("video.compat.mp4")
-    assert downloader._is_intermediate_media("video.compat.123.mp4")
-    assert downloader._is_intermediate_media("video.xcode.mp4")
-    assert downloader._is_intermediate_media("video.xcode.123.mp4")
-    assert not downloader._is_intermediate_media("video.mp4")
+    assert artifacts.is_intermediate_media("video.f137.mp4")
+    assert artifacts.is_intermediate_media("video.part")
+    assert artifacts.is_intermediate_media("video.norm.mp4")
+    assert artifacts.is_intermediate_media("video.compat.mp4")
+    assert artifacts.is_intermediate_media("video.compat.123.mp4")
+    assert artifacts.is_intermediate_media("video.xcode.mp4")
+    assert artifacts.is_intermediate_media("video.xcode.123.mp4")
+    assert not artifacts.is_intermediate_media("video.mp4")
 
 
 def test_video_stem():

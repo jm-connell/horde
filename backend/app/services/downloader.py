@@ -14,7 +14,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Session, select
 
-from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
+from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY
 from ..database import engine
 from ..logging_config import FailureLog, job_context
 from ..models import (
@@ -27,6 +27,13 @@ from ..models import (
     VideoStatus,
 )
 from . import activity, compat_rendition, library, scanner
+from .downloads import artifacts
+from .downloads.artifacts import (
+    cleanup_partial_files,
+    is_intermediate_media,
+    reject_unplayable,
+    resolve_merged_video,
+)
 from .downloads.errors import (
     DownloadCancelled,
     YtdlpLogger,
@@ -46,7 +53,7 @@ from .fsutil import (
     safe_unlink,
 )
 from .media_info import apply_stream_info, needs_compat, probe_stream_info
-from .metadata import probe_dimensions, probe_duration, probe_is_playable
+from .metadata import probe_dimensions, probe_duration
 from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
 from .outtmpl import (
     channel_folder,
@@ -56,8 +63,6 @@ from .outtmpl import (
     windows_filenames_ok,
 )
 from .paths import (
-    COMPAT_SIDECAR_TOKEN,
-    STAGING_FRAGMENT_RE,
     belongs_to_stem,
     find_video_by_path,
     resolve_compat_path,
@@ -329,72 +334,9 @@ def gc_orphaned_device_dirs() -> int:
 
 
 # yt-dlp per-format fragments (e.g. ".f401.mp4") — not the final merged file.
-_FRAGMENT_RE = STAGING_FRAGMENT_RE
 
 
-def _is_intermediate_media(name: str) -> bool:
-    """True for yt-dlp/ffmpeg sidecars that are not the final library file."""
-    low = name.lower()
-    if _FRAGMENT_RE.search(name) or low.endswith(".part"):
-        return True
-    if ".temp." in low or low.endswith(".temp.mp4"):
-        return True
-    if ".norm." in low or low.endswith(".norm.mp4"):
-        return True
-    if ".compat." in low or low.endswith(".compat.mp4"):
-        return True
-    return bool(".xcode." in low or low.endswith(".xcode.mp4"))
-
-
-def _find_merged_video(prepared: Path) -> Path | None:
-    """Locate the final merged video when yt-dlp errors on fragment cleanup."""
-    mp4 = prepared.with_suffix(".mp4")
-    if mp4.exists() and not _is_intermediate_media(mp4.name):
-        return mp4
-    if (
-        prepared.exists()
-        and prepared.suffix.lower() in VIDEO_EXTENSIONS
-        and not _is_intermediate_media(prepared.name)
-    ):
-        return prepared
-
-    parent = prepared.parent
-    stem = video_stem(prepared, staging=True)
-    best: Path | None = None
-    best_size = 0
-    if not parent.is_dir():
-        return None
-    for entry in parent.iterdir():
-        if not entry.is_file():
-            continue
-        if not belongs_to_stem(entry.name, stem):
-            continue
-        if entry.suffix.lower() not in VIDEO_EXTENSIONS:
-            continue
-        if _is_intermediate_media(entry.name):
-            continue
-        try:
-            size = entry.stat().st_size
-        except OSError:
-            continue
-        if size > best_size:
-            best_size = size
-            best = entry
-    return best
-
-
-def _resolve_merged_video(prepared: Path | None, active_paths: set[str]) -> Path | None:
-    if prepared is not None:
-        found = _find_merged_video(prepared)
-        if found is not None:
-            return found
-    for rel in active_paths:
-        found = _find_merged_video(DOWNLOADS_DIR / rel)
-        if found is not None:
-            return found
-    return None
-
-    # Fall through: leave other errors to raised exceptions / default silence.
+# Fall through: leave other errors to raised exceptions / default silence.
 
 
 class _SubtitleYtdlpLogger:
@@ -1338,7 +1280,7 @@ class _DownloadProgress:
 
     def _is_final_finished(self, d: dict[str, Any], downloaded: int) -> bool:
         name = _progress_filename(d)
-        if name and _is_intermediate_media(name):
+        if name and is_intermediate_media(name):
             return False
         info = as_info(d.get("info_dict"))
         hint = _positive_int(info.get("filesize")) or _positive_int(
@@ -1662,49 +1604,6 @@ def _remove_review_duplicates(
     remove_files(doomed)
 
 
-def _validate_playable(path: Path) -> bool:
-    """Return True when the file is a complete, decodable video."""
-    return probe_is_playable(path)
-
-
-def _cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) -> None:
-    """Remove in-progress fragments and optionally corrupt final files."""
-    for rel in paths:
-        full = DOWNLOADS_DIR / rel
-        parent = full.parent
-        stem = video_stem(full, staging=True)
-        if not parent.is_dir():
-            continue
-        for entry in parent.iterdir():
-            if not entry.is_file() or not belongs_to_stem(entry.name, stem):
-                continue
-            if entry.name.endswith(".part") or _FRAGMENT_RE.search(entry.name):
-                safe_unlink(entry)
-                continue
-            if (
-                remove_final
-                and entry.suffix.lower() in VIDEO_EXTENSIONS
-                and _FRAGMENT_RE.search(entry.name) is None
-                and COMPAT_SIDECAR_TOKEN not in entry.name
-            ):
-                safe_unlink(entry)
-
-
-def _cleanup_partial_files(paths: set[str]) -> None:
-    """Remove in-progress fragments; also drop unplayable merged files left by cancel."""
-    _cleanup_download_artifacts(paths, remove_final=False)
-    for rel in paths:
-        full = DOWNLOADS_DIR / rel
-        if not full.is_file():
-            continue
-        if _FRAGMENT_RE.search(full.name) or full.name.endswith(".part"):
-            continue
-        if full.suffix.lower() not in VIDEO_EXTENSIONS:
-            continue
-        if not _validate_playable(full):
-            safe_unlink(full)
-
-
 def _check_quality(
     preset: str, height: int | None, video_codec: str = "av1"
 ) -> str | None:
@@ -1982,7 +1881,7 @@ def _complete_download(
     if staging_dir is not None and not is_device:
         # Validate the processed file, then move it into the library. A failed
         # move or commit puts everything back (see the except below).
-        if not _validate_playable(final_path):
+        if not artifacts.validate_playable(final_path):
             raise RuntimeError("Processed file is not playable")
         journal = MoveJournal(DOWNLOADS_DIR)
         try:
@@ -2346,26 +2245,13 @@ def _promote_from_staging(
     for entry in sorted(final_path.parent.iterdir()):
         if entry == final_path or not entry.is_file():
             continue
-        if not belongs_to_stem(entry.name, stem) or _is_intermediate_media(entry.name):
+        if not belongs_to_stem(entry.name, stem) or is_intermediate_media(entry.name):
             continue
         if entry.name.endswith((".ytdl", ".part")):
             continue
         journal.move(entry, dest.parent / entry.name, backup_dir=backup_dir)
     journal.move(final_path, dest, backup_dir=backup_dir)
     return dest
-
-
-def _reject_unplayable(path: Path | None, attempt_paths: set[str]) -> Path | None:
-    """Return path if playable; otherwise remove corrupt artifacts and return None."""
-    if path is None or not path.exists() or path.stat().st_size <= 0:
-        return None
-    if _validate_playable(path):
-        return path
-    rel = safe_rel(path)
-    if rel:
-        _cleanup_download_artifacts({rel}, remove_final=True)
-    _cleanup_partial_files(attempt_paths)
-    return None
 
 
 def _run_download(
@@ -2509,7 +2395,7 @@ def _run_download(
                 if is_youtube_short_entry(
                     {**(fetched_info or {}), "url": url, "webpage_url": url}
                 ):
-                    _cleanup_partial_files(active_paths)
+                    cleanup_partial_files(active_paths)
                     with Session(engine) as session:
                         job = session.get(DownloadJob, job_id)
                         if job is not None:
@@ -2606,20 +2492,20 @@ def _run_download(
                         elif not is_recoverable_download_error(exc):
                             raise
                         else:
-                            final_path = _resolve_merged_video(prepared, active_paths)
-                            final_path = _reject_unplayable(final_path, attempt_paths)
+                            final_path = resolve_merged_video(prepared, active_paths)
+                            final_path = reject_unplayable(final_path, attempt_paths)
                             if final_path is None:
                                 raise
 
                     if final_path is None:
-                        final_path = _resolve_merged_video(prepared, active_paths)
+                        final_path = resolve_merged_video(prepared, active_paths)
                     if final_path is None and metadata_info:
                         candidate = Path(ydl.prepare_filename(metadata_info))
                         final_path = candidate.with_suffix(".mp4")
                         if not final_path.exists():
                             final_path = candidate if candidate.exists() else None
 
-                    final_path = _reject_unplayable(final_path, attempt_paths)
+                    final_path = reject_unplayable(final_path, attempt_paths)
 
                 if final_path is not None and final_path.exists():
                     break
@@ -2629,19 +2515,19 @@ def _run_download(
                 last_exc = exc
                 if ytdlp_logger.members_only or is_members_only_error(exc):
                     raise MembersOnlyError("Members-only video — skipped") from exc
-                recovered = _resolve_merged_video(prepared, active_paths)
-                recovered = _reject_unplayable(recovered, attempt_paths)
+                recovered = resolve_merged_video(prepared, active_paths)
+                recovered = reject_unplayable(recovered, attempt_paths)
                 if recovered is not None:
                     final_path = recovered
                     break
                 if not (cancel.is_set() and download_queue.is_shutting_down()):
-                    _cleanup_partial_files(attempt_paths)
+                    cleanup_partial_files(attempt_paths)
 
         if ytdlp_logger.members_only:
             raise MembersOnlyError("Members-only video — skipped")
         if final_path is None or not final_path.exists():
-            final_path = _resolve_merged_video(prepared, active_paths)
-        final_path = _reject_unplayable(final_path, active_paths)
+            final_path = resolve_merged_video(prepared, active_paths)
+        final_path = reject_unplayable(final_path, active_paths)
         if (
             final_path is None
             or not final_path.exists()
@@ -2679,7 +2565,7 @@ def _run_download(
         stopping = download_queue.is_shutting_down()
         if not stopping:
             # On shutdown the staged fragments stay: the job resumes from them.
-            _cleanup_partial_files(active_paths)
+            cleanup_partial_files(active_paths)
         restarting = download_queue.is_quality_restart(job_id)
         pausing = download_queue.is_paused()
         _mark_job_cancelled(job_id, destination)
@@ -2692,12 +2578,12 @@ def _run_download(
     except Exception as exc:
         if cancel.is_set():
             if not download_queue.is_shutting_down():
-                _cleanup_partial_files(active_paths)
+                cleanup_partial_files(active_paths)
             _mark_job_cancelled(job_id, destination)
             act.finish(status="cancelled")
             return None
-        recovered = _resolve_merged_video(prepared, active_paths)
-        recovered = _reject_unplayable(recovered, active_paths)
+        recovered = resolve_merged_video(prepared, active_paths)
+        recovered = reject_unplayable(recovered, active_paths)
         effective_info = merge_info(as_info(metadata_info), as_info(info))
         if (
             recovered is not None
@@ -2734,7 +2620,7 @@ def _run_download(
                     exc_info=True,
                 )
 
-        _cleanup_partial_files(active_paths)
+        cleanup_partial_files(active_paths)
         if destination == DownloadDestination.device.value:
             cleanup_device_job_files(job_id)
         prev = progress_store.get(job_id, {})
