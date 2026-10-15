@@ -1,0 +1,46 @@
+# Tool configuration only. Dependencies live in requirements.txt / requirements-dev.txt.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+extend-exclude = ["static"]
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle errors
+  "F",    # pyflakes
+  "W",    # pycodestyle warnings
+  "I",    # isort
+  "B",    # bugbear
+  "UP",   # pyupgrade
+  "BLE",  # blind except
+  "SIM",  # simplify
+  "S",    # bandit
+  "RUF100",  # unused noqa
+  "PLE",  # pylint errors
+  "PIE",  # misc idioms
+]
+ignore = [
+  "E501",    # line length is the formatter's job; long strings/URLs are tolerated
+  "B008",    # FastAPI Depends()/File()/Query() defaults are the framework idiom
+  "S603",    # subprocess is always called with an argv list (never shell=True)
+  "S607",    # ffmpeg/ffprobe/git/yt-dlp are resolved from PATH on purpose
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  "S101",  # assert is how pytest tests are written
+  "S105",  # fake tokens/passwords in fixtures
+  "S106",  # fake tokens/passwords in fixtures
+  "S108",  # hardcoded /tmp paths in fixtures
+  "BLE001",  # tests may catch broad exceptions to assert on them
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+files = ["app"]

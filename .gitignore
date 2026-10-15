@@ -40,3 +40,7 @@ backend/static/wiki/
 # OS / editor
 .DS_Store
 Thumbs.db
+frontend/tsconfig.tsbuildinfo
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
