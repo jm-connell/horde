@@ -347,3 +347,29 @@ def test_shutdown_requeues_pending_postprocess_and_keeps_its_staging(init_db):
     with Session(init_db["engine"]) as session:
         assert session.get(DownloadJob, job_id).status == JobStatus.queued
     assert finished.exists()
+
+
+def test_stopping_the_sprite_pool_kills_its_running_ffmpeg(
+    add_video, init_db, monkeypatch
+):
+    """A sprite build whose ffmpeg is mid-run no longer outlives shutdown."""
+    from app.services import metadata
+
+    marker = init_db["data"] / "grandchild.pid"
+    fake = init_db["data"] / "fake-ffmpeg"
+    fake.write_text(f"#!/bin/sh\nsleep 120 &\necho $! > {marker}\nwait\n")
+    fake.chmod(0o755)
+    monkeypatch.setattr(metadata, "ffmpeg_bin", lambda: str(fake))
+    video = add_video(write_file=True, duration_sec=300.0)
+
+    pool = sprites.SpritePool(concurrency=1)
+    assert pool.enqueue(video.id, "test")
+    assert _wait_for(marker.exists), "the fake ffmpeg never started"
+    assert ffmpeg_progress.children.running() == 1
+
+    started = time.monotonic()
+    assert pool.stop(timeout=10)
+    assert time.monotonic() - started < 8
+    assert ffmpeg_progress.children.running() == 0
+    assert _wait_for(lambda: not _pid_alive(int(marker.read_text())))
+    assert not pool.in_progress(video.id)

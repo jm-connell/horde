@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 SpriteStatus = Literal["ready", "generating"]
 
 
-def _build_sprites(video_id: int, reason: str) -> None:
+def _build_sprites(video_id: int, reason: str, cancel: threading.Event) -> None:
     """Generate the sprite sheet for one video (runs on a pool thread)."""
     with Session(engine) as session:
         video = session.get(Video, video_id)
@@ -69,6 +69,7 @@ def _build_sprites(video_id: int, reason: str) -> None:
             SPRITES_DIR,
             video_id,
             duration=duration,
+            cancel_event=cancel,
         )
         if not sprite:
             return
@@ -113,10 +114,13 @@ class SpritePool:
         self._generating: set[int] = set()
         self._threads: list[threading.Thread] = []
         self._closed = False
+        # Set by signal_stop: running ffmpeg is cancelled instead of awaited.
+        self._cancel = threading.Event()
 
     def start(self) -> None:
         with self._cond:
             self._closed = False
+            self._cancel.clear()
 
     @property
     def is_alive(self) -> bool:
@@ -128,6 +132,7 @@ class SpritePool:
         return self.is_alive
 
     def signal_stop(self) -> None:
+        self._cancel.set()
         with self._cond:
             self._closed = True
             dropped = len(self._queue)
@@ -195,7 +200,7 @@ class SpritePool:
                 video_id, reason = self._queue.popleft()
                 activity.note_queued("sprites", -1)
             try:
-                _build_sprites(video_id, reason)
+                _build_sprites(video_id, reason, self._cancel)
             except Exception:
                 logger.exception("Sprite generation failed for video %s", video_id)
             finally:

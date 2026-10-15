@@ -10,7 +10,7 @@ On shutdown (SIGTERM from `docker stop`, Ctrl+C):
 
 1. Uvicorn stops accepting connections and drains open ones for up to `--timeout-graceful-shutdown` (10 s). The SSE streams (`/api/downloads/events`, `/api/downloads/{id}/events`) watch `app.state.shutdown_event`, which is set the moment the signal arrives, so they end immediately instead of using up the grace period.
 2. `lifespan` shutdown signals **every** worker, then joins them newest first, each with its own timeout (5 s by default). A worker that does not stop is logged by name at `ERROR`.
-3. In-flight downloads and postprocess encodes are cancelled and **requeued** (status `queued`, not `cancelled`), so the next boot resumes them. ffmpeg children get `SIGTERM`, then `SIGKILL` after 3 s; each runs in its own session so helper processes die with it. A registry entry (`ffmpeg-children`) ends anything still running last.
+3. In-flight downloads and postprocess encodes are cancelled and **requeued** (status `queued`, not `cancelled`), so the next boot resumes them. ffmpeg children get `SIGTERM`, then `SIGKILL` after 3 s; each runs in its own session so helper processes die with it. A registry entry (`ffmpeg-children`) ends anything still running last. Every long ffmpeg goes through `run_ffmpeg` (download postprocess, H.264 copies, transcodes, sprite sheets, thumbnail frames), so all of them are cancellable this way; only short ffprobe-style probes (30 s or less) use plain `subprocess.run`.
 
 If startup fails part way, the `finally` still stops the workers that already started.
 
@@ -20,7 +20,7 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `
 |------------------------|-------|
 | `ffmpeg-children` | Terminates ffmpeg processes still running at shutdown. |
 | `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper. |
-| `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. |
+| `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
 | `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `job-metadata`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
 
