@@ -312,8 +312,15 @@ db_tool() {
     host) TOOL_OUT="$(python3 "$ROOT/scripts/sqlite_tool.py" "$1" "${TOOL_DATA}/horde.db" 2>&1)" || rc=$? ;;
     image) TOOL_OUT="$(tool_in_image "$TOOL_IMAGE" "$TOOL_DATA" "$@" 2>&1)" || rc=$? ;;
     *)
-      TOOL_OUT="no running container, image or readable data directory to run the SQLite tool"
-      rc=127
+      # No container, no image and no python3 that can read the file. That is a
+      # fresh install only if the data directory is visibly empty (or absent).
+      if [[ -z "$TOOL_DATA" || ! -e "$TOOL_DATA" || ( -r "$TOOL_DATA" && ! -e "$TOOL_DATA/horde.db" ) ]]; then
+        TOOL_OUT="no database"
+        rc=3
+      else
+        TOOL_OUT="no running container, image or readable data directory to run the SQLite tool"
+        rc=127
+      fi
       ;;
   esac
   return "$rc"

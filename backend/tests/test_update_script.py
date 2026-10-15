@@ -609,3 +609,17 @@ def test_unreadable_revision_after_a_failed_update_is_not_an_automatic_restore(
     assert "restored" not in state, "an unknown state must never auto-restore"
     # The code and image still go back, so the user is not left on a failed version.
     assert state["tags"]["horde:latest"] == "sha256:old"
+
+
+def test_first_install_with_no_container_image_or_data_is_a_fresh_install(harness):
+    harness.publish()
+    harness.set(
+        no_container=True, running=False, images=[], tags={}, labels={}, db_missing=True
+    )
+    # Only the build produces an image; there is nothing to back up or roll back to.
+    result = harness.run()
+
+    assert "No existing database to back up" in result.stdout, (
+        result.stdout + result.stderr
+    )
+    assert not list((harness.work / ".local").glob("update-backups/*/horde.db"))
