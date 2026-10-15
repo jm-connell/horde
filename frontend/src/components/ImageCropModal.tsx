@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import LoadingIndicator from "./LoadingIndicator";
 import {
@@ -241,13 +242,12 @@ export default function ImageCropModal({
     return () => ro.disconnect();
   }, [src]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onCancel();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [busy, onCancel]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, {
+    onEscape: () => {
+      if (!busy) onCancel();
+    },
+  });
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -357,10 +357,12 @@ export default function ImageCropModal({
       })}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="image-crop-title"
-        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl ring-1 ring-ink-700 sm:p-6"
+        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-xl overflow-y-auto outline-none rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl ring-1 ring-ink-700 sm:p-6"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>

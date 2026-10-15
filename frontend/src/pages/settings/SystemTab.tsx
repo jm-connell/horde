@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { createPortal } from "react-dom";
 import { useSettingsPage } from "./context";
 import { Section } from "./ui";
@@ -659,6 +660,9 @@ function ResetHordePanel() {
   // The server requires this exact phrase (POST /api/setup/reset).
   const expectedPhrase = eraseMedia ? "ERASE MEDIA" : "RESET";
   const canReset = confirmText.trim() === expectedPhrase;
+  const resetDialogRef = useRef<HTMLDivElement>(null);
+  // Escape is handled below (it must also respect `resetting`).
+  useFocusTrap(resetDialogRef, { active: open });
 
   useEffect(() => {
     if (!open) return;
@@ -716,10 +720,12 @@ function ResetHordePanel() {
               />
               <div className="pointer-events-none fixed inset-0 z-[81] flex items-start justify-center p-4 pt-[max(1rem,calc(50dvh-8rem))]">
                 <div
+                  ref={resetDialogRef}
+                  tabIndex={-1}
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="reset-horde-title"
-                  className="ui-panel pointer-events-auto w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600 max-h-[calc(100dvh-2rem)]"
+                  className="ui-panel pointer-events-auto w-full max-w-md overflow-y-auto outline-none rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600 max-h-[calc(100dvh-2rem)]"
                 >
                   <h2
                     id="reset-horde-title"

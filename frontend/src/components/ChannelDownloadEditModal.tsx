@@ -1,4 +1,5 @@
-import { useId } from "react";
+import { useId, useRef } from "react";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import ChannelPicker from "./ChannelPicker";
 import { mergePinnedPreset, PRESET_ORDER, presetOptionLabel } from "../presets";
 import type { ChannelStat } from "../types";
@@ -23,6 +24,8 @@ export default function ChannelDownloadEditModal({
   onSave: (patch: Partial<PendingChannelDownload>) => void;
   onDownloadNow: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, { onEscape: onClose });
   const titleInputId = useId();
   const noteInputId = useId();
   const dialogTitleId = useId();
@@ -43,10 +46,12 @@ export default function ChannelDownloadEditModal({
       onClick={backdropClick(onClose)}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={dialogTitleId}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto outline-none rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2

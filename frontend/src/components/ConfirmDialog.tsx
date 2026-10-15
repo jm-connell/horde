@@ -1,6 +1,7 @@
 import { backdropClick } from "../utils";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 export type ConfirmOptions = {
   title: string;
@@ -36,24 +37,18 @@ export default function ConfirmDialog({
   onCancelRef.current = onCancel;
   busyRef.current = busy;
 
+  useFocusTrap(panelRef, {
+    onEscape: () => {
+      if (!busyRef.current) onCancelRef.current();
+    },
+  });
+
   useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
     const prevOverflow = document.body.style.overflow;
-    panelRef.current?.focus();
     document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busyRef.current) {
-        e.preventDefault();
-        onCancelRef.current();
-      }
-    };
-    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", onKey);
-      prev?.focus?.();
     };
-    // Bind once; cancel/busy are read from refs so Escape stays current.
   }, []);
 
   const hasBody = body != null;

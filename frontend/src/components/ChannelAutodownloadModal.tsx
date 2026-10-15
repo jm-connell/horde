@@ -1,5 +1,6 @@
 import { backdropClick } from "../utils";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import ThemedSelect from "./ThemedSelect";
 import { PRESET_LABELS, PRESET_ORDER } from "../presets";
 import type { ChannelAutodownload } from "../types";
@@ -45,13 +46,8 @@ export default function ChannelAutodownloadModal({
     policy.include_completed_streams
   );
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, { onEscape: onClose });
 
   const countNum = Math.max(
     1,
@@ -79,10 +75,12 @@ export default function ChannelAutodownloadModal({
       onClick={backdropClick(onClose)}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="autodownload-title"
-        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-ink-700 bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
+        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-lg overflow-y-auto outline-none rounded-xl border border-ink-700 bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
