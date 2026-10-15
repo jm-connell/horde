@@ -5,6 +5,8 @@ repo_url: https://github.com/jm-connell/horde
 repo_name: jm-connell/horde
 edit_uri: edit/main/docs/
 docs_dir: docs
+exclude_docs: |
+  requirements.txt
 copyright: Source-available under the PolyForm Noncommercial License 1.0.0
 
 theme:
