@@ -197,16 +197,15 @@ def test_dispatch_runs_jobs_fifo_within_concurrency_end_to_end(init_db, monkeypa
                 if len(started) == 3 and running_now["n"] == 0:
                     all_done.set()
 
+    q = downloader.DownloadQueue(runner=tracked)
     monkeypatch.setattr(
         downloader.ffmpeg_queue,
         "enqueue",
         lambda task: (
-            downloader.download_queue.claim_ffmpeg(task.job_id),
+            q.claim_ffmpeg(task.job_id),
             downloader.ffmpeg_queue._worker(task),
         ),
     )
-    q = downloader.DownloadQueue(runner=tracked)
-    monkeypatch.setattr(downloader, "download_queue", q)
     q._dispatch()
     release.set()
     assert all_done.wait(20)
