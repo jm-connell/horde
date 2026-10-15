@@ -729,3 +729,65 @@ export interface PlaylistPreviewData {
   channel: string | null;
   entries: PlaylistPreviewEntry[];
 }
+
+// --- Accounts ---------------------------------------------------------------
+
+/** Stable permission names (see docs/ops/authentication.md). */
+export type Permission =
+  | "delete_videos"
+  | "download"
+  | "offline_download"
+  | "edit_metadata"
+  | "manage_playlists"
+  | "use_ai";
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  is_admin: boolean;
+  /** Effective: every permission for an administrator. */
+  permissions: Permission[];
+}
+
+export interface AuthState {
+  users_exist: boolean;
+  authenticated: boolean;
+  user: AuthUser | null;
+  setup_completed: boolean;
+}
+
+export interface UserAccount {
+  id: number;
+  username: string;
+  is_admin: boolean;
+  disabled: boolean;
+  permissions: Permission[];
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface PermissionInfo {
+  name: Permission;
+  label: string;
+  description: string;
+  default: boolean;
+}
+
+export interface UserCreateInput {
+  username: string;
+  password: string;
+  is_admin: boolean;
+  permissions?: Permission[];
+}
+
+export interface UserUpdateInput {
+  is_admin?: boolean;
+  disabled?: boolean;
+  password?: string;
+  permissions?: Permission[];
+}
+
+export interface MediaToken {
+  token: string;
+  expires_at: string;
+}

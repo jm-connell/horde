@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import LoadingIndicator from "../components/LoadingIndicator";
@@ -9,6 +10,7 @@ import type { Playlist } from "../types";
 import { moveItem } from "../utils";
 
 export default function Playlists() {
+  const { can } = useAuth();
   const [params, setParams] = useSearchParams();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,71 +119,76 @@ export default function Playlists() {
         download automatically.
       </p>
 
-      <div className="mb-6">
-        <div className="ui-panel grid gap-6 rounded-xl bg-ink-900 p-5 ring-1 ring-ink-700 md:grid-cols-2">
-          <div className="min-w-0">
-            <h2 className="mb-3 text-sm font-medium text-gray-200">
-              New Horde playlist
-            </h2>
-            <div className="flex gap-2">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && create()}
-                placeholder="Playlist name"
-                className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-              />
-              <button
-                onClick={create}
-                disabled={busy || !name.trim()}
-                className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
-              >
-                Create
-              </button>
+      {can("manage_playlists") && (
+        <div className="mb-6">
+          <div className="ui-panel grid gap-6 rounded-xl bg-ink-900 p-5 ring-1 ring-ink-700 md:grid-cols-2">
+            <div className="min-w-0">
+              <h2 className="mb-3 text-sm font-medium text-gray-200">
+                New Horde playlist
+              </h2>
+              <div className="flex gap-2">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && create()}
+                  placeholder="Playlist name"
+                  className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                />
+                <button
+                  onClick={create}
+                  disabled={busy || !name.trim()}
+                  className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                >
+                  Create
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="min-w-0">
-            <h2 className="mb-3 text-sm font-medium text-gray-200">
-              Subscribe to YouTube playlist
-            </h2>
-            <div className="flex gap-2">
-              <input
-                value={subscribeUrl}
-                onChange={(e) => setSubscribeUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && subscribe()}
-                placeholder="YouTube playlist URL"
-                className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-              />
-              <button
-                onClick={subscribe}
-                disabled={subscribing || !subscribeUrl.trim()}
-                className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
-              >
-                {subscribing ? "Subscribing..." : "Subscribe"}
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <span className="shrink-0 text-sm text-gray-400">
-                Max resolution
-              </span>
-              <ThemedSelect
-                aria-label="Max resolution"
-                value={subscribePreset}
-                options={allPresets.map((p) => ({
-                  value: p,
-                  label: presetOptionLabel(p, undefined),
-                }))}
-                onChange={setSubscribePreset}
-                className="w-44 shrink-0"
-                buttonClassName="w-full py-2"
-              />
-              <p className="min-w-[10rem] flex-1 text-xs leading-snug text-muted">
-                Horde periodically checks for and downloads new playlist videos.
-              </p>
-            </div>
+            {can("download") && (
+              <div className="min-w-0">
+                <h2 className="mb-3 text-sm font-medium text-gray-200">
+                  Subscribe to YouTube playlist
+                </h2>
+                <div className="flex gap-2">
+                  <input
+                    value={subscribeUrl}
+                    onChange={(e) => setSubscribeUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && subscribe()}
+                    placeholder="YouTube playlist URL"
+                    className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  />
+                  <button
+                    onClick={subscribe}
+                    disabled={subscribing || !subscribeUrl.trim()}
+                    className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                  >
+                    {subscribing ? "Subscribing..." : "Subscribe"}
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <span className="shrink-0 text-sm text-gray-400">
+                    Max resolution
+                  </span>
+                  <ThemedSelect
+                    aria-label="Max resolution"
+                    value={subscribePreset}
+                    options={allPresets.map((p) => ({
+                      value: p,
+                      label: presetOptionLabel(p, undefined),
+                    }))}
+                    onChange={setSubscribePreset}
+                    className="w-44 shrink-0"
+                    buttonClassName="w-full py-2"
+                  />
+                  <p className="min-w-[10rem] flex-1 text-xs leading-snug text-muted">
+                    Horde periodically checks for and downloads new playlist
+                    videos.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 

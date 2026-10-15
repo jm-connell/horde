@@ -311,16 +311,17 @@ function WizardPanel({
         {STEP_TITLE[step]}
       </h1>
       <p className="mt-1 text-xs text-muted">
-        Step {stepIndex + 1} of {STEPS.length}
+        Step {stepIndex + 2} of {STEPS.length + 1}
       </p>
 
       <div className="mt-8 space-y-4">
         {step === "welcome" && (
           <>
             <p className="text-sm text-gray-300">
-              Horde is a single-admin media archive for a trusted LAN. There is
-              no login — anyone who can reach this URL can download, delete, and
-              change settings.
+              Horde is a self-hosted media archive. Everyone signs in with their
+              own account and keeps their own watch history; as the
+              administrator you choose who can delete, download and change
+              settings.
             </p>
             <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-4 py-3 text-sm text-gray-300">
               <p>

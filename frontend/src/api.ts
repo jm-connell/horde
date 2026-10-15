@@ -5,6 +5,13 @@ import type {
   AiSettings,
   AiStatus,
   AppSettings,
+  AuthState,
+  AuthUser,
+  MediaToken,
+  PermissionInfo,
+  UserAccount,
+  UserCreateInput,
+  UserUpdateInput,
   ChannelAutodownload,
   ChannelCatalogStatus,
   ChannelFeedPage,
@@ -86,6 +93,35 @@ export function withCsrf(init?: RequestInit): RequestInit | undefined {
   return { ...init, headers };
 }
 
+/** Fired when the server says the session is gone (401). AuthProvider listens. */
+export const AUTH_REQUIRED_EVENT = "horde:auth-required";
+/** Fired on 403 `permission_denied`; the detail is a user-facing sentence. */
+export const PERMISSION_DENIED_EVENT = "horde:permission-denied";
+
+function notifyAuthFailure(
+  status: number,
+  code: string | undefined,
+  detail: unknown
+): void {
+  if (status === 401 && code === "auth_required") {
+    window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+  } else if (status === 403 && code === "permission_denied") {
+    window.dispatchEvent(
+      new CustomEvent(PERMISSION_DENIED_EVENT, {
+        detail: typeof detail === "string" ? detail : "Not allowed",
+      })
+    );
+  }
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   // Offline mode: fail fast instead of hanging on a dead/slow connection.
   if (connectivity.offlineMode) throw offlineError();
@@ -103,12 +139,15 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   connectivity.reportRequest(performance.now() - t0, false);
   if (!resp.ok) {
     let detail: unknown = resp.statusText;
+    let topCode: string | undefined;
     try {
       const body = await resp.json();
       detail = body.detail ?? detail;
+      if (typeof body.code === "string") topCode = body.code;
     } catch {
       // non-JSON error body; keep status text
     }
+    notifyAuthFailure(resp.status, topCode, detail);
     const validation = formatValidationDetail(detail);
     if (validation) throw new ApiError(validation, { status: resp.status });
     if (typeof detail === "object" && detail !== null) {
@@ -126,6 +165,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(typeof detail === "string" ? detail : String(detail), {
       status: resp.status,
+      code: topCode,
     });
   }
   if (resp.status === 204) return undefined as T;
@@ -176,6 +216,62 @@ export interface ChannelFeedQuery {
 }
 
 export const api = {
+  getAuthState(): Promise<AuthState> {
+    return request<AuthState>("/api/auth/state");
+  },
+
+  login(username: string, password: string): Promise<{ user: AuthUser }> {
+    return request("/api/auth/login", jsonInit("POST", { username, password }));
+  },
+
+  bootstrapAdmin(
+    username: string,
+    password: string
+  ): Promise<{ user: AuthUser }> {
+    return request(
+      "/api/auth/bootstrap",
+      jsonInit("POST", { username, password })
+    );
+  },
+
+  logout(): Promise<void> {
+    return request<void>("/api/auth/logout", { method: "POST" });
+  },
+
+  changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    return request<void>(
+      "/api/auth/password",
+      jsonInit("POST", {
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+    );
+  },
+
+  getMediaToken(videoId: number): Promise<MediaToken> {
+    return request<MediaToken>(`/api/videos/${videoId}/media-token`);
+  },
+
+  listUsers(): Promise<UserAccount[]> {
+    return request<UserAccount[]>("/api/users");
+  },
+
+  listPermissions(): Promise<PermissionInfo[]> {
+    return request<PermissionInfo[]>("/api/users/permissions");
+  },
+
+  createUser(input: UserCreateInput): Promise<UserAccount> {
+    return request<UserAccount>("/api/users", jsonInit("POST", input));
+  },
+
+  updateUser(id: number, input: UserUpdateInput): Promise<UserAccount> {
+    return request<UserAccount>(`/api/users/${id}`, jsonInit("PATCH", input));
+  },
+
+  deleteUser(id: number): Promise<void> {
+    return request<void>(`/api/users/${id}`, { method: "DELETE" });
+  },
+
   listVideos(params: LibraryQuery = {}): Promise<Video[]> {
     const { signal, ...query } = params;
     const qs = new URLSearchParams();
@@ -1264,6 +1360,19 @@ export function spritesMetaUrl(id: number): string {
 
 export function spritesImageUrl(id: number): string {
   return `/api/videos/${id}/sprites`;
+}
+
+/**
+ * Add a signed media token (`GET /api/videos/{id}/media-token`) to a media URL.
+ * Only for URLs handed to a Cast or AirPlay receiver, which send no cookies; the
+ * page's own `<video>` keeps using the cookie so offline cache keys do not change.
+ */
+export function withMediaToken(url: string, token: string): string {
+  const parsed = new URL(url, window.location.origin);
+  parsed.searchParams.set("mt", token);
+  return /^[a-z][a-z0-9+.-]*:/i.test(url)
+    ? parsed.href
+    : `${parsed.pathname}${parsed.search}`;
 }
 
 export function absoluteUrl(path: string): string {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import { api, streamUrl } from "../api";
 import { usePlayback } from "../context/PlaybackContext";
@@ -99,6 +100,7 @@ function FeedMetaRow({
   onDownload: () => void;
   onChannelClick?: () => void;
 }) {
+  const { can } = useAuth();
   const dateLabel = formatPublishedAt(
     entry.published_at,
     entry.published_label
@@ -130,7 +132,7 @@ function FeedMetaRow({
           <span className="text-xs font-medium leading-none text-emerald-400">
             Downloaded
           </span>
-        ) : (
+        ) : can("download") ? (
           <button
             type="button"
             onClick={(e) => {
@@ -143,7 +145,7 @@ function FeedMetaRow({
           >
             {downloading ? "Downloading" : "Download"}
           </button>
-        )}
+        ) : null}
         {maxRes ? (
           <span className="ml-auto shrink-0 text-[10px] font-medium text-muted">
             {maxRes}
@@ -255,6 +257,7 @@ export default function ChannelFeedCard({
   searchQuery?: string;
   onChannelClick?: (hit: { name: string; url: string | null }) => void;
 }) {
+  const { can } = useAuth();
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -400,18 +403,20 @@ export default function ChannelFeedCard({
           </div>
           <div className="flex h-full min-h-[4.5rem] shrink-0 flex-col items-end justify-between py-0.5 pl-3">
             {!inLibrary ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDownload();
-                }}
-                disabled={downloading}
-                className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
-              >
-                {downloading ? "Downloading" : "Download"}
-              </button>
+              can("download") ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDownload();
+                  }}
+                  disabled={downloading}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+                >
+                  {downloading ? "Downloading" : "Download"}
+                </button>
+              ) : null
             ) : (
               <span className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-400 ring-1 ring-emerald-500/40">
                 Downloaded

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import ConfirmDialog from "./ConfirmDialog";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import type { Playlist } from "../types";
@@ -41,6 +42,7 @@ export default function LibraryBulkBar({
   onDelete: () => void | Promise<void>;
   onCancel: () => void;
 }) {
+  const { can } = useAuth();
   const playlistTriggerRef = useRef<HTMLButtonElement>(null);
   const noteTriggerRef = useRef<HTMLButtonElement>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -177,21 +179,25 @@ export default function LibraryBulkBar({
             Download
           </button>
 
-          <button
-            onClick={onSaveFiles}
-            title="Save the video files to your device's downloads folder"
-            className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-400 hover:border-accent hover:text-gray-200"
-          >
-            Save files
-          </button>
+          {can("offline_download") && (
+            <button
+              onClick={onSaveFiles}
+              title="Save the video files to your device's downloads folder"
+              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-400 hover:border-accent hover:text-gray-200"
+            >
+              Save files
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setDeleteConfirmOpen(true)}
-            className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
-          >
-            Delete
-          </button>
+          {can("delete_videos") && (
+            <button
+              type="button"
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+            >
+              Delete
+            </button>
+          )}
 
           <button
             type="button"

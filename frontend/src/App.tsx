@@ -34,6 +34,8 @@ import { SearchProvider } from "./context/SearchContext";
 import { useSetupGate } from "./hooks/useSettings";
 import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
 import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
+import RequirePermission from "./components/auth/RequirePermission";
+import { AuthGate, AuthProvider, useAuth } from "./context/AuthContext";
 
 /** Back-compat: `/playlists/:id` → `/playlists?open=:id` */
 function PlaylistOpenRedirect() {
@@ -90,10 +92,24 @@ function AppRoutes() {
             <Route path="/" element={<Library />} />
             <Route path="/history" element={<History />} />
             <Route path="/offline" element={<OfflinePage />} />
-            <Route path="/download" element={<Download />} />
+            <Route
+              path="/download"
+              element={
+                <RequirePermission permission="download">
+                  <Download />
+                </RequirePermission>
+              }
+            />
             <Route path="/playlists" element={<Playlists />} />
             <Route path="/playlists/:id" element={<PlaylistOpenRedirect />} />
-            <Route path="/import" element={<Import />} />
+            <Route
+              path="/import"
+              element={
+                <RequirePermission permission="download">
+                  <Import />
+                </RequirePermission>
+              }
+            />
             <Route path="/review" element={<Navigate to="/import" replace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/setup" element={<Navigate to="/" replace />} />
@@ -112,6 +128,7 @@ function AppShell() {
   useServiceWorkerUpdate();
   useOfflineQuotaToast();
   const { ready, completed } = useSetupGate();
+  const { isAdmin } = useAuth();
 
   if (!ready) {
     return (
@@ -120,6 +137,23 @@ function AppShell() {
         {/* Boot can stall on a bad connection: surface the offline offer. */}
         <ConnectionTag floating />
         <LoadingIndicator label="Loading" />
+      </div>
+    );
+  }
+
+  if (!completed && !isAdmin) {
+    return (
+      <div className="relative min-h-full overflow-x-hidden">
+        <BackgroundEffect />
+        <main className="relative z-10 mx-auto max-w-md px-4 py-24 text-center">
+          <h1 className="mb-2 text-xl font-semibold text-gray-100">
+            Setup isn’t finished
+          </h1>
+          <p className="text-sm text-gray-400">
+            An administrator needs to finish setting up Horde before it can be
+            used. Please ask them, then reload this page.
+          </p>
+        </main>
       </div>
     );
   }
@@ -156,14 +190,18 @@ export default function App() {
     <ErrorBoundary scope="app" fullPage>
       <ToastProvider>
         <ConfirmProvider>
-          <DownloadProvider>
-            <SearchProvider>
-              <PlaybackProvider>
-                <AppShell />
-                <OverlayScrollThumb viewport />
-              </PlaybackProvider>
-            </SearchProvider>
-          </DownloadProvider>
+          <AuthProvider>
+            <AuthGate>
+              <DownloadProvider>
+                <SearchProvider>
+                  <PlaybackProvider>
+                    <AppShell />
+                    <OverlayScrollThumb viewport />
+                  </PlaybackProvider>
+                </SearchProvider>
+              </DownloadProvider>
+            </AuthGate>
+          </AuthProvider>
         </ConfirmProvider>
       </ToastProvider>
     </ErrorBoundary>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, downloadFileUrl } from "../api";
+import { useAuth } from "../context/AuthContext";
 import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
@@ -44,13 +45,16 @@ export default function VideoActionsMenu({
   onDelete,
   onVideoUpdated,
 }: Props) {
+  const { can } = useAuth();
   const [open, setOpen] = useState(false);
   const [settings, update] = useSettings();
   const { showToast, showError } = useToast();
   const { flip, anchorRef } = useFlipMenu(open, 360);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const canChangeResolution = Boolean(effectiveSourceUrl(video));
-  const canNormalize = Boolean(effectiveSourceUrl(video) && onNormalizeVolume);
+  const canChangeResolution =
+    can("download") && Boolean(effectiveSourceUrl(video));
+  const canNormalize =
+    can("download") && Boolean(effectiveSourceUrl(video) && onNormalizeVolume);
   const offline = useOfflineDownloadAction(video);
   const offlineLabel =
     offline.status === "complete"
@@ -124,26 +128,30 @@ export default function VideoActionsMenu({
         }}
       >
         <MenuScroll className="max-h-[min(24rem,calc(100vh-2rem))]">
-          <button
-            onClick={() => {
-              onEdit();
-              setOpen(false);
-            }}
-            role="menuitem"
-            className={itemClass}
-          >
-            Edit details
-          </button>
-          <button
-            onClick={() => {
-              onAddNote();
-              setOpen(false);
-            }}
-            role="menuitem"
-            className={itemClass}
-          >
-            Add note
-          </button>
+          {can("edit_metadata") && (
+            <button
+              onClick={() => {
+                onEdit();
+                setOpen(false);
+              }}
+              role="menuitem"
+              className={itemClass}
+            >
+              Edit details
+            </button>
+          )}
+          {can("edit_metadata") && (
+            <button
+              onClick={() => {
+                onAddNote();
+                setOpen(false);
+              }}
+              role="menuitem"
+              className={itemClass}
+            >
+              Add note
+            </button>
+          )}
           <button
             onClick={() => {
               update({ autoplayRelated: !settings.autoplayRelated });
@@ -155,9 +163,11 @@ export default function VideoActionsMenu({
           >
             Autoplay related {settings.autoplayRelated ? "✓" : ""}
           </button>
-          <button onClick={refreshTags} role="menuitem" className={itemClass}>
-            Refresh tags (AI)
-          </button>
+          {can("use_ai") && (
+            <button onClick={refreshTags} role="menuitem" className={itemClass}>
+              Refresh tags (AI)
+            </button>
+          )}
           {canChangeResolution && (
             <button
               onClick={() => {
@@ -182,19 +192,27 @@ export default function VideoActionsMenu({
               Normalize volume
             </button>
           )}
-          <button
-            onClick={() => {
-              setOpen(false);
-              void offline.onClick();
-            }}
-            role="menuitem"
-            className={itemClass}
-          >
-            {offlineLabel}
-          </button>
-          <button onClick={downloadFile} role="menuitem" className={itemClass}>
-            Save file to device
-          </button>
+          {can("offline_download") && (
+            <button
+              onClick={() => {
+                setOpen(false);
+                void offline.onClick();
+              }}
+              role="menuitem"
+              className={itemClass}
+            >
+              {offlineLabel}
+            </button>
+          )}
+          {can("offline_download") && (
+            <button
+              onClick={downloadFile}
+              role="menuitem"
+              className={itemClass}
+            >
+              Save file to device
+            </button>
+          )}
           {safeHref(video.source_url) && (
             <a
               href={safeHref(video.source_url)}
@@ -207,16 +225,18 @@ export default function VideoActionsMenu({
               {sourceLinkLabel(video)}
             </a>
           )}
-          <button
-            onClick={() => {
-              setOpen(false);
-              onDelete();
-            }}
-            role="menuitem"
-            className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
-          >
-            Delete
-          </button>
+          {can("delete_videos") && (
+            <button
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+              role="menuitem"
+              className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
+            >
+              Delete
+            </button>
+          )}
         </MenuScroll>
       </FlipMenuPanel>
     </div>

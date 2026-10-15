@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useAuth } from "../context/AuthContext";
 import { describeError } from "../apiErrors";
 import {
   Link,
@@ -95,6 +96,7 @@ function orderPresets(presets: string[]): string[] {
 }
 
 export default function Watch() {
+  const { can } = useAuth();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -1053,7 +1055,7 @@ export default function Watch() {
                         {Math.round(source.video.frame_rate)}fps
                       </span>
                     )}
-                  {!isLibrary && !downloadActive && (
+                  {!isLibrary && !downloadActive && can("download") && (
                     <div className="relative" ref={downloadMenuRef}>
                       <div className="inline-flex overflow-hidden rounded-lg bg-accent text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60">
                         <button
@@ -1196,7 +1198,7 @@ export default function Watch() {
               }
             >
               <div className="min-w-0 space-y-4">
-                {isLibrary && showAiSection && (
+                {isLibrary && showAiSection && can("use_ai") && (
                   <Suspense fallback={<LoadingIndicator className="py-4" />}>
                     <VideoAiPanel
                       video={source.video}
@@ -1295,11 +1297,13 @@ export default function Watch() {
                   {/* Phones: icon only, so the Download button fits the row. */}
                   {isMobile ? "←" : "← Back to library"}
                 </Link>
-                {source.video.id > 0 && (
+                {source.video.id > 0 && can("manage_playlists") && (
                   <AddToPlaylist videoId={source.video.id} />
                 )}
                 {/* Phones get a dedicated button; desktop uses the ••• menu. */}
-                {isMobile && <OfflineDownloadButton video={source.video} />}
+                {isMobile && can("offline_download") && (
+                  <OfflineDownloadButton video={source.video} />
+                )}
                 {source.video.id > 0 && (
                   <VideoActionsMenu
                     video={source.video}

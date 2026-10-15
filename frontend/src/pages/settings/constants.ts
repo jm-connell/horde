@@ -197,7 +197,15 @@ export const TABS: { id: SettingsTab; label: string }[] = [
   { id: "playback", label: "Playback" },
   { id: "ai", label: "AI" },
   { id: "system", label: "System" },
+  { id: "users", label: "Users" },
 ];
+
+/** Tabs that configure the whole server; members never see them. */
+export const ADMIN_ONLY_TABS: ReadonlySet<SettingsTab> = new Set([
+  "ai",
+  "system",
+  "users",
+]);
 
 export const AI_SCHEDULE_OPTIONS: {
   value: AiSchedule;

@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { describeError } from "../apiErrors";
 import { Link, useNavigate } from "react-router-dom";
@@ -44,6 +45,7 @@ export default function PlaylistRow({
   onPlaylistDrop: (id: number) => void;
   onPlaylistDragEnd: () => void;
 }) {
+  const { can } = useAuth();
   const navigate = useNavigate();
   const confirm = useConfirm();
   const { showError } = useToast();
@@ -488,13 +490,15 @@ export default function PlaylistRow({
                       Subscribe to updates
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={onDelete}
-                    className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
-                  >
-                    Delete
-                  </button>
+                  {can("manage_playlists") && (
+                    <button
+                      type="button"
+                      onClick={onDelete}
+                      className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+                    >
+                      Delete
+                    </button>
+                  )}
                   {safeHref(playlist.source_url) && (
                     <a
                       href={safeHref(playlist.source_url)}

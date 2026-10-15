@@ -1,3 +1,4 @@
+import type { Permission } from "../types";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
@@ -6,6 +7,8 @@ import { usePlayback } from "../context/PlaybackContext";
 import { useSearch } from "../context/SearchContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
+import { useAuth } from "../context/AuthContext";
+import AccountMenu from "./auth/AccountMenu";
 import {
   IMPORT_QUEUE_EVENT,
   notifyImportQueueChanged,
@@ -27,14 +30,28 @@ interface NavLinkDef {
   end: boolean;
   /** Needs the server; hidden in offline mode. */
   serverOnly?: boolean;
+  /** Hidden for accounts without this permission. */
+  permission?: Permission;
 }
 
 const BASE_LINKS: NavLinkDef[] = [
   { to: "/", label: "Home", end: true },
   { to: "/playlists", label: "Playlists", end: false, serverOnly: true },
   { to: "/history", label: "History", end: false, serverOnly: true },
-  { to: "/download", label: "Download", end: false, serverOnly: true },
-  { to: "/import", label: "Import", end: false, serverOnly: true },
+  {
+    to: "/download",
+    label: "Download",
+    end: false,
+    serverOnly: true,
+    permission: "download",
+  },
+  {
+    to: "/import",
+    label: "Import",
+    end: false,
+    serverOnly: true,
+    permission: "download",
+  },
   { to: "/settings", label: "Settings", end: false },
 ];
 
@@ -64,6 +81,7 @@ export default function TopNav() {
   const { activeCount } = useDownloads();
   const { search, setSearch, commitSearch } = useSearch();
   const [settings] = useSettings();
+  const { can } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { mode, videoFrameInset } = usePlayback();
@@ -83,7 +101,11 @@ export default function TopNav() {
     hasOfflineItems || offlineMode
       ? [...BASE_LINKS.slice(0, 3), OFFLINE_LINK, ...BASE_LINKS.slice(3)]
       : BASE_LINKS
-  ).filter((link) => !(offlineMode && link.serverOnly));
+  ).filter(
+    (link) =>
+      !(offlineMode && link.serverOnly) &&
+      (!link.permission || can(link.permission))
+  );
   // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
   const isTheaterWide =
     !isMobile && mode === "theater" && location.pathname.startsWith("/watch");
@@ -413,6 +435,7 @@ export default function TopNav() {
               className="ml-auto flex shrink-0 pl-4 empty:hidden"
             >
               <ConnectionTag popupAlign="end" />
+              <AccountMenu variant="dropdown" />
             </div>
           )}
 
@@ -591,6 +614,10 @@ export default function TopNav() {
                     );
                   })}
                 </LiquidNav>
+                <AccountMenu
+                  variant="list"
+                  onNavigate={() => setMenuOpen(false)}
+                />
               </div>
             </Collapse>
           </nav>

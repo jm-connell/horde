@@ -9,6 +9,7 @@ import {
   Suspense,
   type ReactNode,
 } from "react";
+import { useAuth } from "../context/AuthContext";
 import { describeError } from "../apiErrors";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
@@ -178,6 +179,7 @@ function SearchResultSection({
 }
 
 function OnlineLibrary() {
+  const { can } = useAuth();
   const [videos, setVideos] = useState<Video[]>([]);
   const [otherVideos, setOtherVideos] = useState<Video[]>([]);
   const [streamResults, setStreamResults] = useState<ChannelFeedEntry[]>([]);
@@ -1384,7 +1386,7 @@ function OnlineLibrary() {
               } shrink-0 items-center gap-2 text-2xl font-bold text-gray-100`}
             >
               {headline}
-              {activeChannel && (
+              {activeChannel && can("edit_metadata") && (
                 <button
                   onClick={() => {
                     setRenameValue(activeChannel);
@@ -1482,6 +1484,7 @@ function OnlineLibrary() {
             </label>
           )}
           {activeChannel &&
+            can("download") &&
             !activeTag &&
             isYoutubeChannelUrl(activeChannelUrl) && (
               <button

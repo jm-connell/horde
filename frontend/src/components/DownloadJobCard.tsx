@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -68,6 +69,7 @@ function skipDismissConfirm(): boolean {
 
 // Memoized: unrelated SSE progress ticks re-render other cards' props by reference only.
 function DownloadJobCard({ job, live, channels, active = false }: Props) {
+  const { can } = useAuth();
   const {
     updateJobOverrides,
     retryJob,
@@ -687,21 +689,25 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   >
                     Watch →
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(true)}
-                    disabled={deleting}
-                    title="Delete this video from your library"
-                    className="shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
+                  {can("delete_videos") && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(true)}
+                      disabled={deleting}
+                      title="Delete this video from your library"
+                      className="shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  )}
                   <div data-collapse="playlist" className="shrink-0">
-                    <AddToPlaylist
-                      videoId={videoId}
-                      buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
-                      onOpenChange={setPlaylistOpen}
-                    />
+                    {can("manage_playlists") && (
+                      <AddToPlaylist
+                        videoId={videoId}
+                        buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
+                        onOpenChange={setPlaylistOpen}
+                      />
+                    )}
                   </div>
                 </>
               )}

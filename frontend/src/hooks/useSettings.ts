@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { connectivity } from "../offline/connectivity";
-import { getJson, setJson } from "../storage";
+import { getJson, removeItem, setJson } from "../storage";
 import { mutedTextFor } from "../utils/contrast";
 import type { ViewMode } from "../components/videoPlayerTypes";
 import {
@@ -1108,6 +1108,11 @@ export function loadSettings(): Settings {
   }
 }
 
+/** Forget this browser's cached preferences (on sign-in/out, so users never see each other's). */
+export function clearLocalSettings(): void {
+  removeItem(STORAGE_KEY);
+}
+
 function persistLocal(settings: Settings): void {
   setJson(STORAGE_KEY, settings);
   window.dispatchEvent(new Event(EVENT));
@@ -1191,6 +1196,7 @@ function ensureServerHydration(): Promise<void> {
     });
   });
 
+  let signedOut = false;
   const hydrate = api
     .getAppSettings()
     .then((remote) => {
@@ -1214,12 +1220,7 @@ function ensureServerHydration(): Promise<void> {
         // Migrate local → server
         const uiPayload = settingsToServerUi(local);
         if (Object.keys(uiPayload).length > 0) {
-          api
-            .updateAppSettings({
-              ui: uiPayload,
-              progress_expiry_days: remote.progress_expiry_days,
-            })
-            .catch(() => undefined);
+          api.updateAppSettings({ ui: uiPayload }).catch(() => undefined);
         }
         if (remote.progress_expiry_days !== local.progressExpiryDays) {
           persistLocal({
@@ -1237,10 +1238,18 @@ function ensureServerHydration(): Promise<void> {
         );
       }
     })
-    .catch(() => undefined);
+    .catch((err) => {
+      // Asked before signing in (a screen that reads settings can mount first):
+      // not an answer. Leave hydration open so it runs again once signed in.
+      if (err instanceof ApiError && err.status === 401) signedOut = true;
+    });
 
   serverHydratePromise = Promise.race([hydrate, offlineGate]).finally(() => {
-    serverHydrated = true;
+    if (signedOut) {
+      serverHydratePromise = null;
+    } else {
+      serverHydrated = true;
+    }
   });
 
   return serverHydratePromise;

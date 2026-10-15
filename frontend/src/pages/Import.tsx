@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import { describeError } from "../apiErrors";
 import { Link } from "react-router-dom";
 import { api } from "../api";
@@ -69,6 +70,7 @@ interface UploadItem {
 }
 
 export default function Import() {
+  const { can } = useAuth();
   const { showToast, showError } = useToast();
   const confirm = useConfirm();
   const [items, setItems] = useState<Video[]>([]);
@@ -424,12 +426,14 @@ export default function Import() {
                     >
                       Skip
                     </button>
-                    <button
-                      onClick={() => void deleteVideoFile(v)}
-                      className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-4 py-2 text-sm text-red-400 ring-1 ring-ink-700 hover:bg-red-500/10"
-                    >
-                      Delete
-                    </button>
+                    {can("delete_videos") && (
+                      <button
+                        onClick={() => void deleteVideoFile(v)}
+                        className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-4 py-2 text-sm text-red-400 ring-1 ring-ink-700 hover:bg-red-500/10"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -525,13 +529,15 @@ export default function Import() {
                                 >
                                   Keep this
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void deleteVideoFile(v)}
-                                  className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
-                                >
-                                  Delete
-                                </button>
+                                {can("delete_videos") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteVideoFile(v)}
+                                    className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
                               </div>
                             </div>
                           ))}

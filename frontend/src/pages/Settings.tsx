@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { describeError } from "../apiErrors";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
@@ -32,11 +32,14 @@ import LibraryTab from "./settings/LibraryTab";
 import PlaybackTab from "./settings/PlaybackTab";
 import LoadingIndicator from "../components/LoadingIndicator";
 import { AiTab, SystemTab } from "./settings/lazy";
+import UsersTab from "./settings/UsersTab";
+import { useAuth } from "../context/AuthContext";
 import {
   CHAT_MODEL_OPTIONS,
   DEFAULT_AI,
   EMBED_MODEL_OPTIONS,
   TAB_STORAGE_KEY,
+  ADMIN_ONLY_TABS,
   TABS,
 } from "./settings/constants";
 import {
@@ -69,12 +72,19 @@ export default function Settings() {
   const confirm = useConfirm();
   const { setYoutubeVideoSearch } = useSearch();
   const [searchParams] = useSearchParams();
+  const { isAdmin } = useAuth();
+  // Server-wide areas are for administrators; members keep their own preferences.
+  const tabAllowed = useCallback(
+    (id: SettingsTab) => isAdmin || !ADMIN_ONLY_TABS.has(id),
+    [isAdmin]
+  );
+  const tabs = TABS.filter((t) => tabAllowed(t.id));
   const [tab, setTab] = useState<SettingsTab>(() => {
     const fromUrl = resolveTabParam(
       new URLSearchParams(window.location.search).get("tab")
     );
-    if (fromUrl) return fromUrl;
-    return loadTab();
+    const first = fromUrl ?? loadTab();
+    return tabAllowed(first) ? first : "appearance";
   });
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
@@ -416,10 +426,14 @@ export default function Settings() {
     }
   }, [settings.backgroundEffect, tab]);
 
-  const selectTab = (next: SettingsTab) => {
-    setTab(next);
-    setItem(TAB_STORAGE_KEY, next);
-  };
+  const selectTab = useCallback(
+    (next: SettingsTab) => {
+      if (!tabAllowed(next)) return;
+      setTab(next);
+      setItem(TAB_STORAGE_KEY, next);
+    },
+    [tabAllowed]
+  );
 
   // Deep link: /settings?tab=playback&pane=jobs
   useEffect(() => {
@@ -430,7 +444,7 @@ export default function Settings() {
       setAiPane(pane);
       setItem("horde.aiPane", pane);
     }
-  }, [searchParams]);
+  }, [searchParams, selectTab]);
 
   // Cross-tab search: jump to the first tab that matches when the current one doesn't.
   useEffect(() => {
@@ -438,7 +452,7 @@ export default function Settings() {
     if (tabMatchesQuery(tab, q)) return;
     const next = firstMatchingTab(q);
     if (next && next !== tab) selectTab(next);
-  }, [q, tab]);
+  }, [q, tab, selectTab]);
 
   const saveAi = async (patch: Partial<AiSettings>) => {
     const next = { ...aiDraft, ...patch };
@@ -945,17 +959,17 @@ export default function Settings() {
   // Roving tabindex: only the selected tab is in the Tab order; arrows move
   // between tabs and select them.
   const onTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    const index = TABS.findIndex((t) => t.id === tab);
+    const index = tabs.findIndex((t) => t.id === tab);
     let next = -1;
-    if (e.key === "ArrowRight") next = (index + 1) % TABS.length;
+    if (e.key === "ArrowRight") next = (index + 1) % tabs.length;
     else if (e.key === "ArrowLeft") {
-      next = (index - 1 + TABS.length) % TABS.length;
+      next = (index - 1 + tabs.length) % tabs.length;
     } else if (e.key === "Home") next = 0;
-    else if (e.key === "End") next = TABS.length - 1;
+    else if (e.key === "End") next = tabs.length - 1;
     if (next < 0) return;
     e.preventDefault();
-    selectTab(TABS[next].id);
-    document.getElementById(`settings-tab-${TABS[next].id}`)?.focus();
+    selectTab(tabs[next].id);
+    document.getElementById(`settings-tab-${tabs[next].id}`)?.focus();
   };
 
   return (
@@ -970,7 +984,7 @@ export default function Settings() {
           role="tablist"
           aria-label="Settings sections"
         >
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.id}
               role="tab"
@@ -1020,6 +1034,7 @@ export default function Settings() {
           <Suspense fallback={<LoadingIndicator label="Loading" />}>
             {tab === "ai" && <AiTab />}
             {tab === "system" && <SystemTab />}
+            {tab === "users" && isAdmin && <UsersTab />}
           </Suspense>
         </div>
       </SettingsPageProvider>
