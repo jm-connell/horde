@@ -30,6 +30,7 @@ from ..services.playlist_sync import (
     start_playlist_sync,
 )
 from ..services.thumbnails import (
+    resolve_thumbnail_file,
     unlink_playlist_cover,
     write_playlist_cover,
 )
@@ -168,10 +169,9 @@ def _clear_custom_cover(playlist: Playlist) -> None:
 
 
 def _resolved_cover_file(session: Session, playlist: Playlist) -> Path | None:
-    if playlist.cover_path:
-        custom = Path(playlist.cover_path)
-        if custom.is_file():
-            return custom
+    custom = resolve_thumbnail_file(playlist.cover_path)
+    if custom is not None:
+        return custom
     items = _playlist_items(session, playlist.id)
     members = _member_video_ids(session, items)
     pinned = (
@@ -181,10 +181,9 @@ def _resolved_cover_file(session: Session, playlist: Playlist) -> Path | None:
     if video_id is None:
         return None
     video = session.get(Video, video_id)
-    if video is None or not video.thumbnail_path:
+    if video is None:
         return None
-    path = Path(video.thumbnail_path)
-    return path if path.is_file() else None
+    return resolve_thumbnail_file(video.thumbnail_path)
 
 
 def _ordered_videos(session: Session, playlist_id: int) -> list[Video]:

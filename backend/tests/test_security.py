@@ -397,6 +397,21 @@ def test_thumbnail_candidate_grabs_are_capped(client, app, add_video):
 
 
 # --- Path containment ---------------------------------------------------------------------
+
+
+def test_thumbnail_outside_the_thumbnail_dir_is_not_served(
+    client, add_video, session, tmp_path
+):
+    secret = tmp_path / "secret.jpg"
+    secret.write_bytes(b"not for you")
+    video = add_video()
+    video.thumbnail_path = str(secret)
+    session.add(video)
+    session.commit()
+
+    assert client.get(f"/api/thumbnails/{video.id}").status_code == 404
+
+
 def test_production_app_installs_the_stack_in_order():
     from app.main import app as production_app
 

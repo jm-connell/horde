@@ -40,6 +40,7 @@ from ..services.sprites import enqueue_sprite_generation
 from ..services.thumbnails import (
     copy_full,
     ensure_list_thumbnail,
+    resolve_thumbnail_file,
     save_from_url,
     write_full_bytes,
 )
@@ -709,8 +710,8 @@ def get_thumbnail(
     video = session.get(Video, video_id)
     if video is None or not video.thumbnail_path:
         raise HTTPException(status_code=404, detail="No thumbnail")
-    path = Path(video.thumbnail_path)
-    if not path.exists():
+    path = resolve_thumbnail_file(video.thumbnail_path)
+    if path is None:
         raise HTTPException(status_code=404, detail="No thumbnail")
     if size == "sm":
         sm = ensure_list_thumbnail(video_id, path)
