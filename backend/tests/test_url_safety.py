@@ -92,7 +92,7 @@ def test_decimal_and_hex_ip_forms_are_blocked(monkeypatch):
         validate_public_url("http://0x7f.1/")
 
 
-def test_unresolvable_names_pass_validation(monkeypatch):
+def test_unresolvable_names_pass_the_yt_dlp_preflight_only(monkeypatch):
     import socket
 
     def boom(host, port):
@@ -100,6 +100,64 @@ def test_unresolvable_names_pass_validation(monkeypatch):
 
     monkeypatch.setattr(url_safety, "_resolve", boom)
     assert validate_public_url("https://example.invalid/x")
+    # fetch_bytes pins the connection to a validated address, so it cannot proceed.
+    with pytest.raises(UnsafeUrlError, match="resolve"):
+        fetch_bytes("https://example.invalid/x", max_bytes=1000)
+
+
+def test_fetch_refuses_a_name_that_fails_to_resolve_even_if_it_would_later(
+    local_server, monkeypatch
+):
+    """DNS that fails the first lookup and answers 127.0.0.1 the second time."""
+    import socket
+
+    base, handler = local_server
+    monkeypatch.setenv("HORDE_ALLOW_PRIVATE_URLS", "1")
+
+    def boom(host, port):
+        raise socket.gaierror("first lookup fails")
+
+    monkeypatch.setattr(url_safety, "_resolve", boom)
+    port = base.rsplit(":", 1)[1]
+
+    with pytest.raises(UnsafeUrlError):
+        fetch_bytes(f"http://rebind.example:{port}/img.png", max_bytes=1000)
+
+    assert handler.hits == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://[::127.0.0.1]/", "http://[::a00:1]/", "http://[64:ff9b::7f00:1]/"],
+)
+def test_embedded_ipv4_in_ipv6_forms_is_blocked(url):
+    with pytest.raises(UnsafeUrlError):
+        validate_public_url(url)
+
+
+def test_fetch_falls_back_to_the_next_validated_address(monkeypatch):
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.host)
+        if request.url.host == "2606:2800:220:1::1":
+            raise httpx.ConnectError("no IPv6 route")
+        return httpx.Response(200, content=b"ok")
+
+    monkeypatch.setattr(
+        url_safety,
+        "_resolve",
+        lambda host, port: [
+            ipaddress.ip_address("2606:2800:220:1::1"),
+            ipaddress.ip_address("93.184.216.34"),
+        ],
+    )
+    _mock_transport(monkeypatch, handler)
+
+    result = fetch_bytes("http://dual.example/x", max_bytes=1000)
+
+    assert result.body == b"ok"
+    assert seen == ["2606:2800:220:1::1", "93.184.216.34"]
 
 
 def test_private_urls_can_be_allowed_for_lan_sources(monkeypatch):

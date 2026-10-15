@@ -62,10 +62,24 @@ def allow_private_urls() -> bool:
     return os.environ.get("HORDE_ALLOW_PRIVATE_URLS", "").strip().lower() in _TRUTHY
 
 
+def _embedded_ipv4(ip: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    """The IPv4 address an IPv6 address smuggles: mapped, compatible or NAT64."""
+    if ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    packed = ip.packed
+    if packed[:12] == bytes(12):  # ::a.b.c.d (IPv4-compatible, deprecated)
+        return ipaddress.IPv4Address(packed[12:])
+    if packed[:12] == bytes.fromhex("0064ff9b0000000000000000"):  # 64:ff9b::/96
+        return ipaddress.IPv4Address(packed[12:])
+    return None
+
+
 def is_blocked_address(ip: IPAddress) -> bool:
     """True for anything that is not a globally routable unicast address."""
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
+    if isinstance(ip, ipaddress.IPv6Address):
+        embedded = _embedded_ipv4(ip)
+        if embedded is not None:
+            ip = embedded
     # ``is_global`` is False for loopback, private, link-local, CGNAT
     # (100.64/10), reserved, documentation and unspecified ranges.
     return not ip.is_global or ip.is_multicast
@@ -147,11 +161,8 @@ class FetchResult:
     final_url: str
 
 
-def _pinned_request(checked: CheckedUrl, headers: dict[str, str]):
-    """URL, headers and extensions that connect to the validated address."""
-    if not checked.addresses:
-        return checked.url, headers, {}
-    ip = checked.addresses[0]
+def _pinned_request(checked: CheckedUrl, ip: IPAddress, headers: dict[str, str]):
+    """URL, headers and extensions that connect to the validated address ``ip``."""
     parts = urlsplit(checked.url)
     ip_text = f"[{ip}]" if ip.version == 6 else str(ip)
     default_port = 443 if checked.scheme == "https" else 80
@@ -174,40 +185,65 @@ def fetch_bytes(
     headers: dict[str, str] | None = None,
     max_redirects: int = MAX_REDIRECTS,
 ) -> FetchResult:
-    """GET ``url`` safely. Raises :class:`UnsafeUrlError` / :class:`UrlFetchError`."""
+    """GET ``url`` safely. Raises :class:`UnsafeUrlError` / :class:`UrlFetchError`.
+
+    Unlike :func:`validate_public_url` this refuses a host that does not resolve:
+    the connection is pinned to an address we validated, and without one httpx would
+    resolve the name again and could be handed a different (internal) answer.
+    Validated addresses are tried in order, so an IPv6-first host still works from an
+    IPv4-only machine.
+    """
     current = url
     base_headers = dict(headers or {})
     with httpx.Client(timeout=timeout, follow_redirects=False) as client:
         for _hop in range(max_redirects + 1):
             checked = check_url(current)
-            target, req_headers, extensions = _pinned_request(checked, base_headers)
-            try:
-                with client.stream(
-                    "GET", target, headers=req_headers, extensions=extensions
-                ) as resp:
-                    if resp.status_code in _REDIRECT_STATUSES:
-                        location = resp.headers.get("location")
-                        if not location:
-                            raise UrlFetchError("Redirect without a Location header")
-                        current = urljoin(checked.url, location)
-                        continue
-                    if resp.status_code >= 400:
-                        raise UrlFetchError(f"Server answered {resp.status_code}")
-                    declared = resp.headers.get("content-length")
-                    if declared and declared.isdigit() and int(declared) > max_bytes:
-                        raise UrlFetchError("Response is too large")
-                    chunks: list[bytes] = []
-                    total = 0
-                    for chunk in resp.iter_bytes():
-                        total += len(chunk)
-                        if total > max_bytes:
-                            raise UrlFetchError("Response is too large")
-                        chunks.append(chunk)
-                    return FetchResult(
-                        body=b"".join(chunks),
-                        content_type=resp.headers.get("content-type", ""),
-                        final_url=checked.url,
-                    )
-            except httpx.HTTPError as exc:
-                raise UrlFetchError(f"Could not fetch URL: {exc}") from exc
+            if not checked.addresses:
+                raise UnsafeUrlError("Could not resolve that host")
+            redirect_to: str | None = None
+            last_error: httpx.HTTPError | None = None
+            for ip in checked.addresses:
+                target, req_headers, extensions = _pinned_request(
+                    checked, ip, base_headers
+                )
+                try:
+                    with client.stream(
+                        "GET", target, headers=req_headers, extensions=extensions
+                    ) as resp:
+                        if resp.status_code in _REDIRECT_STATUSES:
+                            location = resp.headers.get("location")
+                            if not location:
+                                raise UrlFetchError(
+                                    "Redirect without a Location header"
+                                )
+                            redirect_to = urljoin(checked.url, location)
+                            break
+                        if resp.status_code >= 400:
+                            raise UrlFetchError(f"Server answered {resp.status_code}")
+                        return _read_capped(resp, checked.url, max_bytes)
+                except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                    last_error = exc  # try the next validated address
+                except httpx.HTTPError as exc:
+                    raise UrlFetchError(f"Could not fetch URL: {exc}") from exc
+            else:
+                raise UrlFetchError(f"Could not connect: {last_error}")
+            current = redirect_to or current
     raise UrlFetchError(f"Too many redirects (more than {max_redirects})")
+
+
+def _read_capped(resp: httpx.Response, final_url: str, max_bytes: int) -> FetchResult:
+    declared = resp.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > max_bytes:
+        raise UrlFetchError("Response is too large")
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in resp.iter_bytes():
+        total += len(chunk)
+        if total > max_bytes:
+            raise UrlFetchError("Response is too large")
+        chunks.append(chunk)
+    return FetchResult(
+        body=b"".join(chunks),
+        content_type=resp.headers.get("content-type", ""),
+        final_url=final_url,
+    )
