@@ -49,6 +49,9 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Downloads" })).toBeVisible();
   await stepSettled(page);
   await page.getByRole("button", { name: "Continue" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Playback compatibility" })
+  ).toBeVisible();
   await expect(sidecar).toHaveAttribute("aria-checked", "true");
 
   await stepSettled(page);
