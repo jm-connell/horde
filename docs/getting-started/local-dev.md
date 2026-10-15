@@ -28,7 +28,7 @@ From the repo root:
 
 1. Sets `DOWNLOADS_DIR` and `DATA_DIR` to `./downloads` and `./data` under the repo (creating them if needed)
 2. Creates `.venv` if missing and installs `backend/requirements.txt` when needed
-3. Installs `backend/requirements-dev.txt` (pytest, mkdocs-material) when needed
+3. Installs `backend/requirements-dev.txt` (pytest, ruff, mypy, mkdocs-material) when needed
 4. Builds the MkDocs wiki into `backend/static/wiki/` when missing or when `docs/` / `mkdocs.yml` changed (unless `SKIP_WIKI=1`)
 5. Runs `npm install` in `frontend/` when `node_modules` is missing
 6. Starts **uvicorn** with `--reload` on port **8080**
@@ -104,7 +104,7 @@ Scanner import extensions: **`.mp4`**, **`.mkv`**, **`.webm`**. Fallback poll in
 
 ## Tests
 
-See **[Automated testing](testing.md)** for the intended layers (pytest API tests, Vitest, Playwright, MkDocs, Docker image), local commands, and how GitHub Actions runs the same jobs on every **push**, **pull request**, and manual **Run workflow**.
+Run **`scripts/check.sh`** before every commit: it runs all lint, format, type, test, build, and wiki gates (see [Quality gates](testing.md#quality-gates-scriptscheck-sh)). See **[Automated testing](testing.md)** for the intended layers (pytest API tests, Vitest, Playwright, MkDocs, Docker image), local commands, and how GitHub Actions runs the same jobs on every **push**, **pull request**, and manual **Run workflow**.
 
 Backend (from `backend/`, with the repo venv activated):
 

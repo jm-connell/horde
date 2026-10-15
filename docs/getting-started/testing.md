@@ -8,6 +8,7 @@ This is not a substitute for playing a real video on your LAN. The player still 
 
 | Layer | Tool | Runs in CI? | Protects |
 |-------|------|-------------|----------|
+| **Lint & format** | `ruff check`, `ruff format --check` (backend); ESLint, Prettier, `tsc --noEmit` (frontend) | Yes | Unused code, unsafe patterns, hook-dependency and accessibility mistakes, style drift |
 | **Backend unit** | pytest against services (paths, URL clean, queue, settings clamps, yt-dlp error kinds, migrations, `update.sh` env/mount helpers) | Yes | Logic that used to regress without an HTTP server |
 | **Backend API** | pytest + FastAPI `TestClient` on a temp SQLite + temp `DOWNLOADS_DIR` | Yes | Library, review, playlists, settings, download enqueue (yt-dlp stubbed), Range streaming |
 | **Frontend unit** | Vitest (node) | Yes | Formatters, presets, catalog progress copy, URL helpers |
@@ -23,14 +24,46 @@ CI **must not** call YouTube, OpenRouter, or a real Ollama. Download tests stub 
 !!! tip "Write a test when you fix a bug"
     If something broke in production (queue pause, device downloads, progress expiry, settings merge, update wiping host paths), add a pytest or Vitest case next to the fix. The existing files under `backend/tests/` and `frontend/src/**/*.test.ts` are the pattern.
 
+## Quality gates (`scripts/check.sh`)
+
+One script runs every gate in the order CI does and prints a summary. Run it before each commit:
+
+```bash
+scripts/check.sh          # backend + frontend + docs gates
+scripts/check.sh --e2e    # also run the Playwright suite
+```
+
+| # | Gate | Command (run by the script) |
+|---|------|-----------------------------|
+| 1 | Backend lint | `ruff check .` in `backend/` |
+| 2 | Backend format | `ruff format --check .` in `backend/` |
+| 3 | Backend tests | `PYTHONPATH=. pytest -q` in `backend/` |
+| 4 | Frontend lint | `npm run lint` (ESLint, zero warnings) |
+| 5 | Frontend format | `npm run format:check` (Prettier) |
+| 6 | Types | `npm run typecheck` (`tsc --noEmit`) |
+| 7 | Frontend tests | `npm test` (Vitest) |
+| 8 | Production bundle | `npm run build` |
+| 9 | Wiki | `mkdocs build --strict` (skipped when mkdocs is not installed) |
+| 10 | Browser UI (`--e2e` only) | `npx playwright test` |
+
+Every gate runs even if an earlier one fails, so you see all problems at once; the exit status is non-zero if any failed. Set `PYTHON=/path/to/venv/bin/python` to choose the interpreter (default: `.venv/bin/python` if present, else `python3`).
+
+Auto-fixers: `ruff check --fix . && ruff format .` in `backend/`, `npm run lint:fix` and `npm run format` in `frontend/`.
+
+Tool configuration lives in `backend/pyproject.toml` (ruff, mypy) and `frontend/eslint.config.js` / `frontend/.prettierrc`. `mypy` is configured (`python -m mypy` from `backend/`) but is **not** a gate yet. Every `# noqa` and `// eslint-disable` must carry a reason.
+
+!!! note "Playwright browser path"
+    By default Playwright uses the Chromium that `npx playwright install chromium` fetches (CI does this). On a machine with a preinstalled browser that does not match the pinned Playwright version, set `PW_CHROMIUM_EXECUTABLE=/path/to/chrome`. Set `E2E_APP_PORT` / `E2E_SETUP_PORT` (defaults 8091 / 8092) to run several checkouts side by side.
+
 ## Local commands
 
-Same commands GitHub Actions runs.
+Same commands GitHub Actions runs (`scripts/check.sh` wraps them).
 
 Backend (from `backend/`, venv with `requirements.txt` + `requirements-dev.txt`):
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
+ruff check . && ruff format --check .
 pytest
 ```
 
@@ -39,6 +72,7 @@ Frontend:
 ```bash
 cd frontend
 npm ci   # or npm install
+npm run lint && npm run format:check && npm run typecheck
 npm test
 npm run build
 ```

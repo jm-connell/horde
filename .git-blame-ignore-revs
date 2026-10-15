@@ -1,0 +1,6 @@
+# Mechanical formatting commits. Enable locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# style: apply ruff format
+0876887a270d96af2f54201f621f45c767925506
+# style: apply prettier
+25fa255ed33a56f364d3a0dc31eab54c15698a9f
