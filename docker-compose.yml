@@ -66,6 +66,10 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
       # Baked at build time; override only if needed. Repo for update checks:
       - HORDE_GITHUB_REPO=${HORDE_GITHUB_REPO:-jm-connell/horde}
+      # Security (see docs/ops/security.md). All optional.
+      - HORDE_ALLOWED_HOSTS=${HORDE_ALLOWED_HOSTS:-}
+      - HORDE_ALLOW_PRIVATE_URLS=${HORDE_ALLOW_PRIVATE_URLS:-}
+      - HORDE_MAX_UPLOAD_GB=${HORDE_MAX_UPLOAD_GB:-}
     volumes:
       # Media library on your ZFS dataset.
       - ${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}:/downloads

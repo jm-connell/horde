@@ -45,7 +45,7 @@ After player refactors, use the [Video player smoke checklist](../reference/vide
 
 ## Casting and CORS
 
-Cast receivers fetch media cross-origin; the API enables wide CORS for GET/HEAD/Range — see [No authentication](no-auth.md).
+Cast receivers fetch media cross-origin; only the media routes send CORS headers (GET/HEAD/Range) — see [Security](../ops/security.md).
 
 ## Manual stability checklist
 

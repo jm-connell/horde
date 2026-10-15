@@ -24,19 +24,12 @@ Auth is deliberately out of scope for the core product. If you need multi-user i
 | Media paths are shared | SMB / NFS mounts of `/downloads` are part of the workflow |
 | Chromecast / casting works | Receivers must fetch media cross-origin — see CORS below |
 
-## CORS is intentionally wide for casting
+## CORS is limited to the media routes
 
-Chromecast and similar receivers load media (and often subtitles) from the Horde host while the **sender** page lives on another origin. The FastAPI app enables CORS middleware so those receivers can `GET` / `HEAD` media with Range requests:
-
-- `allow_origins=["*"]`
-- Methods: `GET`, `HEAD`, `OPTIONS`
-- Headers: `Range`, `Content-Type`
-- Exposed: `Content-Range`, `Accept-Ranges`, `Content-Length`
-
-That is convenient on a LAN and **unsafe** if the same port is reachable from the open internet: any site could instruct a browser (or a cast session) to pull your library URLs.
+Chromecast and similar receivers load media (and often subtitles) from the Horde host while the **sender** page lives on another origin. Only the video stream, subtitle and thumbnail routes send CORS headers (`GET` / `HEAD` / `OPTIONS`, with `Range`). Every other route sends none, and every state-changing request needs an `X-Horde-Request` header, so a web page on another site cannot call the API. Details and the Host allowlist: [Security](../ops/security.md).
 
 !!! warning "CORS is not authentication"
-    Wide CORS does not replace a login page — it assumes there is nothing sensitive to gate. Combine it with LAN-only binding (or a VPN), not with “security through obscurity” on a public IP.
+    Anyone who can reach the port and knows a video id can still fetch that video. Combine Horde with LAN-only binding (or a VPN), not with obscurity on a public IP.
 
 ## Practical hardening (outside Horde)
 

@@ -21,14 +21,7 @@ Browser ──► host:8686 ──► container:8080 (FastAPI)
 
 ## CORS (cast receivers)
 
-Horde enables CORS with:
-
-- **Origins:** `*`
-- **Methods:** `GET`, `HEAD`, `OPTIONS`
-- **Headers:** `Range`, `Content-Type`
-- **Exposed:** `Content-Range`, `Accept-Ranges`, `Content-Length`
-
-This exists so Chromecast / cast receivers can fetch media and subtitle URLs cross-origin from the sender page. It is not a general public API policy.
+Only the video stream, subtitle and thumbnail routes send CORS headers (`Access-Control-Allow-Origin: *`, methods `GET`, `HEAD`, `OPTIONS`, `Range` allowed), so Chromecast can fetch them cross-origin. All other routes send none. Horde also only answers LAN-style `Host` names; behind a reverse proxy set `HORDE_ALLOWED_HOSTS`. See [Security](security.md).
 
 ## LAN-only, no authentication
 

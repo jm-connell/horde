@@ -48,7 +48,7 @@ horde.example.com {
 4. Point DNS for `horde.example.com` at the host; Caddy obtains TLS automatically when ports 80/443 are reachable.
 
 !!! warning "Casting through Basic Auth"
-    Chromecast (and similar) often cannot send HTTP Basic credentials when fetching media. Prefer [Tailscale / VPN](#tailscale) for day-to-day use, and keep casting on the LAN. Wide CORS assumes a trusted path — see [No authentication](../design/no-auth.md).
+    Chromecast (and similar) often cannot send HTTP Basic credentials when fetching media. Prefer [Tailscale / VPN](#tailscale) for day-to-day use, and keep casting on the LAN. Cross-origin media access assumes a trusted path (see [Security](security.md)). Behind a reverse proxy on a public name, also set `HORDE_ALLOWED_HOSTS`.
 
 If Caddy runs in Docker on the same Compose network, `reverse_proxy horde:8080` instead of `127.0.0.1:8686`.
 

@@ -37,6 +37,14 @@ Cookie file wins over browser cookies when the file exists. Details: [YouTube ac
 | `OLLAMA_BASE_URL` | *(empty)* | Fixed Ollama URL. Empty = [auto-discover](ai-setup.md). |
 | `OPENROUTER_API_KEY` | *(empty)* | Optional key that overrides the key stored in Settings → AI. |
 
+## Security
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `HORDE_ALLOWED_HOSTS` | *(empty)* | Extra `Host` names Horde answers, comma separated (`horde.example.com`, `*.example.com`). Adds to the LAN defaults; `*` disables the check. See [Security](security.md#allowed-hosts). |
+| `HORDE_ALLOW_PRIVATE_URLS` | *(empty)* | `1` lets server-side fetches and link checks target private / loopback addresses (LAN download sources). See [Security](security.md#private-urls). |
+| `HORDE_MAX_UPLOAD_GB` | `50` | Largest video accepted by Import → upload. |
+
 ## Deploy identity
 
 | Variable | Default | Purpose |
