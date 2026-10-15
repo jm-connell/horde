@@ -48,8 +48,9 @@ on the host. Interactive API docs: `/docs`.
 
 ## Quick start
 
-There is no pre-built Docker Hub image. Clone this repo onto the Docker host,
-set two paths in `.env`, and Compose **builds** the image. Use a real
+There is no Docker Hub image. Clone this repo onto the Docker host, set two
+paths in `.env`, and Compose **builds** the image (a prebuilt GHCR image is an
+optional alternative; see Update below). Use a real
 `git clone` (not a GitHub ZIP) so later `update.sh` can `git pull`.
 
 Do this on the **host** (SSH / TrueNAS shell) — not Dockge’s per-service
@@ -138,16 +139,24 @@ cd /path/to/horde          # e.g. /mnt/tank/dockge/stacks/horde
 bash update.sh
 ```
 
-That snapshots live volume mounts into `.env`, `git pull`s, rebuilds with the
-commit SHA, recreates containers, and waits on `/api/health`. Media and
-settings on host volumes are preserved. Hard-refresh the browser
-(`Ctrl+Shift+R`). Do not `git reset --hard` to unstick a pull.
+That snapshots live volume mounts into `.env`, backs up the SQLite database,
+fast-forwards the checkout, rebuilds with the commit SHA (tagged
+`horde:<shortsha>`), recreates containers, and waits on `/api/health`. If the
+new version is not healthy it rolls back automatically; `bash update.sh
+--rollback` goes back on demand. Media and settings on host volumes are
+preserved. Hard-refresh the browser (`Ctrl+Shift+R`). Do not `git reset
+--hard` to unstick a pull. Details: [Updating](docs/getting-started/updating.md).
+
+Prefer not to build on the NAS? Tagged releases are published as multi-arch
+images to `ghcr.io/jm-connell/horde`; see "Use the published image" in the
+same page.
 
 If you use Dockge, refresh it so it reloads compose — do **not** click
 **Deploy** with a stale editor (the script already recreated the stack).
 
 yt-dlp is **pinned** in `backend/requirements.txt` at image build time; pull
-+ rebuild is how you pick up a newer pin.
++ rebuild is how you pick up a newer pin. Set `YTDLP_AUTO_UPDATE=1` in `.env`
+to fetch the newest yt-dlp on every container start instead (opt-in).
 
 Longer walkthroughs: [`docs/getting-started/install-docker.md`](docs/getting-started/install-docker.md),
 [`docs/getting-started/truenas-dockge.md`](docs/getting-started/truenas-dockge.md),

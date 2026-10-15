@@ -2,7 +2,7 @@
 
 Horde runs as a Docker Compose stack: the main `horde` app, a `bgutil-pot` sidecar for YouTube proof-of-origin tokens, and an optional `ollama` service behind the `ai` profile.
 
-There is **no pre-built image on Docker Hub**. You clone this git repository onto the Docker host and Compose **builds** `horde:latest` from the `Dockerfile`. A zip download of the source can start once, but it has no `.git` directory, so later [`update.sh`](updating.md) / `git pull` will fail.
+There is **no image on Docker Hub**. You clone this git repository onto the Docker host and Compose **builds** `horde:latest` from the `Dockerfile` (tagged releases are also published to GHCR; see [Use the published image](updating.md#use-the-published-image)). A zip download of the source can start once, but it has no `.git` directory, so later [`update.sh`](updating.md) / `git pull` will fail.
 
 On **TrueNAS with Dockge**, clone into the Dockge stacks directory and deploy from the UI: [TrueNAS / Dockge](truenas-dockge.md).
 
