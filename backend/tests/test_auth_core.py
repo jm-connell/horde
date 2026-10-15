@@ -96,23 +96,58 @@ def test_secret_key_is_created_once_with_private_mode(tmp_path):
     assert media_token.load_or_create_secret(path) == key
 
 
+def _ok(secret, token, video_id, epoch, now):
+    parsed = media_token.parse(token)
+    return parsed is not None and media_token.verify(
+        secret, parsed, video_id, epoch, now
+    )
+
+
 def test_media_token_roundtrip_and_rejections():
     secret = b"k" * 32
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    token, expires = media_token.sign(secret, 7, 3, now)
+    token, expires = media_token.sign(secret, 7, 3, "e1", now)
     assert expires == now + media_token.TOKEN_TTL
-    assert media_token.verify(secret, token, 7, now) == 3
-    assert media_token.verify(secret, token, 8, now) is None
-    assert media_token.verify(b"z" * 32, token, 7, now) is None
+    assert _ok(secret, token, 7, "e1", now)
+    assert not _ok(secret, token, 8, "e1", now)  # another video
+    assert not _ok(secret, token, 7, "e2", now)  # password changed since
+    assert not _ok(b"z" * 32, token, 7, "e1", now)
     later = now + media_token.TOKEN_TTL + timedelta(seconds=2)
-    assert media_token.verify(secret, token, 7, later) is None
+    assert not _ok(secret, token, 7, "e1", later)
     expiry, user_id, mac = token.split(".")
-    assert media_token.verify(secret, f"{expiry}.4.{mac}", 7, now) is None
-    assert (
-        media_token.verify(secret, f"{int(expiry) + 99999}.{user_id}.{mac}", 7, now)
-        is None
-    )
-    assert media_token.verify(secret, "garbage", 7, now) is None
+    assert not _ok(secret, f"{expiry}.4.{mac}", 7, "e1", now)
+    assert not _ok(secret, f"{int(expiry) + 99999}.{user_id}.{mac}", 7, "e1", now)
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "garbage",
+        "",
+        "1.2.3",
+        f"1.2.{'a' * 63}",
+        f"1.2.{'A' * 64}",  # digest is lowercase hex
+        f"1.2.{'a' * 63}\u00e9",  # non-ASCII must be a clean refusal, not a TypeError
+        f"1.-2.{'a' * 64}",
+        f"{'9' * 40}.2.{'a' * 64}",
+        f" 1.2.{'a' * 64}",
+    ],
+)
+def test_malformed_media_tokens_do_not_parse(token):
+    assert media_token.parse(token) is None
+
+
+def test_epoch_changes_with_the_password_hash():
+    assert media_token.token_epoch("scrypt$a") != media_token.token_epoch("scrypt$b")
+    assert media_token.token_epoch("scrypt$a") == media_token.token_epoch("scrypt$a")
+
+
+def test_a_short_secret_file_is_refused_not_replaced(tmp_path):
+    path = tmp_path / "secret_key"
+    path.write_bytes(b"short")
+    with pytest.raises(media_token.SecretKeyError):
+        media_token.load_or_create_secret(path)
+    assert path.read_bytes() == b"short"
 
 
 # --- accounts ----------------------------------------------------------------

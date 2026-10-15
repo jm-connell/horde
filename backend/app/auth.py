@@ -102,6 +102,10 @@ class AuthMiddleware:
         self.public = frozenset(public)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "websocket" and is_protected_path(scope["path"]):
+            # Nothing here speaks WebSocket; deny by default like everything else.
+            await send({"type": "websocket.close", "code": 1008})
+            return
         if scope["type"] != "http" or not is_protected_path(scope["path"]):
             await self.app(scope, receive, send)
             return
@@ -142,11 +146,14 @@ class AuthMiddleware:
         values = parse_qs(request.url.query).get(MEDIA_TOKEN_PARAM)
         if not values:
             return None
-        user_id = media_token.verify(runtime.secret(), values[0], video_id)
-        if user_id is None:
+        parsed = media_token.parse(values[0])
+        if parsed is None:
             return None
-        user = accounts.get_user(session, user_id)
+        user = accounts.get_user(session, parsed.user_id)
         if user is None or user.disabled:
+            return None
+        epoch = media_token.token_epoch(user.password_hash)
+        if not media_token.verify(runtime.secret(), parsed, video_id, epoch):
             return None
         return AuthUser.of(user)
 

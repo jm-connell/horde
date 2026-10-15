@@ -77,7 +77,7 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 
 ### Signed media URLs
 
-`GET /api/videos/{id}/media-token` (signed in) returns `{token, expires_at}`: an HMAC over `video id | expiry | user id` with the key in `DATA_DIR/secret_key` (created on first start, mode 600, never stored in the database or returned by the API). It is valid for 12 hours, for that one video, on the stream, subtitle and thumbnail routes only. The app only uses these URLs when handing media to a Chromecast or AirPlay receiver; the page's own player keeps using the cookie. Back up `secret_key` with the rest of `DATA_DIR`; if it is lost a new one is made and outstanding tokens stop working.
+`GET /api/videos/{id}/media-token` (signed in) returns `{token, expires_at}`: an HMAC over `video id | expiry | user id` with the key in `DATA_DIR/secret_key` (created on first start, mode 600, never stored in the database or returned by the API). It is valid for 12 hours, for that one video, on the stream, subtitle and thumbnail routes only, and stops working when that user's password is changed or reset. A malformed token is a plain `401`. The app only uses these URLs when handing media to a Chromecast or AirPlay receiver; the page's own player keeps using the cookie. Back up `secret_key` with the rest of `DATA_DIR`; if it is lost a new one is made and outstanding tokens stop working. A key file shorter than 32 bytes is never used or silently replaced: Horde reports it and the cast links fail until you delete the file.
 
 ## Behind a reverse proxy
 

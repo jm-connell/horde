@@ -10,7 +10,7 @@ from sqlmodel import Session, func, select
 from ..auth import current_user, require_admin, require_permission
 from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
 from ..database import get_session
-from ..models import DownloadJob, JobStatus, Video
+from ..models import DownloadJob, JobStatus, User, Video
 from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
@@ -967,8 +967,14 @@ def media_token(
     """
     if session.get(Video, video_id) is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    row = session.get(User, user.id)
+    if row is None:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
     token, expires_at = media_token_svc.sign(
-        request.app.state.auth.secret(), video_id, user.id
+        request.app.state.auth.secret(),
+        video_id,
+        user.id,
+        media_token_svc.token_epoch(row.password_hash),
     )
     return MediaTokenRead(token=token, expires_at=expires_at)
 

@@ -338,6 +338,7 @@ def media(app, add_video, client, anon_client, admin_user):
             "token": token,
             "secret": app.state.auth.secret(),
             "user": admin_user,
+            "epoch": media_token.token_epoch(admin_user.password_hash),
         },
     )
 
@@ -390,6 +391,7 @@ def test_tampered_and_expired_tokens_are_refused(anon_client, media):
         media.secret,
         media.video.id,
         media.user.id,
+        media.epoch,
         datetime.now(UTC) - timedelta(hours=13),
     )
     assert anon_client.get(url, params={"mt": old}).status_code == 401
@@ -421,7 +423,12 @@ def test_a_token_is_only_good_for_media_routes(anon_client, media):
 def test_a_token_stops_working_when_its_user_is_disabled(anon_client, media, init_db):
     with Session(init_db["engine"]) as s:
         viewer = accounts.create_user(s, "viewer", "viewer-password")
-        token, _ = media_token.sign(media.secret, media.video.id, viewer.id)
+        token, _ = media_token.sign(
+            media.secret,
+            media.video.id,
+            viewer.id,
+            media_token.token_epoch(viewer.password_hash),
+        )
         url = f"/api/videos/{media.video.id}/stream"
         assert anon_client.get(url, params={"mt": token}).status_code in (200, 206)
         accounts.update_user(s, viewer.id, disabled=True)
@@ -463,3 +470,34 @@ def test_proxy_hops_picks_the_entry_counted_from_the_right(app):
         client = None
 
     assert runtime.client_address(Req()) == "2.2.2.2"
+
+
+def test_non_ascii_token_is_a_401_not_a_500(anon_client, media):
+    url = f"/api/videos/{media.video.id}/stream"
+    expiry, uid, mac = media.token.split(".")
+    for bad in (f"{expiry}.{uid}.\u00e9", f"{expiry}.{uid}.{mac[:-1]}\u00e9"):
+        assert anon_client.get(url, params={"mt": bad}).status_code == 401
+
+
+def test_resetting_the_password_voids_outstanding_tokens(anon_client, client, media):
+    url = f"/api/videos/{media.video.id}/stream"
+    assert anon_client.get(url, params={"mt": media.token}).status_code in (200, 206)
+    # The admin changes their own password (keeping this browser signed in).
+    client.post(
+        "/api/auth/password",
+        json={"current_password": "admin-password", "new_password": "another-password"},
+    )
+    assert anon_client.get(url, params={"mt": media.token}).status_code == 401
+    fresh = client.get(f"/api/videos/{media.video.id}/media-token").json()["token"]
+    assert anon_client.get(url, params={"mt": fresh}).status_code in (200, 206)
+
+
+def test_websockets_on_protected_paths_are_closed(app, anon_client):
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    with (
+        pytest.raises(WebSocketDisconnect),
+        anon_client.websocket_connect("/api/anything"),
+    ):
+        pass
