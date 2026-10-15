@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -25,41 +25,41 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
 class AiCurrentJob(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     kind: str
-    video_id: Optional[int] = None
-    title: Optional[str] = None
-    channel: Optional[str] = None
+    video_id: int | None = None
+    title: str | None = None
+    channel: str | None = None
     has_thumbnail: bool = False
-    model: Optional[str] = None
+    model: str | None = None
     attempts: int = 0
-    error: Optional[str] = None
-    run_after: Optional[str] = None
+    error: str | None = None
+    run_after: str | None = None
 
 
 class AiJobFailure(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     kind: str
-    video_id: Optional[int] = None
-    catalog_video_id: Optional[int] = None
-    title: Optional[str] = None
+    video_id: int | None = None
+    catalog_video_id: int | None = None
+    title: str | None = None
     attempts: int = 0
-    error: Optional[str] = None
-    updated_at: Optional[str] = None
+    error: str | None = None
+    updated_at: str | None = None
 
 
 class AiJobRow(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     kind: str
     status: str
-    video_id: Optional[int] = None
-    catalog_video_id: Optional[int] = None
-    title: Optional[str] = None
+    video_id: int | None = None
+    catalog_video_id: int | None = None
+    title: str | None = None
     attempts: int = 0
-    error: Optional[str] = None
-    run_after: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    error: str | None = None
+    run_after: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class AiStatusRead(BaseModel):
@@ -67,21 +67,21 @@ class AiStatusRead(BaseModel):
     provider: str
     ready: bool
     reachable: bool
-    base_url: Optional[str] = None
+    base_url: str | None = None
     embed_model: str
     chat_model: str
     embed_model_present: bool
     chat_model_present: bool
     pulling: list[str] = Field(default_factory=list)
-    last_error: Optional[str] = None
+    last_error: str | None = None
     paused: bool = False
     schedule: str = "on_download"
     indexed_videos: int = 0
     total_videos: int = 0
     queue_depth: int = 0
     queue_breakdown: dict[str, int] = Field(default_factory=dict)
-    current_job: Optional[AiCurrentJob] = None
-    blocked_reason: Optional[str] = None
+    current_job: AiCurrentJob | None = None
+    blocked_reason: str | None = None
     runnable_count: int = 0
     deferred_count: int = 0
     waiting_count: int = 0
@@ -90,11 +90,11 @@ class AiStatusRead(BaseModel):
     workload_profile: str = "normal"
     recommended_profile: str = "normal"
     profile_locked: bool = False
-    lock_reason: Optional[str] = None
-    workload_warning: Optional[str] = None
+    lock_reason: str | None = None
+    workload_warning: str | None = None
     vram_tier: str = "unknown"
-    gpu_name: Optional[str] = None
-    vram_total_bytes: Optional[int] = None
+    gpu_name: str | None = None
+    vram_total_bytes: int | None = None
     gpu_source: str = "unknown"
     invent_sample_size: int = 100
     invent_budget_chars: int = 28000
@@ -106,23 +106,23 @@ class AiStatusRead(BaseModel):
     openrouter_scope: str = "specialized"
     openrouter_embed_model: str = "openai/text-embedding-3-small"
     ollama_prefer_embeddings: bool = False
-    llm_backend: Optional[str] = None
-    embed_backend: Optional[str] = None
+    llm_backend: str | None = None
+    embed_backend: str | None = None
 
 
 class AiTestRequest(BaseModel):
-    base_url: Optional[str] = None
+    base_url: str | None = None
 
 
 class OpenRouterTestRequest(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 class OpenRouterModelRow(BaseModel):
     id: str
     name: str = ""
-    prompt_per_million: Optional[float] = None
-    completion_per_million: Optional[float] = None
+    prompt_per_million: float | None = None
+    completion_per_million: float | None = None
 
 
 def _openrouter_model_row(row: dict[str, Any]) -> OpenRouterModelRow:
@@ -136,7 +136,7 @@ class OpenRouterModelsResponse(BaseModel):
 
 
 class AiApplyWorkloadRequest(BaseModel):
-    profile: Optional[Literal["light", "normal", "heavy"]] = None
+    profile: Literal["light", "normal", "heavy"] | None = None
 
 
 class AiProcessRequest(BaseModel):
@@ -271,7 +271,7 @@ def ai_openrouter_test(payload: OpenRouterTestRequest = OpenRouterTestRequest())
 def ai_openrouter_models():
     try:
         models = list_openrouter_models()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=400, detail=str(exc) or "Could not list models"
         ) from exc
@@ -298,7 +298,7 @@ class OpenRouterCostsRead(BaseModel):
     d30_calls: int = 0
     y1_calls: int = 0
     all_calls: int = 0
-    weekly_budget_usd: Optional[float] = None
+    weekly_budget_usd: float | None = None
     hard_limit: bool = False
     over_budget: bool = False
     blocked: bool = False
@@ -350,7 +350,7 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
             result = worker.enqueue_library_backlog(force=True)
         else:
             result = worker.enqueue_library_backlog(force=True)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=500, detail=str(exc) or "Enqueue failed"
         ) from exc
@@ -380,7 +380,7 @@ def ai_resume():
 
 @router.get("/jobs", response_model=list[AiJobRow])
 def ai_list_jobs(
-    status: Optional[str] = Query(default=None),
+    status: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ):
     try:
@@ -418,7 +418,7 @@ def ai_cancel_job(job_id: int):
 
 @router.get("/recommendations")
 def ai_recommendations(
-    category: Optional[str] = Query(default=None),
+    category: str | None = Query(default=None),
     limit: int = Query(default=24, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),

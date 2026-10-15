@@ -6,7 +6,7 @@ import logging
 import subprocess
 import threading
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ class FfmpegCancelled(Exception):
     """ffmpeg was killed because the download job was cancelled."""
 
 
-def parse_out_time_seconds(line: str) -> Optional[float]:
+def parse_out_time_seconds(line: str) -> float | None:
     """Parse one ffmpeg -progress line into seconds, if it carries out_time."""
     raw = (line or "").strip()
     if raw.startswith("out_time_ms=") or raw.startswith("out_time_us="):
@@ -40,7 +40,7 @@ def parse_out_time_seconds(line: str) -> Optional[float]:
     return None
 
 
-def progress_percent(out_time: float, duration: Optional[float]) -> float:
+def progress_percent(out_time: float, duration: float | None) -> float:
     if not duration or duration <= 0:
         return 0.0
     return min(100.0, max(0.0, (out_time / duration) * 100.0))
@@ -55,10 +55,10 @@ def _with_progress_args(cmd: list[str]) -> list[str]:
 def run_ffmpeg(
     cmd: list[str],
     *,
-    duration: Optional[float] = None,
-    on_progress: Optional[Callable[[float], None]] = None,
-    cancel_event: Optional[threading.Event] = None,
-    timeout: Optional[float] = None,
+    duration: float | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    cancel_event: threading.Event | None = None,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
     """Run ffmpeg, optionally reporting 0–100 progress from out_time.
 

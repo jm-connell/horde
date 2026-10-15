@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 from sqlmodel import Session, SQLModel
@@ -180,15 +181,15 @@ def app(init_db, monkeypatch):
         app_settings,
         backgrounds,
         channels,
+        compat,
         downloads,
         fonts,
         playlists,
         preview,
         review,
+        setup,
         system,
         videos,
-        setup,
-        compat,
     )
     from app.database import get_session
     from app.main import health

@@ -17,9 +17,9 @@ import logging
 import subprocess
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
 
 from . import activity, scanner
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin, ffprobe_bin
@@ -39,10 +39,10 @@ _path_locks: dict[str, threading.Lock] = {}
 
 @dataclass(frozen=True)
 class MediaProbe:
-    video_codec: Optional[str]
-    audio_codec: Optional[str]
+    video_codec: str | None
+    audio_codec: str | None
     format_name: str
-    moov_front: Optional[bool]
+    moov_front: bool | None
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,7 @@ class CompatPlan:
         return self.transcode_audio or self.faststart or self.remux_to_mp4
 
 
-def codec_family(name: Optional[str]) -> str:
+def codec_family(name: str | None) -> str:
     if not name:
         return ""
     raw = name.strip().lower().replace(" ", "")
@@ -65,7 +65,7 @@ def codec_family(name: Optional[str]) -> str:
     return raw.split(".")[0]
 
 
-def is_aac_audio(name: Optional[str]) -> bool:
+def is_aac_audio(name: str | None) -> bool:
     return codec_family(name) in _AAC_AUDIO
 
 
@@ -74,7 +74,7 @@ def is_mp4_container(format_name: str) -> bool:
     return any(token in n for token in ("mp4", "m4a", "mov", "3gp", "isom"))
 
 
-def mp4_video_tag(name: Optional[str]) -> Optional[str]:
+def mp4_video_tag(name: str | None) -> str | None:
     """ISO-BMFF fourcc Safari expects for copied video."""
     fam = codec_family(name)
     if fam in _AV1_VIDEO:
@@ -95,7 +95,7 @@ def apple_webkit_playback(user_agent: str) -> bool:
     return "safari" in ua
 
 
-def mp4_moov_before_mdat(path: Path) -> Optional[bool]:
+def mp4_moov_before_mdat(path: Path) -> bool | None:
     """True when the moov atom is before mdat (faststart). None if not MP4."""
     try:
         file_size = path.stat().st_size
@@ -158,7 +158,7 @@ def ffmpeg_compat_cmd(
     transcode_audio: bool,
     has_video: bool,
     has_audio: bool,
-    video_codec: Optional[str] = None,
+    video_codec: str | None = None,
 ) -> list[str]:
     cmd = [ffmpeg_bin(), "-y", "-i", str(src)]
     if has_video:
@@ -180,7 +180,7 @@ def ffmpeg_compat_cmd(
     return cmd
 
 
-def probe_media(path: Path) -> Optional[MediaProbe]:
+def probe_media(path: Path) -> MediaProbe | None:
     if not path.exists() or path.stat().st_size <= 0:
         return None
     try:
@@ -206,8 +206,8 @@ def probe_media(path: Path) -> Optional[MediaProbe]:
         data = json.loads(result.stdout)
     except (subprocess.SubprocessError, ValueError, OSError, json.JSONDecodeError):
         return None
-    video_codec: Optional[str] = None
-    audio_codec: Optional[str] = None
+    video_codec: str | None = None
+    audio_codec: str | None = None
     for stream in data.get("streams") or []:
         if not isinstance(stream, dict):
             continue
@@ -242,7 +242,7 @@ def _lock_for(path: Path) -> threading.Lock:
 
 
 def _replace_with_retries(src: Path, dest: Path, retries: int = 8) -> None:
-    last_exc: Optional[OSError] = None
+    last_exc: OSError | None = None
     for attempt in range(retries):
         try:
             src.replace(dest)
@@ -268,7 +268,7 @@ def _safe_unlink(path: Path) -> None:
         pass
 
 
-def _safe_rel(path: Path) -> Optional[str]:
+def _safe_rel(path: Path) -> str | None:
     try:
         return to_rel_path(path)
     except ValueError:
@@ -284,9 +284,9 @@ def _dest_mp4(path: Path) -> Path:
 def ensure_safari_mp4(
     path: Path,
     *,
-    cancel_event: Optional[threading.Event] = None,
-    on_progress: Optional[Callable[[float], None]] = None,
-    duration: Optional[float] = None,
+    cancel_event: threading.Event | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    duration: float | None = None,
 ) -> Path:
     """Copy video, AAC audio if needed, faststart. Returns the playable path."""
     with _lock_for(path):
@@ -301,9 +301,9 @@ def ensure_safari_mp4(
 def _ensure_safari_mp4_locked(
     path: Path,
     *,
-    cancel_event: Optional[threading.Event] = None,
-    on_progress: Optional[Callable[[float], None]] = None,
-    duration: Optional[float] = None,
+    cancel_event: threading.Event | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    duration: float | None = None,
 ) -> Path:
     if not path.exists():
         return path

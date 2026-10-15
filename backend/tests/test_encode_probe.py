@@ -7,7 +7,6 @@ from app.services.encode_probe import (
     pick_encoder,
 )
 
-
 _ENCODERS_SAMPLE = """
 Encoders:
  V..... = Video

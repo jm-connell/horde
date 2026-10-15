@@ -10,7 +10,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from .ffmpeg_bin import ffmpeg_bin
 
@@ -49,7 +49,7 @@ _KIND = {
 }
 
 _lock = threading.Lock()
-_cache: tuple[float, "EncodeCapabilities"] | None = None
+_cache: tuple[float, EncodeCapabilities] | None = None
 
 
 @dataclass(frozen=True)
@@ -66,10 +66,10 @@ class EncodeCapabilities:
     hw_h264: bool
     hw_hevc: bool
     ffmpeg_has_hw_encoder: bool
-    gpu_name: Optional[str]
-    gpu_vendor: Optional[str]
-    encoder_h264: Optional[str]
-    encoder_hevc: Optional[str]
+    gpu_name: str | None
+    gpu_vendor: str | None
+    encoder_h264: str | None
+    encoder_hevc: str | None
     ffmpeg_bin: str
 
     def to_dict(self) -> dict[str, Any]:
@@ -164,7 +164,7 @@ def _run_ffmpeg(args: list[str], timeout: float = 8.0) -> str:
 
 
 _filters_lock = threading.Lock()
-_filters_cache: Optional[frozenset[str]] = None
+_filters_cache: frozenset[str] | None = None
 
 
 def parse_ffmpeg_filters(text: str) -> frozenset[str]:
@@ -200,9 +200,9 @@ def pick_encoder(
     target: str,
     encoders: frozenset[str],
     *,
-    nvidia: Optional[bool] = None,
-    dri: Optional[bool] = None,
-) -> Optional[EncoderChoice]:
+    nvidia: bool | None = None,
+    dri: bool | None = None,
+) -> EncoderChoice | None:
     """Pick best encoder for h264 or h265. NVENC → QSV → VAAPI/AMF → VideoToolbox → software."""
     want = "h265" if target in {"h265", "hevc"} else "h264"
     order = _HEVC_ALL if want == "h265" else _H264_ALL
@@ -218,7 +218,7 @@ def pick_encoder(
     return None
 
 
-def _gpu_label() -> tuple[Optional[str], Optional[str]]:
+def _gpu_label() -> tuple[str | None, str | None]:
     try:
         from .ai.workload import probe_local_gpu
 

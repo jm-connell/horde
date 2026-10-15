@@ -1,6 +1,6 @@
 """Pending subtitle retries after timedtext 429s."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -77,7 +77,7 @@ def test_apply_keeps_pending_after_429(add_video, session):
 
     retry = as_utc(video.subtitles_retry_after)
     assert retry is not None
-    assert (retry - datetime.now(timezone.utc)).total_seconds() > 240
+    assert (retry - datetime.now(UTC)).total_seconds() > 240
 
 
 def test_apply_clears_pending_when_tracks_arrive(add_video, session):
@@ -118,7 +118,7 @@ def test_recover_marks_unsynced_empty_captions(add_video, session):
     forgotten = add_video(source_url="https://youtu.be/forgotten1")
     already_synced = add_video(
         source_url="https://youtu.be/synced1",
-        metadata_synced_at=datetime.now(timezone.utc),
+        metadata_synced_at=datetime.now(UTC),
     )
     has_captions = add_video(
         source_url="https://youtu.be/hascaps",
@@ -126,7 +126,7 @@ def test_recover_marks_unsynced_empty_captions(add_video, session):
     )
     too_old = add_video(
         source_url="https://youtu.be/oldone",
-        added_at=datetime.now(timezone.utc) - timedelta(days=14),
+        added_at=datetime.now(UTC) - timedelta(days=14),
     )
     assert recover_unsynced_missing_captions() >= 1
     session.refresh(forgotten)
@@ -140,7 +140,7 @@ def test_recover_marks_unsynced_empty_captions(add_video, session):
 
 
 def test_next_due_skips_backoff_and_prefers_recent(add_video, session):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     waiting = add_video(
         source_url="https://youtu.be/wait",
         subtitles_pending=True,
@@ -186,7 +186,7 @@ def test_captions_fetch_blocked_during_backoff(add_video):
     video = add_video(
         source_url="https://youtu.be/aaaaaaaaaaa",
         subtitles_pending=True,
-        subtitles_retry_after=datetime.now(timezone.utc) + timedelta(hours=1),
+        subtitles_retry_after=datetime.now(UTC) + timedelta(hours=1),
     )
     assert captions_fetch_allowed(video) is False
 
@@ -195,7 +195,7 @@ def test_metadata_sync_skips_captions_during_backoff(add_video, monkeypatch):
     video = add_video(
         source_url="https://youtu.be/aaaaaaaaaaa",
         subtitles_pending=True,
-        subtitles_retry_after=datetime.now(timezone.utc) + timedelta(hours=1),
+        subtitles_retry_after=datetime.now(UTC) + timedelta(hours=1),
         write_file=True,
     )
     monkeypatch.setattr(

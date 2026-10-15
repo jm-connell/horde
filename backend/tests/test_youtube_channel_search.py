@@ -13,7 +13,6 @@ from app.services.ytdlp_extract import (
     search_youtube_channel_videos,
 )
 
-
 LTT = "https://www.youtube.com/@LinusTechTips"
 
 

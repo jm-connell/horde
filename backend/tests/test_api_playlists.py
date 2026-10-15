@@ -356,9 +356,10 @@ def test_add_item_url_queues_download(client, monkeypatch):
 
 
 def test_attach_completed_download_to_playlist(session, add_video):
+    from sqlmodel import select
+
     from app.models import DownloadJob, JobStatus, Playlist, PlaylistItem
     from app.services.downloader import _attach_download_to_playlist
-    from sqlmodel import select
 
     video = add_video(title="Fresh")
     playlist = Playlist(name="Mix")

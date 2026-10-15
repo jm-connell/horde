@@ -10,7 +10,7 @@ from __future__ import annotations
 import base64
 import json
 import shutil
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # Short silent MP4 so the watch page mounts player chrome without a decode error.
@@ -28,9 +28,9 @@ def prepare(mode: str) -> None:
     if not enabled():
         raise RuntimeError("e2e seed refused: HORDE_E2E is not set")
 
+    from . import models  # noqa: F401 — register tables
     from .config import DATA_DIR, DOWNLOADS_DIR
     from .database import engine, init_db
-    from . import models  # noqa: F401 — register tables
     from .services import downloader
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -111,9 +111,9 @@ def _seed_library(downloads: Path) -> None:
         VideoStatus,
     )
 
-    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    now = datetime.now(UTC).replace(second=0, microsecond=0)
     yesterday = now - timedelta(days=1)
-    published = datetime(2024, 5, 14, 12, tzinfo=timezone.utc)
+    published = datetime(2024, 5, 14, 12, tzinfo=UTC)
     chapters = json.dumps(
         [
             {"start_sec": 0, "title": "Cold open"},

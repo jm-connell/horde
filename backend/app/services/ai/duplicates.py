@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Optional
+from typing import Any
 
 from sqlmodel import Session
 
 from ...models import Video
 from .. import app_settings
-from . import embeddings, text as ai_text
+from . import embeddings
+from . import text as ai_text
 from .provider import get_llm_provider, resolve_llm_model
 
 
@@ -50,7 +51,7 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
         return result
 
     # Embedding similarity as a fast signal (Ollama indexes only).
-    embed_score: Optional[float] = None
+    embed_score: float | None = None
     if a.id is not None and b.id is not None:
         va = embeddings.video_centroid(session, a.id)
         vb = embeddings.video_centroid(session, b.id)

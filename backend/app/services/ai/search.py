@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from sqlmodel import Session
 
 from ...models import Video
 from .. import app_settings, library
 from ..search_text import explain_match, query_allows_semantic
-from . import embeddings, text as ai_text
+from . import embeddings
+from . import text as ai_text
 from .provider import get_embed_provider
 
 
-def _caption_chunk_text(video: Video, chunk_index: int) -> Optional[str]:
+def _caption_chunk_text(video: Video, chunk_index: int) -> str | None:
     if chunk_index < 0:
         return None
     use_subs = bool(app_settings.ai_settings().get("use_subtitles", True))
@@ -27,8 +28,8 @@ def explain_library_video(
     video: Video,
     query: str,
     *,
-    chunk_index: Optional[int] = None,
-) -> Optional[dict[str, Any]]:
+    chunk_index: int | None = None,
+) -> dict[str, Any] | None:
     tags = library.parse_tags(video.tags)
     keyword = explain_match(
         query,
@@ -58,12 +59,12 @@ def hybrid_search(
     session: Session,
     q: str,
     *,
-    channel: Optional[str] = None,
-    tag: Optional[str] = None,
+    channel: str | None = None,
+    tag: str | None = None,
     sort: str = "added_at",
     order: str = "desc",
-    needs_review: Optional[bool] = False,
-    seed: Optional[int] = None,
+    needs_review: bool | None = False,
+    seed: int | None = None,
 ) -> tuple[list[Video], dict[int, int]]:
     """Merge whole-word keyword hits with embedding nearest neighbors.
 

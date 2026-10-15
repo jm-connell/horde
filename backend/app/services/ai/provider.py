@@ -11,8 +11,9 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Iterator, Optional, Protocol, Union
+from typing import Any, Protocol, Union
 
 import httpx
 
@@ -133,7 +134,7 @@ def assistant_message_text(message: Any) -> str:
     return content
 
 
-def openrouter_response_format(fmt: ChatFormat) -> Optional[dict[str, Any]]:
+def openrouter_response_format(fmt: ChatFormat) -> dict[str, Any] | None:
     """Map Horde's chat ``format`` into OpenRouter ``response_format``."""
     if not fmt:
         return None
@@ -165,8 +166,8 @@ _NEGATIVE_CACHE_SEC = 30.0
 
 _pull_lock = threading.Lock()
 _pulling: set[str] = set()
-_last_error: Optional[str] = None
-_resolved_url: Optional[str] = None
+_last_error: str | None = None
+_resolved_url: str | None = None
 _resolve_failed_at: float = 0.0
 _model_cache: dict[str, tuple[float, bool, bool]] = {}
 _MODEL_CACHE_SEC = 30.0
@@ -178,13 +179,13 @@ class ProviderStatus:
     provider: str
     ready: bool
     reachable: bool
-    base_url: Optional[str]
+    base_url: str | None
     embed_model: str
     chat_model: str
     embed_model_present: bool
     chat_model_present: bool
     pulling: list[str] = field(default_factory=list)
-    last_error: Optional[str] = None
+    last_error: str | None = None
     paused: bool = False
     schedule: str = "on_download"
     indexed_videos: int = 0
@@ -197,8 +198,8 @@ class ProviderStatus:
     openrouter_scope: str = "specialized"
     openrouter_embed_model: str = "openai/text-embedding-3-small"
     ollama_prefer_embeddings: bool = False
-    llm_backend: Optional[str] = None
-    embed_backend: Optional[str] = None
+    llm_backend: str | None = None
+    embed_backend: str | None = None
 
 
 class EmbedProvider(Protocol):
@@ -211,10 +212,10 @@ class LlmProvider(Protocol):
         prompt: str,
         model: str,
         *,
-        system: Optional[str] = None,
-        messages: Optional[list[dict[str, str]]] = None,
-        num_predict: Optional[int] = None,
-        timeout: Optional[float] = None,
+        system: str | None = None,
+        messages: list[dict[str, str]] | None = None,
+        num_predict: int | None = None,
+        timeout: float | None = None,
         format: ChatFormat = "json",
     ) -> str: ...
 
@@ -302,7 +303,7 @@ class OllamaProvider:
                 )
                 resp.raise_for_status()
             _last_error = None
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _last_error = f"Failed to pull {model}: {format_provider_error(exc)}"
             logger.warning(_last_error)
             raise
@@ -325,7 +326,7 @@ class OllamaProvider:
                 raise RuntimeError("Ollama returned empty embedding")
             _last_error = None
             return [float(x) for x in vec]
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _last_error = format_provider_error(exc)
             invalidate_resolved_url()
             raise
@@ -335,10 +336,10 @@ class OllamaProvider:
         prompt: str,
         model: str,
         *,
-        system: Optional[str] = None,
-        messages: Optional[list[dict[str, str]]] = None,
-        num_predict: Optional[int] = None,
-        timeout: Optional[float] = None,
+        system: str | None = None,
+        messages: list[dict[str, str]] | None = None,
+        num_predict: int | None = None,
+        timeout: float | None = None,
         format: ChatFormat = "json",
         temperature: float = 0.2,
         **_kwargs: Any,
@@ -366,7 +367,7 @@ class OllamaProvider:
                 data = resp.json()
             _last_error = None
             return assistant_message_text(data.get("message") or {})
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _last_error = format_provider_error(exc)
             invalidate_resolved_url()
             raise
@@ -376,10 +377,10 @@ class OllamaProvider:
         prompt: str,
         model: str,
         *,
-        system: Optional[str] = None,
-        messages: Optional[list[dict[str, str]]] = None,
-        num_predict: Optional[int] = None,
-        timeout: Optional[float] = None,
+        system: str | None = None,
+        messages: list[dict[str, str]] | None = None,
+        num_predict: int | None = None,
+        timeout: float | None = None,
         temperature: float = 0.4,
         **_kwargs: Any,
     ) -> Iterator[str]:
@@ -417,7 +418,7 @@ class OllamaProvider:
                         if data.get("done"):
                             break
             _last_error = None
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _last_error = format_provider_error(exc)
             invalidate_resolved_url()
             raise
@@ -426,8 +427,8 @@ class OllamaProvider:
     def _build_messages(
         prompt: str,
         *,
-        system: Optional[str] = None,
-        messages: Optional[list[dict[str, str]]] = None,
+        system: str | None = None,
+        messages: list[dict[str, str]] | None = None,
     ) -> list[dict[str, str]]:
         out: list[dict[str, str]] = []
         if system:
@@ -453,7 +454,7 @@ class OpenRouterProvider:
         self.base_url = OPENROUTER_BASE_URL
         self.timeout = timeout
         # Cost from the most recent chat / stream / embed call (USD/credits).
-        self.last_cost: Optional[float] = None
+        self.last_cost: float | None = None
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -504,8 +505,8 @@ class OpenRouterProvider:
     def _build_messages(
         prompt: str,
         *,
-        system: Optional[str] = None,
-        messages: Optional[list[dict[str, str]]] = None,
+        system: str | None = None,
+        messages: list[dict[str, str]] | None = None,
     ) -> list[dict[str, str]]:
         return OllamaProvider._build_messages(prompt, system=system, messages=messages)
 
@@ -514,9 +515,9 @@ class OpenRouterProvider:
         data: Any,
         *,
         model: str,
-        usage_kind: Optional[str],
-        video_id: Optional[int],
-    ) -> Optional[float]:
+        usage_kind: str | None,
+        video_id: int | None,
+    ) -> float | None:
         from . import cost_ledger
 
         self.last_cost = None
@@ -539,14 +540,14 @@ class OpenRouterProvider:
         prompt: str,
         model: str,
         *,
-        system: Optional[str] = None,
-        messages: Optional[list[dict[str, str]]] = None,
-        num_predict: Optional[int] = None,
-        timeout: Optional[float] = None,
+        system: str | None = None,
+        messages: list[dict[str, str]] | None = None,
+        num_predict: int | None = None,
+        timeout: float | None = None,
         format: ChatFormat = "json",
         temperature: float = 0.2,
-        usage_kind: Optional[str] = None,
-        video_id: Optional[int] = None,
+        usage_kind: str | None = None,
+        video_id: int | None = None,
     ) -> str:
         global _last_error
         self.last_cost = None
@@ -595,7 +596,7 @@ class OpenRouterProvider:
             )
             _last_error = None
             return content
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _last_error = format_provider_error(exc)
             raise
 
@@ -604,13 +605,13 @@ class OpenRouterProvider:
         prompt: str,
         model: str,
         *,
-        system: Optional[str] = None,
-        messages: Optional[list[dict[str, str]]] = None,
-        num_predict: Optional[int] = None,
-        timeout: Optional[float] = None,
+        system: str | None = None,
+        messages: list[dict[str, str]] | None = None,
+        num_predict: int | None = None,
+        timeout: float | None = None,
         temperature: float = 0.4,
-        usage_kind: Optional[str] = None,
-        video_id: Optional[int] = None,
+        usage_kind: str | None = None,
+        video_id: int | None = None,
     ) -> Iterator[str]:
         global _last_error
         self.last_cost = None
@@ -632,7 +633,7 @@ class OpenRouterProvider:
         if num_predict is not None and num_predict > 0:
             payload["max_tokens"] = int(num_predict)
         req_timeout = timeout if timeout is not None else self.timeout
-        last_usage_payload: Optional[dict[str, Any]] = None
+        last_usage_payload: dict[str, Any] | None = None
         try:
             with self._client(timeout=req_timeout) as client:
                 with client.stream("POST", "/chat/completions", json=payload) as resp:
@@ -677,7 +678,7 @@ class OpenRouterProvider:
                     video_id=video_id,
                 )
             _last_error = None
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _last_error = format_provider_error(exc)
             raise
 
@@ -692,8 +693,8 @@ class OpenRouterProvider:
         texts: list[str],
         model: str,
         *,
-        usage_kind: Optional[str] = "embed",
-        video_id: Optional[int] = None,
+        usage_kind: str | None = "embed",
+        video_id: int | None = None,
     ) -> list[list[float]]:
         """Batch-embed texts via OpenRouter ``/embeddings``."""
         global _last_error
@@ -738,7 +739,7 @@ class OpenRouterProvider:
             )
             _last_error = None
             return out
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _last_error = format_provider_error(exc)
             raise
 
@@ -771,7 +772,7 @@ AnyEmbedProvider = Union[OllamaProvider, OpenRouterProvider]
 AnyLlmProvider = Union[OllamaProvider, OpenRouterProvider]
 
 
-def usd_per_million(raw: Any) -> Optional[float]:
+def usd_per_million(raw: Any) -> float | None:
     """Convert OpenRouter USD-per-token list prices to USD per 1M tokens."""
     if raw is None or raw == "":
         return None
@@ -829,7 +830,7 @@ def is_openrouter_text_llm(row: Any) -> bool:
     return True
 
 
-def parse_openrouter_catalog_row(row: Any) -> Optional[dict[str, Any]]:
+def parse_openrouter_catalog_row(row: Any) -> dict[str, Any] | None:
     """Normalize an OpenRouter ``/models`` row to id, name, and $/M prices."""
     if not isinstance(row, dict):
         return None
@@ -860,7 +861,7 @@ def mask_openrouter_api_key(key: str) -> str:
     return f"••••{raw[-4:]}"
 
 
-def openrouter_api_key_set(stored_key: Optional[str] = None) -> bool:
+def openrouter_api_key_set(stored_key: str | None = None) -> bool:
     if OPENROUTER_API_KEY:
         return True
     if stored_key is not None:
@@ -890,15 +891,15 @@ def openrouter_configured() -> bool:
 
 
 def get_openrouter_provider(
-    *, api_key: Optional[str] = None, timeout: float = 120.0
-) -> Optional[OpenRouterProvider]:
+    *, api_key: str | None = None, timeout: float = 120.0
+) -> OpenRouterProvider | None:
     key = (api_key if api_key is not None else resolve_openrouter_api_key()).strip()
     if not key:
         return None
     return OpenRouterProvider(key, timeout=timeout)
 
 
-def test_openrouter_connection(api_key: Optional[str] = None) -> dict[str, Any]:
+def test_openrouter_connection(api_key: str | None = None) -> dict[str, Any]:
     """Probe OpenRouter with the given key (or stored/env key)."""
     key = (api_key or "").strip()
     if not key or key.startswith("••••") or key.startswith("****"):
@@ -941,7 +942,7 @@ def _settings_url() -> str:
     return ""
 
 
-def resolve_base_url(*, force: bool = False) -> Optional[str]:
+def resolve_base_url(*, force: bool = False) -> str | None:
     """Return a reachable Ollama base URL, or None."""
     global _resolved_url, _last_error, _resolve_failed_at
     if not force and _resolved_url:
@@ -1015,7 +1016,7 @@ def openrouter_owns_embeddings() -> bool:
     return True
 
 
-def get_ollama_provider() -> Optional[OllamaProvider]:
+def get_ollama_provider() -> OllamaProvider | None:
     """Ollama instance when local AI is enabled and reachable."""
     ai = app_settings.ai_settings()
     if not ai.get("enabled", True):
@@ -1028,19 +1029,19 @@ def get_ollama_provider() -> Optional[OllamaProvider]:
     return OllamaProvider(url)
 
 
-def get_embed_provider() -> Optional[AnyEmbedProvider]:
+def get_embed_provider() -> AnyEmbedProvider | None:
     """Provider for embeddings: OpenRouter (scope=all) or Ollama."""
     if openrouter_owns_embeddings():
         return get_openrouter_provider()
     return get_ollama_provider()
 
 
-def get_provider() -> Optional[OllamaProvider]:
+def get_provider() -> OllamaProvider | None:
     """Ollama-only helper (pull/workload). Use ``get_embed_provider`` for vectors."""
     return get_ollama_provider()
 
 
-def get_llm_provider() -> Optional[AnyLlmProvider]:
+def get_llm_provider() -> AnyLlmProvider | None:
     """OpenRouter when connected; otherwise Ollama chat when local AI is up."""
     if openrouter_configured():
         provider = get_openrouter_provider()
@@ -1049,7 +1050,7 @@ def get_llm_provider() -> Optional[AnyLlmProvider]:
     return get_ollama_provider()
 
 
-def resolve_llm_model(provider: Optional[AnyLlmProvider] = None) -> str:
+def resolve_llm_model(provider: AnyLlmProvider | None = None) -> str:
     """Chat model id for the active LLM backend."""
     ai = app_settings.ai_settings()
     active = provider if provider is not None else get_llm_provider()
@@ -1058,7 +1059,7 @@ def resolve_llm_model(provider: Optional[AnyLlmProvider] = None) -> str:
     return str(ai.get("chat_model") or "llama3.2:3b")
 
 
-def resolve_embed_model(provider: Optional[AnyEmbedProvider] = None) -> str:
+def resolve_embed_model(provider: AnyEmbedProvider | None = None) -> str:
     """Embedding model id for the active embed backend."""
     from .. import app_settings as settings_mod
 
@@ -1071,7 +1072,7 @@ def resolve_embed_model(provider: Optional[AnyEmbedProvider] = None) -> str:
     return str(ai.get("embed_model") or "nomic-embed-text")
 
 
-def llm_backend_name() -> Optional[str]:
+def llm_backend_name() -> str | None:
     if openrouter_configured():
         return "openrouter"
     if app_settings.ai_settings().get("enabled", True):
@@ -1079,7 +1080,7 @@ def llm_backend_name() -> Optional[str]:
     return None
 
 
-def embed_backend_name() -> Optional[str]:
+def embed_backend_name() -> str | None:
     if openrouter_owns_embeddings():
         return "openrouter"
     if app_settings.ai_settings().get("enabled", True):
@@ -1087,7 +1088,7 @@ def embed_backend_name() -> Optional[str]:
     return None
 
 
-def require_llm_chat_model(provider: AnyLlmProvider, chat_model: str) -> Optional[str]:
+def require_llm_chat_model(provider: AnyLlmProvider, chat_model: str) -> str | None:
     """Return an error if the chat model is unavailable (Ollama only)."""
     if isinstance(provider, OpenRouterProvider):
         if not (chat_model or "").strip():
@@ -1096,7 +1097,7 @@ def require_llm_chat_model(provider: AnyLlmProvider, chat_model: str) -> Optiona
     return require_chat_model(provider, chat_model)
 
 
-def llm_features_allowed() -> tuple[bool, Optional[str]]:
+def llm_features_allowed() -> tuple[bool, str | None]:
     """Whether summarize/chat/etc. may run (ignores live reachability)."""
     ai = app_settings.ai_settings()
     if ai.get("paused"):
@@ -1151,7 +1152,7 @@ def ensure_models(provider: OllamaProvider) -> tuple[bool, bool]:
     return embed_ok, chat_ok
 
 
-def require_chat_model(provider: OllamaProvider, chat_model: str) -> Optional[str]:
+def require_chat_model(provider: OllamaProvider, chat_model: str) -> str | None:
     """Return an error message if chat model is missing; start auto-pull when enabled."""
     if provider.has_model(chat_model):
         return None
@@ -1173,7 +1174,7 @@ def pulling_models() -> list[str]:
         return sorted(_pulling)
 
 
-def last_error() -> Optional[str]:
+def last_error() -> str | None:
     return _last_error
 
 
@@ -1356,7 +1357,7 @@ def build_status(
     )
 
 
-def test_connection(base_url: Optional[str] = None) -> dict[str, Any]:
+def test_connection(base_url: str | None = None) -> dict[str, Any]:
     """Probe a URL (or auto-discover) and return a status dict for Settings."""
     invalidate_resolved_url()
     if base_url and base_url.strip():

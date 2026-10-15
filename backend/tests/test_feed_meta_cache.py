@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.services.feed_meta_cache import (
     format_relative_ago,
@@ -29,7 +29,7 @@ def test_parse_upload_date_relative_years():
     iso = parse_upload_date("Streamed 3 years ago")
     assert iso
     dt = datetime.fromisoformat(iso)
-    delta = datetime.now(timezone.utc) - dt
+    delta = datetime.now(UTC) - dt
     assert timedelta(days=int(2.5 * 365)) < delta < timedelta(days=int(3.5 * 365))
 
 
@@ -40,7 +40,7 @@ def test_relative_label_from_text():
 
 
 def test_format_relative_ago_buckets():
-    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 3, tzinfo=UTC)
     assert format_relative_ago(now - timedelta(days=3 * 365), now=now) == "3 years ago"
     assert format_relative_ago(now - timedelta(days=11), now=now) == "2 weeks ago"
     assert format_relative_ago(now - timedelta(hours=5), now=now) == "5 hours ago"

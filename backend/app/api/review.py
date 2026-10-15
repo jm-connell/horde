@@ -1,7 +1,7 @@
 import logging
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -32,11 +32,11 @@ _UPLOAD_CHUNK = 1024 * 1024
 class DuplicateGroupRead(BaseModel):
     videos: list[VideoRead]
     match_type: str  # youtube_id | heuristic
-    ai_score: Optional[float] = None
-    ai_verdict: Optional[str] = None
-    ai_confidence: Optional[float] = None
-    ai_reason: Optional[str] = None
-    ai_error: Optional[str] = None
+    ai_score: float | None = None
+    ai_verdict: str | None = None
+    ai_confidence: float | None = None
+    ai_reason: str | None = None
+    ai_error: str | None = None
 
 
 class ScanResult(BaseModel):
@@ -130,7 +130,7 @@ async def upload_import(
         unmark_active(rel_path)
         try:
             await file.close()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("failed closing upload stream", exc_info=True)
 
 
@@ -149,7 +149,7 @@ def skip_review(video_id: int, session: Session = Depends(get_session)):
         from ..services.ai import enqueue_for_video
 
         enqueue_for_video(video_id, include_tags=True, force=False)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("AI enqueue after review skip failed", exc_info=True)
     return _to_read(video, session)
 
@@ -224,7 +224,7 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
             raw_groups.append(("heuristic", cluster))
 
     annotate = False
-    ai_unavailable_reason: Optional[str] = None
+    ai_unavailable_reason: str | None = None
     try:
         from ..services import app_settings
         from ..services.ai.provider import get_llm_provider

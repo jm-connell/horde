@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from functools import lru_cache
-from typing import Any, Sequence
+from typing import Any
 
 from sqlalchemy import and_, or_
 

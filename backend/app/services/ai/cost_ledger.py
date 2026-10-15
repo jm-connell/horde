@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
@@ -34,13 +34,13 @@ def _is_sqlite_lock_error(exc: BaseException) -> bool:
 
 def record_cost(
     *,
-    cost: Optional[float],
+    cost: float | None,
     kind: str,
-    model: Optional[str] = None,
-    video_id: Optional[int] = None,
-    prompt_tokens: Optional[int] = None,
-    completion_tokens: Optional[int] = None,
-) -> Optional[float]:
+    model: str | None = None,
+    video_id: int | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+) -> float | None:
     """Store a usage row when cost is a finite non-negative number. Returns cost.
 
     Ledger failures are logged and swallowed so a locked SQLite file cannot
@@ -81,12 +81,12 @@ def record_cost(
     if persisted:
         try:
             _maybe_pause_on_hard_budget()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.warning("OpenRouter budget pause check failed", exc_info=True)
     return value
 
 
-def cost_from_usage_payload(usage: Any) -> Optional[float]:
+def cost_from_usage_payload(usage: Any) -> float | None:
     if not isinstance(usage, dict):
         return None
     raw = usage.get("cost")
@@ -98,7 +98,7 @@ def cost_from_usage_payload(usage: Any) -> Optional[float]:
         return None
 
 
-def tokens_from_usage_payload(usage: Any) -> tuple[Optional[int], Optional[int]]:
+def tokens_from_usage_payload(usage: Any) -> tuple[int | None, int | None]:
     if not isinstance(usage, dict):
         return None, None
     prompt = usage.get("prompt_tokens")
@@ -118,9 +118,9 @@ def record_from_response(
     data: Any,
     *,
     kind: str,
-    model: Optional[str] = None,
-    video_id: Optional[int] = None,
-) -> Optional[float]:
+    model: str | None = None,
+    video_id: int | None = None,
+) -> float | None:
     if not isinstance(data, dict):
         return None
     usage = data.get("usage")
@@ -188,7 +188,7 @@ def totals() -> dict[str, float]:
 
 def budget_status(
     *,
-    window_totals: Optional[dict[str, float]] = None,
+    window_totals: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Return weekly budget config vs rolling 7-day spend."""
     ai = app_settings.ai_settings()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 from sqlmodel import Session, func, select
 
@@ -17,11 +17,12 @@ from ...models import (
     utcnow,
 )
 from .. import activity, app_settings
+from ..channel_autodownload import after_catalog_update, is_active_live_status
 from ..feed_meta_cache import parse_upload_date, published_meta_from_entry
 from ..ytdlp_common import (
+    ERROR_KIND_MEMBERS,
     EXTRACT_PRIORITY_BACKGROUND,
     CatalogSkipError,
-    ERROR_KIND_MEMBERS,
     MembersOnlyError,
     QuietYtdlpLogger,
     catalog_skip_message,
@@ -50,7 +51,6 @@ from .skips import (
     purge_catalog_video,
     skipped_yt_ids,
 )
-from ..channel_autodownload import after_catalog_update, is_active_live_status
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ def _trim_beyond_cap(session: Session, catalog: ChannelCatalog) -> None:
 def sync_feed_head(
     channel_url: str,
     *,
-    channel_name: Optional[str] = None,
+    channel_name: str | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
     """Fetch the newest uploads from YouTube and merge into the local catalog.
@@ -272,7 +272,7 @@ def sync_feed_head(
             live_finished_ids=live_finished,
             source="head",
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("autodownload after head sync failed for %s", url, exc_info=True)
 
     return data
@@ -283,7 +283,7 @@ _head_sync_inflight: set[str] = set()
 
 
 def schedule_feed_head_sync(
-    channel_url: str, *, channel_name: Optional[str] = None
+    channel_url: str, *, channel_name: str | None = None
 ) -> None:
     """Non-blocking newest-page sync; coalesces duplicate requests per channel."""
     url = _normalize_channel_url(channel_url)
@@ -295,7 +295,7 @@ def schedule_feed_head_sync(
     def _run() -> None:
         try:
             sync_feed_head(url, channel_name=channel_name, limit=50)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("feed head sync failed for %s", url, exc_info=True)
         finally:
             with _head_sync_lock:
@@ -307,9 +307,9 @@ def schedule_feed_head_sync(
 def _fetch_description(
     url: str,
     *,
-    title: Optional[str] = None,
-    channel: Optional[str] = None,
-) -> tuple[Optional[str], Optional[str]]:
+    title: str | None = None,
+    channel: str | None = None,
+) -> tuple[str | None, str | None]:
     """Full extract for description; also returns published_at when yt-dlp has it."""
     opts = {
         "quiet": True,
@@ -327,7 +327,7 @@ def _fetch_description(
             channel=channel,
             priority=EXTRACT_PRIORITY_BACKGROUND,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         kind, _message = classify_ytdlp_error(
             exc, url=url, title=title, channel=channel
         )
@@ -387,7 +387,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
                 session.commit()
             _set_runtime(done=i + 1)
             continue
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug(
                 "catalog description fetch failed for %s", row.url, exc_info=True
             )
@@ -432,7 +432,7 @@ def _enqueue_catalog_embeds(catalog_id: int) -> None:
                     catalog_video_id=row.id,
                     force=False,
                 )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("catalog embed enqueue skipped", exc_info=True)
 
 
@@ -494,13 +494,13 @@ def index_catalog(catalog_id: int) -> None:
         offset = 0
         position = 0
         reached_end = False
-        channel_total: Optional[int] = None
+        channel_total: int | None = None
         listing_skips = 0
         while position < max_videos and not should_stop():
             limit = min(_PAGE_SIZE, max_videos - position)
             try:
                 data = _fetch_flat_page(channel_url, offset=offset, limit=limit)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 kind, _message = classify_ytdlp_error(
                     exc, url=channel_url, channel=channel_name
                 )
@@ -548,7 +548,7 @@ def index_catalog(catalog_id: int) -> None:
                 session.commit()
             try:
                 after_catalog_update(channel_url, new_yt_ids=new_ids, source="index")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug(
                     "autodownload after index page failed for %s",
                     channel_url,

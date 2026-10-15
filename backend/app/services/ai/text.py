@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from ...config import DOWNLOADS_DIR
 from ...models import Video
@@ -608,7 +608,7 @@ def category_prompt(entries: list[str]) -> str:
 
 
 def category_embed_text(
-    name: str, blurb: str = "", *, example_titles: Optional[list[str]] = None
+    name: str, blurb: str = "", *, example_titles: list[str] | None = None
 ) -> str:
     """Text embedded for category↔video matching."""
     label = (name or "").strip()
@@ -662,7 +662,7 @@ def format_chat_context(
     *,
     metadata: str,
     caption_chunks: list[str],
-    summary: Optional[str] = None,
+    summary: str | None = None,
     max_chars: int = _CHAT_CONTEXT_CHARS,
 ) -> str:
     """Assemble the video context block injected into the chat system prompt."""
@@ -691,7 +691,7 @@ def chat_fallback_captions(video: Video) -> list[str]:
     return [sub]
 
 
-def resolve_subtitle_path(rel: Optional[str]) -> Optional[Path]:
+def resolve_subtitle_path(rel: str | None) -> Path | None:
     if not rel:
         return None
     path = DOWNLOADS_DIR / rel

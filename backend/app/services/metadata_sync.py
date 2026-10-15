@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timedelta, timezone
-from typing import Any, Literal, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal
 
 from sqlmodel import Session, select
 
@@ -64,7 +64,7 @@ def _extract_metadata(url: str) -> dict[str, Any]:
     return info or {}
 
 
-def _normalize_fields(fields: Optional[list[str]]) -> set[str]:
+def _normalize_fields(fields: list[str] | None) -> set[str]:
     if not fields or "all" in fields:
         return {"views", "thumbnails", "captions", "titles_descriptions"}
     allowed = {"views", "thumbnails", "captions", "titles_descriptions"}
@@ -79,7 +79,7 @@ def _normalize_fields(fields: Optional[list[str]]) -> set[str]:
 def refresh_video_metadata(
     video_id: int,
     *,
-    fields: Optional[list[str]] = None,
+    fields: list[str] | None = None,
 ) -> dict[str, Any]:
     """Fetch fresh metadata from the source URL and update the video row.
 
@@ -164,7 +164,7 @@ def refresh_video_metadata(
 
         apply_source_chapters(video, info, replace_empty=False)
 
-        video.metadata_synced_at = datetime.now(timezone.utc)
+        video.metadata_synced_at = datetime.now(UTC)
         session.add(video)
         session.commit()
 
@@ -194,10 +194,10 @@ def _should_sync(video: Video, min_interval_hours: int = 24) -> bool:
         return False
     if video.metadata_synced_at is None:
         return True
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=min_interval_hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=min_interval_hours)
     synced = video.metadata_synced_at
     if synced.tzinfo is None:
-        synced = synced.replace(tzinfo=timezone.utc)
+        synced = synced.replace(tzinfo=UTC)
     return synced < cutoff
 
 
@@ -254,7 +254,7 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
                 + (f", {_job_state['failed']} failed" if _job_state["failed"] else "")
             )
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         act.finish(status="failed", error=str(exc)[:500])
         raise
     finally:
@@ -264,13 +264,13 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
             running=False,
             current_title=None,
             current_video_id=None,
-            finished_at=datetime.now(timezone.utc).isoformat(),
+            finished_at=datetime.now(UTC).isoformat(),
         )
 
 
 def start_bulk_sync(
-    video_ids: Optional[list[int]] = None,
-    fields: Optional[list[str]] = None,
+    video_ids: list[int] | None = None,
+    fields: list[str] | None = None,
 ) -> dict[str, Any]:
     """Queue a background bulk metadata sync. Returns immediate status."""
     with _job_lock:

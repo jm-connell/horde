@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Literal, Optional
+from typing import Literal
 
 from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import Session
@@ -39,7 +39,7 @@ def enqueue_sprite_generation(
         _generating.add(video_id)
 
     def run() -> None:
-        title: Optional[str] = None
+        title: str | None = None
         waiting = False
         acquired = False
         try:
@@ -71,7 +71,7 @@ def enqueue_sprite_generation(
                 detail=title,
                 video_id=video_id,
             ) as handle:
-                duration: Optional[float] = None
+                duration: float | None = None
                 with Session(engine) as session:
                     video = session.get(Video, video_id)
                     if video is None:
@@ -114,7 +114,7 @@ def enqueue_sprite_generation(
                     except StaleDataError:
                         session.rollback()
                         handle.discard()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("Sprite generation failed for video %s", video_id)
         finally:
             if waiting:

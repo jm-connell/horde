@@ -6,7 +6,7 @@ import os
 import platform
 import shutil
 import subprocess
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter
 
@@ -19,7 +19,7 @@ def _looks_like_arch_string(name: str) -> bool:
     return bool(re.search(r"Family\s+\d+\s+Model", name, re.I))
 
 
-def _cpu_model() -> Optional[str]:
+def _cpu_model() -> str | None:
     # Windows: marketing name from registry (not platform.processor arch string).
     try:
         import sys
@@ -76,7 +76,7 @@ def _cpu_model() -> Optional[str]:
     return None
 
 
-def _cpu_temp() -> Optional[float]:
+def _cpu_temp() -> float | None:
     try:
         import psutil  # type: ignore
 
@@ -122,7 +122,7 @@ def _cpu_ram() -> dict[str, Any]:
     return out
 
 
-def host_gpu() -> Optional[dict[str, Any]]:
+def host_gpu() -> dict[str, Any] | None:
     """Return local GPU stats (NVIDIA / AMD / Intel), or None if unavailable."""
     from ..services.ai.workload import probe_local_gpu
 

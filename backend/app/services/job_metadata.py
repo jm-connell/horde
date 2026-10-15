@@ -5,13 +5,12 @@ from __future__ import annotations
 import logging
 import queue
 import threading
-from typing import Optional
 
 from sqlmodel import Session
 
 from ..database import engine
 from ..models import DownloadJob, JobStatus
-from .url_clean import youtube_video_id, youtube_thumbnail_url
+from .url_clean import youtube_thumbnail_url, youtube_video_id
 from .ytdlp_common import EXTRACT_PRIORITY_BACKGROUND
 from .ytdlp_extract import extract_preview, is_youtube_short_entry, is_youtube_short_url
 from .ytdlp_formats import quality_from_preview
@@ -20,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 _pending: queue.Queue[int] = queue.Queue()
 _stop = threading.Event()
-_thread: Optional[threading.Thread] = None
+_thread: threading.Thread | None = None
 
 
-def request_job_metadata(job_id: Optional[int]) -> None:
+def request_job_metadata(job_id: int | None) -> None:
     if job_id is None:
         return
     _pending.put(job_id)
@@ -56,7 +55,7 @@ def _loop() -> None:
             continue
         try:
             _fill_job(job_id)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("job metadata fill failed for %s", job_id, exc_info=True)
 
 
@@ -81,7 +80,7 @@ def _fill_job(job_id: int) -> None:
 
     try:
         preview = extract_preview(url, priority=EXTRACT_PRIORITY_BACKGROUND)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("job metadata extract failed for %s", job_id, exc_info=True)
         return
 

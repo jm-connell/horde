@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from ..config import DOWNLOADS_DIR
 from ..models import Video, VideoAiMeta
@@ -78,7 +78,7 @@ CHAPTERS_JSON_SCHEMA: dict[str, Any] = {
 }
 
 
-def parse_chapters(description: Optional[str]) -> list[Chapter]:
+def parse_chapters(description: str | None) -> list[Chapter]:
     """YouTube-style timestamp lines; empty unless ≥2 strictly ascending."""
     if not description:
         return []
@@ -165,15 +165,15 @@ def source_chapters_for(video: Video) -> list[Chapter]:
     return parse_chapter_list(getattr(video, "source_chapters", None) or "[]")
 
 
-def ai_chapters_for(meta: Optional[VideoAiMeta]) -> list[Chapter]:
+def ai_chapters_for(meta: VideoAiMeta | None) -> list[Chapter]:
     if meta is None:
         return []
     return parse_chapter_list(getattr(meta, "chapters", None))
 
 
 def resolve_chapters(
-    video: Video, meta: Optional[VideoAiMeta] = None
-) -> tuple[list[Chapter], Optional[ChapterSource]]:
+    video: Video, meta: VideoAiMeta | None = None
+) -> tuple[list[Chapter], ChapterSource | None]:
     from_desc = parse_chapters(video.description)
     if from_desc:
         return from_desc, "description"
@@ -194,7 +194,7 @@ def transcript_char_cap(profile: Any = None) -> int:
 def parse_vtt_cues(raw: str) -> list[tuple[float, str]]:
     """Return (start_sec, text) cues, collapsing consecutive duplicate text."""
     cues: list[tuple[float, str]] = []
-    pending_start: Optional[float] = None
+    pending_start: float | None = None
     pending_lines: list[str] = []
 
     def flush() -> None:
@@ -301,11 +301,11 @@ def is_music_like(cues: list[tuple[float, str]]) -> bool:
 
 def skip_reason(
     video: Video,
-    meta: Optional[VideoAiMeta] = None,
+    meta: VideoAiMeta | None = None,
     *,
     force: bool = False,
-    cues: Optional[list[tuple[float, str]]] = None,
-) -> Optional[str]:
+    cues: list[tuple[float, str]] | None = None,
+) -> str | None:
     """Return a short skip token, or None if an LLM chapter job should run."""
     if parse_chapters(video.description):
         return "description_chapters"
@@ -332,18 +332,18 @@ def skip_reason(
     return None
 
 
-def persist_skip_reason(reason: Optional[str]) -> bool:
+def persist_skip_reason(reason: str | None) -> bool:
     """Whether this skip should stick on video_ai_meta (avoid retry loops)."""
     return reason == "music_like"
 
 
-def min_segment_sec(duration_sec: Optional[float]) -> float:
+def min_segment_sec(duration_sec: float | None) -> float:
     if duration_sec is not None and 0 < float(duration_sec) < SHORT_VIDEO_SEC:
         return MIN_SEGMENT_SHORT_SEC
     return MIN_SEGMENT_SEC
 
 
-def max_chapter_count(duration_sec: Optional[float]) -> int:
+def max_chapter_count(duration_sec: float | None) -> int:
     if duration_sec is None or duration_sec <= 0:
         return 12
     return max(2, min(MAX_CHAPTERS_HARD, int(math.ceil(float(duration_sec) / 120.0))))
@@ -352,7 +352,7 @@ def max_chapter_count(duration_sec: Optional[float]) -> int:
 def snap_and_validate(
     raw_chapters: list[Any],
     cues: list[tuple[float, str]],
-    duration_sec: Optional[float],
+    duration_sec: float | None,
 ) -> list[Chapter]:
     cue_starts = [t for t, _ in cues]
     min_seg = min_segment_sec(duration_sec)
@@ -379,7 +379,7 @@ def snap_and_validate(
     if duration is not None:
         deduped = [c for c in deduped if c["start_sec"] < duration]
     nudged: list[Chapter] = []
-    prev_start: Optional[float] = None
+    prev_start: float | None = None
     for chapter in deduped:
         start = float(chapter["start_sec"])
         if start <= 0.05:
@@ -433,7 +433,7 @@ def snap_and_validate(
 
 def fallback_chapters_from_cues(
     cues: list[tuple[float, str]],
-    duration_sec: Optional[float],
+    duration_sec: float | None,
 ) -> list[Chapter]:
     """Last-resort markers from timed captions when the model output is unusable."""
     windows = _downsample_cues(cues, CUE_WINDOW_SEC)
@@ -507,7 +507,7 @@ def chapters_prompt(
     video: Video,
     transcript: str,
     *,
-    duration_sec: Optional[float],
+    duration_sec: float | None,
 ) -> str:
     duration_label = (
         _fmt_ts(float(duration_sec)) if duration_sec and duration_sec > 0 else "unknown"
@@ -531,7 +531,7 @@ def chapters_prompt(
     )
 
 
-def _coerce_chapter(item: Any) -> Optional[Chapter]:
+def _coerce_chapter(item: Any) -> Chapter | None:
     if not isinstance(item, dict):
         return None
     start = None
@@ -560,7 +560,7 @@ def _coerce_chapter(item: Any) -> Optional[Chapter]:
     return {"start_sec": start_sec, "title": title}
 
 
-def _parse_start_value(raw: Any) -> Optional[float]:
+def _parse_start_value(raw: Any) -> float | None:
     if isinstance(raw, bool):
         return None
     if isinstance(raw, (int, float)):
@@ -591,7 +591,7 @@ def _parse_start_value(raw: Any) -> Optional[float]:
 def _ensure_two_chapters(
     chapters: list[Chapter],
     cue_starts: list[float],
-    duration: Optional[float],
+    duration: float | None,
     min_seg: float,
 ) -> list[Chapter]:
     if len(chapters) >= 2:
@@ -995,7 +995,7 @@ def apply_title_rewrites(
     for index, chapter in enumerate(chapters):
         start = float(chapter["start_sec"])
         title = str(chapter["title"])
-        cand_i: Optional[int] = None
+        cand_i: int | None = None
         if len(candidates) == len(chapters):
             cand_i = index
         else:
@@ -1196,7 +1196,7 @@ def _topic_onset(
     title: str,
     cues: list[tuple[float, str]],
     *,
-    prev_start: Optional[float],
+    prev_start: float | None,
     lookback: float = TOPIC_LOOKBACK_SEC,
 ) -> float:
     """Walk captions backward from a late marker to the first on-topic cue."""

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Generator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import event, inspect, text
@@ -197,7 +197,7 @@ def _applied_migration_ids() -> set[str]:
 
 
 def _record_migration(step_id: str) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     with engine.begin() as conn:
         conn.execute(
             text(

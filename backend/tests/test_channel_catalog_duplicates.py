@@ -10,7 +10,6 @@ from app.services.channel_catalog.runtime import (
     reconcile_duplicate_catalogs,
 )
 
-
 HANDLE = "https://www.youtube.com/@omnidroid_v10"
 CHANNEL_ID = "https://www.youtube.com/channel/UCNNZkE3vPc0Wlbp3iqi5vQw"
 

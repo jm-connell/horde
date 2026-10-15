@@ -9,8 +9,8 @@ import logging
 import re
 import threading
 import time
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +29,8 @@ from .ytdlp_common import (
     youtube_extractor_args,
 )
 from .ytdlp_formats import (
-    _available_presets,
-    _has_audio,
-    _height_to_tier,
-    _video_heights,
     PRESET_MAX_HEIGHT,
+    _available_presets,
     compat_copy_cap,
     compat_format_spec,
     default_download_video_codec,
@@ -52,7 +49,7 @@ def _purge_members_only_yt_id(yt_id: str) -> None:
         from .channel_catalog.skips import purge_members_only_by_yt_id
 
         purge_members_only_by_yt_id(yt_id)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("members-only catalog purge failed", exc_info=True)
 
 
@@ -64,7 +61,7 @@ def _purge_members_only_url(url: str) -> None:
         _purge_members_only_yt_id(yt_id)
 
 
-def _duration_seconds(info: dict[str, Any]) -> Optional[float]:
+def _duration_seconds(info: dict[str, Any]) -> float | None:
     raw = info.get("duration")
     if raw is None:
         return None
@@ -75,7 +72,7 @@ def _duration_seconds(info: dict[str, Any]) -> Optional[float]:
     return duration if duration > 0 else None
 
 
-def _bitrate_bytes(fmt: dict[str, Any], duration: Optional[float]) -> Optional[int]:
+def _bitrate_bytes(fmt: dict[str, Any], duration: float | None) -> int | None:
     tbr = fmt.get("tbr") or fmt.get("vbr") or fmt.get("abr")
     dur = duration if duration is not None else fmt.get("duration")
     if tbr is None or dur is None:
@@ -87,9 +84,7 @@ def _bitrate_bytes(fmt: dict[str, Any], duration: Optional[float]) -> Optional[i
     return n if n > 0 else None
 
 
-def _format_byte_size(
-    fmt: dict[str, Any], duration: Optional[float] = None
-) -> Optional[int]:
+def _format_byte_size(fmt: dict[str, Any], duration: float | None = None) -> int | None:
     exact = fmt.get("filesize")
     if exact:
         try:
@@ -99,7 +94,7 @@ def _format_byte_size(
         if n > 0:
             return n
     approx = fmt.get("filesize_approx")
-    approx_n: Optional[int] = None
+    approx_n: int | None = None
     if approx:
         try:
             parsed = int(approx)
@@ -117,9 +112,7 @@ def _format_byte_size(
     return approx_n or from_tbr
 
 
-def _format_parts_bytes(
-    fmt: dict[str, Any], duration: Optional[float]
-) -> Optional[int]:
+def _format_parts_bytes(fmt: dict[str, Any], duration: float | None) -> int | None:
     parts = fmt.get("requested_formats")
     if not isinstance(parts, list) or not parts:
         return _format_byte_size(fmt, duration)
@@ -161,7 +154,7 @@ def _format_selector_context(formats: list[Any]) -> dict[str, Any]:
 
 def _estimate_preset_bytes(
     ydl: Any, info: dict[str, Any], format_spec: str
-) -> Optional[int]:
+) -> int | None:
     formats = info.get("formats") or []
     if not formats:
         return None
@@ -205,7 +198,7 @@ def _estimate_preset_sizes(info: dict[str, Any], presets: list[str]) -> dict[str
         except Exception:  # noqa: BLE001
             pass
         for preset in presets:
-            size: Optional[int] = None
+            size: int | None = None
             for format_spec in format_chain(preset, codec):
                 try:
                     size = _estimate_preset_bytes(ydl, work, format_spec)
@@ -252,7 +245,7 @@ def extract_preview(
                 priority=priority,
             )
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if is_members_only_error(exc):
             _purge_members_only_url(url)
             raise MembersOnlyError("Members-only video — skipped") from exc
@@ -381,8 +374,8 @@ def _abs_thumb_url(url: str) -> str:
 
 
 def _youtube_thumb_id(
-    info: dict[str, Any], vid: Optional[str] = None, extra_url: Optional[str] = None
-) -> Optional[str]:
+    info: dict[str, Any], vid: str | None = None, extra_url: str | None = None
+) -> str | None:
     for candidate in (vid, info.get("id"), extra_url, info.get("thumbnail")):
         if not isinstance(candidate, str) or not candidate:
             continue
@@ -419,11 +412,9 @@ def _iter_sized_thumbs(info: dict[str, Any]):
         yield width, height, url_s
 
 
-def _best_thumbnail_url(
-    info: dict[str, Any], vid: Optional[str] = None
-) -> Optional[str]:
+def _best_thumbnail_url(info: dict[str, Any], vid: str | None = None) -> str | None:
     """Pick the highest-res thumbnail from yt-dlp info, or a YouTube CDN URL."""
-    best_url: Optional[str] = None
+    best_url: str | None = None
     best_area = -1
     for width, height, url_s in _iter_sized_thumbs(info):
         area = width * height
@@ -444,9 +435,7 @@ def _best_thumbnail_url(
     return None
 
 
-def _list_thumbnail_url(
-    info: dict[str, Any], vid: Optional[str] = None
-) -> Optional[str]:
+def _list_thumbnail_url(info: dict[str, Any], vid: str | None = None) -> str | None:
     """Pick a ~320px-wide 16:9 thumb for list tiles, or YouTube mqdefault."""
     widescreen: list[tuple[int, str]] = []
     any_sized: list[tuple[int, str]] = []
@@ -467,7 +456,7 @@ def _list_thumbnail_url(
     return _best_thumbnail_url(info, vid)
 
 
-def _entry_thumbnail_url(entry: dict[str, Any], vid: Optional[str]) -> Optional[str]:
+def _entry_thumbnail_url(entry: dict[str, Any], vid: str | None) -> str | None:
     """Resolve a thumbnail URL from flat extract data or YouTube video id."""
     return _best_thumbnail_url(entry, vid)
 
@@ -495,7 +484,7 @@ def is_youtube_short_url(url: str) -> bool:
     return "/shorts/" in str(url or "").lower()
 
 
-def _short_era_timestamp(entry: dict[str, Any]) -> Optional[float]:
+def _short_era_timestamp(entry: dict[str, Any]) -> float | None:
     ts = entry.get("timestamp") or entry.get("release_timestamp")
     try:
         if ts is not None:
@@ -509,7 +498,7 @@ def _short_era_timestamp(entry: dict[str, Any]) -> Optional[float]:
         raw = published.replace("Z", "+00:00")
         dt = datetime.fromisoformat(raw)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt.timestamp()
     except ValueError:
         return None
@@ -534,7 +523,7 @@ def is_youtube_short_entry(entry: dict[str, Any]) -> bool:
     return ts_n is None or ts_n >= _SHORTS_ERA_TS
 
 
-def entry_live_status(entry: dict[str, Any]) -> Optional[str]:
+def entry_live_status(entry: dict[str, Any]) -> str | None:
     """Normalize yt-dlp live_status / is_live / was_live flags."""
     raw = entry.get("live_status")
     if isinstance(raw, str) and raw.strip():
@@ -546,7 +535,7 @@ def entry_live_status(entry: dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
+def _map_flat_video_entry(entry: dict[str, Any]) -> dict[str, Any] | None:
     """Normalize a flat yt-dlp playlist entry into catalog/feed fields."""
     if not isinstance(entry, dict):
         return None
@@ -597,7 +586,7 @@ def _map_flat_video_entry(entry: dict[str, Any]) -> Optional[dict[str, Any]]:
     }
 
 
-def _playlist_count(info: dict[str, Any]) -> Optional[int]:
+def _playlist_count(info: dict[str, Any]) -> int | None:
     raw = info.get("playlist_count") or info.get("n_entries")
     if raw is None:
         return None
@@ -677,7 +666,7 @@ def fetch_channel_feed(
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = _as_info(ydl.extract_info(feed_url, download=False))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         kind, message = classify_ytdlp_error(exc, url=channel_url)
         record_extract_failure(kind, message, url=channel_url)
         raise
@@ -782,7 +771,7 @@ def search_youtube_channel_videos(
                 priority=EXTRACT_PRIORITY_BACKGROUND,
             )
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("channel youtube search failed for %s", search_url, exc_info=True)
         return []
 
@@ -858,7 +847,7 @@ def search_youtube_videos(
                 priority=EXTRACT_PRIORITY_BACKGROUND,
             )
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.warning("youtube video search failed for %s", search_url, exc_info=True)
         return {"entries": [], "has_more": False}
 

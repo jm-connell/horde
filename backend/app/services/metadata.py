@@ -1,12 +1,11 @@
 import json
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 from .ffmpeg_bin import ffmpeg_bin, ffprobe_bin
 
 
-def probe_duration(path: Path) -> Optional[float]:
+def probe_duration(path: Path) -> float | None:
     """Return media duration in seconds via ffprobe, or None on failure."""
     try:
         result = subprocess.run(
@@ -78,7 +77,7 @@ def probe_is_playable(path: Path) -> bool:
         return False
 
 
-def probe_dimensions(path: Path) -> Optional[tuple[int, int]]:
+def probe_dimensions(path: Path) -> tuple[int, int] | None:
     """Return (width, height) in pixels of the first video stream via ffprobe."""
     try:
         result = subprocess.run(
@@ -112,7 +111,7 @@ def probe_dimensions(path: Path) -> Optional[tuple[int, int]]:
         return None
 
 
-def probe_frame_rate(path: Path) -> Optional[float]:
+def probe_frame_rate(path: Path) -> float | None:
     """Return the frame rate of the first video stream via ffprobe, or None."""
     try:
         result = subprocess.run(
@@ -266,7 +265,7 @@ def sprites_exist(sprites_dir: Path, video_id: int) -> bool:
     )
 
 
-def load_sprite_meta(sprites_dir: Path, video_id: int) -> Optional[dict]:
+def load_sprite_meta(sprites_dir: Path, video_id: int) -> dict | None:
     path = sprite_meta_path(sprites_dir, video_id)
     if not path.is_file():
         return None
@@ -396,7 +395,7 @@ def generate_sprite_sheet(
     video_id: int,
     *,
     duration: float | None = None,
-) -> Optional[str]:
+) -> str | None:
     """Build a seek-preview sprite sheet + JSON sidecar. Returns image path or None."""
     dur = duration if duration is not None else probe_duration(video_path)
     if not dur or dur <= 0:

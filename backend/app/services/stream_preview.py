@@ -11,7 +11,7 @@ import secrets
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Optional
+from typing import Any
 from xml.sax.saxutils import escape as xml_escape
 
 import httpx
@@ -41,7 +41,7 @@ def _purge_members_only_yt_id(yt_id: str) -> None:
         from .channel_catalog.skips import purge_members_only_by_yt_id
 
         purge_members_only_by_yt_id(yt_id)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("members-only catalog purge failed", exc_info=True)
 
 
@@ -79,7 +79,7 @@ class PreviewRefreshError(RuntimeError):
         self.retry_after = retry_after
 
 
-def _pick_progressive_format(info: dict[str, Any]) -> Optional[dict[str, Any]]:
+def _pick_progressive_format(info: dict[str, Any]) -> dict[str, Any] | None:
     """Best muxed progressive format at or below preview height cap."""
     formats = info.get("formats") or []
     candidates: list[tuple[int, dict[str, Any]]] = []
@@ -124,7 +124,7 @@ def _is_mp4_audio_codec(acodec: str) -> bool:
     return a.startswith("mp4a") or a in ("aac", "mp4a.40.2", "mp4a.40.5")
 
 
-def _video_codec_family(vcodec: str) -> Optional[str]:
+def _video_codec_family(vcodec: str) -> str | None:
     v = vcodec.lower()
     if v.startswith("av01"):
         return "av01"
@@ -212,7 +212,7 @@ def _format_http_headers(fmt: dict[str, Any], info: dict[str, Any]) -> dict[str,
 
 
 def _walk_mp4_boxes(
-    data: bytes, start: int = 0, end: Optional[int] = None
+    data: bytes, start: int = 0, end: int | None = None
 ) -> list[tuple[int, bytes, int]]:
     """Return top-level (offset, type, size) boxes in [start, end)."""
     if end is None:
@@ -241,7 +241,7 @@ def _walk_mp4_boxes(
     return boxes
 
 
-def _find_sidx_range(data: bytes) -> Optional[tuple[int, int]]:
+def _find_sidx_range(data: bytes) -> tuple[int, int] | None:
     """Locate the first complete top-level sidx box; return (start, end_inclusive)."""
     for offset, typ, size in _walk_mp4_boxes(data):
         if typ == b"sidx":
@@ -332,7 +332,7 @@ def _probe_mp4_ranges(
     Returns (init_range, index_range, sidx_info).
     """
     req_headers = dict(headers)
-    last_err: Optional[Exception] = None
+    last_err: Exception | None = None
     for nbytes in _PREVIEW_PROBE_SIZES:
         req_headers["Range"] = f"bytes=0-{nbytes - 1}"
         try:
@@ -479,7 +479,7 @@ def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
                 priority=EXTRACT_PRIORITY_INTERACTIVE,
             )
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if is_members_only_error(exc):
             _purge_members_only_url(url)
             raise MembersOnlyError("Members-only video — skipped") from exc
@@ -498,13 +498,13 @@ def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
     return info
 
 
-def _subtitle_entry_vtt_url(entries: list[Any]) -> Optional[str]:
+def _subtitle_entry_vtt_url(entries: list[Any]) -> str | None:
     """Pick a VTT URL from a yt-dlp subtitle format list for one language."""
     import urllib.parse
 
     if not isinstance(entries, list):
         return None
-    chosen: Optional[dict[str, Any]] = None
+    chosen: dict[str, Any] | None = None
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -590,7 +590,7 @@ def resolve_preview_subtitle(
     }
 
 
-def _max_adaptive_height(info: dict[str, Any]) -> Optional[int]:
+def _max_adaptive_height(info: dict[str, Any]) -> int | None:
     videos, _ = _pick_adaptive_formats(info)
     if not videos:
         return None
@@ -832,7 +832,7 @@ def _do_resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, 
                     return dict(cached)
         info = _extract_preview_info(url, force=force)
 
-    existing_token: Optional[str] = None
+    existing_token: str | None = None
     with _preview_stream_lock:
         prev = _preview_manifest_by_url.get(url)
         if prev:
@@ -887,7 +887,7 @@ def resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]
             _preview_refresh_last_at[url] = time.time()
             _preview_refresh_attempts[url] = 0
         return entry
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         with _preview_stream_lock:
             attempts = _preview_refresh_attempts.get(url, 0) + 1
             _preview_refresh_attempts[url] = attempts
@@ -1074,7 +1074,7 @@ def lookup_preview_media(
                 session["token"] = token
                 _preview_manifest_by_token[token] = session
                 _preview_manifest_by_url[source_url] = session
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # Explicit 403 refresh must surface; proactive refresh can keep
             # serving the existing CDN URLs until they actually fail.
             if refresh:

@@ -5,14 +5,14 @@ import logging
 import re
 import threading
 import time
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 from ..config import (
-    YTDLP_COOKIES_FROM_BROWSER,
     YTDLP_COOKIE_FILE,
+    YTDLP_COOKIES_FROM_BROWSER,
     YTDLP_POT_BASE_URL,
 )
 
@@ -122,7 +122,7 @@ _CATALOG_SKIP_LABELS = {
     ERROR_KIND_UNAVAILABLE: "Unavailable",
 }
 
-_last_extract_failure: Optional[dict[str, Any]] = None
+_last_extract_failure: dict[str, Any] | None = None
 _last_extract_failure_lock = threading.Lock()
 
 
@@ -138,7 +138,7 @@ class CatalogSkipError(Exception):
         self.kind = kind
 
 
-def is_members_only_message(text: Optional[str]) -> bool:
+def is_members_only_message(text: str | None) -> bool:
     """True when a yt-dlp log/error string indicates members-only content."""
     if not text or not isinstance(text, str):
         return False
@@ -150,7 +150,7 @@ def is_members_only_error(exc: BaseException) -> bool:
     return is_members_only_message(str(exc))
 
 
-def is_members_only_entry(entry: Optional[dict[str, Any]]) -> bool:
+def is_members_only_entry(entry: dict[str, Any] | None) -> bool:
     """True when a yt-dlp / catalog entry looks like members-only content."""
     if not entry or not isinstance(entry, dict):
         return False
@@ -165,7 +165,7 @@ def is_members_only_entry(entry: Optional[dict[str, Any]]) -> bool:
     return False
 
 
-def is_age_restricted_entry(entry: Optional[dict[str, Any]]) -> bool:
+def is_age_restricted_entry(entry: dict[str, Any] | None) -> bool:
     """True when a yt-dlp entry is age-gated (not members-only)."""
     if not entry or not isinstance(entry, dict):
         return False
@@ -183,16 +183,16 @@ def is_age_restricted_entry(entry: Optional[dict[str, Any]]) -> bool:
     return False
 
 
-def is_skippable_catalog_kind(kind: Optional[str]) -> bool:
+def is_skippable_catalog_kind(kind: str | None) -> bool:
     return kind in SKIPPABLE_CATALOG_KINDS
 
 
 def catalog_skip_message(
     kind: str,
     *,
-    url: Optional[str] = None,
-    title: Optional[str] = None,
-    channel: Optional[str] = None,
+    url: str | None = None,
+    title: str | None = None,
+    channel: str | None = None,
 ) -> str:
     """Short channel-page toast when a gated video is skipped mid-index."""
     label = _CATALOG_SKIP_LABELS.get(kind, "Skipped")
@@ -214,11 +214,11 @@ def _clip_label(text: str, limit: int = 80) -> str:
 
 
 def describe_extract_target(
-    url: Optional[str] = None,
+    url: str | None = None,
     *,
-    title: Optional[str] = None,
-    channel: Optional[str] = None,
-) -> Optional[str]:
+    title: str | None = None,
+    channel: str | None = None,
+) -> str | None:
     """Short label for the video/channel an extract was aimed at."""
     title_s = _clip_label(title) if title else ""
     channel_s = _clip_label(channel, 60) if channel else ""
@@ -305,9 +305,9 @@ def describe_extract_target(
 def _with_extract_target(
     message: str,
     *,
-    url: Optional[str] = None,
-    title: Optional[str] = None,
-    channel: Optional[str] = None,
+    url: str | None = None,
+    title: str | None = None,
+    channel: str | None = None,
 ) -> str:
     target = describe_extract_target(url, title=title, channel=channel)
     if not target:
@@ -321,9 +321,9 @@ def _with_extract_target(
 def classify_ytdlp_error(
     exc_or_message: Any,
     *,
-    url: Optional[str] = None,
-    title: Optional[str] = None,
-    channel: Optional[str] = None,
+    url: str | None = None,
+    title: str | None = None,
+    channel: str | None = None,
 ) -> tuple[str, str]:
     """Map a yt-dlp exception/message to (error_kind, user_facing_message)."""
 
@@ -425,9 +425,9 @@ def record_extract_failure(
     kind: str,
     message: str,
     *,
-    url: Optional[str] = None,
-    title: Optional[str] = None,
-    channel: Optional[str] = None,
+    url: str | None = None,
+    title: str | None = None,
+    channel: str | None = None,
 ) -> None:
     """Remember the most recent extract/download classification for /api/health."""
     global _last_extract_failure
@@ -435,7 +435,7 @@ def record_extract_failure(
     payload: dict[str, Any] = {
         "kind": kind,
         "message": message,
-        "at": datetime.now(timezone.utc).isoformat(),
+        "at": datetime.now(UTC).isoformat(),
     }
     if target:
         payload["target"] = target
@@ -445,7 +445,7 @@ def record_extract_failure(
         _last_extract_failure = payload
 
 
-def get_last_extract_failure() -> Optional[dict[str, Any]]:
+def get_last_extract_failure() -> dict[str, Any] | None:
     with _last_extract_failure_lock:
         if _last_extract_failure is None:
             return None
@@ -456,9 +456,9 @@ def http_detail_for_error(
     exc_or_message: Any,
     *,
     prefix: str,
-    url: Optional[str] = None,
-    title: Optional[str] = None,
-    channel: Optional[str] = None,
+    url: str | None = None,
+    title: str | None = None,
+    channel: str | None = None,
 ) -> dict[str, str]:
     """Structured FastAPI HTTPException detail for classified yt-dlp failures."""
     kind, message = classify_ytdlp_error(
@@ -476,7 +476,7 @@ class QuietYtdlpLogger:
 
     def __init__(self) -> None:
         self.members_only = False
-        self.last_members_only_msg: Optional[str] = None
+        self.last_members_only_msg: str | None = None
 
     def debug(self, msg: str) -> None:
         pass
@@ -543,7 +543,7 @@ def opts_have_cookies(opts: dict[str, Any]) -> bool:
     return bool(opts.get("cookiefile") or opts.get("cookiesfrombrowser"))
 
 
-def error_kind_for_cookie_retry(exc: BaseException) -> Optional[str]:
+def error_kind_for_cookie_retry(exc: BaseException) -> str | None:
     kind, _ = classify_ytdlp_error(exc)
     if kind in COOKIE_RETRY_KINDS:
         return kind
@@ -552,7 +552,7 @@ def error_kind_for_cookie_retry(exc: BaseException) -> Optional[str]:
 
 def should_retry_with_cookies(
     opts: dict[str, Any],
-    exc: Optional[BaseException] = None,
+    exc: BaseException | None = None,
     *,
     logger_members_only: bool = False,
 ) -> bool:
@@ -566,7 +566,7 @@ def should_retry_with_cookies(
     return error_kind_for_cookie_retry(exc) is not None
 
 
-def extract_has_media(info: Optional[dict[str, Any]]) -> bool:
+def extract_has_media(info: dict[str, Any] | None) -> bool:
     """True when yt-dlp returned downloadable media (not a gated stub)."""
     if not info or not isinstance(info, dict):
         return False
@@ -653,7 +653,7 @@ def _cache_put(key: str, info: dict[str, Any]) -> None:
                 _info_cache.pop(drop_key, None)
 
 
-def _cache_get(key: str) -> Optional[dict[str, Any]]:
+def _cache_get(key: str) -> dict[str, Any] | None:
     cached = _info_cache.get(key)
     if cached and cached[0] > time.time():
         return dict(cached[1])
@@ -731,10 +731,10 @@ def extract_info_gated(
     url: str,
     opts: dict[str, Any],
     *,
-    cache_key: Optional[str] = None,
+    cache_key: str | None = None,
     force: bool = False,
-    title: Optional[str] = None,
-    channel: Optional[str] = None,
+    title: str | None = None,
+    channel: str | None = None,
     cookie_retry: bool = True,
     priority: int = EXTRACT_PRIORITY_DOWNLOAD,
 ) -> dict[str, Any]:

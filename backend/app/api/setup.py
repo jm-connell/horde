@@ -1,6 +1,5 @@
-from pydantic import BaseModel
-
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from ..services import factory_reset
 

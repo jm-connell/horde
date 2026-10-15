@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from sqlmodel import Session, select
 
@@ -29,7 +28,7 @@ def _category_min_score() -> float:
 @dataclass
 class RecommendationSection:
     title: str
-    seed_video_id: Optional[int]
+    seed_video_id: int | None
     videos: list[Video]
     kind: str = "for_you"  # for_you | category | more
 

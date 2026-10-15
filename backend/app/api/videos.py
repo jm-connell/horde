@@ -1,7 +1,5 @@
 import re
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -10,7 +8,7 @@ from sqlmodel import Session, func, select
 
 from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
 from ..database import get_session
-from ..models import DownloadJob, JobStatus, Video, VideoAiMeta, utcnow
+from ..models import DownloadJob, JobStatus, Video, utcnow
 from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
@@ -25,8 +23,21 @@ from ..schemas import (
     WatchProgressUpdate,
 )
 from ..services import downloader, library
-from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
+from ..services.metadata import (
+    delete_sprite_files,
+    load_sprite_meta,
+    sprite_image_path,
+    sprites_exist,
+)
 from ..services.mp4_compat import apple_webkit_playback, ensure_safari_mp4
+from ..services.paths import (
+    is_manual_import,
+    manual_import_rel_path,
+    rename_video_file,
+    resolve_compat_path,
+    to_rel_path,
+)
+from ..services.sprites import enqueue_sprite_generation
 from ..services.thumbnails import (
     copy_full,
     ensure_list_thumbnail,
@@ -34,28 +45,16 @@ from ..services.thumbnails import (
     unlink_for_video,
     write_full_bytes,
 )
-from ..services.metadata import (
-    delete_sprite_files,
-    load_sprite_meta,
-    sprite_image_path,
-    sprites_exist,
-)
-from ..services.paths import (
-    resolve_compat_path,
-    is_manual_import,
-    manual_import_rel_path,
-    rename_video_file,
-    to_rel_path,
-)
-from ..services.sprites import enqueue_sprite_generation
-
+from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
 from .video_serialize import (
-    as_utc as _as_utc,
     resolve_media as _resolve_media,
+)
+from .video_serialize import (
     safe_filename as _safe_filename,
+)
+from .video_serialize import (
     to_read as _to_read,
 )
-
 
 router = APIRouter(prefix="/api", tags=["videos"])
 
@@ -70,14 +69,14 @@ CONTENT_TYPES = {
 
 @router.get("/videos", response_model=list[VideoRead])
 def list_videos(
-    q: Optional[str] = None,
-    channel: Optional[str] = None,
-    tag: Optional[str] = None,
+    q: str | None = None,
+    channel: str | None = None,
+    tag: str | None = None,
     sort: str = Query("added_at"),
     order: str = Query("desc"),
     continue_watching: bool = False,
     watched_only: bool = False,
-    seed: Optional[int] = None,
+    seed: int | None = None,
     session: Session = Depends(get_session),
 ):
     # Expiry is a write; it now runs on a background tick, not this read path.
@@ -126,7 +125,7 @@ def list_tags(session: Session = Depends(get_session)):
 
 
 @router.get("/tags/stats", response_model=list[TagStat])
-def tag_stats(channel: Optional[str] = None, session: Session = Depends(get_session)):
+def tag_stats(channel: str | None = None, session: Session = Depends(get_session)):
     return [
         TagStat(tag=t, count=n) for t, n in library.tag_stats(session, channel=channel)
     ]
@@ -379,7 +378,7 @@ def _delete_media_files(video: Video) -> None:
             sub.unlink(missing_ok=True)
 
 
-def _effective_source_url(video: Video) -> Optional[str]:
+def _effective_source_url(video: Video) -> str | None:
     if video.source_url and video.source_url.strip():
         return video.source_url.strip()
     match = re.search(r"\[([A-Za-z0-9_-]{11})\]", video.file_path)
@@ -473,7 +472,7 @@ def metadata_sync_status():
 def refresh_metadata(
     video_id: int,
     session: Session = Depends(get_session),
-    fields: Optional[str] = Query(None, description="Comma-separated sync fields"),
+    fields: str | None = Query(None, description="Comma-separated sync fields"),
 ):
     from ..services.metadata_sync import refresh_video_metadata
 
@@ -503,7 +502,7 @@ def refresh_video_tags(video_id: int, session: Session = Depends(get_session)):
             raise HTTPException(status_code=400, detail="Could not queue tag refresh")
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _to_read(video, session)
 
@@ -525,7 +524,7 @@ def summarize_video(
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     session.expire_all()
     video = session.get(Video, video_id)
@@ -551,7 +550,7 @@ def generate_video_chapters(
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     session.expire_all()
     video = session.get(Video, video_id)
@@ -711,7 +710,7 @@ def select_thumbnail_candidate(
 @router.get("/thumbnails/{video_id}")
 def get_thumbnail(
     video_id: int,
-    size: Optional[str] = Query(None),
+    size: str | None = Query(None),
     session: Session = Depends(get_session),
 ):
     video = session.get(Video, video_id)
@@ -783,7 +782,7 @@ def get_subtitle(video_id: int, lang: str, session: Session = Depends(get_sessio
 _RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
 
 
-def _resolve_rendition(video: Video, rendition: Optional[str]) -> Optional[Path]:
+def _resolve_rendition(video: Video, rendition: str | None) -> Path | None:
     """Sidecar path for ``rendition=compat``; None means serve the original."""
     if rendition in (None, "", "original"):
         return None
@@ -799,7 +798,7 @@ def _resolve_rendition(video: Video, rendition: Optional[str]) -> Optional[Path]
 def stream_video(
     video_id: int,
     request: Request,
-    rendition: Optional[str] = None,
+    rendition: str | None = None,
     session: Session = Depends(get_session),
 ):
     video = session.get(Video, video_id)
@@ -879,7 +878,7 @@ def stream_video(
 @router.get("/videos/{video_id}/file")
 def download_video_file(
     video_id: int,
-    rendition: Optional[str] = None,
+    rendition: str | None = None,
     session: Session = Depends(get_session),
 ):
     video = session.get(Video, video_id)

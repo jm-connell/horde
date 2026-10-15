@@ -57,7 +57,7 @@ def test_openrouter_models_api_includes_prices(client, monkeypatch):
             }
         ],
     )
-    monkeypatch.setattr("app.api.ai.list_openrouter_embedding_models", lambda: [])
+    monkeypatch.setattr("app.api.ai.list_openrouter_embedding_models", list)
     res = client.get("/api/ai/openrouter/models")
     assert res.status_code == 200
     row = res.json()["models"][0]

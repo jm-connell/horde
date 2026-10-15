@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -52,7 +52,7 @@ def _write_meta(bg_id: str, meta: dict[str, Any]) -> None:
     _meta_path(bg_id).write_text(json.dumps(meta), encoding="utf-8")
 
 
-def _find_file(bg_id: str) -> Optional[Path]:
+def _find_file(bg_id: str) -> Path | None:
     ensure_dirs()
     for path in BACKGROUNDS_DIR.iterdir():
         if path.is_file() and path.stem == bg_id and path.suffix.lower() in ALLOWED_EXT:

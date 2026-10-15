@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import threading
 import time
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
@@ -15,12 +15,12 @@ CACHE_TTL_SEC = 24 * 60 * 60
 _GITHUB_TIMEOUT = 5.0
 
 _lock = threading.Lock()
-_cache: Optional[dict[str, Any]] = None
+_cache: dict[str, Any] | None = None
 _cache_at: float = 0.0
 
 
 def _utcnow_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def _sha_equal(a: str, b: str) -> bool:
@@ -31,7 +31,7 @@ def _sha_equal(a: str, b: str) -> bool:
     return left == right or left.startswith(right) or right.startswith(left)
 
 
-def _fetch_latest(repo: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+def _fetch_latest(repo: str) -> tuple[str | None, str | None, str | None]:
     """Return (sha, html_url, error)."""
     url = f"https://api.github.com/repos/{repo}/commits/main"
     headers = {

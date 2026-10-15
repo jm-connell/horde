@@ -1,14 +1,13 @@
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 
 def _env_path(name: str, default: str) -> Path:
     return Path(os.environ.get(name, default)).resolve()
 
 
-def _optional_env_path(name: str) -> Optional[Path]:
+def _optional_env_path(name: str) -> Path | None:
     raw = os.environ.get(name, "").strip()
     if not raw:
         return None
@@ -41,7 +40,7 @@ MAX_DOWNLOAD_CONCURRENCY: int = int(os.environ.get("MAX_DOWNLOAD_CONCURRENCY", "
 
 # Max simultaneous ffmpeg postprocess workers (remux / transcode / loudnorm).
 # Empty = 2 when a GPU encoder is available, otherwise 1.
-def _optional_positive_int(name: str) -> Optional[int]:
+def _optional_positive_int(name: str) -> int | None:
     raw = os.environ.get(name, "").strip()
     if not raw:
         return None
@@ -51,7 +50,7 @@ def _optional_positive_int(name: str) -> Optional[int]:
         return None
 
 
-MAX_FFMPEG_CONCURRENCY: Optional[int] = _optional_positive_int("MAX_FFMPEG_CONCURRENCY")
+MAX_FFMPEG_CONCURRENCY: int | None = _optional_positive_int("MAX_FFMPEG_CONCURRENCY")
 
 # Max simultaneous ffmpeg sprite-sheet workers (CPU-heavy full-video decode).
 SPRITE_CONCURRENCY: int = max(1, int(os.environ.get("SPRITE_CONCURRENCY", "1")))
@@ -59,7 +58,7 @@ SPRITE_CONCURRENCY: int = max(1, int(os.environ.get("SPRITE_CONCURRENCY", "1")))
 # YouTube bot checks — bgutil POT sidecar (default in Docker) or cookie fallback.
 # See https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
 YTDLP_POT_BASE_URL: str = os.environ.get("YTDLP_POT_BASE_URL", "").strip()
-YTDLP_COOKIE_FILE: Optional[Path] = _optional_env_path("YTDLP_COOKIE_FILE")
+YTDLP_COOKIE_FILE: Path | None = _optional_env_path("YTDLP_COOKIE_FILE")
 YTDLP_COOKIES_FROM_BROWSER: str = os.environ.get(
     "YTDLP_COOKIES_FROM_BROWSER", ""
 ).strip()
@@ -98,7 +97,7 @@ def resolve_git_sha() -> str:
     return "unknown"
 
 
-def short_git_sha(sha: Optional[str] = None) -> str:
+def short_git_sha(sha: str | None = None) -> str:
     value = (sha if sha is not None else resolve_git_sha()).strip()
     if not value or value.lower() == "unknown":
         return "unknown"

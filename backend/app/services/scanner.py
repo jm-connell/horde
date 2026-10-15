@@ -3,8 +3,8 @@ import threading
 import time
 from pathlib import Path
 
-from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 

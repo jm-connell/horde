@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
@@ -12,7 +11,8 @@ from sqlmodel import Session, select
 from ..config import DOWNLOADS_DIR, SPRITES_DIR
 from ..models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc
 from ..schemas import ChapterRead, CompatState, VideoRead
-from ..services import chapters as chapters_svc, library
+from ..services import chapters as chapters_svc
+from ..services import library
 from ..services.metadata import sprites_exist
 
 
@@ -43,10 +43,10 @@ def _media_fields(video: Video, *, full: bool) -> dict:
 
 def to_read(
     video: Video,
-    session: Optional[Session] = None,
+    session: Session | None = None,
     *,
     include_processing: bool = False,
-    match_reason: Optional[dict] = None,
+    match_reason: dict | None = None,
     compact: bool = False,
 ) -> VideoRead:
     if compact:
@@ -88,12 +88,12 @@ def to_read(
         )
     ai_tags: list[str] = []
     user_tags: list[str] = []
-    ai_summary: Optional[str] = None
-    ai_summary_length: Optional[str] = None
-    ai_summary_cost: Optional[float] = None
-    ai_summary_model: Optional[str] = None
-    embed_status: Optional[str] = None
-    embed_error: Optional[str] = None
+    ai_summary: str | None = None
+    ai_summary_length: str | None = None
+    ai_summary_cost: float | None = None
+    ai_summary_model: str | None = None
+    embed_status: str | None = None
+    embed_error: str | None = None
     tags_enriched_at = None
     processing_summary = False
     processing_sprites = False

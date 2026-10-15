@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Optional
 
 from sqlmodel import Session, select
 
@@ -45,7 +44,7 @@ def sync_subscribed_playlist(playlist_id: int) -> None:
             playlist.sync_error = None
             session.add(playlist)
             session.commit()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("Playlist %s sync failed", playlist_id)
         with Session(engine) as session:
             playlist = session.get(Playlist, playlist_id)
@@ -93,7 +92,7 @@ def sync_subscribed_playlists() -> None:
             for index, playlist_id in enumerate(ids):
                 try:
                     sync_subscribed_playlist(playlist_id)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.exception("Playlist %s sync raised", playlist_id)
                 handle.update(
                     done=index + 1,
@@ -104,8 +103,8 @@ def sync_subscribed_playlists() -> None:
 
 
 def find_subscribed_by_url(
-    session: Session, source_url: str, *, exclude_id: Optional[int] = None
-) -> Optional[Playlist]:
+    session: Session, source_url: str, *, exclude_id: int | None = None
+) -> Playlist | None:
     query = select(Playlist).where(
         Playlist.subscribed == True,  # noqa: E712
         Playlist.source_url == source_url,

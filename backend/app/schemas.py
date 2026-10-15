@@ -15,7 +15,7 @@ class SearchMatchReason(BaseModel):
     source: Literal[
         "title", "description", "tags", "notes", "captions", "related", "youtube"
     ]
-    snippet: Optional[str] = None
+    snippet: str | None = None
 
 
 class ChapterRead(BaseModel):
@@ -26,86 +26,86 @@ class ChapterRead(BaseModel):
 class CompatState(BaseModel):
     kind: str = "compat"
     status: str  # none | queued | running | ready | error
-    stage: Optional[str] = None
+    stage: str | None = None
     progress: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class VideoRead(BaseModel):
     id: int
     title: str
-    channel: Optional[str]
-    channel_url: Optional[str]
+    channel: str | None
+    channel_url: str | None
     tags: list[str]
     ai_tags: list[str] = []
     user_tags: list[str] = []
-    description: Optional[str]
-    notes: Optional[str]
-    source_url: Optional[str]
+    description: str | None
+    notes: str | None
+    source_url: str | None
     has_thumbnail: bool
     has_sprites: bool = False
     subtitles: list[SubtitleTrack]
     file_path: str
-    duration_sec: Optional[float]
-    file_size: Optional[int]
-    width_px: Optional[int]
-    height_px: Optional[int]
-    frame_rate: Optional[float]
+    duration_sec: float | None
+    file_size: int | None
+    width_px: int | None
+    height_px: int | None
+    frame_rate: float | None
     # Actual on-disk stream (ffprobe), for client decode checks.
-    vcodec: Optional[str] = None
-    acodec: Optional[str] = None
-    codec_string: Optional[str] = None
-    bit_depth: Optional[int] = None
+    vcodec: str | None = None
+    acodec: str | None = None
+    codec_string: str | None = None
+    bit_depth: int | None = None
     is_hdr: bool = False
     # ≤1080p H.264 sidecar: compact lists only report has_compat.
     has_compat: bool = False
-    compat_size: Optional[int] = None
+    compat_size: int | None = None
     compat: Optional["CompatState"] = None
-    view_count: Optional[int]
-    channel_subscriber_count: Optional[int]
-    published_at: Optional[datetime]
+    view_count: int | None
+    channel_subscriber_count: int | None
+    published_at: datetime | None
     added_at: datetime
     last_position_sec: float
-    last_watched_at: Optional[datetime]
+    last_watched_at: datetime | None
     needs_review: bool
-    platform: Optional[str]
+    platform: str | None
     status: VideoStatus
-    metadata_synced_at: Optional[datetime]
-    source_title: Optional[str]
-    source_description: Optional[str] = None
+    metadata_synced_at: datetime | None
+    source_title: str | None
+    source_description: str | None = None
     title_is_custom: bool
     description_is_custom: bool = False
     subtitles_pending: bool = False
-    ai_summary: Optional[str] = None
-    ai_summary_length: Optional[str] = None
-    ai_summary_cost: Optional[float] = None
-    ai_summary_model: Optional[str] = None
-    embed_status: Optional[str] = None
-    embed_error: Optional[str] = None
-    tags_enriched_at: Optional[datetime] = None
+    ai_summary: str | None = None
+    ai_summary_length: str | None = None
+    ai_summary_cost: float | None = None
+    ai_summary_model: str | None = None
+    embed_status: str | None = None
+    embed_error: str | None = None
+    tags_enriched_at: datetime | None = None
     processing_summary: bool = False
     processing_sprites: bool = False
     processing_chapters: bool = False
     chapters: list[ChapterRead] = []
-    chapters_source: Optional[Literal["description", "source", "ai"]] = None
-    match_reason: Optional[SearchMatchReason] = None
+    chapters_source: Literal["description", "source", "ai"] | None = None
+    match_reason: SearchMatchReason | None = None
 
 
 class VideoUpdate(BaseModel):
-    title: Optional[str] = None
-    channel: Optional[str] = None
-    channel_url: Optional[str] = None
-    tags: Optional[list[str]] = None
-    user_tag: Optional[str] = None  # mark a newly added tag as user-defined
-    description: Optional[str] = None
-    notes: Optional[str] = None
-    source_url: Optional[str] = None
-    published_at: Optional[datetime] = None
+    title: str | None = None
+    channel: str | None = None
+    channel_url: str | None = None
+    tags: list[str] | None = None
+    user_tag: str | None = None  # mark a newly added tag as user-defined
+    description: str | None = None
+    notes: str | None = None
+    source_url: str | None = None
+    published_at: datetime | None = None
     # Setting a remote URL fetches and caches the image server-side.
-    thumbnail_url: Optional[str] = None
+    thumbnail_url: str | None = None
     # Explicit clear/set for "Use source" / keep-custom flows.
-    title_is_custom: Optional[bool] = None
-    description_is_custom: Optional[bool] = None
+    title_is_custom: bool | None = None
+    description_is_custom: bool | None = None
 
 
 class WatchProgressUpdate(BaseModel):
@@ -115,13 +115,13 @@ class WatchProgressUpdate(BaseModel):
 class DownloadCreate(BaseModel):
     url: str
     quality_preset: str = "best"
-    title_override: Optional[str] = None
-    channel_override: Optional[str] = None
-    notes_pending: Optional[str] = None
+    title_override: str | None = None
+    channel_override: str | None = None
+    notes_pending: str | None = None
     normalize_volume: bool = False
     destination: DownloadDestination = DownloadDestination.library
-    video_codec: Optional[str] = None
-    playlist_id: Optional[int] = None
+    video_codec: str | None = None
+    playlist_id: int | None = None
 
 
 class DownloadBulkCreate(BaseModel):
@@ -129,7 +129,7 @@ class DownloadBulkCreate(BaseModel):
     quality_preset: str = "best"
     destination: DownloadDestination = DownloadDestination.library
     normalize_volume: bool = False
-    video_codec: Optional[str] = None
+    video_codec: str | None = None
 
 
 class DownloadBulkSkip(BaseModel):
@@ -139,29 +139,29 @@ class DownloadBulkSkip(BaseModel):
 
 class DownloadPreview(BaseModel):
     is_playlist: bool
-    title: Optional[str]
-    channel: Optional[str]
-    channel_url: Optional[str]
-    thumbnail_url: Optional[str] = None
-    entry_count: Optional[int]
-    view_count: Optional[int] = None
-    published_at: Optional[str] = None
+    title: str | None
+    channel: str | None
+    channel_url: str | None
+    thumbnail_url: str | None = None
+    entry_count: int | None
+    view_count: int | None = None
+    published_at: str | None = None
     available_presets: list[str] = []
     preset_sizes: dict[str, int] = {}
 
 
 class StreamPreviewMeta(BaseModel):
-    id: Optional[str] = None
-    title: Optional[str] = None
-    channel: Optional[str] = None
-    channel_url: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    description: Optional[str] = None
-    duration: Optional[float] = None
-    view_count: Optional[int] = None
-    source_url: Optional[str] = None
-    preview_height: Optional[int] = None
-    library_video_id: Optional[int] = None
+    id: str | None = None
+    title: str | None = None
+    channel: str | None = None
+    channel_url: str | None = None
+    thumbnail_url: str | None = None
+    description: str | None = None
+    duration: float | None = None
+    view_count: int | None = None
+    source_url: str | None = None
+    preview_height: int | None = None
+    library_video_id: int | None = None
     available_presets: list[str] = []
     subtitles: list[SubtitleTrack] = []
 
@@ -175,26 +175,26 @@ class DownloadJobRead(BaseModel):
     available_presets: list[str] = []
     status: JobStatus
     progress: float
-    title: Optional[str]
-    title_override: Optional[str]
-    channel: Optional[str]
-    channel_override: Optional[str]
-    thumbnail_url: Optional[str]
-    notes_pending: Optional[str]
+    title: str | None
+    title_override: str | None
+    channel: str | None
+    channel_override: str | None
+    thumbnail_url: str | None
+    notes_pending: str | None
     paused: bool
-    error: Optional[str]
-    error_kind: Optional[str] = None
+    error: str | None
+    error_kind: str | None = None
     destination: str = DownloadDestination.library.value
-    device_file_path: Optional[str] = None
-    video_id: Optional[int]
-    replace_video_id: Optional[int] = None
-    file_size: Optional[int]
-    height_px: Optional[int] = None
+    device_file_path: str | None = None
+    video_id: int | None
+    replace_video_id: int | None = None
+    file_size: int | None
+    height_px: int | None = None
     video_codec: str = "av1"
     created_at: datetime
     video_missing: bool = False
     superseded: bool = False
-    playlist_id: Optional[int] = None
+    playlist_id: int | None = None
 
     @field_validator("video_codec", mode="before")
     @classmethod
@@ -211,9 +211,9 @@ class DownloadBulkResult(BaseModel):
 
 
 class DownloadJobUpdate(BaseModel):
-    title_override: Optional[str] = None
-    channel_override: Optional[str] = None
-    notes_pending: Optional[str] = None
+    title_override: str | None = None
+    channel_override: str | None = None
+    notes_pending: str | None = None
 
 
 class DownloadQualityUpdate(BaseModel):
@@ -229,22 +229,22 @@ class DownloadQueueStatus(BaseModel):
 class VideoRedownload(BaseModel):
     quality_preset: str = "best"
     normalize_volume: bool = False
-    video_codec: Optional[str] = None
+    video_codec: str | None = None
 
 
 class ChannelStat(BaseModel):
     channel: str
     count: int
-    last_download_at: Optional[datetime] = None
-    subscriber_count: Optional[int] = None
-    channel_url: Optional[str] = None
+    last_download_at: datetime | None = None
+    subscriber_count: int | None = None
+    channel_url: str | None = None
 
 
 class ChannelSearchHit(BaseModel):
     name: str
     url: str
-    thumbnail_url: Optional[str] = None
-    subscriber_count: Optional[int] = None
+    thumbnail_url: str | None = None
+    subscriber_count: int | None = None
 
 
 class ChannelSearchResponse(BaseModel):
@@ -252,78 +252,78 @@ class ChannelSearchResponse(BaseModel):
 
 
 class ChannelFeedEntry(BaseModel):
-    id: Optional[str] = None
+    id: str | None = None
     url: str
-    title: Optional[str] = None
-    duration: Optional[float] = None
-    thumbnail_url: Optional[str] = None
-    view_count: Optional[int] = None
-    like_count: Optional[int] = None
-    dislike_count: Optional[int] = None
-    published_at: Optional[str] = None
+    title: str | None = None
+    duration: float | None = None
+    thumbnail_url: str | None = None
+    view_count: int | None = None
+    like_count: int | None = None
+    dislike_count: int | None = None
+    published_at: str | None = None
     # Honest UI string when the calendar day is unknown ("3 years ago", "2013").
-    published_label: Optional[str] = None
+    published_label: str | None = None
     # Channel display name (set for global catalog search).
-    channel: Optional[str] = None
-    channel_url: Optional[str] = None
+    channel: str | None = None
+    channel_url: str | None = None
     in_library: bool = False
-    video_id: Optional[int] = None
-    library_height_px: Optional[int] = None
-    max_height: Optional[int] = None
-    match_reason: Optional[SearchMatchReason] = None
+    video_id: int | None = None
+    library_height_px: int | None = None
+    max_height: int | None = None
+    match_reason: SearchMatchReason | None = None
 
 
 class ChannelFeedPage(BaseModel):
-    channel: Optional[str] = None
-    channel_url: Optional[str] = None
+    channel: str | None = None
+    channel_url: str | None = None
     entries: list[ChannelFeedEntry] = []
     has_more: bool = False
     indexing: bool = False
     from_catalog: bool = False
     catalog_indexed: int = 0
-    catalog_total: Optional[int] = None
+    catalog_total: int | None = None
     catalog_complete: bool = False
-    catalog_status: Optional[str] = None
-    direct_youtube_search_effective: Optional[bool] = None
-    youtube_video_search_effective: Optional[bool] = None
+    catalog_status: str | None = None
+    direct_youtube_search_effective: bool | None = None
+    youtube_video_search_effective: bool | None = None
 
 
 class ChannelCatalogStatusItem(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     channel_url: str
-    channel_name: Optional[str] = None
+    channel_name: str | None = None
     status: str
     indexed_count: int = 0
-    channel_total: Optional[int] = None
+    channel_total: int | None = None
     complete: bool = False
     max_videos: int = 1000
-    phase: Optional[str] = None
-    last_error: Optional[str] = None
-    started_at: Optional[str] = None
-    finished_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    phase: str | None = None
+    last_error: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    updated_at: str | None = None
     # None = inherit system default.
-    direct_youtube_search: Optional[bool] = None
+    direct_youtube_search: bool | None = None
     direct_youtube_search_effective: bool = True
 
 
 class ChannelCatalogStatusResponse(BaseModel):
     enabled: bool = True
     running: bool = False
-    current_channel: Optional[str] = None
-    current_channel_url: Optional[str] = None
-    current_phase: Optional[str] = None
+    current_channel: str | None = None
+    current_channel_url: str | None = None
+    current_phase: str | None = None
     done: int = 0
     total: int = 0
-    catalog_id: Optional[int] = None
+    catalog_id: int | None = None
     queue_depth: int = 0
     catalogs: list[ChannelCatalogStatusItem] = []
     direct_youtube_search: bool = True
 
 
 class ChannelCatalogIndexRequest(BaseModel):
-    channel: Optional[str] = None
-    url: Optional[str] = None
+    channel: str | None = None
+    url: str | None = None
     force: bool = False
     mode: Literal["incremental", "full"] = "incremental"
 
@@ -332,20 +332,20 @@ class ChannelCatalogIndexResult(BaseModel):
     queued: int = 0
     skipped: int = 0
     refreshed: int = 0
-    catalog_id: Optional[int] = None
+    catalog_id: int | None = None
     detail: str = ""
 
 
 class ChannelCatalogYoutubeSearchUpdate(BaseModel):
-    channel: Optional[str] = None
-    url: Optional[str] = None
+    channel: str | None = None
+    url: str | None = None
     # null = inherit the system Direct YouTube search default.
-    direct_youtube_search: Optional[bool] = None
+    direct_youtube_search: bool | None = None
 
 
 class ChannelCatalogYoutubeSearchPref(BaseModel):
     channel_url: str
-    direct_youtube_search: Optional[bool] = None
+    direct_youtube_search: bool | None = None
     direct_youtube_search_effective: bool = True
 
 
@@ -353,21 +353,21 @@ class ChannelAutodownloadRead(BaseModel):
     configured: bool = False
     enabled: bool = False
     previous_mode: Literal["none", "count", "all"] = "none"
-    previous_count: Optional[int] = 10
+    previous_count: int | None = 10
     quality_preset: str = "1080p"
     include_completed_streams: bool = False
-    channel_url: Optional[str] = None
-    channel_name: Optional[str] = None
+    channel_url: str | None = None
+    channel_name: str | None = None
     pending_estimate: int = 0
     catalog_max_videos: int = 1000
 
 
 class ChannelAutodownloadUpdate(BaseModel):
-    channel: Optional[str] = None
-    url: Optional[str] = None
+    channel: str | None = None
+    url: str | None = None
     enabled: bool = False
     previous_mode: Literal["none", "count", "all"] = "none"
-    previous_count: Optional[int] = None
+    previous_count: int | None = None
     quality_preset: str = "1080p"
     include_completed_streams: bool = False
 
@@ -393,33 +393,33 @@ class ChannelRename(BaseModel):
 
 class PlaylistCreate(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class PlaylistUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    subscribed: Optional[bool] = None
-    quality_preset: Optional[str] = None
-    cover_video_id: Optional[int] = None
+    name: str | None = None
+    description: str | None = None
+    subscribed: bool | None = None
+    quality_preset: str | None = None
+    cover_video_id: int | None = None
 
 
 class PlaylistRead(BaseModel):
     id: int
     name: str
-    description: Optional[str]
+    description: str | None
     source_type: PlaylistSource
-    source_url: Optional[str]
+    source_url: str | None
     subscribed: bool = False
-    quality_preset: Optional[str] = None
-    last_synced_at: Optional[datetime] = None
-    sync_error: Optional[str] = None
+    quality_preset: str | None = None
+    last_synced_at: datetime | None = None
+    sync_error: str | None = None
     created_at: datetime
     item_count: int
     position: int = 0
-    cover_video_id: Optional[int] = None
+    cover_video_id: int | None = None
     has_custom_cover: bool = False
-    thumbnail_video_id: Optional[int] = None
+    thumbnail_video_id: int | None = None
     has_thumbnail: bool = False
 
 
@@ -428,8 +428,8 @@ class PlaylistDetail(PlaylistRead):
 
 
 class PlaylistItemAdd(BaseModel):
-    video_id: Optional[int] = None
-    url: Optional[str] = None
+    video_id: int | None = None
+    url: str | None = None
 
 
 class PlaylistReorder(BaseModel):
@@ -443,24 +443,24 @@ class PlaylistListReorder(BaseModel):
 class PlaylistImport(BaseModel):
     url: str
     quality_preset: str = "best"
-    name: Optional[str] = None
+    name: str | None = None
     entries: list[str] = []
     subscribe: bool = False
 
 
 class PlaylistPreviewEntry(BaseModel):
-    id: Optional[str] = None
+    id: str | None = None
     url: str
-    title: Optional[str] = None
-    channel: Optional[str] = None
-    duration: Optional[float] = None
-    thumbnail_url: Optional[str] = None
-    view_count: Optional[int] = None
+    title: str | None = None
+    channel: str | None = None
+    duration: float | None = None
+    thumbnail_url: str | None = None
+    view_count: int | None = None
 
 
 class PlaylistPreview(BaseModel):
-    title: Optional[str] = None
-    channel: Optional[str] = None
+    title: str | None = None
+    channel: str | None = None
     entries: list[PlaylistPreviewEntry] = []
 
 
@@ -502,11 +502,11 @@ class MetadataSyncStatus(BaseModel):
     done: int = 0
     failed: int = 0
     skipped: int = 0
-    current_title: Optional[str] = None
-    current_video_id: Optional[int] = None
+    current_title: str | None = None
+    current_video_id: int | None = None
     fields: list[str] = []
-    last_error: Optional[str] = None
-    finished_at: Optional[str] = None
+    last_error: str | None = None
+    finished_at: str | None = None
 
 
 class ActivityTaskRead(BaseModel):
@@ -514,23 +514,23 @@ class ActivityTaskRead(BaseModel):
     kind: str
     group: str
     label: str
-    reason: Optional[str] = None
-    engine: Optional[str] = None
-    detail: Optional[str] = None
-    video_id: Optional[int] = None
-    done: Optional[int] = None
-    total: Optional[int] = None
+    reason: str | None = None
+    engine: str | None = None
+    detail: str | None = None
+    video_id: int | None = None
+    done: int | None = None
+    total: int | None = None
     status: str
     started_at: float
-    finished_at: Optional[float] = None
-    error: Optional[str] = None
+    finished_at: float | None = None
+    error: str | None = None
 
 
 class SystemActivityRead(BaseModel):
     running: list[ActivityTaskRead] = []
     recent: list[ActivityTaskRead] = []
     queued: dict[str, int] = {}
-    cpu_percent: Optional[float] = None
+    cpu_percent: float | None = None
 
 
 class BulkPlaylistAdd(BaseModel):

@@ -12,7 +12,7 @@ import logging
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..models import Video, utcnow
 from .ffmpeg_bin import ffprobe_bin
@@ -40,17 +40,17 @@ _HDR_TRANSFERS = frozenset({"smpte2084", "arib-std-b67"})
 
 @dataclass(frozen=True)
 class StreamInfo:
-    vcodec: Optional[str]
-    acodec: Optional[str]
-    codec_string: Optional[str]
-    bit_depth: Optional[int]
+    vcodec: str | None
+    acodec: str | None
+    codec_string: str | None
+    bit_depth: int | None
     is_hdr: bool
-    width: Optional[int] = None
-    height: Optional[int] = None
-    fps: Optional[float] = None
+    width: int | None = None
+    height: int | None = None
+    fps: float | None = None
 
 
-def video_family(name: Optional[str]) -> Optional[str]:
+def video_family(name: str | None) -> str | None:
     if not name:
         return None
     raw = name.strip().lower().split(".")[0]
@@ -59,7 +59,7 @@ def video_family(name: Optional[str]) -> Optional[str]:
     return _FAMILY.get(raw, raw)
 
 
-def audio_family(name: Optional[str]) -> Optional[str]:
+def audio_family(name: str | None) -> str | None:
     if not name:
         return None
     raw = name.strip().lower().split(".")[0]
@@ -68,7 +68,7 @@ def audio_family(name: Optional[str]) -> Optional[str]:
     return raw or None
 
 
-def bit_depth_from_pix_fmt(pix_fmt: Optional[str]) -> Optional[int]:
+def bit_depth_from_pix_fmt(pix_fmt: str | None) -> int | None:
     if not pix_fmt:
         return None
     fmt = pix_fmt.lower()
@@ -79,7 +79,7 @@ def bit_depth_from_pix_fmt(pix_fmt: Optional[str]) -> Optional[int]:
     return 8
 
 
-def _parse_rate(value: Any) -> Optional[float]:
+def _parse_rate(value: Any) -> float | None:
     raw = str(value or "")
     if "/" in raw:
         num, _, den = raw.partition("/")
@@ -94,7 +94,7 @@ def _parse_rate(value: Any) -> Optional[float]:
         return None
 
 
-def _int(value: Any) -> Optional[int]:
+def _int(value: Any) -> int | None:
     try:
         n = int(value)
     except (TypeError, ValueError):
@@ -139,7 +139,7 @@ _H264_PROFILES = {
 }
 
 
-def codec_string_for(stream: dict[str, Any]) -> Optional[str]:
+def codec_string_for(stream: dict[str, Any]) -> str | None:
     """Build an RFC 6381 ``codecs=`` value from an ffprobe video stream."""
     family = video_family(stream.get("codec_name"))
     profile = str(stream.get("profile") or "").strip().lower()
@@ -180,8 +180,8 @@ def codec_string_for(stream: dict[str, Any]) -> Optional[str]:
 
 
 def stream_info_from_ffprobe(data: dict[str, Any]) -> StreamInfo:
-    video: Optional[dict[str, Any]] = None
-    audio: Optional[dict[str, Any]] = None
+    video: dict[str, Any] | None = None
+    audio: dict[str, Any] | None = None
     for stream in data.get("streams") or []:
         if not isinstance(stream, dict):
             continue
@@ -213,7 +213,7 @@ def stream_info_from_ffprobe(data: dict[str, Any]) -> StreamInfo:
     )
 
 
-def probe_stream_info(path: Path) -> Optional[StreamInfo]:
+def probe_stream_info(path: Path) -> StreamInfo | None:
     try:
         if not path.is_file() or path.stat().st_size <= 0:
             return None
@@ -244,7 +244,7 @@ def probe_stream_info(path: Path) -> Optional[StreamInfo]:
     return stream_info_from_ffprobe(data)
 
 
-def apply_stream_info(video: Video, info: Optional[StreamInfo]) -> None:
+def apply_stream_info(video: Video, info: StreamInfo | None) -> None:
     """Copy probe results onto the row (caller commits)."""
     video.media_probed_at = utcnow()
     if info is None:

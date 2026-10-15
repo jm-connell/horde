@@ -10,7 +10,7 @@ import glob
 import os
 import re
 from dataclasses import asdict, dataclass
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 WorkloadProfile = Literal["light", "normal", "heavy"]
@@ -45,12 +45,12 @@ _PCI_VENDOR = {
 
 @dataclass
 class GpuInfo:
-    name: Optional[str] = None
-    vram_total_bytes: Optional[int] = None
-    vram_used_bytes: Optional[int] = None
-    util_percent: Optional[float] = None
-    temp_c: Optional[float] = None
-    vendor: Optional[GpuVendor] = None
+    name: str | None = None
+    vram_total_bytes: int | None = None
+    vram_used_bytes: int | None = None
+    util_percent: float | None = None
+    temp_c: float | None = None
+    vendor: GpuVendor | None = None
 
 
 @dataclass
@@ -68,17 +68,17 @@ class RuntimeConfig:
     enqueue_tag_limit: int
     recommended_profile: WorkloadProfile
     profile_locked: bool
-    lock_reason: Optional[str]
-    warning: Optional[str]
-    gpu_name: Optional[str]
-    vram_total_bytes: Optional[int]
+    lock_reason: str | None
+    warning: str | None
+    gpu_name: str | None
+    vram_total_bytes: int | None
     gpu_source: GpuSource = "unknown"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
-def _num(raw: Any) -> Optional[float]:
+def _num(raw: Any) -> float | None:
     if raw is None:
         return None
     try:
@@ -90,14 +90,14 @@ def _num(raw: Any) -> Optional[float]:
         return None
 
 
-def _int_bytes(raw: Any) -> Optional[int]:
+def _int_bytes(raw: Any) -> int | None:
     value = _num(raw)
     if value is None or value < 0:
         return None
     return int(value)
 
 
-def _read_sysfs(path: str) -> Optional[str]:
+def _read_sysfs(path: str) -> str | None:
     try:
         with open(path, encoding="utf-8", errors="ignore") as fh:
             return fh.read().strip()
@@ -105,7 +105,7 @@ def _read_sysfs(path: str) -> Optional[str]:
         return None
 
 
-def _vendor_from_pci(raw: Optional[str]) -> GpuVendor:
+def _vendor_from_pci(raw: str | None) -> GpuVendor:
     if not raw:
         return "unknown"
     key = raw.strip().lower()
@@ -114,12 +114,12 @@ def _vendor_from_pci(raw: Optional[str]) -> GpuVendor:
 
 def _gpu_dict(
     *,
-    name: Optional[str],
+    name: str | None,
     vendor: GpuVendor,
-    vram_total_bytes: Optional[int] = None,
-    vram_used_bytes: Optional[int] = None,
-    util_percent: Optional[float] = None,
-    temp_c: Optional[float] = None,
+    vram_total_bytes: int | None = None,
+    vram_used_bytes: int | None = None,
+    util_percent: float | None = None,
+    temp_c: float | None = None,
 ) -> dict[str, Any]:
     return {
         "name": name,
@@ -131,7 +131,7 @@ def _gpu_dict(
     }
 
 
-def probe_nvidia_gpu() -> Optional[dict[str, Any]]:
+def probe_nvidia_gpu() -> dict[str, Any] | None:
     """Return NVIDIA GPU stats dict, or None if unavailable."""
     import subprocess
 
@@ -175,11 +175,11 @@ def probe_nvidia_gpu() -> Optional[dict[str, Any]]:
         return None
 
 
-def _parse_rocm_json(data: Any) -> Optional[dict[str, Any]]:
+def _parse_rocm_json(data: Any) -> dict[str, Any] | None:
     if not isinstance(data, dict) or not data:
         return None
 
-    best: Optional[dict[str, Any]] = None
+    best: dict[str, Any] | None = None
     best_total = -1
 
     for card_key, card in data.items():
@@ -236,7 +236,7 @@ def _parse_rocm_json(data: Any) -> Optional[dict[str, Any]]:
     return best
 
 
-def probe_amd_rocm_gpu() -> Optional[dict[str, Any]]:
+def probe_amd_rocm_gpu() -> dict[str, Any] | None:
     """Return AMD GPU stats via rocm-smi, or None if unavailable."""
     import json
     import subprocess
@@ -275,7 +275,7 @@ def _drm_card_dirs() -> list[str]:
     return sorted(cards)
 
 
-def _drm_hwmon_temp(device_dir: str) -> Optional[float]:
+def _drm_hwmon_temp(device_dir: str) -> float | None:
     for temp_path in glob.glob(
         os.path.join(device_dir, "hwmon", "hwmon*", "temp*_input")
     ):
@@ -308,9 +308,9 @@ def _drm_gpu_name(device_dir: str, vendor: GpuVendor) -> str:
     return "GPU"
 
 
-def probe_drm_sysfs_gpu() -> Optional[dict[str, Any]]:
+def probe_drm_sysfs_gpu() -> dict[str, Any] | None:
     """Best-effort AMD/Intel (and other) GPU info from DRM sysfs."""
-    best: Optional[dict[str, Any]] = None
+    best: dict[str, Any] | None = None
     best_score = -1
 
     for card_path in _drm_card_dirs():
@@ -356,9 +356,9 @@ def probe_drm_sysfs_gpu() -> Optional[dict[str, Any]]:
     return best
 
 
-def probe_local_gpu() -> Optional[dict[str, Any]]:
+def probe_local_gpu() -> dict[str, Any] | None:
     """Best-effort local GPU: NVIDIA → AMD ROCm → DRM sysfs."""
-    name_only: Optional[dict[str, Any]] = None
+    name_only: dict[str, Any] | None = None
     for probe in (probe_nvidia_gpu, probe_amd_rocm_gpu, probe_drm_sysfs_gpu):
         try:
             result = probe()
@@ -389,7 +389,7 @@ def detect_gpu() -> GpuInfo:
     )
 
 
-def is_same_host_ollama(url: Optional[str]) -> bool:
+def is_same_host_ollama(url: str | None) -> bool:
     """True when Ollama is expected to share this machine's GPU."""
     if not url or not str(url).strip():
         return True
@@ -403,7 +403,7 @@ def is_same_host_ollama(url: Optional[str]) -> bool:
     return host in _SAME_HOST_NAMES
 
 
-def gpu_from_vram_gb(gb: float, *, name: Optional[str] = None) -> GpuInfo:
+def gpu_from_vram_gb(gb: float, *, name: str | None = None) -> GpuInfo:
     bytes_total = int(float(gb) * GB)
     return GpuInfo(
         name=name or f"Ollama GPU (~{gb:g} GB VRAM)",
@@ -411,7 +411,7 @@ def gpu_from_vram_gb(gb: float, *, name: Optional[str] = None) -> GpuInfo:
     )
 
 
-def probe_ollama_gpu(base_url: str) -> Optional[GpuInfo]:
+def probe_ollama_gpu(base_url: str) -> GpuInfo | None:
     """Best-effort GPU info from Ollama GET /api/info (not yet on all versions)."""
     import httpx
 
@@ -438,7 +438,7 @@ def probe_ollama_gpu(base_url: str) -> Optional[GpuInfo]:
     if not isinstance(gpus, list) or not gpus:
         return None
 
-    best: Optional[dict[str, Any]] = None
+    best: dict[str, Any] | None = None
     best_total = -1
     for row in gpus:
         if not isinstance(row, dict):
@@ -473,9 +473,9 @@ def probe_ollama_gpu(base_url: str) -> Optional[GpuInfo]:
 
 def detect_gpu_for_ai(
     *,
-    base_url: Optional[str] = None,
-    vram_gb: Optional[float] = None,
-) -> tuple[GpuInfo, GpuSource, Optional[str]]:
+    base_url: str | None = None,
+    vram_gb: float | None = None,
+) -> tuple[GpuInfo, GpuSource, str | None]:
     """GPU used for AI model/workload sizing (Ollama machine, not Horde host).
 
     Order: Settings override → Ollama /api/info → same-host local GPU
@@ -676,10 +676,10 @@ def normalize_profile(raw: Any) -> WorkloadProfile:
 
 def resolve_runtime(
     profile: WorkloadProfile | str | None = None,
-    gpu: Optional[GpuInfo] = None,
+    gpu: GpuInfo | None = None,
     *,
-    gpu_source: Optional[GpuSource] = None,
-    detect_warning: Optional[str] = None,
+    gpu_source: GpuSource | None = None,
+    detect_warning: str | None = None,
 ) -> RuntimeConfig:
     if gpu is not None:
         source: GpuSource = gpu_source or "unknown"
@@ -692,7 +692,7 @@ def resolve_runtime(
     requested = normalize_profile(profile)
 
     profile_locked = tier == "critical"
-    lock_reason: Optional[str] = None
+    lock_reason: str | None = None
     if profile_locked:
         lock_reason = (
             "GPU VRAM is under 3 GB (or critically limited). "

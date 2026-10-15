@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -136,7 +136,7 @@ def purge_members_only_by_yt_id(yt_id: str) -> None:
         feed_meta_cache.drop(yt_id)
 
 
-def _skip_reason_for_entry(raw: dict[str, Any]) -> Optional[str]:
+def _skip_reason_for_entry(raw: dict[str, Any]) -> str | None:
     if is_members_only_entry(raw):
         return "members_only"
     if is_age_restricted_entry(raw):
@@ -149,9 +149,9 @@ def _reject_members_or_skipped(
     catalog: ChannelCatalog,
     raw: dict[str, Any],
     *,
-    skipped: Optional[set[str]] = None,
+    skipped: set[str] | None = None,
     allow_gated: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """If entry must be ignored, purge any existing row and return yt_id; else None."""
     yt_id = raw.get("id")
     if not yt_id:

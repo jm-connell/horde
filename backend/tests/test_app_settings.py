@@ -2,8 +2,6 @@
 
 import json
 
-import pytest
-
 from app.services import app_settings as settings_svc
 from app.services.ai.provider import mask_openrouter_api_key
 

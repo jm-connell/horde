@@ -1,7 +1,8 @@
 import asyncio
 import json
 import logging
-from typing import Any, AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -75,7 +76,7 @@ def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobR
         vid for j in jobs for vid in (j.video_id, j.replace_video_id) if vid is not None
     }
     existing: set[int] = set()
-    height_by_video: dict[int, Optional[int]] = {}
+    height_by_video: dict[int, int | None] = {}
     if video_ids:
         videos = session.exec(
             select(Video).where(Video.id.in_(list(video_ids)))  # type: ignore[attr-defined]
@@ -170,7 +171,7 @@ def preview_download(url: str):
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         kind, _ = classify_ytdlp_error(exc, url=cleaned)
         detail = http_detail_for_error(exc, prefix="Could not read link", url=cleaned)
         if kind == ERROR_KIND_UNKNOWN:
@@ -411,7 +412,7 @@ def update_job(
 @router.post("/{job_id}/retry", response_model=DownloadJobRead)
 def retry_job(
     job_id: int,
-    payload: Optional[DownloadJobUpdate] = Body(default=None),
+    payload: DownloadJobUpdate | None = Body(default=None),
     session: Session = Depends(get_session),
 ):
     """Requeue a failed/cancelled job. Extra clicks return the same active job."""

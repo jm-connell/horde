@@ -10,9 +10,10 @@ import threading
 import time
 import uuid
 from collections import deque
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
-from typing import Any, Generator, Iterator, Optional
+from typing import Any
 
 # kind -> group for UI badges / queued chips
 KIND_GROUPS: dict[str, str] = {
@@ -45,16 +46,16 @@ class ActivityTask:
     kind: str
     group: str
     label: str
-    reason: Optional[str] = None
-    engine: Optional[str] = None
-    detail: Optional[str] = None
-    video_id: Optional[int] = None
-    done: Optional[int] = None
-    total: Optional[int] = None
+    reason: str | None = None
+    engine: str | None = None
+    detail: str | None = None
+    video_id: int | None = None
+    done: int | None = None
+    total: int | None = None
     status: str = "running"  # running | completed | failed | cancelled
     started_at: float = field(default_factory=time.time)
-    finished_at: Optional[float] = None
-    error: Optional[str] = None
+    finished_at: float | None = None
+    error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -70,12 +71,12 @@ class ActivityHandle:
     def update(
         self,
         *,
-        done: Optional[int] = None,
-        total: Optional[int] = None,
-        detail: Optional[str] = None,
-        label: Optional[str] = None,
-        engine: Optional[str] = None,
-        reason: Optional[str] = None,
+        done: int | None = None,
+        total: int | None = None,
+        detail: str | None = None,
+        label: str | None = None,
+        engine: str | None = None,
+        reason: str | None = None,
     ) -> None:
         update(
             self.id,
@@ -91,8 +92,8 @@ class ActivityHandle:
         self,
         status: str = "completed",
         *,
-        error: Optional[str] = None,
-        detail: Optional[str] = None,
+        error: str | None = None,
+        detail: str | None = None,
     ) -> None:
         if self._closed:
             return
@@ -117,13 +118,13 @@ def start(
     kind: str,
     label: str,
     *,
-    reason: Optional[str] = None,
-    engine: Optional[str] = None,
-    detail: Optional[str] = None,
-    video_id: Optional[int] = None,
-    total: Optional[int] = None,
-    done: Optional[int] = None,
-    group: Optional[str] = None,
+    reason: str | None = None,
+    engine: str | None = None,
+    detail: str | None = None,
+    video_id: int | None = None,
+    total: int | None = None,
+    done: int | None = None,
+    group: str | None = None,
 ) -> ActivityHandle:
     task_id = uuid.uuid4().hex
     task = ActivityTask(
@@ -148,12 +149,12 @@ def start(
 def update(
     task_id: str,
     *,
-    done: Optional[int] = None,
-    total: Optional[int] = None,
-    detail: Optional[str] = None,
-    label: Optional[str] = None,
-    engine: Optional[str] = None,
-    reason: Optional[str] = None,
+    done: int | None = None,
+    total: int | None = None,
+    detail: str | None = None,
+    label: str | None = None,
+    engine: str | None = None,
+    reason: str | None = None,
 ) -> None:
     with _lock:
         task = _running.get(task_id)
@@ -177,8 +178,8 @@ def finish(
     task_id: str,
     status: str = "completed",
     *,
-    error: Optional[str] = None,
-    detail: Optional[str] = None,
+    error: str | None = None,
+    detail: str | None = None,
 ) -> None:
     with _lock:
         task = _running.pop(task_id, None)
@@ -204,13 +205,13 @@ def track(
     kind: str,
     label: str,
     *,
-    reason: Optional[str] = None,
-    engine: Optional[str] = None,
-    detail: Optional[str] = None,
-    video_id: Optional[int] = None,
-    total: Optional[int] = None,
-    done: Optional[int] = None,
-    group: Optional[str] = None,
+    reason: str | None = None,
+    engine: str | None = None,
+    detail: str | None = None,
+    video_id: int | None = None,
+    total: int | None = None,
+    done: int | None = None,
+    group: str | None = None,
 ) -> Generator[ActivityHandle, None, None]:
     handle = start(
         kind,
@@ -225,7 +226,7 @@ def track(
     )
     try:
         yield handle
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if not handle._closed:
             handle.finish(status="failed", error=str(exc)[:500])
         raise

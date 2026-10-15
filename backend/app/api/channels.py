@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from ..database import get_session
-from ..models import Video
 from ..schemas import (
     ChannelAutodownloadRead,
     ChannelAutodownloadUpdate,
@@ -25,6 +23,7 @@ from ..schemas import (
     ChannelSearchResponse,
     ChannelStat,
 )
+from ..services import app_settings as app_settings_svc
 from ..services import (
     channel_autodownload,
     channel_catalog,
@@ -32,13 +31,11 @@ from ..services import (
     feed_meta_cache,
     library,
 )
-from ..services import app_settings as app_settings_svc
 from ..services.ytdlp_common import cookie_configured, is_members_only_entry
 from ..services.ytdlp_extract import (
     search_youtube_channel_videos,
     search_youtube_videos,
 )
-from .video_serialize import to_read
 
 router = APIRouter(prefix="/api", tags=["channels"])
 
@@ -137,9 +134,9 @@ def channel_catalog_index(
 def _resolve_youtube_channel_url(
     session: Session,
     *,
-    url: Optional[str],
-    channel: Optional[str],
-) -> tuple[str, Optional[str]]:
+    url: str | None,
+    channel: str | None,
+) -> tuple[str, str | None]:
     channel_url = (url or "").strip() or None
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
@@ -159,8 +156,8 @@ def _resolve_youtube_channel_url(
 
 @router.get("/channels/autodownload", response_model=ChannelAutodownloadRead)
 def get_channel_autodownload(
-    channel: Optional[str] = None,
-    url: Optional[str] = None,
+    channel: str | None = None,
+    url: str | None = None,
     session: Session = Depends(get_session),
 ):
     channel_url, channel_name = _resolve_youtube_channel_url(
@@ -211,9 +208,9 @@ def put_channel_autodownload(
 
 def _published_fields(
     raw: dict[str, Any],
-    cached: Optional[dict[str, Any]],
-    library_iso: Optional[str],
-) -> tuple[Optional[str], Optional[str]]:
+    cached: dict[str, Any] | None,
+    library_iso: str | None,
+) -> tuple[str | None, str | None]:
     """Return (sort ISO, display label). Library dates are real calendar days."""
     label = raw.get("published_label")
     if not label and cached and not raw.get("published_at"):
@@ -236,8 +233,8 @@ def _feed_entries_from_raw(
     session: Session,
     raw_entries: list[dict[str, Any]],
     *,
-    channel_name: Optional[str],
-    channel_url: Optional[str] = None,
+    channel_name: str | None,
+    channel_url: str | None = None,
     global_search: bool = False,
 ) -> list[ChannelFeedEntry]:
     lib_map = library.youtube_library_map(
@@ -370,8 +367,8 @@ def channel_youtube_search_pref(
 @router.get("/channels/youtube-search", response_model=ChannelFeedPage)
 def channel_youtube_search(
     q: str = Query(..., min_length=2),
-    channel: Optional[str] = None,
-    url: Optional[str] = None,
+    channel: str | None = None,
+    url: str | None = None,
     limit: int = Query(20, ge=1, le=40),
     session: Session = Depends(get_session),
 ):
@@ -449,8 +446,8 @@ def youtube_video_search(
 @router.get("/channels/catalog/search", response_model=ChannelFeedPage)
 def channel_catalog_search(
     q: str = Query(..., min_length=1),
-    channel: Optional[str] = None,
-    url: Optional[str] = None,
+    channel: str | None = None,
+    url: str | None = None,
     limit: int = Query(60, ge=1, le=200),
     semantic: bool = Query(True),
     session: Session = Depends(get_session),
@@ -495,8 +492,8 @@ def channel_catalog_search(
 
 @router.get("/channels/feed", response_model=ChannelFeedPage)
 def channel_feed(
-    channel: Optional[str] = None,
-    url: Optional[str] = None,
+    channel: str | None = None,
+    url: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(30, ge=1, le=100),
     live: bool = Query(
@@ -570,7 +567,7 @@ def channel_feed(
                 data = downloader.fetch_channel_feed(
                     channel_url, offset=offset, limit=limit
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise HTTPException(
                     status_code=400, detail=f"Could not load channel feed: {exc}"
                 ) from exc
@@ -693,7 +690,7 @@ def channel_feed(
         def _enrich(
             meta_rows: list[tuple[str, str]],
             vote_ids: list[str],
-            catalog_url: Optional[str],
+            catalog_url: str | None,
         ) -> None:
             from ..services import activity
 

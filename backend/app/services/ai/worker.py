@@ -6,14 +6,14 @@ import logging
 import threading
 import time
 from datetime import timedelta
-from typing import Optional
 
 from sqlmodel import Session, select
 
 from ...database import engine
 from ...models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc, utcnow
 from .. import app_settings
-from . import embeddings, tasks, text as ai_text
+from . import embeddings, tasks
+from . import text as ai_text
 from .provider import (
     get_embed_provider,
     get_llm_provider,
@@ -24,10 +24,10 @@ from .provider import (
 logger = logging.getLogger(__name__)
 
 _stop = threading.Event()
-_thread: Optional[threading.Thread] = None
-_timer_thread: Optional[threading.Thread] = None
+_thread: threading.Thread | None = None
+_timer_thread: threading.Thread | None = None
 _wake = threading.Event()
-_blocked_reason: Optional[str] = None
+_blocked_reason: str | None = None
 _WAITING_NOTE_PREFIX = "waiting: "
 _WAITING_STAMP_AGE_SEC = 120
 
@@ -35,8 +35,8 @@ _WAITING_STAMP_AGE_SEC = 120
 def _active_job_exists(
     session: Session,
     kind: AiJobKind,
-    video_id: Optional[int],
-    catalog_video_id: Optional[int] = None,
+    video_id: int | None,
+    catalog_video_id: int | None = None,
 ) -> bool:
     statement = select(AiJob).where(
         AiJob.kind == kind,
@@ -54,11 +54,11 @@ def _active_job_exists(
 
 def enqueue_job(
     kind: AiJobKind,
-    video_id: Optional[int] = None,
+    video_id: int | None = None,
     *,
-    catalog_video_id: Optional[int] = None,
+    catalog_video_id: int | None = None,
     force: bool = False,
-) -> Optional[int]:
+) -> int | None:
     with Session(engine) as session:
         if not force and _active_job_exists(
             session, kind, video_id, catalog_video_id=catalog_video_id
@@ -158,7 +158,7 @@ def _failed_video_ids(session: Session, kind: AiJobKind) -> set[int]:
 
 def enqueue_missing_embeds(
     *,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     skip_failed: bool = False,
     skip_empty_document: bool = False,
 ) -> dict:
@@ -216,7 +216,7 @@ def maybe_enqueue_index_catchup() -> dict:
     return enqueue_missing_embeds(skip_failed=True, skip_empty_document=True)
 
 
-def enqueue_reindex_embeds(*, limit: Optional[int] = None) -> dict:
+def enqueue_reindex_embeds(*, limit: int | None = None) -> dict:
     """Queue embeds for missing, stale, or wrong-model indexes (e.g. after model change)."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
@@ -257,7 +257,7 @@ def enqueue_reindex_embeds(*, limit: Optional[int] = None) -> dict:
     )
 
 
-def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
+def enqueue_missing_tags(*, limit: int | None = None) -> dict:
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
     if not ai.get("enrich_tags", True):
@@ -293,7 +293,7 @@ def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
     return _result(breakdown, empty="No videos needing AI tag review")
 
 
-def enqueue_full_tag_refresh(*, limit: Optional[int] = None) -> dict:
+def enqueue_full_tag_refresh(*, limit: int | None = None) -> dict:
     """Re-queue tag enrich for unlocked videos (clears tags_enriched_at)."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
@@ -485,16 +485,16 @@ def error_count() -> int:
         return len(rows)
 
 
-def blocked_reason() -> Optional[str]:
+def blocked_reason() -> str | None:
     return _blocked_reason
 
 
-def _set_blocked_reason(reason: Optional[str]) -> None:
+def _set_blocked_reason(reason: str | None) -> None:
     global _blocked_reason
     _blocked_reason = reason
 
 
-def _job_title(session: Session, job: AiJob) -> Optional[str]:
+def _job_title(session: Session, job: AiJob) -> str | None:
     if job.video_id:
         video = session.get(Video, job.video_id)
         if video is not None:
@@ -578,7 +578,7 @@ def recent_failures(*, limit: int = 10) -> list[dict]:
 
 def list_jobs(
     *,
-    status: Optional[str] = None,
+    status: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
     limit = max(1, min(int(limit), 200))
@@ -703,7 +703,7 @@ def clear_failed_jobs(*, keep_days: int = 0) -> int:
     return deleted
 
 
-def current_job_info() -> Optional[dict]:
+def current_job_info() -> dict | None:
     with Session(engine) as session:
         job = session.exec(
             select(AiJob)
@@ -755,7 +755,7 @@ def current_job_info() -> Optional[dict]:
         return info
 
 
-def current_job_label() -> Optional[str]:
+def current_job_label() -> str | None:
     info = current_job_info()
     if info is None:
         return None
@@ -783,7 +783,7 @@ def _job_runnable(
     return False
 
 
-def _waiting_reason(*, llm_ok: bool, embed_ok: bool) -> Optional[str]:
+def _waiting_reason(*, llm_ok: bool, embed_ok: bool) -> str | None:
     if not llm_ok and not embed_ok:
         return "No AI provider reachable (enable Ollama or OpenRouter)"
     if not embed_ok:
@@ -838,7 +838,7 @@ def _compute_blocked_reason(
     llm_ok: bool,
     embed_ok: bool,
     has_queued: bool,
-) -> Optional[str]:
+) -> str | None:
     if paused:
         return "AI queue is paused"
     try:
@@ -868,7 +868,7 @@ def _compute_blocked_reason(
     return None
 
 
-def _next_job(session: Session, *, llm_ok: bool, embed_ok: bool) -> Optional[AiJob]:
+def _next_job(session: Session, *, llm_ok: bool, embed_ok: bool) -> AiJob | None:
     now = utcnow()
     jobs = session.exec(
         select(AiJob)
@@ -1030,14 +1030,14 @@ def _worker_loop() -> None:
     while not _stop.is_set():
         try:
             worked = _process_one()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("AI worker loop error")
             worked = False
         if worked:
             continue
         try:
             _maybe_pending_category_refresh()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("Pending category refresh failed")
         _wake.wait(timeout=2.0)
         _wake.clear()
@@ -1095,7 +1095,7 @@ def _timer_loop() -> None:
                 if _stop.is_set():
                     break
                 time.sleep(5)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("AI timer loop error")
             time.sleep(30)
 

@@ -17,7 +17,6 @@ from app.services.ytdlp_extract import (
     is_youtube_short_url,
 )
 
-
 LTT = "https://www.youtube.com/@LinusTechTips"
 
 

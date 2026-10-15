@@ -272,8 +272,8 @@ def test_fetch_channel_feed_ignores_per_video_errors(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "yt_dlp", types.SimpleNamespace(YoutubeDL=DummyYDL)
     )
-    from app.services.ytdlp_extract import fetch_channel_feed
     import app.services.ytdlp_extract as extract
+    from app.services.ytdlp_extract import fetch_channel_feed
 
     extract._feed_cache.clear()
     result = fetch_channel_feed("https://www.youtube.com/@karrigan", offset=0, limit=2)

@@ -1,6 +1,6 @@
 """DownloadQueue state transitions with stubbed worker (no yt-dlp)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, select
 
@@ -101,7 +101,7 @@ def test_recover_stuck_downloading(init_db, monkeypatch):
 def test_next_job_id_skips_paused_fifo(init_db, monkeypatch):
     monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
     q = downloader.DownloadQueue()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with Session(init_db["engine"]) as session:
         older = _add_job(session, paused=True)
         older.created_at = now - timedelta(minutes=5)

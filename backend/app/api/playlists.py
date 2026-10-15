@@ -2,7 +2,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import func, update as sa_update
+from sqlalchemy import func
+from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
 from ..database import get_session
@@ -526,7 +527,7 @@ async def upload_playlist_thumbnail(
         raise HTTPException(status_code=400, detail="Empty file")
     try:
         dest = write_playlist_cover(playlist_id, data)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(status_code=400, detail="Could not read image") from exc
     playlist.cover_path = dest
     session.add(playlist)

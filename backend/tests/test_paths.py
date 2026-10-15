@@ -1,7 +1,5 @@
 """Tests for path helpers used by import / rename."""
 
-from pathlib import Path
-
 from app.models import Video
 from app.services.paths import (
     is_manual_import,

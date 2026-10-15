@@ -1,4 +1,4 @@
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -28,7 +28,7 @@ class AiSettingsRead(BaseModel):
     openrouter_embed_model: str = "openai/text-embedding-3-small"
     ollama_prefer_embeddings: bool = False
     openrouter_show_costs: bool = False
-    openrouter_weekly_budget_usd: Optional[float] = None
+    openrouter_weekly_budget_usd: float | None = None
     openrouter_budget_hard_limit: bool = False
     schedule: Literal["on_download", "on_request", "timer", "set_time"] = "on_download"
     timer_hours: float = 6
@@ -45,47 +45,47 @@ class AiSettingsRead(BaseModel):
     ai_duplicates: bool = True
     category_min_score: float = 0.55
     workload_profile: Literal["light", "normal", "heavy"] = "normal"
-    vram_gb: Optional[float] = None
+    vram_gb: float | None = None
     paused: bool = False
 
 
 class AiSettingsUpdate(BaseModel):
-    enabled: Optional[bool] = None
-    provider: Optional[str] = None
-    base_url: Optional[str] = None
-    embed_model: Optional[str] = None
-    chat_model: Optional[str] = None
-    openrouter_enabled: Optional[bool] = None
-    openrouter_api_key: Optional[str] = None
-    openrouter_model: Optional[str] = None
-    openrouter_scope: Optional[Literal["specialized", "all"]] = None
-    openrouter_embed_model: Optional[str] = None
-    ollama_prefer_embeddings: Optional[bool] = None
-    openrouter_show_costs: Optional[bool] = None
+    enabled: bool | None = None
+    provider: str | None = None
+    base_url: str | None = None
+    embed_model: str | None = None
+    chat_model: str | None = None
+    openrouter_enabled: bool | None = None
+    openrouter_api_key: str | None = None
+    openrouter_model: str | None = None
+    openrouter_scope: Literal["specialized", "all"] | None = None
+    openrouter_embed_model: str | None = None
+    ollama_prefer_embeddings: bool | None = None
+    openrouter_show_costs: bool | None = None
     # null clears; 0 / empty also cleared in clamp_weekly_budget_usd.
-    openrouter_weekly_budget_usd: Optional[float] = None
-    openrouter_budget_hard_limit: Optional[bool] = None
-    schedule: Optional[Literal["on_download", "on_request", "timer", "set_time"]] = None
-    timer_hours: Optional[float] = Field(default=None, ge=0.25, le=168)
-    schedule_time: Optional[str] = None
-    auto_pull_models: Optional[bool] = None
-    use_subtitles: Optional[bool] = None
-    enrich_tags: Optional[bool] = None
-    tag_rescan_days: Optional[int] = Field(
+    openrouter_weekly_budget_usd: float | None = None
+    openrouter_budget_hard_limit: bool | None = None
+    schedule: Literal["on_download", "on_request", "timer", "set_time"] | None = None
+    timer_hours: float | None = Field(default=None, ge=0.25, le=168)
+    schedule_time: str | None = None
+    auto_pull_models: bool | None = None
+    use_subtitles: bool | None = None
+    enrich_tags: bool | None = None
+    tag_rescan_days: int | None = Field(
         default=None,
         ge=app_settings.TAG_RESCAN_DAYS_MIN,
         le=app_settings.TAG_RESCAN_DAYS_MAX,
     )
-    ai_summaries: Optional[bool] = None
-    ai_chapters: Optional[bool] = None
-    ai_chapters_mode: Optional[Literal["on_download", "on_watch"]] = None
-    ai_chat: Optional[bool] = None
-    summary_length: Optional[Literal["short", "medium", "long"]] = None
-    ai_duplicates: Optional[bool] = None
-    category_min_score: Optional[float] = Field(default=None, ge=0.20, le=0.90)
-    workload_profile: Optional[Literal["light", "normal", "heavy"]] = None
-    vram_gb: Optional[float] = Field(default=None, ge=0.5, le=256)
-    paused: Optional[bool] = None
+    ai_summaries: bool | None = None
+    ai_chapters: bool | None = None
+    ai_chapters_mode: Literal["on_download", "on_watch"] | None = None
+    ai_chat: bool | None = None
+    summary_length: Literal["short", "medium", "long"] | None = None
+    ai_duplicates: bool | None = None
+    category_min_score: float | None = Field(default=None, ge=0.20, le=0.90)
+    workload_profile: Literal["light", "normal", "heavy"] | None = None
+    vram_gb: float | None = Field(default=None, ge=0.5, le=256)
+    paused: bool | None = None
 
 
 class AppSettingsRead(BaseModel):
@@ -101,19 +101,19 @@ class AppSettingsRead(BaseModel):
 
 
 class AppSettingsUpdate(BaseModel):
-    progress_expiry_days: Optional[int] = Field(default=None, ge=1, le=365)
-    metadata_sync_interval_hours: Optional[int] = Field(default=None, ge=1, le=168)
-    channel_catalog_enabled: Optional[bool] = None
-    channel_catalog_max_videos: Optional[int] = Field(
+    progress_expiry_days: int | None = Field(default=None, ge=1, le=365)
+    metadata_sync_interval_hours: int | None = Field(default=None, ge=1, le=168)
+    channel_catalog_enabled: bool | None = None
+    channel_catalog_max_videos: int | None = Field(
         default=None,
         ge=app_settings.CHANNEL_CATALOG_MAX_MIN,
         le=app_settings.CHANNEL_CATALOG_MAX_MAX,
     )
-    direct_youtube_search: Optional[bool] = None
-    youtube_video_search: Optional[bool] = None
-    setup_completed: Optional[bool] = None
-    ui: Optional[dict[str, Any]] = None
-    ai: Optional[AiSettingsUpdate] = None
+    direct_youtube_search: bool | None = None
+    youtube_video_search: bool | None = None
+    setup_completed: bool | None = None
+    ui: dict[str, Any] | None = None
+    ai: AiSettingsUpdate | None = None
 
 
 def _ai_read(data: dict[str, Any]) -> AiSettingsRead:

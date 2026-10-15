@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -18,13 +18,14 @@ from ...models import (
     VideoAiMeta,
     utcnow,
 )
-from .. import app_settings, chapters as chapters_svc, library
-from . import embeddings, text as ai_text
+from .. import app_settings, library
+from .. import chapters as chapters_svc
+from . import embeddings
+from . import text as ai_text
 from .provider import (
     OpenRouterProvider,
     get_embed_provider,
     get_llm_provider,
-    get_provider,
     llm_features_allowed,
     require_llm_chat_model,
     resolve_embed_model,
@@ -150,7 +151,7 @@ def _extract_summary_text(raw: str) -> str:
     return ""
 
 
-def run_embed_video(session: Session, video_id: Optional[int]) -> Optional[SkipReason]:
+def run_embed_video(session: Session, video_id: int | None) -> SkipReason | None:
     if video_id is None:
         raise RuntimeError("embed_video requires video_id")
     ok = embeddings.embed_video(session, video_id)
@@ -169,8 +170,8 @@ def run_embed_video(session: Session, video_id: Optional[int]) -> Optional[SkipR
 
 
 def run_embed_catalog_video(
-    session: Session, catalog_video_id: Optional[int]
-) -> Optional[SkipReason]:
+    session: Session, catalog_video_id: int | None
+) -> SkipReason | None:
     if catalog_video_id is None:
         raise RuntimeError("embed_catalog_video requires catalog_video_id")
     video = session.get(ChannelCatalogVideo, catalog_video_id)
@@ -244,7 +245,7 @@ def _is_near_duplicate(tag: str, seen_norms: set[str]) -> bool:
     return False
 
 
-def run_enrich_tags(session: Session, video_id: Optional[int]) -> Optional[SkipReason]:
+def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None:
     if video_id is None:
         raise RuntimeError("enrich_tags requires video_id")
     ai = app_settings.ai_settings()
@@ -659,6 +660,7 @@ def run_chapters(session: Session, video_id: int, *, force: bool = False) -> lis
 def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video]:
     """Mix recent watches, recent adds, and channel-stratified fill."""
     from collections import defaultdict
+
     from sqlalchemy import nullslast
 
     used: set[int] = set()
@@ -775,7 +777,7 @@ def _parse_category_items(raw_items: list[Any]) -> list[tuple[str, str]]:
     return cleaned
 
 
-def run_refresh_categories(session: Session, _video_id: Optional[int] = None) -> None:
+def run_refresh_categories(session: Session, _video_id: int | None = None) -> None:
     embed_provider = get_embed_provider()
     if embed_provider is None:
         raise RuntimeError(
@@ -853,7 +855,7 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
             sample_centroids.append((video, cent))
 
     example_min = 0.28
-    prepared: list[tuple[str, Optional[str], list[float]]] = []
+    prepared: list[tuple[str, str | None, list[float]]] = []
     for name, blurb in cleaned:
         provisional = ai_text.category_embed_text(name, blurb)
         q = embed_provider.embed(provisional, embed_model, usage_kind="embed")
@@ -896,10 +898,10 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
 def dispatch(
     session: Session,
     kind: AiJobKind,
-    video_id: Optional[int],
+    video_id: int | None,
     *,
-    catalog_video_id: Optional[int] = None,
-) -> Optional[SkipReason]:
+    catalog_video_id: int | None = None,
+) -> SkipReason | None:
     """Run a job. Returns None on success, or a skip reason (caller → cancelled)."""
     if kind == AiJobKind.embed_video:
         return run_embed_video(session, video_id)

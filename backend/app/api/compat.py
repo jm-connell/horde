@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -13,8 +13,8 @@ from ..models import Video
 from ..schemas import CompatState
 from ..services import compat_rendition
 from ..services.media_info import needs_compat
-from ..services.ytdlp_formats import compat_copy_cap
 from ..services.paths import resolve_compat_path
+from ..services.ytdlp_formats import compat_copy_cap
 
 router = APIRouter(prefix="/api", tags=["compat"])
 
@@ -35,7 +35,7 @@ class ConvertLibraryRequest(BaseModel):
 
 
 class CompatCancelRequest(BaseModel):
-    kind: Optional[Literal["compat", "convert"]] = None
+    kind: Literal["compat", "convert"] | None = None
 
 
 def _video_or_404(session: Session, video_id: int) -> Video:
@@ -54,7 +54,7 @@ def get_compat(video_id: int, session: Session = Depends(get_session)):
 @router.post("/videos/{video_id}/compat", response_model=CompatState)
 def request_compat(
     video_id: int,
-    payload: Optional[CompatRequest] = None,
+    payload: CompatRequest | None = None,
     session: Session = Depends(get_session),
 ):
     """Create the sidecar for one video (a viewer is waiting, so it jumps the queue)."""
@@ -144,6 +144,6 @@ def convert_library(
 
 
 @router.post("/compat/cancel")
-def compat_cancel(payload: Optional[CompatCancelRequest] = None):
+def compat_cancel(payload: CompatCancelRequest | None = None):
     dropped = compat_rendition.cancel_all(payload.kind if payload else None)
     return {"cancelled": dropped}

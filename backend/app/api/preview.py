@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 from urllib.parse import urlparse
 
 import httpx
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 _CHUNK = 512 * 1024
 _CACHE_CONTROL = "private, max-age=1800, immutable"
 
-_preview_client: Optional[httpx.AsyncClient] = None
+_preview_client: httpx.AsyncClient | None = None
 
 
 def get_preview_client() -> httpx.AsyncClient:
@@ -77,7 +77,7 @@ async def _open_upstream(
     return await client.send(upstream_req, stream=True)
 
 
-async def _close_upstream(upstream: Optional[httpx.Response]) -> None:
+async def _close_upstream(upstream: httpx.Response | None) -> None:
     if upstream is None:
         return
     try:
@@ -88,8 +88,8 @@ async def _close_upstream(upstream: Optional[httpx.Response]) -> None:
 
 def _reresolve_preview(
     *,
-    allow_refresh: Optional[tuple[str, str]] = None,
-    stream_url: Optional[str] = None,
+    allow_refresh: tuple[str, str] | None = None,
+    stream_url: str | None = None,
 ) -> dict:
     """Re-extract CDN URLs after a 401/403. Raises HTTPException on failure."""
     if allow_refresh is not None:
@@ -104,7 +104,7 @@ def _reresolve_preview(
                 detail=str(exc),
                 headers={"Retry-After": str(exc.retry_after)},
             ) from exc
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("Could not refresh preview media: %s", exc)
             raise HTTPException(
                 status_code=502,
@@ -114,7 +114,7 @@ def _reresolve_preview(
     logger.warning("Refreshing preview stream url=%s", stream_url[:80])
     try:
         return stream_preview.resolve_preview_stream(stream_url, force=True)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("Could not refresh preview stream: %s", exc)
         raise HTTPException(
             status_code=502,
@@ -126,8 +126,8 @@ async def _proxy_upstream(
     request: Request,
     resolved: dict,
     *,
-    allow_refresh: Optional[tuple[str, str]] = None,
-    stream_url: Optional[str] = None,
+    allow_refresh: tuple[str, str] | None = None,
+    stream_url: str | None = None,
 ) -> StreamingResponse:
     """Proxy a CDN media URL with Range support.
 
@@ -140,7 +140,7 @@ async def _proxy_upstream(
     if range_header:
         upstream_headers["Range"] = range_header
 
-    upstream: Optional[httpx.Response] = None
+    upstream: httpx.Response | None = None
     try:
         upstream = await _open_upstream(
             client, resolved["direct_url"], upstream_headers
@@ -237,7 +237,7 @@ async def _head_upstream(
     request: Request,
     resolved: dict,
     *,
-    allow_refresh: Optional[tuple[str, str]] = None,
+    allow_refresh: tuple[str, str] | None = None,
 ) -> Response:
     """HEAD proxy for adaptive media (CORS/preflight and player probes)."""
     client = get_preview_client()
@@ -305,7 +305,7 @@ def preview_meta(url: str = Query(...), session: Session = Depends(get_session))
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         kind, _ = classify_ytdlp_error(exc, url=cleaned)
         detail = http_detail_for_error(
             exc, prefix="Could not load preview", url=cleaned
@@ -352,7 +352,7 @@ async def preview_subtitles(
         resolved = stream_preview.resolve_preview_subtitle(cleaned, lang)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not load preview subtitles: {exc}"
         ) from exc
@@ -381,7 +381,7 @@ async def preview_subtitles(
             )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise HTTPException(
                 status_code=502,
                 detail=f"Could not refresh preview subtitles: {exc}",
@@ -428,7 +428,7 @@ def preview_manifest(request: Request, url: str = Query(...)):
     try:
         session = stream_preview.resolve_preview_manifest(cleaned)
         xml = stream_preview.build_dash_manifest(session)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("preview manifest failed for %r", cleaned)
         raise HTTPException(
             status_code=400,
@@ -473,7 +473,7 @@ async def preview_media(
             detail=str(exc),
             headers={"Retry-After": str(exc.retry_after)},
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not open preview media: {exc}"
         ) from exc
@@ -499,7 +499,7 @@ async def preview_media_head(
             detail=str(exc),
             headers={"Retry-After": str(exc.retry_after)},
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not open preview media: {exc}"
         ) from exc
@@ -513,7 +513,7 @@ async def preview_stream(request: Request, url: str = Query(...)):
     cleaned = _require_video_url(url)
     try:
         resolved = stream_preview.resolve_preview_stream(cleaned)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not open preview stream: {exc}"
         ) from exc

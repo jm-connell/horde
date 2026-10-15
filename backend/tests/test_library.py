@@ -1,12 +1,12 @@
 """Library query helpers: filter, sort, continue-watching, tags, channels."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.services import library
 
 
 def _ago(days: int = 0, hours: int = 0) -> datetime:
-    return datetime.now(timezone.utc) - timedelta(days=days, hours=hours)
+    return datetime.now(UTC) - timedelta(days=days, hours=hours)
 
 
 def test_query_excludes_review_when_flagged(session, add_video):
@@ -98,7 +98,7 @@ def test_query_sort_title_and_file_size(session, add_video):
 
 
 def test_continue_watching_skips_short_and_finished(session, add_video):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     in_row = add_video(
         title="Midway",
         duration_sec=100.0,
@@ -136,7 +136,7 @@ def test_expire_stale_progress(session, add_video):
     fresh = add_video(
         title="New",
         last_position_sec=50.0,
-        last_watched_at=datetime.now(timezone.utc),
+        last_watched_at=datetime.now(UTC),
     )
     library.expire_stale_progress(session)
     session.refresh(stale)
@@ -155,7 +155,7 @@ def test_channel_stats_skips_review_and_sorts(session, add_video):
         title="Review junk",
         channel="Alpha",
         needs_review=True,
-        added_at=datetime.now(timezone.utc),
+        added_at=datetime.now(UTC),
         file_path="imports/junk.mp4",
     )
     rows = library.channel_stats(session, sort="video_count", order="desc")
@@ -196,7 +196,7 @@ def test_rename_channel(session, add_video):
 
 
 def test_youtube_library_map_includes_published_at(session, add_video):
-    published = datetime(2020, 5, 1, tzinfo=timezone.utc)
+    published = datetime(2020, 5, 1, tzinfo=UTC)
     video = add_video(
         title="Dated",
         channel="LTT",

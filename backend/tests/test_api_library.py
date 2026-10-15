@@ -1,5 +1,7 @@
 """HTTP regression: library, review, watch progress, streaming, channels."""
 
+from datetime import UTC
+
 
 def test_list_videos_hides_review_queue(client, add_video):
     ready = add_video(title="In library", channel="Alpha")
@@ -121,11 +123,11 @@ def test_list_videos_are_compact(client, add_video):
 
 
 def test_continue_watching_get_is_read_only(client, add_video, session):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from app.models import Video
 
-    stale_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    stale_cutoff = datetime.now(UTC) - timedelta(days=30)
     video = add_video(
         title="Stale progress",
         duration_sec=200.0,

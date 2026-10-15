@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlparse
 
-from sqlmodel import Session, col, func, select
+from sqlmodel import Session, func, select
 
 from ...database import engine
 from ...models import (
@@ -29,7 +28,7 @@ _MAX_DESC_CHARS = 4000
 
 _stop = threading.Event()
 _wake = threading.Event()
-_thread: Optional[threading.Thread] = None
+_thread: threading.Thread | None = None
 _state_lock = threading.Lock()
 _runtime: dict[str, Any] = {
     "running": False,
@@ -121,7 +120,7 @@ def _same_channel_catalog(
     row: ChannelCatalog,
     channel_url: str,
     *,
-    channel_name: Optional[str] = None,
+    channel_name: str | None = None,
 ) -> bool:
     row_keys = _channel_identity_keys(row.channel_url)
     req_keys = _channel_identity_keys(channel_url)
@@ -337,8 +336,8 @@ def get_catalog_by_url(
     session: Session,
     channel_url: str,
     *,
-    channel_name: Optional[str] = None,
-) -> Optional[ChannelCatalog]:
+    channel_name: str | None = None,
+) -> ChannelCatalog | None:
     rows = session.exec(select(ChannelCatalog)).all()
     matches = [
         row
@@ -363,8 +362,8 @@ def youtube_search_pref(
     session: Session,
     channel_url: str,
     *,
-    channel_name: Optional[str] = None,
-    system: Optional[bool] = None,
+    channel_name: str | None = None,
+    system: bool | None = None,
 ) -> dict[str, Any]:
     """Override + effective Direct YouTube search for a channel URL."""
     if system is None:
@@ -386,10 +385,10 @@ def youtube_search_pref(
 
 def set_direct_youtube_search(
     channel_url: str,
-    value: Optional[bool],
+    value: bool | None,
     *,
-    channel_name: Optional[str] = None,
-) -> Optional[dict[str, Any]]:
+    channel_name: str | None = None,
+) -> dict[str, Any] | None:
     """Set per-channel override (None = inherit). Creates a catalog row if needed."""
     url = _normalize_channel_url(channel_url)
     if not url or not is_youtube_channel_url(url):
@@ -422,9 +421,9 @@ def set_direct_youtube_search(
 def enqueue_channel(
     channel_url: str,
     *,
-    channel_name: Optional[str] = None,
+    channel_name: str | None = None,
     force: bool = False,
-) -> Optional[int]:
+) -> int | None:
     """Queue a channel for catalog indexing. Returns catalog id or None."""
     if not _enabled():
         return None
@@ -493,7 +492,7 @@ def enqueue_channel(
 
 
 def maybe_enqueue_for_feed(
-    channel_url: str, *, channel_name: Optional[str] = None
+    channel_url: str, *, channel_name: str | None = None
 ) -> None:
     """Enqueue if missing or stale beyond metadata sync interval."""
     if not _enabled():
@@ -502,7 +501,7 @@ def maybe_enqueue_for_feed(
         interval = int(app_settings.load().get("metadata_sync_interval_hours") or 24)
     except (TypeError, ValueError):
         interval = 24
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=max(1, interval))
+    cutoff = datetime.now(UTC) - timedelta(hours=max(1, interval))
 
     with Session(engine) as session:
         catalog = get_catalog_by_url(session, channel_url, channel_name=channel_name)
@@ -516,7 +515,7 @@ def maybe_enqueue_for_feed(
             return
         updated = catalog.updated_at
         if updated is not None and updated.tzinfo is None:
-            updated = updated.replace(tzinfo=timezone.utc)
+            updated = updated.replace(tzinfo=UTC)
         if (
             catalog.status == ChannelCatalogStatus.ready
             and updated
@@ -530,7 +529,7 @@ def maybe_enqueue_for_feed(
         enqueue_channel(channel_url, channel_name=channel_name, force=True)
 
 
-def _library_channel_targets() -> list[tuple[Optional[str], str]]:
+def _library_channel_targets() -> list[tuple[str | None, str]]:
     """Library channels that have a YouTube URL: (name, url)."""
     with Session(engine) as session:
         from .. import library as library_svc
@@ -598,7 +597,7 @@ def refresh_all_library_channels() -> dict[str, Any]:
 
                 sync_feed_head(url, channel_name=name, limit=50)
                 refreshed += 1
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("incremental head sync failed for %s", url, exc_info=True)
                 skipped += 1
             continue
@@ -637,25 +636,25 @@ def refresh_stale_catalogs() -> None:
         interval = int(app_settings.load().get("metadata_sync_interval_hours") or 24)
     except (TypeError, ValueError):
         interval = 24
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=max(1, interval))
+    cutoff = datetime.now(UTC) - timedelta(hours=max(1, interval))
     with Session(engine) as session:
         rows = session.exec(
             select(ChannelCatalog).where(
                 ChannelCatalog.status == ChannelCatalogStatus.ready
             )
         ).all()
-        stale_urls: list[tuple[str, Optional[str]]] = []
+        stale_urls: list[tuple[str, str | None]] = []
         for catalog in rows:
             updated = catalog.updated_at
             if updated is not None and updated.tzinfo is None:
-                updated = updated.replace(tzinfo=timezone.utc)
+                updated = updated.replace(tzinfo=UTC)
             if updated is None or updated < cutoff:
                 stale_urls.append((catalog.channel_url, catalog.channel_name))
     for channel_url, channel_name in stale_urls:
         enqueue_channel(channel_url, channel_name=channel_name, force=True)
 
 
-def _next_queued(session: Session) -> Optional[ChannelCatalog]:
+def _next_queued(session: Session) -> ChannelCatalog | None:
     return session.exec(
         select(ChannelCatalog)
         .where(ChannelCatalog.status == ChannelCatalogStatus.queued)
@@ -672,7 +671,7 @@ def _worker_loop() -> None:
             _wake.wait(timeout=30)
             _wake.clear()
             continue
-        catalog_id: Optional[int] = None
+        catalog_id: int | None = None
         with Session(engine) as session:
             job = _next_queued(session)
             if job is not None and job.id is not None:
@@ -691,7 +690,7 @@ def start_catalog_worker() -> None:
     try:
         with Session(engine) as session:
             reconcile_duplicate_catalogs(session)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("catalog duplicate reconcile skipped", exc_info=True)
     _stop.clear()
     _thread = threading.Thread(

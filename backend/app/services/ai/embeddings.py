@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import struct
-from typing import Optional
 
 from sqlmodel import Session, select
 
@@ -17,7 +16,7 @@ def pack_vector(vec: list[float]) -> bytes:
     return struct.pack(f"{len(vec)}f", *vec)
 
 
-def unpack_vector(blob: bytes, dim: Optional[int] = None) -> list[float]:
+def unpack_vector(blob: bytes, dim: int | None = None) -> list[float]:
     if not blob:
         return []
     n = dim or (len(blob) // 4)
@@ -63,7 +62,7 @@ def blend_vectors(
     return l2_normalize(mixed)
 
 
-def mean_vectors(vectors: list[list[float]]) -> Optional[list[float]]:
+def mean_vectors(vectors: list[list[float]]) -> list[float] | None:
     usable = [v for v in vectors if v]
     if not usable:
         return None
@@ -197,7 +196,7 @@ def embed_video(session: Session, video_id: int) -> bool:
         return True
     except RuntimeError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         session.rollback()
         meta = _get_or_create_meta(session, video_id)
         meta.embed_status = "error"
@@ -208,7 +207,7 @@ def embed_video(session: Session, video_id: int) -> bool:
         raise RuntimeError(str(exc)) from exc
 
 
-def embed_query(query: str) -> Optional[list[float]]:
+def embed_query(query: str) -> list[float] | None:
     provider = get_embed_provider()
     if provider is None or not query.strip():
         return None
@@ -219,7 +218,7 @@ def embed_query(query: str) -> Optional[list[float]]:
         return None
 
 
-def video_centroid(session: Session, video_id: int) -> Optional[list[float]]:
+def video_centroid(session: Session, video_id: int) -> list[float] | None:
     rows = session.exec(
         select(VideoEmbedding).where(VideoEmbedding.video_id == video_id)
     ).all()
@@ -248,7 +247,7 @@ def similar_video_hits(
     query_vec: list[float],
     *,
     limit: int = 24,
-    exclude_ids: Optional[set[int]] = None,
+    exclude_ids: set[int] | None = None,
     min_score: float = 0.15,
 ) -> list[tuple[int, float, int]]:
     """Return (video_id, score, chunk_index) by best-matching chunk."""
@@ -275,7 +274,7 @@ def similar_video_ids(
     query_vec: list[float],
     *,
     limit: int = 24,
-    exclude_ids: Optional[set[int]] = None,
+    exclude_ids: set[int] | None = None,
     min_score: float = 0.15,
 ) -> list[tuple[int, float]]:
     """Return (video_id, score) sorted by descending cosine similarity.
@@ -356,7 +355,7 @@ def retrieve_video_chunks(
 def build_chat_context(session: Session, video: Video, question: str) -> str:
     """Metadata + RAG caption chunks (or subtitle fallback) for video chat."""
     meta = ai_text.metadata_document(video)
-    summary: Optional[str] = None
+    summary: str | None = None
     if video.id is not None:
         ai_meta = session.get(VideoAiMeta, video.id)
         if ai_meta is not None and ai_meta.summary:
@@ -402,7 +401,7 @@ def videos_needing_embed(
     session: Session,
     *,
     limit: int = 500,
-    exclude_ids: Optional[set[int]] = None,
+    exclude_ids: set[int] | None = None,
     skip_empty_document: bool = False,
 ) -> list[int]:
     ai = app_settings.ai_settings()
@@ -444,7 +443,7 @@ def sync_tag_provenance(
     session: Session,
     video_id: int,
     *,
-    user_tag: Optional[str] = None,
+    user_tag: str | None = None,
 ) -> None:
     """Lock auto-enrich and keep ai/user tag lists in sync with Video.tags."""
     from .. import library as lib

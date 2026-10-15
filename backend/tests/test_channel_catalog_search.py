@@ -15,7 +15,6 @@ from app.services.channel_catalog.query import (
     update_catalog_video_fields,
 )
 
-
 LTT = "https://youtube.com/@linustechtips"
 OTHER = "https://youtube.com/@otherchannel"
 LINUS_TITLE = "I painted his House to Fix his WiFi"

@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import re
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple
 
 _lock = threading.Lock()
 
@@ -62,7 +62,7 @@ def upsert_many(entries: list[dict[str, Any]]) -> None:
         return
     with _lock:
         cache = load()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         for entry in entries:
             yt_id = entry.get("id")
             if not yt_id or not isinstance(yt_id, str):
@@ -165,30 +165,30 @@ def _month_year_label(dt: datetime) -> str:
 class PublishedMeta(NamedTuple):
     """Sort ISO plus an honest display label when the calendar day is not known."""
 
-    iso: Optional[str] = None
-    label: Optional[str] = None
-    precision: Optional[str] = None  # day | month | year | relative
+    iso: str | None = None
+    label: str | None = None
+    precision: str | None = None  # day | month | year | relative
 
 
-def _from_unix(value: float) -> Optional[str]:
+def _from_unix(value: float) -> str | None:
     n = float(value)
     if n > 1e12:
         n /= 1000.0
     if n <= 0:
         return None
     try:
-        return datetime.fromtimestamp(n, tz=timezone.utc).isoformat()
+        return datetime.fromtimestamp(n, tz=UTC).isoformat()
     except (OverflowError, OSError, ValueError):
         return None
 
 
-def _dt_from_iso(iso: str) -> Optional[datetime]:
+def _dt_from_iso(iso: str) -> datetime | None:
     try:
         dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -199,13 +199,13 @@ def _unit_phrase(n: int, singular: str) -> str:
     return f"{n} {singular}s ago"
 
 
-def format_relative_ago(dt: datetime, *, now: Optional[datetime] = None) -> str:
+def format_relative_ago(dt: datetime, *, now: datetime | None = None) -> str:
     """YouTube-style age string. Does not invent a calendar day."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     if now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
+        now = now.replace(tzinfo=UTC)
     seconds = max(0.0, (now - dt).total_seconds())
     minutes = seconds / 60
     hours = seconds / 3600
@@ -230,7 +230,7 @@ def format_relative_ago(dt: datetime, *, now: Optional[datetime] = None) -> str:
     return _unit_phrase(round(days / 365), "year")
 
 
-def relative_label_from_text(raw: str) -> Optional[str]:
+def relative_label_from_text(raw: str) -> str | None:
     """Keep YouTube's '3 years ago' wording; drop 'Streamed' / similar prefixes."""
     s = raw.strip()
     if not s:
@@ -246,12 +246,12 @@ def relative_label_from_text(raw: str) -> Optional[str]:
     return _unit_phrase(int(match.group("n")), singular)
 
 
-def parse_upload_date(raw: Any) -> Optional[str]:
+def parse_upload_date(raw: Any) -> str | None:
     """Normalize yt-dlp dates (YYYYMMDD, unix, ISO, relative 'N years ago') to ISO UTC."""
     if raw is None or isinstance(raw, bool):
         return None
     if isinstance(raw, datetime):
-        dt = raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
+        dt = raw if raw.tzinfo else raw.replace(tzinfo=UTC)
         return dt.isoformat()
     if isinstance(raw, (int, float)):
         return _from_unix(raw)
@@ -260,9 +260,7 @@ def parse_upload_date(raw: Any) -> Optional[str]:
         return None
     if len(s) == 8 and s.isdigit():
         try:
-            return (
-                datetime.strptime(s, "%Y%m%d").replace(tzinfo=timezone.utc).isoformat()
-            )
+            return datetime.strptime(s, "%Y%m%d").replace(tzinfo=UTC).isoformat()
         except ValueError:
             return None
     if s.isdigit():
@@ -273,30 +271,24 @@ def parse_upload_date(raw: Any) -> Optional[str]:
                 iso = s.replace("Z", "+00:00")
                 dt = datetime.fromisoformat(iso)
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
+                    dt = dt.replace(tzinfo=UTC)
                 return dt.isoformat()
-            return (
-                datetime.strptime(s[:10], "%Y-%m-%d")
-                .replace(tzinfo=timezone.utc)
-                .isoformat()
-            )
+            return datetime.strptime(s[:10], "%Y-%m-%d").replace(tzinfo=UTC).isoformat()
         except ValueError:
             pass
     if _YESTERDAY_RE.search(s):
-        return (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        return (datetime.now(UTC) - timedelta(days=1)).isoformat()
     match = _RELATIVE_AGO_RE.search(s)
     if match:
         unit = match.group("unit").lower()
         secs = _UNIT_SECONDS.get(unit)
         if secs:
             n = int(match.group("n"))
-            return (
-                datetime.now(timezone.utc) - timedelta(seconds=n * secs)
-            ).isoformat()
+            return (datetime.now(UTC) - timedelta(seconds=n * secs)).isoformat()
     return None
 
 
-def published_meta_from_entry(entry: Optional[dict[str, Any]]) -> PublishedMeta:
+def published_meta_from_entry(entry: dict[str, Any] | None) -> PublishedMeta:
     """Precise calendar dates when yt-dlp has them; relative labels otherwise.
 
     Channel/search tabs often only have 'N years ago'. That is enough to sort
@@ -370,6 +362,6 @@ def published_meta_from_entry(entry: Optional[dict[str, Any]]) -> PublishedMeta:
     return PublishedMeta()
 
 
-def published_at_from_entry(entry: Optional[dict[str, Any]]) -> Optional[str]:
+def published_at_from_entry(entry: dict[str, Any] | None) -> str | None:
     """Sort key (ISO) from a yt-dlp info/entry dict."""
     return published_meta_from_entry(entry).iso

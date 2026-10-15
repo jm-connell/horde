@@ -12,7 +12,6 @@ import io
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional
 
 import httpx
 
@@ -56,12 +55,12 @@ def write_list_thumbnail(video_id: int, source: Path | bytes) -> bool:
         dest.parent.mkdir(parents=True, exist_ok=True)
         img.save(dest, "JPEG", quality=85, optimize=True)
         return dest.is_file() and dest.stat().st_size > 0
-    except Exception:  # noqa: BLE001 — list thumbs must never fail a download
+    except Exception:
         logger.debug("list thumbnail write failed for %s", video_id, exc_info=True)
         return False
 
 
-def ensure_list_thumbnail(video_id: int, full: Path) -> Optional[Path]:
+def ensure_list_thumbnail(video_id: int, full: Path) -> Path | None:
     """Return the list JPEG, generating it from ``full`` if missing."""
     sm = list_path(video_id)
     if sm.is_file() and sm.stat().st_size > 0:
@@ -81,11 +80,11 @@ def _http_get_bytes(url: str) -> bytes:
 
 
 def save_from_url(
-    url: Optional[str],
+    url: str | None,
     video_id: int,
     *,
-    list_url: Optional[str] = None,
-) -> Optional[str]:
+    list_url: str | None = None,
+) -> str | None:
     """Fetch the full thumbnail and a smaller list sibling. Returns the full path."""
     if not url:
         return None
@@ -123,8 +122,8 @@ def copy_full(src: Path, video_id: int) -> str:
 
 
 def unlink_for_video(
-    video_id: Optional[int],
-    thumbnail_path: Optional[str] = None,
+    video_id: int | None,
+    thumbnail_path: str | None = None,
 ) -> None:
     if thumbnail_path:
         Path(thumbnail_path).unlink(missing_ok=True)
@@ -157,8 +156,8 @@ def write_playlist_cover(playlist_id: int, data: bytes) -> str:
 
 
 def unlink_playlist_cover(
-    playlist_id: Optional[int],
-    cover_path: Optional[str] = None,
+    playlist_id: int | None,
+    cover_path: str | None = None,
 ) -> None:
     if cover_path:
         Path(cover_path).unlink(missing_ok=True)

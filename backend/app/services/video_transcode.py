@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from . import activity, scanner
 from .encode_probe import EncoderChoice, pick_encoder, probe_encode_capabilities
@@ -31,21 +31,21 @@ class TranscodeError(RuntimeError):
         super().__init__(f"Postprocessing: {message}")
 
 
-def is_h264_video(name: Optional[str]) -> bool:
+def is_h264_video(name: str | None) -> bool:
     return codec_family(name) in _H264_FAM
 
 
-def is_hevc_video(name: Optional[str]) -> bool:
+def is_hevc_video(name: str | None) -> bool:
     return codec_family(name) in _HEVC_FAM
 
 
 def encode_target(
     job_codec: str,
-    video_codec: Optional[str],
-    height: Optional[int],
+    video_codec: str | None,
+    height: int | None,
     *,
     preset: str = "",
-) -> Optional[str]:
+) -> str | None:
     """Return 'h264' when the downloaded file should be re-encoded in place, else None.
 
     Only the ``h264_convert`` mode rewrites originals. ≤1080p tiers already
@@ -189,7 +189,7 @@ def ffmpeg_transcode_cmd(
     return cmd
 
 
-def _safe_rel(path: Path) -> Optional[str]:
+def _safe_rel(path: Path) -> str | None:
     try:
         return to_rel_path(path)
     except ValueError:
@@ -207,10 +207,10 @@ def transcode_video(
     path: Path,
     target: str,
     *,
-    encoder: Optional[EncoderChoice] = None,
-    cancel_event: Optional[threading.Event] = None,
-    on_progress: Optional[Callable[[float], None]] = None,
-    duration: Optional[float] = None,
+    encoder: EncoderChoice | None = None,
+    cancel_event: threading.Event | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    duration: float | None = None,
 ) -> Path:
     """Re-encode ``path`` to H.264 or H.265 MP4. Raises TranscodeError on failure."""
     if not path.exists():

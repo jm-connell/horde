@@ -3,13 +3,28 @@ import shutil
 import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .api import (
+    ai,
+    app_settings,
+    backgrounds,
+    channels,
+    compat,
+    downloads,
+    fonts,
+    playlists,
+    preview,
+    review,
+    setup,
+    system,
+    videos,
+)
 from .config import (
     DOWNLOADS_DIR,
     YTDLP_POT_BASE_URL,
@@ -18,41 +33,27 @@ from .config import (
     short_git_sha,
 )
 from .database import engine, init_db
-from .api import (
-    ai,
-    app_settings,
-    compat,
-    backgrounds,
-    channels,
-    downloads,
-    fonts,
-    playlists,
-    preview,
-    review,
-    system,
-    videos,
-    setup,
-)
-from .services.scanner import cleanup_orphans, start_scanner
-from .services import downloader, app_settings as app_settings_svc
+from .services import app_settings as app_settings_svc
+from .services import downloader
 from .services.ai import start_ai_worker, stop_ai_worker
 from .services.ai.worker import recover_ai_jobs
+from .services.channel_autodownload import (
+    start_autodownload_worker,
+    stop_autodownload_worker,
+)
 from .services.channel_catalog import (
     recover_catalog_jobs,
     start_catalog_worker,
     stop_catalog_worker,
 )
-from .services.channel_autodownload import (
-    start_autodownload_worker,
-    stop_autodownload_worker,
-)
-from .services.subtitle_retry import (
-    start_subtitle_retry_worker,
-    stop_subtitle_retry_worker,
-)
 from .services.job_metadata import (
     start_job_metadata_worker,
     stop_job_metadata_worker,
+)
+from .services.scanner import cleanup_orphans, start_scanner
+from .services.subtitle_retry import (
+    start_subtitle_retry_worker,
+    stop_subtitle_retry_worker,
 )
 
 
@@ -162,7 +163,7 @@ def _yt_dlp_version() -> str:
         return "unknown"
 
 
-def _pot_provider_status() -> Optional[dict[str, Any]]:
+def _pot_provider_status() -> dict[str, Any] | None:
     if not YTDLP_POT_BASE_URL:
         return None
     try:
@@ -198,8 +199,9 @@ def ping():
 
 @app.get("/api/health")
 def health():
-    from .models import DownloadJob, JobStatus, Video
     from sqlmodel import Session, func, select
+
+    from .models import DownloadJob, JobStatus, Video
 
     with Session(engine) as session:
         video_count = session.scalar(select(func.count(Video.id))) or 0
@@ -283,10 +285,6 @@ def health():
     catalog_indexing = False
     try:
         from .services import app_settings as settings_svc
-        from .services.ytdlp_common import (
-            cookie_configured,
-            get_last_extract_failure,
-        )
         from .services.ai.worker import (
             blocked_reason,
             error_count,
@@ -294,6 +292,10 @@ def health():
             queue_depth,
         )
         from .services.channel_catalog import get_runtime_status
+        from .services.ytdlp_common import (
+            cookie_configured,
+            get_last_extract_failure,
+        )
 
         downloads_paused = bool(
             downloader.download_queue.is_paused()

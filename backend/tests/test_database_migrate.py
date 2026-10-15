@@ -6,8 +6,10 @@ from sqlmodel import SQLModel
 
 
 def test_migrate_adds_missing_column(tmp_dirs, monkeypatch):
-    from app import models  # noqa: F401
-    from app import database
+    from app import (
+        database,
+        models,  # noqa: F401
+    )
 
     engine = tmp_dirs["engine"]
     # Minimal videos table missing a known migrated column.
@@ -43,8 +45,10 @@ def test_migrate_is_idempotent(tmp_dirs):
 
 
 def test_verify_schema_fails_on_drift(tmp_dirs):
-    from app import models  # noqa: F401
-    from app import database
+    from app import (
+        database,
+        models,  # noqa: F401
+    )
 
     engine = tmp_dirs["engine"]
     SQLModel.metadata.create_all(engine)
@@ -70,9 +74,12 @@ def test_init_db_on_fresh_temp(tmp_dirs):
 
 
 def test_migrate_adds_playlist_subscribe_columns(tmp_dirs):
-    from app import models  # noqa: F401
-    from app import database
     from sqlalchemy import inspect, text
+
+    from app import (
+        database,
+        models,  # noqa: F401
+    )
 
     engine = tmp_dirs["engine"]
     with engine.begin() as conn:

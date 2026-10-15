@@ -108,8 +108,8 @@ def _resume_workers() -> None:
     except Exception:  # noqa: BLE001
         pass
     try:
-        from .ai.worker import wake_worker
         from .ai.provider import invalidate_resolved_url
+        from .ai.worker import wake_worker
 
         invalidate_resolved_url()
         wake_worker()

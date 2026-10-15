@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Optional
+from typing import Any
 
 # Audio-only bitrate caps (kbps). Shown as labeled presets when the source has audio.
 AUDIO_ABR_TIERS: tuple[int, ...] = (160, 128, 64)
@@ -116,7 +116,7 @@ QUALITY_FORMATS = {
     },
 }
 
-PRESET_MAX_HEIGHT: dict[str, Optional[int]] = {
+PRESET_MAX_HEIGHT: dict[str, int | None] = {
     "best": None,
     "2160p": 2160,
     "1440p": 1440,
@@ -173,7 +173,7 @@ def uses_native_h264(preset: str, codec: str) -> bool:
     return max_h <= 1080
 
 
-def effective_max_height(preset: str, codec: str = "av1") -> Optional[int]:
+def effective_max_height(preset: str, codec: str = "av1") -> int | None:
     """Preset height cap after the compat mode is applied (native H.264 tops out at 1080p)."""
     max_h = PRESET_MAX_HEIGHT.get(preset)
     if is_audio_preset(preset):
@@ -183,9 +183,7 @@ def effective_max_height(preset: str, codec: str = "av1") -> Optional[int]:
     return max_h
 
 
-def compat_format_spec(
-    max_height: Optional[int] = None, *, vertical: bool = False
-) -> str:
+def compat_format_spec(max_height: int | None = None, *, vertical: bool = False) -> str:
     """yt-dlp selector for the native H.264 sidecar (≤1080p avc1 + AAC when offered).
 
     ``max_height`` is the short-side cap; vertical video caps width instead so a
@@ -202,7 +200,7 @@ def format_sort_for(preset: str, codec: str = "av1") -> list[str]:
     return list(FORMAT_SORT)
 
 
-def _primary_spec(preset: str, *, h264: bool, max_height: Optional[int] = None) -> str:
+def _primary_spec(preset: str, *, h264: bool, max_height: int | None = None) -> str:
     pair = lambda filt: _pair(filt, h264=h264)
     audio = QUALITY_FORMATS.get(preset) if is_audio_preset(preset) else None
     if audio:
@@ -419,9 +417,9 @@ def score_audio_format(fmt: dict[str, Any], original_lang: str) -> int:
         score += 20_000
     elif "original" in blob:
         score += 15_000
-    elif lang in ("", "und") and not original_lang:
-        score += 5_000
-    elif lang == "en" and not original_lang:
+    elif (
+        lang in ("", "und") and not original_lang or lang == "en" and not original_lang
+    ):
         score += 5_000
     elif lang and original_lang and lang != original_lang:
         score -= 10_000
@@ -432,7 +430,7 @@ def pick_original_audio_format(
     info: dict[str, Any] | None,
     *,
     require_mp4: bool = False,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Choose the original-language audio track when YouTube offers autodubs."""
     if not isinstance(info, dict):
         return None

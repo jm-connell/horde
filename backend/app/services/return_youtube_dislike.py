@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -20,7 +20,7 @@ _lock = threading.Lock()
 _last_fetch_at = 0.0
 
 
-def fetch_votes(video_id: str) -> Optional[dict[str, int]]:
+def fetch_votes(video_id: str) -> dict[str, int] | None:
     """Return {like_count, dislike_count} or None on failure / missing data."""
     yt_id = (video_id or "").strip()
     if not yt_id:

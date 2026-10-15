@@ -1,15 +1,13 @@
 import logging
 import re
-import secrets
 import shutil
 import subprocess
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
-from xml.sax.saxutils import escape as xml_escape
+from typing import Any
 
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -27,17 +25,18 @@ from ..models import (
     Video,
     VideoStatus,
 )
-from . import activity, library, scanner
+from . import activity, compat_rendition, library, scanner
+from .compat_rendition import delete_compat_files
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
+from .media_info import apply_stream_info, needs_compat, probe_stream_info
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
-from .video_transcode import encode_target, transcode_video
-from . import compat_rendition
-from .compat_rendition import delete_compat_files
-from .media_info import apply_stream_info, needs_compat, probe_stream_info
 from .paths import find_video_by_path, to_rel_path
-from .url_clean import clean_url, youtube_video_id, youtube_thumbnail_url
+from .thumbnails import save_from_url as _save_thumbnail
+from .thumbnails import unlink_for_video
+from .url_clean import clean_url, youtube_thumbnail_url, youtube_video_id
+from .video_transcode import encode_target, transcode_video
 from .ytdlp_common import (
     ERROR_KIND_CANCELLED,
     ERROR_KIND_MEMBERS,
@@ -59,40 +58,37 @@ from .ytdlp_common import (
     url_cookie_required,
     youtube_extractor_args,
 )
+from .ytdlp_extract import (
+    _list_thumbnail_url,
+    is_youtube_short_entry,
+    is_youtube_short_url,
+)
 
+# Facade: API routers and tests reach these through ``downloader.<name>`` (tests
+# monkeypatch them here), so they are re-exported explicitly (``x as x``).
+from .ytdlp_extract import estimate_playlist_sizes as estimate_playlist_sizes
+from .ytdlp_extract import extract_playlist as extract_playlist
+from .ytdlp_extract import extract_playlist_entries as extract_playlist_entries
+from .ytdlp_extract import extract_preview as extract_preview
+from .ytdlp_extract import fetch_channel_feed as fetch_channel_feed
+from .ytdlp_extract import search_youtube_channels as search_youtube_channels
 from .ytdlp_formats import (
-    PRESET_MAX_HEIGHT,
     QUALITY_FORMATS,
-    STANDARD_HEIGHTS,
-    _available_presets,
     _format_chain,
-    _has_audio,
-    _height_to_tier,
     apply_audio_format_id,
+    compat_copy_cap,
     decode_available_presets,
     default_download_video_codec,
-    compat_copy_cap,
     effective_max_height,
     format_sort_for,
     is_audio_preset,
     normalize_video_codec,
     pick_original_audio_format,
-    quality_from_preview,
     resolve_quality_preset,
 )
-from .thumbnails import save_from_url as _save_thumbnail, unlink_for_video
-from .ytdlp_extract import (
-    _list_thumbnail_url,
-    estimate_playlist_sizes,
-    extract_playlist,
-    extract_playlist_entries,
-    extract_preview,
-    fetch_channel_feed,
-    is_youtube_short_entry,
-    is_youtube_short_url,
-    search_youtube_channels,
-)
-
+from .ytdlp_formats import _available_presets as _available_presets
+from .ytdlp_formats import _has_audio as _has_audio
+from .ytdlp_formats import _height_to_tier as _height_to_tier
 
 # Live progress snapshots keyed by job id, consumed by the SSE endpoint.
 progress_store: dict[int, dict[str, Any]] = {}
@@ -144,9 +140,7 @@ def is_device_staging_path(rel_path: str) -> bool:
     return posix == DEVICE_STAGING_DIR or posix.startswith(f"{DEVICE_STAGING_DIR}/")
 
 
-def cleanup_device_job_files(
-    job_id: int, device_file_path: Optional[str] = None
-) -> None:
+def cleanup_device_job_files(job_id: int, device_file_path: str | None = None) -> None:
     """Remove ephemeral device-job media (file + staging dir)."""
     root = DOWNLOADS_DIR.resolve()
     staging = (DOWNLOADS_DIR / DEVICE_STAGING_DIR).resolve()
@@ -254,7 +248,7 @@ def _is_intermediate_media(name: str) -> bool:
     return False
 
 
-def _find_merged_video(prepared: Path) -> Optional[Path]:
+def _find_merged_video(prepared: Path) -> Path | None:
     """Locate the final merged video when yt-dlp errors on fragment cleanup."""
     mp4 = prepared.with_suffix(".mp4")
     if mp4.exists() and not _is_intermediate_media(mp4.name):
@@ -268,7 +262,7 @@ def _find_merged_video(prepared: Path) -> Optional[Path]:
 
     parent = prepared.parent
     stem = _video_stem(prepared)
-    best: Optional[Path] = None
+    best: Path | None = None
     best_size = 0
     if not parent.is_dir():
         return None
@@ -291,9 +285,7 @@ def _find_merged_video(prepared: Path) -> Optional[Path]:
     return best
 
 
-def _resolve_merged_video(
-    prepared: Optional[Path], active_paths: set[str]
-) -> Optional[Path]:
+def _resolve_merged_video(prepared: Path | None, active_paths: set[str]) -> Path | None:
     if prepared is not None:
         found = _find_merged_video(prepared)
         if found is not None:
@@ -314,7 +306,7 @@ class _YtdlpLogger:
 
     def __init__(self) -> None:
         self.members_only = False
-        self.last_members_only_msg: Optional[str] = None
+        self.last_members_only_msg: str | None = None
 
     def debug(self, msg: str) -> None:
         pass
@@ -363,7 +355,7 @@ def _purge_members_only_yt_id(yt_id: str) -> None:
         from .channel_catalog.skips import purge_members_only_by_yt_id
 
         purge_members_only_by_yt_id(yt_id)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("members-only catalog purge failed", exc_info=True)
 
 
@@ -537,7 +529,7 @@ class DownloadQueue:
             if job_id not in self._running:
                 self._cancel_events.pop(job_id, None)
 
-    def cancel_event(self, job_id: int) -> Optional[threading.Event]:
+    def cancel_event(self, job_id: int) -> threading.Event | None:
         with self._lock:
             return self._cancel_events.get(job_id)
 
@@ -611,7 +603,7 @@ class DownloadQueue:
                     daemon=True,
                 ).start()
 
-    def _next_job_id(self) -> Optional[int]:
+    def _next_job_id(self) -> int | None:
         """Return next queued job not already claimed. Caller must hold _lock."""
         with Session(engine) as session:
             jobs = session.exec(
@@ -670,11 +662,11 @@ class _PostprocessTask:
     info: dict[str, Any]
     url: str
     quality_preset: str
-    title_override: Optional[str]
-    channel_override: Optional[str]
+    title_override: str | None
+    channel_override: str | None
     normalize_volume: bool
-    replace_video_id: Optional[int]
-    notes_pending: Optional[str]
+    replace_video_id: int | None
+    notes_pending: str | None
     cancel_event: threading.Event
     destination: str
     video_codec: str
@@ -756,7 +748,7 @@ def _update_job(job_id: int, **fields: Any) -> None:
 def _mark_job_cancelled(
     job_id: int,
     destination: str,
-    final_path: Optional[Path] = None,
+    final_path: Path | None = None,
 ) -> None:
     if destination == DownloadDestination.device.value:
         cleanup_device_job_files(job_id)
@@ -828,11 +820,11 @@ def _handoff_postprocess(
     info: dict[str, Any],
     url: str,
     quality_preset: str,
-    title_override: Optional[str],
-    channel_override: Optional[str],
+    title_override: str | None,
+    channel_override: str | None,
     normalize_volume: bool,
-    replace_video_id: Optional[int],
-    notes_pending: Optional[str],
+    replace_video_id: int | None,
+    notes_pending: str | None,
     cancel_event: threading.Event,
     destination: str,
     video_codec: str,
@@ -860,7 +852,7 @@ def _handoff_postprocess(
 _STREAM_SWITCH_SLOP = 512 * 1024
 
 
-def _positive_int(value: Any) -> Optional[int]:
+def _positive_int(value: Any) -> int | None:
     if value is None:
         return None
     try:
@@ -870,7 +862,7 @@ def _positive_int(value: Any) -> Optional[int]:
     return n if n > 0 else None
 
 
-def _progress_stream_total(d: dict[str, Any]) -> Optional[int]:
+def _progress_stream_total(d: dict[str, Any]) -> int | None:
     """Whole-file size for the current stream, not the current HTTP Range."""
     info = _as_info(d.get("info_dict"))
     hint = _positive_int(info.get("filesize")) or _positive_int(
@@ -914,14 +906,14 @@ class _DownloadProgress:
             self.last_stream_downloaded = 0
             self.last_stream_total = 0
 
-    def _apply_downloaded(self, downloaded: int, stream_total: Optional[int]) -> None:
+    def _apply_downloaded(self, downloaded: int, stream_total: int | None) -> None:
         self.last_stream_downloaded = max(self.last_stream_downloaded, downloaded)
         if stream_total:
             self.last_stream_total = max(self.last_stream_total, stream_total)
         combined = self.accumulated_bytes + self.last_stream_downloaded
         self.max_displayed_bytes = max(self.max_displayed_bytes, combined)
 
-    def _combined_total(self) -> Optional[int]:
+    def _combined_total(self) -> int | None:
         if self.last_stream_total:
             return self.accumulated_total + self.last_stream_total
         if self.accumulated_total:
@@ -959,7 +951,7 @@ class _DownloadProgress:
             return False
         return bool(name)
 
-    def apply(self, d: dict[str, Any]) -> Optional[dict[str, Any]]:
+    def apply(self, d: dict[str, Any]) -> dict[str, Any] | None:
         status = d.get("status")
         info = _as_info(d.get("info_dict"))
         if status == "downloading":
@@ -991,7 +983,7 @@ class _DownloadProgress:
         return None
 
 
-def processing_stage_for_compat(plan: CompatPlan) -> Optional[str]:
+def processing_stage_for_compat(plan: CompatPlan) -> str | None:
     """Label the Safari MP4 pass: AAC encode when needed, otherwise remux."""
     if not plan.needed:
         return None
@@ -1000,7 +992,7 @@ def processing_stage_for_compat(plan: CompatPlan) -> Optional[str]:
     return STAGE_REMUXING
 
 
-def processing_stage_for_postprocessor(name: Optional[str]) -> Optional[str]:
+def processing_stage_for_postprocessor(name: str | None) -> str | None:
     key = (name or "").lower().replace("ffmpeg", "")
     if "merger" in key:
         return STAGE_MERGING
@@ -1018,7 +1010,7 @@ def _publish_job_progress(job_id: int, fields: dict[str, Any]) -> dict[str, Any]
 
 
 def _set_processing_stage(
-    job_id: int, stage: str, progress: Optional[float] = None
+    job_id: int, stage: str, progress: float | None = None
 ) -> dict[str, Any]:
     if progress is None:
         progress_n = 0.0
@@ -1037,7 +1029,7 @@ def _set_processing_stage(
     )
 
 
-def _processing_activity_detail(stage: Optional[str]) -> str:
+def _processing_activity_detail(stage: str | None) -> str:
     if not stage:
         return "Processing"
     return _STAGE_ACTIVITY_DETAIL.get(str(stage), "Processing")
@@ -1046,7 +1038,7 @@ def _processing_activity_detail(stage: Optional[str]) -> str:
 def _make_progress_hook(
     job_id: int,
     cancel_event: threading.Event,
-    activity_handle: Optional[activity.ActivityHandle] = None,
+    activity_handle: activity.ActivityHandle | None = None,
 ):
     tracker = _DownloadProgress()
     last_activity_at = 0.0
@@ -1094,7 +1086,7 @@ def _make_progress_hook(
 def _make_postprocessor_hook(
     job_id: int,
     cancel_event: threading.Event,
-    activity_handle: Optional[activity.ActivityHandle] = None,
+    activity_handle: activity.ActivityHandle | None = None,
 ):
     def hook(d: dict[str, Any]) -> None:
         if cancel_event.is_set():
@@ -1137,7 +1129,7 @@ def _collect_tags(info: dict[str, Any]) -> list[str]:
     return collected
 
 
-def _safe_rel(path: Path) -> Optional[str]:
+def _safe_rel(path: Path) -> str | None:
     try:
         return to_rel_path(path)
     except ValueError:
@@ -1199,7 +1191,7 @@ def _subtitle_ydl_opts(
     outtmpl: str,
     *,
     with_cookies: bool = False,
-    ytdlp_logger: Optional[_SubtitleYtdlpLogger] = None,
+    ytdlp_logger: _SubtitleYtdlpLogger | None = None,
 ) -> dict[str, Any]:
     opts: dict[str, Any] = {
         "quiet": True,
@@ -1223,11 +1215,11 @@ def download_subtitles(media: Path, source_url: str):
     Returns a ``SubtitleFetchOutcome``: tracks when VTT landed, or ``retryable``
     when timedtext should be tried again later.
     """
-    from .subtitle_retry import SubtitleFetchOutcome, outcome_from_fetch
-
     import tempfile
 
     import yt_dlp
+
+    from .subtitle_retry import SubtitleFetchOutcome, outcome_from_fetch
 
     if not media.exists():
         return SubtitleFetchOutcome(tracks=[], retryable=True)
@@ -1236,7 +1228,7 @@ def download_subtitles(media: Path, source_url: str):
     stem = media.stem
     _cleanup_subtitle_partials(parent, stem)
     ytdlp_logger = _SubtitleYtdlpLogger()
-    last_exc: Optional[BaseException] = None
+    last_exc: BaseException | None = None
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1251,7 +1243,7 @@ def download_subtitles(media: Path, source_url: str):
                     )
                 ) as ydl:
                     ydl.download([source_url])
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if with_cookies or not should_retry_with_cookies({}, exc):
                     raise
                 with yt_dlp.YoutubeDL(
@@ -1286,7 +1278,7 @@ def download_subtitles(media: Path, source_url: str):
 
 
 def _remove_review_duplicates(
-    session: Session, video_id: Optional[str], keep_id: Optional[int]
+    session: Session, video_id: str | None, keep_id: int | None
 ) -> None:
     if not video_id:
         return
@@ -1302,12 +1294,12 @@ def _remove_review_duplicates(
     session.commit()
 
 
-def _published_at(info: dict[str, Any]) -> Optional[datetime]:
+def _published_at(info: dict[str, Any]) -> datetime | None:
     raw = info.get("upload_date")
     if not raw:
         return None
     try:
-        return datetime.strptime(raw, "%Y%m%d").replace(tzinfo=timezone.utc)
+        return datetime.strptime(raw, "%Y%m%d").replace(tzinfo=UTC)
     except ValueError:
         return None
 
@@ -1352,8 +1344,8 @@ def _cleanup_partial_files(paths: set[str]) -> None:
 
 
 def _check_quality(
-    preset: str, height: Optional[int], video_codec: str = "av1"
-) -> Optional[str]:
+    preset: str, height: int | None, video_codec: str = "av1"
+) -> str | None:
     """Return a warning string if actual height is below the requested cap tier."""
     # H.264-native mode caps 1440p/4K presets at 1080p by design — not a warning.
     max_h = effective_max_height(preset, video_codec)
@@ -1370,7 +1362,7 @@ def _check_quality(
 
 def _replace_with_retries(src: Path, dest: Path, retries: int = 8) -> None:
     """Atomically replace dest with src, retrying Windows file-lock errors."""
-    last_exc: Optional[OSError] = None
+    last_exc: OSError | None = None
     for attempt in range(retries):
         try:
             src.replace(dest)
@@ -1393,10 +1385,10 @@ def _replace_with_retries(src: Path, dest: Path, retries: int = 8) -> None:
 def _apply_loudnorm(
     path: Path,
     *,
-    cancel_event: Optional[threading.Event] = None,
-    on_progress: Optional[Any] = None,
-    duration: Optional[float] = None,
-) -> Optional[str]:
+    cancel_event: threading.Event | None = None,
+    on_progress: Any | None = None,
+    duration: float | None = None,
+) -> str | None:
     """Normalize loudness via ffmpeg; returns warning if skipped."""
     if not ffmpeg_available():
         return "Volume normalization skipped: ffmpeg not found"
@@ -1454,13 +1446,13 @@ def _finalize_in_background(
     video_id: int,
     final_path: Path,
     source_url: str,
-    thumbnail_url: Optional[str],
-    list_thumbnail_url: Optional[str] = None,
+    thumbnail_url: str | None,
+    list_thumbnail_url: str | None = None,
 ) -> None:
     """Fetch subtitles and thumbnail without blocking watchability."""
 
     def run() -> None:
-        title: Optional[str] = None
+        title: str | None = None
         with Session(engine) as session:
             video = session.get(Video, video_id)
             if video is not None:
@@ -1474,7 +1466,7 @@ def _finalize_in_background(
             video_id=video_id,
         ):
             outcome = None
-            thumb: Optional[str] = None
+            thumb: str | None = None
             try:
                 from .subtitle_retry import apply_subtitle_outcome, outcome_from_fetch
 
@@ -1525,15 +1517,15 @@ def _complete_download(
     info: dict[str, Any],
     url: str,
     quality_preset: str,
-    title_override: Optional[str],
-    channel_override: Optional[str],
+    title_override: str | None,
+    channel_override: str | None,
     normalize_volume: bool,
-    replace_video_id: Optional[int],
-    notes_pending: Optional[str],
-    cancel_event: Optional[threading.Event] = None,
+    replace_video_id: int | None,
+    notes_pending: str | None,
+    cancel_event: threading.Event | None = None,
     destination: str = DownloadDestination.library.value,
     video_codec: str = "av1",
-) -> Optional[int]:
+) -> int | None:
     if cancel_event is not None and cancel_event.is_set():
         raise DownloadCancelled()
 
@@ -1592,7 +1584,7 @@ def _complete_download(
                     duration=duration_f,
                 )
 
-        volume_warning: Optional[str] = None
+        volume_warning: str | None = None
         if normalize_volume and final_path.exists():
             _set_processing_stage(job_id, STAGE_NORMALIZING, progress=0.0)
             volume_warning = _apply_loudnorm(
@@ -1610,8 +1602,8 @@ def _complete_download(
     rel_path = to_rel_path(final_path)
     file_size = final_path.stat().st_size if final_path.exists() else None
     duration = probe_duration(final_path) or info.get("duration")
-    width: Optional[int] = None
-    height: Optional[int] = None
+    width: int | None = None
+    height: int | None = None
     dims = probe_dimensions(final_path)
     if dims:
         width, height = dims
@@ -1818,7 +1810,7 @@ def _complete_download(
                 prefer_download=True,
                 reason="Sidecar mode: H.264 copy for older devices",
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("could not queue H.264 sidecar for video %s", video_id)
 
     snapshot = {
@@ -1850,7 +1842,7 @@ def _complete_download(
     return video_id
 
 
-def _reject_unplayable(path: Optional[Path], attempt_paths: set[str]) -> Optional[Path]:
+def _reject_unplayable(path: Path | None, attempt_paths: set[str]) -> Path | None:
     """Return path if playable; otherwise remove corrupt artifacts and return None."""
     if path is None or not path.exists() or path.stat().st_size <= 0:
         return None
@@ -1865,8 +1857,8 @@ def _reject_unplayable(path: Optional[Path], attempt_paths: set[str]) -> Optiona
 
 def _run_download(
     job_id: int,
-    cancel_event: Optional[threading.Event] = None,
-) -> Optional[int]:
+    cancel_event: threading.Event | None = None,
+) -> int | None:
     import yt_dlp
 
     cancel = cancel_event or threading.Event()
@@ -1918,9 +1910,9 @@ def _run_download(
     active_paths: set[str] = set()
     info: dict[str, Any] = {}
     metadata_info: dict[str, Any] = {}
-    prepared: Optional[Path] = None
-    final_path: Optional[Path] = None
-    last_exc: Optional[Exception] = None
+    prepared: Path | None = None
+    final_path: Path | None = None
+    last_exc: Exception | None = None
     ytdlp_logger = _YtdlpLogger()
 
     act = activity.start(
@@ -2161,7 +2153,7 @@ def _run_download(
             act.finish(status="cancelled")
         return None
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if cancel.is_set():
             _cleanup_partial_files(active_paths)
             _mark_job_cancelled(job_id, destination)
@@ -2277,7 +2269,7 @@ job_mutate_lock = threading.Lock()
 _ACTIVE_JOB_STATUSES = (JobStatus.queued, JobStatus.downloading)
 
 
-def find_active_job_for_identity(session: Session, url: str) -> Optional[DownloadJob]:
+def find_active_job_for_identity(session: Session, url: str) -> DownloadJob | None:
     """Queued/downloading job for the same YouTube id (or cleaned URL)."""
     yt_id = youtube_video_id(url)
     cleaned = clean_url(url, keep_playlist=False) or url
@@ -2295,7 +2287,7 @@ def find_active_job_for_identity(session: Session, url: str) -> Optional[Downloa
     return None
 
 
-def library_video_for_url(session: Session, url: str) -> Optional[Video]:
+def library_video_for_url(session: Session, url: str) -> Video | None:
     yt_id = youtube_video_id(url)
     if yt_id:
         return library.find_video_by_youtube_id(session, yt_id)
@@ -2307,7 +2299,7 @@ def library_video_for_url(session: Session, url: str) -> Optional[Video]:
 
 def classify_enqueue_duplicate(
     session: Session, url: str
-) -> Optional[tuple[str, Optional[int]]]:
+) -> tuple[str, int | None] | None:
     """Return (code, existing_job_id) when this video must not be queued again."""
     active = find_active_job_for_identity(session, url)
     if active is not None:
@@ -2327,7 +2319,7 @@ def find_active_job(
     url: str,
     destination: str,
     quality_preset: str,
-) -> Optional[DownloadJob]:
+) -> DownloadJob | None:
     """Return an already-queued/downloading job for the same video."""
     return find_active_job_for_identity(session, url)
 
@@ -2445,13 +2437,7 @@ def change_job_quality(
                 session.commit()
                 session.refresh(job)
                 return job
-            if job.status == JobStatus.cancelled:
-                job.quality_preset = resolved
-                prepare_job_retry(job)
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-            elif job.status == JobStatus.error:
+            if job.status == JobStatus.cancelled or job.status == JobStatus.error:
                 job.quality_preset = resolved
                 prepare_job_retry(job)
                 session.add(job)
@@ -2473,14 +2459,14 @@ def start_download(
     job_id: int,
     url: str,
     quality_preset: str,
-    title_override: Optional[str] = None,
-    channel_override: Optional[str] = None,
+    title_override: str | None = None,
+    channel_override: str | None = None,
 ) -> None:
     """Legacy entry point — enqueue only."""
     enqueue_download(job_id)
 
 
-def _wait_for_job_video_id(job_id: int) -> Optional[int]:
+def _wait_for_job_video_id(job_id: int) -> int | None:
     while True:
         with Session(engine) as session:
             job = session.get(DownloadJob, job_id)
@@ -2521,7 +2507,7 @@ def append_playlist_item(session: Session, playlist_id: int, video_id: int) -> b
     return True
 
 
-def _attach_download_to_playlist(job_id: int, video_id: Optional[int]) -> None:
+def _attach_download_to_playlist(job_id: int, video_id: int | None) -> None:
     if video_id is None:
         return
     with Session(engine) as session:
@@ -2578,11 +2564,11 @@ def _append_unlisted_playlist_items(
         session.commit()
 
 
-def _find_active_job_for_url(session: Session, url: str) -> Optional[DownloadJob]:
+def _find_active_job_for_url(session: Session, url: str) -> DownloadJob | None:
     return find_active_job_for_identity(session, url)
 
 
-def _resolve_library_or_download(entry_url: str, quality_preset: str) -> Optional[int]:
+def _resolve_library_or_download(entry_url: str, quality_preset: str) -> int | None:
     """Return a library video id, downloading only if the YouTube id is new."""
     cleaned = clean_url(entry_url, keep_playlist=False)
     if not cleaned:
@@ -2600,30 +2586,29 @@ def _resolve_library_or_download(entry_url: str, quality_preset: str) -> Optiona
 
     yt_id = youtube_video_id(cleaned)
     thumb = youtube_thumbnail_url(yt_id) if yt_id else None
-    created_job_id: Optional[int] = None
-    with job_mutate_lock:
-        with Session(engine) as session:
-            existing = library_video_for_url(session, cleaned)
-            if existing is not None:
-                return existing.id
-            active = find_active_job_for_identity(session, cleaned)
-            if active is not None and active.id is not None:
-                job_id = active.id
-            else:
-                job = DownloadJob(
-                    url=cleaned,
-                    quality_preset=quality_preset or "best",
-                    status=JobStatus.queued,
-                    thumbnail_url=thumb,
-                    video_codec=default_download_video_codec(),
-                    destination=DownloadDestination.library.value,
-                    paused=download_queue.is_paused(),
-                )
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-                job_id = job.id
-                created_job_id = job_id
+    created_job_id: int | None = None
+    with job_mutate_lock, Session(engine) as session:
+        existing = library_video_for_url(session, cleaned)
+        if existing is not None:
+            return existing.id
+        active = find_active_job_for_identity(session, cleaned)
+        if active is not None and active.id is not None:
+            job_id = active.id
+        else:
+            job = DownloadJob(
+                url=cleaned,
+                quality_preset=quality_preset or "best",
+                status=JobStatus.queued,
+                thumbnail_url=thumb,
+                video_codec=default_download_video_codec(),
+                destination=DownloadDestination.library.value,
+                paused=download_queue.is_paused(),
+            )
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+            job_id = job.id
+            created_job_id = job_id
 
     if created_job_id is not None:
         from .job_metadata import request_job_metadata
@@ -2691,13 +2676,3 @@ def start_playlist_import(
 
 
 # Re-exports for callers that still import preview/extract helpers from downloader.
-from .stream_preview import (  # noqa: E402
-    PreviewRefreshError,
-    build_dash_manifest,
-    extract_stream_preview_meta,
-    list_preview_subtitles,
-    lookup_preview_media,
-    resolve_preview_manifest,
-    resolve_preview_stream,
-    resolve_preview_subtitle,
-)

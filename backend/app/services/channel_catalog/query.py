@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from sqlmodel import Session, col, func, select
 
@@ -21,12 +21,12 @@ from ..search_text import (
     query_allows_semantic,
 )
 from ..ytdlp_common import cookie_configured, is_members_only_entry
+from ..ytdlp_extract import is_youtube_short_entry
 from .runtime import (
     _normalize_channel_url,
     get_catalog_by_url,
 )
 from .skips import skipped_yt_ids
-from ..ytdlp_extract import is_youtube_short_entry
 
 
 def catalog_progress(session: Session, channel_url: str) -> dict[str, Any]:
@@ -133,7 +133,7 @@ def catalog_feed_page(
     *,
     offset: int = 0,
     limit: int = 30,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Return a feed page from the local catalog, or None if not usable yet."""
     catalog = get_catalog_by_url(session, channel_url)
     if catalog is None:
@@ -206,7 +206,7 @@ _KEYWORD_FETCH_CAP = 500
 def _catalog_entry_dict(
     video: ChannelCatalogVideo,
     *,
-    channel_name: Optional[str] = None,
+    channel_name: str | None = None,
 ) -> dict[str, Any]:
     return {
         "id": video.yt_id,
@@ -243,9 +243,9 @@ def _keyword_catalog_rows(
     session: Session,
     query: str,
     *,
-    catalog_id: Optional[int] = None,
+    catalog_id: int | None = None,
     limit: int,
-) -> list[tuple[ChannelCatalogVideo, Optional[str]]]:
+) -> list[tuple[ChannelCatalogVideo, str | None]]:
     clause = keyword_match_clause(
         query,
         col(ChannelCatalogVideo.title),
@@ -278,7 +278,7 @@ def _keyword_catalog_rows(
         .order_by(ChannelCatalogVideo.position.asc())
         .limit(fetch_n)
     ).all()
-    paired: list[tuple[ChannelCatalogVideo, Optional[str]]] = []
+    paired: list[tuple[ChannelCatalogVideo, str | None]] = []
     for row in rows:
         video, catalog = row[0], row[1]
         paired.append((video, getattr(catalog, "channel_name", None)))
@@ -294,9 +294,9 @@ def _semantic_catalog_hits(
     session: Session,
     query: str,
     *,
-    catalog_id: Optional[int] = None,
+    catalog_id: int | None = None,
     limit: int,
-) -> list[tuple[float, ChannelCatalogVideo, Optional[str]]]:
+) -> list[tuple[float, ChannelCatalogVideo, str | None]]:
     try:
         from ..ai import embeddings as emb_mod
 
@@ -322,7 +322,7 @@ def _semantic_catalog_hits(
         )
         if catalog_id is not None:
             stmt = stmt.where(ChannelCatalogVideo.catalog_id == catalog_id)
-        scored: list[tuple[float, ChannelCatalogVideo, Optional[str]]] = []
+        scored: list[tuple[float, ChannelCatalogVideo, str | None]] = []
         for row in session.exec(stmt).all():
             emb, video, catalog = row[0], row[1], row[2]
             vec = emb_mod.unpack_vector(emb.vector, emb.dim)
@@ -342,16 +342,16 @@ def _semantic_catalog_hits(
 
 
 def _fuse_catalog_hits(
-    keyword_hits: list[tuple[ChannelCatalogVideo, Optional[str]]],
-    semantic_hits: list[tuple[float, ChannelCatalogVideo, Optional[str]]],
+    keyword_hits: list[tuple[ChannelCatalogVideo, str | None]],
+    semantic_hits: list[tuple[float, ChannelCatalogVideo, str | None]],
     *,
     skipped: set[str],
-    skip_by_catalog: Optional[dict[int, set[str]]] = None,
+    skip_by_catalog: dict[int, set[str]] | None = None,
     limit: int,
-    keyword_ids: Optional[set[str]] = None,
+    keyword_ids: set[str] | None = None,
     query: str = "",
 ) -> list[dict[str, Any]]:
-    by_id: dict[str, tuple[ChannelCatalogVideo, Optional[str]]] = {}
+    by_id: dict[str, tuple[ChannelCatalogVideo, str | None]] = {}
     scores: dict[str, float] = {}
 
     def hidden(video: ChannelCatalogVideo) -> bool:
@@ -415,7 +415,7 @@ def search_catalog(
         )
     ]
     skipped = skipped_yt_ids(session, catalog.id)
-    semantic_hits: list[tuple[float, ChannelCatalogVideo, Optional[str]]] = []
+    semantic_hits: list[tuple[float, ChannelCatalogVideo, str | None]] = []
     if semantic and query_allows_semantic(q):
         semantic_hits = [
             (score, video, catalog.channel_name)
@@ -445,7 +445,7 @@ def search_all_catalogs(
     if not q:
         return []
     keyword_hits = _keyword_catalog_rows(session, q, limit=limit)
-    semantic_hits: list[tuple[float, ChannelCatalogVideo, Optional[str]]] = []
+    semantic_hits: list[tuple[float, ChannelCatalogVideo, str | None]] = []
     if semantic and query_allows_semantic(q):
         semantic_hits = _semantic_catalog_hits(session, q, limit=limit)
     skip_by_catalog: dict[int, set[str]] = {}

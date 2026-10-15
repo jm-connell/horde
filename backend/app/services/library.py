@@ -2,8 +2,7 @@ import json
 import random as py_random
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, nullsfirst, nullslast
 from sqlmodel import Session, select
@@ -29,9 +28,9 @@ SORT_COLUMNS = {
 class ChannelStatRow:
     channel: str
     count: int
-    last_download_at: Optional[datetime]
-    subscriber_count: Optional[int]
-    channel_url: Optional[str]
+    last_download_at: datetime | None
+    subscriber_count: int | None
+    channel_url: str | None
 
 
 def parse_tags(raw: str) -> list[str]:
@@ -47,7 +46,7 @@ def dump_tags(tags: list[str]) -> str:
     return json.dumps(cleaned)
 
 
-def parse_subtitles(raw: Optional[str]) -> list[dict]:
+def parse_subtitles(raw: str | None) -> list[dict]:
     try:
         value = json.loads(raw or "[]")
         return (
@@ -66,7 +65,7 @@ def expire_stale_progress(session: Session) -> None:
     from .app_settings import load as load_app_settings
 
     expiry_days = load_app_settings().get("progress_expiry_days", PROGRESS_EXPIRY_DAYS)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=expiry_days)
+    cutoff = datetime.now(UTC) - timedelta(days=expiry_days)
     rows = session.exec(
         select(Video).where(
             Video.last_watched_at.is_not(None),
@@ -96,15 +95,15 @@ def _apply_sort(statement, sort: str, order: str):
 
 def query_videos(
     session: Session,
-    q: Optional[str] = None,
-    channel: Optional[str] = None,
-    tag: Optional[str] = None,
+    q: str | None = None,
+    channel: str | None = None,
+    tag: str | None = None,
     sort: str = "added_at",
     order: str = "desc",
-    needs_review: Optional[bool] = None,
+    needs_review: bool | None = None,
     continue_watching: bool = False,
     watched_only: bool = False,
-    seed: Optional[int] = None,
+    seed: int | None = None,
 ) -> list[Video]:
     statement = select(Video)
 
@@ -115,7 +114,7 @@ def query_videos(
 
         settings = load_app_settings()
         cw_days = settings.get("continue_watching_days", CONTINUE_WATCHING_DAYS)
-        cw_cutoff = datetime.now(timezone.utc) - timedelta(days=cw_days)
+        cw_cutoff = datetime.now(UTC) - timedelta(days=cw_days)
         # Started but not effectively finished (within the last 10% of runtime).
         statement = statement.where(Video.last_position_sec >= 30).where(
             (Video.duration_sec.is_(None))
@@ -203,7 +202,7 @@ def channel_stats(
             return row.subscriber_count if row.subscriber_count is not None else -1
         # recent_download (default)
         if row.last_download_at is None:
-            return datetime.min.replace(tzinfo=timezone.utc)
+            return datetime.min.replace(tzinfo=UTC)
         return row.last_download_at
 
     reverse = order == "desc"
@@ -219,7 +218,7 @@ def channel_stats(
     return rows
 
 
-def resolve_channel_url(session: Session, channel_name: str) -> Optional[str]:
+def resolve_channel_url(session: Session, channel_name: str) -> str | None:
     """Return a canonical channel URL for a library channel name, if known."""
     for row in channel_stats(session):
         if row.channel == channel_name and row.channel_url:
@@ -227,7 +226,7 @@ def resolve_channel_url(session: Session, channel_name: str) -> Optional[str]:
     return None
 
 
-def find_video_by_youtube_id(session: Session, yt_id: str) -> Optional[Video]:
+def find_video_by_youtube_id(session: Session, yt_id: str) -> Video | None:
     """Find a library video by YouTube id in source_url or [id] in file_path."""
     if not yt_id:
         return None
@@ -257,16 +256,16 @@ def find_video_by_youtube_id(session: Session, yt_id: str) -> Optional[Video]:
     return None
 
 
-def _iso_published(value: Optional[datetime]) -> Optional[str]:
+def _iso_published(value: datetime | None) -> str | None:
     if value is None:
         return None
-    dt = value if getattr(value, "tzinfo", None) else value.replace(tzinfo=timezone.utc)
+    dt = value if getattr(value, "tzinfo", None) else value.replace(tzinfo=UTC)
     return dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
 
 
 def youtube_library_map(
-    session: Session, channel: Optional[str] = None
-) -> dict[str, tuple[int, Optional[int], Optional[int], Optional[str]]]:
+    session: Session, channel: str | None = None
+) -> dict[str, tuple[int, int | None, int | None, str | None]]:
     """Map YouTube IDs to (library_id, height_px, view_count, published_at ISO)."""
     from urllib.parse import urlparse
 
@@ -282,7 +281,7 @@ def youtube_library_map(
     )
     if channel:
         statement = statement.where(Video.channel == channel)
-    mapping: dict[str, tuple[int, Optional[int], Optional[int], Optional[str]]] = {}
+    mapping: dict[str, tuple[int, int | None, int | None, str | None]] = {}
     for (
         video_id,
         source_url,
@@ -321,7 +320,7 @@ def all_tags(session: Session) -> list[str]:
     return sorted(seen)
 
 
-def tag_stats(session: Session, channel: Optional[str] = None) -> list[tuple[str, int]]:
+def tag_stats(session: Session, channel: str | None = None) -> list[tuple[str, int]]:
     """Return (tag, count) pairs ordered by most common first.
 
     When ``channel`` is given, only tags from that channel's videos are counted.
@@ -430,7 +429,7 @@ def related_videos(
             scored_tags.sort(
                 key=lambda item: (
                     item[0],
-                    item[1].added_at or datetime.min.replace(tzinfo=timezone.utc),
+                    item[1].added_at or datetime.min.replace(tzinfo=UTC),
                 ),
                 reverse=True,
             )

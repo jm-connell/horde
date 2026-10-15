@@ -23,9 +23,10 @@ import subprocess
 import threading
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Literal
 
 from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import Session, select
@@ -53,9 +54,9 @@ from .paths import (
 )
 from .ytdlp_formats import (
     COMPAT_MAX_HEIGHT,
-    compat_copy_cap,
     FORMAT_SORT_H264,
     apply_audio_format_id,
+    compat_copy_cap,
     compat_format_spec,
     pick_original_audio_format,
 )
@@ -105,10 +106,10 @@ _errors: dict[int, str] = {}
 
 
 def compat_dimensions(
-    width: Optional[int],
-    height: Optional[int],
+    width: int | None,
+    height: int | None,
     cap: int = COMPAT_MAX_HEIGHT,
-) -> Optional[tuple[int, int]]:
+) -> tuple[int, int] | None:
     """Scale so the short side is ≤``cap`` (keeps vertical video sharp). None = keep size."""
     if not width or not height:
         return None
@@ -145,11 +146,11 @@ def compat_ffmpeg_cmd(
     dest: Path,
     encoder: EncoderChoice,
     *,
-    src_vcodec: Optional[str],
-    bit_depth: Optional[int],
-    width: Optional[int],
-    height: Optional[int],
-    fps: Optional[float],
+    src_vcodec: str | None,
+    bit_depth: int | None,
+    width: int | None,
+    height: int | None,
+    fps: float | None,
     is_hdr: bool,
     copy_audio: bool,
     filters: frozenset[str] = frozenset(),
@@ -296,7 +297,7 @@ def estimate_compat_bytes(video: Video, cap: int = COMPAT_MAX_HEIGHT) -> int:
     return int(duration * (bps + 160_000) / 8)
 
 
-def job_state(video_id: int) -> Optional[dict[str, Any]]:
+def job_state(video_id: int) -> dict[str, Any] | None:
     with _lock:
         job = _jobs.get(video_id)
         if job is None:
@@ -424,7 +425,7 @@ def cancel(video_id: int) -> bool:
     return True
 
 
-def cancel_all(kind: Optional[JobKind] = None) -> int:
+def cancel_all(kind: JobKind | None = None) -> int:
     """Drop queued jobs (and signal running ones) of ``kind`` (or all)."""
     with _lock:
         ids = [vid for vid, job in _jobs.items() if kind is None or job.kind == kind]
@@ -489,9 +490,7 @@ def _save(video_id: int, **fields: Any) -> None:
             session.rollback()
 
 
-def _set(
-    job: _Job, *, stage: Optional[str] = None, progress: Optional[float] = None
-) -> None:
+def _set(job: _Job, *, stage: str | None = None, progress: float | None = None) -> None:
     with _lock:
         if stage is not None:
             job.stage = stage
@@ -510,15 +509,15 @@ def _safe_unlink(path: Path) -> None:
 class _Source:
     path: Path
     title: str
-    source_url: Optional[str]
-    platform: Optional[str]
-    duration: Optional[float]
-    width: Optional[int]
-    height: Optional[int]
-    fps: Optional[float]
+    source_url: str | None
+    platform: str | None
+    duration: float | None
+    width: int | None
+    height: int | None
+    fps: float | None
 
 
-def _load_source(video_id: int) -> Optional[_Source]:
+def _load_source(video_id: int) -> _Source | None:
     with Session(engine) as session:
         video = session.get(Video, video_id)
         if video is None or video.status != VideoStatus.ready:
@@ -596,9 +595,9 @@ def _run_compat(job: _Job) -> None:
             _set(job, progress=pct)
             handle.update(done=int(pct))
 
-        produced: Optional[Path] = None
+        produced: Path | None = None
         source_kind = "youtube"
-        download_note: Optional[str] = None
+        download_note: str | None = None
         # YouTube only serves H.264 up to 1080p; a full-res copy of a 1440p/4K
         # source has to be encoded here.
         src_short = min(src.width or 0, src.height or 0)
@@ -658,7 +657,7 @@ def _download_native_h264(
     dest: Path,
     cancel_event: threading.Event,
     on_progress: Callable[[float], None],
-) -> Optional[Path]:
+) -> Path | None:
     """Fetch YouTube's avc1 stream (≤1080p) to ``dest``. None when not offered."""
     import yt_dlp
 
@@ -736,8 +735,8 @@ def _encode_compat(
     on_progress: Callable[[float], None],
     handle: activity.ActivityHandle,
     *,
-    src_vcodec: Optional[str],
-    bit_depth: Optional[int],
+    src_vcodec: str | None,
+    bit_depth: int | None,
     is_hdr: bool,
     copy_audio: bool,
     cap: int = COMPAT_MAX_HEIGHT,
@@ -882,7 +881,7 @@ def eligible_video_ids(session: Session, *, kind: JobKind) -> list[int]:
     rows = session.exec(
         select(Video).where(
             Video.status == VideoStatus.ready, Video.needs_review == False
-        )  # noqa: E712
+        )
     ).all()
     cap = compat_copy_cap()
     out: list[int] = []
@@ -908,7 +907,7 @@ def library_summary(session: Session) -> dict[str, Any]:
     rows = session.exec(
         select(Video).where(
             Video.status == VideoStatus.ready, Video.needs_review == False
-        )  # noqa: E712
+        )
     ).all()
     total_bytes = 0
     compat_ready = 0
@@ -963,7 +962,7 @@ def delete_compat_files(video: Video) -> None:
 # ---------------------------------------------------------------------------
 
 _backfill_stop = threading.Event()
-_backfill_thread: Optional[threading.Thread] = None
+_backfill_thread: threading.Thread | None = None
 
 
 def _probe_backfill_loop() -> None:
