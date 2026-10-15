@@ -23,7 +23,7 @@ from ..schemas import (
     DownloadQueueStatus,
 )
 from ..services import downloader
-from ..services.limits import ExtractionGate, extraction_gate
+from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.paths import safe_filename
 from ..services.url_clean import (
     clean_url,
@@ -148,7 +148,9 @@ def list_presets():
     return QUALITY_PRESETS
 
 
-@router.get("/preview", response_model=DownloadPreview)
+@router.get(
+    "/preview", response_model=DownloadPreview, dependencies=[Depends(ytdlp_slot)]
+)
 def preview_download(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")

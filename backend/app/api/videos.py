@@ -588,7 +588,7 @@ def post_video_ai_chat(
 
 
 @router.post("/videos/{video_id}/thumbnail", response_model=VideoRead)
-async def upload_thumbnail(
+def upload_thumbnail(
     video_id: int,
     file: UploadFile,
     session: Session = Depends(get_session),
@@ -596,7 +596,7 @@ async def upload_thumbnail(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    data = await uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
+    data = uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
     try:

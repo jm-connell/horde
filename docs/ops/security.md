@@ -72,7 +72,7 @@ Where the check applies:
 
 Too large gives HTTP 413. Settings (`ui`) are capped at 256 KB; custom CSS at 64 000 characters.
 
-Other limits: bulk endpoints take at most 1000 items (5000 for playlist entries); link previews run at most three at a time with a 60 second timeout (HTTP 429 / 504); thumbnail-candidate grabs run two at a time.
+Other limits: bulk endpoints take at most 1000 items (5000 for playlist entries); link previews run at most three at a time with a 60 second timeout (HTTP 429 / 504); at most `HORDE_YTDLP_REQUEST_THREADS` (default 8) requests are inside yt-dlp work at once, and the rest wait up to 15 seconds for a slot (HTTP 429) without occupying a server thread; thumbnail-candidate grabs run two at a time.
 
 ## Content-Security-Policy
 

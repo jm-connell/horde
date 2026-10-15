@@ -16,7 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from ..database import get_session
 from ..schemas import StreamPreviewMeta
 from ..services import library, stream_preview
-from ..services.limits import ExtractionGate, extraction_gate
+from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url
 from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
 from ..services.ytdlp_common import (
@@ -121,6 +121,16 @@ async def _close_upstream(upstream: httpx.Response | None) -> None:
         pass
 
 
+async def _in_ytdlp_thread(request: Request, fn, *args, **kwargs):
+    """Run blocking yt-dlp work off the event loop, holding a yt-dlp slot.
+
+    The async routes below cannot simply call the extractors: they block for seconds.
+    The slot (see ``services/limits.py``) keeps those worker threads to a bounded few.
+    """
+    async with request.app.state.ytdlp_slots.slot():
+        return await run_in_threadpool(fn, *args, **kwargs)
+
+
 def _reresolve_preview(
     *,
     allow_refresh: tuple[str, str] | None = None,
@@ -191,8 +201,11 @@ async def _proxy_upstream(
     if upstream.status_code in (401, 403) and can_refresh:
         await _close_upstream(upstream)
         upstream = None
-        resolved = _reresolve_preview(
-            allow_refresh=allow_refresh, stream_url=stream_url
+        resolved = await _in_ytdlp_thread(
+            request,
+            _reresolve_preview,
+            allow_refresh=allow_refresh,
+            stream_url=stream_url,
         )
         upstream_headers = dict(resolved.get("http_headers") or {})
         if range_header:
@@ -291,7 +304,9 @@ async def _head_upstream(
         ) from exc
 
     if resp.status_code in (401, 403) and allow_refresh is not None:
-        resolved = _reresolve_preview(allow_refresh=allow_refresh)
+        resolved = await _in_ytdlp_thread(
+            request, _reresolve_preview, allow_refresh=allow_refresh
+        )
         upstream_headers = dict(resolved.get("http_headers") or {})
         if range_header:
             upstream_headers["Range"] = range_header
@@ -330,7 +345,9 @@ async def _head_upstream(
     )
 
 
-@router.get("/meta", response_model=StreamPreviewMeta)
+@router.get(
+    "/meta", response_model=StreamPreviewMeta, dependencies=[Depends(ytdlp_slot)]
+)
 def preview_meta(
     url: str = Query(...),
     session: Session = Depends(get_session),
@@ -388,13 +405,18 @@ def preview_meta(
 
 @router.get("/subtitles")
 async def preview_subtitles(
+    request: Request,
     url: str = Query(...),
     lang: str = Query("en"),
 ):
     """Proxy an English (or requested) WebVTT caption track for stream preview."""
     cleaned = await run_in_threadpool(_require_video_url, url)
     try:
-        resolved = stream_preview.resolve_preview_subtitle(cleaned, lang)
+        resolved = await _in_ytdlp_thread(
+            request, stream_preview.resolve_preview_subtitle, cleaned, lang
+        )
+    except HTTPException:
+        raise  # 429 from the slot
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
@@ -423,9 +445,15 @@ async def preview_subtitles(
             resp.status_code,
         )
         try:
-            resolved = stream_preview.resolve_preview_subtitle(
-                cleaned, lang, force=True
+            resolved = await _in_ytdlp_thread(
+                request,
+                stream_preview.resolve_preview_subtitle,
+                cleaned,
+                lang,
+                force=True,
             )
+        except HTTPException:
+            raise
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except Exception as exc:
@@ -472,8 +500,8 @@ async def preview_subtitles(
 
 # One handler serves both verbs. HEAD stays out of the schema so the OpenAPI
 # document has a single operation id (api_route would emit it twice and warn).
-@router.head("/manifest", include_in_schema=False)
-@router.get("/manifest")
+@router.head("/manifest", include_in_schema=False, dependencies=[Depends(ytdlp_slot)])
+@router.get("/manifest", dependencies=[Depends(ytdlp_slot)])
 def preview_manifest(request: Request, url: str = Query(...)):
     """DASH MPD for adaptive high-res preview streaming."""
     cleaned = _require_video_url(url)
@@ -516,7 +544,11 @@ async def preview_media(
     if not token.strip() or not itag.strip():
         raise HTTPException(status_code=400, detail="token and itag are required")
     try:
-        resolved = stream_preview.lookup_preview_media(token, itag)
+        resolved = await _in_ytdlp_thread(
+            request, stream_preview.lookup_preview_media, token, itag
+        )
+    except HTTPException:
+        raise  # 429 from the slot
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except stream_preview.PreviewRefreshError as exc:
@@ -542,7 +574,11 @@ async def preview_media_head(
     if not token.strip() or not itag.strip():
         raise HTTPException(status_code=400, detail="token and itag are required")
     try:
-        resolved = stream_preview.lookup_preview_media(token, itag)
+        resolved = await _in_ytdlp_thread(
+            request, stream_preview.lookup_preview_media, token, itag
+        )
+    except HTTPException:
+        raise  # 429 from the slot
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except stream_preview.PreviewRefreshError as exc:
@@ -564,7 +600,11 @@ async def preview_stream(request: Request, url: str = Query(...)):
     """Legacy progressive (<=720p) proxy — kept as fallback."""
     cleaned = await run_in_threadpool(_require_video_url, url)
     try:
-        resolved = stream_preview.resolve_preview_stream(cleaned)
+        resolved = await _in_ytdlp_thread(
+            request, stream_preview.resolve_preview_stream, cleaned
+        )
+    except HTTPException:
+        raise  # 429 from the slot
     except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not open preview stream: {exc}"

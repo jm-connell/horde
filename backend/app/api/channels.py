@@ -31,6 +31,7 @@ from ..services import (
     feed_meta_cache,
     library,
 )
+from ..services.limits import ytdlp_slot
 from ..services.url_safety import validate_public_url
 from ..services.ytdlp_common import cookie_configured, is_members_only_entry
 from ..services.ytdlp_extract import (
@@ -77,7 +78,11 @@ def rename_channel(payload: ChannelRename, session: Session = Depends(get_sessio
     return {"updated": updated}
 
 
-@router.get("/channels/search", response_model=ChannelSearchResponse)
+@router.get(
+    "/channels/search",
+    response_model=ChannelSearchResponse,
+    dependencies=[Depends(ytdlp_slot)],
+)
 def search_channels(
     q: str = Query(..., min_length=1),
     limit: int = Query(8, ge=1, le=20),
@@ -370,7 +375,11 @@ def channel_youtube_search_pref(
     return ChannelCatalogYoutubeSearchPref(**result)
 
 
-@router.get("/channels/youtube-search", response_model=ChannelFeedPage)
+@router.get(
+    "/channels/youtube-search",
+    response_model=ChannelFeedPage,
+    dependencies=[Depends(ytdlp_slot)],
+)
 def channel_youtube_search(
     q: str = Query(..., min_length=2),
     channel: str | None = None,
@@ -416,7 +425,11 @@ def channel_youtube_search(
     )
 
 
-@router.get("/youtube/search", response_model=ChannelFeedPage)
+@router.get(
+    "/youtube/search",
+    response_model=ChannelFeedPage,
+    dependencies=[Depends(ytdlp_slot)],
+)
 def youtube_video_search(
     q: str = Query(..., min_length=2),
     limit: int = Query(20, ge=1, le=40),
@@ -496,7 +509,9 @@ def channel_catalog_search(
     )
 
 
-@router.get("/channels/feed", response_model=ChannelFeedPage)
+@router.get(
+    "/channels/feed", response_model=ChannelFeedPage, dependencies=[Depends(ytdlp_slot)]
+)
 def channel_feed(
     channel: str | None = None,
     url: str | None = None,

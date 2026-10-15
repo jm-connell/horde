@@ -24,7 +24,7 @@ from ..schemas import (
     PlaylistUpdate,
 )
 from ..services import downloader, library, uploads
-from ..services.limits import ExtractionGate, extraction_gate
+from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.playlist_sync import (
     find_subscribed_by_url,
     start_playlist_sync,
@@ -200,7 +200,9 @@ def _ordered_videos(session: Session, playlist_id: int) -> list[Video]:
     return videos
 
 
-@router.get("/preview", response_model=PlaylistPreview)
+@router.get(
+    "/preview", response_model=PlaylistPreview, dependencies=[Depends(ytdlp_slot)]
+)
 def preview_playlist(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
@@ -218,7 +220,9 @@ def preview_playlist(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     return PlaylistPreview(**data)
 
 
-@router.post("/estimate", response_model=PlaylistSizeEstimate)
+@router.post(
+    "/estimate", response_model=PlaylistSizeEstimate, dependencies=[Depends(ytdlp_slot)]
+)
 def estimate_playlist_sizes(
     payload: PlaylistSizeEstimateRequest,
     gate: ExtractionGate = Depends(extraction_gate),
@@ -530,7 +534,7 @@ def get_playlist_thumbnail(playlist_id: int, session: Session = Depends(get_sess
 
 
 @router.post("/{playlist_id}/thumbnail", response_model=PlaylistRead)
-async def upload_playlist_thumbnail(
+def upload_playlist_thumbnail(
     playlist_id: int,
     file: UploadFile,
     session: Session = Depends(get_session),
@@ -538,7 +542,7 @@ async def upload_playlist_thumbnail(
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    data = await uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
+    data = uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
     try:
@@ -565,7 +569,7 @@ def sync_playlist(playlist_id: int, session: Session = Depends(get_session)):
     return _to_playlist_read(session, playlist)
 
 
-@router.post("/import", response_model=PlaylistRead)
+@router.post("/import", response_model=PlaylistRead, dependencies=[Depends(ytdlp_slot)])
 def import_playlist(payload: PlaylistImport, session: Session = Depends(get_session)):
     url = clean_url(payload.url, keep_playlist=True)
     if not url:

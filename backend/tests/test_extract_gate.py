@@ -1,6 +1,8 @@
 import threading
 import time
 
+import pytest
+
 from app.services import ytdlp_common
 
 
@@ -36,3 +38,21 @@ def test_interactive_extract_jumps_background_waiters():
     finally:
         ytdlp_common._extract_held = False
         ytdlp_common._extract_waiters.clear()
+
+
+def test_a_waiter_gives_up_instead_of_blocking_forever():
+    ytdlp_common._extract_held = False
+    ytdlp_common._extract_waiters.clear()
+    ytdlp_common._acquire_extract_gate(ytdlp_common.EXTRACT_PRIORITY_DOWNLOAD)
+    try:
+        started = time.monotonic()
+        with pytest.raises(ytdlp_common.ExtractQueueTimeout, match="Gave up waiting"):
+            ytdlp_common._acquire_extract_gate(
+                ytdlp_common.EXTRACT_PRIORITY_INTERACTIVE, timeout=0.2
+            )
+        assert time.monotonic() - started < 2
+        # The abandoned waiter left the queue, so the next release frees the gate.
+        assert ytdlp_common._extract_waiters == []
+    finally:
+        ytdlp_common._release_extract_gate()
+    assert ytdlp_common._extract_held is False

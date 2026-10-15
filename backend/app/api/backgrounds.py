@@ -93,7 +93,7 @@ def list_backgrounds():
 
 
 @router.post("")
-async def upload_background(file: UploadFile = File(...)):
+def upload_background(file: UploadFile = File(...)):
     ensure_dirs()
     name = file.filename or "upload.bin"
     ext = Path(name).suffix.lower()
@@ -116,7 +116,7 @@ async def upload_background(file: UploadFile = File(...)):
 
     bg_id = uuid.uuid4().hex
     dest = BACKGROUNDS_DIR / f"{bg_id}{ext}"
-    size = await uploads.save_upload(file, dest, max_bytes=uploads.BACKGROUND_MAX_BYTES)
+    size = uploads.save_upload(file, dest, max_bytes=uploads.BACKGROUND_MAX_BYTES)
     if size == 0:
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Empty file")

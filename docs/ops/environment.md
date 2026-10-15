@@ -15,6 +15,8 @@ Horde is configured primarily through environment variables. Most values have se
 | `HORDE_TEMP_SWEEP_HOURS` | `6` | At boot, delete leftover files that Horde itself generates (`<stem>.norm.<n>.mp4`, `.compat.<n>.mp4`, `.xcode.<n>.mp4`, `.horde-h264.dl.*`, `.horde-h264.enc.mp4`) older than this many hours that no library row references. Your own files are never swept, whatever their name (`x.temp.mkv`, `notes.part`, `Show.compat.mkv`). `0` disables the sweep. Staging dirs of finished or missing jobs are always removed at boot. |
 | `HORDE_LOG_LEVEL` | `INFO` | Log level for Horde and uvicorn (`DEBUG`, `INFO`, `WARNING`, `ERROR`). See [Logging](logging.md). |
 | `HORDE_LOG_FORMAT` | `text` | `json` writes one JSON object per log line (for Loki, Vector and similar). See [Logging](logging.md). |
+| `HORDE_YTDLP_REQUEST_THREADS` | `8` | How many requests may be inside yt-dlp work (link checks, previews, feeds, searches) at once. Extra requests wait up to 15 s without using a worker thread, then get HTTP 429, so slow YouTube calls can never freeze the rest of the API. |
+| `HORDE_EXTRACT_QUEUE_TIMEOUT_SEC` | `180` | How long one yt-dlp call waits its turn on the global extract queue before giving up with an error. |
 | `HOST` | `0.0.0.0` | Bind address for uvicorn. |
 | `PORT` | `8080` | Listen port **inside** the process/container. |
 | `MAX_DOWNLOAD_CONCURRENCY` | `2` | Max simultaneous yt-dlp download workers (FIFO queue). |

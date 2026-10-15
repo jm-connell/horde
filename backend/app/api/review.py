@@ -62,7 +62,7 @@ def scan_import_folder():
 
 
 @router.post("/upload", response_model=VideoRead)
-async def upload_import(
+def upload_import(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
@@ -92,7 +92,7 @@ async def upload_import(
     part = dest.with_name(dest.name + ".part")
     mark_active(rel_path)
     try:
-        await uploads.save_upload(
+        uploads.save_upload(
             file,
             part,
             max_bytes=uploads.max_video_upload_bytes(),
@@ -128,7 +128,7 @@ async def upload_import(
     finally:
         unmark_active(rel_path)
         try:
-            await file.close()
+            file.file.close()
         except Exception:
             logger.debug("failed closing upload stream", exc_info=True)
 

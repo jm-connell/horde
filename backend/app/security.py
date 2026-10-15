@@ -451,4 +451,5 @@ def install_security(app: FastAPI, *, allowed_hosts: str | None = None) -> None:
         app.add_middleware(spec.cls, **spec.kwargs)
     app.add_exception_handler(UnsafeUrlError, _unsafe_url_handler)
     app.state.extraction_gate = limits.new_extraction_gate()
+    app.state.ytdlp_slots = limits.new_ytdlp_slots()
     app.state.thumbnail_grab_limit = limits.new_thumbnail_grab_limit()

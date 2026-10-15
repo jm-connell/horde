@@ -86,7 +86,7 @@ def list_fonts():
 
 
 @router.post("")
-async def upload_font(file: UploadFile = File(...)):
+def upload_font(file: UploadFile = File(...)):
     ensure_dirs()
     name = file.filename or "font.bin"
     ext = Path(name).suffix.lower()
@@ -103,7 +103,7 @@ async def upload_font(file: UploadFile = File(...)):
 
     font_id = uuid.uuid4().hex
     dest = FONTS_DIR / f"{font_id}{ext}"
-    size = await uploads.save_upload(file, dest, max_bytes=uploads.FONT_MAX_BYTES)
+    size = uploads.save_upload(file, dest, max_bytes=uploads.FONT_MAX_BYTES)
     if size == 0:
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Empty file")

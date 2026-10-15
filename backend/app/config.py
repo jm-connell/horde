@@ -56,6 +56,12 @@ def _optional_positive_int(name: str) -> int | None:
 
 MAX_FFMPEG_CONCURRENCY: int | None = _optional_positive_int("MAX_FFMPEG_CONCURRENCY")
 
+# Max request-handling threads inside yt-dlp work at once (running or waiting for
+# the extract gate). Keeps the shared 40-thread pool free for everything else.
+YTDLP_REQUEST_THREADS: int = max(
+    1, int(os.environ.get("HORDE_YTDLP_REQUEST_THREADS", "8"))
+)
+
 # Max simultaneous ffmpeg sprite-sheet workers (CPU-heavy full-video decode).
 SPRITE_CONCURRENCY: int = max(1, int(os.environ.get("SPRITE_CONCURRENCY", "1")))
 

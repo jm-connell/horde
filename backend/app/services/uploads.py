@@ -57,11 +57,16 @@ def _too_large(max_bytes: int) -> HTTPException:
     return HTTPException(status_code=413, detail=f"File too large (max {limit})")
 
 
-async def read_upload_bytes(file: UploadFile, max_bytes: int) -> bytes:
-    """Read an upload into memory, stopping with 413 once ``max_bytes`` is passed."""
+def read_upload_bytes(file: UploadFile, max_bytes: int) -> bytes:
+    """Read an upload into memory, stopping with 413 once ``max_bytes`` is passed.
+
+    Blocking: Starlette has already spooled the whole upload to a temporary file by
+    the time a handler runs, so these reads are disk I/O. Call it from a plain
+    ``def`` route (which runs in the threadpool), never from the event loop.
+    """
     buf = io.BytesIO()
     while True:
-        chunk = await file.read(_CHUNK)
+        chunk = file.file.read(_CHUNK)
         if not chunk:
             break
         if buf.tell() + len(chunk) > max_bytes:
@@ -70,7 +75,7 @@ async def read_upload_bytes(file: UploadFile, max_bytes: int) -> bytes:
     return buf.getvalue()
 
 
-async def save_upload(
+def save_upload(
     file: UploadFile,
     dest: Path,
     *,
@@ -82,6 +87,7 @@ async def save_upload(
 
     Raises 413 past ``max_bytes`` and 507 when ``free_space_dir`` would drop below
     ``headroom_bytes`` of free space. The partial file is removed on any error.
+    Blocking, like ``read_upload_bytes``.
     """
     allowed = max_bytes
     if free_space_dir is not None:
@@ -94,7 +100,7 @@ async def save_upload(
     try:
         with dest.open("wb") as out:
             while True:
-                chunk = await file.read(_CHUNK)
+                chunk = file.file.read(_CHUNK)
                 if not chunk:
                     break
                 written += len(chunk)

@@ -2,6 +2,7 @@
 
 import heapq
 import logging
+import os
 import re
 import threading
 import time
@@ -678,9 +679,25 @@ _INFO_CACHE_TTL_SEC = 180.0
 _INFO_CACHE_MAX = 48
 
 
-def _acquire_extract_gate(priority: int) -> None:
-    """One extract at a time; lower ``priority`` values run first."""
+class ExtractQueueTimeout(RuntimeError):
+    """The extract gate stayed busy longer than ``EXTRACT_QUEUE_TIMEOUT_SEC``."""
+
+
+#: How long a caller may wait its turn for the global extract gate. A stuck extract
+#: would otherwise hold every later caller (and its thread) forever.
+EXTRACT_QUEUE_TIMEOUT_SEC = float(
+    os.environ.get("HORDE_EXTRACT_QUEUE_TIMEOUT_SEC", "180")
+)
+
+
+def _acquire_extract_gate(priority: int, timeout: float | None = None) -> None:
+    """One extract at a time; lower ``priority`` values run first.
+
+    Waits at most ``timeout`` seconds (default ``EXTRACT_QUEUE_TIMEOUT_SEC``) and then
+    raises ``ExtractQueueTimeout`` without holding the gate.
+    """
     global _extract_held, _extract_waiter_seq
+    limit = EXTRACT_QUEUE_TIMEOUT_SEC if timeout is None else timeout
     with _extract_gate_lock:
         if not _extract_held and not _extract_waiters:
             _extract_held = True
@@ -688,7 +705,16 @@ def _acquire_extract_gate(priority: int) -> None:
         waiter = threading.Event()
         heapq.heappush(_extract_waiters, (int(priority), _extract_waiter_seq, waiter))
         _extract_waiter_seq += 1
-    waiter.wait()
+    if waiter.wait(limit):
+        return
+    with _extract_gate_lock:
+        if waiter.is_set():
+            return  # the gate was handed to us just as the wait expired
+        _extract_waiters[:] = [w for w in _extract_waiters if w[2] is not waiter]
+        heapq.heapify(_extract_waiters)
+    raise ExtractQueueTimeout(
+        f"Gave up waiting {limit:.0f}s for other YouTube requests to finish"
+    )
 
 
 def _release_extract_gate() -> None:
