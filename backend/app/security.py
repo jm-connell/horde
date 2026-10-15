@@ -1,17 +1,448 @@
-"""Request-level security wiring for the app (see the middleware stack added next)."""
+"""Request-level security for the whole app, as one ordered middleware stack.
+
+Horde has no login. It trusts the network it runs on, but a browser on that
+network will happily send requests on behalf of any web page the user visits,
+and will resolve any DNS name an attacker controls to the server's LAN address.
+This module closes those two doors so "trusted LAN" holds:
+
+1. ``HostAllowlistMiddleware``: refuses requests for a Host the operator did not
+   expect. Defeats DNS rebinding (an attacker's name pointing at the LAN IP).
+2. ``BodyLimitMiddleware``: refuses oversized request bodies before they are parsed.
+3. ``MediaCorsMiddleware``: the only CORS in the app. Cast receivers fetch media from
+   a different origin, so the media routes (and only those) send CORS headers.
+4. ``CsrfMiddleware``: every state-changing request must carry ``X-Horde-Request``.
+   A custom header forces a CORS preflight, which no route grants, so a web page on
+   another site cannot send one. ``Sec-Fetch-Site`` and ``Origin`` are checked too.
+5. ``SecurityHeadersMiddleware`` (outermost, so it also covers rejections): CSP,
+   ``nosniff``, referrer policy, framing policy.
+
+``MIDDLEWARE_STACK`` below is the single place the order is defined. A login layer
+slots in right after ``CsrfMiddleware`` (innermost of the security checks, before
+routing), so it only ever sees requests that came from this app's own pages.
+"""
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+import ipaddress
+import logging
+import os
+import re
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, Response
+from starlette.datastructures import MutableHeaders
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from .services import uploads
 from .services.url_safety import UnsafeUrlError
+
+logger = logging.getLogger(__name__)
+
+ALLOWED_HOSTS_ENV = "HORDE_ALLOWED_HOSTS"
+CSRF_HEADER = "x-horde-request"
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+# --- Host allowlist ----------------------------------------------------------
+
+#: Name suffixes that only ever resolve inside a private network.
+_PRIVATE_SUFFIXES = (".local", ".lan", ".home.arpa", ".internal", ".ts.net")
+
+
+_HOSTNAME_RE = re.compile(r"[a-z0-9_]([a-z0-9_.\-]*[a-z0-9_])?")
+
+
+@dataclass(frozen=True)
+class HostPolicy:
+    """Which ``Host`` header values are accepted.
+
+    The defaults cover how people actually reach a homelab service: ``localhost``,
+    any address that is not publicly routable (private, loopback, link-local and
+    CGNAT such as Tailscale's 100.64.0.0/10), single-label names such as ``truenas``
+    and the private-network suffixes. Public names must be listed explicitly in
+    ``HORDE_ALLOWED_HOSTS``; that is what stops DNS rebinding.
+    """
+
+    extra: tuple[str, ...] = ()
+    allow_any: bool = False
+
+    @classmethod
+    def from_env(cls, raw: str | None) -> HostPolicy:
+        entries: list[str] = []
+        for part in (raw or "").split(","):
+            entry = part.strip().lower()
+            if not entry:
+                continue
+            # Accept "host:port" too: the port is not part of the identity.
+            entries.append((cls._hostname(entry) or entry).rstrip("."))
+        return cls(extra=tuple(entries), allow_any="*" in entries)
+
+    @staticmethod
+    def _hostname(header: str) -> str | None:
+        try:
+            return urlsplit(f"//{header}").hostname
+        except ValueError:
+            return None
+
+    def allows(self, host_header: str) -> bool:
+        if self.allow_any:
+            return True
+        host = self._hostname(host_header)
+        if not host:
+            return False
+        host = host.rstrip(".")
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            return self._name_allowed(host)
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        return not ip.is_global or host in self.extra
+
+    def _name_allowed(self, host: str) -> bool:
+        if not _HOSTNAME_RE.fullmatch(host):
+            return False
+        if host == "localhost" or host.endswith(".localhost"):
+            return True
+        if "." not in host or host.endswith(_PRIVATE_SUFFIXES):
+            return True
+        for entry in self.extra:
+            if entry.startswith("*."):
+                if host.endswith(entry[1:]):
+                    return True
+            elif host == entry:
+                return True
+        return False
+
+
+# --- Content-Security-Policy -------------------------------------------------
+
+#: The SPA. Everything it loads is listed here:
+#:  * scripts: its own bundle, the Google Cast sender SDK (gstatic; Chrome's cast
+#:    shim also loads from a chrome-extension: URL)
+#:  * styles: Tailwind output, Google Fonts (a user-selectable UI font), plus inline
+#:    styles (React ``style=`` attributes and the user's custom CSS <style> tag)
+#:  * images: own thumbnails, and remote thumbnails from whichever site yt-dlp read
+#:    (YouTube's i.ytimg.com, Vimeo, ...), so any https host
+#:  * connect: own API, SponsorBlock, Cast SDK
+#:  * media/worker: own streams, blob: for DASH (MediaSource) and the service worker
+APP_CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self' https://www.gstatic.com chrome-extension:",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' data: https://fonts.gstatic.com",
+        "img-src 'self' data: blob: https:",
+        "media-src 'self' blob: data:",
+        "connect-src 'self' https://sponsor.ajay.app https://www.gstatic.com",
+        "worker-src 'self' blob:",
+        "manifest-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'self'",
+    ]
+)
+
+#: The MkDocs wiki served under /wiki. The Material theme emits small inline
+#: scripts (palette and search bootstrap) and starts its search worker from a blob,
+#: and the repo widgets read GitHub (raw.githubusercontent.com, api.github.com).
+WIKI_CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self' data:",
+        "img-src 'self' data: https:",
+        "connect-src 'self' https://raw.githubusercontent.com https://api.github.com",
+        "worker-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'self'",
+    ]
+)
+
+WIKI_PREFIX = "/wiki"
+
+
+def content_security_policy(path: str) -> str:
+    if path == WIKI_PREFIX or path.startswith(f"{WIKI_PREFIX}/"):
+        return WIKI_CSP
+    return APP_CSP
+
+
+# --- ASGI helpers ------------------------------------------------------------
+
+
+def _header(scope: Scope, name: str) -> str | None:
+    key = name.encode("latin-1")
+    for k, v in scope["headers"]:
+        if k == key:
+            return v.decode("latin-1")
+    return None
+
+
+async def _reject(
+    scope: Scope, receive: Receive, send: Send, status: int, detail: str
+) -> None:
+    response = JSONResponse({"detail": detail}, status_code=status)
+    await response(scope, receive, send)
+
+
+# --- Middleware --------------------------------------------------------------
+
+
+class SecurityHeadersMiddleware:
+    """Adds CSP, nosniff, referrer and framing headers to every response."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        csp = content_security_policy(scope["path"])
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.setdefault("Content-Security-Policy", csp)
+                headers.setdefault("X-Content-Type-Options", "nosniff")
+                headers.setdefault("Referrer-Policy", "same-origin")
+                headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
+class HostAllowlistMiddleware:
+    """400 for a Host header that is not allowed (DNS rebinding defence)."""
+
+    def __init__(self, app: ASGIApp, *, policy: HostPolicy) -> None:
+        self.app = app
+        self.policy = policy
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+        host = _header(scope, "host") or ""
+        if self.policy.allows(host):
+            await self.app(scope, receive, send)
+            return
+        logger.warning("Rejected request for unexpected Host %r", host)
+        if scope["type"] == "websocket":
+            await send({"type": "websocket.close", "code": 1008})
+            return
+        await _reject(
+            scope,
+            receive,
+            send,
+            400,
+            f"Host {host!r} is not allowed. If you reach Horde under this name "
+            f"(for example through a reverse proxy), add it to the "
+            f"{ALLOWED_HOSTS_ENV} environment variable.",
+        )
+
+
+#: Slack added to upload limits for multipart framing around the file bytes.
+_MULTIPART_OVERHEAD = 1024 * 1024
+#: Largest body of any ordinary JSON request.
+DEFAULT_BODY_LIMIT = 8 * 1024 * 1024
+
+# (path pattern, limit in bytes as a callable so env overrides apply per request)
+_UPLOAD_LIMITS: tuple[tuple[re.Pattern[str], Callable[[], int]], ...] = (
+    (re.compile(r"/api/fonts"), lambda: uploads.FONT_MAX_BYTES),
+    (re.compile(r"/api/backgrounds"), lambda: uploads.BACKGROUND_MAX_BYTES),
+    (re.compile(r"/api/videos/\d+/thumbnail"), lambda: uploads.IMAGE_MAX_BYTES),
+    (re.compile(r"/api/playlists/\d+/thumbnail"), lambda: uploads.IMAGE_MAX_BYTES),
+    (re.compile(r"/api/review/upload"), uploads.max_video_upload_bytes),
+)
+
+
+def body_limit_for(method: str, path: str) -> int | None:
+    """Maximum request body in bytes, or ``None`` when no body is expected."""
+    if method in SAFE_METHODS:
+        return None
+    for pattern, limit in _UPLOAD_LIMITS:
+        if pattern.fullmatch(path):
+            return limit() + _MULTIPART_OVERHEAD
+    return DEFAULT_BODY_LIMIT
+
+
+class BodyLimitMiddleware:
+    """413 for a request body over its route's cap, before anything parses it."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        limit = body_limit_for(scope["method"], scope["path"])
+        if limit is None:
+            await self.app(scope, receive, send)
+            return
+        declared = _header(scope, "content-length")
+        if declared and declared.isdigit() and int(declared) > limit:
+            await _reject(scope, receive, send, 413, "Request body is too large")
+            return
+
+        received = 0
+
+        async def limited_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    # Raised inside the app, so FastAPI renders it as a 413.
+                    raise StarletteHTTPException(
+                        status_code=413, detail="Request body is too large"
+                    )
+            return message
+
+        await self.app(scope, limited_receive, send)
+
+
+#: Routes a Cast receiver or AirPlay target fetches from another origin.
+MEDIA_ROUTE_PATTERNS = (
+    re.compile(r"/api/videos/\d+/stream"),  # original and ?rendition=compat
+    re.compile(r"/api/videos/\d+/subtitles/[^/]+"),
+    re.compile(r"/api/thumbnails/\d+"),  # poster image
+)
+_MEDIA_METHODS = "GET, HEAD, OPTIONS"
+_MEDIA_EXPOSE = "Content-Range, Accept-Ranges, Content-Length"
+
+
+def is_media_route(path: str) -> bool:
+    return any(p.fullmatch(path) for p in MEDIA_ROUTE_PATTERNS)
+
+
+class MediaCorsMiddleware:
+    """CORS for the media routes only; every other route sends no CORS headers."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if (
+            scope["type"] != "http"
+            or scope["method"] not in SAFE_METHODS
+            or not is_media_route(scope["path"])
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        if scope["method"] == "OPTIONS" and _header(
+            scope, "access-control-request-method"
+        ):
+            response = Response(
+                status_code=204,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": _MEDIA_METHODS,
+                    "Access-Control-Allow-Headers": "Range, Content-Type",
+                    "Access-Control-Max-Age": "600",
+                },
+            )
+            await response(scope, receive, send)
+            return
+
+        async def send_with_cors(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers["Access-Control-Allow-Origin"] = "*"
+                headers["Access-Control-Expose-Headers"] = _MEDIA_EXPOSE
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors)
+
+
+class CsrfMiddleware:
+    """Refuse state-changing requests that did not come from this app's own pages.
+
+    * ``X-Horde-Request: 1`` is required. Cross-site JavaScript cannot add a custom
+      header without a CORS preflight, and no route answers one.
+    * ``Sec-Fetch-Site: cross-site`` is refused outright.
+    * An ``Origin`` header, when sent, must name the host that was requested.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] in SAFE_METHODS:
+            await self.app(scope, receive, send)
+            return
+        problem = self._problem(scope)
+        if problem is None:
+            await self.app(scope, receive, send)
+            return
+        await _reject(scope, receive, send, 403, problem)
+
+    @staticmethod
+    def _problem(scope: Scope) -> str | None:
+        if _header(scope, CSRF_HEADER) != "1":
+            return "Missing X-Horde-Request header"
+        if (_header(scope, "sec-fetch-site") or "").lower() == "cross-site":
+            return "Cross-site requests are not allowed"
+        origin = _header(scope, "origin")
+        if origin is not None:
+            try:
+                origin_host = urlsplit(origin).netloc.lower()
+            except ValueError:
+                origin_host = ""
+            hosts = {
+                (_header(scope, "host") or "").lower(),
+                (_header(scope, "x-forwarded-host") or "").lower(),
+            } - {""}
+            if origin_host not in hosts:
+                return "Origin does not match this server"
+        return None
+
+
+# --- Assembly ----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MiddlewareSpec:
+    cls: type
+    kwargs: dict = field(default_factory=dict)
+
+
+def build_stack(policy: HostPolicy) -> list[MiddlewareSpec]:
+    """The security middleware, outermost first. This list *is* the order."""
+    return [
+        MiddlewareSpec(SecurityHeadersMiddleware),
+        MiddlewareSpec(HostAllowlistMiddleware, {"policy": policy}),
+        MiddlewareSpec(BodyLimitMiddleware),
+        MiddlewareSpec(MediaCorsMiddleware),
+        MiddlewareSpec(CsrfMiddleware),
+        # Authentication goes here: after every check above, before routing.
+    ]
 
 
 async def _unsafe_url_handler(_request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse({"detail": str(exc)}, status_code=400)
 
 
-def install_security(app: FastAPI) -> None:
-    """Map a refused outbound URL (url_safety) to HTTP 400."""
+def install_security(app: FastAPI, *, allowed_hosts: str | None = None) -> None:
+    """Install the middleware stack and the URL-safety error mapping.
+
+    ``allowed_hosts`` overrides ``HORDE_ALLOWED_HOSTS`` (used by tests).
+    """
+    policy = HostPolicy.from_env(
+        os.environ.get(ALLOWED_HOSTS_ENV) if allowed_hosts is None else allowed_hosts
+    )
+    for spec in reversed(
+        build_stack(policy)
+    ):  # add_middleware wraps: last is outermost
+        app.add_middleware(spec.cls, **spec.kwargs)
     app.add_exception_handler(UnsafeUrlError, _unsafe_url_handler)

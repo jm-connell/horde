@@ -269,6 +269,16 @@ def app(init_db, monkeypatch):
 
 @pytest.fixture
 def client(app):
+    """Test client that sends the CSRF header the SPA's api.ts adds to every mutation."""
+    from fastapi.testclient import TestClient
+
+    with TestClient(app, headers={"X-Horde-Request": "1"}) as c:
+        yield c
+
+
+@pytest.fixture
+def raw_client(app):
+    """Test client without the CSRF header: for negative tests of app/security.py."""
     from fastapi.testclient import TestClient
 
     with TestClient(app) as c:

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -131,16 +130,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Horde", lifespan=lifespan)
-install_security(app)
 
-# Cast receivers fetch media/subtitle URLs cross-origin from the sender page.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET", "HEAD", "OPTIONS"],
-    allow_headers=["Range", "Content-Type"],
-    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
-)
+# Host allowlist, CSRF, media-only CORS, security headers (see app/security.py).
+install_security(app)
 
 app.include_router(videos.router)
 app.include_router(compat.router)

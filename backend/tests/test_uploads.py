@@ -62,6 +62,14 @@ def test_oversize_font_is_413_from_the_handler(client, init_db, monkeypatch):
     assert client.get("/api/fonts").json()["items"] == []
 
 
+def test_huge_upload_is_413_before_it_is_parsed(client, init_db):
+    body = b"\x00" * (uploads.FONT_MAX_BYTES + 2 * 1024 * 1024)
+
+    resp = client.post("/api/fonts", files={"file": ("a.woff2", b"wOF2" + body)})
+
+    assert resp.status_code == 413
+
+
 def test_stored_fonts_are_capped(client, init_db, monkeypatch):
     monkeypatch.setattr(uploads, "MAX_STORED_FONTS", 2)
 
@@ -152,8 +160,13 @@ def test_oversize_thumbnail_is_413(client, add_video, monkeypatch):
     small_over = client.post(
         f"/api/videos/{video.id}/thumbnail", files={"file": ("t.png", _png((300, 300)))}
     )
+    huge = client.post(
+        f"/api/videos/{video.id}/thumbnail",
+        files={"file": ("t.png", b"\x00" * (2 * 1024 * 1024))},
+    )
 
     assert small_over.status_code == 413  # handler
+    assert huge.status_code == 413  # body-size gate
 
 
 def test_playlist_cover_is_validated_and_capped(client, monkeypatch):
