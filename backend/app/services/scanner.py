@@ -27,8 +27,10 @@ from .metadata import (
 from .paths import (
     COMPAT_SIDECAR_TOKEN,
     FRAGMENT_RE,
+    STAGING_DIR_NAME,
     find_video_by_path,
     is_manual_import,
+    is_staging_rel_path,
     to_rel_path,
 )
 from .thumbnails import write_list_thumbnail
@@ -89,6 +91,8 @@ def _is_active(rel_path: str) -> bool:
 def _is_media(path: Path) -> bool:
     if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
         return False
+    if STAGING_DIR_NAME in path.parts:
+        return False
     name = path.name.lower()
     # Skip yt-dlp / ffmpeg intermediates that must never become review items.
     if _FRAGMENT_RE.search(path.name) is not None:
@@ -133,7 +137,9 @@ def ingest_media_file(
         return None
 
     # Ephemeral "download to device" staging — never library media.
-    if rel_path.replace("\\", "/").startswith("_device/"):
+    if rel_path.replace("\\", "/").startswith("_device/") or is_staging_rel_path(
+        rel_path
+    ):
         return None
 
     existing = find_video_by_path(session, rel_path)

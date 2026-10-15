@@ -75,6 +75,11 @@ def belongs_to_stem(name: str, stem: str) -> bool:
     return rest == "" or _STEM_SUFFIX_RE.fullmatch(rest) is not None
 
 
+def staging_dir(job_id: int) -> Path:
+    """Per-job download staging dir (same filesystem as the library)."""
+    return DOWNLOADS_DIR / STAGING_DIR_NAME / str(job_id)
+
+
 def is_staging_rel_path(rel_path: str) -> bool:
     posix = (rel_path or "").replace("\\", "/").lstrip("/")
     return posix == STAGING_DIR_NAME or posix.startswith(f"{STAGING_DIR_NAME}/")

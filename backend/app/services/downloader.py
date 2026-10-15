@@ -6,7 +6,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -29,7 +29,13 @@ from ..models import (
 from . import activity, compat_rendition, library, scanner
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
-from .fsutil import replace_with_retries, safe_rel, safe_unlink
+from .fsutil import (
+    MoveJournal,
+    is_within,
+    replace_with_retries,
+    safe_rel,
+    safe_unlink,
+)
 from .media_info import apply_stream_info, needs_compat, probe_stream_info
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
@@ -46,6 +52,7 @@ from .paths import (
     belongs_to_stem,
     find_video_by_path,
     resolve_compat_path,
+    staging_dir,
     to_rel_path,
     video_stem,
 )
@@ -154,6 +161,7 @@ def _download_outtmpl(
     job_id: int,
     info: dict[str, Any],
     channel_override: str | None,
+    root: Path,
 ) -> tuple[str, bool]:
     """Output template for this download and whether yt-dlp should force Windows rules.
 
@@ -161,7 +169,6 @@ def _download_outtmpl(
     style suffixes) under the 255-byte limit; the folder is the channel the
     library row will carry, so ``channel_override`` and the folder agree.
     """
-    root = DOWNLOADS_DIR
     wf = windows_filenames_ok(root)
     if destination == DownloadDestination.device.value:
 
@@ -702,6 +709,10 @@ class _PostprocessTask:
     cancel_event: threading.Event
     destination: str
     video_codec: str
+    # Library downloads: per-job staging dir the media is promoted out of, and
+    # the scanner marks to release once the postprocess stage is over.
+    staging_dir: Path | None = None
+    active_marks: set[str] = field(default_factory=set)
 
 
 class FfmpegQueue:
@@ -747,6 +758,7 @@ class FfmpegQueue:
                 cancel_event=task.cancel_event,
                 destination=task.destination,
                 video_codec=task.video_codec,
+                staging_dir=task.staging_dir,
             )
         except DownloadCancelled:
             _mark_job_cancelled(
@@ -757,6 +769,9 @@ class FfmpegQueue:
         except Exception as exc:  # noqa: BLE001
             _fail_postprocess_job(task.job_id, task.destination, exc)
         finally:
+            for lib in task.active_marks:
+                scanner.unmark_active(lib)
+            _discard_staging_unless_requeued(task.job_id)
             with self._lock:
                 self._running.discard(task.job_id)
             download_queue.release_ffmpeg(task.job_id)
@@ -793,6 +808,42 @@ def _retry_db_locked[T](fn: Callable[[], T], *, what: str) -> T:
             )
             time.sleep(delay)
     raise AssertionError("unreachable")  # pragma: no cover
+
+
+def _library_rel(rel: str, staging: Path | None) -> str:
+    """Library-relative path for a path under the job's staging dir."""
+    if staging is None:
+        return rel
+    prefix = to_rel_path(staging) + "/"
+    return rel[len(prefix) :] if rel.startswith(prefix) else rel
+
+
+def _discard_staging_unless_requeued(job_id: int) -> None:
+    """Remove the job's staging dir unless the job will run again (pause/restart).
+
+    A paused or quality-restarted job goes back to ``queued`` and resumes its
+    ``.part`` files from the same dir; a finished, failed, cancelled or deleted
+    job has no use for it.
+    """
+    root = staging_dir(job_id)
+    if not root.exists() and not root.is_symlink():
+        return
+    with Session(engine) as session:
+        job = session.get(DownloadJob, job_id)
+        if job is not None and job.status == JobStatus.queued:
+            return
+    remove_staging_dir(root)
+
+
+def remove_staging_dir(path: Path) -> None:
+    """Delete one staging dir (never following a symlink out of the library)."""
+    if path.is_symlink():
+        safe_unlink(path)
+        return
+    if not is_within(path):
+        logger.warning("refusing to remove staging dir outside the library: %s", path)
+        return
+    shutil.rmtree(path, ignore_errors=True)
 
 
 def _update_job(job_id: int, **fields: Any) -> None:
@@ -892,6 +943,8 @@ def _handoff_postprocess(
     cancel_event: threading.Event,
     destination: str,
     video_codec: str,
+    staging_dir: Path | None = None,
+    active_marks: set[str] | None = None,
 ) -> None:
     _set_processing_stage(job_id, STAGE_REMUXING, progress=0.0)
     ffmpeg_queue.enqueue(
@@ -909,6 +962,8 @@ def _handoff_postprocess(
             cancel_event=cancel_event,
             destination=destination,
             video_codec=video_codec,
+            staging_dir=staging_dir,
+            active_marks=set(active_marks or ()),
         )
     )
 
@@ -1553,6 +1608,7 @@ def _complete_download(
     cancel_event: threading.Event | None = None,
     destination: str = DownloadDestination.library.value,
     video_codec: str = "av1",
+    staging_dir: Path | None = None,
 ) -> int | None:
     if cancel_event is not None and cancel_event.is_set():
         raise DownloadCancelled()
@@ -1649,6 +1705,21 @@ def _complete_download(
         quality_preset, int(height) if height else None, video_codec
     )
 
+    journal: MoveJournal | None = None
+    if staging_dir is not None and not is_device:
+        # Validate the processed file, then move it into the library. A failed
+        # move or commit puts everything back (see the except below).
+        if not _validate_playable(final_path):
+            raise RuntimeError("Processed file is not playable")
+        journal = MoveJournal(DOWNLOADS_DIR)
+        try:
+            final_path = _promote_from_staging(journal, final_path, staging_dir)
+        except BaseException:
+            journal.rollback()
+            raise
+        rel_path = to_rel_path(final_path)
+        scanner.mark_active(rel_path)
+
     # Ephemeral "to this device" — no library row, sprites, or AI.
     if is_device:
         with Session(engine) as session:
@@ -1694,27 +1765,37 @@ def _complete_download(
         progress_store[job_id] = snapshot
         return None
 
-    committed = _retry_db_locked(
-        lambda: _commit_library_video(
-            job_id=job_id,
-            final_path=final_path,
-            rel_path=rel_path,
-            info=info,
-            source_url=source_url,
-            video_codec=video_codec,
-            quality_preset=quality_preset,
-            title_override=title_override,
-            channel_override=channel_override,
-            replace_video_id=replace_video_id,
-            notes_pending=notes_pending,
-            file_size=file_size,
-            duration=duration,
-            width=width,
-            height=height,
-            stream_info=stream_info,
-        ),
-        what=f"library row for job {job_id}",
-    )
+    try:
+        committed = _retry_db_locked(
+            lambda: _commit_library_video(
+                job_id=job_id,
+                final_path=final_path,
+                rel_path=rel_path,
+                info=info,
+                source_url=source_url,
+                video_codec=video_codec,
+                quality_preset=quality_preset,
+                title_override=title_override,
+                channel_override=channel_override,
+                replace_video_id=replace_video_id,
+                notes_pending=notes_pending,
+                file_size=file_size,
+                duration=duration,
+                width=width,
+                height=height,
+                stream_info=stream_info,
+            ),
+            what=f"library row for job {job_id}",
+        )
+    except BaseException:
+        if journal is not None:
+            journal.rollback()
+        raise
+    else:
+        if journal is not None:
+            journal.commit()
+        if staging_dir is not None:
+            scanner.unmark_active(rel_path)
     video_id = committed.video_id
 
     # The new row is durable: only now remove what it replaced (old media,
@@ -1949,6 +2030,31 @@ def _remove_review_duplicates_for(yt_id: str | None, video_id: int) -> None:
         _remove_review_duplicates(session, yt_id, keep_id=video_id)
 
 
+def _promote_from_staging(
+    journal: MoveJournal, final_path: Path, staging_dir: Path
+) -> Path:
+    """Move a finished download (and sidecars of the same stem) into the library.
+
+    The staging layout mirrors the library layout, so the relative path under the
+    staging dir is the destination. A file already at the destination (re-download
+    or replace) is kept in ``<staging>/.displaced`` until the DB commit succeeds.
+    """
+    rel = final_path.resolve().relative_to(staging_dir.resolve())
+    dest = DOWNLOADS_DIR / rel
+    backup_dir = staging_dir / ".displaced"
+    stem = video_stem(final_path)
+    for entry in sorted(final_path.parent.iterdir()):
+        if entry == final_path or not entry.is_file():
+            continue
+        if not belongs_to_stem(entry.name, stem) or _is_intermediate_media(entry.name):
+            continue
+        if entry.name.endswith((".ytdl", ".part")):
+            continue
+        journal.move(entry, dest.parent / entry.name, backup_dir=backup_dir)
+    journal.move(final_path, dest, backup_dir=backup_dir)
+    return dest
+
+
 def _reject_unplayable(path: Path | None, attempt_paths: set[str]) -> Path | None:
     """Return path if playable; otherwise remove corrupt artifacts and return None."""
     if path is None or not path.exists() or path.stat().st_size <= 0:
@@ -1990,6 +2096,14 @@ def _run_download(
         # Never overwrite a library row from an ephemeral device job.
         replace_video_id = None
         device_job_dir(job_id).mkdir(parents=True, exist_ok=True)
+        staging: Path | None = None
+        out_root = device_job_dir(job_id)
+    else:
+        # Library downloads never write into the library directly: a cancel or
+        # failure must not touch the file a row already references.
+        staging = staging_dir(job_id)
+        staging.mkdir(parents=True, exist_ok=True)
+        out_root = staging
 
     if cancel.is_set():
         raise DownloadCancelled()
@@ -2016,6 +2130,14 @@ def _run_download(
     final_path: Path | None = None
     last_exc: Exception | None = None
     ytdlp_logger = _YtdlpLogger()
+    marked: set[str] = set()
+    handed_off = False
+
+    def mark_library_path(rel: str) -> None:
+        lib = _library_rel(rel, staging)
+        if lib not in marked:
+            marked.add(lib)
+            scanner.mark_active(lib)
 
     act = activity.start(
         "download",
@@ -2038,7 +2160,7 @@ def _run_download(
         "merge_output_format": "mp4",
         "ignoreerrors": True,
         "overwrites": True,
-        "windowsfilenames": windows_filenames_ok(DOWNLOADS_DIR),
+        "windowsfilenames": windows_filenames_ok(out_root),
         "format_sort": format_sort_for(quality_preset, video_codec),
         "file_access_retries": 10,
         "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
@@ -2103,7 +2225,7 @@ def _run_download(
                 metadata_info = _merge_info(metadata_info, fetched)
                 info = metadata_info
                 outtmpl, _ = _download_outtmpl(
-                    destination, job_id, metadata_info, channel_override
+                    destination, job_id, metadata_info, channel_override, out_root
                 )
                 base_ydl_opts["outtmpl"] = outtmpl
                 ydl_opts = {**ydl_opts, "outtmpl": outtmpl}
@@ -2125,7 +2247,7 @@ def _run_download(
                         if rel:
                             attempt_paths.add(rel)
                             active_paths.add(rel)
-                            scanner.mark_active(rel)
+                            mark_library_path(rel)
 
                     progress_store[job_id] = {
                         **progress_store.get(job_id, {}),
@@ -2169,7 +2291,7 @@ def _run_download(
                                     if rel:
                                         attempt_paths.add(rel)
                                         active_paths.add(rel)
-                                        scanner.mark_active(rel)
+                                        mark_library_path(rel)
                                 downloaded = ydl_auth.extract_info(url, download=True)
                                 if ytdlp_logger.members_only:
                                     raise MembersOnlyError(
@@ -2246,7 +2368,10 @@ def _run_download(
             cancel,
             destination,
             video_codec,
+            staging_dir=staging,
+            active_marks=marked,
         )
+        handed_off = True
         return None
 
     except DownloadCancelled:
@@ -2292,10 +2417,17 @@ def _run_download(
                     cancel,
                     destination,
                     video_codec,
+                    staging_dir=staging,
+                    active_marks=marked,
                 )
+                handed_off = True
                 return None
-            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                pass
+            except Exception:
+                logger.warning(
+                    "could not hand recovered download %s to postprocess",
+                    job_id,
+                    exc_info=True,
+                )
 
         _cleanup_partial_files(active_paths)
         if destination == DownloadDestination.device.value:
@@ -2355,15 +2487,12 @@ def _run_download(
         # Ensure activity never leaks if an unexpected path skips finish.
         if not act._closed:
             act.discard()
-        # Keep paths marked briefly so the filesystem watcher does not race
-        # the DB commit and try to ingest the file as a duplicate review item.
-        paths = list(active_paths)
-
-        def _release() -> None:
-            for rel in paths:
-                scanner.unmark_active(rel)
-
-        threading.Timer(5.0, _release).start()
+        if not handed_off:
+            # The postprocess stage owns the marks and the staging dir once it
+            # has the job; otherwise release them here.
+            for lib in marked:
+                scanner.unmark_active(lib)
+            _discard_staging_unless_requeued(job_id)
 
 
 def enqueue_download(job_id: int) -> None:

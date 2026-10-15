@@ -169,7 +169,9 @@ def stub_media_probes(monkeypatch, downloader, *, playable: bool = True) -> None
     )
 
 
-def run_job_inline(downloader, job_id: int) -> None:
+def run_job_inline(
+    downloader, job_id: int, cancel_event: threading.Event | None = None
+) -> None:
     """Run the download stage, then the ffmpeg/finish stage, on this thread."""
 
     def enqueue(task) -> None:
@@ -179,6 +181,6 @@ def run_job_inline(downloader, job_id: int) -> None:
     original = downloader.ffmpeg_queue.enqueue
     downloader.ffmpeg_queue.enqueue = enqueue  # type: ignore[method-assign]
     try:
-        downloader._run_download(job_id, cancel_event=threading.Event())
+        downloader._run_download(job_id, cancel_event=cancel_event or threading.Event())
     finally:
         downloader.ffmpeg_queue.enqueue = original  # type: ignore[method-assign]
