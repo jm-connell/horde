@@ -10,6 +10,7 @@ frontend/dist/
 frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
+frontend/*.tsbuildinfo
 
 # Browser-test runtime (throwaway sqlite and media)
 e2e/.runtime/
@@ -17,6 +18,7 @@ e2e/.runtime/
 # App data
 data/
 downloads/
+ollama/
 *.db
 backend/data/
 backend/downloads/
@@ -35,7 +37,9 @@ compose.override.yaml
 
 # MkDocs
 site/
-backend/static/wiki/
+
+# Built frontend (+ wiki): produced by `npm run build:sync` or the Docker build
+backend/static/
 
 # OS / editor
 .DS_Store

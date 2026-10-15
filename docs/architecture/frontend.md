@@ -1,6 +1,6 @@
 # Frontend
 
-React + Vite SPA under `frontend/`. Production build is copied to `backend/static` (and served by FastAPI). Dev uses Vite on port **5173**.
+React + Vite SPA under `frontend/`. The Docker build compiles it into `/app/static`, and `npm run build:sync` does the same locally into the gitignored `backend/static` (served by FastAPI). Dev uses Vite on port **5173**.
 
 ## Routes
 

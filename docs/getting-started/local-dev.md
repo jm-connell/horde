@@ -134,7 +134,7 @@ cd frontend
 npm run build:sync
 ```
 
-That runs `npm run build` then copies `frontend/dist` into `backend/static` via `scripts/sync-static.mjs`.
+That runs `npm run build` then copies `frontend/dist` into `backend/static` via `scripts/sync-static.mjs`. `backend/static` is gitignored: it is a local build artifact, never committed (the Docker image builds its own copy).
 
 ## Optional: Docker-shaped local stack
 

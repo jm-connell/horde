@@ -2,6 +2,9 @@
 
 Horde splits **media** and **app state** into two roots: `DOWNLOADS_DIR` and `DATA_DIR`. Paths are configurable; see [Environment variables](environment.md).
 
+!!! warning "Local disk for `DATA_DIR`"
+    `DATA_DIR` contains `horde.db`, a SQLite database in WAL mode. It must live on a local filesystem. SQLite WAL is unsafe on SMB/NFS and other network mounts and can corrupt the database. `DOWNLOADS_DIR` may be a network share.
+
 ## Downloads (`DOWNLOADS_DIR`)
 
 Primary media library. Default in Docker: `/downloads` (host: `DOWNLOADS_PATH`).

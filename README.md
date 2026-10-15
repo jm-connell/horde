@@ -82,15 +82,16 @@ cd horde
 cp .env.example .env
 ```
 
-Change the TrueNAS-shaped defaults before first start, or Docker may create
-those paths as root. Keep paths in `.env`, not hardcoded in
+Change the TrueNAS-shaped defaults before first start. They do not exist on
+other machines, so Docker would silently create them as root-owned folders and
+Horde could not write to them. Keep paths in `.env`, not hardcoded in
 `docker-compose.yml`.
 
 | Variable | What to put |
 |----------|-------------|
 | `PUID` / `PGID` | File owner (`id <user>`, or TrueNAS → Credentials → Local Users) |
 | `DOWNLOADS_PATH` | Host folder for videos (`Channel/Year/...`) |
-| `DATA_PATH` | Host folder for SQLite + thumbnails (on the pool, not in the git tree) |
+| `DATA_PATH` | Host folder for SQLite + thumbnails (on the pool, not in the git tree). **Must be a local disk or dataset, never SMB/NFS**: the SQLite database uses WAL, which can corrupt on network filesystems |
 
 ```bash
 # generic example — use your real paths and the same PUID:PGID as in .env

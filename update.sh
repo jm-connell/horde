@@ -259,6 +259,8 @@ if [[ -n "$LIVE_DOWNLOADS" || -n "$LIVE_DATA" ]]; then
       echo >&2
       echo "Aborting: recreating the container would mount different host paths." >&2
       echo "That is what wipes settings (app_settings.json / horde.db) and looks like a storage-path reset." >&2
+      echo "A common cause is an .env that still has the TrueNAS example paths, or no .env at all, on another host" >&2
+      echo "(see docs/getting-started/install-docker.md, 'Configure .env')." >&2
       echo "Live mounts are saved in ${ENV_FILE}. If you really intend to move data, set" >&2
       echo "  HORDE_FORCE_VOLUME_CHANGE=1" >&2
       echo "and run again. Snapshot: ${BACKUP_DIR}" >&2

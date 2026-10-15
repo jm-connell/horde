@@ -52,7 +52,10 @@ Pick two paths that will survive container rebuilds. Examples on a generic Linux
 mkdir -p /home/you/horde-media /home/you/horde-data
 ```
 
-`.env.example` ships TrueNAS-style defaults (`/mnt/tank/media/youtube_archive`, `/opt/dockge/horde/data`). If you leave those paths on a machine where they do not exist, Compose may create them as **root**, and Horde will not be able to write. Always set paths that you created and own.
+`.env.example` ships TrueNAS-style defaults (`/mnt/tank/media/youtube_archive`, `/opt/dockge/horde/data`). If you leave those paths on a machine where they do not exist, Compose may create them as **root**, and Horde will not be able to write. Always set paths that you created and own. `update.sh` stops with a pointer to this page when it detects that a recreate would mount different host paths.
+
+!!! danger "`DATA_PATH` must be a local disk"
+    `DATA_PATH` holds the SQLite database in WAL mode. WAL relies on shared-memory file locking that SMB and NFS do not provide reliably, so a database on a network share can corrupt. Keep `DATA_PATH` on a local disk or ZFS dataset on the Docker host. Only `DOWNLOADS_PATH` (media) may be a network share.
 
 ### 3. Copy and edit `.env`
 
