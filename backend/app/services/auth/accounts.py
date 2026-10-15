@@ -362,8 +362,7 @@ def delete_user(session: Session, user_id: int) -> None:
     user = session.get(User, user_id)
     if user is None:
         raise UserNotFound("User not found")
-    if _is_active_admin(user) and _enabled_admin_count(session) <= 1:
-        raise LastAdmin("This is the last administrator and cannot be deleted")
+    was_active_admin = _is_active_admin(user)
     # Explicit deletes as well as the FK cascades, matching delete_video_cascade.
     _delete_sessions(session, user_id)
     session.execute(delete(UserVideoState).where(UserVideoState.user_id == user_id))
@@ -372,6 +371,14 @@ def delete_user(session: Session, user_id: int) -> None:
         delete(VideoAiChatMessage).where(VideoAiChatMessage.user_id == user_id)
     )
     session.delete(user)
+    if was_active_admin:
+        # Decide after writing: the delete takes SQLite's write lock, so the count
+        # sees every concurrent change that committed first. Counting before
+        # writing let two admins delete each other and leave nobody.
+        session.flush()
+        if _enabled_admin_count(session) == 0:
+            session.rollback()
+            raise LastAdmin("This is the last administrator and cannot be deleted")
     session.commit()
 
 

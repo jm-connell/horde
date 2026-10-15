@@ -238,3 +238,77 @@ def test_deleting_a_user_removes_their_history(session, add_video):
     accounts.delete_user(session, member.id)
     assert session.exec(select(UserVideoState)).all() == []
     assert session.get(type(video), video.id) is not None
+
+
+# --- concurrency -------------------------------------------------------------
+
+
+def _race(init_db, first, second, rounds=25):
+    """Run two removals at once, ``rounds`` times, and return how many admins survive."""
+    import threading
+
+    from sqlmodel import Session
+
+    survivors = []
+    for i in range(rounds):
+        with Session(init_db["engine"]) as s:
+            a = accounts.create_user(s, f"a{i}", "password-one", is_admin=True)
+            b = accounts.create_user(s, f"b{i}", "password-two", is_admin=True)
+            # Everyone else is out of the way so a and b are the only admins.
+            for u in accounts.list_users(s):
+                if u.id not in (a.id, b.id) and u.is_admin:
+                    accounts.update_user(s, u.id, is_admin=False)
+            ids = (a.id, b.id)
+        barrier = threading.Barrier(2)
+        errors: list[Exception] = []
+
+        def run(action, target, barrier=barrier, errors=errors):
+            with Session(init_db["engine"]) as s:
+                barrier.wait()
+                try:
+                    action(s, target)
+                except accounts.LastAdmin:
+                    pass
+                except Exception as exc:  # noqa: BLE001 - reported by the assertion below
+                    errors.append(exc)
+
+        threads = [
+            threading.Thread(target=run, args=(first, ids[1])),
+            threading.Thread(target=run, args=(second, ids[0])),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=60)
+        assert errors == []
+        with Session(init_db["engine"]) as s:
+            survivors.append(
+                len(
+                    [u for u in accounts.list_users(s) if u.is_admin and not u.disabled]
+                )
+            )
+            for u in accounts.list_users(s):
+                if u.username_norm[0] in "ab":
+                    s.delete(u)
+            s.commit()
+    return survivors
+
+
+def test_two_admins_deleting_each_other_never_leaves_nobody(init_db, session):
+    accounts.create_user(session, "owner", "password-one")
+    survivors = _race(
+        init_db,
+        lambda s, uid: accounts.delete_user(s, uid),
+        lambda s, uid: accounts.delete_user(s, uid),
+    )
+    assert min(survivors) >= 1
+
+
+def test_delete_racing_disable_never_leaves_nobody(init_db, session):
+    accounts.create_user(session, "owner", "password-one")
+    survivors = _race(
+        init_db,
+        lambda s, uid: accounts.delete_user(s, uid),
+        lambda s, uid: accounts.update_user(s, uid, disabled=True),
+    )
+    assert min(survivors) >= 1
