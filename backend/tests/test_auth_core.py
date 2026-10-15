@@ -347,3 +347,31 @@ def test_delete_racing_disable_never_leaves_nobody(init_db, session):
         lambda s, uid: accounts.update_user(s, uid, disabled=True),
     )
     assert min(survivors) >= 1
+
+
+def test_concurrent_creation_of_the_same_name_is_a_clean_409(init_db, session):
+    import threading
+
+    from sqlmodel import Session
+
+    accounts.create_user(session, "owner", "password-one")
+    results: list[str] = []
+    barrier = threading.Barrier(4)
+
+    def make():
+        with Session(init_db["engine"]) as s:
+            barrier.wait()
+            try:
+                accounts.create_user(s, "Racer", "password-one")
+                results.append("created")
+            except accounts.UsernameTaken:
+                results.append("taken")
+            except Exception as exc:  # noqa: BLE001 - reported by the assertion below
+                results.append(repr(exc))
+
+    threads = [threading.Thread(target=make) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+    assert sorted(results) == ["created", "taken", "taken", "taken"]

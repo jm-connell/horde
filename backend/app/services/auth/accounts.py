@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from sqlalchemy import delete, func, insert, literal, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
 from ...models import (
@@ -213,7 +214,13 @@ def create_user(
         is_admin=is_admin or first,
     )
     session.add(user)
-    session.flush()
+    try:
+        # The unique index on username_norm is the real guard: two requests can
+        # both pass the lookup above.
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise UsernameTaken(f"The username {name!r} is already taken") from exc
     if first:
         _adopt_legacy_data(session, user)
     session.commit()
