@@ -10,7 +10,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadJob, JobStatus, Playlist, PlaylistItem
 from app.services import downloader
-from app.services.downloads import dbwrite, playlist_attach
+from app.services.downloads import dbwrite, jobs, playlist_attach
 
 
 def _url(n: int) -> str:
@@ -196,7 +196,7 @@ def test_import_into_a_deleted_playlist_is_a_noop(init_db, queued_only):
 def test_playlist_deleted_mid_import_does_not_crash(
     init_db, playlist, queued_only, monkeypatch
 ):
-    real = downloader.library_video_for_url
+    real = jobs.library_video_for_url
 
     def delete_playlist_then_lookup(session, url):
         with Session(init_db["engine"]) as other:
@@ -206,9 +206,7 @@ def test_playlist_deleted_mid_import_does_not_crash(
                 other.commit()
         return real(session, url)
 
-    monkeypatch.setattr(
-        downloader, "library_video_for_url", delete_playlist_then_lookup
-    )
+    monkeypatch.setattr(jobs, "library_video_for_url", delete_playlist_then_lookup)
     downloader.run_playlist_entries(playlist, [_url(1), _url(2)], "best")
     with Session(init_db["engine"]) as s:
         assert s.exec(select(DownloadJob)).all() == []

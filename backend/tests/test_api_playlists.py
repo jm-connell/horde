@@ -162,7 +162,7 @@ def test_sync_attaches_existing_library_video(session, add_video, monkeypatch):
     from sqlmodel import select
 
     from app.models import Playlist, PlaylistItem, PlaylistSource
-    from app.services import downloader
+    from app.services.downloads import jobs
     from app.services.playlist_sync import sync_subscribed_playlist
 
     video = add_video(title="Part 1", yt_id="abcdefghijk")
@@ -193,13 +193,13 @@ def test_sync_attaches_existing_library_video(session, add_video, monkeypatch):
     )
 
     created_jobs: list[int] = []
-    original_enqueue = downloader.enqueue_download
+    original_enqueue = jobs.enqueue_download
 
     def _track_enqueue(job_id: int) -> None:
         created_jobs.append(job_id)
         original_enqueue(job_id)
 
-    monkeypatch.setattr(downloader, "enqueue_download", _track_enqueue)
+    monkeypatch.setattr(jobs, "enqueue_download", _track_enqueue)
 
     sync_subscribed_playlist(pid)
     session.expire_all()

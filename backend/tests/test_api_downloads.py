@@ -384,7 +384,7 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
 
     from app.models import DownloadJob, JobStatus
     from app.services import downloader
-    from app.services.downloads import progress
+    from app.services.downloads import jobs, progress
 
     monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
@@ -425,7 +425,7 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
             session.commit()
         return True
 
-    monkeypatch.setattr(downloader, "wait_until_job_not_running", fake_wait)
+    monkeypatch.setattr(jobs, "wait_until_job_not_running", fake_wait)
 
     changed = client.post(
         f"/api/downloads/{job_id}/quality",

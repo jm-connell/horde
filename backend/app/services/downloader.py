@@ -1,6 +1,5 @@
 import logging
 import threading
-import time
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -12,13 +11,20 @@ from ..models import (
     DownloadJob,
     JobStatus,
     Playlist,
-    Video,
 )
-from . import activity, library
+from . import activity
 
 # Facade: public names that moved to ``services/downloads`` (see the end of the
 # import block); importers outside the package keep working through them.
+from .downloads import jobs
 from .downloads.ffmpeg_queue import ffmpeg_queue as ffmpeg_queue
+from .downloads.jobs import DUPLICATE_MESSAGES as DUPLICATE_MESSAGES
+from .downloads.jobs import change_job_quality as change_job_quality
+from .downloads.jobs import classify_enqueue_duplicate as classify_enqueue_duplicate
+from .downloads.jobs import enqueue_download as enqueue_download
+from .downloads.jobs import find_active_job_for_identity
+from .downloads.jobs import job_mutate_lock as job_mutate_lock
+from .downloads.jobs import prepare_job_retry as prepare_job_retry
 from .downloads.playlist_attach import (
     append_unlisted_playlist_items,
     playlist_attach_lock,
@@ -30,9 +36,7 @@ from .downloads.queue import STUCK_JOB_GRACE_SECONDS as STUCK_JOB_GRACE_SECONDS
 from .downloads.queue import DownloadQueue as DownloadQueue
 from .downloads.queue import download_queue
 from .downloads.staging import DEVICE_STAGING_DIR as DEVICE_STAGING_DIR
-from .downloads.staging import (
-    cleanup_device_job_files,
-)
+from .downloads.staging import cleanup_device_job_files as cleanup_device_job_files
 from .downloads.staging import device_outtmpl as device_outtmpl
 from .downloads.staging import gc_orphaned_device_dirs as gc_orphaned_device_dirs
 from .downloads.staging import is_device_staging_path as is_device_staging_path
@@ -51,247 +55,15 @@ from .ytdlp_extract import (
     is_youtube_short_url,
 )
 from .ytdlp_extract import search_youtube_channels as search_youtube_channels
-from .ytdlp_formats import (
-    QUALITY_FORMATS,
-    decode_available_presets,
-    default_download_video_codec,
-    resolve_quality_preset,
-)
+from .ytdlp_formats import QUALITY_FORMATS as QUALITY_FORMATS
 from .ytdlp_formats import _available_presets as _available_presets
 from .ytdlp_formats import _has_audio as _has_audio
 from .ytdlp_formats import _height_to_tier as _height_to_tier
+from .ytdlp_formats import (
+    default_download_video_codec,
+)
 
 logger = logging.getLogger(__name__)
-
-
-DUPLICATE_QUEUED = "already_queued"
-DUPLICATE_DOWNLOADING = "already_downloading"
-DUPLICATE_LIBRARY = "already_in_library"
-DUPLICATE_MESSAGES = {
-    DUPLICATE_QUEUED: "Already queued",
-    DUPLICATE_DOWNLOADING: "Already downloading",
-    DUPLICATE_LIBRARY: "Already in library",
-}
-
-
-# QUALITY_FORMATS / PRESET_MAX_HEIGHT / STANDARD_HEIGHTS / format_chain: see ytdlp_formats
-
-
-# yt-dlp per-format fragments (e.g. ".f401.mp4") — not the final merged file.
-
-
-# Fall through: leave other errors to raised exceptions / default silence.
-
-
-def enqueue_download(job_id: int) -> None:
-    download_queue.enqueue(job_id)
-
-
-# Serialize create/retry so two clicks cannot insert two active rows.
-job_mutate_lock = threading.Lock()
-
-_ACTIVE_JOB_STATUSES = (JobStatus.queued, JobStatus.downloading)
-
-
-def find_active_job_for_identity(session: Session, url: str) -> DownloadJob | None:
-    """Queued/downloading job for the same YouTube id (or cleaned URL)."""
-    yt_id = youtube_video_id(url)
-    cleaned = clean_url(url, keep_playlist=False) or url
-    jobs = session.exec(
-        select(DownloadJob)
-        .where(DownloadJob.status.in_(list(_ACTIVE_JOB_STATUSES)))
-        .order_by(DownloadJob.id.asc())
-    ).all()
-    for job in jobs:
-        other = job.url or ""
-        if yt_id and youtube_video_id(other) == yt_id:
-            return job
-        if not yt_id and (clean_url(other, keep_playlist=False) or other) == cleaned:
-            return job
-    return None
-
-
-def library_video_for_url(session: Session, url: str) -> Video | None:
-    yt_id = youtube_video_id(url)
-    if yt_id:
-        return library.find_video_by_youtube_id(session, yt_id)
-    cleaned = clean_url(url, keep_playlist=False)
-    if not cleaned:
-        return None
-    return session.exec(select(Video).where(Video.source_url == cleaned)).first()
-
-
-def classify_enqueue_duplicate(
-    session: Session, url: str
-) -> tuple[str, int | None] | None:
-    """Return (code, existing_job_id) when this video must not be queued again."""
-    active = find_active_job_for_identity(session, url)
-    if active is not None:
-        code = (
-            DUPLICATE_DOWNLOADING
-            if active.status == JobStatus.downloading
-            else DUPLICATE_QUEUED
-        )
-        return code, active.id
-    if library_video_for_url(session, url) is not None:
-        return DUPLICATE_LIBRARY, None
-    return None
-
-
-def find_active_job(
-    session: Session,
-    url: str,
-    destination: str,
-    quality_preset: str,
-) -> DownloadJob | None:
-    """Return an already-queued/downloading job for the same video."""
-    return find_active_job_for_identity(session, url)
-
-
-def prepare_job_retry(job: DownloadJob) -> None:
-    """Reset a failed/cancelled job so it can run again. Caller must commit."""
-    if job.destination == DownloadDestination.device.value and job.id is not None:
-        cleanup_device_job_files(job.id, job.device_file_path)
-    job.status = JobStatus.queued
-    job.progress = 0.0
-    job.error = None
-    job.error_kind = None
-    job.paused = download_queue.is_paused()
-    job.device_file_path = None
-    job.file_size = None
-    if job.id is not None:
-        progress_store[job.id] = {
-            "status": "queued",
-            "progress": 0.0,
-            "title": job.title_override or job.title,
-            "channel": job.channel_override or job.channel,
-            "destination": job.destination,
-        }
-
-
-def wait_until_job_not_running(job_id: int, timeout: float = 30.0) -> bool:
-    """Block until the worker thread for job_id has exited."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if not download_queue.is_running(job_id):
-            return True
-        time.sleep(0.1)
-    return not download_queue.is_running(job_id)
-
-
-def change_job_quality(
-    session: Session, job_id: int, requested_preset: str
-) -> DownloadJob:
-    """Change quality on a queued/downloading job. Restarts in-flight work silently."""
-    preset = (requested_preset or "").strip()
-    if preset not in QUALITY_FORMATS:
-        raise ValueError("Unknown quality preset")
-
-    with job_mutate_lock:
-        job = session.get(DownloadJob, job_id)
-        if job is None:
-            raise KeyError("Job not found")
-        if job.status not in (JobStatus.queued, JobStatus.downloading):
-            raise PermissionError("Job already finished")
-
-        available = decode_available_presets(job.available_presets_json)
-        resolved = resolve_quality_preset(preset, available)
-        if resolved == job.quality_preset:
-            return job
-
-        other = find_active_job(
-            session,
-            job.url,
-            job.destination or DownloadDestination.library.value,
-            resolved,
-        )
-        if other is not None and other.id != job.id:
-            raise FileExistsError("Another download at that quality is already active")
-
-        previous_preset = job.quality_preset
-        running = download_queue.is_running(job.id) if job.id is not None else False
-        needs_restart = running or job.status == JobStatus.downloading
-
-        if not needs_restart:
-            job.quality_preset = resolved
-            session.add(job)
-            session.commit()
-            session.refresh(job)
-            return job
-
-        assert job.id is not None  # noqa: S101 - type narrowing; the row was committed above
-        download_queue.request_quality_restart(job.id)
-        job.quality_preset = resolved
-        job.progress = 0.0
-        job.error = None
-        job.error_kind = None
-        session.add(job)
-        session.commit()
-        progress_store[job.id] = {
-            "status": "queued",
-            "progress": 0.0,
-            "title": job.title_override or job.title,
-            "channel": job.channel_override or job.channel,
-            "destination": job.destination,
-        }
-
-    stopped = wait_until_job_not_running(job_id)
-    if not stopped:
-        with job_mutate_lock:
-            session.expire_all()
-            job = session.get(DownloadJob, job_id)
-            if job is not None and job.status == JobStatus.downloading:
-                job.quality_preset = previous_preset
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-            download_queue.release_job(job_id)
-        raise TimeoutError("Could not restart download")
-
-    with job_mutate_lock:
-        session.expire_all()
-        job = session.get(DownloadJob, job_id)
-        if job is None:
-            download_queue.release_job(job_id)
-            raise KeyError("Job not found")
-        try:
-            if job.status == JobStatus.completed:
-                job.quality_preset = previous_preset
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-                return job
-            if job.status == JobStatus.cancelled or job.status == JobStatus.error:
-                job.quality_preset = resolved
-                prepare_job_retry(job)
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-            else:
-                job.quality_preset = resolved
-                job.progress = 0.0
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-        finally:
-            download_queue.release_job(job_id)
-        enqueue_download(job.id)
-        return job
-
-
-def start_download(
-    job_id: int,
-    url: str,
-    quality_preset: str,
-    title_override: str | None = None,
-    channel_override: str | None = None,
-) -> None:
-    """Legacy entry point — enqueue only."""
-    enqueue_download(job_id)
-
-
-def _find_active_job_for_url(session: Session, url: str) -> DownloadJob | None:
-    return find_active_job_for_identity(session, url)
 
 
 def _enqueue_playlist_entry(
@@ -311,8 +83,8 @@ def _enqueue_playlist_entry(
     yt_id = youtube_video_id(cleaned)
     thumb = youtube_thumbnail_url(yt_id) if yt_id else None
     created_job_id: int | None = None
-    with job_mutate_lock, Session(engine) as session:
-        existing = library_video_for_url(session, cleaned)
+    with jobs.job_mutate_lock, Session(engine) as session:
+        existing = jobs.library_video_for_url(session, cleaned)
         if existing is not None and existing.id is not None:
             return "library", existing.id
         active = find_active_job_for_identity(session, cleaned)
@@ -355,7 +127,7 @@ def _enqueue_playlist_entry(
 
     request_job_metadata(created_job_id)
     if created_job_id is not None:
-        enqueue_download(created_job_id)
+        jobs.enqueue_download(created_job_id)
     return "job", created_job_id
 
 

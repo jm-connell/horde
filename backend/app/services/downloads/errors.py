@@ -47,6 +47,7 @@ class YtdlpLogger:
             self.members_only = True
             self.last_members_only_msg = msg
             return
+        # Fall through: leave other errors to raised exceptions / default silence.
 
 
 def purge_members_only_yt_id(yt_id: str) -> None:
