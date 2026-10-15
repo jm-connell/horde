@@ -55,6 +55,8 @@ logger = logging.getLogger(__name__)
 
 configure_logging()
 
+logger = logging.getLogger(__name__)
+
 
 def _frontend_dir() -> Path:
     """Production image uses backend/static. Browser e2e points at frontend/dist."""
@@ -170,6 +172,16 @@ def _start_workers(app_: FastAPI, registry: WorkerRegistry) -> None:
 async def lifespan(app: FastAPI):
     ensure_dirs()
     init_db()
+    if app.state.auth.config.disabled:
+        logger.warning(
+            "HORDE_AUTH_DISABLED is set: Horde is NOT asking anyone to sign in. "
+            "Every request that reaches it acts as an administrator%s. Only use "
+            "this behind a reverse proxy that authenticates users and is the only "
+            "way to reach this port.",
+            " (or the user named in the trusted header)"
+            if app.state.auth.config.trusted_user_header
+            else "",
+        )
     shutdown_event = threading.Event()
     registry = WorkerRegistry()
     app.state.shutdown_event = shutdown_event
