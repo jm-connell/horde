@@ -37,6 +37,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .request_context import RequestIdMiddleware
 from .services import limits, uploads
 from .services.url_safety import UnsafeUrlError
 
@@ -423,6 +424,7 @@ def build_stack(policy: HostPolicy) -> list[MiddlewareSpec]:
     """The security middleware, outermost first. This list *is* the order."""
     return [
         MiddlewareSpec(SecurityHeadersMiddleware),
+        MiddlewareSpec(RequestIdMiddleware),
         MiddlewareSpec(HostAllowlistMiddleware, {"policy": policy}),
         MiddlewareSpec(BodyLimitMiddleware),
         MiddlewareSpec(MediaCorsMiddleware),

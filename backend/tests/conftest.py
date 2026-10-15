@@ -18,6 +18,12 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
+# Configure logging once up front: importing app.main inside a test would otherwise
+# reset the root handlers that pytest's caplog installed for that test.
+from app.logging_config import configure_logging  # noqa: E402 - needs the sys.path entry above
+
+configure_logging()
+
 _DIR_ATTRS = (
     "DOWNLOADS_DIR",
     "THUMBNAILS_DIR",

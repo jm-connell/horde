@@ -32,6 +32,7 @@ from .config import (
     short_git_sha,
 )
 from .database import engine, init_db
+from .logging_config import configure_logging
 from .security import install_security
 from .services import app_settings as app_settings_svc
 from .services import downloader
@@ -55,6 +56,8 @@ from .services.subtitle_retry import (
     start_subtitle_retry_worker,
     stop_subtitle_retry_worker,
 )
+
+configure_logging()
 
 
 def _frontend_dir() -> Path:

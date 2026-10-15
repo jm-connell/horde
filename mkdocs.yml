@@ -87,6 +87,7 @@ nav:
       - YouTube access: ops/youtube-access.md
       - AI setup: ops/ai-setup.md
       - Backup & restore: ops/backup-restore.md
+      - Logging: ops/logging.md
       - Maintenance: ops/maintenance.md
       - Troubleshooting: ops/troubleshooting.md
   - Architecture:
