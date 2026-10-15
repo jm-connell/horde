@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlmodel import Session
 
 from ..auth import require_admin
@@ -59,9 +59,16 @@ def create_user(payload: UserCreate, session: Session = Depends(get_session)):
 
 @router.patch("/{user_id}", response_model=UserRead)
 def update_user(
-    user_id: int, payload: UserUpdate, session: Session = Depends(get_session)
+    user_id: int,
+    payload: UserUpdate,
+    request: Request,
+    session: Session = Depends(get_session),
+    admin: AuthUser = Depends(require_admin),
 ):
     changes = payload.model_fields_set
+    # Resetting your own password must not sign you out of this browser.
+    token = request.cookies.get(accounts.SESSION_COOKIE)
+    keep = accounts.hash_token(token) if token and user_id == admin.id else None
     user = accounts.update_user(
         session,
         user_id,
@@ -69,6 +76,7 @@ def update_user(
         disabled=payload.disabled if "disabled" in changes else None,
         password=payload.password if "password" in changes else None,
         granted=payload.permissions if "permissions" in changes else None,
+        keep_token_hash=keep,
     )
     return _read(user)
 

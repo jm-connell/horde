@@ -324,6 +324,7 @@ def update_user(
     disabled: bool | None = None,
     password: str | None = None,
     granted: list[str] | set[str] | frozenset[str] | None = None,
+    keep_token_hash: str | None = None,
 ) -> User:
     """Admin edit of another (or the same) account.
 
@@ -358,7 +359,7 @@ def update_user(
     user.updated_at = utcnow()
     session.add(user)
     if revoke:
-        _delete_sessions(session, user_id)
+        _delete_sessions(session, user_id, keep_token_hash=keep_token_hash)
     session.commit()
     session.refresh(user)
     return user

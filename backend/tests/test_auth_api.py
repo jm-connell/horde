@@ -516,3 +516,25 @@ def test_current_password_guesses_are_throttled(client):
     assert client.post("/api/auth/password", json=good).status_code == 429
     with TestClient(client.app, headers=CSRF) as other:
         assert _login(other).status_code == 200
+
+
+def test_an_admin_resetting_their_own_password_stays_signed_in(app, client, admin_user):
+    other = TestClient(app, headers=CSRF)
+    _login(other)
+    resp = client.patch(
+        f"/api/users/{admin_user.id}", json={"password": "my-new-password"}
+    )
+    assert resp.status_code == 200
+    assert client.get("/api/videos").status_code == 200  # this browser stays in
+    assert other.get("/api/videos").status_code == 401  # the others do not
+    other.close()
+
+
+def test_resetting_someone_elses_password_signs_them_out_not_you(
+    client, member_client, member_user
+):
+    client.patch(
+        f"/api/users/{member_user.id}", json={"password": "their-new-password"}
+    )
+    assert member_client.get("/api/videos").status_code == 401
+    assert client.get("/api/videos").status_code == 200
