@@ -26,8 +26,9 @@ from ..schemas import (
     PlaylistSizeEstimateRequest,
     PlaylistUpdate,
 )
-from ..services import downloader, library, uploads
+from ..services import library, uploads, ytdlp_extract
 from ..services.auth.accounts import AuthUser
+from ..services.downloads import playlist_import
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.playlist_sync import (
     find_subscribed_by_url,
@@ -217,7 +218,7 @@ def preview_playlist(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     validate_public_url(url)
     try:
         data = gate.run(
-            downloader.extract_playlist_entries, clean_url(url, keep_playlist=True)
+            ytdlp_extract.extract_playlist_entries, clean_url(url, keep_playlist=True)
         )
     except HTTPException:
         raise  # 429 / 504 from the gate
@@ -238,7 +239,7 @@ def estimate_playlist_sizes(
     urls = [u for u in payload.urls if _is_public_url(u)]
     if not urls:
         return PlaylistSizeEstimate(sizes={})
-    sizes = gate.run(downloader.estimate_playlist_sizes, urls)
+    sizes = gate.run(ytdlp_extract.estimate_playlist_sizes, urls)
     return PlaylistSizeEstimate(sizes=sizes)
 
 
@@ -668,7 +669,7 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
         title = (payload.name or "").strip()
         if not title:
             try:
-                preview = downloader.extract_playlist_entries(url)
+                preview = ytdlp_extract.extract_playlist_entries(url)
                 title = preview.get("title") or "Imported playlist"
             except Exception:
                 logger.debug("could not read the playlist title", exc_info=True)
@@ -676,7 +677,7 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
         entries = selected_entries
     else:
         try:
-            title, entries = downloader.extract_playlist(url)
+            title, entries = ytdlp_extract.extract_playlist(url)
         except Exception as exc:
             raise HTTPException(
                 status_code=400, detail=f"Could not read playlist: {exc}"
@@ -701,5 +702,5 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
     session.commit()
     session.refresh(playlist)
 
-    downloader.start_playlist_import(playlist.id, entries, quality)
+    playlist_import.start_playlist_import(playlist.id, entries, quality)
     return _to_playlist_read(session, playlist)

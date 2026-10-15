@@ -66,17 +66,18 @@ def test_playlist_crud_and_items(client, add_video):
 
 
 def test_import_subscribe_and_duplicate(client, monkeypatch):
-    from app.services import downloader
+    from app.services import ytdlp_extract
+    from app.services.downloads import playlist_import
 
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_playlist",
         lambda url: (
             "Build Log",
             ["https://www.youtube.com/watch?v=aaaaaaaaaa1"],
         ),
     )
-    monkeypatch.setattr(downloader, "start_playlist_import", lambda *a, **k: None)
+    monkeypatch.setattr(playlist_import, "start_playlist_import", lambda *a, **k: None)
 
     created = client.post(
         "/api/playlists/import",
@@ -105,9 +106,9 @@ def test_import_subscribe_and_duplicate(client, monkeypatch):
 
 
 def test_import_one_shot_is_not_subscribed(client, monkeypatch):
-    from app.services import downloader
+    from app.services.downloads import playlist_import
 
-    monkeypatch.setattr(downloader, "start_playlist_import", lambda *a, **k: None)
+    monkeypatch.setattr(playlist_import, "start_playlist_import", lambda *a, **k: None)
     created = client.post(
         "/api/playlists/import",
         json={
@@ -129,9 +130,9 @@ def test_sync_requires_subscription(client):
 
 def test_patch_subscribe_youtube_playlist(client, monkeypatch):
     from app.api import playlists as playlists_api
-    from app.services import downloader
+    from app.services.downloads import playlist_import
 
-    monkeypatch.setattr(downloader, "start_playlist_import", lambda *a, **k: None)
+    monkeypatch.setattr(playlist_import, "start_playlist_import", lambda *a, **k: None)
     monkeypatch.setattr(playlists_api, "start_playlist_sync", lambda *a, **k: None)
     created = client.post(
         "/api/playlists/import",
@@ -329,10 +330,10 @@ def test_add_item_url_uses_existing_library_video(client, add_video):
 
 
 def test_add_item_url_queues_download(client, monkeypatch):
-    from app.services import downloader
+    from app.services import ytdlp_extract
 
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_preview",
         lambda url: {
             "id": "bbbbbbbbbb1",

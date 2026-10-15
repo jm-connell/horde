@@ -30,8 +30,12 @@ from ..schemas import (
     DownloadQualityUpdate,
     DownloadQueueStatus,
 )
-from ..services import downloader
+from ..services import ytdlp_extract, ytdlp_formats
 from ..services.auth.accounts import AuthUser
+from ..services.downloads import jobs as download_jobs
+from ..services.downloads import progress as download_progress
+from ..services.downloads import staging as download_staging
+from ..services.downloads.queue import download_queue
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.paths import safe_filename
 from ..services.url_clean import (
@@ -59,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 
-QUALITY_PRESETS = list(downloader.QUALITY_FORMATS.keys())
+QUALITY_PRESETS = list(ytdlp_formats.QUALITY_FORMATS.keys())
 
 _CONTENT_TYPES = {
     ".mp4": "video/mp4",
@@ -75,7 +79,7 @@ _CONTENT_TYPES = {
 def _duplicate_error(code: str) -> CodedHTTPException:
     """409 whose ``code`` says why the link was refused (already_queued, ...)."""
     return CodedHTTPException(
-        409, downloader.DUPLICATE_MESSAGES.get(code, "Already added"), code
+        409, download_jobs.DUPLICATE_MESSAGES.get(code, "Already added"), code
     )
 
 
@@ -184,7 +188,7 @@ def preview_download(url: str, gate: ExtractionGate = Depends(extraction_gate)):
         )
     cleaned = clean_url(url, keep_playlist=True)
     try:
-        return gate.run(downloader.extract_preview, cleaned)
+        return gate.run(ytdlp_extract.extract_preview, cleaned)
     except HTTPException:
         raise  # 429 / 504 from the gate
     except MembersOnlyError as exc:
@@ -205,9 +209,9 @@ def preview_download(url: str, gate: ExtractionGate = Depends(extraction_gate)):
 @router.get("/queue/status", response_model=DownloadQueueStatus)
 def queue_status():
     return DownloadQueueStatus(
-        paused=downloader.download_queue.is_paused(),
-        active_count=downloader.download_queue.active_count(),
-        queued_count=downloader.download_queue.queued_count(),
+        paused=download_queue.is_paused(),
+        active_count=download_queue.active_count(),
+        queued_count=download_queue.queued_count(),
     )
 
 
@@ -217,11 +221,11 @@ def queue_status():
     dependencies=[Depends(require_admin)],
 )
 def pause_queue():
-    downloader.download_queue.pause_all()
+    download_queue.pause_all()
     return DownloadQueueStatus(
         paused=True,
-        active_count=downloader.download_queue.active_count(),
-        queued_count=downloader.download_queue.queued_count(),
+        active_count=download_queue.active_count(),
+        queued_count=download_queue.queued_count(),
     )
 
 
@@ -231,11 +235,11 @@ def pause_queue():
     dependencies=[Depends(require_admin)],
 )
 def resume_queue():
-    downloader.download_queue.resume_all()
+    download_queue.resume_all()
     return DownloadQueueStatus(
-        paused=downloader.download_queue.is_paused(),
-        active_count=downloader.download_queue.active_count(),
-        queued_count=downloader.download_queue.queued_count(),
+        paused=download_queue.is_paused(),
+        active_count=download_queue.active_count(),
+        queued_count=download_queue.queued_count(),
     )
 
 
@@ -246,7 +250,7 @@ async def queue_events(request: Request) -> StreamingResponse:
     async def event_stream() -> AsyncGenerator[str, None]:
         last_payloads: dict[int, Any] = {}
         while not shutdown_requested(request):
-            items = list(downloader.progress_store.items())
+            items = list(download_progress.progress_store.items())
             for job_id, snapshot in items:
                 if not isinstance(snapshot, dict):
                     continue
@@ -309,8 +313,8 @@ def create_download(
 
     from ..services.job_metadata import request_job_metadata
 
-    with downloader.job_mutate_lock:
-        dup = downloader.classify_enqueue_duplicate(session, url)
+    with download_jobs.job_mutate_lock:
+        dup = download_jobs.classify_enqueue_duplicate(session, url)
         if dup is not None:
             code, existing_id = dup
             if playlist_id is not None and existing_id is not None:
@@ -338,14 +342,14 @@ def create_download(
             ),
             destination=destination,
             playlist_id=playlist_id,
-            paused=downloader.download_queue.is_paused(),
+            paused=download_queue.is_paused(),
         )
         session.add(job)
         session.commit()
         session.refresh(job)
 
     request_job_metadata(job.id)
-    downloader.enqueue_download(job.id)
+    download_jobs.enqueue_download(job.id)
     return _enrich_jobs(session, [job])[0]
 
 
@@ -398,8 +402,8 @@ def create_downloads_bulk(
         seen_urls.add(url)
         seen_ids.add(identity)
 
-        with downloader.job_mutate_lock:
-            dup = downloader.classify_enqueue_duplicate(session, url)
+        with download_jobs.job_mutate_lock:
+            dup = download_jobs.classify_enqueue_duplicate(session, url)
             if dup is not None:
                 code, _existing = dup
                 skips.append(DownloadBulkSkip(url=url, reason=code))
@@ -412,13 +416,13 @@ def create_downloads_bulk(
                 normalize_volume=payload.normalize_volume,
                 video_codec=codec,
                 destination=destination,
-                paused=downloader.download_queue.is_paused(),
+                paused=download_queue.is_paused(),
             )
             session.add(job)
             session.commit()
             session.refresh(job)
         request_job_metadata(job.id)
-        downloader.enqueue_download(job.id)
+        download_jobs.enqueue_download(job.id)
         jobs.append(job)
 
     return DownloadBulkResult(
@@ -478,7 +482,7 @@ def retry_job(
 ):
     """Requeue a failed/cancelled job. Extra clicks return the same active job."""
     data = (payload or DownloadJobUpdate()).model_dump(exclude_unset=True)
-    with downloader.job_mutate_lock:
+    with download_jobs.job_mutate_lock:
         job = session.get(DownloadJob, job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
@@ -496,12 +500,12 @@ def retry_job(
         if "notes_pending" in data:
             job.notes_pending = (data["notes_pending"] or "").strip() or None
 
-        downloader.prepare_job_retry(job)
+        download_jobs.prepare_job_retry(job)
         session.add(job)
         session.commit()
         session.refresh(job)
 
-    downloader.enqueue_download(job.id)
+    download_jobs.enqueue_download(job.id)
     return _enrich_jobs(session, [job])[0]
 
 
@@ -517,7 +521,7 @@ def change_job_quality(
 ):
     """Change resolution on an active job. In-flight work is discarded and restarted."""
     try:
-        job = downloader.change_job_quality(session, job_id, payload.quality_preset)
+        job = download_jobs.change_job_quality(session, job_id, payload.quality_preset)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Job not found") from exc
     except ValueError as exc:
@@ -543,7 +547,7 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
     if job.status in (JobStatus.completed, JobStatus.cancelled):
         raise HTTPException(status_code=409, detail="Job already finished")
     was_downloading = job.status == JobStatus.downloading
-    downloader.download_queue.cancel_job(job_id)
+    download_queue.cancel_job(job_id)
     if was_downloading:
         import time
 
@@ -573,8 +577,8 @@ def dismiss_finished_jobs(session: Session = Depends(get_session)):
     jobs = list(session.exec(statement).all())
     for job in jobs:
         if job.destination == DownloadDestination.device.value:
-            downloader.cleanup_device_job_files(job.id, job.device_file_path)
-        downloader.progress_store.pop(job.id, None)
+            download_staging.cleanup_device_job_files(job.id, job.device_file_path)
+        download_progress.progress_store.pop(job.id, None)
         session.delete(job)
     session.commit()
     return Response(status_code=204)
@@ -593,10 +597,10 @@ def dismiss_job(job_id: int, session: Session = Depends(get_session)):
             detail="Only finished jobs can be removed from the list",
         )
     if job.destination == DownloadDestination.device.value:
-        downloader.cleanup_device_job_files(job.id, job.device_file_path)
+        download_staging.cleanup_device_job_files(job.id, job.device_file_path)
     session.delete(job)
     session.commit()
-    downloader.progress_store.pop(job_id, None)
+    download_progress.progress_store.pop(job_id, None)
     return Response(status_code=204)
 
 
@@ -651,7 +655,7 @@ def download_device_file(job_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=409, detail="File not ready")
 
     rel = job.device_file_path.replace("\\", "/")
-    if not downloader.is_device_staging_path(rel):
+    if not download_staging.is_device_staging_path(rel):
         raise HTTPException(status_code=404, detail="File not found")
 
     path = (DOWNLOADS_DIR / rel).resolve()
@@ -690,7 +694,7 @@ async def job_events(job_id: int, request: Request) -> StreamingResponse:
         last_payload = None
         ticks = 0
         while not shutdown_requested(request):
-            snapshot = downloader.progress_store.get(job_id)
+            snapshot = download_progress.progress_store.get(job_id)
             if snapshot is not None and snapshot != last_payload:
                 last_payload = snapshot
                 yield f"data: {json.dumps(snapshot)}\n\n"

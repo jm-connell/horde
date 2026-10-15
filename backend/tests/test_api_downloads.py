@@ -20,7 +20,7 @@ def test_presets_and_queue_status(client):
 
 
 def test_enqueue_cancel_and_pause(client, monkeypatch):
-    from app.services import downloader, ytdlp_extract
+    from app.services import ytdlp_extract
 
     calls = {"n": 0}
 
@@ -29,7 +29,7 @@ def test_enqueue_cancel_and_pause(client, monkeypatch):
         raise AssertionError("create must not extract")
 
     monkeypatch.setattr(ytdlp_extract, "extract_preview", fake_preview)
-    monkeypatch.setattr(downloader, "extract_preview", fake_preview)
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", fake_preview)
 
     created = client.post(
         "/api/downloads",
@@ -302,11 +302,11 @@ def test_create_download_keeps_best_until_metadata_fills(client):
 
 
 def test_change_quality_on_queued_job(client, monkeypatch):
-    from app.services import downloader
+    from app.services import ytdlp_extract
 
     monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_preview",
         lambda url: {
             "id": "dQw4w9WgXcQ",
@@ -361,11 +361,11 @@ def test_change_quality_rejects_finished_and_unknown(client, init_db, monkeypatc
         == 404
     )
 
-    from app.services import downloader
+    from app.services import ytdlp_extract
 
     monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_preview",
         lambda url: {"id": "dQw4w9WgXcQ", "is_playlist": False},
     )
@@ -385,12 +385,12 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
     from sqlmodel import Session
 
     from app.models import DownloadJob, JobStatus
-    from app.services import downloader
+    from app.services import ytdlp_extract
     from app.services.downloads import jobs, progress
 
     monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_preview",
         lambda url: {
             "id": "dQw4w9WgXcQ",

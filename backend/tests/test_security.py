@@ -370,10 +370,10 @@ def test_job_events_for_unknown_job_is_404(client):
 
 def test_job_events_closes_for_a_finished_job(client, session, monkeypatch):
     from app.models import DownloadJob, JobStatus
-    from app.services import downloader
+    from app.services.downloads import progress
 
     # Other tests leave snapshots behind in the process-wide store.
-    monkeypatch.setattr(downloader, "progress_store", {})
+    monkeypatch.setattr(progress, "progress_store", {})
 
     job = DownloadJob(url="https://example.com/v", status=JobStatus.completed)
     session.add(job)
@@ -392,11 +392,11 @@ def test_job_events_closes_for_a_finished_job(client, session, monkeypatch):
 def test_preview_extraction_times_out_instead_of_hanging(client, app, monkeypatch):
     import time
 
-    from app.services import downloader
+    from app.services import ytdlp_extract
     from app.services.limits import ExtractionGate
 
     app.state.extraction_gate = ExtractionGate(1, wait_sec=0.05, timeout_sec=0.1)
-    monkeypatch.setattr(downloader, "extract_preview", lambda *_a: time.sleep(0.5))
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", lambda *_a: time.sleep(0.5))
 
     slow = client.get("/api/downloads/preview", params={"url": "https://example.com/v"})
     busy = client.get("/api/downloads/preview", params={"url": "https://example.com/w"})

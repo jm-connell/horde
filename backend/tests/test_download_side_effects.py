@@ -19,8 +19,7 @@ from ytdlp_fakes import (
 )
 
 from app.models import DownloadJob, JobStatus, Video
-from app.services import downloader
-from app.services.downloads import finalize
+from app.services.downloads import finalize, subtitles
 
 YT = "sideeffect01"
 URL = f"https://www.youtube.com/watch?v={YT}"
@@ -105,6 +104,6 @@ def test_background_finalize_fetches_subtitles_and_thumbnail_then_queues_work(
 
 
 def test_subtitle_fetch_for_a_missing_file_is_retryable(tmp_path):
-    outcome = downloader.download_subtitles(tmp_path / "gone.mp4", URL)
+    outcome = subtitles.download_subtitles(tmp_path / "gone.mp4", URL)
     assert outcome.retryable is True
     assert outcome.tracks == []

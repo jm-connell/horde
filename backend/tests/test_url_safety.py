@@ -384,14 +384,14 @@ def test_source_and_channel_urls_must_be_http(client, add_video, bad):
     "url", ["http://127.0.0.1:1/x", "http://169.254.169.254/", "file:///etc/passwd"]
 )
 def test_ytdlp_entry_points_refuse_internal_urls(client, monkeypatch, url):
-    from app.services import downloader
+    from app.services import ytdlp_extract
 
     def must_not_run(*_a, **_kw):
         raise AssertionError("yt-dlp was started for an unsafe URL")
 
-    monkeypatch.setattr(downloader, "extract_preview", must_not_run)
-    monkeypatch.setattr(downloader, "extract_playlist", must_not_run)
-    monkeypatch.setattr(downloader, "extract_playlist_entries", must_not_run)
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", must_not_run)
+    monkeypatch.setattr(ytdlp_extract, "extract_playlist", must_not_run)
+    monkeypatch.setattr(ytdlp_extract, "extract_playlist_entries", must_not_run)
 
     assert client.get("/api/downloads/preview", params={"url": url}).status_code == 400
     assert client.post("/api/downloads", json={"url": url}).status_code == 400

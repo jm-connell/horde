@@ -48,10 +48,10 @@ def test_path_validation_error(client):
 
 
 def test_duplicate_download_names_the_reason_in_code(client, monkeypatch):
-    from app.services import downloader
+    from app.services.downloads import jobs
 
     monkeypatch.setattr(
-        downloader, "classify_enqueue_duplicate", lambda s, u: ("already_queued", 1)
+        jobs, "classify_enqueue_duplicate", lambda s, u: ("already_queued", 1)
     )
     resp = client.post("/api/downloads", json={"url": "https://example.com/v"})
     assert resp.status_code == 409

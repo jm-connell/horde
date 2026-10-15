@@ -30,9 +30,9 @@ from ..services import app_settings as app_settings_svc
 from ..services import (
     channel_autodownload,
     channel_catalog,
-    downloader,
     feed_meta_cache,
     library,
+    ytdlp_extract,
 )
 from ..services.limits import ytdlp_slot
 from ..services.url_safety import validate_public_url
@@ -96,7 +96,7 @@ def search_channels(
     q: str = Query(..., min_length=1),
     limit: int = Query(8, ge=1, le=20),
 ):
-    hits = downloader.search_youtube_channels(q, limit=limit)
+    hits = ytdlp_extract.search_youtube_channels(q, limit=limit)
     return ChannelSearchResponse(results=[ChannelSearchHit(**h) for h in hits])
 
 
@@ -596,7 +596,7 @@ def channel_feed(
             live_error = None
         if data is None:
             try:
-                data = downloader.fetch_channel_feed(
+                data = ytdlp_extract.fetch_channel_feed(
                     channel_url, offset=offset, limit=limit
                 )
                 from_catalog = False
@@ -617,7 +617,7 @@ def channel_feed(
 
         if data is None:
             try:
-                data = downloader.fetch_channel_feed(
+                data = ytdlp_extract.fetch_channel_feed(
                     channel_url, offset=offset, limit=limit
                 )
             except Exception as exc:
@@ -770,7 +770,7 @@ def channel_feed(
                 done = 0
                 for yt_id, entry_url in meta_rows:
                     try:
-                        preview = downloader.extract_preview(entry_url)
+                        preview = ytdlp_extract.extract_preview(entry_url)
                     except Exception:
                         logger.debug(
                             "feed enrichment failed for %s", entry_url, exc_info=True

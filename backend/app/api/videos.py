@@ -44,9 +44,10 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import downloader, library, uploads, user_state
+from ..services import library, uploads, user_state
 from ..services.auth import media_token as media_token_svc
 from ..services.auth.accounts import AuthUser
+from ..services.downloads import jobs as download_jobs
 from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
 from ..services.metadata import (
     load_sprite_meta,
@@ -554,7 +555,7 @@ def redownload_video(
     session.commit()
     session.refresh(job)
 
-    downloader.enqueue_download(job.id)
+    download_jobs.enqueue_download(job.id)
     return _to_read(video, session, user_id=user.id)
 
 

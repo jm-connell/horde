@@ -208,7 +208,7 @@ def test_slow_yt_dlp_work_does_not_stall_other_requests(client, monkeypatch):
 def test_requests_beyond_the_yt_dlp_slots_get_429_without_taking_threads(
     app, client, monkeypatch
 ):
-    from app.services import downloader
+    from app.services import ytdlp_extract
 
     app.state.ytdlp_slots = YtdlpSlots(1, 0.2)
     release = threading.Event()
@@ -219,7 +219,7 @@ def test_requests_beyond_the_yt_dlp_slots_get_429_without_taking_threads(
         release.wait(5)
         raise ValueError("boom")
 
-    monkeypatch.setattr(downloader, "extract_preview", slow_preview)
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", slow_preview)
     first = threading.Thread(
         target=lambda: client.get(
             "/api/downloads/preview", params={"url": "https://example.com/a"}
