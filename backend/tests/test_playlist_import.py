@@ -10,7 +10,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadJob, JobStatus, Playlist, PlaylistItem
 from app.services import downloader
-from app.services.downloads import dbwrite
+from app.services.downloads import dbwrite, playlist_attach
 
 
 def _url(n: int) -> str:
@@ -49,7 +49,7 @@ def _finish(init_db, job_id: int, video_id: int) -> None:
     dbwrite.update_job(
         job_id, status=JobStatus.completed, video_id=video_id, progress=100.0
     )
-    downloader._attach_download_to_playlist(job_id, video_id)
+    playlist_attach.attach_download_to_playlist(job_id, video_id)
 
 
 def test_import_returns_immediately_and_tags_jobs_with_playlist(
@@ -172,7 +172,7 @@ def test_attach_survives_unique_violation_race(
         job_id = s.exec(select(DownloadJob)).one().id
     dbwrite.update_job(job_id, status=JobStatus.completed, video_id=video.id)
 
-    real_slot = downloader._attach_slot
+    real_slot = playlist_attach.attach_slot
 
     def racing_slot(session, playlist_id, jid):
         with Session(init_db["engine"]) as other:
@@ -182,8 +182,8 @@ def test_attach_survives_unique_violation_race(
             other.commit()
         return real_slot(session, playlist_id, jid)
 
-    monkeypatch.setattr(downloader, "_attach_slot", racing_slot)
-    downloader._attach_download_to_playlist(job_id, video.id)  # must not raise
+    monkeypatch.setattr(playlist_attach, "attach_slot", racing_slot)
+    playlist_attach.attach_download_to_playlist(job_id, video.id)  # must not raise
     assert _order(init_db, playlist) == [video.id]
 
 
@@ -264,7 +264,7 @@ def test_concurrent_completions_get_distinct_ordered_positions(
 
     def finish(jid, vid):
         barrier.wait()
-        downloader._attach_download_to_playlist(jid, vid)
+        playlist_attach.attach_download_to_playlist(jid, vid)
 
     threads = [
         threading.Thread(target=finish, args=(j, v.id))
@@ -296,7 +296,7 @@ def test_attach_failure_never_changes_job_status(
     def boom(*_a, **_k):
         raise RuntimeError("database exploded")
 
-    monkeypatch.setattr(downloader, "_attach_slot", boom)
-    downloader._attach_download_to_playlist(job_id, video.id)  # must not raise
+    monkeypatch.setattr(playlist_attach, "attach_slot", boom)
+    playlist_attach.attach_download_to_playlist(job_id, video.id)  # must not raise
     with Session(init_db["engine"]) as s:
         assert s.get(DownloadJob, job_id).status == JobStatus.completed

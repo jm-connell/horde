@@ -359,7 +359,7 @@ def test_attach_completed_download_to_playlist(session, add_video):
     from sqlmodel import select
 
     from app.models import DownloadJob, JobStatus, Playlist, PlaylistItem
-    from app.services.downloader import _attach_download_to_playlist
+    from app.services.downloads.playlist_attach import attach_download_to_playlist
 
     video = add_video(title="Fresh")
     playlist = Playlist(name="Mix")
@@ -376,7 +376,7 @@ def test_attach_completed_download_to_playlist(session, add_video):
     session.commit()
     session.refresh(job)
 
-    _attach_download_to_playlist(job.id, video.id)
+    attach_download_to_playlist(job.id, video.id)
     session.expire_all()
     items = list(
         session.exec(
