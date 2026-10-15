@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
@@ -2119,10 +2119,17 @@ def _commit_library_video(
                 if existing is not None:
                     replace_video_id = existing.id
 
-        if replace_video_id:
-            video = session.get(Video, replace_video_id)
-            if video is None:
-                raise RuntimeError("Video to replace not found")
+        video = session.get(Video, replace_video_id) if replace_video_id else None
+        if replace_video_id and video is None:
+            # The row was deleted while the download ran (its job FK is now
+            # SET NULL): keep the download as a new library video.
+            logger.warning(
+                "video %s to replace is gone; importing job %s as new",
+                replace_video_id,
+                job_id,
+            )
+            replace_video_id = None
+        if replace_video_id and video is not None:
             old_path = DOWNLOADS_DIR / video.file_path
             if old_path.resolve() != final_path.resolve():
                 stale.append(old_path)
@@ -2950,14 +2957,26 @@ def _attach_download_to_playlist(job_id: int, video_id: int | None) -> None:
             is not None
         ):
             return
+        playlist_id = job.playlist_id
         session.add(
             PlaylistItem(
-                playlist_id=job.playlist_id,
+                playlist_id=playlist_id,
                 video_id=video_id,
-                position=_attach_slot(session, job.playlist_id, job_id),
+                position=_attach_slot(session, playlist_id, job_id),
             )
         )
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            # UNIQUE(playlist_id, video_id): another worker or the user added it
+            # first; or the playlist/video was deleted meanwhile (FK). Either
+            # way there is nothing left to attach.
+            session.rollback()
+            logger.info(
+                "playlist %s item for video %s already present or gone",
+                playlist_id,
+                video_id,
+            )
 
 
 def _upsert_playlist_item(
@@ -2980,7 +2999,24 @@ def _upsert_playlist_item(
     else:
         existing.position = position
         session.add(existing)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        # Lost a race with an attach (UNIQUE(playlist_id, video_id)): set the
+        # position on the row that won. If the playlist is gone, give up.
+        row = session.exec(
+            select(PlaylistItem).where(
+                PlaylistItem.playlist_id == playlist_id,
+                PlaylistItem.video_id == video_id,
+            )
+        ).first()
+        if row is None:
+            logger.info("playlist %s no longer exists; skipping item", playlist_id)
+            return
+        row.position = position
+        session.add(row)
+        session.commit()
 
 
 def _append_unlisted_playlist_items(
@@ -3054,7 +3090,13 @@ def _enqueue_playlist_entry(
             paused=download_queue.is_paused(),
         )
         session.add(job)
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            # The playlist was deleted mid-import (playlist_id is an FK).
+            session.rollback()
+            logger.info("playlist %s deleted during import; skipping", playlist_id)
+            return "skip", None
         session.refresh(job)
         created_job_id = job.id
 
@@ -3083,6 +3125,10 @@ def run_playlist_entries(
     are not on the remote list stay after the remote entries.
     """
     total = len(entries)
+    with Session(engine) as session:
+        if session.get(Playlist, playlist_id) is None:
+            logger.info("playlist %s no longer exists; import skipped", playlist_id)
+            return
     placed: set[int] = set()
     job_ids: list[int] = []
     for index, entry_url in enumerate(entries):
