@@ -57,12 +57,19 @@ class FakeYtdlp:
         # Called after the fragments are on disk and before the merge:
         # raise to simulate a failure, or block on an event to simulate a cancel.
         self.before_merge: Callable[[Path, dict[str, Any]], None] | None = None
+        # Raised by the metadata fetch (the gate in front of every download).
+        self.fetch_error: Exception | None = None
+        # Raised after the merged file is on disk, like a yt-dlp postprocessor
+        # that fails once the media already exists.
+        self.fail_after_merge: Exception | None = None
 
     def add(self, url: str, info: dict[str, Any]) -> dict[str, Any]:
         self.infos[url] = info
         return info
 
     def fetch(self, url: str, *_a: Any, **_k: Any) -> dict[str, Any]:
+        if self.fetch_error is not None:
+            raise self.fetch_error
         return dict(self.infos[url])
 
     def install(self, monkeypatch, downloader) -> None:
@@ -139,6 +146,8 @@ class FakeYtdlp:
                 fake.written.append(merged)
                 video_frag.unlink()
                 audio_frag.unlink()
+                if fake.fail_after_merge is not None:
+                    raise fake.fail_after_merge
                 for hook in hooks:
                     hook(
                         {
