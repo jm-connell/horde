@@ -8,11 +8,13 @@ Primary media library. Default in Docker: `/downloads` (host: `DOWNLOADS_PATH`).
 
 ### Downloaded videos
 
-yt-dlp writes with this template:
+yt-dlp writes (into a [staging dir](#download-staging), then moved here) with this layout:
 
 ```text
-%(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s
+<channel>/%(upload_date>%Y|Unknown year)s/%(title).150B [%(id).64B].%(ext)s
 ```
+
+Free-text fields are truncated by **bytes** (Linux limits a name to 255 bytes, so emoji-heavy titles plus yt-dlp's `.f137.mp4.part` suffixes would otherwise fail), and yt-dlp's Windows filename rules are on because the library is often browsed over SMB (no trailing dots/spaces, no `: ? " < > | *`; reserved names like `CON` get a `_` prefix). Files downloaded before this layout keep their names.
 
 Example:
 
@@ -26,7 +28,7 @@ downloads/
 
 | Piece | Meaning |
 |-------|---------|
-| Channel folder | Uploader / channel name from yt-dlp |
+| Channel folder | The channel the library row carries: your channel override, else the uploader / channel from yt-dlp (max 80 bytes), else `Unknown channel` |
 | Year | Upload year (`upload_date`) |
 | Filename | Title + YouTube (or source) id in brackets + extension |
 
@@ -39,6 +41,14 @@ downloads/imports/
 ```
 
 Files dropped or uploaded for the [import / review](../guides/import-review.md) queue land here (or anywhere under downloads that the scanner sees). After approval they are moved into the channel/year layout.
+
+### Download staging
+
+```text
+downloads/.horde-staging/{job_id}/
+```
+
+Every library download (new, re-download, change quality, replace) runs in its own staging dir with the same folder layout. Only after the file is validated and post-processed is it moved into the library (a same-path replace is atomic and the old copy is restored if the database write fails), so cancelling or failing a re-download never damages the file a library row points at. Paused jobs keep their staging dir so partial files resume. The scanner ignores it. At boot, staging dirs of finished or missing jobs are removed, and stale `.part` / `.ytdl` / ffmpeg temp files older than `HORDE_TEMP_SWEEP_HOURS` (default 6) that nothing references are swept.
 
 ### Device staging (ephemeral)
 

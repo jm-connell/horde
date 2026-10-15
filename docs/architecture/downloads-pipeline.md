@@ -47,11 +47,14 @@ Download-related code is split for maintainability (façades may still re-export
 ## yt-dlp
 
 - Format presets: `best`, height caps (`2160p`…`480p`), `audio`. Default selectors prefer AV1 then AAC; `format_sort` is `res`, `fps`, `hdr:12`, `vcodec:av01`, `lang`, `acodec:mp4a`, `vbr`, `abr`. After download-meta extract, Horde pins the original-language audio `format_id` (same scoring as stream preview) so autodubs lose to the source track. The Settings **playback compatibility** mode (`video_codec` on the job) picks the selector: `av1` as above; `h264_native` uses YouTube `avc1` and caps every video preset at 1080p; `h264_convert` uses `avc1` at ≤1080p and AV1 at 1440p/4K, then re-encodes; `sidecar` downloads AV1 like `av1` and fetches a second H.264 file afterwards. Legacy `h264`/`h265` normalize to `h264_convert`. Existing library files are not rewritten.
-- Output template under `DOWNLOADS_DIR`:
+- Output template (rooted in the job's `DOWNLOADS_DIR/.horde-staging/{job_id}/`, then promoted into the library; see [storage layout](../ops/storage-layout.md)):
 
   ```text
-  %(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s
+  <channel>/%(upload_date>%Y|Unknown year)s/%(title).150B [%(id).64B].%(ext)s
   ```
+
+  The channel folder is chosen in Python (`services/outtmpl.py`) to match `Video.channel`; the title budget shrinks until yt-dlp's own rendering leaves room for suffixes under 255 bytes. File-name matching for cleanup (`paths.video_stem` / `belongs_to_stem`) is exact on the full stem, never a prefix scan.
+- Job robustness: the worker body is total (any failure ends the job in `error`, DB writes retry "database is locked"), and a reaper requeues `downloading` jobs no worker or ffmpeg stage owns. Scanner marks are held until the postprocess stage finishes. Playlist import enqueues normal jobs tagged with `playlist_id`; order is kept through ascending job ids (no position column on jobs).
 
 - Extractor args use yt-dlp’s default YouTube player clients minus `android_vr` (those CDN URLs now 403 after ~60s of range requests). bgutil POT is attached when `YTDLP_POT_BASE_URL` is set. Cookies (see [YouTube access](../ops/youtube-access.md)) stay off until a specific video is blocked as age-restricted or members-only; that one extract/download is retried with cookies.
 - `POST /api/downloads` and `/bulk` insert a job and return immediately (catalog autodownload already did this). Title/presets fill on a background worker that uses the **low-priority** extract gate. Interactive `GET /preview` jumps that gate. Preview, download-meta, and stream preview share the same `url` cache key.
