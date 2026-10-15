@@ -118,7 +118,7 @@ const BUFFERING_INDICATOR_DELAY_MS = 400;
 function snapRateToStep(r: number): number {
   if (SPEED_STEPS.includes(r)) return r;
   return SPEED_STEPS.reduce((best, s) =>
-    Math.abs(s - r) < Math.abs(best - r) ? s : best,
+    Math.abs(s - r) < Math.abs(best - r) ? s : best
   );
 }
 
@@ -135,7 +135,7 @@ function activeChapterAt(chapters: Chapter[], time: number): Chapter | null {
 function isChapterActive(
   chapters: Chapter[],
   chapterIndex: number,
-  time: number,
+  time: number
 ): boolean {
   const ch = chapters[chapterIndex];
   const next = chapters[chapterIndex + 1];
@@ -180,7 +180,7 @@ interface Props {
   miniWidth?: number | null;
   onMiniResize?: (
     width: number,
-    origin: { left: number; top: number; height: number },
+    origin: { left: number; top: number; height: number }
   ) => void;
   onMiniMove?: (left: number, top: number) => void;
   onMiniMoveEnd?: () => void;
@@ -279,7 +279,7 @@ export default function VideoPlayer({
   const [showSpeed, setShowSpeed] = useState(false);
   const [showQuality, setShowQuality] = useState(false);
   const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
-    streamQualityToChoice(settings.defaultStreamQuality),
+    streamQualityToChoice(settings.defaultStreamQuality)
   );
   /** Distinct short-side qualities (min(w,h)), not raw frame heights. */
   const [availableHeights, setAvailableHeights] = useState<number[]>([]);
@@ -407,7 +407,7 @@ export default function VideoPlayer({
     pct: number;
   } | null>(null);
   const [hoveredChapterSec, setHoveredChapterSec] = useState<number | null>(
-    null,
+    null
   );
   const scrubberRef = useRef<HTMLDivElement>(null);
 
@@ -607,7 +607,7 @@ export default function VideoPlayer({
     shakaPlayerRef,
     capabilityMaxHeightRef,
     variantTracksRef,
-    setQualityChoice,
+    setQualityChoice
   );
 
   const pickQuality = useCallback(
@@ -615,16 +615,16 @@ export default function VideoPlayer({
       // Explicit ladder picks override a persisted auto-downgrade / AV1 blacklist.
       if (choice !== "auto") {
         void import("../utils/decodeCapability").then((m) =>
-          m.clearDowngrade(),
+          m.clearDowngrade()
         );
         capabilityMaxHeightRef.current = Math.max(
           capabilityMaxHeightRef.current,
-          typeof choice === "number" ? choice : 2160,
+          typeof choice === "number" ? choice : 2160
         );
       }
       applyQualityChoice(choice);
     },
-    [applyQualityChoice],
+    [applyQualityChoice]
   );
 
   usePlaybackHealth({
@@ -635,7 +635,7 @@ export default function VideoPlayer({
       if (!p) return;
       capabilityMaxHeightRef.current = Math.min(
         capabilityMaxHeightRef.current,
-        maxHeight,
+        maxHeight
       );
       // Relabel the menu to the new ceiling so UI matches what can play.
       setQualityChoice(maxHeight);
@@ -762,7 +762,7 @@ export default function VideoPlayer({
   const showSkippedNotice = useCallback(
     (
       seg: { startSec: number; endSec: number; label: string },
-      timed: boolean,
+      timed: boolean
     ) => {
       promptKeyRef.current = null;
       skipNoticeKindRef.current = "skipped";
@@ -783,7 +783,7 @@ export default function VideoPlayer({
         }, 4000);
       }
     },
-    [],
+    []
   );
 
   const undoSkip = useCallback(() => {
@@ -897,12 +897,12 @@ export default function VideoPlayer({
         } else {
           const match =
             shakaTracks.find(
-              (t) => (t.language || "").toLowerCase() === selected,
+              (t) => (t.language || "").toLowerCase() === selected
             ) ??
             shakaTracks.find(
               (t) =>
                 (t.language || "").toLowerCase().split("-")[0] ===
-                selected.split("-")[0],
+                selected.split("-")[0]
             );
           if (match) player.selectTextTrack(match);
           player.setTextTrackVisibility(showNative);
@@ -914,7 +914,7 @@ export default function VideoPlayer({
     }
 
     const trackEls = Array.from(
-      v.querySelectorAll("track"),
+      v.querySelectorAll("track")
     ) as HTMLTrackElement[];
     trackEls.forEach((el, i) => {
       const tt = el.track;
@@ -950,8 +950,8 @@ export default function VideoPlayer({
       try {
         const existing = new Set(
           (player.getTextTracks() ?? []).map((t) =>
-            (t.language || "").toLowerCase(),
-          ),
+            (t.language || "").toLowerCase()
+          )
         );
         for (const t of tracks) {
           const lang = t.lang.toLowerCase();
@@ -960,7 +960,7 @@ export default function VideoPlayer({
             t.src,
             t.lang,
             "subtitles",
-            "text/vtt",
+            "text/vtt"
           );
           existing.add(lang);
         }
@@ -990,7 +990,7 @@ export default function VideoPlayer({
     const onTrackLoad = () => setCaptionMode();
     v.addEventListener("loadedmetadata", onTrackLoad);
     const trackEls = Array.from(
-      v.querySelectorAll("track"),
+      v.querySelectorAll("track")
     ) as HTMLTrackElement[];
     for (const el of trackEls) {
       el.addEventListener("load", onTrackLoad);
@@ -1010,7 +1010,7 @@ export default function VideoPlayer({
       const t = Math.max(0, sec);
       const from = Math.max(
         videoRef.current?.currentTime ?? 0,
-        prevTimeRef.current,
+        prevTimeRef.current
       );
       // Timeline / arrow seeks set isSeeking and jump currentTime, so the
       // timeupdate "moving backward" check never sees the jump. Record it here.
@@ -1019,7 +1019,7 @@ export default function VideoPlayer({
           from,
           t,
           sponsorSegmentsRef.current,
-          suppressedSegmentsRef.current,
+          suppressedSegmentsRef.current
         );
       }
       isSeekingRef.current = true;
@@ -1031,7 +1031,7 @@ export default function VideoPlayer({
       }
       if (videoRef.current) videoRef.current.currentTime = t;
     },
-    [chromecast.casting, chromecast.remoteSeek],
+    [chromecast.casting, chromecast.remoteSeek]
   );
 
   // Listen for programmatic seek requests (e.g., clicking a chapter in Watch.tsx)
@@ -1276,13 +1276,13 @@ export default function VideoPlayer({
       const pos = scrubPositionFromClientX(
         clientX,
         el.getBoundingClientRect(),
-        duration,
+        duration
       );
       if (!pos) return;
       setScrubHover(pos);
       if (!hoverOnly) seekTo(pos.time);
     },
-    [duration, seekTo],
+    [duration, seekTo]
   );
 
   const onScrubPointerDown = useCallback(
@@ -1296,7 +1296,7 @@ export default function VideoPlayer({
       onControlsInteractionStart();
       scrubFromClientX(e.clientX);
     },
-    [onControlsInteractionStart, scrubFromClientX],
+    [onControlsInteractionStart, scrubFromClientX]
   );
 
   const onScrubPointerMove = useCallback(
@@ -1304,7 +1304,7 @@ export default function VideoPlayer({
       const dragging = e.currentTarget.hasPointerCapture(e.pointerId);
       scrubFromClientX(e.clientX, !dragging);
     },
-    [scrubFromClientX],
+    [scrubFromClientX]
   );
 
   const onScrubPointerUp = useCallback(
@@ -1316,7 +1316,7 @@ export default function VideoPlayer({
       }
       onControlsInteractionEnd();
     },
-    [onControlsInteractionEnd],
+    [onControlsInteractionEnd]
   );
 
   const onScrubPointerLeave = useCallback(
@@ -1324,7 +1324,7 @@ export default function VideoPlayer({
       if (e.currentTarget.hasPointerCapture(e.pointerId)) return;
       setScrubHover(null);
     },
-    [],
+    []
   );
 
   useEffect(() => {
@@ -1618,7 +1618,7 @@ export default function VideoPlayer({
         activateHold();
       }, HOLD_DELAY_MS);
     },
-    [isMini, activateHold],
+    [isMini, activateHold]
   );
 
   const onVideoPointerUp = useCallback(
@@ -1648,7 +1648,7 @@ export default function VideoPlayer({
         }
       }
     },
-    [isMini, endHold, isMobile, togglePlay],
+    [isMini, endHold, isMobile, togglePlay]
   );
 
   const onVideoPointerCancel = useCallback(() => {
@@ -1669,7 +1669,7 @@ export default function VideoPlayer({
       }
       togglePlay();
     },
-    [isMobile, togglePlay],
+    [isMobile, togglePlay]
   );
 
   useEffect(() => {
@@ -1739,7 +1739,7 @@ export default function VideoPlayer({
       window.addEventListener("pointerup", onEnd);
       window.addEventListener("pointercancel", onEnd);
     },
-    [miniWidth, isMobile, clampMiniWidth, onMiniResize],
+    [miniWidth, isMobile, clampMiniWidth, onMiniResize]
   );
 
   const miniMoveDrag = useRef<{
@@ -1811,7 +1811,7 @@ export default function VideoPlayer({
       window.addEventListener("pointerup", onEnd);
       window.addEventListener("pointercancel", onEnd);
     },
-    [isMini, onMiniMove, onMiniMoveEnd],
+    [isMini, onMiniMove, onMiniMoveEnd]
   );
 
   useEffect(() => {
@@ -1853,13 +1853,13 @@ export default function VideoPlayer({
           if (spriteMeta && videoId != null && spriteMeta.count > 0) {
             const idx = Math.min(
               spriteMeta.count - 1,
-              Math.max(0, Math.floor(time / spriteMeta.interval_sec)),
+              Math.max(0, Math.floor(time / spriteMeta.interval_sec))
             );
             const col = idx % spriteMeta.columns;
             const row = Math.floor(idx / spriteMeta.columns);
             const rows = Math.max(
               1,
-              Math.ceil(spriteMeta.count / spriteMeta.columns),
+              Math.ceil(spriteMeta.count / spriteMeta.columns)
             );
             const sheetW = spriteMeta.columns * spriteMeta.tile_width;
             const sheetH = rows * spriteMeta.tile_height;
@@ -1920,7 +1920,7 @@ export default function VideoPlayer({
           (t) =>
             t.lang === captionLang ||
             t.lang.toLowerCase().split("-")[0] ===
-              captionLang.toLowerCase().split("-")[0],
+              captionLang.toLowerCase().split("-")[0]
         )?.src ?? null);
 
   // Ultrawide (e.g. 2:1) letterboxes inside a 16:9 dock — compact the up-next
@@ -1946,7 +1946,11 @@ export default function VideoPlayer({
         <video
           key={effectiveStreamType === "dash" ? "dash" : "file"}
           ref={videoRef}
-          src={effectiveStreamType === "dash" ? undefined : effectiveSrc || undefined}
+          src={
+            effectiveStreamType === "dash"
+              ? undefined
+              : effectiveSrc || undefined
+          }
           playsInline
           {...{ "x-webkit-airplay": "allow" }}
           controls={false}
@@ -1977,7 +1981,7 @@ export default function VideoPlayer({
                   prev,
                   t,
                   sponsorSegments,
-                  suppressedSegmentsRef.current,
+                  suppressedSegmentsRef.current
                 );
               }
               let insidePrompt: SponsorSegment | null = null;
@@ -2004,7 +2008,7 @@ export default function VideoPlayer({
                         endSec: seg.endSec,
                         label: sponsorBlockSegmentLabel(seg.category),
                       },
-                      true,
+                      true
                     );
                   }
                   break;
@@ -2020,7 +2024,7 @@ export default function VideoPlayer({
                       skipNoticeTimer.current = null;
                     }
                     const label = sponsorBlockSegmentLabel(
-                      insidePrompt.category,
+                      insidePrompt.category
                     );
                     skipNoticeKindRef.current = "prompt";
                     setSkipNoticeKind("prompt");
@@ -2078,19 +2082,19 @@ export default function VideoPlayer({
             if (effectiveStreamType === "dash") {
               if (enterCompatMode()) return;
               setMediaError(
-                "The preview stream failed. Check your connection and try again.",
+                "The preview stream failed. Check your connection and try again."
               );
               return;
             }
             if (compatMode) {
               setMediaError(
-                "Compatibility-mode preview failed. Try again or download the video.",
+                "Compatibility-mode preview failed. Try again or download the video."
               );
               return;
             }
             if (!effectiveSrc || onSourceError?.()) return;
             setMediaError(
-              "This video could not be played. Check your connection and try again.",
+              "This video could not be played. Check your connection and try again."
             );
           }}
           onPointerDown={isMini ? undefined : onVideoPointerDown}
@@ -2275,7 +2279,7 @@ export default function VideoPlayer({
                     const active = isChapterActive(
                       chapters,
                       chapterIndex,
-                      current,
+                      current
                     );
                     return (
                       <button
@@ -2402,7 +2406,7 @@ export default function VideoPlayer({
                           setShowQuality((s) => !s);
                         }}
                         className={`${playerChromeBtn(
-                          qualityChoice !== "auto" || showQuality,
+                          qualityChoice !== "auto" || showQuality
                         )} tabular-nums`}
                         title="Stream quality"
                       >
@@ -2422,7 +2426,7 @@ export default function VideoPlayer({
                               setShowQuality(false);
                             }}
                             className={`${playerMenuItem(
-                              qualityChoice === "auto",
+                              qualityChoice === "auto"
                             )} text-left`}
                           >
                             Auto
@@ -2439,7 +2443,7 @@ export default function VideoPlayer({
                                 setShowQuality(false);
                               }}
                               className={`${playerMenuItem(
-                                qualityChoice === h,
+                                qualityChoice === h
                               )} text-left tabular-nums`}
                             >
                               {qualityMenuLabel(h)}
@@ -2457,7 +2461,7 @@ export default function VideoPlayer({
                       setShowSpeed((s) => !s);
                     }}
                     className={`${playerChromeBtn(
-                      rate !== 1 || showSpeed,
+                      rate !== 1 || showSpeed
                     )} tabular-nums`}
                     title="Playback speed"
                   >

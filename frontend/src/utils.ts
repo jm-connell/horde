@@ -100,7 +100,10 @@ export function stripChapterLines(description: string | null): string {
     if (line && CHAPTER_LINE_RE.test(line)) continue;
     kept.push(rawLine);
   }
-  return kept.join("\n").replace(/^\n+|\n+$/g, "").replace(/\n{3,}/g, "\n\n");
+  return kept
+    .join("\n")
+    .replace(/^\n+|\n+$/g, "")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
 /** Percent for a live download; prefer bytes over a possibly-stale progress field. */
@@ -166,7 +169,7 @@ function formatUsdPerMillionAmount(n: number): string {
 /** Format OpenRouter list prices as "in / out" USD per 1M tokens. */
 export function formatOpenRouterPerMillion(
   promptPerMillion?: number | null,
-  completionPerMillion?: number | null,
+  completionPerMillion?: number | null
 ): string {
   if (promptPerMillion == null && completionPerMillion == null) return "";
   const input = promptPerMillion ?? 0;
@@ -257,7 +260,11 @@ export function formatPublishedAt(
   if (trimmedLabel) return trimmedLabel;
   if (!iso) return "";
   const s = iso.trim();
-  if (YEAR_ONLY_RE.test(s) || RELATIVE_AGO_RE.test(s) || YEAR_MONTH_RE.test(s)) {
+  if (
+    YEAR_ONLY_RE.test(s) ||
+    RELATIVE_AGO_RE.test(s) ||
+    YEAR_MONTH_RE.test(s)
+  ) {
     return s;
   }
   return formatDate(s);
@@ -267,7 +274,9 @@ export function formatPublishedAt(
 export function formatCompactCount(count: number): string {
   const format = (n: number, suffix: string) => {
     const rounded = Math.round(n * 10) / 10;
-    const body = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    const body = Number.isInteger(rounded)
+      ? String(rounded)
+      : rounded.toFixed(1);
     return `${body}${suffix}`;
   };
   if (count >= 1_000_000_000) return format(count / 1_000_000_000, "B");
@@ -286,7 +295,9 @@ export function formatViewCount(count: number | null): string {
 export function joinDotList(
   parts: Array<string | null | undefined | false>
 ): string {
-  return parts.filter((p): p is string => typeof p === "string" && p.trim() !== "").join(" · ");
+  return parts
+    .filter((p): p is string => typeof p === "string" && p.trim() !== "")
+    .join(" · ");
 }
 
 /** Compact like ratio label (e.g. "92%") when both counts are known. */
@@ -379,10 +390,7 @@ export function formatRelative(iso: string | null): string {
   return `${Math.floor(diffMo / 12)}y ago`;
 }
 
-export {
-  clipboardTextToUrl,
-  readClipboardText,
-} from "./clipboard";
+export { clipboardTextToUrl, readClipboardText } from "./clipboard";
 
 /** Source URL for re-downloading; falls back to YouTube id in the file path. */
 export function effectiveSourceUrl(video: {

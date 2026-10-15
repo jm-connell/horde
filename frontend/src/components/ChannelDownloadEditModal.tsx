@@ -1,9 +1,5 @@
 import ChannelPicker from "./ChannelPicker";
-import {
-  mergePinnedPreset,
-  PRESET_ORDER,
-  presetOptionLabel,
-} from "../presets";
+import { mergePinnedPreset, PRESET_ORDER, presetOptionLabel } from "../presets";
 import type { ChannelStat } from "../types";
 import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
 import { youtubeThumbnailUrl } from "../utils";

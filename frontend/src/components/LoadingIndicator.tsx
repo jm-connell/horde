@@ -1,8 +1,5 @@
 import { useSettings } from "../hooks/useSettings";
-import {
-  isLoadingStyle,
-  type LoadingStyle,
-} from "../loadingStyles";
+import { isLoadingStyle, type LoadingStyle } from "../loadingStyles";
 
 export function LoadingMark({
   style,

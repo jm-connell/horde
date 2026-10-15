@@ -181,7 +181,7 @@ function OnlineLibrary() {
   const [streamResults, setStreamResults] = useState<ChannelFeedEntry[]>([]);
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamDownloading, setStreamDownloading] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set()
   );
   const [youtubeResults, setYoutubeResults] = useState<ChannelFeedEntry[]>([]);
   const [youtubeLoading, setYoutubeLoading] = useState(false);
@@ -221,10 +221,10 @@ function OnlineLibrary() {
     setYoutubeVideoSearch,
   } = useSearch();
   const [activeChannel, setActiveChannel] = useState<string | null>(
-    searchParams.get("channel"),
+    searchParams.get("channel")
   );
   const [activeTag, setActiveTag] = useState<string | null>(
-    searchParams.get("tag"),
+    searchParams.get("tag")
   );
   const [sortState, setSortState] = useState<LibrarySortState>(() => {
     const saved = loadLibrarySort(loadSettings().defaultLibrarySort);
@@ -247,7 +247,7 @@ function OnlineLibrary() {
   const [feedLayout, setFeedLayoutState] = useState(loadFeedLayout);
   const [autodownloadOpen, setAutodownloadOpen] = useState(false);
   const [autodownload, setAutodownload] = useState<ChannelAutodownload | null>(
-    null,
+    null
   );
   const [autodownloadSaving, setAutodownloadSaving] = useState(false);
 
@@ -271,10 +271,10 @@ function OnlineLibrary() {
   const { onJobCompleted, submitDownload } = useDownloads();
   const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
   const [narrowViewport, setNarrowViewport] = useState(
-    () => typeof window !== "undefined" && window.innerWidth < 1100,
+    () => typeof window !== "undefined" && window.innerWidth < 1100
   );
   const [viewportWidth, setViewportWidth] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth : 0,
+    typeof window !== "undefined" ? window.innerWidth : 0
   );
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
   const [sidebarOverlayVisible, setSidebarOverlayVisible] = useState(false);
@@ -344,7 +344,7 @@ function OnlineLibrary() {
   }, [narrowViewport]);
 
   const backgroundRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
+    null
   );
   // Coalesce several job completions into one full-library refetch instead of one each.
   const scheduleBackgroundRefresh = useCallback(() => {
@@ -679,12 +679,12 @@ function OnlineLibrary() {
 
   const visibleContinueWatching = useMemo(
     () => continueWatching.filter((v) => !isDismissed(v.id)),
-    [continueWatching, isDismissed],
+    [continueWatching, isDismissed]
   );
 
   const selectableVideos = useMemo(
     () => (debouncedSearch ? [...videos, ...otherVideos] : videos),
-    [debouncedSearch, videos, otherVideos],
+    [debouncedSearch, videos, otherVideos]
   );
 
   const youtubeVisible = useMemo(
@@ -694,17 +694,17 @@ function OnlineLibrary() {
         ...videos.map((v) => extractYouTubeId(v.source_url, v.file_path)),
         ...otherVideos.map((v) => extractYouTubeId(v.source_url, v.file_path)),
       ]),
-    [youtubeResults, streamResults, videos, otherVideos],
+    [youtubeResults, streamResults, videos, otherVideos]
   );
 
   const hasTags = useMemo(
     () => tags.some((t) => t.count > TAG_MIN_COUNT || t.tag === activeTag),
-    [tags, activeTag],
+    [tags, activeTag]
   );
 
   const visibleTags = useMemo(() => {
     const filtered = tags.filter(
-      (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag,
+      (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
     );
     if (!showAllTags && filtered.length > TAG_PAGE_SIZE) {
       return filtered.slice(0, TAG_PAGE_SIZE);
@@ -714,7 +714,7 @@ function OnlineLibrary() {
 
   const hiddenTagCount = useMemo(() => {
     const filtered = tags.filter(
-      (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag,
+      (t) => t.count > TAG_MIN_COUNT || t.tag === activeTag
     );
     return showAllTags ? 0 : Math.max(0, filtered.length - TAG_PAGE_SIZE);
   }, [tags, activeTag, showAllTags]);
@@ -785,7 +785,7 @@ function OnlineLibrary() {
               .replace(/\/+$/, "")
               .replace(
                 /\/(videos|shorts|streams|playlists|featured|about|search)$/i,
-                "",
+                ""
               )
               .toLowerCase();
           const target = norm(activeChannelUrl);
@@ -884,12 +884,12 @@ function OnlineLibrary() {
               .replace(/\/+$/, "")
               .replace(
                 /\/(videos|shorts|streams|playlists|featured|about|search)$/i,
-                "",
+                ""
               )
               .toLowerCase();
           const target = norm(activeChannelUrl);
           const hit = status.catalogs.find(
-            (c) => norm(c.channel_url) === target,
+            (c) => norm(c.channel_url) === target
           );
           setCatalogProgress((prev) => ({
             indexed: hit?.indexed_count ?? 0,
@@ -914,7 +914,7 @@ function OnlineLibrary() {
       showToast(
         err instanceof Error && err.message
           ? err.message
-          : "Could not start channel indexing",
+          : "Could not start channel indexing"
       );
     } finally {
       setIndexingChannel(false);
@@ -942,13 +942,13 @@ function OnlineLibrary() {
       setAutodownload(row);
       setAutodownloadOpen(false);
       showToast(
-        payload.enabled ? "Autodownload saved" : "Autodownload turned off",
+        payload.enabled ? "Autodownload saved" : "Autodownload turned off"
       );
     } catch (err) {
       showToast(
         err instanceof Error && err.message
           ? err.message
-          : "Could not save autodownload",
+          : "Could not save autodownload"
       );
     } finally {
       setAutodownloadSaving(false);
@@ -973,13 +973,13 @@ function OnlineLibrary() {
               youtubeSearchOverride: result.direct_youtube_search,
               youtubeSearchEffective: result.direct_youtube_search_effective,
             }
-          : prev,
+          : prev
       );
     } catch (err) {
       showToast(
         err instanceof Error && err.message
           ? err.message
-          : "Could not update YouTube search",
+          : "Could not update YouTube search"
       );
     } finally {
       setYoutubePrefSaving(false);
@@ -1067,8 +1067,8 @@ function OnlineLibrary() {
       .then(() => showToast("Download queued"))
       .catch((err: unknown) =>
         showToast(
-          err instanceof Error ? err.message : "Could not start download",
-        ),
+          err instanceof Error ? err.message : "Could not start download"
+        )
       )
       .finally(() => {
         setStreamDownloading((prev) => {
@@ -1147,7 +1147,7 @@ function OnlineLibrary() {
     const selected = videos.filter((v) => selectedIds.has(v.id));
     selected.forEach((v) => void offlineManager.download(v));
     showToast(
-      `Downloading ${selected.length} video${selected.length === 1 ? "" : "s"} for offline viewing`,
+      `Downloading ${selected.length} video${selected.length === 1 ? "" : "s"} for offline viewing`
     );
     exitSelectMode();
   };
@@ -1178,7 +1178,7 @@ function OnlineLibrary() {
     }
     showToast(
       `Synced ${result.refreshed} video${result.refreshed === 1 ? "" : "s"}` +
-        (result.failed ? ` (${result.failed} failed)` : ""),
+        (result.failed ? ` (${result.failed} failed)` : "")
     );
     setRefreshKey((k) => k + 1);
     exitSelectMode();
@@ -1202,7 +1202,7 @@ function OnlineLibrary() {
     const el = mainContentRef.current;
     if (!el) return;
     setQueueDockedBottom(
-      el.getBoundingClientRect().right > window.innerWidth - QUEUE_RESERVE_PX,
+      el.getBoundingClientRect().right > window.innerWidth - QUEUE_RESERVE_PX
     );
   }, []);
 
@@ -1500,7 +1500,7 @@ function OnlineLibrary() {
                       title={DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP}
                       onToggle={() =>
                         void setChannelYoutubeSearch(
-                          !(catalogProgress?.youtubeSearchEffective ?? true),
+                          !(catalogProgress?.youtubeSearchEffective ?? true)
                         )
                       }
                     />
@@ -1980,7 +1980,7 @@ function OnlineLibrary() {
           <div
             className={`pointer-events-auto w-96 ${queueDockAlignClass(
               miniPlayerActive ? miniPlayerRect : null,
-              { viewportWidth },
+              { viewportWidth }
             )}`}
           >
             <PlaybackQueue

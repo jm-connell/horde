@@ -56,24 +56,47 @@ export const CSS_SELECTORS: CssHookRow[] = [
   },
   {
     selector: 'html[data-page="home"]',
-    meaning: "Library home. Also: watch, settings, history, download, import, playlists",
+    meaning:
+      "Library home. Also: watch, settings, history, download, import, playlists",
   },
   { selector: '[data-horde="nav"]', meaning: "Top navigation bar" },
   { selector: '[data-horde="main"]', meaning: "Page content shell" },
-  { selector: '[data-horde="sidebar"]', meaning: "Library channel sidebar rail" },
-  { selector: '[data-horde="channel-list"]', meaning: "Channel list inside the sidebar" },
-  { selector: '[data-horde="background"]', meaning: "Background effect / image" },
+  {
+    selector: '[data-horde="sidebar"]',
+    meaning: "Library channel sidebar rail",
+  },
+  {
+    selector: '[data-horde="channel-list"]',
+    meaning: "Channel list inside the sidebar",
+  },
+  {
+    selector: '[data-horde="background"]',
+    meaning: "Background effect / image",
+  },
   { selector: '[data-horde="video-card"]', meaning: "Library video card" },
   { selector: '[data-horde="feed-card"]', meaning: "Channel feed card" },
-  { selector: '[data-horde="card-preview-seek"]', meaning: "Hover-preview seek bar on a video thumbnail" },
-  { selector: '[data-horde="page-scroll"]', meaning: "Document overlay scroll thumb" },
+  {
+    selector: '[data-horde="card-preview-seek"]',
+    meaning: "Hover-preview seek bar on a video thumbnail",
+  },
+  {
+    selector: '[data-horde="page-scroll"]',
+    meaning: "Document overlay scroll thumb",
+  },
   { selector: ".page-shell", meaning: "Centered page column" },
   { selector: ".ui-panel", meaning: "Settings panels, menus, chrome blocks" },
   { selector: ".ui-card", meaning: "Hoverable cards (library, playlists)" },
   { selector: ".ui-interactive", meaning: "Buttons and clickable chrome" },
   { selector: ".horde-scrollbar", meaning: "Themed overlay scroll areas" },
-  { selector: ".horde-meta-scrollbar", meaning: "Watch description/chapters, dropdown lists, and settings activity native scrollbar (hidden; overlay thumb on hover/scroll)" },
-  { selector: ".horde-overlay-scroll-thumb", meaning: "Solid accent overlay scroll pill (page, description, chapters)" },
+  {
+    selector: ".horde-meta-scrollbar",
+    meaning:
+      "Watch description/chapters, dropdown lists, and settings activity native scrollbar (hidden; overlay thumb on hover/scroll)",
+  },
+  {
+    selector: ".horde-overlay-scroll-thumb",
+    meaning: "Solid accent overlay scroll pill (page, description, chapters)",
+  },
 ];
 
 const PAGE_IDS = [

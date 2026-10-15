@@ -13,10 +13,16 @@ import {
 } from "../hooks/useCardPreview";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { formatTimestamp } from "../utils";
-import { PREVIEW_UNLOAD_DELAY_MS, reportPreviewTime } from "../utils/cardPreview";
+import {
+  PREVIEW_UNLOAD_DELAY_MS,
+  reportPreviewTime,
+} from "../utils/cardPreview";
 import { scrubPositionFromClientX } from "./playerSeek";
 
-function stopCardNav(e: { preventDefault: () => void; stopPropagation: () => void }) {
+function stopCardNav(e: {
+  preventDefault: () => void;
+  stopPropagation: () => void;
+}) {
   e.preventDefault();
   e.stopPropagation();
 }

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
-import type { CompatCopyResolution, DownloadVideoCodec } from "../../hooks/useSettings";
+import type {
+  CompatCopyResolution,
+  DownloadVideoCodec,
+} from "../../hooks/useSettings";
 import type { CompatSummary, SystemStats } from "../../types";
 import { formatSize } from "../../utils";
 import { probeDecodeSupport } from "../../utils/decodeCapability";
@@ -25,7 +28,8 @@ const MODES: ModeInfo[] = [
     id: "av1",
     title: "AV1 only",
     badge: "Recommended if your devices support it",
-    summary: "Keep YouTube’s original AV1/VP9 files. Smallest files, full resolution (4K/HDR).",
+    summary:
+      "Keep YouTube’s original AV1/VP9 files. Smallest files, full resolution (4K/HDR).",
     storage: { level: "low", label: "Smallest" },
     compute: { level: "low", label: "None" },
     details: [
@@ -38,7 +42,8 @@ const MODES: ModeInfo[] = [
   {
     id: "h264_native",
     title: "H.264 only, up to 1080p",
-    summary: "Download YouTube’s own H.264 version. Plays everywhere, but YouTube stops H.264 at 1080p.",
+    summary:
+      "Download YouTube’s own H.264 version. Plays everywhere, but YouTube stops H.264 at 1080p.",
     storage: { level: "mid", label: "~1.5–2× AV1" },
     compute: { level: "low", label: "None" },
     details: [
@@ -51,7 +56,8 @@ const MODES: ModeInfo[] = [
   {
     id: "h264_convert",
     title: "H.264 only, full resolution",
-    summary: "Download AV1 for 1440p/4K, then convert it to H.264 on this server and replace the original.",
+    summary:
+      "Download AV1 for 1440p/4K, then convert it to H.264 on this server and replace the original.",
     storage: { level: "high", label: "~2–3× AV1 at 4K" },
     compute: { level: "high", label: "Heavy — GPU strongly advised" },
     details: [
@@ -65,7 +71,8 @@ const MODES: ModeInfo[] = [
     id: "sidecar",
     title: "AV1 + H.264 copy",
     badge: "Most compatible",
-    summary: "Keep the full-quality AV1 original and save a ≤1080p H.264 copy beside it. Each device plays the best one it can.",
+    summary:
+      "Keep the full-quality AV1 original and save a ≤1080p H.264 copy beside it. Each device plays the best one it can.",
     storage: { level: "high", label: "Significantly more: +50–150%" },
     compute: { level: "mid", label: "Low for new downloads" },
     details: [
@@ -83,9 +90,19 @@ const LEVEL_CLASS: Record<Level, string> = {
   high: "border-amber-500/30 bg-amber-500/10 text-amber-300",
 };
 
-function Pill({ level, label, kind }: { level: Level; label: string; kind: string }) {
+function Pill({
+  level,
+  label,
+  kind,
+}: {
+  level: Level;
+  label: string;
+  kind: string;
+}) {
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[11px] ${LEVEL_CLASS[level]}`}>
+    <span
+      className={`rounded-full border px-2 py-0.5 text-[11px] ${LEVEL_CLASS[level]}`}
+    >
       <span className="opacity-70">{kind}:</span> {label}
     </span>
   );
@@ -112,7 +129,8 @@ function hardwareSummary(stats: SystemStats | null | undefined): {
     encoderLabel,
     gpuVisibleButUnusable: Boolean(gpuName && !enc?.ffmpeg_has_hw_encoder),
     nvidiaNoAv1Decode:
-      encoder === "h264_nvenc" && /\b(GTX\s*1\d{3}|RTX\s*20\d{2}|TITAN\s*RTX)\b/i.test(gpuName ?? ""),
+      encoder === "h264_nvenc" &&
+      /\b(GTX\s*1\d{3}|RTX\s*20\d{2}|TITAN\s*RTX)\b/i.test(gpuName ?? ""),
   };
 }
 
@@ -128,11 +146,17 @@ function cpuLabel(stats: SystemStats | null | undefined): string {
 }
 
 /** Sidecar mode with full-resolution copies: 1440p/4K are encoded here. */
-const SIDECAR_FULL_RES: Pick<ModeInfo, "summary" | "storage" | "compute" | "details" | "needsGpu"> = {
+const SIDECAR_FULL_RES: Pick<
+  ModeInfo,
+  "summary" | "storage" | "compute" | "details" | "needsGpu"
+> = {
   summary:
     "Keep the full-quality AV1 original and save a full-resolution H.264 copy (up to 4K) beside it. Each device plays the best one it can.",
   storage: { level: "high", label: "Much more: +100–200% at 4K" },
-  compute: { level: "high", label: "Heavy for 1440p/4K — GPU strongly advised" },
+  compute: {
+    level: "high",
+    label: "Heavy for 1440p/4K — GPU strongly advised",
+  },
   details: [
     "1080p and lower: YouTube’s own H.264 is downloaded too, with no conversion.",
     "1440p and 4K: YouTube has no H.264 at these sizes, so a full-resolution H.264 copy is encoded on this server (up to 4K).",
@@ -172,18 +196,23 @@ export default function PlaybackCompatPicker({
 
   const fullRes = copyResolution === "source";
   const modes = MODES.map((m) =>
-    m.id === "sidecar" && fullRes ? { ...m, ...SIDECAR_FULL_RES } : m,
+    m.id === "sidecar" && fullRes ? { ...m, ...SIDECAR_FULL_RES } : m
   );
   const selected = modes.find((m) => m.id === mode) ?? modes[0];
 
   return (
     <div>
-      <p className="text-sm font-medium text-gray-200">Playback compatibility</p>
+      <p className="text-sm font-medium text-gray-200">
+        Playback compatibility
+      </p>
       <p className="mt-0.5 text-xs text-gray-500">
         YouTube stores high-resolution video as AV1, which plays on most new
         devices but not on older iPads, iPhones, Macs and TVs. Pick how Horde
         balances storage, server work and device support.{" "}
-        <a href="/wiki/guides/downloads/#compatibility-codecs" className="text-accent hover:underline">
+        <a
+          href="/wiki/guides/downloads/#compatibility-codecs"
+          className="text-accent hover:underline"
+        >
           Learn more
         </a>
       </p>
@@ -194,9 +223,15 @@ export default function PlaybackCompatPicker({
           <span className="text-gray-400">
             GPU:{" "}
             {hw.gpuName ? (
-              <span className={hw.hasGpuEncode ? "text-emerald-300" : "text-amber-300"}>
+              <span
+                className={
+                  hw.hasGpuEncode ? "text-emerald-300" : "text-amber-300"
+                }
+              >
                 {hw.gpuName}
-                {hw.hasGpuEncode ? " — usable for encoding" : " — not usable by Horde"}
+                {hw.hasGpuEncode
+                  ? " — usable for encoding"
+                  : " — not usable by Horde"}
               </span>
             ) : stats ? (
               <span className="text-gray-300">None detected</span>
@@ -228,7 +263,11 @@ export default function PlaybackCompatPicker({
       </div>
 
       {/* Modes */}
-      <div className="mt-3 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Playback compatibility">
+      <div
+        className="mt-3 grid gap-2 sm:grid-cols-2"
+        role="radiogroup"
+        aria-label="Playback compatibility"
+      >
         {modes.map((m) => {
           const active = m.id === mode;
           return (
@@ -247,15 +286,23 @@ export default function PlaybackCompatPicker({
               <span className="flex items-center gap-2">
                 <span
                   className={`h-3.5 w-3.5 shrink-0 rounded-full border ${
-                    active ? "border-accent bg-accent shadow-[inset_0_0_0_2px_rgb(0_0_0/0.6)]" : "border-gray-500"
+                    active
+                      ? "border-accent bg-accent shadow-[inset_0_0_0_2px_rgb(0_0_0/0.6)]"
+                      : "border-gray-500"
                   }`}
                 />
-                <span className="text-sm font-medium text-gray-100">{m.title}</span>
+                <span className="text-sm font-medium text-gray-100">
+                  {m.title}
+                </span>
               </span>
               {m.badge && (
-                <span className="mt-1 block text-[11px] font-medium text-accent">{m.badge}</span>
+                <span className="mt-1 block text-[11px] font-medium text-accent">
+                  {m.badge}
+                </span>
               )}
-              <span className="mt-1 block text-xs text-gray-400">{m.summary}</span>
+              <span className="mt-1 block text-xs text-gray-400">
+                {m.summary}
+              </span>
               <span className="mt-2 flex flex-wrap gap-1.5">
                 <Pill kind="Storage" {...m.storage} />
                 <Pill kind="Server work" {...m.compute} />
@@ -288,7 +335,11 @@ export default function PlaybackCompatPicker({
       />
 
       {showLibraryActions && (
-        <LibraryActions mode={mode} hasGpuEncode={hw.hasGpuEncode} copyResolution={copyResolution} />
+        <LibraryActions
+          mode={mode}
+          hasGpuEncode={hw.hasGpuEncode}
+          copyResolution={copyResolution}
+        />
       )}
     </div>
   );
@@ -318,9 +369,15 @@ function CopyResolutionChoice({
   return (
     <div className="mt-3">
       <p className="text-xs font-medium text-gray-300">
-        {mode === "sidecar" ? "H.264 copy resolution" : "Resolution of on-demand H.264 copies"}
+        {mode === "sidecar"
+          ? "H.264 copy resolution"
+          : "Resolution of on-demand H.264 copies"}
       </p>
-      <div className="mt-1.5 flex flex-wrap gap-1.5" role="radiogroup" aria-label="H.264 copy resolution">
+      <div
+        className="mt-1.5 flex flex-wrap gap-1.5"
+        role="radiogroup"
+        aria-label="H.264 copy resolution"
+      >
         {options.map((o) => (
           <button
             key={o.id}
@@ -335,7 +392,9 @@ function CopyResolutionChoice({
           </button>
         ))}
       </div>
-      <p className="mt-1 text-xs text-gray-500">{options.find((o) => o.id === value)?.hint}</p>
+      <p className="mt-1 text-xs text-gray-500">
+        {options.find((o) => o.id === value)?.hint}
+      </p>
     </div>
   );
 }
@@ -383,7 +442,12 @@ function ModeWarnings({
         "That is slow: expect minutes per video, longer for 4K.",
     });
   }
-  if (known && hw.hasGpuEncode && hw.nvidiaNoAv1Decode && mode.needsGpu !== "none") {
+  if (
+    known &&
+    hw.hasGpuEncode &&
+    hw.nvidiaNoAv1Decode &&
+    mode.needsGpu !== "none"
+  ) {
     out.push({
       tone: "info",
       text:
@@ -394,8 +458,7 @@ function ModeWarnings({
   if (mode.id === "av1" && av1Here === false) {
     out.push({
       tone: "warn",
-      text:
-        "This device can’t decode AV1. With AV1 only, it would need a converted copy for each video. Consider “AV1 + H.264 copy”.",
+      text: "This device can’t decode AV1. With AV1 only, it would need a converted copy for each video. Consider “AV1 + H.264 copy”.",
     });
   }
   if (mode.id === "h264_convert") {
@@ -435,7 +498,10 @@ function LibraryActions({
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
-    api.getCompatSummary().then(setSummary).catch(() => undefined);
+    api
+      .getCompatSummary()
+      .then(setSummary)
+      .catch(() => undefined);
   }, []);
 
   useEffect(refresh, [refresh]);
@@ -453,7 +519,11 @@ function LibraryActions({
 
   const active =
     summary != null &&
-    summary.queued + summary.running + summary.convert_queued + summary.convert_running > 0;
+    summary.queued +
+      summary.running +
+      summary.convert_queued +
+      summary.convert_running >
+      0;
 
   useEffect(() => {
     if (!active) return;
@@ -469,10 +539,14 @@ function LibraryActions({
     fn()
       .then((r) =>
         setMessage(
-          r.queued ? `${label}: queued ${plural(r.queued, "video", "videos")}.` : `${label}: nothing new to queue.`,
-        ),
+          r.queued
+            ? `${label}: queued ${plural(r.queued, "video", "videos")}.`
+            : `${label}: nothing new to queue.`
+        )
       )
-      .catch((e: unknown) => setMessage(e instanceof Error ? e.message : "Request failed"))
+      .catch((e: unknown) =>
+        setMessage(e instanceof Error ? e.message : "Request failed")
+      )
       .finally(() => {
         setBusy(false);
         setConfirmConvert(false);
@@ -483,7 +557,9 @@ function LibraryActions({
   const cancel = (kind: "compat" | "convert") => {
     api
       .cancelCompatJobs(kind)
-      .then((r) => setMessage(`Cancelled ${plural(r.cancelled, "job", "jobs")}.`))
+      .then((r) =>
+        setMessage(`Cancelled ${plural(r.cancelled, "job", "jobs")}.`)
+      )
       .catch(() => undefined)
       .finally(refresh);
   };
@@ -494,7 +570,8 @@ function LibraryActions({
   return (
     <div className="ui-panel mt-4 space-y-3 rounded-lg border border-ink-700 bg-ink-900 px-3 py-3 text-xs">
       <p className="text-gray-400">
-        Library: {plural(summary.videos, "video", "videos")}, {formatSize(summary.library_bytes)}
+        Library: {plural(summary.videos, "video", "videos")},{" "}
+        {formatSize(summary.library_bytes)}
         {summary.compat_ready > 0 &&
           ` · ${summary.compat_ready} H.264 copies (${formatSize(summary.compat_bytes)})`}
         {summary.unprobed > 0 && ` · checking codecs of ${summary.unprobed}…`}
@@ -502,11 +579,15 @@ function LibraryActions({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm text-gray-200">Create H.264 copies for the library</p>
+          <p className="text-sm text-gray-200">
+            Create H.264 copies for the library
+          </p>
           <p className="text-gray-500">
             {summary.compat_missing > 0
               ? `${plural(summary.compat_missing, "video has", "videos have")} no H.264 copy. Estimated +${formatSize(summary.compat_missing_est_bytes)}, ` +
-                (hasGpuEncode ? "converted on the GPU" : "converted on the CPU (slow)") +
+                (hasGpuEncode
+                  ? "converted on the GPU"
+                  : "converted on the CPU (slow)") +
                 "; YouTube’s own H.264 is downloaded when available."
               : "Every video already plays on older devices."}
           </p>
@@ -519,7 +600,11 @@ function LibraryActions({
         {compatPending > 0 ? (
           <span className="flex items-center gap-2 text-gray-300">
             {summary.running} running · {summary.queued} queued
-            <button type="button" className={PANEL_BTN} onClick={() => cancel("compat")}>
+            <button
+              type="button"
+              className={PANEL_BTN}
+              onClick={() => cancel("compat")}
+            >
               Cancel
             </button>
           </span>
@@ -530,7 +615,9 @@ function LibraryActions({
             disabled={busy || summary.compat_missing === 0}
             onClick={() => run(api.startCompatBackfill, "H.264 copies")}
           >
-            {summary.compat_missing === 1 ? "Create 1 copy" : `Create ${summary.compat_missing || ""} copies`}
+            {summary.compat_missing === 1
+              ? "Create 1 copy"
+              : `Create ${summary.compat_missing || ""} copies`}
           </button>
         )}
       </div>
@@ -547,14 +634,21 @@ function LibraryActions({
             </p>
             {!hasGpuEncode && summary.convertible > 0 && (
               <p className="text-amber-400/90">
-                No GPU encoder: converting {plural(summary.convertible, "video", "videos")} on the CPU could take days.
+                No GPU encoder: converting{" "}
+                {plural(summary.convertible, "video", "videos")} on the CPU
+                could take days.
               </p>
             )}
           </div>
           {convertPending > 0 ? (
             <span className="flex items-center gap-2 text-gray-300">
-              {summary.convert_running} running · {summary.convert_queued} queued
-              <button type="button" className={PANEL_BTN} onClick={() => cancel("convert")}>
+              {summary.convert_running} running · {summary.convert_queued}{" "}
+              queued
+              <button
+                type="button"
+                className={PANEL_BTN}
+                onClick={() => cancel("convert")}
+              >
                 Cancel
               </button>
             </span>
@@ -568,7 +662,11 @@ function LibraryActions({
               >
                 Replace {plural(summary.convertible, "original", "originals")}
               </button>
-              <button type="button" className={PANEL_BTN} onClick={() => setConfirmConvert(false)}>
+              <button
+                type="button"
+                className={PANEL_BTN}
+                onClick={() => setConfirmConvert(false)}
+              >
                 Keep originals
               </button>
             </span>

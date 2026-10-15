@@ -79,7 +79,9 @@ function RunningRow({ task, now }: { task: ActivityTask; now: number }) {
             </span>
           </div>
           {task.detail && (
-            <p className="mt-0.5 truncate text-xs text-gray-300">{task.detail}</p>
+            <p className="mt-0.5 truncate text-xs text-gray-300">
+              {task.detail}
+            </p>
           )}
           {task.reason && (
             <p className="mt-0.5 text-xs text-gray-500">{task.reason}</p>
@@ -181,9 +183,7 @@ export default function BackgroundActivity({
     }
     if (cpu != null) parts.push(`CPU ${cpu}%`);
     if (ffmpegRunning) {
-      parts.push(
-        `${ffmpegRunning} ffmpeg${ffmpegRunning === 1 ? "" : "s"}`
-      );
+      parts.push(`${ffmpegRunning} ffmpeg${ffmpegRunning === 1 ? "" : "s"}`);
     }
     summary = parts.join(" · ");
   }

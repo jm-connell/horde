@@ -13,7 +13,10 @@ export function useOfflineMode(): boolean {
 }
 
 export function useOfflineDownloads(): OfflineSnapshot {
-  return useSyncExternalStore(offlineManager.subscribe, offlineManager.getSnapshot);
+  return useSyncExternalStore(
+    offlineManager.subscribe,
+    offlineManager.getSnapshot
+  );
 }
 
 export interface OfflineItemView {
@@ -25,16 +28,22 @@ export interface OfflineItemView {
 
 export function itemProgress(
   item: OfflineItem | undefined,
-  liveBytes: ReadonlyMap<number, number>,
+  liveBytes: ReadonlyMap<number, number>
 ): OfflineItemView {
   if (!item) return { item, progress: 0, bytes: 0 };
   const bytes = Math.max(bytesDone(item), liveBytes.get(item.videoId) ?? 0);
   const progress =
-    item.status === "complete" ? 1 : item.totalBytes ? bytes / item.totalBytes : 0;
+    item.status === "complete"
+      ? 1
+      : item.totalBytes
+        ? bytes / item.totalBytes
+        : 0;
   return { item, progress, bytes };
 }
 
-export function useOfflineItem(videoId: number | null | undefined): OfflineItemView {
+export function useOfflineItem(
+  videoId: number | null | undefined
+): OfflineItemView {
   const snap = useOfflineDownloads();
   const item = videoId == null ? undefined : snap.byId.get(videoId);
   return itemProgress(item, snap.liveBytes);

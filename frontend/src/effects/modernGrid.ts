@@ -83,7 +83,11 @@ export function createModernGridEffect(
         ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
       }
-      for (let y = -spacing + offset * 0.6; y < height + spacing; y += spacing) {
+      for (
+        let y = -spacing + offset * 0.6;
+        y < height + spacing;
+        y += spacing
+      ) {
         ctx.moveTo(0, y);
         ctx.lineTo(width, y);
       }

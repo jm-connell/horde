@@ -1,8 +1,5 @@
 import { Fragment, type ReactNode } from "react";
-import {
-  parseInlineTimestamp,
-  TIMESTAMP_INLINE_RE,
-} from "../utils";
+import { parseInlineTimestamp, TIMESTAMP_INLINE_RE } from "../utils";
 
 const URL_RE = /(https?:\/\/[^\s]+)/g;
 
@@ -78,7 +75,9 @@ export default function LinkifiedText({ text }: { text: string }) {
           );
         }
         return (
-          <Fragment key={i}>{renderTextWithTimestamps(part, String(i))}</Fragment>
+          <Fragment key={i}>
+            {renderTextWithTimestamps(part, String(i))}
+          </Fragment>
         );
       })}
     </>

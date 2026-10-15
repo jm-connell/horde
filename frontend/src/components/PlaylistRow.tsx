@@ -294,7 +294,8 @@ export default function PlaylistRow({
       ? " · imported from YouTube"
       : "";
   const videoCount = current?.videos.length ?? playlist.item_count;
-  const coverPinned = playlist.has_custom_cover || playlist.cover_video_id != null;
+  const coverPinned =
+    playlist.has_custom_cover || playlist.cover_video_id != null;
 
   return (
     <div
@@ -422,81 +423,87 @@ export default function PlaylistRow({
           {loading && !current ? (
             <LoadingIndicator className="py-8" />
           ) : loadError ? (
-            <p className="py-6 text-center text-sm text-gray-500">{loadError}</p>
+            <p className="py-6 text-center text-sm text-gray-500">
+              {loadError}
+            </p>
           ) : (
             <>
               <div className="flex flex-wrap items-start gap-2">
                 <div className="flex min-w-0 flex-1 flex-nowrap items-start gap-2">
-                <button
-                  type="button"
-                  onClick={playAll}
-                  disabled={!current || current.videos.length === 0}
-                  className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
-                >
-                  Play all
-                </button>
-                {playlist.subscribed && (
                   <button
                     type="button"
-                    onClick={onSync}
-                    disabled={actionBusy}
-                    className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
+                    onClick={playAll}
+                    disabled={!current || current.videos.length === 0}
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
                   >
-                    Sync now
+                    Play all
                   </button>
-                )}
-                <PlaylistAddVideo
-                  playlistId={playlist.id}
-                  memberIds={new Set((current?.videos ?? []).map((v) => v.id))}
-                  active={open}
-                  onAdded={(next) => {
-                    setDetail(next);
-                    onUpdated(next);
-                  }}
-                />
+                  {playlist.subscribed && (
+                    <button
+                      type="button"
+                      onClick={onSync}
+                      disabled={actionBusy}
+                      className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
+                    >
+                      Sync now
+                    </button>
+                  )}
+                  <PlaylistAddVideo
+                    playlistId={playlist.id}
+                    memberIds={
+                      new Set((current?.videos ?? []).map((v) => v.id))
+                    }
+                    active={open}
+                    onAdded={(next) => {
+                      setDetail(next);
+                      onUpdated(next);
+                    }}
+                  />
                 </div>
                 <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                {playlist.subscribed && (
+                  {playlist.subscribed && (
+                    <button
+                      type="button"
+                      onClick={onStopSubscribing}
+                      disabled={actionBusy}
+                      className="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/10 disabled:opacity-50"
+                    >
+                      Stop subscription
+                    </button>
+                  )}
+                  {youtubeImported && !playlist.subscribed && (
+                    <button
+                      type="button"
+                      onClick={onSubscribeUpdates}
+                      disabled={actionBusy}
+                      className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
+                    >
+                      Subscribe to updates
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={onStopSubscribing}
-                    disabled={actionBusy}
-                    className="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/10 disabled:opacity-50"
+                    onClick={onDelete}
+                    className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
                   >
-                    Stop subscription
+                    Delete
                   </button>
-                )}
-                {youtubeImported && !playlist.subscribed && (
-                  <button
-                    type="button"
-                    onClick={onSubscribeUpdates}
-                    disabled={actionBusy}
-                    className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
-                  >
-                    Subscribe to updates
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
-                >
-                  Delete
-                </button>
-                {playlist.source_url && (
-                  <a
-                    href={playlist.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 text-sm text-accent hover:underline"
-                  >
-                    Source playlist ↗
-                  </a>
-                )}
+                  {playlist.source_url && (
+                    <a
+                      href={playlist.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 text-sm text-accent hover:underline"
+                    >
+                      Source playlist ↗
+                    </a>
+                  )}
                 </div>
               </div>
               {playlist.sync_error && (
-                <p className="mt-2 text-sm text-red-400">{playlist.sync_error}</p>
+                <p className="mt-2 text-sm text-red-400">
+                  {playlist.sync_error}
+                </p>
               )}
               {actionError && (
                 <p className="mt-2 text-sm text-red-400">{actionError}</p>
@@ -506,93 +513,96 @@ export default function PlaylistRow({
               )}
 
               {editing && (
-              <div className="mt-4">
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Cover
-                  </p>
-                  {coverPinned && (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-baseline justify-between gap-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Cover
+                    </p>
+                    {coverPinned && (
+                      <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => void setCoverVideo(null)}
+                        className="text-xs text-gray-400 hover:text-accent disabled:opacity-50"
+                      >
+                        Use first video
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 horde-scrollbar">
+                    {(current?.videos ?? []).map((video, index) => {
+                      const selected =
+                        !playlist.has_custom_cover &&
+                        (playlist.cover_video_id === video.id ||
+                          (playlist.cover_video_id == null && index === 0));
+                      const src = video.has_thumbnail
+                        ? listThumbnailUrl(video.id)
+                        : null;
+                      return (
+                        <button
+                          key={video.id}
+                          type="button"
+                          disabled={actionBusy}
+                          title={
+                            index === 0 && playlist.cover_video_id == null
+                              ? "Default (first video)"
+                              : `Use thumbnail from ${video.title}`
+                          }
+                          onClick={() => {
+                            if (
+                              index === 0 &&
+                              playlist.cover_video_id == null &&
+                              !playlist.has_custom_cover
+                            ) {
+                              return;
+                            }
+                            void setCoverVideo(index === 0 ? null : video.id);
+                          }}
+                          className={`relative w-20 shrink-0 overflow-hidden rounded-md ring-1 ${
+                            selected
+                              ? "ring-accent"
+                              : "ring-ink-700 hover:ring-ink-500"
+                          }`}
+                        >
+                          <PlaylistThumb
+                            src={src}
+                            className="aspect-video w-full"
+                          />
+                          {index === 0 && playlist.cover_video_id == null && (
+                            <span className="absolute bottom-0.5 left-0.5 rounded bg-ink-950/80 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-gray-300">
+                              Auto
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                     <button
                       type="button"
                       disabled={actionBusy}
-                      onClick={() => void setCoverVideo(null)}
-                      className="text-xs text-gray-400 hover:text-accent disabled:opacity-50"
+                      onClick={() => coverInputRef.current?.click()}
+                      className={`flex aspect-video w-20 shrink-0 flex-col items-center justify-center rounded-md border border-dashed text-[10px] uppercase tracking-wide ${
+                        playlist.has_custom_cover
+                          ? "border-accent text-accent"
+                          : "border-ink-600 text-gray-500 hover:border-ink-500 hover:text-gray-300"
+                      }`}
                     >
-                      Use first video
+                      {playlist.has_custom_cover ? "Custom" : "Upload"}
                     </button>
-                  )}
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-1 horde-scrollbar">
-                  {(current?.videos ?? []).map((video, index) => {
-                    const selected =
-                      !playlist.has_custom_cover &&
-                      (playlist.cover_video_id === video.id ||
-                        (playlist.cover_video_id == null && index === 0));
-                    const src = video.has_thumbnail
-                      ? listThumbnailUrl(video.id)
-                      : null;
-                    return (
-                      <button
-                        key={video.id}
-                        type="button"
-                        disabled={actionBusy}
-                        title={
-                          index === 0 && playlist.cover_video_id == null
-                            ? "Default (first video)"
-                            : `Use thumbnail from ${video.title}`
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) setCoverDraft(file);
+                        else if (coverInputRef.current) {
+                          coverInputRef.current.value = "";
                         }
-                        onClick={() => {
-                          if (
-                            index === 0 &&
-                            playlist.cover_video_id == null &&
-                            !playlist.has_custom_cover
-                          ) {
-                            return;
-                          }
-                          void setCoverVideo(index === 0 ? null : video.id);
-                        }}
-                        className={`relative w-20 shrink-0 overflow-hidden rounded-md ring-1 ${
-                          selected
-                            ? "ring-accent"
-                            : "ring-ink-700 hover:ring-ink-500"
-                        }`}
-                      >
-                        <PlaylistThumb src={src} className="aspect-video w-full" />
-                        {index === 0 && playlist.cover_video_id == null && (
-                          <span className="absolute bottom-0.5 left-0.5 rounded bg-ink-950/80 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-gray-300">
-                            Auto
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    disabled={actionBusy}
-                    onClick={() => coverInputRef.current?.click()}
-                    className={`flex aspect-video w-20 shrink-0 flex-col items-center justify-center rounded-md border border-dashed text-[10px] uppercase tracking-wide ${
-                      playlist.has_custom_cover
-                        ? "border-accent text-accent"
-                        : "border-ink-600 text-gray-500 hover:border-ink-500 hover:text-gray-300"
-                    }`}
-                  >
-                    {playlist.has_custom_cover ? "Custom" : "Upload"}
-                  </button>
-                  <input
-                    ref={coverInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) setCoverDraft(file);
-                      else if (coverInputRef.current) {
-                        coverInputRef.current.value = "";
-                      }
-                    }}
-                  />
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
               )}
 
               <div className="mt-3 space-y-2">

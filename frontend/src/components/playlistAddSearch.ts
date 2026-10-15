@@ -54,7 +54,10 @@ export function findLibraryVideoForUrl<T extends PlaylistAddLibraryHit>(
       if (id === yt) return video;
     }
     const source = video.source_url?.trim();
-    if (source && (source === url || source.replace(/\/+$/, "") === normalized)) {
+    if (
+      source &&
+      (source === url || source.replace(/\/+$/, "") === normalized)
+    ) {
       return video;
     }
   }
@@ -97,7 +100,10 @@ export function filterLibraryVideos<T extends PlaylistAddLibraryHit>(
     if (!channelPhrase && !titlePhrase && !tokensOk) continue;
 
     let score = 0;
-    if (channel === raw || (compact.length >= 2 && compactChannel === compact)) {
+    if (
+      channel === raw ||
+      (compact.length >= 2 && compactChannel === compact)
+    ) {
       score += 40;
     } else if (
       channel.startsWith(raw) ||

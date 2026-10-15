@@ -16,8 +16,7 @@ const TS_RE = /(\d{1,2}):(\d{2}):(\d{2})\.(\d{3})/;
 const CUE_TIMING_RE =
   /^(\d{1,2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}\.\d{3})/;
 /** Per-word tags: `<00:00:01.200><c> word</c>` */
-const WORD_TAG_RE =
-  /<(\d{1,2}:\d{2}:\d{2}\.\d{3})><c>([^<]*)<\/c>/g;
+const WORD_TAG_RE = /<(\d{1,2}:\d{2}:\d{2}\.\d{3})><c>([^<]*)<\/c>/g;
 const MIN_CUE_DURATION_SEC = 0.05;
 /** Close typical YouTube inter-cue holes so the overlay doesn't blink off. */
 export const CUE_GAP_FILL_SEC = 0.5;
@@ -143,10 +142,13 @@ function parseWordsFromPayload(
   // Manual / pop-on: whole payload as one entry, all words at cue start.
   const plain = payloadLines.map(stripTags).filter(Boolean).join(" ");
   if (!plain) return [];
-  return plain.split(" ").filter(Boolean).map((text) => ({
-    text,
-    startSec: cueStart,
-  }));
+  return plain
+    .split(" ")
+    .filter(Boolean)
+    .map((text) => ({
+      text,
+      startSec: cueStart,
+    }));
 }
 
 /**
@@ -219,10 +221,7 @@ export function parseVttLines(text: string): CaptionLine[] {
 }
 
 /** Active line at time t, or -1 if none. Prefers the latest still-covering cue. */
-export function findCaptionLineIndex(
-  lines: CaptionLine[],
-  t: number
-): number {
+export function findCaptionLineIndex(lines: CaptionLine[], t: number): number {
   let lo = 0;
   let hi = lines.length - 1;
   let ans = -1;

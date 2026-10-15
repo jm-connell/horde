@@ -46,7 +46,9 @@ export default function LiquidNav({
   const measure = useCallback(() => {
     const root = containerRef.current;
     if (!root) return;
-    const active = root.querySelector<HTMLElement>('[data-liquid-active="true"]');
+    const active = root.querySelector<HTMLElement>(
+      '[data-liquid-active="true"]'
+    );
     if (!active) {
       setPill(null);
       return;
@@ -122,7 +124,9 @@ export default function LiquidNav({
     const onResize = () => measure();
     window.addEventListener("resize", onResize);
     const ro =
-      typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(measure)
+        : null;
     ro?.observe(root);
     return () => {
       window.removeEventListener("resize", onResize);
@@ -174,8 +178,7 @@ export default function LiquidNav({
                   width: pill.width,
                   height: pill.height,
                   transition,
-                  borderRadius:
-                    isLiquid && traveling ? "0.85rem" : "0.5rem",
+                  borderRadius: isLiquid && traveling ? "0.85rem" : "0.5rem",
                 }
           }
         />

@@ -9,10 +9,7 @@ import {
   loadSettings,
   type CustomThemePreset,
 } from "../hooks/useSettings";
-import {
-  newCustomFontId,
-  parseCustomFontInput,
-} from "../fonts";
+import { newCustomFontId, parseCustomFontInput } from "../fonts";
 import type {
   AiSettings,
   AiStatus,
@@ -57,7 +54,12 @@ import {
   resolveAiPaneParam,
   tabMatchesQuery,
 } from "./settings/search";
-import type { AiPane, AiProcessAction, AiProviderPane, SettingsTab } from "./settings/types";
+import type {
+  AiPane,
+  AiProcessAction,
+  AiProviderPane,
+  SettingsTab,
+} from "./settings/types";
 
 export default function Settings() {
   const [settings, update] = useSettings();
@@ -92,9 +94,8 @@ export default function Settings() {
   const [openRouterEmbedModels, setOpenRouterEmbedModels] = useState<
     OpenRouterModel[]
   >([]);
-  const [openRouterCosts, setOpenRouterCosts] = useState<OpenRouterCosts | null>(
-    null
-  );
+  const [openRouterCosts, setOpenRouterCosts] =
+    useState<OpenRouterCosts | null>(null);
   const [aiProviderPane, setAiProviderPane] = useState<AiProviderPane>("local");
   const aiProviderPaneFromBackendRef = useRef(false);
   const [aiPane, setAiPane] = useState<AiPane>(() => {
@@ -169,17 +170,10 @@ export default function Settings() {
 
   const showUpdateNotice = Boolean(
     updateCheck?.update_available &&
-      updateCheck.latest_sha &&
-      updateCheck.latest_sha !== dismissedUpdateSha &&
-      (!q ||
-        match(
-          "update",
-          "version",
-          "github",
-          "git pull",
-          "docker",
-          "rebuild"
-        ))
+    updateCheck.latest_sha &&
+    updateCheck.latest_sha !== dismissedUpdateSha &&
+    (!q ||
+      match("update", "version", "github", "git pull", "docker", "rebuild"))
   );
 
   const refreshAiStatus = () =>
@@ -189,7 +183,10 @@ export default function Settings() {
       .catch(() => setAiStatus(null));
 
   useEffect(() => {
-    api.storageStats().then(setStorage).catch(() => undefined);
+    api
+      .storageStats()
+      .then(setStorage)
+      .catch(() => undefined);
     api
       .getAppSettings()
       .then((s) => {
@@ -302,9 +299,7 @@ export default function Settings() {
         `OpenRouter weekly budget exceeded (${spent} / ${limit}). Calls blocked.`
       );
     } else {
-      showToast(
-        `OpenRouter weekly spend is ${spent} (limit ${limit}).`
-      );
+      showToast(`OpenRouter weekly spend is ${spent} (limit ${limit}).`);
     }
   }, [openRouterCosts, showToast]);
 
@@ -466,7 +461,9 @@ export default function Settings() {
   const saveAi = async (patch: Partial<AiSettings>) => {
     const next = { ...aiDraft, ...patch };
     setAiDraft(next);
-    const updated = await api.updateAppSettings({ ai: patch }).catch(() => null);
+    const updated = await api
+      .updateAppSettings({ ai: patch })
+      .catch(() => null);
     if (updated?.ai) {
       setAppSettings(updated);
       setAiDraft({ ...DEFAULT_AI, ...updated.ai });
@@ -504,7 +501,9 @@ export default function Settings() {
       setCatalogMaxInput(String(updated.channel_catalog_max_videos ?? 1000));
       setSyncIntervalInput(String(updated.metadata_sync_interval_hours ?? 24));
       if (patch.youtube_video_search != null) {
-        setYoutubeVideoSearch(updated.youtube_video_search ?? patch.youtube_video_search);
+        setYoutubeVideoSearch(
+          updated.youtube_video_search ?? patch.youtube_video_search
+        );
       }
       refreshCatalogStatus();
     }

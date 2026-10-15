@@ -20,13 +20,11 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "appearance",
-    keywords:
-      `interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency blur frost glass tint legibility ${LOADING_STYLE_SEARCH_KEYWORDS}`,
+    keywords: `interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency blur frost glass tint legibility ${LOADING_STYLE_SEARCH_KEYWORDS}`,
   },
   {
     tab: "appearance",
-    keywords:
-      "saved themes save theme save current preset snapshot appearance",
+    keywords: "saved themes save theme save current preset snapshot appearance",
   },
   {
     tab: "appearance",
@@ -46,8 +44,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "library",
-    keywords:
-      "homepage continue watching progress bar dates video cards",
+    keywords: "homepage continue watching progress bar dates video cards",
   },
   {
     tab: "library",
@@ -73,8 +70,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "playback",
-    keywords:
-      "undownloaded channel feed show undownloaded library downloads",
+    keywords: "undownloaded channel feed show undownloaded library downloads",
   },
   {
     tab: "playback",
@@ -91,7 +87,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "playback",
-    keywords: "playback speed speed default hold hold-click hold speed click to hold",
+    keywords:
+      "playback speed speed default hold hold-click hold speed click to hold",
   },
   {
     tab: "playback",
@@ -119,8 +116,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "ai",
     pane: "providers",
-    keywords:
-      "models embedding chat model vram auto-pull gpu",
+    keywords: "models embedding chat model vram auto-pull gpu",
   },
   {
     tab: "ai",
@@ -131,7 +127,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "ai",
     pane: "features",
-    keywords: "features subtitles enrich tags duplicate confirmation llm category match strictness score summary summarize captions chapters timestamps transcript short medium long length 3 minutes lyrics on download watch page generate automatic button",
+    keywords:
+      "features subtitles enrich tags duplicate confirmation llm category match strictness score summary summarize captions chapters timestamps transcript short medium long length 3 minutes lyrics on download watch page generate automatic button",
   },
   // System
   {

@@ -1,9 +1,19 @@
 import { api } from "../../api";
 import { loadSettings } from "../../hooks/useSettings";
-import type { BackgroundEffect, FlowingGradientPreset, UiFont } from "../../hooks/useSettings";
+import type {
+  BackgroundEffect,
+  FlowingGradientPreset,
+  UiFont,
+} from "../../hooks/useSettings";
 import { fontSelectOptions, labelFromFilename } from "../../fonts";
-import { BACKGROUND_EFFECT_OPTIONS, FLOWING_PRESET_OPTIONS } from "../../effects";
-import { LOADING_STYLE_OPTIONS, LOADING_STYLE_SEARCH_KEYWORDS } from "../../loadingStyles";
+import {
+  BACKGROUND_EFFECT_OPTIONS,
+  FLOWING_PRESET_OPTIONS,
+} from "../../effects";
+import {
+  LOADING_STYLE_OPTIONS,
+  LOADING_STYLE_SEARCH_KEYWORDS,
+} from "../../loadingStyles";
 import Collapse from "../../components/Collapse";
 import LiquidNav from "../../components/LiquidNav";
 import { LoadingMark } from "../../components/LoadingIndicator";
@@ -88,9 +98,7 @@ export default function AppearanceTab() {
             />
           </div>
           <div>
-            <p className="mb-2 text-sm font-medium text-gray-200">
-              Save theme
-            </p>
+            <p className="mb-2 text-sm font-medium text-gray-200">Save theme</p>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
@@ -244,9 +252,7 @@ export default function AppearanceTab() {
                   : undefined
             }
           >
-            <p className="mb-2 text-sm font-medium text-gray-200">
-              Typeface
-            </p>
+            <p className="mb-2 text-sm font-medium text-gray-200">Typeface</p>
             <ThemedSelect
               aria-label="Font"
               value={settings.uiFont}
@@ -267,9 +273,7 @@ export default function AppearanceTab() {
                   : undefined
             }
           >
-            <p className="mb-2 text-sm font-medium text-gray-200">
-              Font size
-            </p>
+            <p className="mb-2 text-sm font-medium text-gray-200">Font size</p>
             <p className="mb-3 text-xs text-gray-500">
               Scales text across the app without extreme zoom steps.
             </p>
@@ -418,9 +422,7 @@ export default function AppearanceTab() {
       >
         {settings.backgroundEffect === "none" ? (
           <div>
-            <p className="mb-2 text-sm font-medium text-gray-200">
-              Animation
-            </p>
+            <p className="mb-2 text-sm font-medium text-gray-200">Animation</p>
             <ThemedSelect
               aria-label="Background animation"
               value={settings.backgroundEffect}
@@ -683,9 +685,7 @@ export default function AppearanceTab() {
                 </p>
               </div>
               <div>
-                <p className="mb-2 text-sm font-medium text-gray-200">
-                  Color
-                </p>
+                <p className="mb-2 text-sm font-medium text-gray-200">Color</p>
                 <div className="mb-3 flex flex-wrap gap-2">
                   {(
                     [
@@ -706,9 +706,7 @@ export default function AppearanceTab() {
                 </div>
                 {settings.backgroundEffectColorMode === "custom" && (
                   <label className="flex items-center justify-between gap-4 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2">
-                    <span className="text-sm text-gray-300">
-                      Effect color
-                    </span>
+                    <span className="text-sm text-gray-300">Effect color</span>
                     <input
                       type="color"
                       value={settings.backgroundEffectColor}

@@ -85,7 +85,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     if (live?.downloaded_bytes) {
       maxBytesRef.current = Math.max(
         maxBytesRef.current,
-        live.downloaded_bytes,
+        live.downloaded_bytes
       );
     }
   } else {
@@ -96,7 +96,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   const percent = downloadProgressPercent(
     live?.progress ?? job.progress,
     status === "downloading" ? downloaded : undefined,
-    liveTotal,
+    liveTotal
   );
   const completed = status === "completed";
   const failed = status === "error";
@@ -105,37 +105,37 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     status,
     failed,
     cancelled,
-    completed,
+    completed
   );
   const videoId = live?.video_id ?? job.video_id;
   const isDeviceJob = (live?.destination ?? job.destination) === "device";
   const { item: offlineItem, progress: offlineProgress } = useOfflineItem(
-    isDeviceJob ? -job.id : null,
+    isDeviceJob ? -job.id : null
   );
   const videoGone = isLibraryVideoGone(
     isDeviceJob,
     job.video_missing,
-    job.superseded,
+    job.superseded
   );
   const canEditNotes = canEditDownloadJobNotes(
     isDeviceJob,
     failed,
     cancelled,
     videoGone,
-    completed,
+    completed
   );
   const inLibrary = canManageCompletedLibraryVideo(
     completed,
     isDeviceJob,
     videoGone,
-    videoId,
+    videoId
   );
   const canRedownload = canRedownloadRemovedJob(
     completed,
     isDeviceJob,
     failed,
     job.video_missing,
-    job.superseded,
+    job.superseded
   );
   const isReplacing =
     active &&
@@ -164,7 +164,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   const [redownloading, setRedownloading] = useState(false);
   const [changingQuality, setChangingQuality] = useState(false);
   const [sourcePresets, setSourcePresets] = useState<string[]>(
-    () => job.available_presets ?? [],
+    () => job.available_presets ?? []
   );
   const [editingTitle, setEditingTitle] = useState(false);
   const retryingRef = useRef(false);
@@ -211,7 +211,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   ]);
   const displayPreset = resolveQualityPreset(
     job.quality_preset || "best",
-    sourcePresets,
+    sourcePresets
   );
   const finishedRes = completed
     ? finishedQualityLabel(job.quality_preset, job.height_px, sourcePresets)
@@ -637,14 +637,16 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               ref={setActionRow}
               className="mt-3 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-hidden sm:gap-2"
             >
-              {completed && isDeviceJob && offlineItem?.status === "complete" && (
-                <Link
-                  to={`/watch/${-job.id}`}
-                  className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
-                >
-                  Watch
-                </Link>
-              )}
+              {completed &&
+                isDeviceJob &&
+                offlineItem?.status === "complete" && (
+                  <Link
+                    to={`/watch/${-job.id}`}
+                    className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
+                  >
+                    Watch
+                  </Link>
+                )}
               {completed &&
                 isDeviceJob &&
                 (offlineItem?.status === "queued" ||

@@ -296,11 +296,7 @@ export default function AiQueueStatus({
                   )
                 : null,
               aiStatus.queue_breakdown.enrich_tags
-                ? plural(
-                    aiStatus.queue_breakdown.enrich_tags,
-                    "tag",
-                    "tags"
-                  )
+                ? plural(aiStatus.queue_breakdown.enrich_tags, "tag", "tags")
                 : null,
               aiStatus.queue_breakdown.summarize
                 ? plural(

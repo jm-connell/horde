@@ -303,7 +303,7 @@ export default function Watch() {
   useEffect(() => {
     if (source?.kind !== "stream" || activeJobId != null) return;
     const existing = jobs.find(
-      (j) => j.url === source.url && isActiveJob(j, progress[j.id]),
+      (j) => j.url === source.url && isActiveJob(j, progress[j.id])
     );
     if (existing) setActiveJobId(existing.id);
   }, [source, jobs, progress, activeJobId]);
@@ -385,11 +385,11 @@ export default function Watch() {
         setAiSummariesEnabled(llmConnected && !!s.ai.ai_summaries);
         setAiChaptersEnabled(llmConnected && !!s.ai.ai_chapters);
         setAiChaptersMode(
-          s.ai.ai_chapters_mode === "on_watch" ? "on_watch" : "on_download",
+          s.ai.ai_chapters_mode === "on_watch" ? "on_watch" : "on_download"
         );
         setAiChatEnabled(llmConnected && !!s.ai.ai_chat);
         setShowAiCosts(
-          openRouterConnected && s.ai.openrouter_show_costs === true,
+          openRouterConnected && s.ai.openrouter_show_costs === true
         );
       })
       .catch(() => {
@@ -421,7 +421,7 @@ export default function Watch() {
       .then((rows) => {
         setMoreLikeThis(rows);
         setRelatedHasMore(
-          rows.length >= RELATED_PAGE && rows.length < RELATED_MAX,
+          rows.length >= RELATED_PAGE && rows.length < RELATED_MAX
         );
       })
       .catch(() => setMoreLikeThis([]));
@@ -438,7 +438,7 @@ export default function Watch() {
       const rows = await api.getRelatedVideos(
         video.id,
         RELATED_PAGE,
-        moreLikeThis.length,
+        moreLikeThis.length
       );
       setMoreLikeThis((prev) => {
         const seen = new Set(prev.map((v) => v.id));
@@ -447,7 +447,7 @@ export default function Watch() {
       });
       setRelatedHasMore(
         rows.length >= RELATED_PAGE &&
-          moreLikeThis.length + rows.length < RELATED_MAX,
+          moreLikeThis.length + rows.length < RELATED_MAX
       );
     } catch {
       setRelatedHasMore(false);
@@ -464,7 +464,7 @@ export default function Watch() {
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) void loadMoreRelated();
       },
-      { rootMargin: "200px" },
+      { rootMargin: "200px" }
     );
     io.observe(el);
     return () => io.disconnect();
@@ -550,7 +550,7 @@ export default function Watch() {
       setSource({ kind: "library", video: v });
       updateCurrentVideo(v);
     },
-    [updateCurrentVideo],
+    [updateCurrentVideo]
   );
 
   const generateChapters = useCallback(
@@ -570,7 +570,7 @@ export default function Watch() {
         setGeneratingChapters(false);
       }
     },
-    [video, setVideo, showToast],
+    [video, setVideo, showToast]
   );
 
   const onRedownload = async () => {
@@ -582,7 +582,7 @@ export default function Watch() {
         video.id,
         redownloadPreset,
         settings.normalizeVolumeOnDownload,
-        settings.downloadVideoCodec,
+        settings.downloadVideoCodec
       );
       showToast("Download started — check the Download page for progress.");
       refreshJobs();
@@ -590,7 +590,7 @@ export default function Watch() {
     } catch (err) {
       redownloadPending.current = false;
       showToast(
-        err instanceof Error ? err.message : "Could not start download",
+        err instanceof Error ? err.message : "Could not start download"
       );
     } finally {
       setRedownloading(false);
@@ -618,16 +618,16 @@ export default function Watch() {
         video.id,
         preset,
         true,
-        settings.downloadVideoCodec,
+        settings.downloadVideoCodec
       );
       showToast(
-        "Normalizing via redownload — check the Download page for progress.",
+        "Normalizing via redownload — check the Download page for progress."
       );
       refreshJobs();
     } catch (err) {
       redownloadPending.current = false;
       showToast(
-        err instanceof Error ? err.message : "Could not start download",
+        err instanceof Error ? err.message : "Could not start download"
       );
     } finally {
       setRedownloading(false);
@@ -665,7 +665,7 @@ export default function Watch() {
       showToast(STAY_DOWNLOAD_TOAST);
     } catch (err: unknown) {
       showToast(
-        err instanceof Error ? err.message : "Could not start download",
+        err instanceof Error ? err.message : "Could not start download"
       );
     } finally {
       setQueuing(false);
@@ -683,12 +683,12 @@ export default function Watch() {
         setSelectedPreset(
           resolveQualityPreset(
             activeJob.quality_preset,
-            activeJob.available_presets ?? availablePresets,
-          ),
+            activeJob.available_presets ?? availablePresets
+          )
         );
       }
       showToast(
-        err instanceof Error ? err.message : "Could not change resolution",
+        err instanceof Error ? err.message : "Could not change resolution"
       );
     }
   }
@@ -756,7 +756,7 @@ export default function Watch() {
   const downloadPercent = downloadProgressPercent(
     live?.progress ?? activeJob?.progress,
     live?.downloaded_bytes,
-    live?.total_bytes,
+    live?.total_bytes
   );
   const downloadActive = activeJob != null && isActiveJob(activeJob, live);
 
@@ -1128,7 +1128,7 @@ export default function Watch() {
                           size="compact"
                           value={resolveQualityPreset(
                             activeJob?.quality_preset || selectedPreset,
-                            activeJob?.available_presets ?? availablePresets,
+                            activeJob?.available_presets ?? availablePresets
                           )}
                           options={presetOptions.map((p) => ({
                             value: p,
@@ -1201,7 +1201,7 @@ export default function Watch() {
                             {
                               tags: [...(source.video.tags || []), cleaned],
                               user_tag: cleaned,
-                            },
+                            }
                           );
                           setVideo(updated);
                         }
@@ -1211,11 +1211,11 @@ export default function Watch() {
                     isLibrary
                       ? async (tag) => {
                           const next = (source.video.tags || []).filter(
-                            (t) => t.toLowerCase() !== tag.toLowerCase(),
+                            (t) => t.toLowerCase() !== tag.toLowerCase()
                           );
                           const updated = await api.updateVideo(
                             source.video.id,
-                            { tags: next },
+                            { tags: next }
                           );
                           setVideo(updated);
                         }
@@ -1265,21 +1265,21 @@ export default function Watch() {
                 {/* Phones get a dedicated button; desktop uses the ••• menu. */}
                 {isMobile && <OfflineDownloadButton video={source.video} />}
                 {source.video.id > 0 && (
-                <VideoActionsMenu
-                  video={source.video}
-                  onEdit={() => {
-                    setEditFocus(undefined);
-                    setEditing((v) => !v);
-                  }}
-                  onAddNote={() => {
-                    setEditFocus("notes");
-                    setEditing(true);
-                  }}
-                  onChangeResolution={() => setRedownloadOpen(true)}
-                  onNormalizeVolume={onNormalizeVolume}
-                  onDelete={onDelete}
-                  onVideoUpdated={setVideo}
-                />
+                  <VideoActionsMenu
+                    video={source.video}
+                    onEdit={() => {
+                      setEditFocus(undefined);
+                      setEditing((v) => !v);
+                    }}
+                    onAddNote={() => {
+                      setEditFocus("notes");
+                      setEditing(true);
+                    }}
+                    onChangeResolution={() => setRedownloadOpen(true)}
+                    onNormalizeVolume={onNormalizeVolume}
+                    onDelete={onDelete}
+                    onVideoUpdated={setVideo}
+                  />
                 )}
               </div>
             )}

@@ -47,7 +47,13 @@ export type SettingsPageContextValue = {
   bgUploading: boolean;
   uploadCustomBackground: (file: File | null) => Promise<void>;
   lastUploadedName: string | null;
-  bgLibrary: { id: string; url: string; mime: string; animated: boolean; filename?: string }[];
+  bgLibrary: {
+    id: string;
+    url: string;
+    mime: string;
+    animated: boolean;
+    filename?: string;
+  }[];
   deleteLibraryBackground: (id: string) => Promise<void>;
   paletteColors: string[];
   paletteLoading: boolean;
@@ -63,7 +69,18 @@ export type SettingsPageContextValue = {
   setCatalogMaxInput: Dispatch<SetStateAction<string>>;
   syncIntervalInput: string;
   setSyncIntervalInput: Dispatch<SetStateAction<string>>;
-  saveCatalogSettings: (patch: Partial<Pick<AppSettings, "channel_catalog_enabled" | "channel_catalog_max_videos" | "metadata_sync_interval_hours" | "direct_youtube_search" | "youtube_video_search">>) => Promise<void>;
+  saveCatalogSettings: (
+    patch: Partial<
+      Pick<
+        AppSettings,
+        | "channel_catalog_enabled"
+        | "channel_catalog_max_videos"
+        | "metadata_sync_interval_hours"
+        | "direct_youtube_search"
+        | "youtube_video_search"
+      >
+    >
+  ) => Promise<void>;
   metadataSyncFields: string[];
   toggleSyncField: (field: string) => void;
   resyncAllMetadata: () => Promise<void>;
@@ -146,13 +163,13 @@ export type {
   UiFont,
 };
 
-export const SettingsPageContext = createContext<SettingsPageContextValue | null>(
-  null
-);
+export const SettingsPageContext =
+  createContext<SettingsPageContextValue | null>(null);
 
 export function useSettingsPage(): SettingsPageContextValue {
   const ctx = useContext(SettingsPageContext);
-  if (!ctx) throw new Error("useSettingsPage must be used within SettingsPageContext");
+  if (!ctx)
+    throw new Error("useSettingsPage must be used within SettingsPageContext");
   return ctx;
 }
 

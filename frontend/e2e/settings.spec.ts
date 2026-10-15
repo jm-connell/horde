@@ -11,7 +11,9 @@ async function waitForSettingsPatch(page: import("@playwright/test").Page) {
 
 test("appearance changes theme and loading animation", async ({ page }) => {
   await page.goto("/settings?tab=appearance");
-  await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Settings", level: 1 })
+  ).toBeVisible();
   await page.getByRole("button", { name: "Theme" }).click();
   await page.getByRole("option", { name: "OLED (true black)" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "oled");
@@ -21,7 +23,9 @@ test("appearance changes theme and loading animation", async ({ page }) => {
     .getByRole("button", { name: "Comet" });
   await comet.click();
   await expect(comet).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("A bright head with a fading tail")).toBeVisible();
+  await expect(
+    page.getByText("A bright head with a fading tail")
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Font" })).toBeVisible();
   await expect(page.getByLabel("Background animation").first()).toBeVisible();
 });
@@ -29,7 +33,9 @@ test("appearance changes theme and loading animation", async ({ page }) => {
 test("settings search jumps to SponsorBlock", async ({ page }) => {
   await page.goto("/settings");
   await page.getByLabel("Search settings").fill("sponsorblock");
-  await expect(page.getByRole("heading", { name: "SponsorBlock" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "SponsorBlock" })
+  ).toBeVisible();
   await expect(page.getByText("Enable SponsorBlock")).toBeVisible();
 });
 
@@ -37,10 +43,14 @@ test("library settings persist sort default, dates, and progress expiry", async 
   page,
 }) => {
   await page.goto("/");
-  await expect(videoCard(page, "Aurora Drift").first()).toContainText("May 14, 2024");
+  await expect(videoCard(page, "Aurora Drift").first()).toContainText(
+    "May 14, 2024"
+  );
 
   await page.goto("/settings?tab=library");
-  await expect(page.getByRole("heading", { name: "Progress expiry" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Progress expiry" })
+  ).toBeVisible();
   await expect(page.getByText("Show dates on video cards")).toBeVisible();
   await expect(page.getByText("Direct YouTube search")).toBeVisible();
 
@@ -74,9 +84,9 @@ test("library settings persist sort default, dates, and progress expiry", async 
   await expect(videoCard(page, "Aurora Drift").first()).not.toContainText(
     "May 14, 2024"
   );
-  await expect(page.getByRole("button", { name: "Sort library" })).toContainText(
-    "Title"
-  );
+  await expect(
+    page.getByRole("button", { name: "Sort library" })
+  ).toContainText("Title");
 
   await page.goto("/settings?tab=library");
   await expect(expiry.getByRole("spinbutton")).toHaveValue("21");
@@ -90,7 +100,9 @@ test("playback settings hide the watch description", async ({ page }) => {
   await expect(page.getByText("Aurora over the ridge line.")).toBeVisible();
 
   await page.goto("/settings?tab=playback");
-  await expect(page.getByRole("button", { name: "Default stream quality" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Default stream quality" })
+  ).toBeVisible();
   await page.getByRole("button", { name: "Default stream quality" }).click();
   await page.getByRole("option", { name: "720p" }).click();
   await expect(
@@ -112,7 +124,9 @@ test("AI panes and system status render without calling providers", async ({
 }) => {
   await page.goto("/settings?tab=ai");
   await expect(page.getByRole("button", { name: "Providers" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "OpenRouter", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "OpenRouter", exact: true })
+  ).toBeVisible();
   await page.getByRole("button", { name: "Features" }).click();
   await expect(page.getByText("AI video summaries")).toBeVisible();
   await expect(page.getByText("AI video chapters")).toBeVisible();

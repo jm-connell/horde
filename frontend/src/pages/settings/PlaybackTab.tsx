@@ -93,12 +93,7 @@ export default function PlaybackTab() {
             description="When browsing a channel, include uploads that are not yet in your library. Turn off to show only downloaded videos."
             hidden={
               !!q &&
-              !match(
-                "undownloaded",
-                "channel",
-                "feed",
-                "show undownloaded"
-              )
+              !match("undownloaded", "channel", "feed", "show undownloaded")
             }
             control={
               <Toggle
@@ -117,13 +112,7 @@ export default function PlaybackTab() {
             description="Starting quality for streamed (not yet downloaded) videos. Auto adapts to your device and network; you can still change quality in the player."
             hidden={
               !!q &&
-              !match(
-                "stream quality",
-                "resolution",
-                "4k",
-                "1080p",
-                "streaming"
-              )
+              !match("stream quality", "resolution", "4k", "1080p", "streaming")
             }
             control={
               <ThemedSelect
@@ -165,12 +154,7 @@ export default function PlaybackTab() {
             description="On desktop, play a preview when you hover a video."
             hidden={
               !!q &&
-              !match(
-                "preview on hover",
-                "hover preview",
-                "desktop",
-                "mouse"
-              )
+              !match("preview on hover", "hover preview", "desktop", "mouse")
             }
             control={
               <Toggle
@@ -188,12 +172,7 @@ export default function PlaybackTab() {
             description="On phones, play a preview when a video is centered on screen."
             hidden={
               !!q &&
-              !match(
-                "preview when centered",
-                "centered",
-                "mobile",
-                "phone"
-              )
+              !match("preview when centered", "centered", "mobile", "phone")
             }
             control={
               <Toggle
@@ -251,7 +230,9 @@ export default function PlaybackTab() {
       <Section
         title="Hold-click speed"
         description="Hold the video to play at this speed until you release."
-        hidden={!match("hold", "hold-click", "hold speed", "click to hold", "speed")}
+        hidden={
+          !match("hold", "hold-click", "hold speed", "click to hold", "speed")
+        }
       >
         <SettingRow
           title="Hold speed"
@@ -300,7 +281,9 @@ export default function PlaybackTab() {
               checked={offlineMode}
               disabled={net.reconnecting}
               onChange={() =>
-                offlineMode ? void connectivity.reconnect() : connectivity.goOffline()
+                offlineMode
+                  ? void connectivity.reconnect()
+                  : connectivity.goOffline()
               }
             />
           }

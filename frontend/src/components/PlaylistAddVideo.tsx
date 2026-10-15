@@ -157,9 +157,7 @@ export default function PlaylistAddVideo({
   }, [query]);
 
   const highlightIndex =
-    suggestions.length === 0
-      ? 0
-      : Math.min(highlight, suggestions.length - 1);
+    suggestions.length === 0 ? 0 : Math.min(highlight, suggestions.length - 1);
 
   const close = () => {
     setOpen(false);
@@ -190,7 +188,9 @@ export default function PlaylistAddVideo({
     setError(null);
     try {
       const next = await api.addUrlToPlaylist(playlistId, url);
-      const addedExisting = next.videos.some((video) => !memberIds.has(video.id));
+      const addedExisting = next.videos.some(
+        (video) => !memberIds.has(video.id)
+      );
       onAdded(next);
       setQuery("");
       setLinkPreview(null);
@@ -200,7 +200,9 @@ export default function PlaylistAddVideo({
       }
       pendingDownloads.current += 1;
       refreshJobs();
-      setStatus("Download started — the video will appear here when it finishes.");
+      setStatus(
+        "Download started — the video will appear here when it finishes."
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not queue download");
     } finally {
@@ -266,9 +268,7 @@ export default function PlaylistAddVideo({
           }`}
         >
           <p className="truncate text-sm font-medium text-gray-100">{title}</p>
-          <p className="truncate text-xs text-gray-500">
-            {meta || item.url}
-          </p>
+          <p className="truncate text-xs text-gray-500">{meta || item.url}</p>
         </button>
       </li>
     );
@@ -446,7 +446,9 @@ export default function PlaylistAddVideo({
                           {item.video.title}
                         </p>
                         {meta ? (
-                          <p className="truncate text-xs text-gray-500">{meta}</p>
+                          <p className="truncate text-xs text-gray-500">
+                            {meta}
+                          </p>
                         ) : null}
                       </button>
                     </li>

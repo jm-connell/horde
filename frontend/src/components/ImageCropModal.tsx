@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import LoadingIndicator from "./LoadingIndicator";
@@ -453,11 +459,10 @@ export default function ImageCropModal({
                 title="Zoom out"
                 onClick={() =>
                   setCrop((prev) =>
-                    zoomAtPoint(
-                      cropInput(prev),
-                      prev.zoom / ZOOM_STEP,
-                      { x: 0, y: 0 }
-                    )
+                    zoomAtPoint(cropInput(prev), prev.zoom / ZOOM_STEP, {
+                      x: 0,
+                      y: 0,
+                    })
                   )
                 }
                 className={controlButtonClass}
@@ -487,11 +492,10 @@ export default function ImageCropModal({
                 title="Zoom in"
                 onClick={() =>
                   setCrop((prev) =>
-                    zoomAtPoint(
-                      cropInput(prev),
-                      prev.zoom * ZOOM_STEP,
-                      { x: 0, y: 0 }
-                    )
+                    zoomAtPoint(cropInput(prev), prev.zoom * ZOOM_STEP, {
+                      x: 0,
+                      y: 0,
+                    })
                   )
                 }
                 className={controlButtonClass}

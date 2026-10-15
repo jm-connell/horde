@@ -12,13 +12,19 @@ export default function SystemStatsSnippet({
 
   const cards: { label: string; value: React.ReactNode }[] = [];
 
-  if (stats.cpu_model || stats.cpu_percent != null || stats.cpu_temp_c != null) {
+  if (
+    stats.cpu_model ||
+    stats.cpu_percent != null ||
+    stats.cpu_temp_c != null
+  ) {
     cards.push({
       label: "CPU",
       value: (
         <>
           {stats.cpu_model && (
-            <span className="block text-xs text-gray-400">{stats.cpu_model}</span>
+            <span className="block text-xs text-gray-400">
+              {stats.cpu_model}
+            </span>
           )}
           <span className="block">
             {[
@@ -42,7 +48,8 @@ export default function SystemStatsSnippet({
       label: "RAM",
       value: (
         <>
-          {formatSize(stats.ram_used_bytes)} / {formatSize(stats.ram_total_bytes)}
+          {formatSize(stats.ram_used_bytes)} /{" "}
+          {formatSize(stats.ram_total_bytes)}
           {stats.ram_percent != null
             ? ` (${Math.round(stats.ram_percent)}%)`
             : ""}
@@ -90,7 +97,7 @@ export default function SystemStatsSnippet({
           href="/wiki/ops/environment/#gpu"
           className="mt-1 block text-xs text-accent hover:underline"
         >
-            Why?
+          Why?
         </a>
       </>
     ),

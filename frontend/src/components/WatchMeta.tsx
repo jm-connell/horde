@@ -337,71 +337,68 @@ export default function WatchMeta({
   };
 
   const metaBody = (
+    <div
+      className={
+        metaSideBySide
+          ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(12rem,0.85fr)]"
+          : undefined
+      }
+    >
+      {showDescriptionPanel && (
         <div
+          ref={panelRef}
           className={
             metaSideBySide
-              ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(12rem,0.85fr)]"
-              : undefined
+              ? "ui-panel group isolate relative flex min-h-0 scroll-mt-20 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700 [overflow-anchor:none]"
+              : "ui-panel group isolate relative min-h-0 scroll-mt-20 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700 [overflow-anchor:none]"
           }
         >
-          {showDescriptionPanel && (
-            <div
-              ref={panelRef}
-              className={
-                metaSideBySide
-                  ? "ui-panel group isolate relative flex min-h-0 scroll-mt-20 flex-col overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700 [overflow-anchor:none]"
-                  : "ui-panel group isolate relative min-h-0 scroll-mt-20 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700 [overflow-anchor:none]"
-              }
-            >
-              {descriptionBody && (
-                <div className="relative min-h-0">
-                  <div
-                    ref={clipRef}
-                    className="horde-meta-scrollbar min-h-0"
-                  >
-                    <div className={`px-4 py-3 ${TOGGLE_INSET}`}>
-                      <p className="whitespace-pre-wrap text-sm text-gray-300">
-                        <LinkifiedText text={descriptionBody} />
-                      </p>
-                      {boxExpanded ? extrasBlock : null}
-                    </div>
-                  </div>
-                  <OverlayScrollThumb
-                    scrollRef={clipRef}
-                    revision={`${boxExpanded}-${descriptionBody}`}
-                  />
+          {descriptionBody && (
+            <div className="relative min-h-0">
+              <div ref={clipRef} className="horde-meta-scrollbar min-h-0">
+                <div className={`px-4 py-3 ${TOGGLE_INSET}`}>
+                  <p className="whitespace-pre-wrap text-sm text-gray-300">
+                    <LinkifiedText text={descriptionBody} />
+                  </p>
+                  {boxExpanded ? extrasBlock : null}
                 </div>
-              )}
-              {!descriptionBody && hasExtras && (
-                <div className="px-4 py-3">{extrasBlock}</div>
-              )}
-              {descriptionBody && (
-                <>
-                  <DescriptionBoxToggle
-                    expanded={boxExpanded}
-                    onToggle={() => toggleBox(!boxExpanded)}
-                    corner="top"
-                    buttonRef={topToggleRef}
-                  />
-                  {boxExpanded && (
-                    <DescriptionBoxToggle
-                      expanded
-                      onToggle={() => toggleBox(false)}
-                      corner="bottom"
-                    />
-                  )}
-                </>
-              )}
+              </div>
+              <OverlayScrollThumb
+                scrollRef={clipRef}
+                revision={`${boxExpanded}-${descriptionBody}`}
+              />
             </div>
           )}
-          {chapters.length > 0 && (
-            <ChaptersList
-              chapters={chapters}
-              expanded={boxExpanded}
-              collapsedRem={collapsedRem}
-            />
+          {!descriptionBody && hasExtras && (
+            <div className="px-4 py-3">{extrasBlock}</div>
+          )}
+          {descriptionBody && (
+            <>
+              <DescriptionBoxToggle
+                expanded={boxExpanded}
+                onToggle={() => toggleBox(!boxExpanded)}
+                corner="top"
+                buttonRef={topToggleRef}
+              />
+              {boxExpanded && (
+                <DescriptionBoxToggle
+                  expanded
+                  onToggle={() => toggleBox(false)}
+                  corner="bottom"
+                />
+              )}
+            </>
           )}
         </div>
+      )}
+      {chapters.length > 0 && (
+        <ChaptersList
+          chapters={chapters}
+          expanded={boxExpanded}
+          collapsedRem={collapsedRem}
+        />
+      )}
+    </div>
   );
 
   const headerRow =
@@ -477,9 +474,7 @@ export default function WatchMeta({
   return (
     <div>
       {headerRow}
-      <Collapse open={settings.descriptionExpanded}>
-        {metaBody}
-      </Collapse>
+      <Collapse open={settings.descriptionExpanded}>{metaBody}</Collapse>
     </div>
   );
 }

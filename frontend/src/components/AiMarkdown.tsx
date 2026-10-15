@@ -9,7 +9,8 @@ import { createElement, Fragment, type ReactNode } from "react";
 function parseInline(text: string): ReactNode[] {
   const out: ReactNode[] = [];
   // Prefer ** / __ / ` before single * / _.
-  const re = /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+?`|\*[^*\n]+?\*|_[^_\n]+?_)/g;
+  const re =
+    /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+?`|\*[^*\n]+?\*|_[^_\n]+?_)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let key = 0;
@@ -67,8 +68,7 @@ const UL_RE = /^\s*[-*+]\s+(.*)$/;
 const OL_RE = /^\s*\d+[.)]\s+(.*)$/;
 
 type Block =
-  | { kind: "p"; text: string }
-  | { kind: "ul" | "ol"; items: string[] };
+  { kind: "p"; text: string } | { kind: "ul" | "ol"; items: string[] };
 
 function expandFlattenedLists(raw: string): string {
   // Recover list items that were collapsed onto one line:

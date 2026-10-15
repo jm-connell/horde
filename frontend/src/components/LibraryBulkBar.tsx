@@ -85,10 +85,7 @@ export default function LibraryBulkBar({
               open={playlistOpen}
               className="absolute bottom-10 left-0 z-50 w-56"
             >
-              <MenuScroll
-                className="max-h-56"
-                revision={playlists.length}
-              >
+              <MenuScroll className="max-h-56" revision={playlists.length}>
                 {playlists.length === 0 ? (
                   <p className="px-3 py-2 text-xs text-gray-500">
                     No playlists yet.
@@ -119,29 +116,29 @@ export default function LibraryBulkBar({
               open={bulkNoteOpen}
               className="absolute bottom-10 left-0 z-50 w-72"
             >
-                <div className="p-3">
-                  <div className="mb-1 flex items-baseline justify-between gap-2">
-                    <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                      Note
-                    </span>
-                  </div>
-                  <textarea
-                    value={bulkNote}
-                    onChange={(e) => onNoteChange(e.target.value)}
-                    rows={3}
-                    placeholder="Note to apply to all selected..."
-                    className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                    autoFocus
-                  />
-                  <button
-                    onClick={onSaveNote}
-                    disabled={!bulkNote.trim()}
-                    className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-40"
-                  >
-                    Apply to {selectedCount} video{selectedCount === 1 ? "" : "s"}
-                  </button>
+              <div className="p-3">
+                <div className="mb-1 flex items-baseline justify-between gap-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    Note
+                  </span>
                 </div>
-              </MenuFlyout>
+                <textarea
+                  value={bulkNote}
+                  onChange={(e) => onNoteChange(e.target.value)}
+                  rows={3}
+                  placeholder="Note to apply to all selected..."
+                  className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  autoFocus
+                />
+                <button
+                  onClick={onSaveNote}
+                  disabled={!bulkNote.trim()}
+                  className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-40"
+                >
+                  Apply to {selectedCount} video{selectedCount === 1 ? "" : "s"}
+                </button>
+              </div>
+            </MenuFlyout>
           </div>
 
           <button

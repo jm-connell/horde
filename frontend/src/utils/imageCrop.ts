@@ -59,7 +59,12 @@ export function coverScale(
   viewportHeight: number,
   rotationDeg: number
 ): number {
-  if (imageWidth < 1 || imageHeight < 1 || viewportWidth < 1 || viewportHeight < 1) {
+  if (
+    imageWidth < 1 ||
+    imageHeight < 1 ||
+    viewportWidth < 1 ||
+    viewportHeight < 1
+  ) {
     return 1;
   }
   let scale = 0;
@@ -217,7 +222,10 @@ export function cropToJpegFile(
   input: CropInput,
   filename = "cover.jpg"
 ): Promise<File> {
-  const { width, height } = outputSize(input.viewportWidth, input.viewportHeight);
+  const { width, height } = outputSize(
+    input.viewportWidth,
+    input.viewportHeight
+  );
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;

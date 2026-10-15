@@ -5,7 +5,10 @@ import {
   setFlowingGradientPresetGetter,
 } from "../effects";
 import { parseHexColor, type EffectController } from "../effects/shared";
-import { useSettings, type BackgroundEffect as EffectId } from "../hooks/useSettings";
+import {
+  useSettings,
+  type BackgroundEffect as EffectId,
+} from "../hooks/useSettings";
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -42,8 +45,7 @@ export default function BackgroundEffect() {
   const customColor = settings.backgroundEffectColor;
   const pauseWhileWatching = settings.pauseBackgroundWhileWatching;
   const onWatchPage = location.pathname.startsWith("/watch/");
-  const shouldPause =
-    playerFullscreen || (pauseWhileWatching && onWatchPage);
+  const shouldPause = playerFullscreen || (pauseWhileWatching && onWatchPage);
   const isCustom = effect === "custom-image" && !!settings.customBackgroundId;
   const active =
     effect !== "none" &&
@@ -60,7 +62,9 @@ export default function BackgroundEffect() {
 
   useEffect(() => {
     const syncFullscreen = () => {
-      setPlayerFullscreen(document.body.classList.contains("player-fullscreen"));
+      setPlayerFullscreen(
+        document.body.classList.contains("player-fullscreen")
+      );
     };
     syncFullscreen();
     const observer = new MutationObserver(syncFullscreen);

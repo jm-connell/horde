@@ -30,7 +30,9 @@ function containerMime(filePath: string): string {
   return "video/mp4";
 }
 
-function codecLabel(video: Pick<Video, "vcodec" | "bit_depth" | "width_px" | "height_px">): string {
+function codecLabel(
+  video: Pick<Video, "vcodec" | "bit_depth" | "width_px" | "height_px">
+): string {
   switch (video.vcodec) {
     case "av1":
       return "AV1";
@@ -53,7 +55,13 @@ export { codecLabel };
 const cache = new Map<string, OriginalSupport>();
 
 function cacheKey(v: Video): string {
-  return [v.codec_string, v.width_px, v.height_px, Math.round(v.frame_rate ?? 30), v.file_path.split(".").pop()].join("|");
+  return [
+    v.codec_string,
+    v.width_px,
+    v.height_px,
+    Math.round(v.frame_rate ?? 30),
+    v.file_path.split(".").pop(),
+  ].join("|");
 }
 
 /** Estimated bitrate from size/duration (MediaCapabilities wants a number). */
@@ -65,7 +73,9 @@ function bitrate(v: Video): number {
   return short >= 2160 ? 20_000_000 : short >= 1440 ? 12_000_000 : 6_000_000;
 }
 
-export async function checkOriginalSupport(video: Video): Promise<OriginalSupport> {
+export async function checkOriginalSupport(
+  video: Video
+): Promise<OriginalSupport> {
   if (!video.codec_string) return "unknown";
   const key = cacheKey(video);
   const hit = cache.get(key);
@@ -73,7 +83,8 @@ export async function checkOriginalSupport(video: Video): Promise<OriginalSuppor
 
   const contentType = `${containerMime(video.file_path)}; codecs="${video.codec_string}"`;
   let result: OriginalSupport = "unknown";
-  const mc = typeof navigator !== "undefined" ? navigator.mediaCapabilities : undefined;
+  const mc =
+    typeof navigator !== "undefined" ? navigator.mediaCapabilities : undefined;
   if (mc?.decodingInfo) {
     try {
       const info = await mc.decodingInfo({
@@ -86,14 +97,23 @@ export async function checkOriginalSupport(video: Video): Promise<OriginalSuppor
           framerate: video.frame_rate ?? 30,
         },
       });
-      result = !info.supported ? "unsupported" : info.smooth ? "smooth" : "rough";
+      result = !info.supported
+        ? "unsupported"
+        : info.smooth
+          ? "smooth"
+          : "rough";
     } catch {
       result = "unknown";
     }
   }
   if (result === "unknown" && typeof document !== "undefined") {
     const answer = document.createElement("video").canPlayType(contentType);
-    result = answer === "" ? "unsupported" : answer === "probably" ? "smooth" : "unknown";
+    result =
+      answer === ""
+        ? "unsupported"
+        : answer === "probably"
+          ? "smooth"
+          : "unknown";
   }
   cache.set(key, result);
   return result;
@@ -103,7 +123,7 @@ export async function checkOriginalSupport(video: Video): Promise<OriginalSuppor
 export function chooseRendition(
   support: OriginalSupport,
   video: Pick<Video, "has_compat">,
-  { forceOriginal = false }: { forceOriginal?: boolean } = {},
+  { forceOriginal = false }: { forceOriginal?: boolean } = {}
 ): RenditionChoice {
   if (forceOriginal) return { rendition: "original" };
   const hasCompat = Boolean(video.has_compat);
@@ -118,9 +138,12 @@ export function chooseRendition(
 /** Same ~1080p H.264 bitrate model as the server (for "adds ~X MB" copy). */
 export function estimateCompatBytes(
   video: Pick<Video, "duration_sec" | "width_px" | "height_px">,
-  cap = 1080,
+  cap = 1080
 ): number {
-  const short = Math.min(Math.min(video.width_px ?? 1080, video.height_px ?? 1080), cap);
+  const short = Math.min(
+    Math.min(video.width_px ?? 1080, video.height_px ?? 1080),
+    cap
+  );
   const bps =
     short >= 2160
       ? 18_000_000

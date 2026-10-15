@@ -25,7 +25,7 @@ export default function ConnectionTag({
     () => () => {
       if (failedTimer.current) window.clearTimeout(failedTimer.current);
     },
-    [],
+    []
   );
 
   if (state.status === "online") return null;
@@ -43,7 +43,9 @@ export default function ConnectionTag({
   };
 
   const wrap = `ui-panel flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap ${
-    floating ? "fixed left-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 -translate-x-1/2 shadow-xl" : ""
+    floating
+      ? "fixed left-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] z-50 -translate-x-1/2 shadow-xl"
+      : ""
   }`;
 
   const offerBtn = (
@@ -118,7 +120,9 @@ export default function ConnectionTag({
         className={`h-2 w-2 rounded-full bg-amber-400 ${slow ? "" : "animate-pulse"}`}
       />
       {/* Phones: once the offer shows, the button carries the message. */}
-      <span className={state.offerOffline && !floating ? "hidden sm:inline" : ""}>
+      <span
+        className={state.offerOffline && !floating ? "hidden sm:inline" : ""}
+      >
         {slow ? "Slow connection" : "Connecting…"}
       </span>
       {state.offerOffline && offerBtn}

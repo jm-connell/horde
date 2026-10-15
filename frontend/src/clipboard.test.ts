@@ -19,16 +19,13 @@ describe("parseDownloadUrlList", () => {
       parseDownloadUrlList(
         "https://youtu.be/aaaaaaaaaaa, https://youtu.be/bbbbbbbbbbb"
       )
-    ).toEqual([
-      "https://youtu.be/aaaaaaaaaaa",
-      "https://youtu.be/bbbbbbbbbbb",
-    ]);
+    ).toEqual(["https://youtu.be/aaaaaaaaaaa", "https://youtu.be/bbbbbbbbbbb"]);
   });
 
   it("returns a single URL like clipboardTextToUrl", () => {
-    expect(parseDownloadUrlList("watch this https://youtu.be/dQw4w9WgXcQ")).toEqual(
-      ["https://youtu.be/dQw4w9WgXcQ"]
-    );
+    expect(
+      parseDownloadUrlList("watch this https://youtu.be/dQw4w9WgXcQ")
+    ).toEqual(["https://youtu.be/dQw4w9WgXcQ"]);
   });
 });
 
@@ -47,9 +44,9 @@ describe("isYoutubePlaylistOnlyUrl", () => {
 
 describe("isYoutubeShortsUrl", () => {
   it("matches /shorts/ paths", () => {
-    expect(isYoutubeShortsUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ")).toBe(
-      true
-    );
+    expect(
+      isYoutubeShortsUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ")
+    ).toBe(true);
     expect(isYoutubeShortsUrl("https://youtu.be/dQw4w9WgXcQ")).toBe(false);
   });
 });
@@ -63,7 +60,9 @@ describe("clipboardTextToUrl", () => {
 
   it("pulls the first URL out of surrounding text", () => {
     expect(
-      clipboardTextToUrl("watch this\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ extra")
+      clipboardTextToUrl(
+        "watch this\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ extra"
+      )
     ).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   });
 
@@ -82,7 +81,8 @@ describe("clipboardEventToText", () => {
   it("prefers text/plain", () => {
     expect(
       clipboardEventToText({
-        getData: (type) => (type === "text/plain" ? " https://youtu.be/a " : ""),
+        getData: (type) =>
+          type === "text/plain" ? " https://youtu.be/a " : "",
       })
     ).toBe(" https://youtu.be/a ");
   });
@@ -109,9 +109,9 @@ describe("clipboardReadAvailable", () => {
     expect(
       clipboardReadAvailable({ clipboard: { readText: async () => "" } })
     ).toBe(true);
-    expect(clipboardReadAvailable({ clipboard: { read: async () => [] } })).toBe(
-      true
-    );
+    expect(
+      clipboardReadAvailable({ clipboard: { read: async () => [] } })
+    ).toBe(true);
   });
 });
 
@@ -124,9 +124,14 @@ describe("shouldCapturePagePaste", () => {
 
   it("does not steal paste from other fields", () => {
     expect(shouldCapturePagePaste({ tagName: "INPUT" }, urlInput)).toBe(false);
-    expect(shouldCapturePagePaste({ tagName: "TEXTAREA" }, urlInput)).toBe(false);
+    expect(shouldCapturePagePaste({ tagName: "TEXTAREA" }, urlInput)).toBe(
+      false
+    );
     expect(
-      shouldCapturePagePaste({ tagName: "DIV", isContentEditable: true }, urlInput)
+      shouldCapturePagePaste(
+        { tagName: "DIV", isContentEditable: true },
+        urlInput
+      )
     ).toBe(false);
   });
 
@@ -220,7 +225,9 @@ describe("readClipboardText", () => {
       },
     });
     try {
-      expect(await readClipboardText()).toBe("  https://youtu.be/dQw4w9WgXcQ  ");
+      expect(await readClipboardText()).toBe(
+        "  https://youtu.be/dQw4w9WgXcQ  "
+      );
     } finally {
       Object.defineProperty(globalThis, "navigator", {
         configurable: true,

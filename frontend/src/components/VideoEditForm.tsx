@@ -233,7 +233,9 @@ export default function VideoEditForm({
         setThumbVersion((v) => v + 1);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate thumbnails");
+      setError(
+        err instanceof Error ? err.message : "Could not generate thumbnails"
+      );
     } finally {
       setCandLoading(false);
     }

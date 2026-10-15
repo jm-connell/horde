@@ -224,11 +224,7 @@ export interface ChannelCatalogStatus {
 }
 
 export type JobStatus =
-  | "queued"
-  | "downloading"
-  | "completed"
-  | "error"
-  | "cancelled";
+  "queued" | "downloading" | "completed" | "error" | "cancelled";
 
 export type DownloadDestination = "library" | "device";
 

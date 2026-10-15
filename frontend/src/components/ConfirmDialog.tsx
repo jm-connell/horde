@@ -57,7 +57,7 @@ export default function ConfirmDialog({
   }, []);
 
   const hasBody = body != null;
-  const confirmText = busy ? busyLabel ?? confirmLabel : confirmLabel;
+  const confirmText = busy ? (busyLabel ?? confirmLabel) : confirmLabel;
 
   return createPortal(
     <div
@@ -76,10 +76,7 @@ export default function ConfirmDialog({
         className="ui-panel ui-panel-legible max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl outline-none ring-1 ring-ink-600"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2
-          id={titleId}
-          className="text-base font-semibold text-gray-100"
-        >
+        <h2 id={titleId} className="text-base font-semibold text-gray-100">
           {title}
         </h2>
         {hasBody ? (

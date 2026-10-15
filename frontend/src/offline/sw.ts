@@ -34,7 +34,10 @@ interface SwScope {
   location: Location;
   skipWaiting(): Promise<void>;
   clients: { claim(): Promise<void> };
-  addEventListener(type: "install" | "activate", fn: (e: ExtendableEvent) => void): void;
+  addEventListener(
+    type: "install" | "activate",
+    fn: (e: ExtendableEvent) => void
+  ): void;
   addEventListener(type: "fetch", fn: (e: FetchEvent) => void): void;
   addEventListener(type: "message", fn: (e: MessageEvent) => void): void;
 }
@@ -46,7 +49,14 @@ const RUNTIME_MAX_ENTRIES = 60;
 const INDEX_URL = "/index.html";
 
 /** Server-only paths that must never get the SPA shell. */
-const NON_SPA_PREFIXES = ["/api/", "/wiki", "/docs", "/redoc", "/openapi.json", "/assets/"];
+const NON_SPA_PREFIXES = [
+  "/api/",
+  "/wiki",
+  "/docs",
+  "/redoc",
+  "/openapi.json",
+  "/assets/",
+];
 
 sw.addEventListener("install", (event) => {
   event.waitUntil(
@@ -54,9 +64,11 @@ sw.addEventListener("install", (event) => {
       const cache = await caches.open(SHELL_CACHE);
       // `reload` bypasses the HTTP cache so a new version never precaches
       // stale files.
-      await cache.addAll(__PRECACHE__.map((u) => new Request(u, { cache: "reload" })));
+      await cache.addAll(
+        __PRECACHE__.map((u) => new Request(u, { cache: "reload" }))
+      );
       await sw.skipWaiting();
-    })(),
+    })()
   );
 });
 
@@ -67,10 +79,10 @@ sw.addEventListener("activate", (event) => {
       await Promise.all(
         keys
           .filter((k) => k.startsWith("horde-shell-") && k !== SHELL_CACHE)
-          .map((k) => caches.delete(k)),
+          .map((k) => caches.delete(k))
       );
       await sw.clients.claim();
-    })(),
+    })()
   );
 });
 
@@ -85,7 +97,10 @@ sw.addEventListener("fetch", (event) => {
   if (url.origin !== sw.location.origin) return;
   const path = url.pathname;
 
-  if (req.mode === "navigate" && !NON_SPA_PREFIXES.some((p) => path.startsWith(p))) {
+  if (
+    req.mode === "navigate" &&
+    !NON_SPA_PREFIXES.some((p) => path.startsWith(p))
+  ) {
     event.respondWith(shellNavigation(req));
     return;
   }
@@ -109,7 +124,10 @@ sw.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (/^\/api\/fonts\/[^/]+$/.test(path) || /^\/api\/backgrounds\/[^/]+$/.test(path)) {
+  if (
+    /^\/api\/fonts\/[^/]+$/.test(path) ||
+    /^\/api\/backgrounds\/[^/]+$/.test(path)
+  ) {
     event.respondWith(staleWhileRevalidate(req, event));
   }
 });
@@ -138,7 +156,10 @@ async function extrasFirst(req: Request): Promise<Response> {
   return fetch(req);
 }
 
-async function staleWhileRevalidate(req: Request, event: FetchEvent): Promise<Response> {
+async function staleWhileRevalidate(
+  req: Request,
+  event: FetchEvent
+): Promise<Response> {
   const cache = await caches.open(RUNTIME_CACHE);
   const hit = await cache.match(req);
   const update = fetch(req).then(async (resp) => {
@@ -177,7 +198,7 @@ async function offlineStream(videoId: number, req: Request): Promise<Response> {
 /** Returns null when a chunk is missing so the caller can fall back to network. */
 async function buildMediaResponse(
   item: OfflineItem,
-  rangeHeader: string | null,
+  rangeHeader: string | null
 ): Promise<Response | null> {
   const size = item.totalBytes;
   const parsed = parseRange(rangeHeader, size);
@@ -197,7 +218,9 @@ async function buildMediaResponse(
     const hit = await cache.match(chunkUrl(item.videoId, s.index));
     if (!hit) return null;
     const blob = await hit.blob();
-    parts.push(s.from === 0 && s.to === blob.size ? blob : blob.slice(s.from, s.to));
+    parts.push(
+      s.from === 0 && s.to === blob.size ? blob : blob.slice(s.from, s.to)
+    );
   }
   const body = new Blob(parts, { type: item.contentType });
   const headers: Record<string, string> = {

@@ -54,7 +54,7 @@ const SKIP_TOAST: Record<string, string> = {
 
 function toastBulkSkips(
   skips: DownloadBulkSkip[],
-  showToast: (message: string) => void,
+  showToast: (message: string) => void
 ) {
   if (skips.length === 0) return;
   const counts = new Map<string, number>();
@@ -132,10 +132,10 @@ export default function Download() {
     }
   });
   const [activeSectionVisible, setActiveSectionVisible] = useState(
-    () => activeCount > 0,
+    () => activeCount > 0
   );
   const [activeSectionEntered, setActiveSectionEntered] = useState(
-    () => activeCount > 0,
+    () => activeCount > 0
   );
 
   useEffect(() => {
@@ -204,7 +204,7 @@ export default function Download() {
           // Leave channel empty so the picker stays on "Auto-detected".
           if (!p.is_playlist && p.available_presets.length > 0) {
             setPreset((current) =>
-              current !== "best" ? current : p.available_presets[0],
+              current !== "best" ? current : p.available_presets[0]
             );
           }
         })
@@ -517,7 +517,7 @@ export default function Download() {
       setImportMessage(
         playlistMode === "subscribe"
           ? `Subscribed to "${created.name}" — new videos will download automatically.`
-          : `Importing "${created.name}" — videos will appear in your library as they finish.`,
+          : `Importing "${created.name}" — videos will appear in your library as they finish.`
       );
       setUrl("");
       setPreview(null);
@@ -603,8 +603,8 @@ export default function Download() {
                 }
                 setPasteHint(
                   insecureClipboardHint(
-                    typeof window !== "undefined" && window.isSecureContext,
-                  ),
+                    typeof window !== "undefined" && window.isSecureContext
+                  )
                 );
               }}
               className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
@@ -761,7 +761,7 @@ export default function Download() {
                   {playlistEntries.map((entry) => {
                     const thumbSrc = youtubeListThumbnailUrl(
                       entry.id,
-                      entry.thumbnail_url,
+                      entry.thumbnail_url
                     );
                     const rowClass =
                       playlistMode === "subscribe"
@@ -839,7 +839,7 @@ export default function Download() {
               value: p,
               label: presetOptionLabel(
                 p,
-                metadataLoaded ? presetSizes : undefined,
+                metadataLoaded ? presetSizes : undefined
               ),
             }))}
             onChange={setPreset}
@@ -1016,7 +1016,7 @@ export default function Download() {
               (j) =>
                 j.status === "completed" ||
                 j.status === "error" ||
-                j.status === "cancelled",
+                j.status === "cancelled"
             ) && (
               <button
                 type="button"

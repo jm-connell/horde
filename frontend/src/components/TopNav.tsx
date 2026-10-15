@@ -38,7 +38,11 @@ const BASE_LINKS: NavLinkDef[] = [
   { to: "/settings", label: "Settings", end: false },
 ];
 
-const OFFLINE_LINK: NavLinkDef = { to: "/offline", label: "Offline", end: false };
+const OFFLINE_LINK: NavLinkDef = {
+  to: "/offline",
+  label: "Offline",
+  end: false,
+};
 
 const ICON_BTN =
   "ui-nav-icon relative z-10 shrink-0 bg-transparent p-1.5 text-gray-300 hover:text-gray-100";
@@ -69,11 +73,11 @@ export default function TopNav() {
   const offlineSnap = useOfflineDownloads();
   const hasOfflineItems = offlineSnap.items.length > 0;
   const activeOffline = offlineSnap.items.find(
-    (i) => i.status === "downloading" || i.status === "queued",
+    (i) => i.status === "downloading" || i.status === "queued"
   );
   const activeOfflineProgress = itemProgress(
     activeOffline,
-    offlineSnap.liveBytes,
+    offlineSnap.liveBytes
   ).progress;
   const NAV_LINKS: NavLinkDef[] = (
     hasOfflineItems || offlineMode
@@ -404,7 +408,10 @@ export default function TopNav() {
 
           {/* Desktop: pill sits at the far right so it never shifts the links. */}
           {!useHamburger && (
-            <div ref={tagRef} className="ml-auto flex shrink-0 pl-4 empty:hidden">
+            <div
+              ref={tagRef}
+              className="ml-auto flex shrink-0 pl-4 empty:hidden"
+            >
               <ConnectionTag popupAlign="end" />
             </div>
           )}
@@ -566,7 +573,7 @@ export default function TopNav() {
                     const active = isLinkActive(
                       location.pathname,
                       link.to,
-                      link.end,
+                      link.end
                     );
                     return (
                       <NavLink

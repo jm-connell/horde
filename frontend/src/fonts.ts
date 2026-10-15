@@ -167,11 +167,7 @@ export function fontSelectOptions(
     value: f.id,
     label: f.name,
   }));
-  return [
-    ...builtins,
-    ...saved,
-    { value: "custom", label: "Add custom…" },
-  ];
+  return [...builtins, ...saved, { value: "custom", label: "Add custom…" }];
 }
 
 function googleCssUrl(familyParam: string): string {
@@ -200,9 +196,7 @@ export function parseCustomFontInput(raw: string): {
     return { cssUrl: input, family: null };
   }
 
-  const specimen = input.match(
-    /fonts\.google\.com\/specimen\/([^/?#]+)/i
-  );
+  const specimen = input.match(/fonts\.google\.com\/specimen\/([^/?#]+)/i);
   if (specimen) {
     const name = decodeURIComponent(specimen[1].replace(/\+/g, " "));
     const param = `${name.replace(/ /g, "+")}:wght@400;500;600;700`;

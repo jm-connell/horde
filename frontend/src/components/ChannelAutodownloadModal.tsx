@@ -31,7 +31,11 @@ export default function ChannelAutodownloadModal({
     policy.previous_mode
   );
   const [previousCount, setPreviousCount] = useState(
-    String(policy.previous_count && policy.previous_count > 0 ? policy.previous_count : 10)
+    String(
+      policy.previous_count && policy.previous_count > 0
+        ? policy.previous_count
+        : 10
+    )
   );
   const [qualityPreset, setQualityPreset] = useState(
     policy.quality_preset || "1080p"
@@ -48,7 +52,10 @@ export default function ChannelAutodownloadModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const countNum = Math.max(1, Math.min(500, parseInt(previousCount, 10) || 10));
+  const countNum = Math.max(
+    1,
+    Math.min(500, parseInt(previousCount, 10) || 10)
+  );
   const allPrevious = previousMode === "all";
   const qualityOptions = PRESET_ORDER.map((p) => ({
     value: p,
@@ -201,7 +208,11 @@ export default function ChannelAutodownloadModal({
             disabled={saving}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
           >
-            {saving ? "Saving…" : policy.enabled ? "Save" : "Enable autodownload"}
+            {saving
+              ? "Saving…"
+              : policy.enabled
+                ? "Save"
+                : "Enable autodownload"}
           </button>
           {policy.configured && policy.enabled && (
             <button

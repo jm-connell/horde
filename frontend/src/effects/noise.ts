@@ -13,11 +13,7 @@ function hash2(x: number, y: number, seed: number): number {
   return n - Math.floor(n);
 }
 
-export function valueNoise2(
-  x: number,
-  y: number,
-  seed = 0
-): number {
+export function valueNoise2(x: number, y: number, seed = 0): number {
   const x0 = Math.floor(x);
   const y0 = Math.floor(y);
   const fx = fade(x - x0);
@@ -29,12 +25,7 @@ export function valueNoise2(
   return lerp(lerp(n00, n10, fx), lerp(n01, n11, fx), fy);
 }
 
-export function fbm2(
-  x: number,
-  y: number,
-  octaves = 4,
-  seed = 0
-): number {
+export function fbm2(x: number, y: number, octaves = 4, seed = 0): number {
   let amp = 0.5;
   let freq = 1;
   let sum = 0;

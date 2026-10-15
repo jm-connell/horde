@@ -1,4 +1,10 @@
-import { createCanvasLoop, rand, rgba, type EffectController, type Rgb } from "./shared";
+import {
+  createCanvasLoop,
+  rand,
+  rgba,
+  type EffectController,
+  type Rgb,
+} from "./shared";
 
 interface Star {
   x: number;
@@ -38,8 +44,7 @@ export function createGalaxyEffect(
 
   const rebuild = (w: number, h: number, size: number) => {
     const area = w * h;
-    const starCount =
-      Math.floor((area / 9000) * size) + Math.floor(80 * size);
+    const starCount = Math.floor((area / 9000) * size) + Math.floor(80 * size);
     stars = Array.from({ length: starCount }, () => ({
       x: (Math.random() - 0.5) * w * 1.4,
       y: (Math.random() - 0.5) * h * 1.4,

@@ -33,9 +33,7 @@ function loadCastScript(): Promise<void> {
       if (isAvailable) resolve();
       else reject(new Error("Cast API unavailable"));
     };
-    const existing = document.querySelector(
-      `script[src="${CAST_SENDER_URL}"]`
-    );
+    const existing = document.querySelector(`script[src="${CAST_SENDER_URL}"]`);
     if (existing) {
       const waitForCast = () => {
         if (window.cast?.framework) resolve();
@@ -105,8 +103,7 @@ export function useChromecast() {
     let cleanupRemote: (() => void) | undefined;
     let onCastStateChanged: (() => void) | undefined;
     let onSessionStateChanged:
-      | ((event: cast.framework.SessionStateEventData) => void)
-      | undefined;
+      ((event: cast.framework.SessionStateEventData) => void) | undefined;
 
     loadCastScript()
       .then(() => {
@@ -122,9 +119,7 @@ export function useChromecast() {
 
         onCastStateChanged = () => {
           const state = ctx.getCastState();
-          setAvailable(
-            state !== castFramework.CastState.NO_DEVICES_AVAILABLE
-          );
+          setAvailable(state !== castFramework.CastState.NO_DEVICES_AVAILABLE);
         };
 
         onSessionStateChanged = (
@@ -132,14 +127,11 @@ export function useChromecast() {
         ) => {
           const session = ctx.getCurrentSession();
           if (
-            event.sessionState ===
-              castFramework.SessionState.SESSION_STARTED ||
+            event.sessionState === castFramework.SessionState.SESSION_STARTED ||
             event.sessionState === castFramework.SessionState.SESSION_RESUMED
           ) {
             const player = new castFramework.RemotePlayer();
-            const controller = new castFramework.RemotePlayerController(
-              player
-            );
+            const controller = new castFramework.RemotePlayerController(player);
             remotePlayerRef.current = player;
             remoteControllerRef.current = controller;
             cleanupRemote?.();
@@ -205,69 +197,72 @@ export function useChromecast() {
     };
   }, [attachRemoteListeners]);
 
-  const castMedia = useCallback(async (info: CastMediaInfo) => {
-    const ctx = window.cast?.framework?.CastContext?.getInstance();
-    if (!ctx) return;
+  const castMedia = useCallback(
+    async (info: CastMediaInfo) => {
+      const ctx = window.cast?.framework?.CastContext?.getInstance();
+      if (!ctx) return;
 
-    let session = ctx.getCurrentSession();
-    if (!session) {
-      session = await ctx.requestSession();
-    }
+      let session = ctx.getCurrentSession();
+      if (!session) {
+        session = await ctx.requestSession();
+      }
 
-    const mediaInfo = new chrome.cast.media.MediaInfo(
-      info.contentUrl,
-      info.mimeType
-    );
-    mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
+      const mediaInfo = new chrome.cast.media.MediaInfo(
+        info.contentUrl,
+        info.mimeType
+      );
+      mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
 
-    const metadata = new chrome.cast.media.GenericMediaMetadata();
-    metadata.title = info.title;
-    if (info.posterUrl) {
-      metadata.images = [{ url: info.posterUrl }];
-    }
-    mediaInfo.metadata = metadata;
+      const metadata = new chrome.cast.media.GenericMediaMetadata();
+      metadata.title = info.title;
+      if (info.posterUrl) {
+        metadata.images = [{ url: info.posterUrl }];
+      }
+      mediaInfo.metadata = metadata;
 
-    if (info.subtitles.length > 0) {
-      mediaInfo.tracks = info.subtitles.map((sub, i) => {
-        const track = new chrome.cast.media.Track(
-          i + 1,
-          chrome.cast.media.TrackType.TEXT
-        );
-        track.trackContentId = sub.src;
-        track.trackContentType = "text/vtt";
-        track.subtype = chrome.cast.media.TextTrackType.SUBTITLES;
-        track.name = sub.lang;
-        track.language = sub.lang;
-        return track;
-      });
+      if (info.subtitles.length > 0) {
+        mediaInfo.tracks = info.subtitles.map((sub, i) => {
+          const track = new chrome.cast.media.Track(
+            i + 1,
+            chrome.cast.media.TrackType.TEXT
+          );
+          track.trackContentId = sub.src;
+          track.trackContentType = "text/vtt";
+          track.subtype = chrome.cast.media.TextTrackType.SUBTITLES;
+          track.name = sub.lang;
+          track.language = sub.lang;
+          return track;
+        });
 
-      if (info.activeSubtitleLang) {
-        const idx = info.subtitles.findIndex(
-          (s) => s.lang === info.activeSubtitleLang
-        );
-        if (idx >= 0) {
-          mediaInfo.activeTrackIds = [idx + 1];
+        if (info.activeSubtitleLang) {
+          const idx = info.subtitles.findIndex(
+            (s) => s.lang === info.activeSubtitleLang
+          );
+          if (idx >= 0) {
+            mediaInfo.activeTrackIds = [idx + 1];
+          }
         }
       }
-    }
 
-    const request = new chrome.cast.media.LoadRequest(mediaInfo);
-    request.currentTime = info.currentTime;
-    request.autoplay = true;
+      const request = new chrome.cast.media.LoadRequest(mediaInfo);
+      request.currentTime = info.currentTime;
+      request.autoplay = true;
 
-    await session.loadMedia(request);
-    setCasting(true);
-    setDeviceName(session.getCastDevice()?.friendlyName ?? null);
+      await session.loadMedia(request);
+      setCasting(true);
+      setDeviceName(session.getCastDevice()?.friendlyName ?? null);
 
-    if (!remotePlayerRef.current) {
-      const player = new cast.framework.RemotePlayer();
-      const controller = new cast.framework.RemotePlayerController(player);
-      remotePlayerRef.current = player;
-      remoteControllerRef.current = controller;
-      attachRemoteListeners();
-    }
-    syncRemoteState();
-  }, [attachRemoteListeners, syncRemoteState]);
+      if (!remotePlayerRef.current) {
+        const player = new cast.framework.RemotePlayer();
+        const controller = new cast.framework.RemotePlayerController(player);
+        remotePlayerRef.current = player;
+        remoteControllerRef.current = controller;
+        attachRemoteListeners();
+      }
+      syncRemoteState();
+    },
+    [attachRemoteListeners, syncRemoteState]
+  );
 
   const stop = useCallback(() => {
     const ctx = window.cast?.framework?.CastContext?.getInstance();

@@ -117,7 +117,9 @@ export const OFFLINE_PROGRESS_EVENT = "horde:offline-progress";
 
 function notifyOfflineProgress(videoId: number, positionSec: number): void {
   window.dispatchEvent(
-    new CustomEvent(OFFLINE_PROGRESS_EVENT, { detail: { videoId, positionSec } }),
+    new CustomEvent(OFFLINE_PROGRESS_EVENT, {
+      detail: { videoId, positionSec },
+    })
   );
 }
 
@@ -179,9 +181,11 @@ export const api = {
     } catch (err) {
       if (!isNetworkFailure(err)) throw err;
       // Sync when the connection is back (offline/manager flushes these).
-      await putPendingProgress({ videoId: id, positionSec, at: Date.now() }).catch(
-        () => undefined,
-      );
+      await putPendingProgress({
+        videoId: id,
+        positionSec,
+        at: Date.now(),
+      }).catch(() => undefined);
     }
   },
 
@@ -207,18 +211,12 @@ export const api = {
     }
   },
 
-  getRelatedVideos(
-    id: number,
-    limit = 8,
-    offset = 0
-  ): Promise<Video[]> {
+  getRelatedVideos(id: number, limit = 8, offset = 0): Promise<Video[]> {
     const qs = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
     });
-    return request<Video[]>(
-      `/api/videos/${id}/related?${qs.toString()}`
-    );
+    return request<Video[]>(`/api/videos/${id}/related?${qs.toString()}`);
   },
 
   updateVideo(id: number, payload: VideoUpdate): Promise<Video> {
@@ -443,12 +441,14 @@ export const api = {
     });
   },
 
-  indexChannelCatalog(params: {
-    channel?: string;
-    url?: string;
-    force?: boolean;
-    mode?: "incremental" | "full";
-  } = {}): Promise<{
+  indexChannelCatalog(
+    params: {
+      channel?: string;
+      url?: string;
+      force?: boolean;
+      mode?: "incremental" | "full";
+    } = {}
+  ): Promise<{
     queued: number;
     skipped: number;
     refreshed: number;
@@ -503,7 +503,10 @@ export const api = {
     });
   },
 
-  renameChannel(oldName: string, newName: string): Promise<{ updated: number }> {
+  renameChannel(
+    oldName: string,
+    newName: string
+  ): Promise<{ updated: number }> {
     return request<{ updated: number }>("/api/channels", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -675,7 +678,9 @@ export const api = {
     });
   },
 
-  cancelCompatJobs(kind?: "compat" | "convert"): Promise<{ cancelled: number }> {
+  cancelCompatJobs(
+    kind?: "compat" | "convert"
+  ): Promise<{ cancelled: number }> {
     return request("/api/compat/cancel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -696,9 +701,7 @@ export const api = {
     return request<UpdateCheck>(`/api/updates${qs}`);
   },
 
-  uploadBackground(
-    file: File
-  ): Promise<{
+  uploadBackground(file: File): Promise<{
     id: string;
     url: string;
     mime: string;
@@ -751,10 +754,9 @@ export const api = {
   },
 
   deleteFont(id: string): Promise<{ ok: boolean }> {
-    return request<{ ok: boolean }>(
-      `/api/fonts/${encodeURIComponent(id)}`,
-      { method: "DELETE" }
-    );
+    return request<{ ok: boolean }>(`/api/fonts/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   },
 
   pauseAi(): Promise<{ paused: boolean }> {
@@ -778,7 +780,9 @@ export const api = {
   },
 
   refreshVideoTags(id: number): Promise<Video> {
-    return request<Video>(`/api/videos/${id}/ai/refresh-tags`, { method: "POST" });
+    return request<Video>(`/api/videos/${id}/ai/refresh-tags`, {
+      method: "POST",
+    });
   },
 
   summarizeVideo(
@@ -829,7 +833,10 @@ export const api = {
   ): Promise<void> {
     const resp = await fetch(`/api/videos/${id}/ai/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
       body: JSON.stringify({ message }),
       signal: opts.signal,
     });
@@ -841,7 +848,9 @@ export const api = {
       } catch {
         // non-JSON
       }
-      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      throw new Error(
+        typeof detail === "string" ? detail : JSON.stringify(detail)
+      );
     }
     if (!resp.body) {
       throw new Error("No response body");
@@ -981,10 +990,7 @@ export const api = {
     return request<DownloadJob>(`/api/downloads/${jobId}`);
   },
 
-  updateJob(
-    jobId: number,
-    overrides: DownloadOverrides
-  ): Promise<DownloadJob> {
+  updateJob(jobId: number, overrides: DownloadOverrides): Promise<DownloadJob> {
     return request<DownloadJob>(`/api/downloads/${jobId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1009,7 +1015,10 @@ export const api = {
     });
   },
 
-  changeJobQuality(jobId: number, quality_preset: string): Promise<DownloadJob> {
+  changeJobQuality(
+    jobId: number,
+    quality_preset: string
+  ): Promise<DownloadJob> {
     return request<DownloadJob>(`/api/downloads/${jobId}/quality`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1222,7 +1231,10 @@ export function absoluteUrl(path: string): string {
 
 export type Rendition = "original" | "compat";
 
-export function streamUrl(id: number, rendition: Rendition = "original"): string {
+export function streamUrl(
+  id: number,
+  rendition: Rendition = "original"
+): string {
   return rendition === "compat"
     ? `/api/videos/${id}/stream?rendition=compat`
     : `/api/videos/${id}/stream`;

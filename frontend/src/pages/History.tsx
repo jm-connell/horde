@@ -41,8 +41,7 @@ function dayLabel(key: string): string {
     weekday: "long",
     month: "short",
     day: "numeric",
-    year:
-      date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+    year: date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
   });
 }
 
@@ -92,9 +91,7 @@ export default function History() {
       ) : videos.length === 0 ? (
         <div className="py-20 text-center text-gray-500">
           <p className="text-lg">No watch history yet.</p>
-          <p className="mt-1 text-sm">
-            Videos you watch will appear here.
-          </p>
+          <p className="mt-1 text-sm">Videos you watch will appear here.</p>
         </div>
       ) : (
         <div className="space-y-8">

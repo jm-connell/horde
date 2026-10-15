@@ -97,7 +97,10 @@ export function useChannelDownloadQueue(channelName: string) {
   }, []);
 
   useEffect(() => {
-    api.listPresets().then(setAllPresets).catch(() => undefined);
+    api
+      .listPresets()
+      .then(setAllPresets)
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -182,9 +185,7 @@ export function useChannelDownloadQueue(channelName: string) {
 
       submittingIdsRef.current.add(tempId);
       setPending((prev) =>
-        prev.map((p) =>
-          p.tempId === tempId ? { ...p, submitting: true } : p
-        )
+        prev.map((p) => (p.tempId === tempId ? { ...p, submitting: true } : p))
       );
       clearTimer(tempId);
 

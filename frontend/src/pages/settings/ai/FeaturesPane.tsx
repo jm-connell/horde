@@ -45,25 +45,18 @@ export default function FeaturesPane() {
           control={
             <Toggle
               checked={aiDraft.use_subtitles}
-              onChange={() =>
-                saveAi({ use_subtitles: !aiDraft.use_subtitles })
-              }
+              onChange={() => saveAi({ use_subtitles: !aiDraft.use_subtitles })}
             />
           }
         />
         <SettingRow
           title="AI video summaries"
           description="Generated after download when captions are available. Uses OpenRouter when connected; otherwise Ollama (recommend ≥6GB VRAM). Regenerate anytime on Watch."
-          hidden={
-            !!q &&
-            !match("summary", "summarize", "captions", "watch")
-          }
+          hidden={!!q && !match("summary", "summarize", "captions", "watch")}
           control={
             <Toggle
               checked={aiDraft.ai_summaries}
-              onChange={() =>
-                saveAi({ ai_summaries: !aiDraft.ai_summaries })
-              }
+              onChange={() => saveAi({ ai_summaries: !aiDraft.ai_summaries })}
             />
           }
         />
@@ -77,9 +70,7 @@ export default function FeaturesPane() {
           control={
             <Toggle
               checked={aiDraft.ai_chapters}
-              onChange={() =>
-                saveAi({ ai_chapters: !aiDraft.ai_chapters })
-              }
+              onChange={() => saveAi({ ai_chapters: !aiDraft.ai_chapters })}
             />
           }
         />
@@ -127,8 +118,7 @@ export default function FeaturesPane() {
           title="AI video chat"
           description="Ask the video questions on the Watch page using its metadata, description, and captions. Larger GPUs auto-upgrade to bigger chat models."
           hidden={
-            !!q &&
-            !match("chat", "ask", "conversation", "watch", "captions")
+            !!q && !match("chat", "ask", "conversation", "watch", "captions")
           }
           control={
             <Toggle
@@ -157,8 +147,7 @@ export default function FeaturesPane() {
                 <HelpTip text={SUMMARY_LENGTH_TIP} />
                 <div className="ui-panel flex rounded-lg border border-ink-700 bg-ink-900 p-0.5">
                   {SUMMARY_LENGTH_OPTIONS.map((opt) => {
-                    const selected =
-                      aiDraft.summary_length === opt.value;
+                    const selected = aiDraft.summary_length === opt.value;
                     return (
                       <button
                         key={opt.value}
@@ -186,13 +175,7 @@ export default function FeaturesPane() {
           description="Minimum similarity for videos under a category chip. Higher = fewer, tighter matches; lower = fuller, noisier shelves."
           hidden={
             !!q &&
-            !match(
-              "category",
-              "categories",
-              "strictness",
-              "match",
-              "score"
-            )
+            !match("category", "categories", "strictness", "match", "score")
           }
           control={
             <input
@@ -230,9 +213,7 @@ export default function FeaturesPane() {
           control={
             <Toggle
               checked={aiDraft.enrich_tags}
-              onChange={() =>
-                saveAi({ enrich_tags: !aiDraft.enrich_tags })
-              }
+              onChange={() => saveAi({ enrich_tags: !aiDraft.enrich_tags })}
             />
           }
         />
@@ -254,7 +235,10 @@ export default function FeaturesPane() {
                     if (!Number.isFinite(n)) return;
                     setAiDraft((d) => ({
                       ...d,
-                      tag_rescan_days: Math.max(7, Math.min(365, Math.round(n))),
+                      tag_rescan_days: Math.max(
+                        7,
+                        Math.min(365, Math.round(n))
+                      ),
                     }));
                   }}
                   onBlur={() => {
@@ -278,9 +262,7 @@ export default function FeaturesPane() {
           control={
             <Toggle
               checked={aiDraft.ai_duplicates}
-              onChange={() =>
-                saveAi({ ai_duplicates: !aiDraft.ai_duplicates })
-              }
+              onChange={() => saveAi({ ai_duplicates: !aiDraft.ai_duplicates })}
             />
           }
         />

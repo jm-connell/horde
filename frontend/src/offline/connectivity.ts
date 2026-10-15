@@ -276,7 +276,7 @@ export class Connectivity {
   private set(patch: Partial<ConnectivityState>): void {
     const next = { ...this.state, ...patch };
     const changed = (Object.keys(patch) as (keyof ConnectivityState)[]).some(
-      (k) => this.state[k] !== next[k],
+      (k) => this.state[k] !== next[k]
     );
     if (!changed) return;
     this.state = next;
@@ -329,7 +329,7 @@ export function startConnectivity(): void {
   window.addEventListener("online", () => void connectivity.reconnect(false));
   window.addEventListener("offline", () => connectivity.browserOffline());
   document.addEventListener("visibilitychange", () =>
-    connectivity.visibilityChanged(),
+    connectivity.visibilityChanged()
   );
   if (navigator.onLine === false && !connectivity.offlineMode) {
     connectivity.browserOffline();

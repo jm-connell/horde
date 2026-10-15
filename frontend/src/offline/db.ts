@@ -17,11 +17,7 @@ export const EXTRAS_CACHE = "horde-offline-extras-v1";
 export const CHUNK_SIZE = 4 * 1024 * 1024;
 
 export type OfflineStatus =
-  | "queued"
-  | "downloading"
-  | "paused"
-  | "complete"
-  | "error";
+  "queued" | "downloading" | "paused" | "complete" | "error";
 
 export interface OfflineSponsorSegment {
   startSec: number;
@@ -65,7 +61,9 @@ export function chunkUrl(videoId: number, index: number): string {
   return `/__offline__/chunk/${videoId}/${index}`;
 }
 
-export function chunkCount(item: Pick<OfflineItem, "totalBytes" | "chunkSize">): number {
+export function chunkCount(
+  item: Pick<OfflineItem, "totalBytes" | "chunkSize">
+): number {
   if (!item.totalBytes) return 0;
   return Math.ceil(item.totalBytes / item.chunkSize);
 }
@@ -119,7 +117,9 @@ async function store(name: string, mode: IDBTransactionMode) {
   return db.transaction(name, mode).objectStore(name);
 }
 
-export async function getItem(videoId: number): Promise<OfflineItem | undefined> {
+export async function getItem(
+  videoId: number
+): Promise<OfflineItem | undefined> {
   return wrap((await store(ITEMS_STORE, "readonly")).get(videoId));
 }
 
@@ -144,7 +144,9 @@ export async function getAllPendingProgress(): Promise<PendingProgress[]> {
 }
 
 export async function deletePendingProgress(videoId: number): Promise<void> {
-  await wrap((await store(PENDING_PROGRESS_STORE, "readwrite")).delete(videoId));
+  await wrap(
+    (await store(PENDING_PROGRESS_STORE, "readwrite")).delete(videoId)
+  );
 }
 
 /** `/api/videos/12/stream` → 12, `/api/videos/-3/stream` → -3. */

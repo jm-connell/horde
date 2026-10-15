@@ -66,10 +66,7 @@ export function createLightspeedEffect(
         const y0 = cy + sin * Math.max(0, s.dist - s.length);
         const fade = Math.min(1, s.dist / (maxDist * 0.35));
 
-        ctx.strokeStyle = rgba(
-          accent,
-          s.alpha * fade * (isLight ? 0.7 : 1)
-        );
+        ctx.strokeStyle = rgba(accent, s.alpha * fade * (isLight ? 0.7 : 1));
         ctx.lineWidth = s.width;
         ctx.lineCap = "round";
         ctx.beginPath();

@@ -39,7 +39,9 @@ export default function CompatGate({
   if (isMini) {
     return (
       <div className="absolute inset-0 z-[7] flex items-center justify-center bg-black/85 px-3 text-center text-xs text-gray-200">
-        {pending ? `Preparing compatible copy… ${pct}%` : `Can’t play ${label} here`}
+        {pending
+          ? `Preparing compatible copy… ${pct}%`
+          : `Can’t play ${label} here`}
       </div>
     );
   }
@@ -87,10 +89,10 @@ export default function CompatGate({
       ) : (
         <>
           <p className="max-w-sm text-sm text-gray-300">
-            Horde can make an H.264 copy (up to {copyCap >= 2160 ? "4K" : "1080p"})
-            that plays on almost any device. It’s saved next to the original
-            and uses about {formatSize(estimateCompatBytes(video, copyCap))} more
-            storage.
+            Horde can make an H.264 copy (up to{" "}
+            {copyCap >= 2160 ? "4K" : "1080p"}) that plays on almost any device.
+            It’s saved next to the original and uses about{" "}
+            {formatSize(estimateCompatBytes(video, copyCap))} more storage.
           </p>
           <button
             type="button"

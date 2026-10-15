@@ -22,7 +22,9 @@ export function createWarpGridEffect(
         const by = row * spacing;
         const n = fbm2(col * 0.18 + time * 0.08, row * 0.18, 3, 2);
         const x = bx + (n - 0.5) * amp * 2;
-        const y = by + (fbm2(row * 0.18, col * 0.18 + time * 0.08, 3, 9) - 0.5) * amp * 2;
+        const y =
+          by +
+          (fbm2(row * 0.18, col * 0.18 + time * 0.08, 3, 9) - 0.5) * amp * 2;
         if (col === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -36,7 +38,9 @@ export function createWarpGridEffect(
         const by = row * spacing;
         const n = fbm2(col * 0.18 + time * 0.08, row * 0.18, 3, 2);
         const x = bx + (n - 0.5) * amp * 2;
-        const y = by + (fbm2(row * 0.18, col * 0.18 + time * 0.08, 3, 9) - 0.5) * amp * 2;
+        const y =
+          by +
+          (fbm2(row * 0.18, col * 0.18 + time * 0.08, 3, 9) - 0.5) * amp * 2;
         if (row === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }

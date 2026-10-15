@@ -63,8 +63,7 @@ export default function ThemedSelect<T extends string>({
   const compact = size === "compact";
   const { flip, anchorRef } = useFlipMenu(open, compact ? 200 : 320);
   const visible = useMemo(
-    () =>
-      searchable ? filterThemedSelectOptions(options, query) : options,
+    () => (searchable ? filterThemedSelectOptions(options, query) : options),
     [searchable, options, query]
   );
 
@@ -106,9 +105,7 @@ export default function ThemedSelect<T extends string>({
   const move = (dir: 1 | -1) => {
     if (searchable) {
       if (!visible.length) return;
-      setActiveIndex(
-        (i) => (i + dir + visible.length) % visible.length
-      );
+      setActiveIndex((i) => (i + dir + visible.length) % visible.length);
       return;
     }
     const idx = options.findIndex((o) => o.value === value);
@@ -241,9 +238,7 @@ export default function ThemedSelect<T extends string>({
             spellCheck={false}
             value={query}
             placeholder={
-              query
-                ? searchPlaceholder
-                : selected?.label ?? searchPlaceholder
+              query ? searchPlaceholder : (selected?.label ?? searchPlaceholder)
             }
             onFocus={() => !disabled && setOpen(true)}
             onChange={(e) => {

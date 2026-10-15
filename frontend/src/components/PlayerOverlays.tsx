@@ -40,7 +40,9 @@ export default function PlayerOverlays({
 
       {mediaError && !isMini && (
         <div className="absolute inset-0 z-[6] flex flex-col items-center justify-center gap-3 bg-black/80 px-4">
-          <p className="max-w-sm text-center text-sm text-red-300">{mediaError}</p>
+          <p className="max-w-sm text-center text-sm text-red-300">
+            {mediaError}
+          </p>
           <button
             type="button"
             onClick={onRetry}

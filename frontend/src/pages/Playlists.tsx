@@ -43,7 +43,10 @@ export default function Playlists() {
   }, []);
 
   useEffect(() => {
-    api.listPresets().then(setAllPresets).catch(() => undefined);
+    api
+      .listPresets()
+      .then(setAllPresets)
+      .catch(() => undefined);
   }, []);
 
   const scrolledOpen = useRef<number | null>(null);
@@ -71,7 +74,9 @@ export default function Playlists() {
       setExpandedId(created.id);
       load({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create playlist");
+      setError(
+        err instanceof Error ? err.message : "Could not create playlist"
+      );
     } finally {
       setBusy(false);
     }
@@ -82,9 +87,13 @@ export default function Playlists() {
     setSubscribing(true);
     setError(null);
     try {
-      const created = await api.importPlaylist(subscribeUrl.trim(), subscribePreset, {
-        subscribe: true,
-      });
+      const created = await api.importPlaylist(
+        subscribeUrl.trim(),
+        subscribePreset,
+        {
+          subscribe: true,
+        }
+      );
       setSubscribeUrl("");
       setPlaylists((prev) =>
         prev.some((row) => row.id === created.id) ? prev : [...prev, created]
@@ -189,9 +198,7 @@ export default function Playlists() {
               open={expandedId === p.id}
               dragging={draggingId === p.id}
               dragOver={dragOverId === p.id}
-              onToggle={() =>
-                setExpandedId(expandedId === p.id ? null : p.id)
-              }
+              onToggle={() => setExpandedId(expandedId === p.id ? null : p.id)}
               onPlaylistDragStart={(id) => {
                 playlistDragFrom.current = id;
                 setDraggingId(id);

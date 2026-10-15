@@ -275,7 +275,9 @@ export function useShakaDashLoad({
       } catch (err) {
         if (cancelled) return;
         const msg =
-          err instanceof Error ? err.message : "Failed to start adaptive stream";
+          err instanceof Error
+            ? err.message
+            : "Failed to start adaptive stream";
         if (!enterCompatMode()) {
           setMediaError(msg);
           setBuffering(false);
@@ -355,11 +357,6 @@ export function useApplyShakaQuality(
         console.warn("[stream-quality] apply failed", err);
       }
     },
-    [
-      shakaPlayerRef,
-      capabilityMaxHeightRef,
-      variantTracksRef,
-      setQualityChoice,
-    ]
+    [shakaPlayerRef, capabilityMaxHeightRef, variantTracksRef, setQualityChoice]
   );
 }

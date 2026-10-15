@@ -41,21 +41,21 @@ interface DownloadContextValue {
   submitDownload: (
     url: string,
     preset: string,
-    overrides: SubmitOverrides,
+    overrides: SubmitOverrides
   ) => Promise<DownloadJob>;
   submitBulkDownloads: (
     urls: string[],
     preset: string,
-    overrides?: Pick<SubmitOverrides, "destination">,
+    overrides?: Pick<SubmitOverrides, "destination">
   ) => Promise<DownloadBulkResult>;
   retryJob: (
     jobId: number,
-    overrides?: SubmitOverrides,
+    overrides?: SubmitOverrides
   ) => Promise<DownloadJob>;
   changeJobQuality: (jobId: number, preset: string) => Promise<DownloadJob>;
   updateJobOverrides: (
     jobId: number,
-    overrides: SubmitOverrides & { notes?: string },
+    overrides: SubmitOverrides & { notes?: string }
   ) => Promise<void>;
   cancelJob: (jobId: number) => Promise<void>;
   dismissJob: (jobId: number) => Promise<void>;
@@ -64,7 +64,7 @@ interface DownloadContextValue {
   resumeQueue: () => Promise<void>;
   refreshJobs: () => void;
   onJobCompleted: (
-    cb: (videoId: number | null, event?: ProgressEvent) => void,
+    cb: (videoId: number | null, event?: ProgressEvent) => void
   ) => () => void;
 }
 
@@ -97,7 +97,7 @@ function isActiveJob(job: DownloadJob, live?: ProgressEvent): boolean {
 
 function patchJobFromEvent(
   job: DownloadJob,
-  event: ProgressEvent,
+  event: ProgressEvent
 ): DownloadJob {
   return {
     ...job,
@@ -132,38 +132,43 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         triggerBrowserDownload(deviceDownloadFileUrl(job.id));
         return;
       }
-      showToast(`Saving \u201c${job.title || "video"}\u201d for offline viewing`);
+      showToast(
+        `Saving \u201c${job.title || "video"}\u201d for offline viewing`
+      );
       void offlineManager.downloadJob(job).catch(() => undefined);
     },
-    [showToast],
+    [showToast]
   );
 
-  const refreshJob = useCallback((jobId: number) => {
-    api
-      .getJob(jobId)
-      .then((fresh) => {
-        setJobs((prev) => prev.map((j) => (j.id === fresh.id ? fresh : j)));
-        if (fresh.status === "completed") {
-          setProgress((prev) => ({
-            ...prev,
-            [jobId]: {
-              status: "completed",
-              progress: 100,
-              video_id: fresh.video_id ?? undefined,
-              title: fresh.title ?? undefined,
-              destination: fresh.destination,
-            },
-          }));
-          if (
-            fresh.destination === "device" &&
-            !deviceSaved.current.has(jobId)
-          ) {
-            saveDeviceJob(fresh);
+  const refreshJob = useCallback(
+    (jobId: number) => {
+      api
+        .getJob(jobId)
+        .then((fresh) => {
+          setJobs((prev) => prev.map((j) => (j.id === fresh.id ? fresh : j)));
+          if (fresh.status === "completed") {
+            setProgress((prev) => ({
+              ...prev,
+              [jobId]: {
+                status: "completed",
+                progress: 100,
+                video_id: fresh.video_id ?? undefined,
+                title: fresh.title ?? undefined,
+                destination: fresh.destination,
+              },
+            }));
+            if (
+              fresh.destination === "device" &&
+              !deviceSaved.current.has(jobId)
+            ) {
+              saveDeviceJob(fresh);
+            }
           }
-        }
-      })
-      .catch(() => undefined);
-  }, [saveDeviceJob]);
+        })
+        .catch(() => undefined);
+    },
+    [saveDeviceJob]
+  );
 
   const maybeSaveDeviceFile = useCallback(
     (jobId: number, destination?: string) => {
@@ -177,7 +182,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         })
         .catch(() => undefined);
     },
-    [saveDeviceJob],
+    [saveDeviceJob]
   );
 
   const handleQueueEvent = useCallback(
@@ -215,7 +220,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         event.available_presets
       ) {
         setJobs((prev) =>
-          prev.map((j) => (j.id === jobId ? patchJobFromEvent(j, event) : j)),
+          prev.map((j) => (j.id === jobId ? patchJobFromEvent(j, event) : j))
         );
       }
 
@@ -246,7 +251,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         showToast(downloadErrorToast(event.error_kind, event.error));
       }
     },
-    [refreshJob, showToast, maybeSaveDeviceFile],
+    [refreshJob, showToast, maybeSaveDeviceFile]
   );
 
   const handleQueueEventRef = useRef(handleQueueEvent);
@@ -273,7 +278,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       .catch(() => undefined);
     syncQueue();
     const close = subscribeToQueue((event) =>
-      handleQueueEventRef.current(event),
+      handleQueueEventRef.current(event)
     );
     const poll = setInterval(refreshJobs, 10000);
     const queuePoll = setInterval(syncQueue, 5000);
@@ -318,14 +323,14 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       settings.downloadVideoCodec,
       syncQueue,
       showToast,
-    ],
+    ]
   );
 
   const submitBulkDownloads = useCallback(
     async (
       urls: string[],
       preset: string,
-      overrides: Pick<SubmitOverrides, "destination"> = {},
+      overrides: Pick<SubmitOverrides, "destination"> = {}
     ) => {
       const result = await api.bulkCreateDownloads(urls, preset, {
         destination: overrides.destination ?? "library",
@@ -339,11 +344,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       syncQueue();
       return result;
     },
-    [
-      settings.normalizeVolumeOnDownload,
-      settings.downloadVideoCodec,
-      syncQueue,
-    ],
+    [settings.normalizeVolumeOnDownload, settings.downloadVideoCodec, syncQueue]
   );
 
   const retryJob = useCallback(
@@ -380,7 +381,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
     },
-    [refreshJob, syncQueue],
+    [refreshJob, syncQueue]
   );
 
   const changeJobQuality = useCallback(
@@ -395,8 +396,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
                 progress: 0,
                 status: j.status === "downloading" ? "queued" : j.status,
               }
-            : j,
-        ),
+            : j
+        )
       );
       setProgress((prev) => ({
         ...prev,
@@ -419,7 +420,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         window.setTimeout(() => restartingJobs.current.delete(jobId), 10000);
       }
     },
-    [refreshJob, syncQueue],
+    [refreshJob, syncQueue]
   );
 
   const updateJobOverrides = useCallback(
@@ -431,7 +432,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       });
       setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
     },
-    [],
+    []
   );
 
   const cancelJob = useCallback(
@@ -450,7 +451,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       }
       syncQueue();
     },
-    [syncQueue],
+    [syncQueue]
   );
 
   const dismissJob = useCallback(async (jobId: number) => {
@@ -470,8 +471,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         (j) =>
           j.status !== "completed" &&
           j.status !== "error" &&
-          j.status !== "cancelled",
-      ),
+          j.status !== "cancelled"
+      )
     );
     setProgress((prev) => {
       const next = { ...prev };
@@ -507,7 +508,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       completionListeners.current.add(cb);
       return () => completionListeners.current.delete(cb);
     },
-    [],
+    []
   );
 
   const activeCount = jobs.filter((j) => isActiveJob(j, progress[j.id])).length;
@@ -549,7 +550,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       resumeQueue,
       refreshJobs,
       onJobCompleted,
-    ],
+    ]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

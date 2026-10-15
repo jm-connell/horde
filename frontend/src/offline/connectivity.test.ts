@@ -44,7 +44,7 @@ function setup(opts: { storage?: ReturnType<typeof memoryStorage> } = {}) {
         pingCalls++;
         const p: PendingPing = { signal, resolve, reject };
         pending.push(p);
-      }),
+      })
   );
   const c = new Connectivity({
     ping,
@@ -397,7 +397,10 @@ describe("reconnect()", () => {
     const p = h.c.reconnect();
     await h.answer("reject");
     await p;
-    expect(h.c.getState()).toMatchObject({ status: "offline", reconnecting: false });
+    expect(h.c.getState()).toMatchObject({
+      status: "offline",
+      reconnecting: false,
+    });
   });
 
   it("reconnect(false) in manual offline does not change state or ping", async () => {

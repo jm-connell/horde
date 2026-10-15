@@ -57,7 +57,8 @@ export default function CustomCssSection() {
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs tabular-nums text-gray-500">
-                {length.toLocaleString()} / {CUSTOM_CSS_MAX_CHARS.toLocaleString()}
+                {length.toLocaleString()} /{" "}
+                {CUSTOM_CSS_MAX_CHARS.toLocaleString()}
               </p>
               <button
                 type="button"
@@ -85,8 +86,9 @@ export default function CustomCssSection() {
               </summary>
               <div className="mt-3 space-y-4 text-xs text-gray-400">
                 <p>
-                  This is a short, stable catalog — not a dump of every DOM node.
-                  Inspect the running page for one-off targeting. Full notes:{" "}
+                  This is a short, stable catalog — not a dump of every DOM
+                  node. Inspect the running page for one-off targeting. Full
+                  notes:{" "}
                   <a
                     href="/wiki/settings/custom-css/"
                     className="text-accent hover:underline"

@@ -44,7 +44,10 @@ export function presetOptionLabel(
   return approx ? `${base} (${approx})` : base;
 }
 
-export function mergePinnedPreset(available: string[], pinned: string): string[] {
+export function mergePinnedPreset(
+  available: string[],
+  pinned: string
+): string[] {
   if (pinned === "best" || available.includes(pinned)) return available;
   const merged = new Set([...available, pinned]);
   return PRESET_ORDER.filter((p) => merged.has(p));
@@ -66,7 +69,10 @@ export function maxPresetLabel(presets: string[]): string {
 }
 
 /** Map a requested "best" preset to the highest concrete tier in `available`. */
-export function resolveQualityPreset(preset: string, available: string[]): string {
+export function resolveQualityPreset(
+  preset: string,
+  available: string[]
+): string {
   if (preset !== "best") return preset;
   for (const p of PRESET_ORDER) {
     if (p === "best" || isAudioPreset(p)) continue;

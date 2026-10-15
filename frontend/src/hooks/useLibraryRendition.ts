@@ -29,7 +29,7 @@ const POLL_MS = 2000;
 export function useLibraryRendition(
   video: Video | null,
   mode: DownloadVideoCodec,
-  onCompatReady: (video: Video) => void,
+  onCompatReady: (video: Video) => void
 ): LibraryRenditionState {
   const [support, setSupport] = useState<OriginalSupport>("unknown");
   const [checking, setChecking] = useState(true);
@@ -65,7 +65,9 @@ export function useLibraryRendition(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-check per file
   }, [videoId, video?.codec_string, video?.file_path]);
 
-  const effectiveSupport: OriginalSupport = originalFailed ? "unsupported" : support;
+  const effectiveSupport: OriginalSupport = originalFailed
+    ? "unsupported"
+    : support;
   const choice = video
     ? chooseRendition(effectiveSupport, video, { forceOriginal: forced })
     : { rendition: null };
@@ -82,8 +84,11 @@ export function useLibraryRendition(
           status: "error",
           stage: null,
           progress: 0,
-          error: err instanceof Error ? err.message : "Could not start the conversion",
-        }),
+          error:
+            err instanceof Error
+              ? err.message
+              : "Could not start the conversion",
+        })
       );
   }, [videoId, offline]);
 
@@ -108,7 +113,10 @@ export function useLibraryRendition(
         .then((state) => {
           setCompat(state);
           if (state.status === "ready") {
-            api.getVideo(videoId).then((v) => readyRef.current(v)).catch(() => undefined);
+            api
+              .getVideo(videoId)
+              .then((v) => readyRef.current(v))
+              .catch(() => undefined);
           }
         })
         .catch(() => undefined);

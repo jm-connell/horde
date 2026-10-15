@@ -94,7 +94,10 @@ export default function VideoCard({
     stacked,
     titleLines,
     titleNeeded,
-  } = useCardCopyLayout(video.title, Boolean(video.channel && hasSecondaryMeta));
+  } = useCardCopyLayout(
+    video.title,
+    Boolean(video.channel && hasSecondaryMeta)
+  );
 
   const handleClick = (e: React.MouseEvent) => {
     if (selectable) {

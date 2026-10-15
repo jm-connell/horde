@@ -30,7 +30,10 @@ export default function AddToPlaylist({
 
   useEffect(() => {
     if (!open) return;
-    api.listPlaylists().then(setPlaylists).catch(() => undefined);
+    api
+      .listPlaylists()
+      .then(setPlaylists)
+      .catch(() => undefined);
   }, [open]);
 
   useEffect(() => {

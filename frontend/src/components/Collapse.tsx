@@ -18,7 +18,10 @@ export default function Collapse({
         open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
       } ${className}`}
     >
-      <div className="min-h-0 overflow-hidden" {...(!open ? { inert: true } : {})}>
+      <div
+        className="min-h-0 overflow-hidden"
+        {...(!open ? { inert: true } : {})}
+      >
         {children}
       </div>
     </div>

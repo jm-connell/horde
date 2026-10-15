@@ -34,11 +34,7 @@ export default function VideoAiPanel({
 
   const expanded = settings.aiExpanded;
   const showToggle = canSummarize && canChat;
-  const activeTab: AiTab = showToggle
-    ? tab
-    : canSummarize
-      ? "summary"
-      : "chat";
+  const activeTab: AiTab = showToggle ? tab : canSummarize ? "summary" : "chat";
 
   useEffect(() => {
     setSummaryError(null);
@@ -184,7 +180,9 @@ export default function VideoAiPanel({
             <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
               <div className="px-4 py-3">
                 {summaryError && (
-                  <p className="mb-2 text-xs text-amber-400/90">{summaryError}</p>
+                  <p className="mb-2 text-xs text-amber-400/90">
+                    {summaryError}
+                  </p>
                 )}
                 {hasAiSummary ? (
                   <AiMarkdown text={video.ai_summary || ""} />

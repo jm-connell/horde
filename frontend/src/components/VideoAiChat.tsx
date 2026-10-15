@@ -30,7 +30,8 @@ function toDisplay(m: VideoAiChatMessage): DisplayMessage {
     role: m.role,
     content: m.content,
     cost: typeof m.cost === "number" ? m.cost : null,
-    model: typeof m.model === "string" && m.model.trim() ? m.model.trim() : null,
+    model:
+      typeof m.model === "string" && m.model.trim() ? m.model.trim() : null,
   };
 }
 
@@ -131,7 +132,11 @@ export default function VideoAiChat({
         signal: ac.signal,
         onEvent: (event) => {
           const type = String(event.type || "");
-          if (type === "user" && event.message && typeof event.message === "object") {
+          if (
+            type === "user" &&
+            event.message &&
+            typeof event.message === "object"
+          ) {
             const msg = event.message as VideoAiChatMessage;
             setMessages((prev) =>
               prev.map((m) =>
@@ -185,9 +190,7 @@ export default function VideoAiChat({
             );
           } else if (type === "error") {
             const detail =
-              typeof event.detail === "string"
-                ? event.detail
-                : "Chat failed";
+              typeof event.detail === "string" ? event.detail : "Chat failed";
             setError(detail);
             showToast(detail);
             setMessages((prev) =>
@@ -207,7 +210,8 @@ export default function VideoAiChat({
         showToast(msg);
         setMessages((prev) =>
           prev.filter(
-            (m) => m.id !== tempUserId && (m.id !== tempAsstId || m.content.trim())
+            (m) =>
+              m.id !== tempUserId && (m.id !== tempAsstId || m.content.trim())
           )
         );
       }
@@ -274,17 +278,14 @@ export default function VideoAiChat({
             </div>
           </div>
         )}
-        {!loading &&
-          !showSeed &&
-          messages.length === 0 &&
-          !sending && (
-            <p className="text-xs text-gray-500">
-              Ask this video anything
-              {!hasSubtitles
-                ? " — captions not available, answers will use title and description only."
-                : "."}
-            </p>
-          )}
+        {!loading && !showSeed && messages.length === 0 && !sending && (
+          <p className="text-xs text-gray-500">
+            Ask this video anything
+            {!hasSubtitles
+              ? " — captions not available, answers will use title and description only."
+              : "."}
+          </p>
+        )}
         {messages.map((m) => {
           const waiting =
             sending && m.role === "assistant" && !m.content.trim();

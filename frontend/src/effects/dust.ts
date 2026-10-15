@@ -30,30 +30,33 @@ export function createDustEffect(canvas: HTMLCanvasElement): EffectController {
     }));
   };
 
-  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, time, size }) => {
-    if (
-      width !== lastW ||
-      height !== lastH ||
-      Math.abs(size - lastSize) > 0.05
-    ) {
-      lastW = width;
-      lastH = height;
-      lastSize = size;
-      rebuild(width, height, size);
-    }
-
-    ctx.clearRect(0, 0, width, height);
-    for (const s of specks) {
-      s.y -= s.speed * dt;
-      s.x += Math.sin(time * 0.4 + s.phase) * s.wobble * dt;
-      if (s.y < -4) {
-        s.y = height + 4;
-        s.x = Math.random() * width;
+  return createCanvasLoop(
+    canvas,
+    ({ ctx, width, height, accent, dt, time, size }) => {
+      if (
+        width !== lastW ||
+        height !== lastH ||
+        Math.abs(size - lastSize) > 0.05
+      ) {
+        lastW = width;
+        lastH = height;
+        lastSize = size;
+        rebuild(width, height, size);
       }
-      ctx.fillStyle = rgba(accent, s.alpha);
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fill();
+
+      ctx.clearRect(0, 0, width, height);
+      for (const s of specks) {
+        s.y -= s.speed * dt;
+        s.x += Math.sin(time * 0.4 + s.phase) * s.wobble * dt;
+        if (s.y < -4) {
+          s.y = height + 4;
+          s.x = Math.random() * width;
+        }
+        ctx.fillStyle = rgba(accent, s.alpha);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
-  });
+  );
 }

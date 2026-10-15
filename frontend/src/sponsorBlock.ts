@@ -101,9 +101,7 @@ export const DEFAULT_SPONSOR_BLOCK_CATEGORIES: SponsorBlockCategoryMap = {
   music_offtopic: false,
 };
 
-const CATEGORY_IDS = new Set<string>(
-  SPONSOR_BLOCK_CATEGORIES.map((c) => c.id)
-);
+const CATEGORY_IDS = new Set<string>(SPONSOR_BLOCK_CATEGORIES.map((c) => c.id));
 
 const LABEL_BY_ID = new Map(
   SPONSOR_BLOCK_CATEGORIES.map((c) => [c.id, c.label])
@@ -155,7 +153,9 @@ export function normalizeSponsorBlockCategories(
 ): SponsorBlockCategoryMap {
   const out: SponsorBlockCategoryMap = { ...DEFAULT_SPONSOR_BLOCK_CATEGORIES };
   if (!value || typeof value !== "object") return out;
-  for (const [key, enabled] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, enabled] of Object.entries(
+    value as Record<string, unknown>
+  )) {
     if (CATEGORY_IDS.has(key) && typeof enabled === "boolean") {
       out[key as SponsorBlockCategory] = enabled;
     }

@@ -58,7 +58,7 @@ test.describe("offline downloads (mobile)", () => {
     const body = await list.json();
     const items: { id: number; title: string }[] = Array.isArray(body)
       ? body
-      : body.items ?? body.videos ?? [];
+      : (body.items ?? body.videos ?? []);
     const id = items.find((v) => v.title === TITLE)?.id;
     expect(id, `video "${TITLE}" not in /api/videos`).toBeTruthy();
     const full = await request.get(`/api/videos/${id}/stream`);
@@ -126,7 +126,9 @@ test.describe("offline downloads (mobile)", () => {
       expect(ready, `console: ${logs.join(" | ")}`).toMatchObject({
         error: null,
       });
-      expect((ready as { readyState: number }).readyState).toBeGreaterThanOrEqual(2);
+      expect(
+        (ready as { readyState: number }).readyState
+      ).toBeGreaterThanOrEqual(2);
     });
 
     await test.step("offline home lists downloads; server-only nav hidden", async () => {

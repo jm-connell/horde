@@ -13,7 +13,8 @@ export function remPx(): number {
 export function detailsInnerHeight(el: HTMLElement): number {
   const style = getComputedStyle(el);
   const pad =
-    (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+    (parseFloat(style.paddingTop) || 0) +
+    (parseFloat(style.paddingBottom) || 0);
   return el.getBoundingClientRect().height - pad;
 }
 
@@ -186,7 +187,11 @@ export function useCardCopyLayout(
     if (detailsEl) ro.observe(detailsEl);
     if (combinedEl) ro.observe(combinedEl);
     void document.fonts?.ready.then(() => {
-      if (sizerEl?.isConnected || detailsEl?.isConnected || combinedEl?.isConnected) {
+      if (
+        sizerEl?.isConnected ||
+        detailsEl?.isConnected ||
+        combinedEl?.isConnected
+      ) {
         measure();
       }
     });

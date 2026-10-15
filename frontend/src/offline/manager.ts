@@ -155,7 +155,8 @@ class OfflineManager {
       this.emit(true);
       connectivity.subscribe(() => this.onConnectivity());
       window.addEventListener(OFFLINE_PROGRESS_EVENT, (e) => {
-        const d = (e as CustomEvent<{ videoId: number; positionSec: number }>).detail;
+        const d = (e as CustomEvent<{ videoId: number; positionSec: number }>)
+          .detail;
         this.recordProgress(d.videoId, d.positionSec);
       });
       this.onConnectivity();
@@ -178,7 +179,7 @@ class OfflineManager {
     if (choice.rendition === null) {
       api.requestCompat(video.id).catch(() => undefined);
       throw new Error(
-        `This device can’t play ${codecLabel(video)} video. Horde is making an H.264 copy — save it for offline again once that finishes.`,
+        `This device can’t play ${codecLabel(video)} video. Horde is making an H.264 copy — save it for offline again once that finishes.`
       );
     }
     await this.enqueue({
@@ -219,7 +220,7 @@ class OfflineManager {
     const item = this.items.get(videoId);
     if (!item || item.status === "complete") return;
     void this.save({ ...item, status: "queued", error: null }).then(() =>
-      this.pump(),
+      this.pump()
     );
   }
 
@@ -335,11 +336,19 @@ class OfflineManager {
     let item = this.items.get(videoId);
     if (!item) return;
     try {
-      item = await this.patch(videoId, { status: "downloading", error: null }, signal);
+      item = await this.patch(
+        videoId,
+        { status: "downloading", error: null },
+        signal
+      );
       if (item.totalBytes === 0) item = await this.prepare(item, signal);
       item = await this.fetchChunks(item, signal);
       item = await this.fetchExtras(item, signal);
-      await this.patch(videoId, { status: "complete", completedAt: Date.now() }, signal);
+      await this.patch(
+        videoId,
+        { status: "complete", completedAt: Date.now() },
+        signal
+      );
     } catch (err) {
       const current = this.items.get(videoId);
       if (!current) return; // removed
@@ -364,7 +373,10 @@ class OfflineManager {
   }
 
   /** First request: learn the size/type (also triggers the iOS remux). */
-  private async prepare(item: OfflineItem, signal: AbortSignal): Promise<OfflineItem> {
+  private async prepare(
+    item: OfflineItem,
+    signal: AbortSignal
+  ): Promise<OfflineItem> {
     let video = item.video;
     if (item.videoId > 0) {
       // List responses can be compact; fetch full metadata (chapters, subs).
@@ -378,7 +390,9 @@ class OfflineManager {
     if (resp.status !== 206) {
       await resp.body?.cancel().catch(() => undefined);
       throw new Error(
-        resp.ok ? "Server does not support resumable downloads" : `Download failed (${resp.status})`,
+        resp.ok
+          ? "Server does not support resumable downloads"
+          : `Download failed (${resp.status})`
       );
     }
     const total = contentRangeTotal(resp.headers.get("content-range"));
@@ -387,7 +401,11 @@ class OfflineManager {
     await this.ensureSpace(total);
     const contentType =
       resp.headers.get("content-type")?.split(";")[0] || "video/mp4";
-    return this.patch(item.videoId, { video, totalBytes: total, contentType }, signal);
+    return this.patch(
+      item.videoId,
+      { video, totalBytes: total, contentType },
+      signal
+    );
   }
 
   private async ensureSpace(bytes: number): Promise<void> {
@@ -396,12 +414,15 @@ class OfflineManager {
     const free = est.quota - (est.usage ?? 0);
     if (free < bytes * 1.02) {
       throw new Error(
-        `Not enough storage (${formatMb(bytes)} needed, ${formatMb(free)} free)`,
+        `Not enough storage (${formatMb(bytes)} needed, ${formatMb(free)} free)`
       );
     }
   }
 
-  private async fetchChunks(item: OfflineItem, signal: AbortSignal): Promise<OfflineItem> {
+  private async fetchChunks(
+    item: OfflineItem,
+    signal: AbortSignal
+  ): Promise<OfflineItem> {
     const cache = await caches.open(MEDIA_CACHE);
     const count = chunkCount(item);
     for (let i = item.chunksDone; i < count; i++) {
@@ -410,7 +431,9 @@ class OfflineManager {
       const blob = await this.fetchChunkWithRetry(item, start, end, signal);
       await cache.put(
         chunkUrl(item.videoId, i),
-        new Response(blob, { headers: { "Content-Type": "application/octet-stream" } }),
+        new Response(blob, {
+          headers: { "Content-Type": "application/octet-stream" },
+        })
       );
       item = await this.patch(item.videoId, { chunksDone: i + 1 }, signal);
     }
@@ -421,7 +444,7 @@ class OfflineManager {
     item: OfflineItem,
     start: number,
     end: number,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<Blob> {
     let lastErr: unknown;
     for (let attempt = 0; attempt < MAX_CHUNK_RETRIES; attempt++) {
@@ -441,7 +464,7 @@ class OfflineManager {
     item: OfflineItem,
     start: number,
     end: number,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<Blob> {
     const resp = await fetch(item.sourceUrl, {
       headers: { Range: `bytes=${start}-${end}` },
@@ -475,7 +498,10 @@ class OfflineManager {
     return new Blob(parts as BlobPart[]);
   }
 
-  private async fetchExtras(item: OfflineItem, signal: AbortSignal): Promise<OfflineItem> {
+  private async fetchExtras(
+    item: OfflineItem,
+    signal: AbortSignal
+  ): Promise<OfflineItem> {
     const cache = await caches.open(EXTRAS_CACHE);
     const extras: string[] = [];
     const store = async (url: string, source: string | Request = url) => {
@@ -504,7 +530,7 @@ class OfflineManager {
       if (thumb) {
         await store(
           `/api/thumbnails/${item.videoId}`,
-          new Request(thumb, { mode: "no-cors" }),
+          new Request(thumb, { mode: "no-cors" })
         );
       }
     }
@@ -517,7 +543,9 @@ class OfflineManager {
       const media = await caches.open(MEDIA_CACHE);
       const count = Math.max(chunkCount(item), item.chunksDone + 1);
       await Promise.all(
-        Array.from({ length: count }, (_, i) => media.delete(chunkUrl(item.videoId, i))),
+        Array.from({ length: count }, (_, i) =>
+          media.delete(chunkUrl(item.videoId, i))
+        )
       );
       const extras = await caches.open(EXTRAS_CACHE);
       await Promise.all(item.extras.map((u) => extras.delete(u)));
@@ -541,7 +569,7 @@ class OfflineManager {
   private async patch(
     videoId: number,
     patch: Partial<OfflineItem>,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<OfflineItem> {
     if (signal.aborted) throw signal.reason;
     const current = this.items.get(videoId);
@@ -574,7 +602,9 @@ class OfflineManager {
   }
 
   private publish(): void {
-    const items = [...this.items.values()].sort((a, b) => b.createdAt - a.createdAt);
+    const items = [...this.items.values()].sort(
+      (a, b) => b.createdAt - a.createdAt
+    );
     this.snapshot = {
       ...this.snapshot,
       items,
@@ -598,22 +628,25 @@ class FileChangedError extends Error {
 
 async function fetchSponsorSegments(
   video: Video,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<OfflineSponsorSegment[] | null> {
   const ytId = extractYouTubeId(video.source_url, video.file_path);
   if (!ytId) return null;
   const cats = encodeURIComponent(
-    JSON.stringify(SPONSOR_BLOCK_CATEGORIES.map((c) => c.id)),
+    JSON.stringify(SPONSOR_BLOCK_CATEGORIES.map((c) => c.id))
   );
   try {
     const resp = await fetch(
       `https://sponsor.ajay.app/api/skipSegments?videoID=${ytId}&categories=${cats}`,
-      { signal },
+      { signal }
     );
     // 404 = no segments for this video.
     if (resp.status === 404) return [];
     if (!resp.ok) return null;
-    const data = (await resp.json()) as { segment: [number, number]; category: string }[];
+    const data = (await resp.json()) as {
+      segment: [number, number];
+      category: string;
+    }[];
     if (!Array.isArray(data)) return null;
     return data.map((s) => ({
       startSec: s.segment[0],
@@ -634,7 +667,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
         clearTimeout(t);
         reject(signal.reason);
       },
-      { once: true },
+      { once: true }
     );
   });
 }

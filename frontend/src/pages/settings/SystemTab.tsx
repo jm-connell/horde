@@ -122,9 +122,9 @@ export default function SystemTab() {
 bash update.sh`}
                   </pre>
                   <p>
-                    Use <span className="font-mono">bash update.sh</span> so
-                    you do not need <span className="font-mono">chmod +x</span>
-                    . Then hard-refresh the browser (
+                    Use <span className="font-mono">bash update.sh</span> so you
+                    do not need <span className="font-mono">chmod +x</span>.
+                    Then hard-refresh the browser (
                     <kbd className="font-mono">Ctrl+Shift+R</kbd>
                     ). Library data stays on host volumes.
                   </p>
@@ -257,8 +257,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                 <span className="ml-2 font-sans text-gray-500">
                   {updateCheck.update_available
                     ? "· update available"
-                    : health.horde_version &&
-                        health.horde_version !== "unknown"
+                    : health.horde_version && health.horde_version !== "unknown"
                       ? "· up to date"
                       : ""}
                 </span>
@@ -296,21 +295,19 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                     : health.ollama.reachable
                       ? "Connected"
                       : "Offline"}
-                {!health.ollama.enabled || health.ollama.ready
-                  ? null
-                  : health.ollama.last_error ? (
-                      <div className="mt-0.5 max-w-xs text-xs text-red-400">
-                        {health.ollama.last_error}
-                      </div>
-                    ) : null}
+                {!health.ollama.enabled || health.ollama.ready ? null : health
+                    .ollama.last_error ? (
+                  <div className="mt-0.5 max-w-xs text-xs text-red-400">
+                    {health.ollama.last_error}
+                  </div>
+                ) : null}
               </StatusRow>
             )}
             {health.openrouter && (
               <StatusRow label="OpenRouter" tip={STATUS_TIPS.openrouter}>
                 {!health.openrouter.enabled
                   ? "Disabled"
-                  : health.openrouter.configured ||
-                      health.openrouter.reachable
+                  : health.openrouter.configured || health.openrouter.reachable
                     ? "Configured"
                     : "No API key"}
               </StatusRow>
@@ -352,10 +349,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                     </span>
                   ) : null}
                 </StatusRow>
-                <StatusRow
-                  label="Catalog queue"
-                  tip={STATUS_TIPS.catalogQueue}
-                >
+                <StatusRow label="Catalog queue" tip={STATUS_TIPS.catalogQueue}>
                   {health.workers.catalog_queue_depth}
                   {health.workers.catalog_indexing ? " · indexing" : ""}
                 </StatusRow>
@@ -761,16 +755,15 @@ function ResetHordePanel() {
                   </label>
                   <Collapse open={!eraseMedia}>
                     <p className="pt-3 text-xs text-gray-500">
-                      Library files, playlists, and watch progress stay on
-                      disk.
+                      Library files, playlists, and watch progress stay on disk.
                     </p>
                   </Collapse>
                   <Collapse open={eraseMedia}>
                     <div className="pt-4">
                       <p className="text-xs text-gray-500">
                         Type{" "}
-                        <span className="font-mono text-gray-300">RESET</span> to
-                        confirm.
+                        <span className="font-mono text-gray-300">RESET</span>{" "}
+                        to confirm.
                       </p>
                       <input
                         type="text"

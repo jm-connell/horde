@@ -66,7 +66,10 @@ function likeRatioTitle(
   return `${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes (YouTube)`;
 }
 
-function watchHref(entry: ChannelFeedEntry, channelName: string): string | null {
+function watchHref(
+  entry: ChannelFeedEntry,
+  channelName: string
+): string | null {
   if (entry.in_library && entry.video_id != null) {
     return `/watch/${entry.video_id}`;
   }
@@ -96,7 +99,10 @@ function FeedMetaRow({
   onDownload: () => void;
   onChannelClick?: () => void;
 }) {
-  const dateLabel = formatPublishedAt(entry.published_at, entry.published_label);
+  const dateLabel = formatPublishedAt(
+    entry.published_at,
+    entry.published_label
+  );
   const views =
     entry.view_count != null ? formatViewCount(entry.view_count) : "";
   const likeLabel = formatLikeRatio(entry.like_count, entry.dislike_count);
@@ -111,7 +117,11 @@ function FeedMetaRow({
       />
       <span
         className="block min-h-4 min-w-0 truncate text-xs leading-4 text-gray-500"
-        title={likeTip ? `${stats}${stats ? " · " : ""}${likeTip}` : stats || undefined}
+        title={
+          likeTip
+            ? `${stats}${stats ? " · " : ""}${likeTip}`
+            : stats || undefined
+        }
       >
         {stats || "\u00a0"}
       </span>
@@ -196,9 +206,7 @@ function FeedThumbnail({
         </div>
         <div
           className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center transition-opacity ${
-            previewing
-              ? "opacity-0"
-              : "opacity-0 group-hover:opacity-100"
+            previewing ? "opacity-0" : "opacity-0 group-hover:opacity-100"
           }`}
         >
           <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-gray-100 ring-1 ring-white/20">
@@ -272,7 +280,10 @@ export default function ChannelFeedCard({
     return maxResCache.get(entry.url) ?? "";
   });
   const viewCount = entry.view_count;
-  const dateLabel = formatPublishedAt(entry.published_at, entry.published_label);
+  const dateLabel = formatPublishedAt(
+    entry.published_at,
+    entry.published_label
+  );
   const href = watchHref(
     {
       ...entry,

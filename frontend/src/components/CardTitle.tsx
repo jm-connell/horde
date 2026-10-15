@@ -99,7 +99,12 @@ export default function CardTitle({
 
     const top = place === "bottom" ? y + CURSOR_GAP_Y : y - CURSOR_GAP_Y;
     setCoords((prev) => {
-      if (prev && prev.top === top && prev.left === left && prev.place === place) {
+      if (
+        prev &&
+        prev.top === top &&
+        prev.left === left &&
+        prev.place === place
+      ) {
         return prev;
       }
       return { top, left, place };
@@ -138,8 +143,7 @@ export default function CardTitle({
   }, [truncated]);
 
   const showFromPointer = (e: MouseEvent<HTMLHeadingElement>) => {
-    const overflows =
-      truncated ?? lineClampOverflows(e.currentTarget);
+    const overflows = truncated ?? lineClampOverflows(e.currentTarget);
     if (!overflows) return;
     pointerOpen.current = true;
     const { clientX, clientY } = e;

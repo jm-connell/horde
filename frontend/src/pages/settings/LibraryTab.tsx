@@ -10,7 +10,10 @@ import {
   METADATA_INTERVAL_TIP,
   PANEL_BTN,
 } from "./constants";
-import { LIBRARY_SORT_OPTIONS, type LibrarySort } from "../../hooks/useLibrarySort";
+import {
+  LIBRARY_SORT_OPTIONS,
+  type LibrarySort,
+} from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
 
@@ -130,8 +133,8 @@ export default function LibraryTab() {
             Progress expiry
           </h3>
           <p className="mb-3 text-xs text-gray-500">
-            Saved watch position resets after this many days of inactivity.
-            The continue watching row hides videos after 7 days (fixed, not
+            Saved watch position resets after this many days of inactivity. The
+            continue watching row hides videos after 7 days (fixed, not
             configurable).
           </p>
           <div className="flex items-center gap-3">
@@ -161,8 +164,8 @@ export default function LibraryTab() {
             Default video sort
           </h3>
           <p className="mb-3 text-xs text-gray-500">
-            Used when you open the library or after a temporary sort expires
-            (3 hours).
+            Used when you open the library or after a temporary sort expires (3
+            hours).
           </p>
           <div className="flex flex-wrap gap-2">
             {LIBRARY_SORT_OPTIONS.filter((o) => o.value !== "random").map(
@@ -291,7 +294,9 @@ export default function LibraryTab() {
               mode={settings.downloadVideoCodec}
               onChange={(id) => update({ downloadVideoCodec: id })}
               copyResolution={settings.compatCopyResolution}
-              onCopyResolutionChange={(v) => update({ compatCopyResolution: v })}
+              onCopyResolutionChange={(v) =>
+                update({ compatCopyResolution: v })
+              }
               stats={systemStats}
               showLibraryActions
             />
@@ -401,7 +406,8 @@ export default function LibraryTab() {
                   const clamped = Math.max(100, Math.min(5000, n));
                   setCatalogMaxInput(String(clamped));
                   if (
-                    clamped !== (appSettings?.channel_catalog_max_videos ?? 1000)
+                    clamped !==
+                    (appSettings?.channel_catalog_max_videos ?? 1000)
                   ) {
                     void saveCatalogSettings({
                       channel_catalog_max_videos: clamped,

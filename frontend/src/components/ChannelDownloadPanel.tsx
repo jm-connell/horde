@@ -48,8 +48,7 @@ export default function ChannelDownloadPanel({
   const { queue, miniPlayerActive, miniPlayerRect, miniPlayerCornerAnchor } =
     usePlayback();
   const queueVisible = queue.length > 0;
-  const liftAboveQueue =
-    queueVisible && queueDockedBottom && !miniPlayerActive;
+  const liftAboveQueue = queueVisible && queueDockedBottom && !miniPlayerActive;
   const [viewport, setViewport] = useState(() => ({
     width: typeof window !== "undefined" ? window.innerWidth : 0,
     height: typeof window !== "undefined" ? window.innerHeight : 0,
@@ -76,8 +75,7 @@ export default function ChannelDownloadPanel({
   );
 
   const editingItem = pending.find((p) => p.tempId === editingId) ?? null;
-  const presetOptions =
-    allPresets.length > 0 ? allPresets : [...PRESET_ORDER];
+  const presetOptions = allPresets.length > 0 ? allPresets : [...PRESET_ORDER];
 
   const panelShell =
     "ui-panel ui-panel-legible pointer-events-auto rounded-xl border border-ink-700 bg-ink-900 p-3 shadow-2xl ring-1 ring-ink-700";
@@ -180,7 +178,9 @@ export default function ChannelDownloadPanel({
                   <p className="line-clamp-2 text-sm font-medium text-gray-100">
                     {item.title || item.entry.title || "Untitled"}
                   </p>
-                  <p className="truncate text-xs text-gray-500">{item.channel}</p>
+                  <p className="truncate text-xs text-gray-500">
+                    {item.channel}
+                  </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <ThemedSelect
                       aria-label="Download resolution"

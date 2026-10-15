@@ -120,7 +120,9 @@ export function Section({
           {description}
         </p>
       )}
-      <div className={title || description ? undefined : "mt-0"}>{children}</div>
+      <div className={title || description ? undefined : "mt-0"}>
+        {children}
+      </div>
     </div>
   );
 }

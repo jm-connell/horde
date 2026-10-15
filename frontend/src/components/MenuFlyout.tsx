@@ -33,7 +33,10 @@ export function useMenuPresence(open: boolean): boolean {
       setPresent(false);
       return;
     }
-    const t = window.setTimeout(() => setPresent(false), MENU_FLYOUT_UNMOUNT_MS);
+    const t = window.setTimeout(
+      () => setPresent(false),
+      MENU_FLYOUT_UNMOUNT_MS
+    );
     return () => window.clearTimeout(t);
   }, [open]);
 

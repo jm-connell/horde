@@ -7,12 +7,14 @@ export type FeedSortContext = "browse" | "search";
 export function isYoutubeChannelUrl(url: string | null | undefined): boolean {
   if (!url) return false;
   try {
-    const host = new URL(
-      url.includes("://") ? url : `https://${url}`
-    ).hostname
+    const host = new URL(url.includes("://") ? url : `https://${url}`).hostname
       .replace(/^www\./i, "")
       .toLowerCase();
-    return host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com");
+    return (
+      host === "youtu.be" ||
+      host === "youtube.com" ||
+      host.endsWith(".youtube.com")
+    );
   } catch {
     return /youtube\.com|youtu\.be/i.test(url);
   }

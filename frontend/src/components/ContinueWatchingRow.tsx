@@ -65,7 +65,7 @@ export default function ContinueWatchingRow({
     const maxScroll = el.scrollWidth - el.clientWidth;
     const target = Math.max(
       0,
-      Math.min(maxScroll, el.scrollLeft + dir * page * step),
+      Math.min(maxScroll, el.scrollLeft + dir * page * step)
     );
     if (Math.abs(target - el.scrollLeft) < 4) return;
 
@@ -124,10 +124,7 @@ export default function ContinueWatchingRow({
         >
           <div className="flex gap-4">
             {videos.map((v) => (
-              <div
-                key={v.id}
-                className="group relative w-56 shrink-0 sm:w-64"
-              >
+              <div key={v.id} className="group relative w-56 shrink-0 sm:w-64">
                 <button
                   onClick={() => onDismiss(v.id)}
                   className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-gray-300 opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"

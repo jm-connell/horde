@@ -76,7 +76,9 @@ describe("watchProcessingLabel", () => {
   it("joins in-flight summary and preview work", () => {
     expect(watchProcessingLabel({})).toBeNull();
     expect(watchProcessingLabel({ processing_summary: true })).toBe("summary");
-    expect(watchProcessingLabel({ processing_chapters: true })).toBe("chapters");
+    expect(watchProcessingLabel({ processing_chapters: true })).toBe(
+      "chapters"
+    );
     expect(watchProcessingLabel({ processing_sprites: true })).toBe("previews");
     expect(
       watchProcessingLabel({
@@ -167,9 +169,9 @@ describe("misc helpers", () => {
     expect(formatViewCount(1_500_000)).toBe("1.5M views");
     expect(formatCompactCount(23_000)).toBe("23K");
     expect(formatLikeRatio(92, 8)).toBe("92%");
-    expect(
-      joinDotList(["Sep 5, 2026", "83K views", "99%", "", null])
-    ).toBe("Sep 5, 2026 · 83K views · 99%");
+    expect(joinDotList(["Sep 5, 2026", "83K views", "99%", "", null])).toBe(
+      "Sep 5, 2026 · 83K views · 99%"
+    );
   });
   it("effectiveSourceUrl falls back to path id", () => {
     expect(
@@ -231,9 +233,9 @@ describe("youtubeListThumbnailUrl", () => {
 describe("youtubeVideoIdFromUrl", () => {
   it("parses watch, short, and ytimg URLs", () => {
     expect(youtubeVideoIdFromUrl("dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
-    expect(
-      youtubeVideoIdFromUrl("https://youtu.be/dQw4w9WgXcQ?t=12")
-    ).toBe("dQw4w9WgXcQ");
+    expect(youtubeVideoIdFromUrl("https://youtu.be/dQw4w9WgXcQ?t=12")).toBe(
+      "dQw4w9WgXcQ"
+    );
     expect(
       youtubeVideoIdFromUrl(
         "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"

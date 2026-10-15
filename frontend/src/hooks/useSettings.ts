@@ -16,10 +16,7 @@ import {
   isCustomCssEnabled,
   normalizeCustomCss,
 } from "../customCss";
-import {
-  isLoadingStyle,
-  type LoadingStyle,
-} from "../loadingStyles";
+import { isLoadingStyle, type LoadingStyle } from "../loadingStyles";
 import {
   DEFAULT_SPONSOR_BLOCK_CATEGORIES,
   normalizeSponsorBlockCategories,
@@ -57,10 +54,7 @@ export interface CustomColors {
 }
 
 export type ChannelSort =
-  | "recent_download"
-  | "video_count"
-  | "alphabetical"
-  | "subscriber_count";
+  "recent_download" | "video_count" | "alphabetical" | "subscriber_count";
 
 export type LibrarySort =
   | "added_at"
@@ -90,12 +84,7 @@ export type BackgroundEffect =
   | "lightspeed"
   | "galaxy";
 
-export type FlowingGradientPreset =
-  | "theme"
-  | "rgb"
-  | "cool"
-  | "warm"
-  | "mono";
+export type FlowingGradientPreset = "theme" | "rgb" | "cool" | "warm" | "mono";
 
 export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator = "none" | "liquid" | "underline" | "fade";
@@ -136,13 +125,7 @@ export interface CustomThemePreset {
   customCssEnabled: boolean;
 }
 
-export type StreamQuality =
-  | "auto"
-  | "2160"
-  | "1440"
-  | "1080"
-  | "720"
-  | "480";
+export type StreamQuality = "auto" | "2160" | "1440" | "1080" | "720" | "480";
 
 /**
  * Playback-compatibility mode (persisted as `download_video_codec`):
@@ -151,7 +134,8 @@ export type StreamQuality =
  * - h264_convert: H.264 at full resolution; >1080p converted on this server.
  * - sidecar: AV1 original + a ≤1080p H.264 copy beside it.
  */
-export type DownloadVideoCodec = "av1" | "h264_native" | "h264_convert" | "sidecar";
+export type DownloadVideoCodec =
+  "av1" | "h264_native" | "h264_convert" | "sidecar";
 
 export type CompatCopyResolution = "1080p" | "source";
 
@@ -452,8 +436,14 @@ function applyCustomColors(colors: CustomColors): void {
   root.style.setProperty("--ink-700", rgbString(mixRgb(bg, white, 0.22)));
   root.style.setProperty("--ink-600", rgbString(mixRgb(bg, white, 0.35)));
   root.style.setProperty("--accent", rgbString(accent));
-  root.style.setProperty("--accent-soft", rgbString(mixRgb(accent, white, 0.35)));
-  root.style.setProperty("--accent-deep", rgbString(mixRgb(accent, black, 0.25)));
+  root.style.setProperty(
+    "--accent-soft",
+    rgbString(mixRgb(accent, white, 0.35))
+  );
+  root.style.setProperty(
+    "--accent-deep",
+    rgbString(mixRgb(accent, black, 0.25))
+  );
 }
 
 const LEGACY_THEMES: Record<string, Theme> = {
@@ -620,9 +610,7 @@ function migratePanelTranslucency(
   };
 }
 
-function normalizeBackgroundColorMode(
-  value: unknown
-): "accent" | "custom" {
+function normalizeBackgroundColorMode(value: unknown): "accent" | "custom" {
   return value === "custom" ? "custom" : "accent";
 }
 
@@ -665,16 +653,28 @@ function normalizeBool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-export function normalizeDownloadVideoCodec(value: unknown): DownloadVideoCodec {
+export function normalizeDownloadVideoCodec(
+  value: unknown
+): DownloadVideoCodec {
   const raw = String(value ?? "")
     .trim()
     .toLowerCase()
     .replace(/[-._+]/g, "");
-  if (raw === "sidecar" || raw === "dual" || raw === "av1h264") return "sidecar";
+  if (raw === "sidecar" || raw === "dual" || raw === "av1h264")
+    return "sidecar";
   if (raw === "h264native" || raw === "native") return "h264_native";
   // Legacy "h264" / "h265" were per-download transcode targets.
   if (
-    ["h264convert", "h264", "avc", "avc1", "h265", "hevc", "hvc1", "hev1"].includes(raw)
+    [
+      "h264convert",
+      "h264",
+      "avc",
+      "avc1",
+      "h265",
+      "hevc",
+      "hvc1",
+      "hev1",
+    ].includes(raw)
   ) {
     return "h264_convert";
   }
@@ -702,7 +702,9 @@ function snakeToCamel(key: string): string {
   return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 }
 
-export function settingsToServerUi(settings: Settings): Record<string, unknown> {
+export function settingsToServerUi(
+  settings: Settings
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const key of SERVER_UI_KEYS) {
     const val = settings[key];
@@ -752,10 +754,7 @@ const FONT_SIZE_SCALE: Record<FontSize, number> = {
   xl: 1.25,
 };
 
-function normalizeFontSize(
-  value: unknown,
-  legacyUiScale?: unknown
-): FontSize {
+function normalizeFontSize(value: unknown, legacyUiScale?: unknown): FontSize {
   if (typeof value === "string" && VALID_FONT_SIZES.has(value)) {
     return value as FontSize;
   }
@@ -865,7 +864,10 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
             : r.uiFont
           : DEFAULTS.uiFont,
       customCss: normalizeCustomCss(r.customCss),
-      customCssEnabled: isCustomCssEnabled(r.customCssEnabled, r.customCss ?? ""),
+      customCssEnabled: isCustomCssEnabled(
+        r.customCssEnabled,
+        r.customCss ?? ""
+      ),
     });
   }
   return out.slice(0, 40);
@@ -1059,14 +1061,15 @@ export function applyMotionPrefs(settings: Settings): void {
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = (
-      raw ? JSON.parse(raw) : {}
-    ) as Partial<Settings> & { liquidNav?: boolean };
+    const parsed = (raw ? JSON.parse(raw) : {}) as Partial<Settings> & {
+      liquidNav?: boolean;
+    };
     if (parsed.previewMuted === undefined) {
       try {
         const legacy = localStorage.getItem(LEGACY_PREVIEW_MUTE_KEY);
         if (legacy === "1" || legacy === "true") parsed.previewMuted = true;
-        else if (legacy === "0" || legacy === "false") parsed.previewMuted = false;
+        else if (legacy === "0" || legacy === "false")
+          parsed.previewMuted = false;
       } catch {
         // private mode
       }

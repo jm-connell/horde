@@ -134,8 +134,7 @@ export default function SubtitleOverlay({
     if (!stack) return;
 
     const rowEls = stack.querySelectorAll(".subtitle-overlay-line");
-    const rowAt = (index: number) =>
-      rowEls[index] as HTMLElement | undefined;
+    const rowAt = (index: number) => rowEls[index] as HTMLElement | undefined;
     const rowHeight = (index: number) => rowAt(index)?.offsetHeight ?? 0;
     const rowStep = (index: number) => {
       const a = rowAt(index);
@@ -317,11 +316,7 @@ export default function SubtitleOverlay({
   measureLiftRef.current = () => {
     if (!controlsVisible) suppressLiftRef.current = false;
     if (
-      !captionLiftActive(
-        controlsVisible,
-        dragging,
-        suppressLiftRef.current
-      )
+      !captionLiftActive(controlsVisible, dragging, suppressLiftRef.current)
     ) {
       setLiftPx((prev) => (prev === 0 ? prev : 0));
       return;

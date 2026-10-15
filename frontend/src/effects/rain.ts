@@ -16,7 +16,12 @@ export function createRainEffect(canvas: HTMLCanvasElement): EffectController {
   let lastH = 0;
   let lastSize = 0;
 
-  const spawn = (w: number, h: number, anywhere: boolean, size: number): Drop => ({
+  const spawn = (
+    w: number,
+    h: number,
+    anywhere: boolean,
+    size: number
+  ): Drop => ({
     x: Math.random() * w,
     y: anywhere ? Math.random() * h : -rand(0, h * 0.35),
     len: rand(12, 28) * size,
@@ -33,39 +38,42 @@ export function createRainEffect(canvas: HTMLCanvasElement): EffectController {
     );
   };
 
-  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, size }) => {
-    if (
-      Math.abs(width - lastW) > 8 ||
-      Math.abs(height - lastH) > 8 ||
-      Math.abs(size - lastSize) > 0.05
-    ) {
-      lastW = width;
-      lastH = height;
-      lastSize = size;
-      rebuild(width, height, size);
-    }
-    if (width <= 0 || height <= 0) return;
-
-    ctx.clearRect(0, 0, width, height);
-    ctx.lineCap = "round";
-
-    const span = height + 60;
-    for (const d of drops) {
-      d.y += d.speed * dt;
-      d.x += d.wind * dt;
-
-      if (d.y > span) {
-        d.y -= span + d.len;
+  return createCanvasLoop(
+    canvas,
+    ({ ctx, width, height, accent, dt, size }) => {
+      if (
+        Math.abs(width - lastW) > 8 ||
+        Math.abs(height - lastH) > 8 ||
+        Math.abs(size - lastSize) > 0.05
+      ) {
+        lastW = width;
+        lastH = height;
+        lastSize = size;
+        rebuild(width, height, size);
       }
-      if (d.x > width + 10) d.x -= width + 20;
-      if (d.x < -10) d.x += width + 20;
+      if (width <= 0 || height <= 0) return;
 
-      ctx.strokeStyle = rgba(accent, d.alpha);
-      ctx.lineWidth = d.width;
-      ctx.beginPath();
-      ctx.moveTo(d.x, d.y);
-      ctx.lineTo(d.x - d.wind * 0.04, d.y + d.len);
-      ctx.stroke();
+      ctx.clearRect(0, 0, width, height);
+      ctx.lineCap = "round";
+
+      const span = height + 60;
+      for (const d of drops) {
+        d.y += d.speed * dt;
+        d.x += d.wind * dt;
+
+        if (d.y > span) {
+          d.y -= span + d.len;
+        }
+        if (d.x > width + 10) d.x -= width + 20;
+        if (d.x < -10) d.x += width + 20;
+
+        ctx.strokeStyle = rgba(accent, d.alpha);
+        ctx.lineWidth = d.width;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - d.wind * 0.04, d.y + d.len);
+        ctx.stroke();
+      }
     }
-  });
+  );
 }

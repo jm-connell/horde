@@ -15,7 +15,14 @@ import ThemePalettePicker from "./settings/ThemePalettePicker";
 import { Toggle } from "./settings/ui";
 import { INPUT, INPUT_KEY, PANEL_BTN } from "./settings/constants";
 
-const STEPS = ["welcome", "downloads", "playback", "look", "ai", "done"] as const;
+const STEPS = [
+  "welcome",
+  "downloads",
+  "playback",
+  "look",
+  "ai",
+  "done",
+] as const;
 type Step = (typeof STEPS)[number];
 type AiChoice = "skip" | "openrouter" | "ollama";
 
@@ -62,7 +69,10 @@ export default function Setup() {
       .then((r) => r.json())
       .then(setHealth)
       .catch(() => undefined);
-    api.getSystemStats().then(setSystemStats).catch(() => undefined);
+    api
+      .getSystemStats()
+      .then(setSystemStats)
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -106,10 +116,9 @@ export default function Setup() {
       await flushSettingsSync();
       await api.updateAppSettings({ setup_completed: true });
       markSetupCompleted();
-      navigate(
-        (health?.library_video_count ?? 0) > 0 ? "/" : "/download",
-        { replace: true }
-      );
+      navigate((health?.library_video_count ?? 0) > 0 ? "/" : "/download", {
+        replace: true,
+      });
     } catch {
       setFinishing(false);
     }
@@ -150,7 +159,9 @@ export default function Setup() {
       setAiStatus("OpenRouter connected. You can continue.");
       goNext();
     } catch (err) {
-      setAiStatus(err instanceof Error ? err.message : "OpenRouter test failed.");
+      setAiStatus(
+        err instanceof Error ? err.message : "OpenRouter test failed."
+      );
     } finally {
       setAiBusy(false);
     }
@@ -216,7 +227,10 @@ export default function Setup() {
         ))}
       </div>
 
-      <div ref={wrapRef} className={`relative mt-6 overflow-hidden ${HEIGHT_EASE}`}>
+      <div
+        ref={wrapRef}
+        className={`relative mt-6 overflow-hidden ${HEIGHT_EASE}`}
+      >
         {leaving != null ? (
           <div
             className={`pointer-events-none absolute inset-x-0 top-0 ${
@@ -386,7 +400,9 @@ function WizardPanel({
               mode={settings.downloadVideoCodec}
               onChange={(id) => update({ downloadVideoCodec: id })}
               copyResolution={settings.compatCopyResolution}
-              onCopyResolutionChange={(v) => update({ compatCopyResolution: v })}
+              onCopyResolutionChange={(v) =>
+                update({ compatCopyResolution: v })
+              }
               stats={systemStats}
             />
           </>
@@ -408,8 +424,7 @@ function WizardPanel({
         {step === "ai" && (
           <>
             <p className="text-sm text-gray-400">
-              AI is optional. Skip for now and enable it later in Settings →
-              AI.
+              AI is optional. Skip for now and enable it later in Settings → AI.
             </p>
             <div className="flex flex-wrap gap-2">
               {(

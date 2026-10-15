@@ -36,7 +36,17 @@ export default function JobsPane() {
         first
         title="Queue"
         description="Live AI job status and pause/resume."
-        hidden={!match("queue", "indexed", "pause", "resume", "process", "gpu jobs", "index missing")}
+        hidden={
+          !match(
+            "queue",
+            "indexed",
+            "pause",
+            "resume",
+            "process",
+            "gpu jobs",
+            "index missing"
+          )
+        }
       >
         {aiStatus ? (
           <AiQueueStatus
@@ -84,7 +94,9 @@ export default function JobsPane() {
                   onClick={async () => {
                     const res = await api.retryFailedAiJobs().catch(() => null);
                     if (res) {
-                      showToast(`Retried ${res.retried} job${res.retried === 1 ? "" : "s"}`);
+                      showToast(
+                        `Retried ${res.retried} job${res.retried === 1 ? "" : "s"}`
+                      );
                       refreshAiStatus();
                     }
                   }}
@@ -95,9 +107,13 @@ export default function JobsPane() {
                   type="button"
                   className={PANEL_BTN}
                   onClick={async () => {
-                    const res = await api.clearFailedAiJobs(0).catch(() => null);
+                    const res = await api
+                      .clearFailedAiJobs(0)
+                      .catch(() => null);
                     if (res) {
-                      showToast(`Cleared ${res.deleted} failed job${res.deleted === 1 ? "" : "s"}`);
+                      showToast(
+                        `Cleared ${res.deleted} failed job${res.deleted === 1 ? "" : "s"}`
+                      );
                       refreshAiStatus();
                     }
                   }}
@@ -121,7 +137,9 @@ export default function JobsPane() {
                       {job.attempts > 0 ? ` · ${job.attempts} attempts` : ""}
                     </p>
                     {job.error && (
-                      <p className="mt-0.5 truncate text-red-400/90">{job.error}</p>
+                      <p className="mt-0.5 truncate text-red-400/90">
+                        {job.error}
+                      </p>
                     )}
                   </div>
                   {job.id != null && (
@@ -312,7 +330,9 @@ export default function JobsPane() {
               onClick={() => runAiProcess(catchUpScope)}
               className={PANEL_BTN}
             >
-              {aiProcessingAction === catchUpScope ? "Queuing…" : "Run catch-up"}
+              {aiProcessingAction === catchUpScope
+                ? "Queuing…"
+                : "Run catch-up"}
             </button>
           </div>
 
@@ -337,9 +357,7 @@ export default function JobsPane() {
               >
                 <path d="m6 9 6 6 6-6" />
               </svg>
-              {stepsOpen
-                ? "Hide individual steps"
-                : "Show individual steps"}
+              {stepsOpen ? "Hide individual steps" : "Show individual steps"}
             </button>
             <Collapse open={stepsOpen}>
               <div className="space-y-4">
