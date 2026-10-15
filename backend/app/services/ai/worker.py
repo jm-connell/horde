@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from datetime import timedelta
 
 from sqlmodel import Session, select
 
 from ...database import engine
+from ...logging_config import job_context
 from ...models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc, utcnow
 from .. import app_settings
+from ..workers import BackgroundWorker
 from . import embeddings, tasks
 from . import text as ai_text
 from .provider import (
@@ -23,9 +24,7 @@ from .provider import (
 
 logger = logging.getLogger(__name__)
 
-_stop = threading.Event()
-_thread: threading.Thread | None = None
-_timer_thread: threading.Thread | None = None
+#: Callers outside this module nudge the worker through ``wake_worker()``.
 _wake = threading.Event()
 _blocked_reason: str | None = None
 _WAITING_NOTE_PREFIX = "waiting: "
@@ -940,6 +939,18 @@ def _process_one() -> bool:
         video_id = job.video_id
         catalog_video_id = job.catalog_video_id
 
+    with job_context(f"ai-{job_id}"):
+        _run_claimed_job(job_id, kind, video_id, catalog_video_id)
+    return True
+
+
+def _run_claimed_job(
+    job_id: int | None,
+    kind: AiJobKind,
+    video_id: int | None,
+    catalog_video_id: int | None,
+) -> None:
+    """Run one AI job that ``_process_one`` has already marked running."""
     _clear_waiting_notes()
 
     kind_key = kind.value if hasattr(kind, "value") else str(kind)
@@ -1009,7 +1020,6 @@ def _process_one() -> bool:
                 session.commit()
         if act is not None:
             act.finish(status="failed", error=str(exc)[:500])
-    return True
 
 
 def _maybe_pending_category_refresh() -> None:
@@ -1026,8 +1036,8 @@ def _maybe_pending_category_refresh() -> None:
     enqueue_refresh_categories(force=True)
 
 
-def _worker_loop() -> None:
-    while not _stop.is_set():
+def _worker_loop(worker: BackgroundWorker) -> None:
+    while not worker.stopping:
         try:
             worked = _process_one()
         except Exception:
@@ -1039,8 +1049,8 @@ def _worker_loop() -> None:
             _maybe_pending_category_refresh()
         except Exception:
             logger.exception("Pending category refresh failed")
-        _wake.wait(timeout=2.0)
-        _wake.clear()
+        if worker.wait_for_wake(2.0):
+            return
 
 
 def _maybe_run_daily() -> None:
@@ -1069,8 +1079,9 @@ def _maybe_run_daily() -> None:
         app_settings.save({"ai": {"last_daily_run": today}})
 
 
-def _timer_loop() -> None:
-    while not _stop.is_set():
+def _timer_loop(worker: BackgroundWorker) -> None:
+    while not worker.stopping:
+        pause = 60.0
         try:
             ai = app_settings.ai_settings()
             schedule = str(ai.get("schedule") or "")
@@ -1082,35 +1093,27 @@ def _timer_loop() -> None:
                     hours = max(0.25, min(hours, 168.0))
                     enqueue_library_backlog(force=False)
                     enqueue_job(AiJobKind.refresh_categories, None, force=False)
-                    deadline = time.time() + hours * 3600
-                    while time.time() < deadline and not _stop.is_set():
-                        time.sleep(5)
+                    if worker.sleep(hours * 3600):
+                        return
                     continue
                 if schedule == "set_time":
                     _maybe_run_daily()
                 if schedule == "on_download":
                     maybe_enqueue_index_catchup()
             # Poll frequently for set_time / schedule changes
-            for _ in range(12):
-                if _stop.is_set():
-                    break
-                time.sleep(5)
         except Exception:
             logger.exception("AI timer loop error")
-            time.sleep(30)
+            pause = 30.0
+        if worker.sleep(pause):
+            return
 
 
-def start_ai_worker() -> None:
-    global _thread, _timer_thread
-    if _thread is not None and _thread.is_alive():
-        return
-    _stop.clear()
-    _thread = threading.Thread(target=_worker_loop, name="horde-ai-worker", daemon=True)
-    _thread.start()
-    _timer_thread = threading.Thread(
-        target=_timer_loop, name="horde-ai-timer", daemon=True
-    )
-    _timer_thread.start()
+def create_workers() -> list[BackgroundWorker]:
+    """The job runner and the scheduler that feeds it (registered in this order)."""
+    return [
+        BackgroundWorker("horde-ai-worker", _worker_loop, wake_event=_wake),
+        BackgroundWorker("horde-ai-timer", _timer_loop),
+    ]
 
 
 def recover_ai_jobs() -> int:
@@ -1132,11 +1135,6 @@ def recover_ai_jobs() -> int:
         logger.info("Recovered %s stuck AI job(s) → queued", reset)
         _wake.set()
     return reset
-
-
-def stop_ai_worker() -> None:
-    _stop.set()
-    _wake.set()
 
 
 def wake_worker() -> None:

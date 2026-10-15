@@ -299,5 +299,5 @@ def test_boot_cleanup_runs_after_queue_recovery():
 
     from app import main
 
-    src = inspect.getsource(main.lifespan)
+    src = inspect.getsource(main._start_workers)
     assert src.index("download_queue.recover()") < src.index("run_boot_cleanup()")

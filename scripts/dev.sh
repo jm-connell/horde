@@ -101,7 +101,7 @@ wait_for_backend() {
 echo "Starting backend on http://127.0.0.1:8080 ..."
 (
   cd "$ROOT/backend"
-  python -m uvicorn app.main:app --reload --port 8080
+  python -m uvicorn app.main:app --reload --port 8080 --timeout-graceful-shutdown 10
 ) &
 BACKEND_PID=$!
 

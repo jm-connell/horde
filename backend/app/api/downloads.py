@@ -4,7 +4,7 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlmodel import Session, select
 
@@ -32,6 +32,7 @@ from ..services.url_clean import (
     youtube_video_id,
 )
 from ..services.url_safety import UnsafeUrlError, validate_public_url
+from ..services.workers import shutdown_requested
 from ..services.ytdlp_common import (
     ERROR_KIND_UNKNOWN,
     MembersOnlyError,
@@ -221,12 +222,12 @@ def resume_queue():
 
 
 @router.get("/events")
-async def queue_events() -> StreamingResponse:
+async def queue_events(request: Request) -> StreamingResponse:
     """One EventSource for the whole download queue (avoids HTTP/1.1 socket cap)."""
 
     async def event_stream() -> AsyncGenerator[str, None]:
         last_payloads: dict[int, Any] = {}
-        while True:
+        while not shutdown_requested(request):
             items = list(downloader.progress_store.items())
             for job_id, snapshot in items:
                 if not isinstance(snapshot, dict):
@@ -618,18 +619,15 @@ def _job_status(job_id: int) -> JobStatus | None:
 
 
 @router.get("/{job_id}/events")
-async def job_events(
-    job_id: int, session: Session = Depends(get_session)
-) -> StreamingResponse:
+async def job_events(job_id: int, request: Request) -> StreamingResponse:
     """Progress stream for one job: 404 for an unknown job, closes once it finishes."""
-    job = session.get(DownloadJob, job_id)
-    if job is None:
+    if await asyncio.to_thread(_job_status, job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
     async def event_stream() -> AsyncGenerator[str, None]:
         last_payload = None
         ticks = 0
-        while True:
+        while not shutdown_requested(request):
             snapshot = downloader.progress_store.get(job_id)
             if snapshot is not None and snapshot != last_payload:
                 last_payload = snapshot

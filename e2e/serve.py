@@ -50,7 +50,13 @@ def main() -> None:
     sys.path.insert(0, str(BACKEND))
     import uvicorn
 
-    uvicorn.run("app.main:app", host="127.0.0.1", port=args.port, log_level="info")
+    uvicorn.run(
+        "app.main:app",
+        host="127.0.0.1",
+        port=args.port,
+        log_level="info",
+        timeout_graceful_shutdown=10,
+    )
 
 
 if __name__ == "__main__":

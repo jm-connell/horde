@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from sqlmodel import Session, select
@@ -20,6 +21,7 @@ from ..models import (
 )
 from . import app_settings, library
 from .url_clean import clean_url, youtube_video_id
+from .workers import BackgroundWorker
 from .ytdlp_extract import is_youtube_short_entry
 from .ytdlp_formats import QUALITY_FORMATS, default_download_video_codec
 
@@ -33,9 +35,6 @@ PREVIOUS_COUNT_MAX = 500
 POLL_INTERVAL_SEC = 15 * 60
 STARTUP_DELAY_SEC = 60
 LIVE_ACTIVE = frozenset({"is_live", "is_upcoming", "post_live"})
-
-_stop = threading.Event()
-_thread: threading.Thread | None = None
 
 
 def normalize_previous_mode(value: Any) -> str:
@@ -431,14 +430,14 @@ def schedule_apply_saved_policy(
     thread.start()
 
 
-def poll_enabled_channels() -> None:
+def poll_enabled_channels(should_stop: Callable[[], bool] | None = None) -> None:
     from .channel_catalog import sync_feed_head
 
     with Session(engine) as session:
         policies = list_enabled_policies(session)
         targets = [(p.channel_url, p.channel_name) for p in policies]
     for channel_url, channel_name in targets:
-        if _stop.is_set():
+        if should_stop is not None and should_stop():
             return
         try:
             sync_feed_head(channel_url, channel_name=channel_name, limit=50)
@@ -446,31 +445,17 @@ def poll_enabled_channels() -> None:
             logger.debug("autodownload poll failed for %s", channel_url, exc_info=True)
 
 
-def _worker_loop() -> None:
-    if _stop.wait(timeout=STARTUP_DELAY_SEC):
+def _worker_loop(worker: BackgroundWorker) -> None:
+    if worker.sleep(STARTUP_DELAY_SEC):
         return
-    while not _stop.is_set():
+    while not worker.stopping:
         try:
-            poll_enabled_channels()
+            poll_enabled_channels(lambda: worker.stopping)
         except Exception:
             logger.debug("autodownload poller error", exc_info=True)
-        if _stop.wait(timeout=POLL_INTERVAL_SEC):
+        if worker.sleep(POLL_INTERVAL_SEC):
             return
 
 
-def start_autodownload_worker() -> None:
-    global _thread
-    if _thread is not None and _thread.is_alive():
-        return
-    _stop.clear()
-    _thread = threading.Thread(
-        target=_worker_loop, daemon=True, name="autodownload-poller"
-    )
-    _thread.start()
-
-
-def stop_autodownload_worker() -> None:
-    _stop.set()
-    thread = _thread
-    if thread is not None and thread.is_alive():
-        thread.join(timeout=5)
+def create_worker() -> BackgroundWorker:
+    return BackgroundWorker("autodownload-poller", _worker_loop)

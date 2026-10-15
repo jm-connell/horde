@@ -1,11 +1,15 @@
+import asyncio
+import logging
 import os
 import shutil
-import subprocess
+import signal
+import threading
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -24,38 +28,21 @@ from .api import (
     system,
     videos,
 )
-from .config import (
-    DOWNLOADS_DIR,
-    YTDLP_POT_BASE_URL,
-    ensure_dirs,
-    resolve_git_sha,
-    short_git_sha,
-)
+from .config import DATA_DIR, DOWNLOADS_DIR, ensure_dirs, short_git_sha
 from .database import engine, init_db
 from .logging_config import configure_logging
+from .schemas import ReadyResponse
 from .security import install_security
 from .services import app_settings as app_settings_svc
-from .services import downloader
-from .services.ai import start_ai_worker, stop_ai_worker
+from .services import downloader, ffmpeg_progress
 from .services.ai.worker import recover_ai_jobs
-from .services.channel_autodownload import (
-    start_autodownload_worker,
-    stop_autodownload_worker,
-)
-from .services.channel_catalog import (
-    recover_catalog_jobs,
-    start_catalog_worker,
-    stop_catalog_worker,
-)
-from .services.job_metadata import (
-    start_job_metadata_worker,
-    stop_job_metadata_worker,
-)
-from .services.scanner import cleanup_orphans, start_scanner
-from .services.subtitle_retry import (
-    start_subtitle_retry_worker,
-    stop_subtitle_retry_worker,
-)
+from .services.channel_catalog import recover_catalog_jobs
+from .services.health import HealthCache, build_readiness
+from .services.scanner import cleanup_orphans, create_scanner_workers
+from .services.storage_check import network_storage_warning
+from .services.workers import WorkerRegistry
+
+logger = logging.getLogger(__name__)
 
 configure_logging()
 
@@ -79,57 +66,124 @@ def _e2e_browser() -> bool:
     return enabled()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    ensure_dirs()
-    init_db()
-    if _e2e_browser():
-        from .e2e_seed import prepare
+def _install_shutdown_signals(event: threading.Event) -> Callable[[], None]:
+    """Set ``event`` the moment SIGINT/SIGTERM arrives, then defer to the old handler.
 
-        prepare(os.environ.get("HORDE_E2E_MODE", "app"))
-        yield
-        return
-    cleanup_orphans()
-    from .services.ytdlp_common import ensure_plugins_loaded
+    Uvicorn waits for open connections before it runs the lifespan shutdown, so a
+    stream that only watched a lifespan-set flag would hold the shutdown until the
+    graceful timeout. Wrapping the handler lets streams end as soon as the signal
+    lands. Only the main thread may install handlers (not true under TestClient).
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return lambda: None
+    previous: dict[int, Any] = {}
 
-    ensure_plugins_loaded()
-    await preview.init_preview_client()
+    def make_handler(signum: int) -> Callable[[int, Any], None]:
+        chained = previous[signum]
+
+        def handler(received: int, frame: Any) -> None:
+            event.set()
+            if callable(chained):
+                chained(received, frame)
+            elif chained == signal.SIG_DFL:
+                signal.signal(received, signal.SIG_DFL)
+                signal.raise_signal(received)
+
+        return handler
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        previous[signum] = signal.getsignal(signum)
+        signal.signal(signum, make_handler(signum))
+
+    def restore() -> None:
+        for signum, old in previous.items():
+            if old is not None:
+                signal.signal(signum, old)
+
+    return restore
+
+
+def _start_workers(app_: FastAPI, registry: WorkerRegistry) -> None:
+    """Recover interrupted work, then start every background worker.
+
+    Workers stop in the reverse of this order, so what others depend on comes first.
+    """
+    from .services import (
+        channel_autodownload,
+        channel_catalog,
+        compat_rendition,
+        job_metadata,
+        subtitle_retry,
+    )
+    from .services.ai import worker as ai_worker
+    from .services.metadata_sync import create_sync_worker
+    from .services.sprites import sprite_pool
+
+    registry.start(ffmpeg_progress.children_worker())
+    health = _health_cache(app_)
+    if health.pot_base_url:
+        registry.start(health.create_pot_worker())
+    registry.start(downloader.download_queue)
+    registry.start(downloader.ffmpeg_queue)
+    registry.start(downloader.download_queue.create_reaper())
     downloader.download_queue.recover()
-    downloader.download_queue.start_reaper()
     downloader.gc_orphaned_device_dirs()
     from .services.temp_sweep import run_boot_cleanup
 
     run_boot_cleanup()
     recover_ai_jobs()
     recover_catalog_jobs()
-    observer = start_scanner()
-
-    from .services.metadata_sync import start_sync_worker
-
+    registry.start(sprite_pool)
+    for worker in create_scanner_workers():
+        registry.start(worker)
     settings = app_settings_svc.load()
-    start_sync_worker(interval_hours=settings.get("metadata_sync_interval_hours", 24))
-    start_ai_worker()
-    start_catalog_worker()
-    start_autodownload_worker()
-    start_subtitle_retry_worker()
-    start_job_metadata_worker()
-    from .services.compat_rendition import start_probe_backfill, stop_probe_backfill
+    registry.start(create_sync_worker(settings.get("metadata_sync_interval_hours", 24)))
+    for worker in ai_worker.create_workers():
+        registry.start(worker)
+    registry.start(channel_catalog.create_catalog_worker())
+    registry.start(channel_autodownload.create_worker())
+    registry.start(subtitle_retry.create_worker())
+    registry.start(job_metadata.create_worker())
+    job_metadata.rehydrate_pending()
+    registry.start(compat_rendition.create_probe_backfill_worker())
 
-    start_probe_backfill()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ensure_dirs()
+    init_db()
+    shutdown_event = threading.Event()
+    registry = WorkerRegistry()
+    app.state.shutdown_event = shutdown_event
+    app.state.workers = registry
+    restore_signals = _install_shutdown_signals(shutdown_event)
     try:
+        if _e2e_browser():
+            from .e2e_seed import prepare
+
+            prepare(os.environ.get("HORDE_E2E_MODE", "app"))
+            yield
+            return
+        warning = network_storage_warning(DATA_DIR)
+        app.state.storage_warning = warning
+        if warning:
+            logger.error("Storage problem: %s", warning)
+        cleanup_orphans()
+        from .services.ytdlp_common import ensure_plugins_loaded
+
+        ensure_plugins_loaded()
+        await preview.init_preview_client()
+        _start_workers(app, registry)
         yield
     finally:
-        downloader.download_queue.stop_reaper()
-        stop_probe_backfill()
-        stop_job_metadata_worker()
-        stop_subtitle_retry_worker()
-        stop_autodownload_worker()
-        stop_catalog_worker()
-        stop_ai_worker()
-        observer.stop()
-        observer.join(timeout=5)
+        shutdown_event.set()
+        # Join in a thread: a worker mid-write must not block the event loop that
+        # still has to finish closing the connections.
+        stuck = await asyncio.to_thread(registry.stop_all)
+        if stuck:
+            logger.error("shutdown left running: %s", ", ".join(stuck))
         await preview.close_preview_client()
+        restore_signals()
 
 
 app = FastAPI(title="Horde", lifespan=lifespan)
@@ -152,59 +206,38 @@ app.include_router(fonts.router)
 app.include_router(setup.router)
 
 
-def _yt_dlp_version() -> str:
-    try:
-        result = subprocess.run(
-            ["yt-dlp", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        return result.stdout.strip() or "unknown"
-    except Exception:  # noqa: BLE001
-        return "unknown"
-
-
-def _pot_provider_status() -> dict[str, Any] | None:
-    if not YTDLP_POT_BASE_URL:
-        return None
-    try:
-        import httpx
-
-        url = f"{YTDLP_POT_BASE_URL.rstrip('/')}/ping"
-        response = httpx.get(url, timeout=2.0)
-        if response.is_success:
-            data = response.json()
-            return {
-                "status": "ok",
-                "url": YTDLP_POT_BASE_URL,
-                "version": data.get("version"),
-            }
-        return {
-            "status": "error",
-            "url": YTDLP_POT_BASE_URL,
-            "detail": f"HTTP {response.status_code}",
-        }
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "status": "error",
-            "url": YTDLP_POT_BASE_URL,
-            "detail": str(exc),
-        }
+def _health_cache(app_: FastAPI) -> HealthCache:
+    """The app's startup-computed health values (built on first use if absent)."""
+    cache = getattr(app_.state, "health_cache", None)
+    if cache is None:
+        cache = app_.state.health_cache = HealthCache()
+    return cache
 
 
 @app.get("/api/ping")
 def ping():
-    """Connectivity probe for the PWA: no DB or disk work, never cached."""
+    """Liveness probe for the PWA: no DB or disk work, never cached."""
     return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
 
-@app.get("/api/health")
-def health():
+@app.get("/api/ready", response_model=ReadyResponse)
+def ready(request: Request):
+    """Readiness probe: database reachable, migrations at head, workers alive."""
+    report = build_readiness(request.app, engine)
+    return JSONResponse(report.model_dump(), status_code=200 if report.ready else 503)
+
+
+def build_health_payload(app_: FastAPI) -> dict[str, Any]:
+    """Everything ``GET /api/health`` returns, built from memory plus three COUNTs.
+
+    Kept in one function so a caller can trim or wrap it (the unauthenticated view
+    shows less than the signed-in one).
+    """
     from sqlmodel import Session, func, select
 
     from .models import DownloadJob, JobStatus, Video
 
+    cache = _health_cache(app_)
     with Session(engine) as session:
         video_count = session.scalar(select(func.count(Video.id))) or 0
         review_count = (
@@ -231,10 +264,11 @@ def health():
             "free_bytes": usage.free,
         }
     except OSError:
-        pass
+        logger.debug("disk usage unavailable for %s", DOWNLOADS_DIR, exc_info=True)
 
     ollama = None
     openrouter = None
+    # Health is polled every few seconds: failures below log at debug, not warning.
     try:
         from .services import app_settings as settings_svc
         from .services.ai.provider import (
@@ -270,11 +304,12 @@ def health():
             # Avoid remote ping on /health; presence of a key is enough here.
             "reachable": bool(or_enabled and resolve_openrouter_api_key()),
         }
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("AI status unavailable for health", exc_info=True)
         ollama = {"enabled": False, "ready": False, "reachable": False}
         openrouter = {"enabled": False, "configured": False, "reachable": False}
 
-    sha = resolve_git_sha()
+    sha = cache.git_sha
 
     downloads_paused = False
     cookies_ok = False
@@ -313,18 +348,20 @@ def health():
         cat = get_runtime_status()
         catalog_queue_depth = int(cat.get("queue_depth") or 0)
         catalog_indexing = bool(cat.get("running"))
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug("worker status unavailable for health", exc_info=True)
 
     return {
         "status": "ok",
         "horde_sha": sha,
         "horde_version": short_git_sha(sha),
-        "yt_dlp_version": _yt_dlp_version(),
-        "pot_provider": _pot_provider_status(),
+        "yt_dlp_version": cache.ytdlp_version,
+        "ffmpeg": cache.ffmpeg(),
+        "pot_provider": cache.pot_status(),
         "ollama": ollama,
         "openrouter": openrouter,
         "disk": disk,
+        "storage_warning": getattr(app_.state, "storage_warning", None),
         "library_video_count": video_count,
         "review_pending_count": review_count,
         "active_downloads": active_downloads,
@@ -346,6 +383,11 @@ def health():
             "last_extract_failure": last_extract,
         },
     }
+
+
+@app.get("/api/health")
+def health(request: Request):
+    return build_health_payload(request.app)
 
 
 @app.get("/api/updates")

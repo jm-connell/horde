@@ -89,12 +89,19 @@ services:
       # Opt-in: on every start, install the newest yt-dlp into the data volume.
       - YTDLP_AUTO_UPDATE=${YTDLP_AUTO_UPDATE:-0}
       - HORDE_ALLOW_ROOT=${HORDE_ALLOW_ROOT:-0}
+      # Logging and nightly database backups (docs/ops/logging.md, backup-restore.md).
+      - HORDE_LOG_LEVEL=${HORDE_LOG_LEVEL:-INFO}
+      - HORDE_LOG_FORMAT=${HORDE_LOG_FORMAT:-text}
+      - HORDE_BACKUP_HOUR=${HORDE_BACKUP_HOUR:-4}
+      - HORDE_BACKUP_KEEP=${HORDE_BACKUP_KEEP:-7}
     volumes:
       # Media library on your ZFS dataset.
       - ${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}:/downloads
       # Persistent SQLite DB + cached thumbnails.
       - ${DATA_PATH:-/opt/dockge/horde/data}:/app/data
     restart: unless-stopped
+    # Uvicorn drains for up to 10 s, then workers stop (ffmpeg gets SIGTERM, then SIGKILL).
+    stop_grace_period: 30s
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

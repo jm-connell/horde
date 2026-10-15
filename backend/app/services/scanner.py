@@ -1,6 +1,8 @@
+import logging
 import re
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from sqlalchemy.exc import IntegrityError
@@ -35,6 +37,9 @@ from .paths import (
 )
 from .thumbnails import write_list_thumbnail
 from .video_delete import delete_video_cascade, remove_files
+from .workers import BackgroundWorker, CallbackWorker, ManagedWorker
+
+logger = logging.getLogger(__name__)
 
 _scan_lock = threading.Lock()
 _suspended = threading.Event()
@@ -208,8 +213,12 @@ def ingest_media_file(
                     video.id,
                     reason="New file found by the folder scanner",
                 )
-            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                pass
+            except Exception:
+                logger.warning(
+                    "could not queue sprite generation for video %s",
+                    video.id,
+                    exc_info=True,
+                )
 
         return video
 
@@ -257,6 +266,7 @@ def scan_once(
     requeue_skipped: bool = False,
     record_empty: bool = False,
     reason: str = "Looking for new or dropped media files",
+    should_stop: Callable[[], bool] | None = None,
 ) -> tuple[int, int]:
     """Walk the downloads tree once, ingesting any unseen media files.
 
@@ -278,7 +288,7 @@ def scan_once(
         try:
             with Session(engine) as session:
                 for path in DOWNLOADS_DIR.rglob("*"):
-                    if _suspended.is_set():
+                    if _suspended.is_set() or (should_stop and should_stop()):
                         break
                     if _is_media(path) and _ingest_file(session, path):
                         added += 1
@@ -351,8 +361,9 @@ class _MediaEventHandler(FileSystemEventHandler):
         try:
             with Session(engine) as session:
                 _ingest_file(session, path)
-        except Exception:  # noqa: BLE001, S110 - keep watchdog thread alive
-            pass
+        except Exception:
+            # An exception here would end the watchdog thread for good.
+            logger.warning("could not ingest %s", path, exc_info=True)
 
     def on_created(self, event) -> None:
         if not event.is_directory:
@@ -363,30 +374,45 @@ class _MediaEventHandler(FileSystemEventHandler):
             self._maybe_ingest(event.dest_path)
 
 
-def _polling_loop() -> None:
-    while True:
-        time.sleep(SCAN_INTERVAL_SEC)
-        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
-            scan_once()
-        except Exception:  # noqa: BLE001, S110 - keep the poller alive across errors
-            pass
-        try:
-            with Session(engine) as session:
-                library.expire_stale_progress(session)
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+def _scan_pass(worker: BackgroundWorker, *, expire_progress: bool) -> None:
+    try:
+        scan_once(should_stop=lambda: worker.stopping)
+    except Exception:
+        # Keep the poller alive: the next pass retries.
+        logger.warning("library scan failed", exc_info=True)
+    if not expire_progress:
+        return
+    try:
+        with Session(engine) as session:
+            library.expire_stale_progress(session)
+    except Exception:
+        logger.warning("expiring stale import progress failed", exc_info=True)
 
 
-def start_scanner() -> Observer:
-    # Initial sweep so existing files appear immediately on boot.
-    scan_once()
+def _polling_loop(worker: BackgroundWorker) -> None:
+    # The initial sweep runs here, not in startup, so the server answers requests
+    # while a large library is walked; the watchdog already covers new files.
+    _scan_pass(worker, expire_progress=False)
+    while not worker.sleep(SCAN_INTERVAL_SEC):
+        _scan_pass(worker, expire_progress=True)
 
+
+def create_scanner_workers() -> list[ManagedWorker]:
+    """The watchdog observer and the fallback poller (which also runs the first scan)."""
     observer = Observer()
     observer.schedule(_MediaEventHandler(), str(DOWNLOADS_DIR), recursive=True)
     observer.daemon = True
-    observer.start()
 
-    poller = threading.Thread(target=_polling_loop, daemon=True)
-    poller.start()
+    def stop_observer(timeout: float) -> None:
+        if observer.is_alive():
+            observer.stop()
+            observer.join(timeout=timeout)
 
-    return observer
+    watcher = CallbackWorker(
+        "scanner-watchdog",
+        start=observer.start,
+        stop=stop_observer,
+        is_alive=observer.is_alive,
+        signal_stop=observer.stop,
+    )
+    return [watcher, BackgroundWorker("scanner-poller", _polling_loop)]

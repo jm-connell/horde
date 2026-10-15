@@ -94,7 +94,8 @@ def test_worker_fills_queued_job(init_db, monkeypatch):
         session.commit()
         job_id = job.id
 
-    job_metadata.start_job_metadata_worker()
+    worker = job_metadata.create_worker()
+    worker.start()
     try:
         job_metadata.request_job_metadata(job_id)
         assert done.wait(timeout=5)
@@ -109,4 +110,4 @@ def test_worker_fills_queued_job(init_db, monkeypatch):
             job = session.get(DownloadJob, job_id)
             assert job.title == "From Worker"
     finally:
-        job_metadata.stop_job_metadata_worker()
+        assert worker.stop(timeout=5)

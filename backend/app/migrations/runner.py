@@ -72,6 +72,18 @@ def _current_revision(engine: Engine) -> str | None:
         return MigrationContext.configure(conn).get_current_revision()
 
 
+def head_revision() -> str | None:
+    """The newest revision this code ships."""
+    cfg = Config()
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parent))
+    return ScriptDirectory.from_config(cfg).get_current_head()
+
+
+def is_at_head(engine: Engine, head: str | None = None) -> bool:
+    """True when the database is migrated to ``head`` (default: this code's head)."""
+    return _current_revision(engine) == (head or head_revision())
+
+
 def _backup_database(engine: Engine, label: str) -> Path | None:
     """Copy the database next to itself before it is changed. Keeps the newest few."""
     db_file = engine.url.database

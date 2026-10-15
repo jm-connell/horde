@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import shutil
 import sys
-import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -51,23 +50,27 @@ def _rebind_imported_app_modules(monkeypatch, *, engine, dirs: dict[str, Any]) -
 
 
 @pytest.fixture(autouse=True)
-def _join_background_workers(monkeypatch):
-    """Do not let fire-and-forget worker threads outlive the test that started them.
+def _join_background_workers():
+    """Do not let sprite threads outlive the test that started them.
 
-    Importing/scanning a library enqueues a sprite worker thread and registers the
-    video id in the module-level ``sprites._generating`` set. If that thread is still
-    running when the next test starts, the next test's ``enqueue_sprite_generation``
-    returns "generating" without starting a worker, and the old thread keeps using
-    a torn-down engine. Joining here (while ``monkeypatch`` still points the modules
-    at this test's engine and tmp dirs) keeps every test isolated.
+    Importing/scanning a library enqueues sprite builds on the process-wide pool.
+    A build still running when the next test starts would keep using a torn-down
+    engine, so wait for the backlog to drain and stop the pool's threads here (while
+    the test's ``monkeypatch`` still points the modules at its engine and tmp
+    dirs). The pool reopens for the next test.
     """
-    started_before = set(threading.enumerate())
+    from app.services import downloader, ffmpeg_progress
+    from app.services.channel_catalog import runtime as catalog_runtime
+    from app.services.sprites import sprite_pool
+
+    # Lifespan tests shut these process-wide objects down; reopen them for the next test.
+    sprite_pool.start()
+    downloader.download_queue.start()
+    ffmpeg_progress.children.reopen()
+    catalog_runtime._stop.clear()
     yield
-    for thread in threading.enumerate():
-        if thread in started_before or not thread.name.startswith("sprites-"):
-            continue
-        thread.join(timeout=30)
-        assert not thread.is_alive(), f"{thread.name} still running after test"
+    assert sprite_pool.wait_idle(30), "sprite builds still running after test"
+    assert sprite_pool.stop(timeout=30), "sprite threads still running after test"
 
 
 @pytest.fixture
@@ -233,7 +236,7 @@ def app(init_db, monkeypatch):
         videos,
     )
     from app.database import get_session
-    from app.main import health
+    from app.main import health, ping, ready
     from app.security import install_security
     from app.services import downloader
 
@@ -263,6 +266,8 @@ def app(init_db, monkeypatch):
     test_app.include_router(fonts.router)
     test_app.include_router(setup.router)
     test_app.add_api_route("/api/health", health, methods=["GET"])
+    test_app.add_api_route("/api/ready", ready, methods=["GET"])
+    test_app.add_api_route("/api/ping", ping, methods=["GET"])
     install_security(test_app)
 
     def _override_session():

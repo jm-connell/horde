@@ -22,7 +22,7 @@ The columns are timestamp, level, logger, thread name, then the correlation IDs 
 * Every HTTP response has an `X-Request-ID` header. If the client (or your reverse proxy) sends its own `X-Request-ID` of up to 64 letters, digits and `._:-`, Horde reuses it; otherwise it generates one. Every log line written while that request is handled carries `request_id`.
 * Download, ffmpeg postprocess, AI and channel-catalog jobs set `job_id` (`download-<id>`, `ai-<id>`, `catalog-<id>`) while they run, so `grep job_id=download-12` follows one download from start to finish.
 
-Uvicorn's own access lines are written after the response, outside the request context, so they do not carry the ID; the `X-Request-ID` header in your proxy's log is the way to match them.
+Uvicorn's access lines carry the same `request_id`, so a proxy log line and the matching Horde access line can be joined on the `X-Request-ID` header.
 
 ## Caught errors are logged, not swallowed
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -13,12 +14,15 @@ from ..database import engine
 from ..models import Video
 from . import activity
 from .thumbnails import save_from_url
+from .workers import BackgroundWorker
 from .ytdlp_common import (
     EXTRACT_PRIORITY_BACKGROUND,
     extract_info_gated,
     youtube_extractor_args,
 )
 from .ytdlp_extract import _list_thumbnail_url
+
+logger = logging.getLogger(__name__)
 
 SyncField = Literal["views", "thumbnails", "captions", "titles_descriptions", "all"]
 
@@ -183,8 +187,10 @@ def refresh_video_metadata(
                 tracks_url = source_url
             outcome = download_subtitles(media, tracks_url)
             apply_subtitle_outcome(video_id, outcome)
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.warning(
+                "caption refresh failed for video %s", video_id, exc_info=True
+            )
 
     return changed
 
@@ -311,9 +317,11 @@ def start_bulk_sync(
     }
 
 
-def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
-    """Background thread: refresh stale metadata for all syncable videos."""
-    while True:
+def run_periodic_sync(
+    worker: BackgroundWorker, interval_hours: int = 24, batch_size: int = 20
+) -> None:
+    """Worker loop: refresh stale metadata for all syncable videos, hourly."""
+    while not worker.stopping:
         with _sync_lock:
             with Session(engine) as session:
                 all_videos = session.exec(
@@ -333,31 +341,40 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
                 )
                 try:
                     for i, video in enumerate(batch):
+                        if worker.stopping:
+                            break
                         act.update(done=i, detail=video.title)
-                        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+                        try:
                             refresh_video_metadata(video.id)
-                        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                            pass
+                        except Exception:
+                            logger.warning(
+                                "periodic metadata refresh failed for video %s",
+                                video.id,
+                                exc_info=True,
+                            )
                     act.finish(detail=f"{len(batch)} video(s)")
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
+                    logger.warning("periodic metadata refresh failed", exc_info=True)
                     act.finish(status="failed", error=str(exc)[:500])
                 finally:
                     if not act._closed:
                         act.discard()
 
+        if worker.stopping:
+            return
         try:
             from . import channel_catalog
 
             channel_catalog.refresh_stale_catalogs()
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.warning("refreshing stale channel catalogs failed", exc_info=True)
 
         try:
             from .playlist_sync import sync_subscribed_playlists
 
             sync_subscribed_playlists()
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.warning("syncing subscribed playlists failed", exc_info=True)
 
         # Re-read interval so Settings changes apply without restart.
         try:
@@ -367,17 +384,16 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
                 settings_svc.load().get("metadata_sync_interval_hours")
                 or interval_hours
             )
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
-        threading.Event().wait(3600)
+        except Exception:
+            logger.warning(
+                "could not re-read the metadata sync interval", exc_info=True
+            )
+        if worker.sleep(3600):
+            return
 
 
-def start_sync_worker(interval_hours: int = 24) -> threading.Thread:
-    t = threading.Thread(
-        target=run_periodic_sync,
-        kwargs={"interval_hours": interval_hours},
-        daemon=True,
-        name="metadata-sync",
+def create_sync_worker(interval_hours: int = 24) -> BackgroundWorker:
+    return BackgroundWorker(
+        "metadata-sync",
+        lambda worker: run_periodic_sync(worker, interval_hours=interval_hours),
     )
-    t.start()
-    return t

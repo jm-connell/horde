@@ -51,20 +51,14 @@ From `main.py` `lifespan`:
 
 1. `ensure_dirs()` — create downloads + data subdirs  
 2. `init_db()` — Alembic `upgrade head` (adopting pre-Alembic databases first); refuses a database from a newer version  
-3. `cleanup_orphans()` — drop library rows for missing files  
-4. `ensure_plugins_loaded()` — load yt-dlp plugins once before workers  
-5. `preview.init_preview_client()`  
-6. `downloader.download_queue.recover()` — `downloading` → `queued`; restore `download_queue_paused`  
-7. `recover_ai_jobs()` — AI jobs left `running` → `queued`  
-8. `recover_catalog_jobs()` — catalogs left `indexing` → `queued`  
-9. `start_scanner()` — watchdog + `SCAN_INTERVAL_SEC` poller  
-10. `start_sync_worker(interval_hours=…)` — from settings  
-11. `start_ai_worker()`  
-12. `start_catalog_worker()`  
-13. `start_autodownload_worker()`  
-14. `start_subtitle_retry_worker()`  
+3. A `WorkerRegistry` and the app-level shutdown event are created and stored on `app.state`  
+4. Network-filesystem check of `DATA_DIR` (logs an `ERROR` and sets `storage_warning` on `/api/health`)  
+5. `cleanup_orphans()` — drop library rows for missing files  
+6. `ensure_plugins_loaded()` — load yt-dlp plugins once before workers  
+7. `preview.init_preview_client()`  
+8. `_start_workers()`: the download queue, ffmpeg queue and reaper are registered, then `download_queue.recover()` (`downloading` → `queued`; restore `download_queue_paused`), `recover_ai_jobs()`, `recover_catalog_jobs()`, then the sprite pool, scanner (watchdog + poller, which runs the first library scan), metadata sync, AI, catalog, autodownload, subtitle retry, job metadata, probe backfill  
 
-On shutdown (reverse concerns): stop subtitle retry → stop autodownload → stop catalog → stop AI → stop observer → close preview client.
+On shutdown the shutdown event is set (streams end), every worker is signalled and then joined newest first, and the preview client is closed. See [Workers](workers.md#lifecycle).
 
 ## Related
 

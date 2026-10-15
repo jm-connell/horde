@@ -563,3 +563,13 @@ class SystemActivityRead(BaseModel):
 
 class BulkPlaylistAdd(BaseModel):
     video_ids: list[int] = Field(max_length=MAX_BULK_ITEMS)
+
+
+class ReadyResponse(BaseModel):
+    """``GET /api/ready``: 200 when ``ready``, 503 otherwise."""
+
+    ready: bool
+    database: bool
+    migrations: bool
+    workers: dict[str, bool]
+    problems: list[str]

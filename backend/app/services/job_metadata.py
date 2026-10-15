@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import logging
 import queue
-import threading
 
 from sqlmodel import Session, select
 
 from ..database import engine
 from ..models import DownloadJob, JobStatus
 from .url_clean import youtube_thumbnail_url, youtube_video_id
+from .workers import BackgroundWorker
 from .ytdlp_common import EXTRACT_PRIORITY_BACKGROUND
 from .ytdlp_extract import extract_preview, is_youtube_short_entry, is_youtube_short_url
 from .ytdlp_formats import quality_from_preview
@@ -18,8 +18,7 @@ from .ytdlp_formats import quality_from_preview
 logger = logging.getLogger(__name__)
 
 _pending: queue.Queue[int] = queue.Queue()
-_stop = threading.Event()
-_thread: threading.Thread | None = None
+_STOP_SENTINEL = -1
 
 
 def request_job_metadata(job_id: int | None) -> None:
@@ -28,14 +27,11 @@ def request_job_metadata(job_id: int | None) -> None:
     _pending.put(job_id)
 
 
-def start_job_metadata_worker() -> None:
-    global _thread
-    if _thread is not None and _thread.is_alive():
-        return
-    _stop.clear()
-    _thread = threading.Thread(target=_loop, name="job-metadata", daemon=True)
-    _thread.start()
-    rehydrate_pending()
+def create_worker() -> BackgroundWorker:
+    """The worker; call ``rehydrate_pending()`` once it is registered."""
+    return BackgroundWorker(
+        "job-metadata", _loop, on_stop=lambda: _pending.put(_STOP_SENTINEL)
+    )
 
 
 def rehydrate_pending() -> int:
@@ -56,21 +52,13 @@ def rehydrate_pending() -> int:
     return len(ids)
 
 
-def stop_job_metadata_worker() -> None:
-    _stop.set()
-    _pending.put(-1)
-    thread = _thread
-    if thread is not None:
-        thread.join(timeout=2)
-
-
-def _loop() -> None:
-    while not _stop.is_set():
+def _loop(worker: BackgroundWorker) -> None:
+    while not worker.stopping:
         try:
             job_id = _pending.get(timeout=1.0)
         except queue.Empty:
             continue
-        if job_id < 0 or _stop.is_set():
+        if job_id < 0 or worker.stopping:
             continue
         try:
             _fill_job(job_id)

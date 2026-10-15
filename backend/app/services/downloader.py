@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
 from ..database import engine
+from ..logging_config import job_context
 from ..models import (
     DownloadDestination,
     DownloadJob,
@@ -63,6 +64,7 @@ from .url_clean import clean_url, youtube_thumbnail_url, youtube_video_id
 from .url_safety import UnsafeUrlError, validate_public_url
 from .video_delete import delete_video_cascade, remove_files
 from .video_transcode import encode_target, transcode_video
+from .workers import BackgroundWorker
 from .ytdlp_common import (
     ERROR_KIND_CANCELLED,
     ERROR_KIND_MEMBERS,
@@ -499,8 +501,53 @@ class DownloadQueue:
         self._held: set[int] = set()
         self._restart_ids: set[int] = set()
         self._orphan_seen: dict[int, float] = {}
-        self._reaper: threading.Thread | None = None
-        self._reaper_stop = threading.Event()
+        # Shutdown: stop dispatching, cancel in-flight work and requeue it (see
+        # ``_mark_job_cancelled``) so the next boot resumes it.
+        self._shutting_down = False
+        self._threads: set[threading.Thread] = set()
+
+    # -- ManagedWorker protocol (registered by lifespan) -----------------------
+
+    name = "download-queue"
+    #: Seconds the registry waits for in-flight downloads to cancel and requeue.
+    stop_timeout = 10.0
+
+    def start(self) -> None:
+        with self._lock:
+            self._shutting_down = False
+
+    @property
+    def is_alive(self) -> bool:
+        """True while the queue accepts and dispatches jobs."""
+        with self._lock:
+            return not self._shutting_down
+
+    @property
+    def healthy(self) -> bool:
+        return self.is_alive
+
+    def is_shutting_down(self) -> bool:
+        with self._lock:
+            return self._shutting_down
+
+    def signal_stop(self) -> None:
+        """Stop dispatching and cancel every in-flight job (they requeue)."""
+        with self._lock:
+            self._shutting_down = True
+            events = list(self._cancel_events.values())
+        for event in events:
+            event.set()
+
+    def stop(self, timeout: float | None = None) -> bool:
+        """Signal, then wait for the download threads. True when all have ended."""
+        self.signal_stop()
+        deadline = time.monotonic() + (10.0 if timeout is None else timeout)
+        with self._lock:
+            threads = list(self._threads)
+        for thread in threads:
+            thread.join(max(0.0, deadline - time.monotonic()))
+        with self._lock:
+            return not any(t.is_alive() for t in self._threads)
 
     def is_paused(self) -> bool:
         with self._lock:
@@ -715,7 +762,8 @@ class DownloadQueue:
         while True:
             with self._lock:
                 if (
-                    self._global_paused
+                    self._shutting_down
+                    or self._global_paused
                     or len(self._running) >= MAX_DOWNLOAD_CONCURRENCY
                 ):
                     return
@@ -725,7 +773,8 @@ class DownloadQueue:
                 return
             with self._lock:
                 if (
-                    self._global_paused
+                    self._shutting_down
+                    or self._global_paused
                     or len(self._running) >= MAX_DOWNLOAD_CONCURRENCY
                 ):
                     return
@@ -734,11 +783,14 @@ class DownloadQueue:
                 self._running.add(job_id)
                 cancel_event = threading.Event()
                 self._cancel_events[job_id] = cancel_event
-            threading.Thread(
-                target=self._worker,
-                args=(job_id, cancel_event),
-                daemon=True,
-            ).start()
+                thread = threading.Thread(
+                    target=self._worker,
+                    args=(job_id, cancel_event),
+                    daemon=True,
+                    name=f"download-{job_id}",
+                )
+                self._threads.add(thread)
+            thread.start()
 
     def _next_job_id(self) -> int | None:
         """Oldest queued, unpaused job that is neither running nor held."""
@@ -804,33 +856,27 @@ class DownloadQueue:
             self._dispatch()
         return reaped
 
-    def start_reaper(self, interval: float = REAPER_INTERVAL_SECONDS) -> None:
-        if self._reaper is not None and self._reaper.is_alive():
-            return
-        self._reaper_stop.clear()
+    def create_reaper(
+        self, interval: float = REAPER_INTERVAL_SECONDS
+    ) -> BackgroundWorker:
+        """The worker that requeues orphaned jobs and prunes finished progress."""
 
-        def loop() -> None:
-            while not self._reaper_stop.wait(interval):
+        def loop(worker: BackgroundWorker) -> None:
+            while not worker.sleep(interval):
                 try:
                     self.reap_stuck_jobs()
                     progress_store.prune()
                 except Exception:
                     logger.exception("stuck-job reaper pass failed")
 
-        self._reaper = threading.Thread(
-            target=loop, name="download-reaper", daemon=True
-        )
-        self._reaper.start()
-
-    def stop_reaper(self) -> None:
-        self._reaper_stop.set()
-        thread = self._reaper
-        if thread is not None:
-            thread.join(timeout=2)
-        self._reaper = None
+        return BackgroundWorker("download-reaper", loop)
 
     def _worker(self, job_id: int, cancel_event: threading.Event) -> None:
         """Run one job. Total: whatever happens, the job leaves ``downloading``."""
+        with job_context(f"download-{job_id}"):
+            self._run_job(job_id, cancel_event)
+
+    def _run_job(self, job_id: int, cancel_event: threading.Event) -> None:
         try:
             with Session(engine) as session:
                 job = session.get(DownloadJob, job_id)
@@ -857,6 +903,7 @@ class DownloadQueue:
         finally:
             with self._lock:
                 self._running.discard(job_id)
+                self._threads.discard(threading.current_thread())
                 if job_id not in self._ffmpeg_running:
                     self._cancel_events.pop(job_id, None)
             self._dispatch()
@@ -903,10 +950,59 @@ class _PostprocessTask:
 class FfmpegQueue:
     """Bounded remux/transcode/loudnorm so a slow encode does not hold a download slot."""
 
+    name = "ffmpeg-queue"
+    stop_timeout = 10.0
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._pending: list[_PostprocessTask] = []
         self._running: set[int] = set()
+        self._threads: set[threading.Thread] = set()
+
+    # -- ManagedWorker protocol (registered by lifespan) -----------------------
+    # Shutdown cancels in-flight encodes through the shared per-job cancel events
+    # (set by ``DownloadQueue.signal_stop``); this queue drops what has not started.
+
+    def start(self) -> None:
+        return
+
+    @property
+    def is_alive(self) -> bool:
+        return not download_queue.is_shutting_down()
+
+    @property
+    def healthy(self) -> bool:
+        return self.is_alive
+
+    def signal_stop(self) -> None:
+        with self._lock:
+            pending, self._pending = self._pending, []
+        for task in pending:
+            self._abandon(task)
+
+    def stop(self, timeout: float | None = None) -> bool:
+        self.signal_stop()
+        deadline = time.monotonic() + (10.0 if timeout is None else timeout)
+        with self._lock:
+            threads = list(self._threads)
+        for thread in threads:
+            thread.join(max(0.0, deadline - time.monotonic()))
+        with self._lock:
+            return not any(t.is_alive() for t in self._threads)
+
+    def _abandon(self, task: _PostprocessTask) -> None:
+        """Requeue a postprocess task that never started (shutdown)."""
+        try:
+            _mark_job_cancelled(task.job_id, task.destination, task.final_path)
+        except Exception:
+            logger.exception("could not requeue job %s at shutdown", task.job_id)
+        for lib in task.active_marks:
+            scanner.unmark_active(lib)
+        try:
+            _discard_staging_unless_requeued(task.job_id)
+        except Exception:
+            logger.exception("could not clean staging for job %s", task.job_id)
+        download_queue.release_ffmpeg(task.job_id)
 
     def enqueue(self, task: _PostprocessTask) -> None:
         download_queue.claim_ffmpeg(task.job_id)
@@ -915,19 +1011,28 @@ class FfmpegQueue:
         self._dispatch()
 
     def _dispatch(self) -> None:
+        if download_queue.is_shutting_down():
+            self.signal_stop()
+            return
         cap = ffmpeg_slot_limit()
         with self._lock:
             while self._pending and len(self._running) < cap:
                 task = self._pending.pop(0)
                 self._running.add(task.job_id)
-                threading.Thread(
+                thread = threading.Thread(
                     target=self._worker,
                     args=(task,),
                     daemon=True,
                     name=f"ffmpeg-{task.job_id}",
-                ).start()
+                )
+                self._threads.add(thread)
+                thread.start()
 
     def _worker(self, task: _PostprocessTask) -> None:
+        with job_context(f"download-{task.job_id}"):
+            self._run_task(task)
+
+    def _run_task(self, task: _PostprocessTask) -> None:
         try:
             _complete_download(
                 task.job_id,
@@ -959,6 +1064,7 @@ class FfmpegQueue:
             _discard_staging_unless_requeued(task.job_id)
             with self._lock:
                 self._running.discard(task.job_id)
+                self._threads.discard(threading.current_thread())
             download_queue.release_ffmpeg(task.job_id)
             self._dispatch()
 
@@ -1101,7 +1207,9 @@ def _mark_job_cancelled(
             return
         restarting = download_queue.take_quality_restart(job_id)
         pausing = download_queue.is_paused()
-        if restarting or pausing:
+        # A job interrupted by shutdown goes back to the queue, like a pause, and
+        # resumes from its staged .part files on the next boot.
+        if restarting or pausing or download_queue.is_shutting_down():
             job.status = JobStatus.queued
             job.paused = pausing
             job.progress = 0.0

@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from sqlmodel import Session, func, select
 
 from ...database import engine
+from ...logging_config import job_context
 from ...models import (
     ChannelCatalog,
     ChannelCatalogSkip,
@@ -19,6 +20,7 @@ from ...models import (
     utcnow,
 )
 from .. import app_settings
+from ..workers import BackgroundWorker
 
 logger = logging.getLogger(__name__)
 
@@ -661,13 +663,13 @@ def _next_queued(session: Session) -> ChannelCatalog | None:
     ).first()
 
 
-def _worker_loop() -> None:
+def _worker_loop(worker: BackgroundWorker) -> None:
     from .index import index_catalog
 
-    while not _stop.is_set():
+    while not worker.stopping:
         if not _enabled():
-            _wake.wait(timeout=30)
-            _wake.clear()
+            if worker.wait_for_wake(30):
+                return
             continue
         catalog_id: int | None = None
         with Session(engine) as session:
@@ -675,26 +677,23 @@ def _worker_loop() -> None:
             if job is not None and job.id is not None:
                 catalog_id = job.id
         if catalog_id is not None:
-            index_catalog(catalog_id)
+            with job_context(f"catalog-{catalog_id}"):
+                index_catalog(catalog_id)
             continue
-        _wake.wait(timeout=15)
-        _wake.clear()
+        if worker.wait_for_wake(15):
+            return
 
 
-def start_catalog_worker() -> None:
-    global _thread
-    if _thread is not None and _thread.is_alive():
-        return
+def create_catalog_worker() -> BackgroundWorker:
+    """The catalog indexer. Reconciles duplicate catalogs before it starts."""
     try:
         with Session(engine) as session:
             reconcile_duplicate_catalogs(session)
     except Exception:
         logger.debug("catalog duplicate reconcile skipped", exc_info=True)
-    _stop.clear()
-    _thread = threading.Thread(
-        target=_worker_loop, daemon=True, name="horde-channel-catalog"
+    return BackgroundWorker(
+        "horde-channel-catalog", _worker_loop, stop_event=_stop, wake_event=_wake
     )
-    _thread.start()
 
 
 def recover_catalog_jobs() -> int:
@@ -717,8 +716,3 @@ def recover_catalog_jobs() -> int:
         logger.info("Recovered %s stuck catalog(s) → queued", reset)
         _wake.set()
     return reset
-
-
-def stop_catalog_worker() -> None:
-    _stop.set()
-    _wake.set()

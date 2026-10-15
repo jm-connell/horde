@@ -20,6 +20,7 @@ from ..config import DOWNLOADS_DIR
 from ..database import engine
 from ..models import Video, as_utc
 from . import activity, library
+from .workers import BackgroundWorker
 from .ytdlp_common import (
     ERROR_KIND_BOT,
     ERROR_KIND_COOKIES,
@@ -62,8 +63,6 @@ _RETRYABLE_KINDS = frozenset(
     }
 )
 
-_stop = threading.Event()
-_thread: threading.Thread | None = None
 _cooldown_lock = threading.Lock()
 _global_retry_after: datetime | None = None
 
@@ -311,17 +310,17 @@ def process_due_subtitle() -> bool:
     return True
 
 
-def _worker_loop() -> None:
+def _worker_loop(worker: BackgroundWorker) -> None:
     try:
         recover_unsynced_missing_captions()
     except Exception:
         logger.debug("subtitle pending recovery failed", exc_info=True)
-    if _stop.wait(timeout=STARTUP_DELAY_SEC):
+    if worker.sleep(STARTUP_DELAY_SEC):
         return
-    while not _stop.is_set():
+    while not worker.stopping:
         wait = seconds_until_global_cooldown()
         if wait > 0:
-            if _stop.wait(timeout=min(wait, POLL_INTERVAL_SEC)):
+            if worker.sleep(min(wait, POLL_INTERVAL_SEC)):
                 return
             continue
         ran = False
@@ -331,24 +330,12 @@ def _worker_loop() -> None:
             logger.debug("subtitle retry failed", exc_info=True)
             note_global_cooldown(INTER_FETCH_SEC)
         if ran:
-            if _stop.wait(timeout=INTER_FETCH_SEC):
+            if worker.sleep(INTER_FETCH_SEC):
                 return
             continue
-        if _stop.wait(timeout=POLL_INTERVAL_SEC):
+        if worker.sleep(POLL_INTERVAL_SEC):
             return
 
 
-def start_subtitle_retry_worker() -> None:
-    global _thread
-    if _thread is not None and _thread.is_alive():
-        return
-    _stop.clear()
-    _thread = threading.Thread(target=_worker_loop, daemon=True, name="subtitle-retry")
-    _thread.start()
-
-
-def stop_subtitle_retry_worker() -> None:
-    _stop.set()
-    thread = _thread
-    if thread is not None and thread.is_alive():
-        thread.join(timeout=5)
+def create_worker() -> BackgroundWorker:
+    return BackgroundWorker("subtitle-retry", _worker_loop)

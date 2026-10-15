@@ -22,7 +22,6 @@ import contextlib
 import logging
 import subprocess
 import threading
-import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -54,6 +53,7 @@ from .paths import (
     resolve_compat_path,
     to_rel_path,
 )
+from .workers import BackgroundWorker
 from .ytdlp_formats import (
     COMPAT_MAX_HEIGHT,
     FORMAT_SORT_H264,
@@ -1046,17 +1046,14 @@ def delete_compat_files(video: Video) -> None:
 # Startup: probe codecs for rows that predate the columns
 # ---------------------------------------------------------------------------
 
-_backfill_stop = threading.Event()
-_backfill_thread: threading.Thread | None = None
 
-
-def _probe_backfill_loop() -> None:
+def _probe_backfill_loop(worker: BackgroundWorker) -> None:
     # Let startup settle first; ffprobe is cheap but the library may be large.
-    if _backfill_stop.wait(10.0):
+    if worker.sleep(10.0):
         return
     # Unreadable files (NAS offline, mid-move) stay unprobed for a later boot.
     skipped: set[int] = set()
-    while not _backfill_stop.is_set():
+    while not worker.stopping:
         with Session(engine) as session:
             query = select(Video).where(
                 Video.media_probed_at == None,  # noqa: E711
@@ -1068,7 +1065,7 @@ def _probe_backfill_loop() -> None:
             if not batch:
                 return
             for video in batch:
-                if _backfill_stop.is_set():
+                if worker.stopping:
                     return
                 path = (DOWNLOADS_DIR / video.file_path).resolve()
                 info = probe_stream_info(path)
@@ -1081,19 +1078,9 @@ def _probe_backfill_loop() -> None:
                 session.commit()
             except StaleDataError:
                 session.rollback()
-        time.sleep(0.5)
+        if worker.sleep(0.5):
+            return
 
 
-def start_probe_backfill() -> None:
-    global _backfill_thread
-    if _backfill_thread is not None and _backfill_thread.is_alive():
-        return
-    _backfill_stop.clear()
-    _backfill_thread = threading.Thread(
-        target=_probe_backfill_loop, daemon=True, name="codec-probe-backfill"
-    )
-    _backfill_thread.start()
-
-
-def stop_probe_backfill() -> None:
-    _backfill_stop.set()
+def create_probe_backfill_worker() -> BackgroundWorker:
+    return BackgroundWorker("codec-probe-backfill", _probe_backfill_loop)

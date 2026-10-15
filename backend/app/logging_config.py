@@ -145,6 +145,9 @@ def build_config(level: str = "INFO", fmt: str = "text") -> dict[str, Any]:
             "uvicorn": {"handlers": [], "level": level, "propagate": True},
             "uvicorn.error": {"handlers": [], "level": level, "propagate": True},
             "uvicorn.access": {"handlers": [], "level": level, "propagate": True},
+            # One INFO line per outbound request is noise (feeds, AI, sidecars).
+            "httpx": {"level": "WARNING"},
+            "httpcore": {"level": "WARNING"},
         },
     }
 

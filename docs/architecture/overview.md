@@ -27,21 +27,16 @@ ensure_dirs
     -> cleanup_orphans
     -> ensure yt-dlp plugins loaded
     -> init preview HTTP client
-    -> download_queue.recover()   # downloading→queued; restore pause flag
+    -> register download/ffmpeg queues + reaper, then download_queue.recover()   # downloading→queued; restore pause flag
     -> recover_ai_jobs()          # running→queued
     -> recover_catalog_jobs()     # indexing→queued
-    -> start_scanner()            # watchdog + poll
-    -> start_sync_worker()        # metadata / catalog freshness
-    -> start_ai_worker()
-    -> start_catalog_worker()
-    -> start_autodownload_worker()
-    -> start_subtitle_retry_worker()
-    -> start_job_metadata_worker()
+    -> sprite pool, scanner (the first scan runs on its poller thread)
+    -> metadata sync, AI, catalog, autodownload, subtitle retry, job metadata, probe backfill
 ```
 
 Stuck mid-flight download / AI / catalog work is requeued **before** workers start so a crash cannot leave jobs stranded forever. Download queue pause is restored from `download_queue_paused` in app settings.
 
-Shutdown stops job-metadata, subtitle retry, autodownload, catalog, and AI workers, joins the scanner observer, and closes the preview client.
+Shutdown signals every registered worker and joins them in reverse start order with a per-worker timeout; in-flight downloads are requeued and ffmpeg children are terminated. See [Workers](workers.md#lifecycle).
 
 ## Major moving parts
 
