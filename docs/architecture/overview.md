@@ -23,7 +23,7 @@ On process start, `lifespan` in `main.py` runs roughly:
 
 ```text
 ensure_dirs
-    -> init_db (create_all + schema_migrations / ALTER + verify_schema)
+    -> init_db (Alembic upgrade head)
     -> cleanup_orphans
     -> ensure yt-dlp plugins loaded
     -> init preview HTTP client

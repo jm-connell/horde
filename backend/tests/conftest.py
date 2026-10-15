@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import threading
 from collections.abc import Callable
@@ -10,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from sqlmodel import Session, SQLModel
+from sqlmodel import Session
 
 # backend/ is the import root (package name: app)
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -119,15 +120,28 @@ def tmp_dirs(tmp_path, monkeypatch):
     }
 
 
-@pytest.fixture
-def init_db(tmp_dirs):
-    """Create all tables + run additive migrations on the temp engine."""
-    from app import models  # noqa: F401
-    from app.database import _migrate_columns, engine, verify_schema
+@pytest.fixture(scope="session")
+def _migrated_template_db(tmp_path_factory) -> Path:
+    """A fully migrated database, built once through the real ``init_db`` path.
 
-    SQLModel.metadata.create_all(engine)
-    _migrate_columns()
-    verify_schema()
+    Running every Alembic revision per test would dominate the suite; tests copy
+    this file instead. Tests that exercise migrations call ``init_db`` themselves.
+    """
+    from app.database import create_sqlite_engine, init_db
+
+    path = tmp_path_factory.mktemp("template-db") / "horde.db"
+    template_engine = create_sqlite_engine(f"sqlite:///{path}")
+    init_db(template_engine)
+    with template_engine.connect() as conn:
+        conn.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
+    template_engine.dispose()
+    return path
+
+
+@pytest.fixture
+def init_db(tmp_dirs, _migrated_template_db):
+    """Temp database at the latest schema (copy of the migrated template)."""
+    shutil.copyfile(_migrated_template_db, tmp_dirs["db_path"])
     return tmp_dirs
 
 

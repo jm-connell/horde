@@ -40,7 +40,9 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 | Module | Role |
 |--------|------|
 | `config.py` | Env-derived paths and constants |
-| `database.py` | Engine (WAL + busy timeout), `create_all`, `schema_migrations` ledger, additive `ALTER` columns, `verify_schema` |
+| `database.py` | Engine (WAL, busy timeout, foreign keys), `init_db()` |
+| `migrations/` | Alembic environment, runner and revisions |
+| `legacy_migrations.py` | Frozen pre-Alembic additive migrator, used once to adopt old installs |
 | `models.py` | SQLModel tables |
 
 ## Lifespan order
@@ -48,7 +50,7 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 From `main.py` `lifespan`:
 
 1. `ensure_dirs()` — create downloads + data subdirs  
-2. `init_db()` — `create_all`, versioned migration steps + additive columns, `verify_schema()`  
+2. `init_db()` — Alembic `upgrade head` (adopting pre-Alembic databases first); refuses a database from a newer version  
 3. `cleanup_orphans()` — drop library rows for missing files  
 4. `ensure_plugins_loaded()` — load yt-dlp plugins once before workers  
 5. `preview.init_preview_client()`  

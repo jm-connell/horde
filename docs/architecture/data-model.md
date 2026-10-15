@@ -1,6 +1,6 @@
 # Data model
 
-SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLModel. There is **no Alembic** — schema evolves via `create_all`, a **`schema_migrations`** ledger, additive `ALTER TABLE` column lists, and a startup `verify_schema()` check. See [SQLite & migrations](../design/sqlite-and-migrations.md).
+SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLModel. The schema is managed with **Alembic** (revisions in `backend/app/migrations/versions`, applied by `init_db()` at startup); foreign keys are enforced. See [SQLite & migrations](../design/sqlite-and-migrations.md).
 
 ## Tables
 
@@ -33,24 +33,23 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `openrouter_usage` | Append-only cost ledger |
 | `ai_categories` | Recommendation category chips (name, blurb, embedding) |
 | `ai_jobs` | Background job queue (`embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize`, `chapters`) |
-| `schema_migrations` | Ledger of applied migration step ids (`id`, `applied_at`) |
+| `alembic_version` | Current Alembic revision (`version_num`) |
+| `schema_migrations` | Legacy ledger from before Alembic (adopted installs only; unused) |
 
 ## Schema lifecycle
 
 ```text
 init_db():
-  import models
-  SQLModel.metadata.create_all(engine)   # new tables
-  _migrate_columns()                     # schema_migrations + ALTER ADD COLUMN
-  verify_schema()                        # fail fast if still incomplete
+  fresh database                 -> alembic upgrade head
+  tables, no alembic_version     -> legacy additive migrator, then upgrade head
+  unknown alembic revision       -> refuse to start (newer app ran here)
+  otherwise                      -> backup, then upgrade head if behind
 ```
 
-`MIGRATION_STEPS` in `database.py` records versioned steps (e.g. `2026_07_additive_columns`). Column lists remain the source of which fields to add; the ledger makes order explicit and allows future destructive one-shots without Alembic.
+Revisions live in `backend/app/migrations/versions/` and are forward-only; a pre-migration copy of `horde.db` is written to `DATA_DIR/backups/`. The legacy `schema_migrations` table is only kept on installs that predate Alembic. Details and the "how to add a migration" recipe: [SQLite & migrations](../design/sqlite-and-migrations.md).
 
-Migrations for day-to-day features are **additive** (new nullable/defaulted columns). Breaking renames/drops need a new numbered Python step (or a fresh `horde.db`).
-
-!!! danger "Missing columns"
-    If `verify_schema` raises, fix the DB (or delete `data/horde.db` to start empty) and restart. Do not ignore startup migration errors.
+!!! danger "Startup migration errors"
+    Do not ignore them. A failed migration rolls back and leaves the database as it was; restore from `DATA_DIR/backups/` or your own backup if needed.
 
 ## Related
 

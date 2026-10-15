@@ -38,8 +38,8 @@ def prepare(mode: str) -> None:
     for extra in ("thumbnails", "sprites", "backgrounds", "fonts"):
         _empty_dir(DATA_DIR / extra)
 
-    SQLModel.metadata.drop_all(engine)
     init_db()
+    _clear_tables(engine)
 
     app_mode = mode == "app"
     _write_settings(DATA_DIR, setup_completed=app_mode)
@@ -49,6 +49,14 @@ def prepare(mode: str) -> None:
         return
 
     _seed_library(DOWNLOADS_DIR)
+
+
+def _clear_tables(engine) -> None:
+    """Empty every table (children first) but keep the migrated schema."""
+    with engine.begin() as conn:
+        for table in reversed(SQLModel.metadata.sorted_tables):
+            conn.execute(table.delete())
+        conn.exec_driver_sql("DELETE FROM sqlite_sequence")
 
 
 def _empty_dir(path: Path) -> None:

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import func
+from sqlalchemy import delete, func
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
@@ -370,11 +370,7 @@ def delete_playlist(playlist_id: int, session: Session = Depends(get_session)):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    items = session.exec(
-        select(PlaylistItem).where(PlaylistItem.playlist_id == playlist_id)
-    ).all()
-    for item in items:
-        session.delete(item)
+    session.execute(delete(PlaylistItem).where(PlaylistItem.playlist_id == playlist_id))
     unlink_playlist_cover(playlist.id, playlist.cover_path)
     session.delete(playlist)
     session.commit()

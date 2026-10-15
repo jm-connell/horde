@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from enum import Enum
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Index, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -37,8 +37,21 @@ class DownloadDestination(str, Enum):
     device = "device"
 
 
+# Foreign keys are enforced (PRAGMA foreign_keys=ON). Every FK declares what
+# happens when the parent row goes away:
+#   CASCADE  - the child only makes sense with its parent (embeddings, chat,
+#              playlist membership, catalog rows).
+#   SET NULL - the child is history that must outlive the parent (download
+#              jobs, the OpenRouter cost ledger) or a soft pointer (playlist
+#              cover, job -> playlist).
+# Tables whose ids are referenced from elsewhere use AUTOINCREMENT so a deleted
+# id is never reissued to an unrelated row.
+_AUTOINCREMENT = {"sqlite_autoincrement": True}
+
+
 class Video(SQLModel, table=True):
     __tablename__ = "videos"
+    __table_args__ = _AUTOINCREMENT
 
     id: int | None = Field(default=None, primary_key=True)
     title: str = Field(index=True)
@@ -49,7 +62,7 @@ class Video(SQLModel, table=True):
     description: str | None = None
     # Free-form user note, e.g. context about when/why the video was saved.
     notes: str | None = None
-    source_url: str | None = None
+    source_url: str | None = Field(default=None, index=True)
     thumbnail_path: str | None = None
     # Seek-preview sprite sheet path (absolute), sibling JSON sidecar beside it.
     sprite_path: str | None = None
@@ -110,13 +123,14 @@ class Video(SQLModel, table=True):
 
 class DownloadJob(SQLModel, table=True):
     __tablename__ = "download_jobs"
+    __table_args__ = _AUTOINCREMENT
 
     id: int | None = Field(default=None, primary_key=True)
     url: str
     quality_preset: str = "best"
     # JSON list of source presets from preview (e.g. ["2160p","1080p","audio"]).
     available_presets_json: str | None = None
-    status: JobStatus = Field(default=JobStatus.queued)
+    status: JobStatus = Field(default=JobStatus.queued, index=True)
     progress: float = 0.0
     title: str | None = None
     title_override: str | None = None
@@ -132,12 +146,18 @@ class DownloadJob(SQLModel, table=True):
     destination: str = Field(default=DownloadDestination.library.value)
     # Relative path under DOWNLOADS_DIR for device jobs (serve + cleanup).
     device_file_path: str | None = None
-    replace_video_id: int | None = Field(default=None, foreign_key="videos.id")
+    replace_video_id: int | None = Field(
+        default=None, foreign_key="videos.id", ondelete="SET NULL", index=True
+    )
     # When set, the finished library video is appended to this playlist.
-    playlist_id: int | None = Field(default=None, index=True)
+    playlist_id: int | None = Field(
+        default=None, foreign_key="playlists.id", ondelete="SET NULL", index=True
+    )
     error: str | None = None
     error_kind: str | None = None
-    video_id: int | None = Field(default=None, foreign_key="videos.id")
+    video_id: int | None = Field(
+        default=None, foreign_key="videos.id", ondelete="SET NULL", index=True
+    )
     file_size: int | None = None
     height_px: int | None = None
     created_at: datetime = Field(default_factory=utcnow)
@@ -150,6 +170,7 @@ class PlaylistSource(str, Enum):
 
 class Playlist(SQLModel, table=True):
     __tablename__ = "playlists"
+    __table_args__ = _AUTOINCREMENT
 
     id: int | None = Field(default=None, primary_key=True)
     name: str
@@ -163,17 +184,22 @@ class Playlist(SQLModel, table=True):
     # Lower sorts first. New playlists are inserted at 0.
     position: int = Field(default=0, index=True)
     # Pinned cover from a member video; None uses the first item.
-    cover_video_id: int | None = None
+    cover_video_id: int | None = Field(
+        default=None, foreign_key="videos.id", ondelete="SET NULL"
+    )
     cover_path: str | None = None
     created_at: datetime = Field(default_factory=utcnow, index=True)
 
 
 class PlaylistItem(SQLModel, table=True):
     __tablename__ = "playlist_items"
+    __table_args__ = (
+        UniqueConstraint("playlist_id", "video_id", name="uq_playlist_items_pair"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
-    playlist_id: int = Field(foreign_key="playlists.id", index=True)
-    video_id: int = Field(foreign_key="videos.id", index=True)
+    playlist_id: int = Field(foreign_key="playlists.id", index=True, ondelete="CASCADE")
+    video_id: int = Field(foreign_key="videos.id", index=True, ondelete="CASCADE")
     position: int = 0
 
 
@@ -204,6 +230,7 @@ class ChannelCatalogStatus(str, Enum):
 
 class ChannelCatalog(SQLModel, table=True):
     __tablename__ = "channel_catalogs"
+    __table_args__ = _AUTOINCREMENT
 
     id: int | None = Field(default=None, primary_key=True)
     channel_url: str = Field(index=True, unique=True)
@@ -226,10 +253,12 @@ class ChannelCatalog(SQLModel, table=True):
 
 class ChannelCatalogVideo(SQLModel, table=True):
     __tablename__ = "channel_catalog_videos"
-    __table_args__ = (UniqueConstraint("catalog_id", "yt_id"),)
+    __table_args__ = (UniqueConstraint("catalog_id", "yt_id"), _AUTOINCREMENT)
 
     id: int | None = Field(default=None, primary_key=True)
-    catalog_id: int = Field(foreign_key="channel_catalogs.id", index=True)
+    catalog_id: int = Field(
+        foreign_key="channel_catalogs.id", index=True, ondelete="CASCADE"
+    )
     yt_id: str = Field(index=True)
     url: str
     title: str | None = None
@@ -272,7 +301,9 @@ class ChannelCatalogSkip(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("catalog_id", "yt_id"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    catalog_id: int = Field(foreign_key="channel_catalogs.id", index=True)
+    catalog_id: int = Field(
+        foreign_key="channel_catalogs.id", index=True, ondelete="CASCADE"
+    )
     yt_id: str = Field(index=True)
     reason: str = Field(default="members_only")
     skipped_at: datetime = Field(default_factory=utcnow)
@@ -283,7 +314,10 @@ class ChannelCatalogEmbedding(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     catalog_video_id: int = Field(
-        foreign_key="channel_catalog_videos.id", index=True, unique=True
+        foreign_key="channel_catalog_videos.id",
+        index=True,
+        unique=True,
+        ondelete="CASCADE",
     )
     model: str = Field(default="nomic-embed-text")
     dim: int = 0
@@ -296,7 +330,7 @@ class VideoEmbedding(SQLModel, table=True):
     __tablename__ = "video_embeddings"
 
     id: int | None = Field(default=None, primary_key=True)
-    video_id: int = Field(foreign_key="videos.id", index=True)
+    video_id: int = Field(foreign_key="videos.id", index=True, ondelete="CASCADE")
     # -1 = metadata document; 0+ = subtitle chunk index.
     chunk_index: int = Field(default=-1, index=True)
     model: str = Field(default="nomic-embed-text")
@@ -309,7 +343,7 @@ class VideoEmbedding(SQLModel, table=True):
 class VideoAiMeta(SQLModel, table=True):
     __tablename__ = "video_ai_meta"
 
-    video_id: int = Field(primary_key=True, foreign_key="videos.id")
+    video_id: int = Field(primary_key=True, foreign_key="videos.id", ondelete="CASCADE")
     embed_status: str = Field(default="pending", index=True)
     content_hash: str = Field(default="")
     summary: str | None = None
@@ -338,7 +372,7 @@ class VideoAiChat(SQLModel, table=True):
 
     __tablename__ = "video_ai_chat"
 
-    video_id: int = Field(primary_key=True, foreign_key="videos.id")
+    video_id: int = Field(primary_key=True, foreign_key="videos.id", ondelete="CASCADE")
     updated_at: datetime = Field(default_factory=utcnow)
 
 
@@ -346,7 +380,7 @@ class VideoAiChatMessage(SQLModel, table=True):
     __tablename__ = "video_ai_chat_messages"
 
     id: int | None = Field(default=None, primary_key=True)
-    video_id: int = Field(foreign_key="videos.id", index=True)
+    video_id: int = Field(foreign_key="videos.id", index=True, ondelete="CASCADE")
     role: str = Field(default="user", index=True)  # user | assistant
     content: str = Field(default="")
     # OpenRouter usage.cost for this assistant turn (USD/credits), when known.
@@ -365,7 +399,9 @@ class OpenRouterUsage(SQLModel, table=True):
     kind: str = Field(default="other", index=True)
     cost: float = Field(default=0.0)
     model: str | None = None
-    video_id: int | None = Field(default=None, index=True)
+    video_id: int | None = Field(
+        default=None, foreign_key="videos.id", ondelete="SET NULL", index=True
+    )
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     created_at: datetime = Field(default_factory=utcnow, index=True)
@@ -385,12 +421,22 @@ class AiCategory(SQLModel, table=True):
 
 class AiJob(SQLModel, table=True):
     __tablename__ = "ai_jobs"
+    # Dedupe lookups ("is there already a queued X job for this video?").
+    __table_args__ = (
+        Index("ix_ai_jobs_video_id_kind_status", "video_id", "kind", "status"),
+        _AUTOINCREMENT,
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     kind: AiJobKind = Field(index=True)
-    video_id: int | None = Field(default=None, foreign_key="videos.id", index=True)
+    video_id: int | None = Field(
+        default=None, foreign_key="videos.id", index=True, ondelete="CASCADE"
+    )
     catalog_video_id: int | None = Field(
-        default=None, foreign_key="channel_catalog_videos.id", index=True
+        default=None,
+        foreign_key="channel_catalog_videos.id",
+        index=True,
+        ondelete="CASCADE",
     )
     status: AiJobStatus = Field(default=AiJobStatus.queued, index=True)
     attempts: int = 0
