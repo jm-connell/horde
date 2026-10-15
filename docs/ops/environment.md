@@ -52,7 +52,8 @@ Cookie file wins over browser cookies when the file exists. Details: [YouTube ac
 | `HORDE_ALLOWED_HOSTS` | *(empty)* | Extra `Host` names Horde answers, comma separated (`horde.example.com`, `*.example.com`). Adds to the LAN defaults; `*` disables the check. See [Security](security.md#allowed-hosts). |
 | `HORDE_TRUST_PROXY` | *(off)* | `1` = believe `X-Forwarded-For` / `X-Forwarded-Proto` from a proxy you control (login rate limiting, `Secure` cookie). See [Accounts](authentication.md#behind-a-reverse-proxy). |
 | `HORDE_AUTH_DISABLED` | *(off)* | `1` = no sign-in; every request acts as the first admin. Only behind a proxy that authenticates. See [Accounts](authentication.md#behind-a-reverse-proxy). |
-| `HORDE_TRUSTED_USER_HEADER` | *(empty)* | With the two above: the header naming the existing Horde user to act as. |
+| `HORDE_TRUSTED_PROXY_HOPS` | `1` | Proxies appending to `X-Forwarded-For`; the client address is counted from the right. |
+| `HORDE_TRUSTED_USER_HEADER` | *(empty)* | With the two above: the header naming the existing Horde user to act as. Requires `HORDE_TRUST_PROXY=1`, otherwise Horde refuses to start. |
 | `HORDE_ALLOW_PRIVATE_URLS` | *(empty)* | `1` lets server-side fetches and link checks target private / loopback addresses (LAN download sources). See [Security](security.md#private-urls). |
 | `HORDE_MAX_UPLOAD_GB` | `50` | Largest video accepted by Import → upload. |
 

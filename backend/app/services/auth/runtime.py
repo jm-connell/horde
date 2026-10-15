@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 AUTH_DISABLED_ENV = "HORDE_AUTH_DISABLED"
 TRUST_PROXY_ENV = "HORDE_TRUST_PROXY"
 TRUSTED_USER_HEADER_ENV = "HORDE_TRUSTED_USER_HEADER"
+PROXY_HOPS_ENV = "HORDE_TRUSTED_PROXY_HOPS"
+
+
+class ConfigError(RuntimeError):
+    """An unsafe or inconsistent authentication setting; Horde refuses to start."""
 
 
 def _truthy(raw: str | None) -> bool:
@@ -42,15 +47,36 @@ class AuthConfig:
     disabled: bool = False
     trust_proxy: bool = False
     trusted_user_header: str = ""
+    #: Proxies in front of Horde that append to ``X-Forwarded-For``; the client
+    #: address is the entry that many places from the right (the left is whatever
+    #: the client claimed).
+    proxy_hops: int = 1
+
+    def __post_init__(self) -> None:
+        if self.disabled and self.trusted_user_header and not self.trust_proxy:
+            # Without trust the header is ignored and everyone would be the admin.
+            raise ConfigError(
+                f"{TRUSTED_USER_HEADER_ENV} is set but {TRUST_PROXY_ENV} is not. "
+                "Horde would ignore the header and treat every request as the "
+                f"administrator. Set {TRUST_PROXY_ENV}=1 (only behind a proxy that "
+                f"sets that header) or unset {TRUSTED_USER_HEADER_ENV}."
+            )
+        if self.proxy_hops < 1:
+            raise ConfigError(f"{PROXY_HOPS_ENV} must be 1 or more")
 
     @classmethod
     def from_env(cls) -> AuthConfig:
+        try:
+            hops = int(os.environ.get(PROXY_HOPS_ENV, "1") or "1")
+        except ValueError as exc:
+            raise ConfigError(f"{PROXY_HOPS_ENV} must be a whole number") from exc
         return cls(
             disabled=_truthy(os.environ.get(AUTH_DISABLED_ENV)),
             trust_proxy=_truthy(os.environ.get(TRUST_PROXY_ENV)),
             trusted_user_header=os.environ.get(TRUSTED_USER_HEADER_ENV, "")
             .strip()
             .lower(),
+            proxy_hops=hops,
         )
 
 
@@ -85,10 +111,15 @@ class AuthRuntime:
     def client_address(self, request: Request) -> str:
         """The caller's IP; X-Forwarded-For only when a trusted proxy is declared."""
         if self.config.trust_proxy:
-            forwarded = request.headers.get("x-forwarded-for", "")
-            first = forwarded.split(",")[0].strip()
-            if first:
-                return first
+            # Our own proxy appends the address it saw; everything left of that is
+            # client-controlled and must not decide who gets rate limited.
+            chain = [
+                part.strip()
+                for part in request.headers.get("x-forwarded-for", "").split(",")
+                if part.strip()
+            ]
+            if len(chain) >= self.config.proxy_hops:
+                return chain[-self.config.proxy_hops]
         return request.client.host if request.client else "unknown"
 
     def is_https(self, request: Request) -> bool:

@@ -432,3 +432,34 @@ def test_secret_key_file_is_private(client, media, init_db):
     key = init_db["data"] / "secret_key"
     assert key.exists() and oct(key.stat().st_mode & 0o777) == "0o600"
     assert key.read_bytes() not in media.token.encode()
+
+
+def test_a_spoofed_leftmost_forwarded_for_does_not_dodge_the_throttle(app, admin_user):
+    from app.services.auth.runtime import AuthConfig
+
+    app.state.auth.config = AuthConfig(trust_proxy=True)
+    with TestClient(app, headers=CSRF) as c:
+        statuses = [
+            c.post(
+                "/api/auth/login",
+                json={"username": "admin", "password": "wrong-password"},
+                # The proxy appends the real peer (10.0.0.9); the client invents the rest.
+                headers={"X-Forwarded-For": f"203.0.113.{i}, 10.0.0.9"},
+            ).status_code
+            for i in range(FREE_ATTEMPTS + 1)
+        ]
+    assert statuses[:FREE_ATTEMPTS] == [401] * FREE_ATTEMPTS
+    assert statuses[-1] == 429
+
+
+def test_proxy_hops_picks_the_entry_counted_from_the_right(app):
+    from app.services.auth.runtime import AuthConfig
+
+    runtime = app.state.auth
+    runtime.config = AuthConfig(trust_proxy=True, proxy_hops=2)
+
+    class Req:
+        headers = {"x-forwarded-for": "1.1.1.1, 2.2.2.2, 3.3.3.3"}
+        client = None
+
+    assert runtime.client_address(Req()) == "2.2.2.2"

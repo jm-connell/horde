@@ -153,9 +153,26 @@ def test_trusted_header_picks_the_account_only_behind_a_trusted_proxy(
         assert c.get("/api/videos", headers={"X-User": "ghost"}).status_code == 401
         # The proxy is expected to always send the header; absent means bypassed.
         assert c.get("/api/videos").status_code == 401
-    untrusted = AuthConfig(
-        disabled=True, trust_proxy=False, trusted_user_header="x-user"
-    )
-    with TestClient(_proxy_app(untrusted, init_db)) as c:
-        # Without HORDE_TRUST_PROXY the header is ignored and the admin is used.
-        assert c.get("/api/videos", headers={"X-User": "ghost"}).status_code == 200
+
+
+def test_a_trusted_user_header_without_trust_proxy_refuses_to_start():
+    import pytest
+
+    from app.services.auth.runtime import ConfigError
+
+    with pytest.raises(ConfigError, match="HORDE_TRUST_PROXY"):
+        AuthConfig(disabled=True, trust_proxy=False, trusted_user_header="x-user")
+
+
+def test_the_environment_is_validated_the_same_way(monkeypatch):
+    import pytest
+
+    from app.services.auth.runtime import ConfigError
+
+    monkeypatch.setenv("HORDE_AUTH_DISABLED", "1")
+    monkeypatch.setenv("HORDE_TRUSTED_USER_HEADER", "X-Remote-User")
+    monkeypatch.delenv("HORDE_TRUST_PROXY", raising=False)
+    with pytest.raises(ConfigError):
+        AuthConfig.from_env()
+    monkeypatch.setenv("HORDE_TRUST_PROXY", "1")
+    assert AuthConfig.from_env().trusted_user_header == "x-remote-user"
