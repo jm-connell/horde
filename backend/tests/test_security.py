@@ -312,6 +312,90 @@ def test_chunked_body_without_length_is_capped_too(client, monkeypatch):
     assert resp.status_code == 413
 
 
+def test_bulk_lists_are_bounded(client):
+    ids = list(range(1001))
+
+    assert (
+        client.post("/api/videos/bulk-delete", json={"video_ids": ids}).status_code
+        == 422
+    )
+    assert (
+        client.patch(
+            "/api/videos/bulk-notes", json={"video_ids": ids, "notes": "n"}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/api/downloads/bulk", json={"urls": ["https://e.com"] * 1001}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/api/playlists/estimate", json={"urls": ["https://e.com"] * 1001}
+        ).status_code
+        == 422
+    )
+
+
+# --- Download progress stream --------------------------------------------------------
+
+
+def test_job_events_for_unknown_job_is_404(client):
+    assert client.get("/api/downloads/987654/events").status_code == 404
+
+
+def test_job_events_closes_for_a_finished_job(client, session, monkeypatch):
+    from app.models import DownloadJob, JobStatus
+    from app.services import downloader
+
+    # Other tests leave snapshots behind in the process-wide store.
+    monkeypatch.setattr(downloader, "progress_store", {})
+
+    job = DownloadJob(url="https://example.com/v", status=JobStatus.completed)
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    resp = client.get(f"/api/downloads/{job.id}/events")
+
+    assert resp.status_code == 200
+    assert '"status": "completed"' in resp.text
+
+
+# --- Resource limits -------------------------------------------------------------------
+
+
+def test_preview_extraction_times_out_instead_of_hanging(client, app, monkeypatch):
+    import time
+
+    from app.services import downloader
+    from app.services.limits import ExtractionGate
+
+    app.state.extraction_gate = ExtractionGate(1, wait_sec=0.05, timeout_sec=0.1)
+    monkeypatch.setattr(downloader, "extract_preview", lambda *_a: time.sleep(0.5))
+
+    slow = client.get("/api/downloads/preview", params={"url": "https://example.com/v"})
+    busy = client.get("/api/downloads/preview", params={"url": "https://example.com/w"})
+
+    assert slow.status_code == 504
+    # The timed-out read still holds the only slot, so the next caller is told to wait.
+    assert busy.status_code == 429
+
+
+def test_thumbnail_candidate_grabs_are_capped(client, app, add_video):
+    from app.services.limits import ConcurrencyLimit
+
+    video = add_video(write_file=True)
+    app.state.thumbnail_grab_limit = ConcurrencyLimit("thumbnail grabs", 1, 0.05)
+
+    with app.state.thumbnail_grab_limit.slot():
+        resp = client.post(f"/api/videos/{video.id}/thumbnail/candidates")
+
+    assert resp.status_code == 429
+
+
 # --- Path containment ---------------------------------------------------------------------
 def test_production_app_installs_the_stack_in_order():
     from app.main import app as production_app

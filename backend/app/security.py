@@ -37,7 +37,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .services import uploads
+from .services import limits, uploads
 from .services.url_safety import UnsafeUrlError
 
 logger = logging.getLogger(__name__)
@@ -434,7 +434,7 @@ async def _unsafe_url_handler(_request: Request, exc: Exception) -> JSONResponse
 
 
 def install_security(app: FastAPI, *, allowed_hosts: str | None = None) -> None:
-    """Install the middleware stack and the URL-safety error mapping.
+    """Install the middleware stack, the URL-safety error mapping and the limits.
 
     ``allowed_hosts`` overrides ``HORDE_ALLOWED_HOSTS`` (used by tests).
     """
@@ -446,3 +446,5 @@ def install_security(app: FastAPI, *, allowed_hosts: str | None = None) -> None:
     ):  # add_middleware wraps: last is outermost
         app.add_middleware(spec.cls, **spec.kwargs)
     app.add_exception_handler(UnsafeUrlError, _unsafe_url_handler)
+    app.state.extraction_gate = limits.new_extraction_gate()
+    app.state.thumbnail_grab_limit = limits.new_thumbnail_grab_limit()

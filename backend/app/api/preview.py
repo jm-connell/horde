@@ -16,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from ..database import get_session
 from ..schemas import StreamPreviewMeta
 from ..services import library, stream_preview
+from ..services.limits import ExtractionGate, extraction_gate
 from ..services.url_clean import _youtube_video_id, clean_url
 from ..services.url_safety import validate_public_url
 from ..services.ytdlp_common import (
@@ -296,10 +297,16 @@ async def _head_upstream(
 
 
 @router.get("/meta", response_model=StreamPreviewMeta)
-def preview_meta(url: str = Query(...), session: Session = Depends(get_session)):
+def preview_meta(
+    url: str = Query(...),
+    session: Session = Depends(get_session),
+    gate: ExtractionGate = Depends(extraction_gate),
+):
     cleaned = _require_video_url(url)
     try:
-        meta = stream_preview.extract_stream_preview_meta(cleaned)
+        meta = gate.run(stream_preview.extract_stream_preview_meta, cleaned)
+    except HTTPException:
+        raise  # 429 / 504 from the gate
     except MembersOnlyError as exc:
         raise HTTPException(
             status_code=400,

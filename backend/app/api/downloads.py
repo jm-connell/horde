@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR
-from ..database import get_session
+from ..database import engine, get_session
 from ..models import DownloadDestination, DownloadJob, JobStatus, Playlist, Video
 from ..schemas import (
     DownloadBulkCreate,
@@ -23,6 +23,7 @@ from ..schemas import (
     DownloadQueueStatus,
 )
 from ..services import downloader
+from ..services.limits import ExtractionGate, extraction_gate
 from ..services.paths import safe_filename
 from ..services.url_clean import (
     clean_url,
@@ -147,7 +148,7 @@ def list_presets():
 
 
 @router.get("/preview", response_model=DownloadPreview)
-def preview_download(url: str):
+def preview_download(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
     validate_public_url(url)
@@ -169,7 +170,9 @@ def preview_download(url: str):
         )
     cleaned = clean_url(url, keep_playlist=True)
     try:
-        return downloader.extract_preview(cleaned)
+        return gate.run(downloader.extract_preview, cleaned)
+    except HTTPException:
+        raise  # 429 / 504 from the gate
     except MembersOnlyError as exc:
         raise HTTPException(
             status_code=400,
@@ -602,21 +605,44 @@ def download_device_file(job_id: int, session: Session = Depends(get_session)):
     return FileResponse(path, media_type=content_type, filename=filename)
 
 
+_TERMINAL_STATUSES = (JobStatus.completed, JobStatus.error, JobStatus.cancelled)
+# Re-check the database this often (in poll ticks) so a stream cannot outlive a job
+# whose final progress snapshot was never published.
+_JOB_STATUS_RECHECK_TICKS = 10
+
+
+def _job_status(job_id: int) -> JobStatus | None:
+    with Session(engine) as session:
+        job = session.get(DownloadJob, job_id)
+        return job.status if job is not None else None
+
+
 @router.get("/{job_id}/events")
-async def job_events(job_id: int) -> StreamingResponse:
+async def job_events(
+    job_id: int, session: Session = Depends(get_session)
+) -> StreamingResponse:
+    """Progress stream for one job: 404 for an unknown job, closes once it finishes."""
+    job = session.get(DownloadJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
     async def event_stream() -> AsyncGenerator[str, None]:
         last_payload = None
+        ticks = 0
         while True:
             snapshot = downloader.progress_store.get(job_id)
             if snapshot is not None and snapshot != last_payload:
                 last_payload = snapshot
                 yield f"data: {json.dumps(snapshot)}\n\n"
-                if snapshot.get("status") in {
-                    "completed",
-                    "error",
-                    "cancelled",
-                }:
+                if snapshot.get("status") in {"completed", "error", "cancelled"}:
                     break
+            if ticks % _JOB_STATUS_RECHECK_TICKS == 0:
+                status = await asyncio.to_thread(_job_status, job_id)
+                if status is None or status in _TERMINAL_STATUSES:
+                    if last_payload is None and status is not None:
+                        yield f"data: {json.dumps({'status': status.value})}\n\n"
+                    break
+            ticks += 1
             await asyncio.sleep(0.5)
 
     return StreamingResponse(

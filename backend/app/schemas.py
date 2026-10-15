@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated, Literal, Optional
 from urllib.parse import urlsplit
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 from .models import DownloadDestination, JobStatus, PlaylistSource, VideoStatus
 
@@ -153,7 +153,7 @@ class DownloadCreate(BaseModel):
 
 
 class DownloadBulkCreate(BaseModel):
-    urls: list[str]
+    urls: list[str] = Field(max_length=MAX_BULK_ITEMS)
     quality_preset: str = "best"
     destination: DownloadDestination = DownloadDestination.library
     normalize_volume: bool = False
@@ -461,18 +461,18 @@ class PlaylistItemAdd(BaseModel):
 
 
 class PlaylistReorder(BaseModel):
-    video_ids: list[int]
+    video_ids: list[int] = Field(max_length=MAX_PLAYLIST_ITEMS)
 
 
 class PlaylistListReorder(BaseModel):
-    playlist_ids: list[int]
+    playlist_ids: list[int] = Field(max_length=MAX_BULK_ITEMS)
 
 
 class PlaylistImport(BaseModel):
     url: str
     quality_preset: str = "best"
     name: str | None = None
-    entries: list[str] = []
+    entries: list[str] = Field(default=[], max_length=MAX_PLAYLIST_ITEMS)
     subscribe: bool = False
 
 
@@ -493,7 +493,7 @@ class PlaylistPreview(BaseModel):
 
 
 class PlaylistSizeEstimateRequest(BaseModel):
-    urls: list[str]
+    urls: list[str] = Field(max_length=MAX_BULK_ITEMS)
 
 
 class PlaylistSizeEstimate(BaseModel):
@@ -501,17 +501,17 @@ class PlaylistSizeEstimate(BaseModel):
 
 
 class BulkVideoDelete(BaseModel):
-    video_ids: list[int]
+    video_ids: list[int] = Field(max_length=MAX_BULK_ITEMS)
     delete_files: bool = False
 
 
 class BulkVideoNotes(BaseModel):
-    video_ids: list[int]
+    video_ids: list[int] = Field(max_length=MAX_BULK_ITEMS)
     notes: str
 
 
 class BulkMetadataRefresh(BaseModel):
-    video_ids: list[int] = []
+    video_ids: list[int] = Field(default=[], max_length=MAX_BULK_ITEMS)
     fields: list[str] = []  # views | thumbnails | captions | titles_descriptions | all
 
 
@@ -562,4 +562,4 @@ class SystemActivityRead(BaseModel):
 
 
 class BulkPlaylistAdd(BaseModel):
-    video_ids: list[int]
+    video_ids: list[int] = Field(max_length=MAX_BULK_ITEMS)

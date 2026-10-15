@@ -24,6 +24,7 @@ from ..schemas import (
     WatchProgressUpdate,
 )
 from ..services import downloader, library, uploads
+from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
 from ..services.metadata import (
     load_sprite_meta,
     sprite_image_path,
@@ -613,6 +614,7 @@ def generate_thumbnail_candidates(
     video_id: int,
     count: int = Query(8, ge=1, le=16),
     session: Session = Depends(get_session),
+    grab_limit: ConcurrencyLimit = Depends(thumbnail_grab_limit),
 ):
     """Extract several frames from the video for the user to pick as thumbnail."""
     from ..services import activity
@@ -623,14 +625,17 @@ def generate_thumbnail_candidates(
         raise HTTPException(status_code=404, detail="Video not found")
     media = _resolve_media(video)
     THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
-    with activity.track(
-        "thumbnail",
-        "Generating thumbnail candidates",
-        reason="You asked to pick a new thumbnail",
-        engine="ffmpeg",
-        detail=video.title,
-        video_id=video_id,
-        total=count,
+    with (
+        grab_limit.slot(),
+        activity.track(
+            "thumbnail",
+            "Generating thumbnail candidates",
+            reason="You asked to pick a new thumbnail",
+            engine="ffmpeg",
+            detail=video.title,
+            video_id=video_id,
+            total=count,
+        ),
     ):
         candidates = _gen(
             media,

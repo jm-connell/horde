@@ -24,6 +24,7 @@ from ..schemas import (
     PlaylistUpdate,
 )
 from ..services import downloader, library, uploads
+from ..services.limits import ExtractionGate, extraction_gate
 from ..services.playlist_sync import (
     find_subscribed_by_url,
     start_playlist_sync,
@@ -201,12 +202,16 @@ def _ordered_videos(session: Session, playlist_id: int) -> list[Video]:
 
 
 @router.get("/preview", response_model=PlaylistPreview)
-def preview_playlist(url: str):
+def preview_playlist(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
     validate_public_url(url)
     try:
-        data = downloader.extract_playlist_entries(clean_url(url, keep_playlist=True))
+        data = gate.run(
+            downloader.extract_playlist_entries, clean_url(url, keep_playlist=True)
+        )
+    except HTTPException:
+        raise  # 429 / 504 from the gate
     except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not read playlist: {exc}"
@@ -215,11 +220,14 @@ def preview_playlist(url: str):
 
 
 @router.post("/estimate", response_model=PlaylistSizeEstimate)
-def estimate_playlist_sizes(payload: PlaylistSizeEstimateRequest):
-    if not payload.urls:
-        return PlaylistSizeEstimate(sizes={})
+def estimate_playlist_sizes(
+    payload: PlaylistSizeEstimateRequest,
+    gate: ExtractionGate = Depends(extraction_gate),
+):
     urls = [u for u in payload.urls if _is_public_url(u)]
-    sizes = downloader.estimate_playlist_sizes(urls)
+    if not urls:
+        return PlaylistSizeEstimate(sizes={})
+    sizes = gate.run(downloader.estimate_playlist_sizes, urls)
     return PlaylistSizeEstimate(sizes=sizes)
 
 
