@@ -30,6 +30,7 @@ from ..services.url_clean import (
     youtube_thumbnail_url,
     youtube_video_id,
 )
+from ..services.url_safety import UnsafeUrlError, validate_public_url
 from ..services.ytdlp_common import (
     ERROR_KIND_UNKNOWN,
     MembersOnlyError,
@@ -149,6 +150,7 @@ def list_presets():
 def preview_download(url: str):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
+    validate_public_url(url)
     from ..e2e_mode import enabled as e2e_browser
 
     if e2e_browser():
@@ -243,6 +245,7 @@ async def queue_events() -> StreamingResponse:
 def create_download(payload: DownloadCreate, session: Session = Depends(get_session)):
     if not payload.url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
+    validate_public_url(payload.url)
 
     if is_youtube_short_url(payload.url):
         raise HTTPException(status_code=400, detail="Don't watch Shorts")
@@ -327,6 +330,11 @@ def create_downloads_bulk(
 
     for raw in payload.urls:
         if not raw.strip():
+            continue
+        try:
+            validate_public_url(raw)
+        except UnsafeUrlError:
+            skips.append(DownloadBulkSkip(url=raw.strip(), reason="invalid_url"))
             continue
         if is_youtube_short_url(raw):
             skips.append(DownloadBulkSkip(url=raw.strip(), reason="shorts"))

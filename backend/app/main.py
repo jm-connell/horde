@@ -33,6 +33,7 @@ from .config import (
     short_git_sha,
 )
 from .database import engine, init_db
+from .security import install_security
 from .services import app_settings as app_settings_svc
 from .services import downloader
 from .services.ai import start_ai_worker, stop_ai_worker
@@ -130,6 +131,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Horde", lifespan=lifespan)
+install_security(app)
 
 # Cast receivers fetch media/subtitle URLs cross-origin from the sender page.
 app.add_middleware(

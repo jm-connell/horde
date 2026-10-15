@@ -44,6 +44,7 @@ from ..services.thumbnails import (
     save_from_url,
     write_full_bytes,
 )
+from ..services.url_safety import validate_public_url
 from ..services.video_delete import delete_video_cascade, remove_files
 from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
 from .video_serialize import (
@@ -411,6 +412,7 @@ def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
 
     if video.id is None:
         raise HTTPException(status_code=400, detail="Could not fetch thumbnail")
+    validate_public_url(url)  # 400 with the reason instead of a generic failure
     dest = save_from_url(
         url, video.id, list_url=_list_thumbnail_url({"thumbnail": url})
     )

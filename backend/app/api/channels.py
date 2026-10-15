@@ -31,6 +31,7 @@ from ..services import (
     feed_meta_cache,
     library,
 )
+from ..services.url_safety import validate_public_url
 from ..services.ytdlp_common import cookie_configured, is_members_only_entry
 from ..services.ytdlp_extract import (
     search_youtube_channel_videos,
@@ -38,6 +39,14 @@ from ..services.ytdlp_extract import (
 )
 
 router = APIRouter(prefix="/api", tags=["channels"])
+
+
+def _checked_url(raw: str | None) -> str | None:
+    """A caller-supplied channel URL, trimmed. It reaches yt-dlp, so it must be public."""
+    url = (raw or "").strip() or None
+    if url:
+        validate_public_url(url)
+    return url
 
 
 @router.get("/channels", response_model=list[ChannelStat])
@@ -93,7 +102,7 @@ def channel_catalog_index(
             status_code=400, detail="Channel catalog indexing is disabled"
         )
 
-    channel_url = (payload.url or "").strip() or None
+    channel_url = _checked_url(payload.url)
     channel_name = (payload.channel or "").strip() or None
 
     # No channel specified → refresh or full-index every library channel with a URL.
@@ -137,7 +146,7 @@ def _resolve_youtube_channel_url(
     url: str | None,
     channel: str | None,
 ) -> tuple[str, str | None]:
-    channel_url = (url or "").strip() or None
+    channel_url = _checked_url(url)
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
@@ -339,7 +348,7 @@ def channel_youtube_search_pref(
     session: Session = Depends(get_session),
 ):
     """Set per-channel Direct YouTube search override (null = inherit)."""
-    channel_url = (payload.url or "").strip() or None
+    channel_url = _checked_url(payload.url)
     channel_name = (payload.channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
@@ -369,7 +378,7 @@ def channel_youtube_search(
     limit: int = Query(20, ge=1, le=40),
     session: Session = Depends(get_session),
 ):
-    channel_url = (url or "").strip() or None
+    channel_url = _checked_url(url)
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
@@ -500,7 +509,7 @@ def channel_feed(
     ),
     session: Session = Depends(get_session),
 ):
-    channel_url = (url or "").strip() or None
+    channel_url = _checked_url(url)
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)

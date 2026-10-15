@@ -11,11 +11,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from sqlmodel import Session
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from ..database import get_session
 from ..schemas import StreamPreviewMeta
 from ..services import library, stream_preview
 from ..services.url_clean import _youtube_video_id, clean_url
+from ..services.url_safety import validate_public_url
 from ..services.ytdlp_common import (
     ERROR_KIND_UNKNOWN,
     MembersOnlyError,
@@ -65,6 +67,8 @@ def _require_video_url(url: str) -> str:
     cleaned = clean_url(url, keep_playlist=False)
     if not cleaned.strip():
         raise HTTPException(status_code=400, detail="URL is required")
+    # DNS lookup blocks briefly; the async routes call this through to_thread.
+    validate_public_url(cleaned)
     return cleaned
 
 
@@ -347,7 +351,7 @@ async def preview_subtitles(
     lang: str = Query("en"),
 ):
     """Proxy an English (or requested) WebVTT caption track for stream preview."""
-    cleaned = _require_video_url(url)
+    cleaned = await run_in_threadpool(_require_video_url, url)
     try:
         resolved = stream_preview.resolve_preview_subtitle(cleaned, lang)
     except KeyError as exc:
@@ -510,7 +514,7 @@ async def preview_media_head(
 @router.get("/stream")
 async def preview_stream(request: Request, url: str = Query(...)):
     """Legacy progressive (<=720p) proxy — kept as fallback."""
-    cleaned = _require_video_url(url)
+    cleaned = await run_in_threadpool(_require_video_url, url)
     try:
         resolved = stream_preview.resolve_preview_stream(cleaned)
     except Exception as exc:

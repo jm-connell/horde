@@ -352,8 +352,8 @@ def is_youtube_channel_url(channel_url: str) -> bool:
     if not url:
         return False
     parsed = urlparse(url if "://" in url else f"https://{url}")
-    host = (parsed.netloc or "").lower().replace("www.", "")
-    return "youtube.com" in host or host == "youtu.be"
+    host = (parsed.hostname or "").lower()
+    return host == "youtube.com" or host.endswith(".youtube.com") or host == "youtu.be"
 
 
 def youtube_search_pref(

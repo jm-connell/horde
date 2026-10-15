@@ -33,9 +33,18 @@ from ..services.thumbnails import (
     write_playlist_cover,
 )
 from ..services.url_clean import clean_url, youtube_video_id
+from ..services.url_safety import UnsafeUrlError, validate_public_url
 from .videos import _to_read
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
+
+
+def _is_public_url(url: str) -> bool:
+    try:
+        validate_public_url(url)
+    except UnsafeUrlError:
+        return False
+    return True
 
 
 def _item_count(session: Session, playlist_id: int) -> int:
@@ -195,6 +204,7 @@ def _ordered_videos(session: Session, playlist_id: int) -> list[Video]:
 def preview_playlist(url: str):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
+    validate_public_url(url)
     try:
         data = downloader.extract_playlist_entries(clean_url(url, keep_playlist=True))
     except Exception as exc:
@@ -208,7 +218,8 @@ def preview_playlist(url: str):
 def estimate_playlist_sizes(payload: PlaylistSizeEstimateRequest):
     if not payload.urls:
         return PlaylistSizeEstimate(sizes={})
-    sizes = downloader.estimate_playlist_sizes(payload.urls)
+    urls = [u for u in payload.urls if _is_public_url(u)]
+    sizes = downloader.estimate_playlist_sizes(urls)
     return PlaylistSizeEstimate(sizes=sizes)
 
 
@@ -552,6 +563,7 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
     url = clean_url(payload.url, keep_playlist=True)
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
+    validate_public_url(url)
 
     if payload.subscribe:
         other = find_subscribed_by_url(session, url)
@@ -562,6 +574,8 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
             )
 
     selected_entries = [e.strip() for e in payload.entries if e.strip()]
+    for entry in selected_entries:
+        validate_public_url(entry)
     if selected_entries:
         title = (payload.name or "").strip()
         if not title:

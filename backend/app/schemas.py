@@ -1,9 +1,37 @@
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, field_validator
 
 from .models import DownloadDestination, JobStatus, PlaylistSource, VideoStatus
+
+#: Largest list a bulk endpoint accepts (video ids, pasted URLs).
+MAX_BULK_ITEMS = 1000
+#: Playlist-sized lists (entries, ordering) can legitimately be much longer.
+MAX_PLAYLIST_ITEMS = 5000
+
+
+def _http_url(value: str | None) -> str | None:
+    """Links stored from user input are rendered as <a href>: http(s) only.
+
+    An empty string is kept (the UI sends it to clear a field).
+    """
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return text
+    try:
+        parts = urlsplit(text)
+    except ValueError as exc:
+        raise ValueError("Not a valid URL") from exc
+    if parts.scheme.lower() not in ("http", "https") or not parts.netloc:
+        raise ValueError("Must be an http:// or https:// URL")
+    return text
+
+
+HttpUrl = Annotated[str, AfterValidator(_http_url)]
 
 
 class SubtitleTrack(BaseModel):
@@ -94,15 +122,15 @@ class VideoRead(BaseModel):
 class VideoUpdate(BaseModel):
     title: str | None = None
     channel: str | None = None
-    channel_url: str | None = None
+    channel_url: HttpUrl | None = None
     tags: list[str] | None = None
     user_tag: str | None = None  # mark a newly added tag as user-defined
     description: str | None = None
     notes: str | None = None
-    source_url: str | None = None
+    source_url: HttpUrl | None = None
     published_at: datetime | None = None
     # Setting a remote URL fetches and caches the image server-side.
-    thumbnail_url: str | None = None
+    thumbnail_url: HttpUrl | None = None
     # Explicit clear/set for "Use source" / keep-custom flows.
     title_is_custom: bool | None = None
     description_is_custom: bool | None = None

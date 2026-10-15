@@ -228,6 +228,7 @@ def app(init_db, monkeypatch):
     )
     from app.database import get_session
     from app.main import health
+    from app.security import install_security
     from app.services import downloader
 
     monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
@@ -256,6 +257,7 @@ def app(init_db, monkeypatch):
     test_app.include_router(fonts.router)
     test_app.include_router(setup.router)
     test_app.add_api_route("/api/health", health, methods=["GET"])
+    install_security(test_app)
 
     def _override_session():
         with DBSession(init_db["engine"]) as s:
@@ -271,3 +273,26 @@ def client(app):
 
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def _stub_dns(monkeypatch):
+    """Keep url_safety hermetic: IP literals resolve to themselves, names to a public IP.
+
+    Tests that need another answer monkeypatch ``url_safety._resolve`` themselves.
+    """
+    import ipaddress
+
+    from app.services import url_safety
+
+    def fake_resolve(host: str, port: int):
+        try:
+            return [ipaddress.ip_address(host)]
+        except ValueError:
+            pass
+        if host == "localhost":
+            return [ipaddress.ip_address("127.0.0.1")]
+        return [ipaddress.ip_address("93.184.216.34")]
+
+    monkeypatch.setattr(url_safety, "_resolve", fake_resolve)
+    monkeypatch.delenv("HORDE_ALLOW_PRIVATE_URLS", raising=False)

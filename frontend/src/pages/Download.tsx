@@ -50,6 +50,7 @@ const SKIP_TOAST: Record<string, string> = {
   playlist: "Skipped playlist link — paste it alone to import.",
   shorts: "Don't watch shorts",
   duplicate_in_paste: "Skipped duplicate links",
+  invalid_url: "Skipped links that are not public http(s) URLs",
 };
 
 function toastBulkSkips(
