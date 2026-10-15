@@ -373,3 +373,49 @@ def test_stopping_the_sprite_pool_kills_its_running_ffmpeg(
     assert ffmpeg_progress.children.running() == 0
     assert _wait_for(lambda: not _pid_alive(int(marker.read_text())))
     assert not pool.in_progress(video.id)
+
+
+def test_signal_wrapper_sets_the_event_and_chains_to_the_previous_handler():
+    import signal
+
+    seen: list[int] = []
+    original = signal.signal(signal.SIGTERM, lambda signum, _f: seen.append(signum))
+    try:
+        event = threading.Event()
+        restore = main._install_shutdown_signals(event)
+        signal.raise_signal(signal.SIGTERM)
+        assert event.is_set()
+        assert seen == [signal.SIGTERM]
+        restore()
+        assert signal.getsignal(signal.SIGTERM) is not None
+    finally:
+        signal.signal(signal.SIGTERM, original)
+
+
+def test_signal_wrapper_leaves_an_ignored_signal_alone():
+    import signal
+
+    original = signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    try:
+        event = threading.Event()
+        restore = main._install_shutdown_signals(event)
+        assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+        signal.raise_signal(signal.SIGTERM)  # ignored: nothing shuts down
+        assert not event.is_set()
+        restore()
+        assert signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+    finally:
+        signal.signal(signal.SIGTERM, original)
+
+
+def test_shutdown_logs_how_many_workers_stop_and_each_result(caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="app.services.workers")
+    registry = WorkerRegistry()
+    registry.start(BackgroundWorker("one", lambda w: w.sleep(30)))
+    registry.start(BackgroundWorker("two", lambda w: w.sleep(30)))
+    registry.stop_all()
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages[0] == "stopping 2 background workers"
+    assert messages[1:] == ["worker two stopped", "worker one stopped"]

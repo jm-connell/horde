@@ -28,6 +28,7 @@ from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,22 @@ def head_revision() -> str | None:
 def is_at_head(engine: Engine, head: str | None = None) -> bool:
     """True when the database is migrated to ``head`` (default: this code's head)."""
     return _current_revision(engine) == (head or head_revision())
+
+
+def stored_revision(engine: Engine) -> str | None:
+    """The revision in ``alembic_version``, read with one cheap query.
+
+    Unlike ``_current_revision`` this builds no Alembic ``MigrationContext`` (which
+    logs two INFO lines per call), so a probe can use it on every request.
+    """
+    with engine.connect() as conn:
+        try:
+            row = conn.exec_driver_sql(
+                "SELECT version_num FROM alembic_version"
+            ).first()
+        except OperationalError:  # no such table: not migrated yet
+            return None
+    return row[0] if row else None
 
 
 def _backup_database(engine: Engine, label: str) -> Path | None:

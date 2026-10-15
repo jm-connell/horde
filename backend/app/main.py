@@ -76,6 +76,9 @@ def _install_shutdown_signals(event: threading.Event) -> Callable[[], None]:
     stream that only watched a lifespan-set flag would hold the shutdown until the
     graceful timeout. Wrapping the handler lets streams end as soon as the signal
     lands. Only the main thread may install handlers (not true under TestClient).
+
+    A signal that is ignored (``SIG_IGN``) or has no Python handler is left alone:
+    the process will not shut down because of it, so the event must not be set.
     """
     if threading.current_thread() is not threading.main_thread():
         return lambda: None
@@ -95,7 +98,10 @@ def _install_shutdown_signals(event: threading.Event) -> Callable[[], None]:
         return handler
 
     for signum in (signal.SIGINT, signal.SIGTERM):
-        previous[signum] = signal.getsignal(signum)
+        old = signal.getsignal(signum)
+        if not (callable(old) or old == signal.SIG_DFL):
+            continue
+        previous[signum] = old
         signal.signal(signum, make_handler(signum))
 
     def restore() -> None:
@@ -229,7 +235,9 @@ def ping():
 @app.get("/api/ready", response_model=ReadyResponse)
 def ready(request: Request):
     """Readiness probe: database reachable, migrations at head, workers alive."""
-    report = build_readiness(request.app, engine)
+    report = build_readiness(
+        request.app, engine, _health_cache(request.app).head_revision
+    )
     return JSONResponse(report.model_dump(), status_code=200 if report.ready else 503)
 
 

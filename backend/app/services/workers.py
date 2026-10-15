@@ -226,6 +226,7 @@ class WorkerRegistry:
         with self._lock:
             workers = list(reversed(self._workers))
             self._workers.clear()
+        logger.info("stopping %d background workers", len(workers))
         for worker in workers:
             try:
                 worker.signal_stop()
@@ -245,7 +246,9 @@ class WorkerRegistry:
             except Exception:
                 logger.warning("stopping %s failed", worker.name, exc_info=True)
                 stopped = False
-            if not stopped:
+            if stopped:
+                logger.info("worker %s stopped", worker.name)
+            else:
                 stuck.append(worker.name)
                 logger.error("worker %s did not stop within its timeout", worker.name)
         return stuck

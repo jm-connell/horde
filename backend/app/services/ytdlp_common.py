@@ -688,16 +688,30 @@ class ExtractQueueTimeout(RuntimeError):
 EXTRACT_QUEUE_TIMEOUT_SEC = float(
     os.environ.get("HORDE_EXTRACT_QUEUE_TIMEOUT_SEC", "180")
 )
+#: Background work (catalog indexing, metadata fills) always queues behind
+#: interactive requests, so it may wait longer before giving up.
+EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC = float(
+    os.environ.get(
+        "HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC",
+        str(3 * EXTRACT_QUEUE_TIMEOUT_SEC),
+    )
+)
 
 
 def _acquire_extract_gate(priority: int, timeout: float | None = None) -> None:
     """One extract at a time; lower ``priority`` values run first.
 
-    Waits at most ``timeout`` seconds (default ``EXTRACT_QUEUE_TIMEOUT_SEC``) and then
-    raises ``ExtractQueueTimeout`` without holding the gate.
+    Waits at most ``timeout`` seconds and then raises ``ExtractQueueTimeout`` without
+    holding the gate. The default is ``EXTRACT_QUEUE_TIMEOUT_SEC``, or the longer
+    ``EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC`` for background priority.
     """
     global _extract_held, _extract_waiter_seq
-    limit = EXTRACT_QUEUE_TIMEOUT_SEC if timeout is None else timeout
+    if timeout is not None:
+        limit = timeout
+    elif priority >= EXTRACT_PRIORITY_BACKGROUND:
+        limit = EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC
+    else:
+        limit = EXTRACT_QUEUE_TIMEOUT_SEC
     with _extract_gate_lock:
         if not _extract_held and not _extract_waiters:
             _extract_held = True

@@ -9,8 +9,10 @@ Every worker is a `BackgroundWorker` (or implements the same `ManagedWorker` pro
 On shutdown (SIGTERM from `docker stop`, Ctrl+C):
 
 1. Uvicorn stops accepting connections and drains open ones for up to `--timeout-graceful-shutdown` (10 s). The SSE streams (`/api/downloads/events`, `/api/downloads/{id}/events`) watch `app.state.shutdown_event`, which is set the moment the signal arrives, so they end immediately instead of using up the grace period.
-2. `lifespan` shutdown signals **every** worker, then joins them newest first, each with its own timeout (5 s by default). A worker that does not stop is logged by name at `ERROR`.
+2. `lifespan` shutdown logs `stopping N background workers`, signals **every** worker first, then joins them one by one, newest first, each with its own timeout (5 s by default, 10 s for the download and ffmpeg queues) and an overall budget of 20 s. Each result is logged at `INFO`; a worker that does not stop is logged by name at `ERROR`. Because everything is signalled before anything is joined, independent workers wind down in parallel.
 3. In-flight downloads and postprocess encodes are cancelled and **requeued** (status `queued`, not `cancelled`), so the next boot resumes them. ffmpeg children get `SIGTERM`, then `SIGKILL` after 3 s; each runs in its own session so helper processes die with it. A registry entry (`ffmpeg-children`) ends anything still running last. Every long ffmpeg goes through `run_ffmpeg` (download postprocess, H.264 copies, transcodes, sprite sheets, thumbnail frames), so all of them are cancellable this way; only short ffprobe-style probes (30 s or less) use plain `subprocess.run`.
+
+**Worst-case stop time** is the 10 s drain plus the 20 s join budget, so 30 s; a normal stop takes 1-3 s. The Compose file allows 40 s (`stop_grace_period`). With plain `docker run` the default is only 10 s, so pass `--stop-timeout 40` (or more), or Docker kills the process before the workers finish.
 
 If startup fails part way, the `finally` still stops the workers that already started.
 

@@ -20,7 +20,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..config import YTDLP_POT_BASE_URL, resolve_git_sha
-from ..migrations.runner import is_at_head
+from ..migrations.runner import head_revision, stored_revision
 from ..schemas import ReadyResponse
 from .workers import BackgroundWorker
 
@@ -67,6 +67,8 @@ class HealthCache:
         self.pot_base_url = pot_base_url
         self.git_sha = resolve_git_sha()
         self.ytdlp_version = ytdlp_version()
+        #: The newest migration this code ships (read once; /api/ready compares to it).
+        self.head_revision = head_revision()
         self.build_info = read_build_info(build_info_path)
         self._pot: dict[str, Any] | None = None
         self._pot_lock = threading.Lock()
@@ -120,10 +122,14 @@ class HealthCache:
         return BackgroundWorker("pot-probe", loop, stop_timeout=POT_TIMEOUT_SEC + 1)
 
 
-def build_readiness(app: FastAPI, engine: Engine) -> ReadyResponse:
+def build_readiness(
+    app: FastAPI, engine: Engine, head_revision: str | None
+) -> ReadyResponse:
     """Can this instance serve? Database reachable, schema at head, workers up.
 
     Without a lifespan (tests, tools) there is no registry and no workers to check.
+    Once shutdown has begun the answer is always "not ready", so a load balancer
+    stops sending traffic while the workers wind down.
     """
     problems: list[str] = []
     database = False
@@ -132,12 +138,15 @@ def build_readiness(app: FastAPI, engine: Engine) -> ReadyResponse:
         with engine.connect() as conn:
             conn.exec_driver_sql("SELECT 1")
         database = True
-        migrations = is_at_head(engine)
+        migrations = stored_revision(engine) == head_revision
         if not migrations:
             problems.append("database is not at the latest migration")
     except SQLAlchemyError:
         logger.warning("readiness: database check failed", exc_info=True)
         problems.append("database unreachable")
+    shutdown = getattr(app.state, "shutdown_event", None)
+    if shutdown is not None and shutdown.is_set():
+        problems.append("shutting down")
     registry = getattr(app.state, "workers", None)
     workers = registry.status() if registry is not None else {}
     problems.extend(

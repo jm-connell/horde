@@ -22,6 +22,8 @@ Horde has three probe endpoints. None of them forks a process or waits on the ne
 }
 ```
 
+`/api/ready` answers `503` with the problem `shutting down` as soon as a stop signal arrives, so a proxy stops sending traffic while the workers wind down. It reads the stored migration revision with one cheap query and compares it with the head revision cached at startup.
+
 A worker that finished its job on purpose (the codec probe backfill ends when nothing is left to probe) counts as running; one that crashed does not. Use `/api/ping` for the container healthcheck and `/api/ready` for "has it finished starting".
 
 ## Health { #health }

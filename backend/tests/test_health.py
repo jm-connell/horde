@@ -111,7 +111,7 @@ def test_ready_when_database_and_migrations_are_fine(client):
 
 
 def test_not_ready_when_migrations_are_behind(client, monkeypatch):
-    monkeypatch.setattr(health_svc, "is_at_head", lambda _engine: False)
+    monkeypatch.setattr(health_svc, "stored_revision", lambda _engine: "0000_old")
     response = client.get("/api/ready")
     assert response.status_code == 503
     assert response.json()["problems"] == ["database is not at the latest migration"]
@@ -179,3 +179,25 @@ def test_missing_mountinfo_means_no_warning(tmp_path):
 def test_storage_warning_is_surfaced_on_health(app, client):
     app.state.storage_warning = "DATA_DIR is on nfs4"
     assert client.get("/api/health").json()["storage_warning"] == "DATA_DIR is on nfs4"
+
+
+def test_not_ready_once_shutdown_has_begun(app, client):
+    import threading
+
+    app.state.shutdown_event = threading.Event()
+    assert client.get("/api/ready").status_code == 200
+    app.state.shutdown_event.set()
+    response = client.get("/api/ready")
+    assert response.status_code == 503
+    assert "shutting down" in response.json()["problems"]
+
+
+def test_ready_does_not_spin_up_alembic_each_call(client, caplog):
+    import logging
+
+    client.get("/api/ready")  # builds the cache
+    caplog.set_level(logging.INFO)
+    caplog.clear()
+    for _ in range(3):
+        assert client.get("/api/ready").status_code == 200
+    assert not [r for r in caplog.records if r.name.startswith("alembic")]
