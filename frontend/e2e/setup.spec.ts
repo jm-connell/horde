@@ -12,9 +12,30 @@ async function stepSettled(page: Page) {
 
 test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await page.goto("/");
+  // Nobody can sign in yet: the first step creates the administrator.
+  await expect(
+    page.getByRole("heading", { name: "Create the admin account" })
+  ).toBeVisible();
+  await page.getByLabel("Username").fill("owner");
+  await page.getByLabel("Password", { exact: true }).fill("first-password");
+  await page.getByLabel("Repeat password").fill("different-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.locator("form").getByRole("alert")).toContainText(
+    "don’t match"
+  );
+  await page.getByLabel("Repeat password").fill("first-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+
   await expect(page).toHaveURL(/\/setup$/);
   await expect(page.getByRole("heading", { name: "Welcome" })).toBeVisible();
-  await expect(page.getByText("There is no login")).toBeVisible();
+  await expect(page.getByText("Everyone signs in with their")).toBeVisible();
+
+  // The account step is one-shot: it cannot be used to add a second admin.
+  const again = await page.request.post("/api/auth/bootstrap", {
+    headers: { "X-Horde-Request": "1" },
+    data: { username: "intruder", password: "intruder-password" },
+  });
+  expect(again.status()).toBe(409);
   await expect(
     page.getByRole("link", { name: "Home", exact: true })
   ).toHaveCount(0);

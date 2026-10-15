@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
+import { storageStatePath } from "./e2e/accounts";
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(frontendRoot, "..");
@@ -26,6 +27,7 @@ const desktop = {
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
@@ -45,7 +47,11 @@ export default defineConfig({
     {
       name: "app",
       testIgnore: /setup\.spec\.ts/,
-      use: { ...desktop, baseURL: appUrl },
+      use: {
+        ...desktop,
+        baseURL: appUrl,
+        storageState: storageStatePath("admin"),
+      },
     },
     {
       // Phone-sized Chromium (touch, 412x915, mobile UA) over the specs whose
@@ -57,6 +63,7 @@ export default defineConfig({
         locale: "en-US",
         timezoneId: "UTC",
         baseURL: appUrl,
+        storageState: storageStatePath("admin"),
       },
     },
     {

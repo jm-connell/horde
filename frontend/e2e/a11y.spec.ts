@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { anonymousContext, expect, test } from "./fixtures";
 
 /**
  * axe-core on every main page. Serious and critical violations fail the test;
@@ -12,6 +12,15 @@ async function expectNoSeriousViolations(
   label: string,
   scope?: string
 ) {
+  // The page fades in on navigation; contrast measured mid-fade is meaningless.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => null))
+    )
+  );
   let axe = new AxeBuilder({ page }).withTags([
     "wcag2a",
     "wcag2aa",
@@ -37,7 +46,14 @@ async function expectNoSeriousViolations(
   expect(summary, `${label}\n${summary.join("\n")}`).toEqual([]);
 }
 
-const settingsTabs = ["appearance", "library", "playback", "ai", "system"];
+const settingsTabs = [
+  "appearance",
+  "library",
+  "playback",
+  "ai",
+  "system",
+  "users",
+];
 
 test("library page has no serious accessibility violations", async ({
   page,
@@ -132,3 +148,19 @@ for (const theme of ["light", "earthy", "frozen", "mocha", "nord", "sunset"]) {
     await expectNoSeriousViolations(page, `library (${theme} theme)`);
   });
 }
+
+test("sign-in page has no serious accessibility violations", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  void page;
+  const ctx = await anonymousContext(browser, baseURL);
+  const visitor = await ctx.newPage();
+  await visitor.goto("/login");
+  await expect(
+    visitor.getByRole("heading", { name: "Sign in to Horde" })
+  ).toBeVisible();
+  await expectNoSeriousViolations(visitor, "login");
+  await ctx.close();
+});

@@ -1,4 +1,11 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import {
+  test as base,
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
+import { storageStatePath, type AccountName } from "./accounts";
 
 /** Mutations from outside the SPA (the test's own API calls) need the CSRF header. */
 export const CSRF_HEADERS = { "X-Horde-Request": "1" };
@@ -114,4 +121,42 @@ export function videoCard(page: Page, title: string) {
 /** Channel pages render feed cards, not library video cards. */
 export function feedCard(page: Page, title: string) {
   return page.locator("[data-horde='feed-card']", { hasText: title });
+}
+
+/** A browser context already signed in as one of the seeded accounts. */
+export async function contextAs(
+  browser: Browser,
+  baseURL: string | undefined,
+  name: AccountName
+): Promise<BrowserContext> {
+  return browser.newContext({
+    baseURL,
+    storageState: storageStatePath(name),
+    locale: "en-US",
+    timezoneId: "UTC",
+  });
+}
+
+/** A context with no cookies, as a visitor who has not signed in. */
+export async function anonymousContext(
+  browser: Browser,
+  baseURL: string | undefined
+): Promise<BrowserContext> {
+  return browser.newContext({
+    baseURL,
+    storageState: { cookies: [], origins: [] },
+    locale: "en-US",
+    timezoneId: "UTC",
+  });
+}
+
+/** Sign in through the login form. */
+export async function signInWithForm(
+  page: Page,
+  username: string,
+  password: string
+): Promise<void> {
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
 }

@@ -48,24 +48,79 @@ def prepare(mode: str) -> None:
         _empty_dir(DATA_DIR / extra)
 
     init_db()
-    _clear_tables(engine)
-
     app_mode = mode == "app"
+    # Browsers keep their session cookie across resets, so in app mode the seeded
+    # accounts (and their sessions) survive; setup mode starts with nobody.
+    _clear_tables(engine, keep_accounts=app_mode)
+
     _write_settings(DATA_DIR, setup_completed=app_mode)
     _reset_queue(downloader)
 
     if not app_mode:
         return
 
+    _seed_accounts(engine)
     _seed_library(DOWNLOADS_DIR)
 
 
-def _clear_tables(engine) -> None:
+#: Accounts every app-mode e2e run starts with: (username, password, admin, grants).
+#: ``viewer`` can watch and nothing else, to exercise permission-gated screens.
+E2E_ACCOUNTS = (
+    ("admin", "e2e-admin-password", True, ()),
+    ("member", "e2e-member-password", False, None),  # None = default grants
+    ("viewer", "e2e-viewer-password", False, ("use_ai",)),
+)
+_ACCOUNT_TABLES = {"users", "user_sessions"}
+
+
+def _clear_tables(engine, *, keep_accounts: bool = False) -> None:
     """Empty every table (children first) but keep the migrated schema."""
     with engine.begin() as conn:
         for table in reversed(SQLModel.metadata.sorted_tables):
+            if keep_accounts and table.name in _ACCOUNT_TABLES:
+                continue
             conn.execute(table.delete())
-        conn.exec_driver_sql("DELETE FROM sqlite_sequence")
+        if keep_accounts:
+            conn.exec_driver_sql(
+                "DELETE FROM sqlite_sequence WHERE name NOT IN ('users', 'user_sessions')"
+            )
+        else:
+            conn.exec_driver_sql("DELETE FROM sqlite_sequence")
+
+
+def _seed_accounts(engine) -> None:
+    """Make the seeded accounts exist with known passwords and roles.
+
+    Accounts a test created are removed (their sessions go with them). Existing
+    seeded accounts keep their rows, so a browser that signed in earlier stays
+    signed in; their password, role and grants are put back.
+    """
+    from sqlmodel import Session, select
+
+    from .models import User
+    from .services.auth import accounts, passwords, permissions
+
+    seeded = {name for name, *_ in E2E_ACCOUNTS}
+    with Session(engine) as session:
+        for user in session.exec(select(User)).all():
+            if user.username_norm not in seeded:
+                session.delete(user)
+        session.commit()
+        for name, password, is_admin, grants in E2E_ACCOUNTS:
+            wanted = permissions.DEFAULT_PERMISSIONS if grants is None else set(grants)
+            user = accounts.get_by_username(session, name)
+            if user is None:
+                accounts.create_user(
+                    session, name, password, is_admin=is_admin, granted=wanted
+                )
+                continue
+            if not passwords.verify_password(password, user.password_hash):
+                user.password_hash = passwords.hash_password(password)
+            user.is_admin = is_admin
+            user.disabled = False
+            user.permissions = permissions.dump(wanted)
+            session.add(user)
+        session.commit()
 
 
 def _empty_dir(path: Path) -> None:
@@ -124,9 +179,11 @@ def _seed_library(downloads: Path) -> None:
         Playlist,
         PlaylistItem,
         PlaylistSource,
+        UserVideoState,
         Video,
         VideoStatus,
     )
+    from .services.auth import accounts
 
     now = datetime.now(UTC).replace(second=0, microsecond=0)
     yesterday = now - timedelta(days=1)
@@ -165,8 +222,6 @@ def _seed_library(downloads: Path) -> None:
             height_px=1080,
             view_count=1200,
             published_at=published,
-            last_position_sec=40,
-            last_watched_at=now,
             source_chapters=chapters,
         )
         harbor = video(
@@ -178,8 +233,6 @@ def _seed_library(downloads: Path) -> None:
             duration_sec=90,
             file_size=2_000_000,
             height_px=720,
-            last_position_sec=15,
-            last_watched_at=yesterday,
         )
         cedar = video(
             title="Cedar Notes",
@@ -224,6 +277,26 @@ def _seed_library(downloads: Path) -> None:
         session.refresh(aurora)
         session.refresh(harbor)
         session.refresh(kiln)
+
+        # The admin has watched two videos; nobody else has watched anything.
+        admin = accounts.get_by_username(session, "admin")
+        session.add(
+            UserVideoState(
+                user_id=admin.id,
+                video_id=aurora.id,
+                position_sec=40,
+                last_watched_at=now,
+            )
+        )
+        session.add(
+            UserVideoState(
+                user_id=admin.id,
+                video_id=harbor.id,
+                position_sec=15,
+                last_watched_at=yesterday,
+            )
+        )
+        session.commit()
 
         playlist = Playlist(
             name="Evening set",

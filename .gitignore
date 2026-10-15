@@ -48,3 +48,5 @@ frontend/tsconfig.tsbuildinfo
 .ruff_cache/
 .mypy_cache/
 .pytest_cache/
+# Saved signed-in browser states for the e2e suite
+frontend/e2e/.auth/
