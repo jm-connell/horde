@@ -109,6 +109,30 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
+class FailureLog:
+    """Logs a failure that repeats on every pass without flooding the log.
+
+    The first failure is a warning with its traceback; further failures are
+    ``debug`` until ``ok()`` reports a success (which logs one INFO line). Create one
+    per loop or call site and keep it local, so there is no shared state to reset.
+    """
+
+    def __init__(self, logger: logging.Logger, message: str) -> None:
+        self._logger = logger
+        self._message = message
+        self._failing = False
+
+    def failed(self, *args: object) -> None:
+        level = logging.DEBUG if self._failing else logging.WARNING
+        self._failing = True
+        self._logger.log(level, self._message, *args, exc_info=True)
+
+    def ok(self) -> None:
+        if self._failing:
+            self._failing = False
+            self._logger.info("%s: recovered", self._message % ())
+
+
 def resolve_level(raw: str | None) -> str:
     value = (raw or "").strip().upper()
     return value if value in logging.getLevelNamesMapping() else "INFO"

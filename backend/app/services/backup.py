@@ -122,7 +122,9 @@ def run_nightly_backup(
     directory.mkdir(parents=True, exist_ok=True)
     target = nightly_path(directory, now or datetime.now().astimezone())
     partial = target.with_name(target.name + ".part")
-    partial.unlink(missing_ok=True)
+    # A crash mid-backup leaves a .part behind (possibly from an earlier day).
+    for stale in directory.glob(f"{NIGHTLY_PREFIX}*.db.part"):
+        stale.unlink(missing_ok=True)
     raw = engine.raw_connection()
     try:
         conn: sqlite3.Connection = raw.driver_connection  # type: ignore[assignment]

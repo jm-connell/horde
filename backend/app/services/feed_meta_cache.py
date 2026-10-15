@@ -29,7 +29,7 @@ def load() -> dict[str, dict[str, Any]]:
             if isinstance(data, dict):
                 return {k: v for k, v in data.items() if isinstance(v, dict)}
     except Exception:
-        logger.warning(
+        logger.debug(
             "feed metadata cache unreadable; starting empty",
             exc_info=True,
         )

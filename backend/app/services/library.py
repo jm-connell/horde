@@ -404,7 +404,7 @@ def related_videos(
                     scored.sort(key=lambda item: item[0], reverse=True)
                     add_candidates([v for _, v in scored])
         except Exception:
-            logger.warning(
+            logger.debug(
                 "embedding-based related videos unavailable for video %s",
                 source.id,
                 exc_info=True,

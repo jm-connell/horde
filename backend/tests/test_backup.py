@@ -195,3 +195,15 @@ def test_backups_can_run_while_other_threads_write(init_db):
     with sqlite3.connect(path) as copy:
         assert copy.execute("PRAGMA integrity_check").fetchone() == ("ok",)
         assert copy.execute("SELECT count(*) FROM videos").fetchone()[0] > 0
+
+
+def test_leftover_part_files_from_earlier_runs_are_removed(init_db):
+    folder = init_db["data"] / "backups"
+    folder.mkdir()
+    stale = folder / "horde-nightly-20261001.db.part"
+    stale.write_bytes(b"half")
+    other = folder / "mine.db.part"
+    other.write_bytes(b"not ours")
+    backup.run_nightly_backup(init_db["engine"], now=_day(), keep=7)
+    assert not stale.exists()
+    assert other.exists()

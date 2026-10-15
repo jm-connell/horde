@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
 from ..database import engine
-from ..logging_config import job_context
+from ..logging_config import FailureLog, job_context
 from ..models import (
     DownloadDestination,
     DownloadJob,
@@ -862,12 +862,14 @@ class DownloadQueue:
         """The worker that requeues orphaned jobs and prunes finished progress."""
 
         def loop(worker: BackgroundWorker) -> None:
+            failures = FailureLog(logger, "stuck-job reaper pass failed")
             while not worker.sleep(interval):
                 try:
                     self.reap_stuck_jobs()
                     progress_store.prune()
-                except Exception:
-                    logger.exception("stuck-job reaper pass failed")
+                    failures.ok()
+                except Exception:  # noqa: BLE001 - FailureLog logs the traceback
+                    failures.failed()
 
         return BackgroundWorker("download-reaper", loop)
 

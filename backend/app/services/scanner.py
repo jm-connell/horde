@@ -17,6 +17,7 @@ from ..config import (
     VIDEO_EXTENSIONS,
 )
 from ..database import engine
+from ..logging_config import FailureLog
 from ..models import Video, VideoStatus, utcnow
 from . import activity, library
 from .metadata import (
@@ -374,27 +375,38 @@ class _MediaEventHandler(FileSystemEventHandler):
             self._maybe_ingest(event.dest_path)
 
 
-def _scan_pass(worker: BackgroundWorker, *, expire_progress: bool) -> None:
+def _scan_pass(
+    worker: BackgroundWorker,
+    scan_failures: FailureLog,
+    expire_failures: FailureLog,
+    *,
+    expire_progress: bool,
+) -> None:
     try:
         scan_once(should_stop=lambda: worker.stopping)
-    except Exception:
-        # Keep the poller alive: the next pass retries.
-        logger.warning("library scan failed", exc_info=True)
+        scan_failures.ok()
+    except Exception:  # noqa: BLE001 - FailureLog logs the traceback
+        # Keep the poller alive: the next pass retries. A NAS that is offline fails
+        # every minute, so only the first failure is a warning.
+        scan_failures.failed()
     if not expire_progress:
         return
     try:
         with Session(engine) as session:
             library.expire_stale_progress(session)
-    except Exception:
-        logger.warning("expiring stale import progress failed", exc_info=True)
+        expire_failures.ok()
+    except Exception:  # noqa: BLE001 - FailureLog logs the traceback
+        expire_failures.failed()
 
 
 def _polling_loop(worker: BackgroundWorker) -> None:
     # The initial sweep runs here, not in startup, so the server answers requests
     # while a large library is walked; the watchdog already covers new files.
-    _scan_pass(worker, expire_progress=False)
+    scan_failures = FailureLog(logger, "library scan failed")
+    expire_failures = FailureLog(logger, "expiring stale import progress failed")
+    _scan_pass(worker, scan_failures, expire_failures, expire_progress=False)
     while not worker.sleep(SCAN_INTERVAL_SEC):
-        _scan_pass(worker, expire_progress=True)
+        _scan_pass(worker, scan_failures, expire_failures, expire_progress=True)
 
 
 def create_scanner_workers() -> list[ManagedWorker]:

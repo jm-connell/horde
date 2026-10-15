@@ -178,11 +178,8 @@ def system_stats():
             "free_bytes": usage.free,
         }
     except Exception:
-        logger.warning(
-            "could not read disk usage of %s",
-            DOWNLOADS_DIR,
-            exc_info=True,
-        )
+        # The Settings page polls this endpoint.
+        logger.debug("could not read disk usage of %s", DOWNLOADS_DIR, exc_info=True)
     return {
         "cpu_percent": cpu_ram["cpu_percent"],
         "cpu_model": cpu_ram["cpu_model"],

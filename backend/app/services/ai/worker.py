@@ -9,7 +9,7 @@ from datetime import timedelta
 from sqlmodel import Session, select
 
 from ...database import engine
-from ...logging_config import job_context
+from ...logging_config import FailureLog, job_context
 from ...models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc, utcnow
 from .. import app_settings
 from ..workers import BackgroundWorker
@@ -847,10 +847,8 @@ def _compute_blocked_reason(
         if budget.get("blocked"):
             return "OpenRouter weekly budget hard limit reached"
     except Exception:
-        logger.warning(
-            "could not read the AI budget status",
-            exc_info=True,
-        )
+        # Runs on every idle pass of the worker, so keep it out of the warnings.
+        logger.debug("could not read the AI budget status", exc_info=True)
     if not has_queued:
         return None
     wait = _waiting_reason(llm_ok=llm_ok, embed_ok=embed_ok)
@@ -1045,11 +1043,13 @@ def _maybe_pending_category_refresh() -> None:
 
 
 def _worker_loop(worker: BackgroundWorker) -> None:
+    loop_failures = FailureLog(logger, "AI worker loop error")
     while not worker.stopping:
         try:
             worked = _process_one()
-        except Exception:
-            logger.exception("AI worker loop error")
+            loop_failures.ok()
+        except Exception:  # noqa: BLE001 - FailureLog logs the traceback
+            loop_failures.failed()
             worked = False
         if worked:
             continue
@@ -1088,6 +1088,7 @@ def _maybe_run_daily() -> None:
 
 
 def _timer_loop(worker: BackgroundWorker) -> None:
+    failures = FailureLog(logger, "AI timer loop error")
     while not worker.stopping:
         pause = 60.0
         try:
@@ -1109,8 +1110,9 @@ def _timer_loop(worker: BackgroundWorker) -> None:
                 if schedule == "on_download":
                     maybe_enqueue_index_catchup()
             # Poll frequently for set_time / schedule changes
-        except Exception:
-            logger.exception("AI timer loop error")
+            failures.ok()
+        except Exception:  # noqa: BLE001 - FailureLog logs the traceback
+            failures.failed()
             pause = 30.0
         if worker.sleep(pause):
             return

@@ -146,3 +146,28 @@ def test_request_id_reaches_log_records_made_in_handlers(client):
     finally:
         logging.getLogger("app.security").removeHandler(handler)
     assert seen == ["rid-9"]
+
+
+def test_failure_log_warns_once_then_stays_quiet_until_recovery(caplog):
+    from app.logging_config import FailureLog
+
+    log = logging.getLogger("horde.failure-test")
+    caplog.set_level(logging.DEBUG, logger="horde.failure-test")
+    failures = FailureLog(log, "poll failed")
+    for _ in range(3):
+        try:
+            raise OSError("nas offline")
+        except OSError:
+            failures.failed()
+    levels = [r.levelno for r in caplog.records]
+    assert levels == [logging.WARNING, logging.DEBUG, logging.DEBUG]
+    assert all(r.exc_info for r in caplog.records)
+
+    failures.ok()
+    failures.ok()  # only the first success after failures says anything
+    assert [r.levelno for r in caplog.records][3:] == [logging.INFO]
+    try:
+        raise OSError("again")
+    except OSError:
+        failures.failed()
+    assert caplog.records[-1].levelno == logging.WARNING
