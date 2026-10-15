@@ -75,3 +75,13 @@ Fix every review finding plus week-1, weeks 2–4 and months 2–3 items. Add au
 - Should a playing standard-size player pause background effects by default? It currently only does so when the setting is on.
 - The `/api/v1` prefix: do it or skip it (WP-H1 will decide or ask).
 - Should the React Compiler ESLint rules be adopted later (~120 findings)?
+
+## WP-J1 downloader split handoff (received 23:0x UTC)
+- wp/dlsplit tip 8540ac3 (25 commits on d2c71be), backed up as backup/wp-dlsplit. HEAD: ruff/format ok, pytest 970 passed. Radon: F(94)/F(61)/F(41)/D(22) -> worst C(14).
+- Remaining: (1) full `scripts/check.sh --e2e` (ports 8891/8892, PYTEST_ADDOPTS="--basetemp=$SP/dlsplit/tmp_gate -p no:cacheprovider"); (2) archive-verify the last 7 commits (from 581bb3e) with `$SP/dlsplit/verify.sh <sha>` or percommit2.sh; (3) architect review (fresh reviewer, REVIEW_RULES, immutable SHA); (4) rebase onto tip after auth merges — API-layer edits isolated in 49ad282 (import paths only; can be dropped since the facade works); (5) merge.
+- Gotchas: tests patch where names are looked up (finalize.*, postprocess.*, artifacts.validate_playable); DownloadQueue runner injected (`download_queue.runner`); test_import_resolution.py guards lazy imports; .gitignore `downloads/` anchored to `/downloads/`.
+- Owner question: when to delete the downloader.py facade (kept one release).
+
+## Test-run hygiene (learned the hard way)
+- NEVER `pkill -f pytest` / `pkill -f <script>`: it kills your own shell (exit 144) and other agents' runs. Kill by PID.
+- Concurrent pytest sessions MUST use distinct `--basetemp` (they share /tmp/pytest-of-root and delete each other's dirs → spurious "unable to open database file").
