@@ -3,8 +3,11 @@
 # Base images are pinned to an exact version AND an immutable digest so a
 # rebuild is reproducible. Dependabot (docker ecosystem) proposes bumps.
 
+# The frontend and the wiki are platform-independent static files, so they are
+# always built on the build host (fast, no emulation) even for arm64 images.
+
 # --- Stage 1: build the React frontend ---
-FROM node:22.23.3-alpine3.24@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS frontend
+FROM --platform=$BUILDPLATFORM node:22.23.3-alpine3.24@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS frontend
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -12,7 +15,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # --- Stage 2: build the MkDocs wiki ---
-FROM python:3.12.15-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS docs
+FROM --platform=$BUILDPLATFORM python:3.12.15-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS docs
 WORKDIR /docs
 COPY docs/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
