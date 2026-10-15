@@ -6,6 +6,17 @@ const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(frontendRoot, "..");
 const python = process.env.E2E_PYTHON || "python3";
 
+// Ports are overridable so several checkouts/agents can run e2e side by side.
+const appPort = Number(process.env.E2E_APP_PORT || 8091);
+const setupPort = Number(process.env.E2E_SETUP_PORT || 8092);
+const appUrl = `http://127.0.0.1:${appPort}`;
+const setupUrl = `http://127.0.0.1:${setupPort}`;
+
+// CI uses the Chromium that `playwright install` fetches. On machines whose
+// preinstalled browser build differs from this Playwright version, point
+// PW_CHROMIUM_EXECUTABLE at a compatible Chromium binary instead.
+const chromiumExecutable = process.env.PW_CHROMIUM_EXECUTABLE || undefined;
+
 const desktop = {
   ...devices["Desktop Chrome"],
   locale: "en-US",
@@ -26,31 +37,34 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
+    launchOptions: chromiumExecutable
+      ? { executablePath: chromiumExecutable }
+      : {},
   },
   projects: [
     {
       name: "app",
       testIgnore: /setup\.spec\.ts/,
-      use: { ...desktop, baseURL: "http://127.0.0.1:8091" },
+      use: { ...desktop, baseURL: appUrl },
     },
     {
       name: "setup",
       testMatch: /setup\.spec\.ts/,
-      use: { ...desktop, baseURL: "http://127.0.0.1:8092" },
+      use: { ...desktop, baseURL: setupUrl },
     },
   ],
   webServer: [
     {
-      command: `${python} e2e/serve.py --mode app --port 8091`,
+      command: `${python} e2e/serve.py --mode app --port ${appPort}`,
       cwd: repoRoot,
-      url: "http://127.0.0.1:8091/api/health",
+      url: `${appUrl}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
     {
-      command: `${python} e2e/serve.py --mode setup --port 8092`,
+      command: `${python} e2e/serve.py --mode setup --port ${setupPort}`,
       cwd: repoRoot,
-      url: "http://127.0.0.1:8092/api/health",
+      url: `${setupUrl}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
