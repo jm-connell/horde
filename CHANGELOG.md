@@ -10,6 +10,16 @@ All notable changes to Horde are documented here. The format follows
 This section summarizes the architecture and operations overhaul at a high
 level. Detailed per-area entries are added by the maintainer at release time.
 
+### Upgrade notes
+
+- **`PUID=0` / `PGID=0` no longer start.** The container now refuses to run the
+  app as root. Set `PUID`/`PGID` to the owner of your media dataset, or set
+  `HORDE_ALLOW_ROOT=1` in `.env` if you really want the old behaviour.
+- `DATA_PATH` must be on a local disk (SQLite WAL is unsafe on SMB/NFS).
+- A checkout that tracks `main` bakes a `git describe` version such as
+  `1.2.0-5-gabc1234`; the in-app update check then only reports **new releases**,
+  not every new commit on `main`. Run `bash update.sh` regularly to follow `main`.
+
 ### Added
 
 - Versioned releases: tagging `vX.Y.Z` publishes multi-arch (amd64, arm64)

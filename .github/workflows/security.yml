@@ -66,7 +66,10 @@ jobs:
             HORDE_VERSION=ci
           cache-from: type=gha,scope=image-jellyfin
           cache-to: type=gha,scope=image-jellyfin,mode=max
-      - name: Scan (fail on fixable CRITICAL)
+      # Blocking only on main and the weekly run: a new CVE in the base image
+      # must not block an unrelated pull request, but it must not ship either.
+      # On pull requests the same scan runs and reports without failing.
+      - name: Scan (fixable CRITICAL; blocking on main and weekly)
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: horde:scan
@@ -74,7 +77,7 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
           vuln-type: os,library
-          exit-code: "1"
+          exit-code: ${{ github.event_name == 'pull_request' && '0' || '1' }}
 
   gitleaks:
     name: Secret scan (gitleaks)

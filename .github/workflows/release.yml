@@ -12,6 +12,7 @@ on:
 permissions:
   contents: write
   packages: write
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -36,6 +37,34 @@ jobs:
             echo "::error::${GITHUB_REF_NAME} is not on main; release tags must be cut from main."
             exit 1
           fi
+
+      - name: CI and Image workflows must be green on the tagged commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Tag only commits that passed: wait for runs that are still going
+          # (up to 40 minutes), fail if a workflow has no successful run.
+          for wf in ci.yml image.yml; do
+            for _ in $(seq 1 80); do
+              runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${wf}/runs?head_sha=${GITHUB_SHA}&per_page=50" --jq '.workflow_runs')"
+              ok="$(jq '[.[] | select(.conclusion == "success")] | length' <<<"${runs}")"
+              pending="$(jq '[.[] | select(.status != "completed")] | length' <<<"${runs}")"
+              if [ "${ok}" -gt 0 ]; then
+                echo "${wf}: green on ${GITHUB_SHA}"
+                break
+              fi
+              if [ "${pending}" -eq 0 ]; then
+                echo "::error::${wf} has no successful run on ${GITHUB_SHA}. Fix main (or re-run the workflow) and re-tag."
+                exit 1
+              fi
+              echo "${wf}: still running, waiting..."
+              sleep 30
+            done
+            if [ "${ok}" -le 0 ]; then
+              echo "::error::timed out waiting for ${wf}"
+              exit 1
+            fi
+          done
 
       - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1

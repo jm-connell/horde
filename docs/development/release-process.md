@@ -59,6 +59,12 @@ Also recommended:
 - **Packages**: make the `horde` package public after the first release.
 - **Pages**: *Settings → Pages → Source: GitHub Actions*.
 
+## What CI checks on a release
+
+The Release workflow refuses to build unless the `CI` and `Image` workflows have a successful run on the tagged commit (it waits up to 40 minutes for runs still in progress), so tag only commits on a green `main`.
+
+The Trivy image scan (`Security` workflow) fails on CRITICAL findings that have a fix. It blocks on pushes to `main` and on the weekly run, but on pull requests it only reports: a newly published CVE in a base image should not block an unrelated pull request, yet it must be fixed before anything ships from `main`.
+
 ## Dependency automation
 
 - Dependabot opens one grouped minor/patch pull request per ecosystem each week (Python, npm, Docker, Compose, Actions) and separate pull requests for major updates.

@@ -64,6 +64,8 @@ The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `f
 | `HORDE_MEM_LIMIT` | *(unlimited)* | Compose-only. Memory limit for the `horde` container, for example `4g`. |
 | `HORDE_PIDS_LIMIT` | `1024` | Compose-only. Maximum processes/threads. |
 | `FFMPEG_FLAVOR` | `jellyfin` | Build-time. `jellyfin` or `debian`; the build fails if the flavor is unavailable. |
+| `JELLYFIN_GPG_FPR` | *(empty)* | Build-time. Expected fingerprint (40 hex characters) of the Jellyfin repository signing key; the build fails on a mismatch. Empty = the fingerprint is only printed in the build log. |
+| `YTDLP_UPDATE_TIMEOUT_SEC` | `45` | Time limit for the `YTDLP_AUTO_UPDATE` download at start. |
 
 ### Runtime yt-dlp updater
 

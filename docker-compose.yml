@@ -53,6 +53,9 @@ services:
         # `jellyfin` (default; hardware-encoder-capable) or `debian`. The build
         # fails if the chosen flavor cannot be installed.
         FFMPEG_FLAVOR: ${FFMPEG_FLAVOR:-jellyfin}
+        # Optional: fail the build unless the Jellyfin repository key has this
+        # fingerprint (40 hex characters, no spaces).
+        JELLYFIN_GPG_FPR: ${JELLYFIN_GPG_FPR:-}
         HORDE_VERSION: ${HORDE_VERSION:-dev}
     # Built locally by default (update.sh also tags horde:<shortsha> for rollback).
     # Set HORDE_IMAGE to use a published image instead; see docs/getting-started/updating.md.

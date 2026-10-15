@@ -143,6 +143,8 @@ Settings → System can show a quiet notice when a newer version is available (d
 - When the image has a release version baked in (`HORDE_VERSION`, set for tagged releases and by `update.sh` from your nearest `v*` tag), Horde compares it with the **latest GitHub release**.
 - Otherwise, or while the repository has no releases, it compares the baked commit SHA with `main` and **ignores** commits by the `github-actions[bot]` stats bot and changes that only touch docs, so a daily bot commit no longer shows up as an update.
 
+Installs that track `main` with `update.sh` bake a `git describe` version such as `1.2.0-5-gabc1234`. For them the notice only appears when a **new release** is published; commits on `main` in between do not trigger it (run `bash update.sh` to follow `main`).
+
 Both rely on identity baked at build time — another reason to use `update.sh` or set `HORDE_GIT_SHA` on rebuild.
 
 Override the repo used for checks with `HORDE_GITHUB_REPO` if needed ([Environment variables](../ops/environment.md)).
