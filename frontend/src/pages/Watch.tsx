@@ -855,7 +855,7 @@ export default function Watch() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-ink-600">
+                  <div className="flex h-full items-center justify-center text-muted">
                     <span className="text-xl">▶</span>
                   </div>
                 )}

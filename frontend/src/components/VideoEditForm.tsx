@@ -289,7 +289,7 @@ export default function VideoEditForm({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-ink-600">
+              <div className="flex h-full items-center justify-center text-muted">
                 No thumbnail
               </div>
             )}
@@ -353,6 +353,7 @@ export default function VideoEditForm({
           <div className="mt-2">
             <span className={labelClass}>Or thumbnail URL</span>
             <input
+              aria-label="Thumbnail URL"
               value={draft.thumbnail_url}
               onChange={(e) => set("thumbnail_url", e.target.value)}
               placeholder="https://..."
@@ -364,10 +365,11 @@ export default function VideoEditForm({
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>
+              <label htmlFor={`${fieldId}-title`} className={labelClass}>
                 Title{requireChannel ? " *" : ""}
               </label>
               <input
+                id={`${fieldId}-title`}
                 value={draft.title}
                 onChange={(e) => set("title", e.target.value)}
                 className={inputClass}

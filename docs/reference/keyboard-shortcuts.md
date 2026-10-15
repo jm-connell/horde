@@ -23,7 +23,14 @@ Player shortcuts are handled globally while the full player is active. They mirr
     These shortcuts are **disabled while the mini player is active** so typing and browsing are not hijacked. Expand back to the Watch page (or docked player) for hotkeys. See [Player architecture](../design/player-architecture.md).
 
 !!! note "Form fields"
-    Shortcuts are ignored when focus is in an `INPUT`, `TEXTAREA`, or `SELECT` so you can type titles, notes, and search queries normally.
+    Shortcuts are ignored when focus is in an `INPUT`, `TEXTAREA`, `SELECT` or any `contenteditable` element so you can type titles, notes, and search queries normally. They are also ignored when ++ctrl++, ++alt++ or ++cmd++ is held, and ++space++ / the arrow keys are left to a focused button, menu item or slider.
+
+!!! tip "Turn single-key shortcuts off"
+    **Settings → Playback → Single-key player shortcuts** disables the letter, punctuation and ++space++ shortcuts (WCAG 2.1.4), for example when speech-input software types into the page. Arrow keys and ++escape++ keep working. The choice is stored with the other playback preferences.
+
+## Menus and dialogs
+
+Menus (video actions, stream quality, download quality, bulk playlist picker) open with ++enter++ or ++space++ on their button. ++arrow-down++ / ++arrow-up++, ++home++ and ++end++ move between items, ++escape++ closes the menu and returns focus to its button, and ++tab++ closes it. Dialogs keep ++tab++ inside them, close on ++escape++ and give focus back to where you were.
 
 ## Tips
 

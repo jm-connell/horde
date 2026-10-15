@@ -136,7 +136,7 @@ bash update.sh`}
                       href={safeHref(updateCheck.latest_html_url)}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-block text-accent hover:underline"
+                      className="inline-block text-accent underline underline-offset-2"
                     >
                       View latest commit on GitHub
                     </a>

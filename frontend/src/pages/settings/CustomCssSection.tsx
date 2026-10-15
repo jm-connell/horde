@@ -91,7 +91,7 @@ export default function CustomCssSection() {
                   notes:{" "}
                   <a
                     href="/wiki/settings/custom-css/"
-                    className="text-accent hover:underline"
+                    className="text-accent underline underline-offset-2"
                   >
                     Custom CSS wiki
                   </a>

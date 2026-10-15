@@ -405,13 +405,30 @@ export default function PlaylistAddVideo({
               className="mt-1 max-h-64 w-full overflow-y-auto rounded-lg bg-ink-950 ring-1 ring-ink-800 horde-scrollbar"
             >
               {loadingLibrary ? (
-                <li className="px-3 py-2 text-sm text-muted">Searching…</li>
+                <li
+                  role="option"
+                  aria-disabled="true"
+                  aria-selected="false"
+                  className="px-3 py-2 text-sm text-muted"
+                >
+                  Searching…
+                </li>
               ) : alreadyInPlaylist ? (
-                <li className="px-3 py-2 text-sm text-muted">
+                <li
+                  role="option"
+                  aria-disabled="true"
+                  aria-selected="false"
+                  className="px-3 py-2 text-sm text-muted"
+                >
                   Already in this playlist
                 </li>
               ) : suggestions.length === 0 ? (
-                <li className="px-3 py-2 text-sm text-muted">
+                <li
+                  role="option"
+                  aria-disabled="true"
+                  aria-selected="false"
+                  className="px-3 py-2 text-sm text-muted"
+                >
                   {looksLikeDownloadUrl(query) && linkPreviewing
                     ? "Looking up…"
                     : "No matching videos"}

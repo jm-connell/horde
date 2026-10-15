@@ -95,7 +95,7 @@ export default function SystemStatsSnippet({
         <span className="block text-gray-400">None detected</span>
         <a
           href="/wiki/ops/environment/#gpu"
-          className="mt-1 block text-xs text-accent hover:underline"
+          className="mt-1 block text-xs text-accent underline underline-offset-2"
         >
           Why?
         </a>

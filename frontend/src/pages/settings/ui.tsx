@@ -4,14 +4,18 @@ export function Toggle({
   checked,
   onChange,
   disabled = false,
+  label,
 }: {
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
+  /** Accessible name when the toggle is not wrapped in a <label>. */
+  label?: string;
 }) {
   return (
     <button
       role="switch"
+      aria-label={label}
       aria-checked={checked}
       aria-disabled={disabled || undefined}
       disabled={disabled}

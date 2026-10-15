@@ -942,6 +942,22 @@ export default function Settings() {
     systemActivity,
   };
 
+  // Roving tabindex: only the selected tab is in the Tab order; arrows move
+  // between tabs and select them.
+  const onTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const index = TABS.findIndex((t) => t.id === tab);
+    let next = -1;
+    if (e.key === "ArrowRight") next = (index + 1) % TABS.length;
+    else if (e.key === "ArrowLeft") {
+      next = (index - 1 + TABS.length) % TABS.length;
+    } else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = TABS.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    selectTab(TABS[next].id);
+    document.getElementById(`settings-tab-${TABS[next].id}`)?.focus();
+  };
+
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-6 text-2xl font-bold text-gray-100">Settings</h1>
@@ -951,12 +967,18 @@ export default function Settings() {
           className="ui-panel flex w-full min-w-0 max-w-full flex-wrap gap-1 rounded-xl bg-ink-900 p-1 ring-1 ring-ink-700 sm:inline-flex sm:w-fit sm:flex-nowrap sm:overflow-x-auto"
           pillClassName="bg-ink-800"
           dependency={tab}
+          role="tablist"
+          aria-label="Settings sections"
         >
           {TABS.map((t) => (
             <button
               key={t.id}
               role="tab"
+              id={`settings-tab-${t.id}`}
+              aria-controls="settings-panel"
               aria-selected={tab === t.id}
+              tabIndex={tab === t.id ? 0 : -1}
+              onKeyDown={onTabKeyDown}
               data-liquid-active={tab === t.id ? "true" : undefined}
               onClick={() => selectTab(t.id)}
               className={`ui-interactive relative z-10 shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -988,6 +1010,8 @@ export default function Settings() {
       <SettingsPageProvider value={ctxValue}>
         <div
           role="tabpanel"
+          id="settings-panel"
+          aria-labelledby={`settings-tab-${tab}`}
           className="ui-panel space-y-6 rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700"
         >
           {tab === "appearance" && <AppearanceTab />}

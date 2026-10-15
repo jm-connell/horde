@@ -119,7 +119,14 @@ export default function ThemedSelect<T extends string>({
   const optionList = (
     <ul id={listId} role="listbox">
       {visible.length === 0 ? (
-        <li className="px-3 py-2 text-sm text-muted">No matching models</li>
+        <li
+          role="option"
+          aria-disabled="true"
+          aria-selected="false"
+          className="px-3 py-2 text-sm text-muted"
+        >
+          No matching models
+        </li>
       ) : (
         visible.map((opt, i) => {
           const active = opt.value === value;
@@ -269,7 +276,12 @@ export default function ThemedSelect<T extends string>({
         <button
           type="button"
           disabled={disabled}
-          aria-label={ariaLabel}
+          // WCAG 2.5.3: the name must contain the visible text (the current value).
+          aria-label={
+            ariaLabel && selected
+              ? `${ariaLabel}: ${selected.label}`
+              : ariaLabel
+          }
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={listId}

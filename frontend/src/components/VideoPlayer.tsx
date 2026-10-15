@@ -2581,7 +2581,7 @@ export default function VideoPlayer({
                     type="button"
                     onClick={cycleCaptions}
                     className={playerChromeBtn(Boolean(captionLang))}
-                    aria-label="Subtitles"
+                    aria-label="CC (subtitles)"
                     aria-pressed={Boolean(captionLang)}
                     title={
                       subtitlesPending && tracks.length === 0
@@ -2619,7 +2619,7 @@ export default function VideoPlayer({
                       type="button"
                       onClick={requestPiP}
                       className={playerChromeBtn(false)}
-                      aria-label="Picture in picture"
+                      aria-label="PiP (picture in picture)"
                       title="Picture in picture"
                     >
                       PiP

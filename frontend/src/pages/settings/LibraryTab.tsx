@@ -142,6 +142,7 @@ export default function LibraryTab() {
               type="number"
               min={1}
               max={365}
+              aria-label="Progress expiry in days"
               value={expiryInput}
               onChange={(e) => setExpiryInput(e.target.value)}
               className={INPUT_COMPACT}

@@ -226,6 +226,8 @@ export default function BackgroundActivity({
           <div className="group isolate relative">
             <ul
               ref={recentScrollRef}
+              // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
+              tabIndex={0}
               className="horde-meta-scrollbar max-h-[calc(8*2.75rem)] divide-y divide-ink-800/80 overflow-y-auto overscroll-contain"
               aria-label="Recent activity"
             >

@@ -19,7 +19,11 @@ YouTube app's downloads work.
 
 After the first visit, the UI (scripts, styles, icons) is cached by a service
 worker. Later launches don't re-download it, even on a slow connection;
-updates are fetched in the background and apply on the next launch.
+new versions are fetched in the background but never swapped in under you:
+an **Update available** notice with a **Reload** button appears, and the new
+version starts when you press it (or the next time every Horde tab has been
+closed). Tabs that were open before an update keep working until reloaded,
+because the previous version's files are kept for one release.
 
 ## Downloading videos
 
@@ -44,6 +48,11 @@ pause / resume, retry, remove, and how much storage is used.
 The old behaviour — saving the raw file to the device's Downloads folder — is
 still available as **•••** → **Save file to device**, **Save files** in
 library select mode, and **Save file** on device download job cards.
+
+!!! note "Storage full"
+    If the device runs out of space during a download, Horde removes the
+    partial download, marks it as failed and shows how much storage is free.
+    Remove other offline videos and retry.
 
 !!! note "Storage"
     Horde asks the browser to keep downloads persistent, but the OS may still

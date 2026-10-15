@@ -194,7 +194,7 @@ function FeedThumbnail({
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-ink-600">
+            <div className="flex h-full w-full items-center justify-center text-muted">
               <span className="text-4xl">▶</span>
             </div>
           )}

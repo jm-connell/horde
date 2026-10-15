@@ -104,7 +104,7 @@ export function PlaylistThumb({
           className="h-full w-full object-cover"
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-ink-600">
+        <div className="flex h-full w-full items-center justify-center text-muted">
           <svg
             viewBox="0 0 24 24"
             className="h-5 w-5"

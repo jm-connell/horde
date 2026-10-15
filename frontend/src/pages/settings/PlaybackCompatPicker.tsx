@@ -211,7 +211,7 @@ export default function PlaybackCompatPicker({
         balances storage, server work and device support.{" "}
         <a
           href="/wiki/guides/downloads/#compatibility-codecs"
-          className="text-accent hover:underline"
+          className="text-accent underline underline-offset-2"
         >
           Learn more
         </a>

@@ -264,6 +264,7 @@ export default function ProvidersPane() {
                   Enable Local AI (Ollama)
                 </span>
                 <Toggle
+                  label="Enable Local AI (Ollama)"
                   checked={aiDraft.enabled}
                   onChange={() => saveAi({ enabled: !aiDraft.enabled })}
                 />
