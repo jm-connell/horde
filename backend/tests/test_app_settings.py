@@ -1,6 +1,9 @@
 """Tests for settings clamps, merge, load/save, and API key masking."""
 
 import json
+import threading
+
+import pytest
 
 from app.services import app_settings as settings_svc
 from app.services.ai.provider import mask_openrouter_api_key
@@ -126,11 +129,173 @@ def test_reset_to_defaults_empties_ui_and_ai(tmp_dirs):
     assert raw["ai"]["enabled"] is True
 
 
-def test_load_corrupt_file_returns_defaults(tmp_dirs):
+def test_load_corrupt_file_without_backup_keeps_setup_completed(tmp_dirs, caplog):
     path = tmp_dirs["data"] / "app_settings.json"
     path.write_text("{not json")
-    data = settings_svc.load()
+    with caplog.at_level("ERROR"):
+        data = settings_svc.load()
     assert data["ai"]["chat_model"] == settings_svc.AI_DEFAULTS["chat_model"]
+    # A corrupt file must not bounce an installed app into the setup wizard.
+    assert data["setup_completed"] is True
+    assert "corrupt" in caplog.text
+    assert path.read_text() == "{not json"
+    copies = list(tmp_dirs["data"].glob("app_settings.json.corrupt-*"))
+    assert len(copies) == 1
+    assert copies[0].read_text() == "{not json"
+    # Repeated loads do not litter further copies.
+    settings_svc.load()
+    assert len(list(tmp_dirs["data"].glob("app_settings.json.corrupt-*"))) == 1
+
+
+def test_save_refuses_to_overwrite_unparseable_file(tmp_dirs):
+    path = tmp_dirs["data"] / "app_settings.json"
+    path.write_text('{"ai": {"openrouter_api_key": "sk-or-secret"')  # truncated
+    before = path.read_bytes()
+    with pytest.raises(settings_svc.SettingsCorruptError, match="refusing"):
+        settings_svc.save({"ui": {"theme": "oled"}})
+    assert path.read_bytes() == before
+
+
+def test_corrupt_file_is_recovered_from_backup(tmp_dirs, caplog):
+    path = tmp_dirs["data"] / "app_settings.json"
+    settings_svc.save({"setup_completed": True, "ai": {"openrouter_api_key": "k1"}})
+    settings_svc.save({"progress_expiry_days": 30})  # first good file -> .bak
+    bak = path.with_name("app_settings.json.bak")
+    assert json.loads(bak.read_text())["ai"]["openrouter_api_key"] == "k1"
+    path.write_text("\x00\x00 garbage")
+    with caplog.at_level("ERROR"):
+        data = settings_svc.load()
+    assert data["ai"]["openrouter_api_key"] == "k1"
+    assert data["setup_completed"] is True
+    assert json.loads(path.read_text())["ai"]["openrouter_api_key"] == "k1"
+    corrupt = list(tmp_dirs["data"].glob("app_settings.json.corrupt-*"))
+    assert len(corrupt) == 1
+    assert corrupt[0].read_text() == "\x00\x00 garbage"
+    assert "restored" in caplog.text
+
+
+def test_save_after_corruption_with_backup_keeps_data(tmp_dirs):
+    path = tmp_dirs["data"] / "app_settings.json"
+    settings_svc.save({"setup_completed": True, "ai": {"openrouter_api_key": "k1"}})
+    settings_svc.save({"ui": {"theme": "oled"}})
+    settings_svc.save({"progress_expiry_days": 19})  # .bak now holds the theme
+    path.write_text("{")
+    out = settings_svc.save({"progress_expiry_days": 20})
+    assert out["ai"]["openrouter_api_key"] == "k1"
+    assert out["ui"]["theme"] == "oled"
+    on_disk = json.loads(path.read_text())
+    assert on_disk["ai"]["openrouter_api_key"] == "k1"
+    assert on_disk["progress_expiry_days"] == 20
+
+
+def test_reset_is_the_way_out_of_unrecoverable_corruption(tmp_dirs):
+    path = tmp_dirs["data"] / "app_settings.json"
+    path.write_text("{")
+    settings_svc.reset_to_defaults()
+    assert json.loads(path.read_text())["setup_completed"] is False
+    settings_svc.save({"ui": {"theme": "oled"}})
+
+
+def test_write_is_atomic_private_and_keeps_one_backup(tmp_dirs):
+    path = tmp_dirs["data"] / "app_settings.json"
+    settings_svc.save({"progress_expiry_days": 20})
+    settings_svc.save({"progress_expiry_days": 21})
+    settings_svc.save({"progress_expiry_days": 22})
+    assert path.stat().st_mode & 0o777 == 0o600
+    bak = path.with_name("app_settings.json.bak")
+    assert bak.stat().st_mode & 0o777 == 0o600
+    assert json.loads(bak.read_text())["progress_expiry_days"] == 21
+    assert [p.name for p in tmp_dirs["data"].iterdir() if p.name.endswith(".tmp")] == []
+
+
+def test_io_error_never_reports_setup_incomplete(tmp_dirs, monkeypatch):
+    settings_svc.save({"setup_completed": True})
+    path = tmp_dirs["data"] / "app_settings.json"
+    real_read_bytes = type(path).read_bytes
+
+    def boom(self):
+        if self.name == "app_settings.json":
+            raise OSError(5, "Input/output error")
+        return real_read_bytes(self)
+
+    # Cached last-known value is served and flagged, never replaced by defaults.
+    settings_svc.save({"progress_expiry_days": 33})
+    path.write_text(path.read_text() + " ")  # invalidate the cache signature
+    monkeypatch.setattr(type(path), "read_bytes", boom)
+    data = settings_svc.load()
+    assert data["setup_completed"] is True
+    assert data["progress_expiry_days"] == 33
+    with pytest.raises(settings_svc.SettingsUnavailableError):
+        settings_svc._store._cache.clear()
+        settings_svc.load()
+
+
+def test_load_uses_cache_until_file_changes(tmp_dirs, monkeypatch):
+    path = tmp_dirs["data"] / "app_settings.json"
+    settings_svc.save({"progress_expiry_days": 25})
+    reads = {"n": 0}
+    real_read_bytes = type(path).read_bytes
+
+    def counting(self):
+        if self.name == "app_settings.json":
+            reads["n"] += 1
+        return real_read_bytes(self)
+
+    monkeypatch.setattr(type(path), "read_bytes", counting)
+    for _ in range(5):
+        assert settings_svc.load()["progress_expiry_days"] == 25
+    assert reads["n"] == 0
+    # An external edit (different size) is noticed.
+    path.write_text(json.dumps({"setup_completed": True, "progress_expiry_days": 100}))
+    assert settings_svc.load()["progress_expiry_days"] == 100
+    assert reads["n"] == 1
+
+
+def test_load_returns_independent_copies(tmp_dirs):
+    settings_svc.save({"ui": {"theme": "oled"}})
+    first = settings_svc.load()
+    first["ui"]["theme"] = "mutated"
+    assert settings_svc.load()["ui"]["theme"] == "oled"
+
+
+def test_concurrent_readers_and_writers_never_see_defaults(tmp_dirs):
+    """Hammer save/load from many threads: no reader may observe defaults."""
+    settings_svc.save(
+        {"setup_completed": True, "ai": {"openrouter_api_key": "sk-or-secret"}}
+    )
+    stop = threading.Event()
+    failures: list[str] = []
+
+    def reader():
+        while not stop.is_set():
+            try:
+                data = settings_svc.load()
+            except Exception as exc:
+                failures.append(f"load raised {exc!r}")
+                return
+            if data["setup_completed"] is not True:
+                failures.append("setup_completed flipped to False")
+            if data["ai"]["openrouter_api_key"] != "sk-or-secret":
+                failures.append("api key lost")
+
+    def writer(n):
+        for i in range(60):
+            settings_svc.save({"ui": {f"k{n}": i}, "progress_expiry_days": 7 + i})
+
+    readers = [threading.Thread(target=reader) for _ in range(6)]
+    writers = [threading.Thread(target=writer, args=(n,)) for n in range(3)]
+    for t in readers + writers:
+        t.start()
+    for t in writers:
+        t.join(timeout=60)
+    stop.set()
+    for t in readers:
+        t.join(timeout=10)
+    assert not failures, failures[:3]
+    final = settings_svc.load()
+    assert final["ai"]["openrouter_api_key"] == "sk-or-secret"
+    assert {f"k{n}" for n in range(3)} <= set(final["ui"])
+    assert not list(tmp_dirs["data"].glob("app_settings.json.corrupt-*"))
 
 
 def test_save_merges_ui_and_ai(tmp_dirs):

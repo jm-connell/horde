@@ -1,9 +1,14 @@
+import copy
 import json
+import logging
+import os
+import tempfile
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-_lock = threading.Lock()
+logger = logging.getLogger(__name__)
 
 AI_DEFAULTS: dict[str, Any] = {
     "enabled": True,
@@ -222,37 +227,242 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     return merged
 
 
-def load() -> dict[str, Any]:
-    p = _path()
-    try:
-        if p.exists():
-            data = json.loads(p.read_text())
-            merged = {**DEFAULTS, **data}
-            # Deep-merge ui so partial saves don't wipe nested keys on read.
-            ui = data.get("ui")
-            if isinstance(ui, dict):
-                merged["ui"] = ui
-            else:
-                merged["ui"] = {}
-            merged["ai"] = _merge_ai(data.get("ai"))
-            # Existing installs predating the wizard must not be trapped in setup.
-            if "setup_completed" not in data:
-                merged["setup_completed"] = True
-            else:
-                merged["setup_completed"] = bool(data.get("setup_completed"))
-            return merged
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+def _factory_defaults(*, setup_completed: bool) -> dict[str, Any]:
     out = dict(DEFAULTS)
     out["ui"] = {}
     out["ai"] = dict(AI_DEFAULTS)
-    out["setup_completed"] = False
+    out["setup_completed"] = setup_completed
     return out
+
+
+def _normalize(data: dict[str, Any]) -> dict[str, Any]:
+    """Merge a parsed settings file over the defaults."""
+    merged = {**DEFAULTS, **data}
+    # Deep-merge ui so partial saves don't wipe nested keys on read.
+    ui = data.get("ui")
+    merged["ui"] = ui if isinstance(ui, dict) else {}
+    merged["ai"] = _merge_ai(data.get("ai"))
+    # Existing installs predating the wizard must not be trapped in setup.
+    if "setup_completed" not in data:
+        merged["setup_completed"] = True
+    else:
+        merged["setup_completed"] = bool(data.get("setup_completed"))
+    return merged
+
+
+class SettingsError(RuntimeError):
+    """Base class for settings persistence failures."""
+
+
+class SettingsCorruptError(SettingsError):
+    """The settings file cannot be parsed and no backup could restore it."""
+
+
+class SettingsUnavailableError(SettingsError):
+    """The settings file could not be read (I/O error); nothing was assumed."""
+
+
+class _Store:
+    """Thread-safe settings reader/writer with an mtime+size validated cache.
+
+    Writes are atomic (temp file, fsync, ``os.replace``, directory fsync), so a
+    concurrent reader sees either the old or the new file, never a torn one.
+    One ``.bak`` of the previous good file is kept. A file that fails to parse
+    is preserved as ``<name>.corrupt-<timestamp>``, restored from ``.bak`` when
+    possible, and is never overwritten by defaults.
+    """
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        # path -> (signature, normalized settings, degraded)
+        self._cache: dict[Path, tuple[tuple[int, int, int], dict[str, Any], bool]] = {}
+
+    @staticmethod
+    def _signature(p: Path) -> tuple[int, int, int] | None:
+        try:
+            st = p.stat()
+        except FileNotFoundError:
+            return None
+        return (st.st_ino, st.st_mtime_ns, st.st_size)
+
+    @staticmethod
+    def _parse(raw: bytes) -> dict[str, Any]:
+        data = json.loads(raw.decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"expected a JSON object, got {type(data).__name__}")
+        return data
+
+    def read(self, p: Path) -> tuple[dict[str, Any], bool]:
+        """Return ``(settings, degraded)``.
+
+        ``degraded`` means the file is corrupt and unrecoverable: the returned
+        settings are stand-in defaults and must never be persisted.
+        """
+        with self.lock:
+            sig = self._signature(p)
+            cached = self._cache.get(p)
+            if cached is not None and sig is not None and cached[0] == sig:
+                return copy.deepcopy(cached[1]), cached[2]
+            try:
+                return self._read_uncached(p, sig)
+            except OSError as exc:
+                if cached is not None:
+                    logger.error(
+                        "Cannot read %s (%s); serving last known settings",
+                        p,
+                        exc,
+                    )
+                    return copy.deepcopy(cached[1]), cached[2]
+                raise SettingsUnavailableError(
+                    f"Cannot read settings file {p}: {exc}"
+                ) from exc
+
+    def _read_uncached(
+        self, p: Path, sig: tuple[int, int, int] | None
+    ) -> tuple[dict[str, Any], bool]:
+        bak = _backup_path(p)
+        if sig is None:
+            restored = self._load_backup(bak)
+            if restored is None:
+                return _factory_defaults(setup_completed=False), False
+            logger.error("%s is missing; restoring it from %s", p, bak)
+            self._atomic_write(p, bak.read_bytes(), keep_backup=False)
+            return self._remember(p, restored, False)
+        raw = p.read_bytes()
+        try:
+            data = self._parse(raw)
+        except (ValueError, UnicodeDecodeError) as exc:
+            return self._recover(p, raw, exc)
+        return self._remember(p, _normalize(data), False)
+
+    def _remember(
+        self, p: Path, settings: dict[str, Any], degraded: bool
+    ) -> tuple[dict[str, Any], bool]:
+        sig = self._signature(p)
+        if sig is not None:
+            self._cache[p] = (sig, settings, degraded)
+        return copy.deepcopy(settings), degraded
+
+    def _load_backup(self, bak: Path) -> dict[str, Any] | None:
+        try:
+            return _normalize(self._parse(bak.read_bytes()))
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as exc:
+            logger.error("Settings backup %s is unusable: %s", bak, exc)
+            return None
+
+    def _recover(
+        self, p: Path, raw: bytes, exc: Exception
+    ) -> tuple[dict[str, Any], bool]:
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
+        corrupt = p.with_name(f"{p.name}.corrupt-{stamp}")
+        bak = _backup_path(p)
+        restored = self._load_backup(bak)
+        if restored is not None:
+            os.replace(p, corrupt)
+            logger.error(
+                "Settings file %s is corrupt (%s). Preserved as %s and restored "
+                "from backup %s",
+                p,
+                exc,
+                corrupt,
+                bak,
+            )
+            self._atomic_write(p, bak.read_bytes(), keep_backup=False)
+            return self._remember(p, restored, False)
+        # Leave the corrupt file in place (so a save is refused) but keep a copy.
+        corrupt.write_bytes(raw)
+        logger.error(
+            "Settings file %s is corrupt (%s) and no usable backup exists. A copy "
+            "was preserved as %s. Running on defaults; saving is disabled until "
+            "the file is fixed or removed.",
+            p,
+            exc,
+            corrupt,
+        )
+        # An install that has a settings file has finished setup; do not drop
+        # the user into the wizard because the file is unreadable.
+        return self._remember(p, _factory_defaults(setup_completed=True), True)
+
+    def write(self, p: Path, settings: dict[str, Any]) -> None:
+        with self.lock:
+            payload = json.dumps(settings, indent=2).encode("utf-8")
+            self._atomic_write(p, payload, keep_backup=True)
+            self._remember(p, _normalize(settings), False)
+
+    def _atomic_write(self, p: Path, payload: bytes, *, keep_backup: bool) -> None:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if keep_backup:
+            self._rotate_backup(p)
+        fd, tmp_name = tempfile.mkstemp(
+            dir=p.parent, prefix=f".{p.name}.", suffix=".tmp"
+        )
+        tmp = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                os.fchmod(fh.fileno(), 0o600)
+                fh.write(payload)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, p)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        _fsync_dir(p.parent)
+
+    def _rotate_backup(self, p: Path) -> None:
+        """Copy the current file to ``.bak`` if (and only if) it parses."""
+        try:
+            raw = p.read_bytes()
+            self._parse(raw)
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError) as exc:
+            logger.warning("Not backing up %s: %s", p, exc)
+            return
+        self._atomic_write(_backup_path(p), raw, keep_backup=False)
+
+
+def _backup_path(p: Path) -> Path:
+    return p.with_name(p.name + ".bak")
+
+
+def _fsync_dir(directory: Path) -> None:
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+_store = _Store()
+# Held across load-modify-write cycles in save(); re-entrant with the store lock.
+_lock = _store.lock
+
+
+def load() -> dict[str, Any]:
+    """Return the current settings.
+
+    Never returns factory defaults because of a read or parse error: a corrupt
+    file is restored from its backup, an unreadable one raises
+    ``SettingsUnavailableError`` (or serves the last known good value).
+    """
+    settings, _degraded = _store.read(_path())
+    return settings
 
 
 def save(updates: dict[str, Any]) -> dict[str, Any]:
     with _lock:
-        current = load()
+        current, degraded = _store.read(_path())
+        if degraded:
+            raise SettingsCorruptError(
+                f"{_path()} is corrupt and could not be restored from "
+                f"{_backup_path(_path()).name}; refusing to overwrite it with "
+                "defaults. Restore the file from a backup (a copy of the corrupt "
+                "file was saved next to it as app_settings.json.corrupt-*), or "
+                "delete it to start over."
+            )
         if "ui" in updates and isinstance(updates["ui"], dict):
             existing_ui = (
                 current.get("ui") if isinstance(current.get("ui"), dict) else {}
@@ -268,20 +478,18 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
 
 
 def reset_to_defaults() -> dict[str, Any]:
-    """Replace the settings file with factory defaults (no ui/ai merge)."""
+    """Replace the settings file with factory defaults (no ui/ai merge).
+
+    This is the one deliberate way out of a corrupt, unrecoverable file.
+    """
     with _lock:
-        out = dict(DEFAULTS)
-        out["ui"] = {}
-        out["ai"] = dict(AI_DEFAULTS)
-        out["setup_completed"] = False
+        out = _factory_defaults(setup_completed=False)
         _write(out)
         return out
 
 
 def _write(data: dict[str, Any]) -> None:
-    p = _path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(data, indent=2))
+    _store.write(_path(), data)
 
 
 def ai_settings() -> dict[str, Any]:
