@@ -1,3 +1,4 @@
+import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
@@ -10,8 +11,42 @@ from ..services.ai.provider import (
     normalize_openrouter_model,
     openrouter_api_key_set,
 )
+from ..services.css_sanitize import sanitize_custom_css
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+#: Largest the stored ``ui`` blob may grow to (all keys together, as JSON).
+UI_MAX_BYTES = 256 * 1024
+_CUSTOM_CSS_KEYS = ("customCss", "custom_css")
+
+
+def _sanitize_ui_css(value: Any) -> Any:
+    """Sanitize custom CSS wherever it appears (including inside saved themes)."""
+    if isinstance(value, dict):
+        return {
+            k: (
+                sanitize_custom_css(v)
+                if k in _CUSTOM_CSS_KEYS and isinstance(v, str)
+                else _sanitize_ui_css(v)
+            )
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_ui_css(v) for v in value]
+    return value
+
+
+def _prepare_ui_update(ui: dict[str, Any]) -> dict[str, Any]:
+    """Sanitize a ``ui`` patch and refuse it if the merged blob would be too large."""
+    cleaned = _sanitize_ui_css(ui)
+    stored = app_settings.load().get("ui")
+    merged = {**(stored if isinstance(stored, dict) else {}), **cleaned}
+    if len(json.dumps(merged, ensure_ascii=False).encode("utf-8")) > UI_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"UI settings are too large (max {UI_MAX_BYTES // 1024} KB)",
+        )
+    return cleaned
 
 
 class AiSettingsRead(BaseModel):
@@ -222,7 +257,7 @@ def update_settings(payload: AppSettingsUpdate):
     if payload.setup_completed is True:
         updates["setup_completed"] = True
     if payload.ui is not None:
-        updates["ui"] = payload.ui
+        updates["ui"] = _prepare_ui_update(payload.ui)
     if payload.ai is not None:
         ai_updates = payload.ai.model_dump(exclude_unset=True)
         if "vram_gb" in ai_updates:

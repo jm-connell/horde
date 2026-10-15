@@ -5,7 +5,9 @@ import {
   normalizeCustomCss,
   pageIdFromPath,
   sanitizeCustomCss,
+  stripRemoteCss,
 } from "./customCss";
+import vectors from "./customCssSanitize.vectors.json";
 
 describe("normalizeCustomCss", () => {
   it("keeps ordinary CSS and rejects non-strings", () => {
@@ -58,5 +60,21 @@ describe("pageIdFromPath", () => {
     expect(pageIdFromPath("/import")).toBe("import");
     expect(pageIdFromPath("/review")).toBe("import");
     expect(pageIdFromPath("/nope")).toBe("other");
+  });
+});
+
+describe("stripRemoteCss", () => {
+  // The same vectors run against the server implementation in
+  // backend/tests/test_css_sanitize.py.
+  for (const vector of vectors) {
+    it(vector.name, () => {
+      expect(stripRemoteCss(vector.input)).toBe(vector.output);
+    });
+  }
+
+  it("is applied by sanitizeCustomCss together with the style-tag guard", () => {
+    expect(
+      sanitizeCustomCss("@import 'x';a{background:url(//e.test/x)}</style>")
+    ).toBe("a{background:none}<\\/style>");
   });
 });

@@ -1,0 +1,132 @@
+[
+  {
+    "name": "drops @import with url()",
+    "input": "@import url(\"https://evil.test/x.css\");\nbody{color:red}",
+    "output": "\nbody{color:red}"
+  },
+  {
+    "name": "drops @import with a string",
+    "input": "@import \"https://evil.test/x.css\"; a{color:red}",
+    "output": " a{color:red}"
+  },
+  {
+    "name": "drops uppercase @IMPORT",
+    "input": "@IMPORT url(//evil.test/x.css);a{}",
+    "output": "a{}"
+  },
+  {
+    "name": "drops @import written with escapes",
+    "input": "@\\69mport \"https://evil.test\";a{}",
+    "output": "a{}"
+  },
+  {
+    "name": "drops @import without a semicolon",
+    "input": "@import \"x\"",
+    "output": ""
+  },
+  {
+    "name": "replaces an absolute url()",
+    "input": "a{background:url(https://evil.test/x.png)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "replaces a quoted protocol-relative url()",
+    "input": "a{background:url('//evil.test/x')}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "replaces a javascript: url()",
+    "input": "a{background:url(javascript:alert(1))}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "is case-insensitive about URL() and the scheme",
+    "input": "a{background:URL(HTTPS://EVIL.TEST/x)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "replaces url() with padding inside the parens",
+    "input": "a{background:url(  \"https://evil.test/x\"  )}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "sees through an escaped function name",
+    "input": "a{background:\\75rl(https://evil.test/x)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "sees through an escaped scheme",
+    "input": "a{background:url(\"h\\74tps://evil.test\")}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "treats a double backslash host as protocol-relative",
+    "input": "a{background:url(\\\\\\\\evil.test/x)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "replaces a remote @font-face source",
+    "input": "@font-face{font-family:X;src:url(https://evil.test/x.woff2) format(\"woff2\")}",
+    "output": "@font-face{font-family:X;src:none format(\"woff2\")}"
+  },
+  {
+    "name": "replaces image-set() with a remote image",
+    "input": "a{background:image-set(\"https://evil.test/a.png\" 1x)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "replaces -webkit-image-set() with a remote url()",
+    "input": "a{background:-webkit-image-set(url(https://evil.test/a.png) 1x)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "keeps data: urls",
+    "input": "a{background:url(data:image/png;base64,AAAA)}",
+    "output": "a{background:url(data:image/png;base64,AAAA)}"
+  },
+  {
+    "name": "keeps a quoted data: url",
+    "input": "a{background:url(\"data:image/svg+xml;utf8,<svg/>\")}",
+    "output": "a{background:url(\"data:image/svg+xml;utf8,<svg/>\")}"
+  },
+  {
+    "name": "keeps same-origin relative urls",
+    "input": "a{background:url(/api/backgrounds/abc)}",
+    "output": "a{background:url(/api/backgrounds/abc)}"
+  },
+  {
+    "name": "keeps image-set() with data: images",
+    "input": "a{background:image-set(\"data:image/png;base64,AA\" 1x)}",
+    "output": "a{background:image-set(\"data:image/png;base64,AA\" 1x)}"
+  },
+  {
+    "name": "keeps comments",
+    "input": "/* note */ a{color:red}",
+    "output": "/* note */ a{color:red}"
+  },
+  {
+    "name": "leaves url( inside strings alone",
+    "input": "a::after{content:\"url(https://x)\"}",
+    "output": "a::after{content:\"url(https://x)\"}"
+  },
+  {
+    "name": "leaves unrelated functions alone",
+    "input": "a{width:calc(1px + 2px);color:rgb(1 2 3);--x:my-url(a)}",
+    "output": "a{width:calc(1px + 2px);color:rgb(1 2 3);--x:my-url(a)}"
+  },
+  {
+    "name": "keeps a split-by-comment name (it is not a url token)",
+    "input": "a{b:u/**/rl(https://x)}",
+    "output": "a{b:u/**/rl(https://x)}"
+  },
+  {
+    "name": "handles several urls in one value",
+    "input": "a{background:url(a.png),url(https://evil.test/b.png),url(c.png)}",
+    "output": "a{background:url(a.png),none,url(c.png)}"
+  },
+  {
+    "name": "drops NUL bytes",
+    "input": "a{color:red}\u0000",
+    "output": "a{color:red}"
+  }
+]
