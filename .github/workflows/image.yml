@@ -1,0 +1,92 @@
+name: Image
+
+# Build the production image and prove it starts: the container must become
+# healthy and answer /api/ping and /api/health. This replaces the old
+# build-only job in ci.yml.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Build and smoke test (${{ matrix.flavor }} ffmpeg)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [jellyfin, debian]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          load: true
+          tags: horde:ci
+          build-args: |
+            FFMPEG_FLAVOR=${{ matrix.flavor }}
+            HORDE_GIT_SHA=${{ github.sha }}
+            HORDE_VERSION=ci
+          cache-from: type=gha,scope=image-${{ matrix.flavor }}
+          cache-to: type=gha,scope=image-${{ matrix.flavor }},mode=max
+
+      - name: Container refuses to run as root
+        run: |
+          if docker run --rm -e PUID=0 -e PGID=0 horde:ci true; then
+            echo "expected the entrypoint to refuse PUID=0" >&2
+            exit 1
+          fi
+
+      - name: Start the container
+        run: |
+          mkdir -p "$RUNNER_TEMP/horde/data" "$RUNNER_TEMP/horde/downloads"
+          docker run -d --name horde-smoke \
+            -p 18080:8080 \
+            -e PUID="$(id -u)" -e PGID="$(id -g)" \
+            --security-opt no-new-privileges:true \
+            -v "$RUNNER_TEMP/horde/data:/app/data" \
+            -v "$RUNNER_TEMP/horde/downloads:/downloads" \
+            horde:ci
+
+      - name: Wait for the Docker healthcheck
+        run: |
+          for _ in $(seq 1 60); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' horde-smoke)"
+            echo "health: ${status}"
+            [ "${status}" = "healthy" ] && exit 0
+            sleep 2
+          done
+          docker logs horde-smoke
+          exit 1
+
+      - name: Probe the API
+        run: |
+          curl -fsS http://127.0.0.1:18080/api/ping
+          echo
+          curl -fsS http://127.0.0.1:18080/api/health | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["status"] == "ok", d; print("health ok:", d["horde_sha"][:7])'
+          curl -fsS -o /dev/null http://127.0.0.1:18080/
+          curl -fsS -o /dev/null http://127.0.0.1:18080/wiki/
+
+      - name: Report build info
+        run: |
+          docker exec horde-smoke cat /app/BUILD_INFO
+          docker exec horde-smoke ffmpeg -version | head -n 1
+          docker logs horde-smoke 2>&1 | grep 'horde-entrypoint'
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker logs horde-smoke 2>&1 | tail -n 50 || true
+          docker rm -f horde-smoke || true
