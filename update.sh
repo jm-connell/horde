@@ -14,9 +14,11 @@
 # Optional env:
 #   HORDE_HEALTH_URL            Health endpoint to poll (default http://127.0.0.1:8686/api/health)
 #   HORDE_COMPOSE_PROFILES      Compose profiles (e.g. ai); also honors COMPOSE_PROFILES
-#   HORDE_HEALTH_TIMEOUT_SEC    Seconds to wait for health (default 90)
+#   HORDE_HEALTH_TIMEOUT_SEC    Seconds to wait for health (default 90; 150 with YTDLP_AUTO_UPDATE=1)
 #   HORDE_FORCE_VOLUME_CHANGE=1 Allow recreate even if DOWNLOADS_PATH / DATA_PATH would move
 #   HORDE_KEEP_BACKUPS          How many .local/update-backups/<timestamp> folders to keep (default 5)
+#   HORDE_KEEP_IMAGES           How many horde:<sha> image tags to keep (default 3)
+#   HORDE_FORCE_REBUILD=1       Rebuild even when the checkout is already at the running commit
 #   HORDE_AUTO_ROLLBACK=0       Do not roll back automatically when the health check fails
 #   HORDE_SKIP_DB_BACKUP=1      Continue even if the database cannot be backed up
 #   HORDE_DISCARD_COMPOSE_EDITS=1  Back up, then discard local edits to the compose file
@@ -55,9 +57,16 @@ for arg in "$@"; do
 done
 
 HEALTH_URL="${HORDE_HEALTH_URL:-http://127.0.0.1:8686/api/health}"
-HEALTH_TIMEOUT_SEC="${HORDE_HEALTH_TIMEOUT_SEC:-90}"
 KEEP_BACKUPS="${HORDE_KEEP_BACKUPS:-5}"
+KEEP_IMAGES="${HORDE_KEEP_IMAGES:-3}"
 ENV_FILE="$ROOT/.env"
+# The yt-dlp updater (YTDLP_AUTO_UPDATE=1) runs before the app starts, so give
+# the health wait room for it.
+HEALTH_DEFAULT=90
+if [[ "${YTDLP_AUTO_UPDATE:-$(horde_env_get "$ENV_FILE" YTDLP_AUTO_UPDATE)}" == "1" ]]; then
+  HEALTH_DEFAULT=150
+fi
+HEALTH_TIMEOUT_SEC="${HORDE_HEALTH_TIMEOUT_SEC:-$HEALTH_DEFAULT}"
 BACKUPS_ROOT="$ROOT/.local/update-backups"
 STATE_FILE="$ROOT/.local/update-state.env"
 SHA=""
@@ -237,19 +246,37 @@ image_id() {
   docker_bin image inspect --format '{{.Id}}' "$1" 2>/dev/null || true
 }
 
+# Commit baked into an image (OCI revision label set by the Dockerfile); empty
+# for images built before the label existed.
+image_revision() {
+  docker_bin image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$1" 2>/dev/null || true
+}
+
 state_get() { horde_env_get "$STATE_FILE" "$1"; }
 state_set() { horde_env_upsert "$STATE_FILE" "$1" "$2"; }
 
-# Run scripts/sqlite_tool.py against the live DB inside the running container.
-# Prints the tool's stdout; non-zero when the container cannot run it.
+# --- where the SQLite tool runs ------------------------------------------------
+# scripts/sqlite_tool.py is run in the running container (docker exec), on the
+# host when python3 can read the file, or in a throwaway container of the
+# current image. Never decide "there is no database" from a host-side test:
+# a 0700 PUID-owned dataset is invisible to the invoking user.
+
+running_container() {
+  local id
+  id="$(compose ps -q horde 2>/dev/null || true)"
+  [[ -n "$id" ]] || return 1
+  [[ "$(docker_bin inspect --format '{{.State.Running}}' "$id" 2>/dev/null || true)" == "true" ]] || return 1
+  printf '%s' "$id"
+}
+
+# Stdin of `docker exec/run -i` is the script itself.
 tool_in_container() {
   local cid="$1"
   shift
   docker_bin exec -i "$cid" python - "$@" < "$ROOT/scripts/sqlite_tool.py"
 }
 
-# Same, in a one-off container of IMAGE against the data dir DATA (used when the
-# app container is stopped or unhealthy). Runs as the data owner, not root.
+# One-off container of IMAGE against the data dir DATA, as the data owner.
 tool_in_image() {
   local image="$1" data="$2"
   shift 2
@@ -258,52 +285,145 @@ tool_in_image() {
     "$image" - "$@" < "$ROOT/scripts/sqlite_tool.py"
 }
 
-# SQLite online backup (no downtime, consistent even in WAL mode) into
-# $BACKUP_DIR/horde.db. Also records the schema revision before the update.
+# Choose where to run the tool. Sets TOOL_MODE (container|host|image|none) and
+# TOOL_CID / TOOL_IMAGE / TOOL_DATA. $1 = data dir, $2 = image to use for the
+# one-off container fallback.
+select_tool() {
+  local data="$1" image="$2"
+  TOOL_MODE="none"
+  TOOL_CID=""
+  TOOL_IMAGE="$image"
+  TOOL_DATA="$data"
+  if TOOL_CID="$(running_container)"; then
+    TOOL_MODE="container"
+  elif command -v python3 >/dev/null 2>&1 && [[ -n "$data" && -r "${data}/horde.db" ]]; then
+    TOOL_MODE="host"
+  elif [[ -n "$image" && -n "$data" ]]; then
+    TOOL_MODE="image"
+  fi
+}
+
+# Run a sqlite_tool command (not `backup`). Output in TOOL_OUT, tool exit status
+# returned: 0 ok, 3 no database, anything else a failure.
+db_tool() {
+  local rc=0
+  case "$TOOL_MODE" in
+    container) TOOL_OUT="$(tool_in_container "$TOOL_CID" "$@" 2>&1)" || rc=$? ;;
+    host) TOOL_OUT="$(python3 "$ROOT/scripts/sqlite_tool.py" "$1" "${TOOL_DATA}/horde.db" 2>&1)" || rc=$? ;;
+    image) TOOL_OUT="$(tool_in_image "$TOOL_IMAGE" "$TOOL_DATA" "$@" 2>&1)" || rc=$? ;;
+    *)
+      TOOL_OUT="no running container, image or readable data directory to run the SQLite tool"
+      rc=127
+      ;;
+  esac
+  return "$rc"
+}
+
+# Read the Alembic revision into DB_REVISION / DB_STATUS (ok|missing|unknown).
+read_revision() {
+  local rc=0
+  DB_REVISION=""
+  db_tool revision || rc=$?
+  case "$rc" in
+    0) DB_STATUS="ok"; DB_REVISION="$(printf '%s' "$TOOL_OUT" | tail -n 1)" ;;
+    3) DB_STATUS="missing" ;;
+    *) DB_STATUS="unknown" ;;
+  esac
+}
+
+# SQLite online backup (no downtime, consistent even in WAL mode) into $1.
+db_backup() {
+  local dest="$1" rc=0 name
+  case "$TOOL_MODE" in
+    container)
+      TOOL_OUT="$(tool_in_container "$TOOL_CID" backup /tmp/horde-update-backup.db 2>&1)" || rc=$?
+      if [[ "$rc" -eq 0 ]]; then
+        docker_bin cp "${TOOL_CID}:/tmp/horde-update-backup.db" "$dest" >/dev/null || rc=$?
+        docker_bin exec "$TOOL_CID" rm -f /tmp/horde-update-backup.db >/dev/null 2>&1 || true
+      fi
+      ;;
+    host)
+      TOOL_OUT="$(python3 "$ROOT/scripts/sqlite_tool.py" backup "$dest" "${TOOL_DATA}/horde.db" 2>&1)" || rc=$?
+      ;;
+    image)
+      name="horde-update-tool-$$"
+      TOOL_OUT="$(docker_bin run -i --name "$name" --user "${PUID_VALUE:-1000}:${PGID_VALUE:-1000}" \
+        --entrypoint python -v "${TOOL_DATA}:/app/data" "$TOOL_IMAGE" - backup /tmp/horde-update-backup.db \
+        < "$ROOT/scripts/sqlite_tool.py" 2>&1)" || rc=$?
+      if [[ "$rc" -eq 0 ]]; then
+        docker_bin cp "${name}:/tmp/horde-update-backup.db" "$dest" >/dev/null || rc=$?
+      fi
+      docker_bin rm -f "$name" >/dev/null 2>&1 || true
+      ;;
+    *)
+      TOOL_OUT="no way to run the SQLite tool"
+      rc=127
+      ;;
+  esac
+  return "$rc"
+}
+
+# Create the per-update backup folder (once) and keep the snapshot files in it.
+ensure_backup_dir() {
+  [[ -d "$BACKUP_DIR" ]] && return 0
+  mkdir -p "$BACKUP_DIR"
+  cp -a "$SNAP_DIR"/. "$BACKUP_DIR"/ 2>/dev/null || true
+}
+
+# Back up the database just before `compose up`. Records the schema revision
+# before the update. A missing database (tool exit 3) is a fresh install; every
+# other failure aborts unless HORDE_SKIP_DB_BACKUP=1.
 DB_BACKUP_PATH=""
 REVISION_BEFORE=""
 backup_database() {
-  local cid out revision=""
-  local dest="$BACKUP_DIR/horde.db"
-  if [[ -z "$LIVE_DATA" || ! -f "${LIVE_DATA}/horde.db" ]]; then
-    echo "No existing database to back up (fresh install)."
+  local dest="$BACKUP_DIR/horde.db" why=""
+  select_tool "${LIVE_DATA:-$PLAN_DATA}" "$PREV_IMAGE_ID"
+  read_revision
+  case "$DB_STATUS" in
+    missing)
+      echo "No existing database to back up (fresh install)."
+      return 0
+      ;;
+    unknown)
+      why="could not read the database: ${TOOL_OUT}"
+      ;;
+    *)
+      REVISION_BEFORE="$DB_REVISION"
+      ensure_backup_dir
+      echo "Backing up the database (SQLite online backup, via ${TOOL_MODE}) ..."
+      if db_backup "$dest"; then
+        echo "  database backup: ${dest} ($(du -h "$dest" | cut -f1)), integrity ok (schema revision ${REVISION_BEFORE})"
+        DB_BACKUP_PATH="$dest"
+        return 0
+      fi
+      why="the backup failed: ${TOOL_OUT}"
+      ;;
+  esac
+  echo "Cannot back up the database: ${why}" >&2
+  REVISION_BEFORE=""
+  if [[ "${HORDE_SKIP_DB_BACKUP:-}" == "1" ]]; then
+    echo "HORDE_SKIP_DB_BACKUP=1 set; continuing WITHOUT a database backup." >&2
     return 0
   fi
-  echo "Backing up the database (SQLite online backup) ..."
-  if cid="$(resolve_horde_container)" \
-    && out="$(tool_in_container "$cid" backup /tmp/horde-update-backup.db 2>&1)" \
-    && docker_bin cp "${cid}:/tmp/horde-update-backup.db" "$dest" >/dev/null; then
-    docker_bin exec "$cid" rm -f /tmp/horde-update-backup.db >/dev/null 2>&1 || true
-    revision="$(tool_in_container "$cid" revision 2>/dev/null || true)"
-  elif command -v python3 >/dev/null 2>&1 \
-    && out="$(python3 "$ROOT/scripts/sqlite_tool.py" backup "$dest" "${LIVE_DATA}/horde.db" 2>&1)"; then
-    revision="$(python3 "$ROOT/scripts/sqlite_tool.py" revision "${LIVE_DATA}/horde.db" 2>/dev/null || true)"
-  else
-    echo "Could not back up ${LIVE_DATA}/horde.db: ${out:-no running container and no python3 on the host}" >&2
-    if [[ "${HORDE_SKIP_DB_BACKUP:-}" == "1" ]]; then
-      echo "HORDE_SKIP_DB_BACKUP=1 set; continuing WITHOUT a database backup." >&2
-      return 0
-    fi
-    echo "Aborting before the running version was touched. Fix the cause or set HORDE_SKIP_DB_BACKUP=1." >&2
-    exit 1
-  fi
-  echo "  database backup: ${dest} ($(du -h "$dest" | cut -f1)), integrity ok"
-  DB_BACKUP_PATH="$dest"
-  REVISION_BEFORE="${revision:-none}"
+  echo "Aborting before the running version was touched. Fix the cause or set HORDE_SKIP_DB_BACKUP=1." >&2
+  exit 1
 }
 
 # Put the previous image back as the horde image and recreate the container.
 # Never builds or pulls: it must work offline and must not re-fetch the bad version.
 recreate_previous() {
   local prev_image="$1" prev_sha="$2"
-  docker_bin tag "$prev_image" "$IMAGE_REF"
+  docker_bin tag "$prev_image" "$IMAGE_REF" || return 1
   SHA="$prev_sha"
   compose "${UP_ARGS[@]}" --no-build --pull never --force-recreate
 }
 
-# Restore the database backup over the live one. The newer database is kept as
-# horde.db.pre-rollback-<ts> next to it. Runs in a throwaway container as root
-# so it works whatever the host permissions are, with the app stopped.
+# Restore the database backup over the live one, with the app stopped, in a
+# throwaway container (root, so host permissions do not matter). The copy is
+# verified with PRAGMA integrity_check BEFORE it replaces anything, then renamed
+# into place atomically; the newer database is kept as horde.db.pre-rollback-<ts>
+# (and its -wal/-shm beside it). On any failure nothing is deleted and the
+# non-zero status is returned.
 restore_database() {
   local backup_dir="$1" data="$2" image="$3" ts
   ts="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -313,24 +433,43 @@ restore_database() {
   docker_bin run --rm --entrypoint sh -e "TS=$ts" \
     -v "${data}:/app/data" -v "${backup_dir}:/backup:ro" "$image" -c '
       set -e
-      [ -f /app/data/horde.db ] && mv /app/data/horde.db "/app/data/horde.db.pre-rollback-$TS"
-      rm -f /app/data/horde.db-wal /app/data/horde.db-shm
-      cp /backup/horde.db /app/data/horde.db
-      chown "$(stat -c %u:%g /app/data)" /app/data/horde.db'
+      cd /app/data
+      rm -f horde.db.restoring
+      cp /backup/horde.db horde.db.restoring
+      python -c "
+import sqlite3, sys
+c = sqlite3.connect(\"horde.db.restoring\")
+sys.exit(0 if c.execute(\"PRAGMA integrity_check\").fetchone()[0] == \"ok\" else 1)"
+      chown "$(stat -c %u:%g .)" horde.db.restoring
+      if [ -f horde.db ]; then
+        ln horde.db "horde.db.pre-rollback-$TS" 2>/dev/null || cp -p horde.db "horde.db.pre-rollback-$TS"
+      fi
+      mv -f horde.db.restoring horde.db
+      for ext in wal shm; do
+        if [ -f "horde.db-$ext" ]; then mv "horde.db-$ext" "horde.db-$ext.pre-rollback-$TS"; fi
+      done' || {
+    docker_bin run --rm --entrypoint rm -v "${data}:/app/data" "$image" -f /app/data/horde.db.restoring >/dev/null 2>&1 || true
+    return 1
+  }
 }
 
 # Roll back to the state recorded by the last update. $1 = reason shown to the
 # user, $2 = "auto" (restore the DB when the schema revision changed) or "manual".
+# Everything that can refuse is checked BEFORE anything is stopped or changed;
+# every later step is checked explicitly (this runs inside `if`, where set -e is
+# off). Returns 0 ok, 2 failed, 3 refused without changing anything.
 perform_rollback() {
   local reason="$1" how="$2"
-  local prev_image prev_sha prev_branch backup revision_before revision_after new_image restore=0
+  local prev_image prev_sha prev_branch new_sha new_image backup revision_before restore=0
+  local cur_branch cur_sha
 
   prev_image="$(state_get PREV_IMAGE_ID)"
   prev_sha="$(state_get PREV_GIT_SHA)"
   prev_branch="$(state_get GIT_BRANCH)"
+  new_sha="$(state_get NEW_GIT_SHA)"
+  new_image="$(state_get NEW_IMAGE_ID)"
   backup="$(state_get DB_BACKUP)"
   revision_before="$(state_get REVISION_BEFORE)"
-  new_image="$(state_get NEW_IMAGE_ID)"
 
   echo
   echo "ROLLING BACK: ${reason}" >&2
@@ -340,51 +479,111 @@ perform_rollback() {
     return 2
   fi
 
-  # Did a schema migration run? Compare the Alembic revision recorded before
-  # the update with the one in the live database now (no revision table before
-  # = "none", so the Alembic adoption counts as a migration too).
-  if [[ -n "$LIVE_DATA" && -f "${LIVE_DATA}/horde.db" && -n "$revision_before" ]]; then
-    compose stop horde >/dev/null 2>&1 || true
-    revision_after="$(tool_in_image "${new_image:-$prev_image}" "$LIVE_DATA" revision 2>/dev/null || true)"
-    if [[ -z "$revision_after" ]]; then
-      # An unreadable revision means the failed version may have damaged the schema.
-      echo "Could not read the schema revision of the current database." >&2
-      revision_after="unreadable"
+  # Git: only move the checkout back if it is still exactly where the update
+  # left it. Later commits of yours are never dropped silently.
+  cur_branch="$(git rev-parse --abbrev-ref HEAD)"
+  cur_sha="$(git rev-parse HEAD)"
+  GIT_ACTION="none"
+  if [[ "$cur_sha" != "$prev_sha" ]]; then
+    if [[ "$cur_sha" != "$new_sha" || ( -n "$prev_branch" && "$cur_branch" != "$prev_branch" ) ]]; then
+      {
+        echo "Stopping: the checkout is at ${cur_sha:0:7} on ${cur_branch}, not where the update left it"
+        echo "(${new_sha:0:7} on ${prev_branch}). Nothing was changed."
+        echo "To go back to the previous version yourself:"
+        echo "  git switch ${prev_branch:-main} && git reset --keep ${prev_sha}"
+        echo "then re-run: bash update.sh --rollback"
+      } >&2
+      return 3
     fi
-    if horde_schema_changed "$revision_before" "$revision_after"; then
-      echo "A database schema migration ran during the update:" >&2
-      echo "  before: ${revision_before}" >&2
-      echo "  after:  ${revision_after}" >&2
-      if [[ "$how" == "auto" || "$RESTORE_DB" -eq 1 ]]; then
-        if [[ -f "$backup" ]]; then
-          restore=1
-        else
-          echo "  ... but the backup ${backup:-<none>} is missing; cannot restore." >&2
-        fi
-      else
-        echo "  The previous version will refuse to start on the migrated database (\"schema is at revision ... which this version of Horde does not know\")." >&2
-        echo "  To also restore the pre-update backup (this DISCARDS everything written since):" >&2
-        echo "    bash update.sh --rollback --restore-db" >&2
-        echo "  (Horde also keeps its own pre-migration copies in DATA_PATH/backups/.)" >&2
-      fi
-    else
-      echo "No schema migration ran; the database is left untouched."
-    fi
+    GIT_ACTION="reset"
   fi
 
-  if [[ -n "$prev_branch" ]] && git rev-parse --verify -q "${prev_sha}^{commit}" >/dev/null; then
-    echo "Restoring git checkout to ${prev_sha:0:7} on ${prev_branch} ..."
-    git checkout -q -B "$prev_branch" "$prev_sha"
+  # Did a schema migration run? Compare the Alembic revision recorded before
+  # the update with the one in the live database now (no revision table before
+  # = "none", so the Alembic adoption counts as a migration too). Read it
+  # without stopping a running app; after a failed update the app is stopped
+  # first, since it is not serving anyway.
+  if [[ "$how" == "auto" ]]; then
+    compose stop horde >/dev/null 2>&1 || true
+  fi
+  local changed=0 unknown=0
+  if [[ -n "$LIVE_DATA" ]]; then
+    select_tool "$LIVE_DATA" "${new_image:-$prev_image}"
+    read_revision
+    case "$DB_STATUS" in
+      ok)
+        if horde_schema_changed "$revision_before" "$DB_REVISION"; then
+          changed=1
+          echo "A database schema migration ran during the update:" >&2
+          echo "  before: ${revision_before}" >&2
+          echo "  after:  ${DB_REVISION}" >&2
+        else
+          echo "No schema migration ran; the database is left untouched."
+        fi
+        ;;
+      missing) echo "There is no database to protect." ;;
+      *)
+        unknown=1
+        echo "Could not read the schema revision of the current database: ${TOOL_OUT}" >&2
+        ;;
+    esac
+  fi
+
+  if [[ "$RESTORE_DB" -eq 1 ]]; then
+    restore=1
+  elif [[ "$changed" -eq 1 || "$unknown" -eq 1 ]]; then
+    if [[ "$how" == "auto" && "$changed" -eq 1 ]]; then
+      restore=1
+    else
+      {
+        if [[ "$changed" -eq 1 ]]; then
+          echo "The previous version refuses to start on the migrated database"
+          echo "(\"schema is at revision ... which this version of Horde does not know\")."
+        else
+          echo "The state of the database could not be determined, so it is NOT restored automatically."
+        fi
+        echo "To restore the pre-update backup (this DISCARDS everything written since):"
+        echo "  bash update.sh --rollback --restore-db"
+        echo "(Horde also keeps its own pre-migration copies in DATA_PATH/backups/.)"
+      } >&2
+      if [[ "$how" == "manual" ]]; then
+        echo "Nothing was changed." >&2
+        return 3
+      fi
+    fi
+  fi
+  if [[ "$restore" -eq 1 && ! -f "$backup" ]]; then
+    echo "Cannot restore: the backup ${backup:-<none>} is missing. Nothing was changed." >&2
+    return 2
   fi
 
   if [[ "$restore" -eq 1 ]]; then
     echo "RESTORING DATABASE from ${backup}." >&2
     echo "Everything written to the database after that backup is discarded; the newer file is kept as horde.db.pre-rollback-*." >&2
-    restore_database "$(dirname "$backup")" "$LIVE_DATA" "$prev_image"
+    if ! restore_database "$(dirname "$backup")" "$LIVE_DATA" "$prev_image"; then
+      {
+        echo "RESTORE FAILED. Horde is stopped. The current database was NOT replaced"
+        echo "(any horde.db.pre-rollback-* file next to it is a safe copy; do not delete it)."
+        echo "Check free space and permissions on ${LIVE_DATA}, then run: bash update.sh --rollback --restore-db"
+        echo "The backup is ${backup}."
+      } >&2
+      return 2
+    fi
+  fi
+
+  if [[ "$GIT_ACTION" == "reset" ]]; then
+    echo "Restoring git checkout to ${prev_sha:0:7} on ${cur_branch} ..."
+    if ! git reset --keep "$prev_sha"; then
+      echo "git reset --keep ${prev_sha} failed (local changes in the way?). The database was already handled; fix git and re-run." >&2
+      return 2
+    fi
   fi
 
   echo "Recreating containers on the previous image ..."
-  recreate_previous "$prev_image" "$prev_sha"
+  if ! recreate_previous "$prev_image" "$prev_sha"; then
+    echo "Could not recreate the containers on the previous image." >&2
+    return 2
+  fi
   if command -v curl >/dev/null 2>&1; then
     if ! wait_for_health; then
       echo "The previous version is not healthy either. Inspect the logs and ${BACKUPS_ROOT}." >&2
@@ -401,15 +600,33 @@ ensure_data_user() {
   PGID_VALUE="${PGID_VALUE:-1000}"
 }
 
+# Keep the newest KEEP_IMAGES horde:<shortsha> tags (plus the current and the
+# previous one, which rollback needs). Untagging only; images in use stay.
+prune_image_tags() {
+  local keep_now="$1" keep_prev="$2" n=0 tag
+  [[ "$KEEP_IMAGES" =~ ^[0-9]+$ ]] || return 0
+  while IFS= read -r tag; do
+    [[ "$tag" =~ ^[0-9a-f]{7}$ ]] || continue
+    n=$((n + 1))
+    if [[ "$n" -le "$KEEP_IMAGES" || "$tag" == "$keep_now" || "$tag" == "$keep_prev" ]]; then
+      continue
+    fi
+    docker_bin rmi "horde:${tag}" >/dev/null 2>&1 || true
+  done < <(docker_bin image ls horde --format '{{.CreatedAt}}|{{.Tag}}' 2>/dev/null | LC_ALL=C sort -r | cut -d'|' -f2)
+}
+
+# Snapshot files live in a scratch dir; the per-update backup folder is only
+# created when there is something to back up, so aborted runs leave nothing.
+mkdir -p "$ROOT/.local"
+SNAP_DIR="$(mktemp -d "$ROOT/.local/update-snap.XXXXXX")"
+trap 'rm -rf "$SNAP_DIR"' EXIT
 BACKUP_DIR="$BACKUPS_ROOT/$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -p "$BACKUP_DIR"
-horde_prune_backups "$BACKUPS_ROOT" "$KEEP_BACKUPS"
-SNAPSHOT="$BACKUP_DIR/live.env"
+SNAPSHOT="$SNAP_DIR/live.env"
 LIVE_DOWNLOADS=""
 LIVE_DATA=""
 
 if [[ -f "$ENV_FILE" ]]; then
-  cp -a "$ENV_FILE" "$BACKUP_DIR/env.before"
+  cp -a "$ENV_FILE" "$SNAP_DIR/env.before"
 fi
 
 echo "Snapshotting running volume mounts so settings and library paths cannot reset..."
@@ -418,14 +635,8 @@ if write_live_snapshot "$SNAPSHOT"; then
   LIVE_DATA="$(horde_env_get "$SNAPSHOT" DATA_PATH)"
   echo "  downloads: ${LIVE_DOWNLOADS:-(not mounted)}"
   echo "  data:      ${LIVE_DATA:-(not mounted)}"
-  if [[ -n "$LIVE_DATA" && -f "${LIVE_DATA}/app_settings.json" ]]; then
-    echo "  settings:  ${LIVE_DATA}/app_settings.json (keeping)"
-  fi
-  if [[ -n "$LIVE_DATA" && -f "${LIVE_DATA}/horde.db" ]]; then
-    echo "  database:  ${LIVE_DATA}/horde.db (keeping)"
-  fi
   horde_seed_env_from_snapshot "$ENV_FILE" "$SNAPSHOT"
-  cp -a "$ENV_FILE" "$BACKUP_DIR/env.seeded"
+  cp -a "$ENV_FILE" "$SNAP_DIR/env.seeded"
   host_port="$(horde_env_get "$SNAPSHOT" HOST_PORT)"
   if [[ -z "${HORDE_HEALTH_URL:-}" && -n "$host_port" ]]; then
     HEALTH_URL="http://127.0.0.1:${host_port}/api/health"
@@ -454,7 +665,9 @@ if [[ "$MODE" == "rollback" ]]; then
     exit 1
   fi
   echo "Rolling back to $(state_get PREV_GIT_SHA | cut -c1-7) (the version before the update of $(state_get UPDATED_AT))."
-  if perform_rollback "manual rollback requested" manual; then
+  rc=0
+  perform_rollback "manual rollback requested" manual || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
     echo
     echo "Rolled back to $(state_get PREV_GIT_SHA | cut -c1-7)."
     echo "Re-run 'bash update.sh' later to update again; this checkout was moved back, so the same upstream change will be pulled again."
@@ -463,9 +676,14 @@ if [[ "$MODE" == "rollback" ]]; then
   exit 1
 fi
 
-PREV_SHA="$(git rev-parse HEAD)"
 PREV_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 PREV_IMAGE_ID="$(image_id "$IMAGE_REF")"
+# The commit of what is deployed is the one baked into the image, not the
+# checkout's HEAD: an earlier aborted run may already have pulled newer code.
+PREV_SHA="$(image_revision "$PREV_IMAGE_ID")"
+if ! [[ "$PREV_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  PREV_SHA="$(git rev-parse HEAD)"
+fi
 
 horde_git_pull "$BACKUP_DIR"
 
@@ -476,9 +694,23 @@ fi
 
 SHA="$(git rev-parse HEAD)"
 SHORT="${SHA:0:7}"
+
+# Nothing new and the image exists: do not touch anything, above all not the
+# rollback point recorded by the last real update.
+RUNNING_IMAGE=""
+if cid="$(running_container)"; then
+  RUNNING_IMAGE="$(docker_bin inspect --format '{{.Image}}' "$cid" 2>/dev/null || true)"
+fi
+if [[ "$SHA" == "$PREV_SHA" && -n "$PREV_IMAGE_ID" && "$RUNNING_IMAGE" == "$PREV_IMAGE_ID" \
+  && "$(image_revision "$PREV_IMAGE_ID")" == "$SHA" && "${HORDE_FORCE_REBUILD:-}" != "1" ]]; then
+  echo
+  echo "Already up to date at ${SHORT}; the running container uses the current image. Nothing to do."
+  echo "(HORDE_FORCE_REBUILD=1 rebuilds anyway.)"
+  exit 0
+fi
 VERSION="${VERSION:-$(horde_version_string)}"
 
-PLANNED_FILE="$BACKUP_DIR/planned.mounts"
+PLANNED_FILE="$SNAP_DIR/planned.mounts"
 planned_bind_mounts > "$PLANNED_FILE" || true
 PLAN_DOWNLOADS="$(horde_mount_source "$PLANNED_FILE" /downloads)"
 PLAN_DATA="$(horde_mount_source "$PLANNED_FILE" /app/data)"
@@ -501,7 +733,7 @@ if [[ -n "$LIVE_DOWNLOADS" || -n "$LIVE_DATA" ]]; then
       echo "(see docs/getting-started/install-docker.md, 'Configure .env')." >&2
       echo "Live mounts are saved in ${ENV_FILE}. If you really intend to move data, set" >&2
       echo "  HORDE_FORCE_VOLUME_CHANGE=1" >&2
-      echo "and run again. Snapshot: ${BACKUP_DIR}" >&2
+      echo "and run again." >&2
       exit 1
     fi
   else
@@ -509,19 +741,6 @@ if [[ -n "$LIVE_DOWNLOADS" || -n "$LIVE_DATA" ]]; then
   fi
 fi
 
-# Last moment before anything changes: back up the database, then remember
-# where we came from so a failed update can be undone.
-backup_database
-
-mkdir -p "$(dirname "$STATE_FILE")"
-rm -f "$STATE_FILE"
-state_set DB_BACKUP "$DB_BACKUP_PATH"
-state_set REVISION_BEFORE "$REVISION_BEFORE"
-state_set UPDATED_AT "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-state_set GIT_BRANCH "$PREV_BRANCH"
-state_set PREV_GIT_SHA "$PREV_SHA"
-state_set PREV_IMAGE_ID "$PREV_IMAGE_ID"
-state_set NEW_GIT_SHA "$SHA"
 if [[ -n "$PREV_IMAGE_ID" ]]; then
   # A named tag keeps the old image from being pruned as dangling.
   docker_bin tag "$PREV_IMAGE_ID" "horde:${PREV_SHA:0:7}" || true
@@ -536,16 +755,30 @@ else
   docker_bin tag "$IMAGE_REF" "horde:${SHORT}"
 fi
 NEW_IMAGE_ID="$(image_id "$IMAGE_REF")"
+
+# The build succeeded; the last moment before anything running changes: back up
+# the database, then record where we came from so a failed update can be undone.
+REBUILD_SAME=0
+if [[ "$SHA" == "$PREV_SHA" && -f "$STATE_FILE" ]]; then
+  REBUILD_SAME=1 # same commit rebuilt: keep the rollback point of the real update
+fi
+if [[ "$REBUILD_SAME" -eq 0 ]]; then
+  backup_database
+  mkdir -p "$(dirname "$STATE_FILE")"
+  rm -f "$STATE_FILE"
+  state_set DB_BACKUP "$DB_BACKUP_PATH"
+  state_set REVISION_BEFORE "$REVISION_BEFORE"
+  state_set GIT_BRANCH "$PREV_BRANCH"
+  state_set PREV_GIT_SHA "$PREV_SHA"
+  state_set PREV_IMAGE_ID "$PREV_IMAGE_ID"
+  horde_prune_backups "$BACKUPS_ROOT" "$KEEP_BACKUPS" "${DB_BACKUP_PATH:+$(dirname "$DB_BACKUP_PATH")}"
+fi
+state_set UPDATED_AT "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+state_set NEW_GIT_SHA "$SHA"
 state_set NEW_IMAGE_ID "$NEW_IMAGE_ID"
 
 echo "Recreating containers..."
 compose "${UP_ARGS[@]}"
-
-if [[ -n "$LIVE_DATA" ]]; then
-  if [[ ! -f "${LIVE_DATA}/horde.db" && -f "$BACKUP_DIR/live.env" ]]; then
-    echo "Warning: ${LIVE_DATA}/horde.db is missing after recreate. Check DATA_PATH in .env." >&2
-  fi
-fi
 
 if ! command -v curl >/dev/null 2>&1; then
   echo
@@ -561,13 +794,20 @@ if ! wait_for_health; then
     echo "HORDE_AUTO_ROLLBACK=0: leaving the new version running. Roll back with: bash update.sh --rollback" >&2
     exit 1
   fi
+  if [[ "$REBUILD_SAME" -eq 1 ]]; then
+    echo "The rebuilt image of the running commit is not healthy; roll back with: bash update.sh --rollback" >&2
+    exit 1
+  fi
   if [[ -z "$PREV_IMAGE_ID" ]]; then
     echo "No previous image existed (first install?), so there is nothing to roll back to." >&2
     exit 1
   fi
   # The failed container is about to be replaced; keep its log for diagnosis.
+  ensure_backup_dir
   compose logs --no-color --tail=200 horde > "$BACKUP_DIR/failed-container.log" 2>&1 || true
-  if perform_rollback "the new version (${SHORT}) did not become healthy" auto; then
+  rc=0
+  perform_rollback "the new version (${SHORT}) did not become healthy" auto || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
     {
       echo
       echo "UPDATE FAILED and was rolled back to ${PREV_SHA:0:7}; Horde is running the previous version."
@@ -578,17 +818,16 @@ if ! wait_for_health; then
   exit 1
 fi
 
-# Record the schema revision the new version produced (for a later --rollback).
-if cid="$(resolve_horde_container)"; then
-  state_set REVISION_AFTER "$(tool_in_container "$cid" revision 2>/dev/null || true)"
-fi
+prune_image_tags "$SHORT" "${PREV_SHA:0:7}"
 
 echo
 echo "Updated to ${SHORT}."
 if [[ -n "$PREV_IMAGE_ID" ]]; then
   echo "Previous version kept for rollback: horde:${PREV_SHA:0:7}  (bash update.sh --rollback)"
 fi
-echo "Database backup: ${BACKUP_DIR}/horde.db"
+if [[ -n "$DB_BACKUP_PATH" ]]; then
+  echo "Database backup: ${DB_BACKUP_PATH}"
+fi
 echo "Hard-refresh the browser (Ctrl+Shift+R) if the UI looks stale."
 echo "Library data and settings on host volumes are unchanged."
 echo "If downloads fail after YouTube changes, see Maintenance → Bumping yt-dlp (/wiki/ops/maintenance/)."

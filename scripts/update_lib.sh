@@ -278,17 +278,20 @@ horde_version_string() {
   printf '%s' "${described#v}"
 }
 
-# Keep the newest KEEP entries of DIR (timestamped names sort chronologically).
+# Keep the newest KEEP entries of DIR (timestamped names sort chronologically),
+# but never delete PROTECT (the backup update-state.env points at).
 horde_prune_backups() {
-  local dir="$1" keep="${2:-5}" entry count=0 i
+  local dir="$1" keep="${2:-5}" protect="${3:-}" entry count=0 i
   local -a entries=()
   [[ -d "$dir" ]] || return 0
   [[ "$keep" =~ ^[0-9]+$ && "$keep" -ge 1 ]] || keep=5
+  protect="${protect%/}"
   while IFS= read -r entry; do
     entries+=("$entry")
   done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort -r)
   count="${#entries[@]}"
   for ((i = keep; i < count; i++)); do
+    [[ -n "$protect" && "${entries[$i]}" == "$protect" ]] && continue
     rm -rf -- "${entries[$i]}"
   done
 }

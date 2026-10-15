@@ -448,9 +448,22 @@ def test_sqlite_tool_revision_handles_legacy_and_missing_databases(tmp_path):
     assert _tool("revision", str(legacy)).stdout.strip() == "none"
 
     missing = _tool("revision", str(tmp_path / "nope.db"))
-    assert missing.returncode != 0
+    assert missing.returncode == 3, "exit 3 means 'no database', distinct from failures"
     assert not (tmp_path / "nope.db").exists(), "must not create an empty database"
     assert (
         _tool("backup", str(tmp_path / "out.db"), str(tmp_path / "nope.db")).returncode
         != 0
     )
+
+
+def test_prune_backups_never_deletes_the_protected_folder(tmp_path):
+    root = tmp_path / "update-backups"
+    for stamp in ("20260101T000000Z", "20260102T000000Z", "20260103T000000Z"):
+        (root / stamp).mkdir(parents=True)
+
+    _check(f"horde_prune_backups '{root}' 1 '{root}/20260101T000000Z'")
+
+    assert sorted(p.name for p in root.iterdir()) == [
+        "20260101T000000Z",
+        "20260103T000000Z",
+    ]

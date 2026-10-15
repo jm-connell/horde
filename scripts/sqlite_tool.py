@@ -9,6 +9,9 @@ Commands:
                     to $DATA_DIR/horde.db.
   revision [DB]     Print the Alembic revision (alembic_version.version_num), or
                     "none" when the table is missing (a pre-Alembic database).
+
+Exit status: 0 ok, 3 the database file does not exist, anything else a real
+failure (unreadable, corrupt, locked).
 """
 
 from __future__ import annotations
@@ -18,14 +21,20 @@ import sqlite3
 import sys
 
 
+NOT_FOUND = 3
+
+
 def _default_db() -> str:
     return os.path.join(os.environ.get("DATA_DIR", "/app/data"), "horde.db")
 
 
 def _require_file(path: str) -> None:
-    # sqlite3.connect() would silently create an empty database.
+    # sqlite3.connect() would silently create an empty database. Exit code 3 is
+    # reserved for "there is no database" so update.sh can tell a fresh install
+    # from a database it merely failed to read.
     if not os.path.isfile(path):
-        raise SystemExit(f"database not found: {path}")
+        print(f"database not found: {path}", file=sys.stderr)
+        raise SystemExit(NOT_FOUND)
 
 
 def backup(dst: str, src: str) -> None:
