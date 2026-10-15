@@ -18,6 +18,7 @@ import {
   type OfflineItem,
 } from "./db";
 import { chunkSlices, parseRange, type ByteRange } from "./ranges";
+import { matchPreferCurrent } from "./cacheLookup";
 
 declare const __PRECACHE__: string[];
 declare const __SW_VERSION__: string;
@@ -125,7 +126,11 @@ sw.addEventListener("activate", (event) => {
 });
 
 sw.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") void sw.skipWaiting();
+  // Only a page (WindowClient) may activate a waiting worker.
+  const source = event.source as { type?: string } | null;
+  if (event.data?.type === "SKIP_WAITING" && source?.type === "window") {
+    void sw.skipWaiting();
+  }
 });
 
 async function readShellVersions(): Promise<string[]> {
@@ -195,18 +200,24 @@ sw.addEventListener("fetch", (event) => {
 });
 
 async function shellNavigation(req: Request): Promise<Response> {
-  const cached = await caches.match(INDEX_URL);
+  const cached = await matchPreferCurrent(caches, SHELL_CACHE, INDEX_URL);
   if (cached) return cached;
   return fetch(req);
 }
 
 async function cacheFirst(req: Request, cacheName: string): Promise<Response> {
-  const hit = await caches.match(req, { ignoreSearch: true });
+  const hit = await matchPreferCurrent(caches, cacheName, req, {
+    ignoreSearch: true,
+  });
   if (hit) return hit;
   const resp = await fetch(req);
   if (resp.ok && resp.type === "basic") {
-    const cache = await caches.open(cacheName);
-    void cache.put(req, resp.clone());
+    // A full disk must not fail a good network response.
+    const copy = resp.clone();
+    void caches
+      .open(cacheName)
+      .then((cache) => cache.put(req, copy))
+      .catch((err) => console.warn("SW cache write failed", err));
   }
   return resp;
 }
@@ -226,8 +237,13 @@ async function staleWhileRevalidate(
   const hit = await cache.match(req);
   const update = fetch(req).then(async (resp) => {
     if (resp.ok) {
-      await cache.put(req, resp.clone());
-      await trimCache(cache, RUNTIME_MAX_ENTRIES);
+      try {
+        await cache.put(req, resp.clone());
+        await trimCache(cache, RUNTIME_MAX_ENTRIES);
+      } catch (err) {
+        // e.g. QuotaExceededError: still return the good network response.
+        console.warn("SW runtime cache write failed", err);
+      }
     }
     return resp;
   });
