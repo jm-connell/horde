@@ -1,6 +1,6 @@
 """yt-dlp metadata extract helpers (preview cards, channel feed, search).
 
-Download queue / playlist-import orchestration stays in downloader.py.
+Download queue / playlist-import orchestration lives in services/downloads.
 """
 
 from __future__ import annotations

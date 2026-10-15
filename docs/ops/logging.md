@@ -12,7 +12,7 @@ Horde logs to standard error, so `docker logs horde` (or `docker compose logs -f
 Text lines look like this:
 
 ```text
-2026-10-15 09:12:31 INFO    app.services.downloader [download-12] (job_id=download-12) started
+2026-10-15 09:12:31 INFO    app.services.downloads.runner [download-12] (job_id=download-12) started
 ```
 
 The columns are timestamp, level, logger, thread name, then the correlation IDs when there are any, then the message. JSON lines carry the same fields (`ts`, `level`, `logger`, `thread`, `message`, `request_id`, `job_id`, and `exc_info` for tracebacks), which suits Loki, Vector or any collector that parses JSON.

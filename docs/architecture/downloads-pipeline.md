@@ -23,11 +23,20 @@ URL
 
 ## Module split
 
-Download-related code is split for maintainability (façades may still re-export):
+Download-related code is split for maintainability. The queue, the yt-dlp attempt loop and the library commit live in the `services/downloads/` package; `downloader.py` is a compatibility façade that only re-exports the names callers used to import from it.
 
 | Module | Role |
 |--------|------|
-| `downloader.py` | `DownloadQueue`, ffmpeg postprocess queue, finalize, playlist import / subscribe attach |
+| `downloads/queue.py` | `DownloadQueue`: FIFO dispatch, global pause, cancel, quality restart, stuck-job reaper. It is handed the job runner instead of importing it |
+| `downloads/runner.py` | `run_download`: the yt-dlp attempt loop (format selectors, one cookie retry, recovery of a finished file), then the hand-off to the postprocess queue |
+| `downloads/ffmpeg_queue.py` | `FfmpegQueue`: bounded postprocess stage so a slow encode does not hold a download slot |
+| `downloads/postprocess.py` | `PostprocessTask` and the ffmpeg steps: Safari remux, H.264 transcode, loudness normalisation, quality check |
+| `downloads/finalize.py` | `complete_download`: promote from staging, commit the library row (`commit_library_video`), queue AI, catalog, subtitles, thumbnail and sidecar work |
+| `downloads/jobs.py` | Job rows: duplicate detection, retry preparation, quality change, `job_mutate_lock` |
+| `downloads/playlist_import.py`, `playlist_attach.py` | Playlist import as ordinary queue jobs; placing a finished download at its playlist position |
+| `downloads/progress.py` | `progress_store` and the yt-dlp progress / postprocessor hooks |
+| `downloads/staging.py`, `artifacts.py` | Per-job staging and `_device` dirs, output templates, promoting into the library; finding and cleaning yt-dlp output files |
+| `downloads/lifecycle.py`, `errors.py`, `dbwrite.py`, `spec.py`, `infodict.py`, `subtitles.py` | Ending a job (cancel / requeue / fail), exceptions and the yt-dlp logger, locked-database retries, the `JobSpec` snapshot of a job row, info-dict helpers, subtitle fetch |
 | `job_metadata.py` | Background title/preset fill for cheap-enqueued jobs |
 | `ffmpeg_progress.py` | ffmpeg `-progress` / `out_time` parsing and cancel |
 | `ytdlp_extract.py` | Download-card preview, channel feed fetch, channel search |
