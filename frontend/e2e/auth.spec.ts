@@ -191,3 +191,23 @@ test("a member without download cannot reach the download page", async ({
   ).toBeVisible();
   await ctx.close();
 });
+
+test("backslash and control-character next targets stay on the site", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  void page;
+  for (const next of [
+    "/\\evil.example/x",
+    "/%09/evil.example",
+    "/%0a/evil.example",
+  ]) {
+    const ctx = await anonymousContext(browser, baseURL);
+    const p = await ctx.newPage();
+    await p.goto(`/login?next=${encodeURIComponent(decodeURIComponent(next))}`);
+    await signInWithForm(p, "member", ACCOUNTS.member.password);
+    await expect(p).toHaveURL(new RegExp(`^${baseURL}/$`));
+    await ctx.close();
+  }
+});
