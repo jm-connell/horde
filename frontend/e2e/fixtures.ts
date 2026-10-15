@@ -3,9 +3,36 @@ import { test as base, expect, type Page } from "@playwright/test";
 /** Mutations from outside the SPA (the test's own API calls) need the CSRF header. */
 export const CSRF_HEADERS = { "X-Horde-Request": "1" };
 
-/** Seeded app. Each test starts from the same library and empty browser storage. */
+/**
+ * Collect Content-Security-Policy violations in the page. Chromium reports a
+ * blocked resource as a console error ("Refused to ...") and as a
+ * securitypolicyviolation event; either one fails the test.
+ */
+function watchCspViolations(page: Page): string[] {
+  const violations: string[] = [];
+  page.on("console", (msg) => {
+    const text = msg.text();
+    if (/Refused to|Content Security Policy|HORDE_CSP_VIOLATION/i.test(text)) {
+      violations.push(text);
+    }
+  });
+  void page.addInitScript(() => {
+    document.addEventListener("securitypolicyviolation", (e) => {
+      console.error(
+        `HORDE_CSP_VIOLATION ${e.violatedDirective} blocked ${e.blockedURI}`
+      );
+    });
+  });
+  return violations;
+}
+
+/**
+ * Seeded app. Each test starts from the same library and empty browser storage,
+ * and fails if the page triggers a CSP violation.
+ */
 export const test = base.extend({
   page: async ({ page, request }, use) => {
+    const violations = watchCspViolations(page);
     const reset = await request.post("/api/e2e/reset", {
       headers: CSRF_HEADERS,
     });
@@ -24,6 +51,7 @@ export const test = base.extend({
       sessionStorage.setItem(key, "1");
     });
     await use(page);
+    expect(violations, "CSP violations").toEqual([]);
   },
 });
 
