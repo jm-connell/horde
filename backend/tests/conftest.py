@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,26 @@ def _rebind_imported_app_modules(monkeypatch, *, engine, dirs: dict[str, Any]) -
         for attr in _DIR_ATTRS:
             if hasattr(mod, attr) and attr in dirs:
                 monkeypatch.setattr(mod, attr, dirs[attr])
+
+
+@pytest.fixture(autouse=True)
+def _join_background_workers(monkeypatch):
+    """Do not let fire-and-forget worker threads outlive the test that started them.
+
+    Importing/scanning a library enqueues a sprite worker thread and registers the
+    video id in the module-level ``sprites._generating`` set. If that thread is still
+    running when the next test starts, the next test's ``enqueue_sprite_generation``
+    returns "generating" without starting a worker, and the old thread keeps using
+    a torn-down engine. Joining here (while ``monkeypatch`` still points the modules
+    at this test's engine and tmp dirs) keeps every test isolated.
+    """
+    started_before = set(threading.enumerate())
+    yield
+    for thread in threading.enumerate():
+        if thread in started_before or not thread.name.startswith("sprites-"):
+            continue
+        thread.join(timeout=30)
+        assert not thread.is_alive(), f"{thread.name} still running after test"
 
 
 @pytest.fixture
