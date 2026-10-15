@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,8 @@ from ..models import (
 )
 from . import app_settings, downloader, scanner
 from .video_delete import collect_video_files, remove_files
+
+logger = logging.getLogger(__name__)
 
 _ALWAYS_CLEAR_MODELS = (AiJob, OpenRouterUsage, DownloadJob)
 
@@ -82,8 +85,10 @@ def _pause_workers(*, cancel_downloads: bool) -> None:
         downloader.download_queue.pause_all()
     except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
-    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+    try:
         app_settings.save({"ai": {"paused": True}})
+    except app_settings.SettingsError:
+        logger.warning("Could not pause AI before reset", exc_info=True)
     except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     if not cancel_downloads:

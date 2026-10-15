@@ -327,3 +327,26 @@ def test_mask_openrouter_api_key():
     assert mask_openrouter_api_key("") == ""
     assert mask_openrouter_api_key("abcd") == "••••"
     assert mask_openrouter_api_key("sk-or-v1-abcdefgh") == "••••efgh"
+
+
+def test_reset_leaves_no_copy_of_the_secrets(tmp_dirs):
+    secret = "sk-or-very-secret-key"
+    path = tmp_dirs["data"] / "app_settings.json"
+    settings_svc.save({"setup_completed": True, "ai": {"openrouter_api_key": secret}})
+    settings_svc.save({"progress_expiry_days": 20})  # creates the .bak
+    path.with_name(path.name + ".corrupt-20200101T000000").write_text(secret)
+    assert path.with_name(path.name + ".bak").exists()
+
+    settings_svc.reset_to_defaults()
+
+    assert not path.with_name(path.name + ".bak").exists()
+    assert not list(tmp_dirs["data"].glob("app_settings.json.corrupt-*"))
+    for f in tmp_dirs["data"].rglob("*"):
+        if f.is_file():
+            assert secret.encode() not in f.read_bytes(), f
+
+
+def test_settings_degraded_is_exposed(client, tmp_dirs):
+    assert client.get("/api/settings").json()["settings_degraded"] is False
+    (tmp_dirs["data"] / "app_settings.json").write_text("{broken")
+    assert client.get("/api/settings").json()["settings_degraded"] is True

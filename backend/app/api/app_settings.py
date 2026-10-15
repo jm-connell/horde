@@ -95,6 +95,8 @@ class AppSettingsRead(BaseModel):
     channel_catalog_max_videos: int = 1000
     direct_youtube_search: bool = True
     youtube_video_search: bool = True
+    # True when app_settings.json is corrupt and unrecoverable (running on defaults).
+    settings_degraded: bool = False
     setup_completed: bool = False
     ui: dict[str, Any] = Field(default_factory=dict)
     ai: AiSettingsRead = Field(default_factory=AiSettingsRead)
@@ -184,6 +186,7 @@ def _settings_read(data: dict[str, Any]) -> AppSettingsRead:
         direct_youtube_search=app_settings.direct_youtube_search_system(data),
         youtube_video_search=app_settings.youtube_video_search_system(data),
         setup_completed=bool(data.get("setup_completed")),
+        settings_degraded=app_settings.is_degraded(),
         ui=ui,
         ai=_ai_read(data),
     )

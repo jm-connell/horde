@@ -385,11 +385,22 @@ class _Store:
         # the user into the wizard because the file is unreadable.
         return self._remember(p, _factory_defaults(setup_completed=True), True)
 
-    def write(self, p: Path, settings: dict[str, Any]) -> None:
+    def write(
+        self, p: Path, settings: dict[str, Any], *, keep_backup: bool = True
+    ) -> None:
         with self.lock:
             payload = json.dumps(settings, indent=2).encode("utf-8")
-            self._atomic_write(p, payload, keep_backup=True)
+            self._atomic_write(p, payload, keep_backup=keep_backup)
             self._remember(p, _normalize(settings), False)
+
+    def purge_copies(self, p: Path) -> None:
+        """Delete the ``.bak`` and every ``.corrupt-*`` copy of ``p``."""
+        with self.lock:
+            for extra in [_backup_path(p), *p.parent.glob(f"{p.name}.corrupt-*")]:
+                try:
+                    extra.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning("Could not delete %s", extra, exc_info=True)
 
     def _atomic_write(self, p: Path, payload: bytes, *, keep_backup: bool) -> None:
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -480,12 +491,23 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
 def reset_to_defaults() -> dict[str, Any]:
     """Replace the settings file with factory defaults (no ui/ai merge).
 
-    This is the one deliberate way out of a corrupt, unrecoverable file.
+    This is the one deliberate way out of a corrupt, unrecoverable file. No
+    backup is kept and the ``.bak`` / ``.corrupt-*`` copies are deleted, since
+    they would still contain secrets such as the OpenRouter key.
     """
     with _lock:
         out = _factory_defaults(setup_completed=False)
-        _write(out)
+        _store.write(_path(), out, keep_backup=False)
+        _store.purge_copies(_path())
         return out
+
+
+def is_degraded() -> bool:
+    """True when the settings file is corrupt and no backup could restore it."""
+    try:
+        return _store.read(_path())[1]
+    except SettingsError:
+        return True
 
 
 def _write(data: dict[str, Any]) -> None:
