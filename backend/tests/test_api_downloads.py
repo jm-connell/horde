@@ -511,6 +511,8 @@ def test_dismiss_finished_includes_cancelled(client, init_db):
 
 
 def test_queue_events_route_registered(client):
-    paths = [getattr(route, "path", "") for route in client.app.routes]
+    # Newer FastAPI keeps included routers lazy, so read the OpenAPI schema
+    # instead of walking app.routes.
+    paths = client.app.openapi()["paths"]
     assert "/api/downloads/events" in paths
     assert "/api/downloads/{job_id}/events" in paths

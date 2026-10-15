@@ -47,6 +47,9 @@ def test_sprite_generation_writes_path_after_concurrent_update(
     monkeypatch.setattr("app.services.sprites.generate_sprite_sheet", fake_generate)
     monkeypatch.setattr("app.services.sprites.sprites_exist", lambda *_a, **_k: False)
 
+    # Earlier tests (scanner ingest) can leave a daemon sprite worker for the
+    # same video id behind; let it drain so this enqueue is not a no-op.
+    _wait_sprite_worker(vid)
     enqueue_sprite_generation(vid)
     _wait_sprite_worker(vid)
 

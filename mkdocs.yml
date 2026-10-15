@@ -96,6 +96,8 @@ nav:
       - Download pipeline: architecture/downloads-pipeline.md
       - AI pipeline: architecture/ai-pipeline.md
       - API overview: architecture/api-overview.md
+  - Development:
+      - Dependencies & reproducible builds: development/dependencies.md
   - Design decisions:
       - Why Horde: design/why-horde.md
       - No authentication: design/no-auth.md
