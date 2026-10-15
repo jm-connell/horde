@@ -269,8 +269,14 @@ if [[ -n "$LIVE_DOWNLOADS" || -n "$LIVE_DATA" ]]; then
   fi
 fi
 
-echo "Building horde image at ${SHA:0:7}..."
-compose build horde
+HORDE_IMAGE_REF="${HORDE_IMAGE:-$(horde_env_get "$ENV_FILE" HORDE_IMAGE)}"
+if horde_uses_registry_image "$HORDE_IMAGE_REF"; then
+  echo "Pulling ${HORDE_IMAGE_REF} (published by CI; may lag main by a few minutes)..."
+  compose pull horde
+else
+  echo "Building horde image at ${SHA:0:7}..."
+  compose build horde
+fi
 
 UP_ARGS=(up -d)
 if want_ai_profile; then

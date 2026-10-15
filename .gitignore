@@ -35,7 +35,7 @@ compose.override.yaml
 
 # MkDocs
 site/
-backend/static/wiki/
+backend/static/
 
 # OS / editor
 .DS_Store

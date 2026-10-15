@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+import numpy as np
 from sqlmodel import Session, col, func, select
 
 from ...database import engine
@@ -322,19 +323,20 @@ def _semantic_catalog_hits(
         )
         if catalog_id is not None:
             stmt = stmt.where(ChannelCatalogVideo.catalog_id == catalog_id)
+        rows = session.exec(stmt).all()
+        scores = emb_mod.cosine_scores(
+            query_vec, [r[0].vector for r in rows], [r[0].dim for r in rows]
+        )
         scored: list[tuple[float, ChannelCatalogVideo, Optional[str]]] = []
-        for row in session.exec(stmt).all():
-            emb, video, catalog = row[0], row[1], row[2]
-            vec = emb_mod.unpack_vector(emb.vector, emb.dim)
-            score = emb_mod.cosine(query_vec, vec)
-            if score >= _CATALOG_EMBED_MIN_SCORE:
-                scored.append(
-                    (
-                        score,
-                        video,
-                        catalog.channel_name if catalog else None,
-                    )
+        for i in np.flatnonzero(scores >= _CATALOG_EMBED_MIN_SCORE):
+            _emb, video, catalog = rows[i][0], rows[i][1], rows[i][2]
+            scored.append(
+                (
+                    float(scores[i]),
+                    video,
+                    catalog.channel_name if catalog else None,
                 )
+            )
         scored.sort(key=lambda x: x[0], reverse=True)
         return scored[:limit]
     except Exception:  # noqa: BLE001

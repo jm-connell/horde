@@ -232,3 +232,10 @@ _horde_clear_compose_conflicts() {
     echo "Re-apply other compose tweaks in docker-compose.override.yml (gitignored)." >&2
   fi
 }
+
+# True when HORDE_IMAGE names a registry image (pull) rather than the local
+# build tag (empty or horde:*).
+horde_uses_registry_image() {
+  local ref="${1:-}"
+  [[ -n "$ref" && "$ref" != horde:* && "$ref" != "horde" ]]
+}

@@ -257,3 +257,18 @@ def test_git_pull_keeps_env_and_recovers_compose_conflicts(tmp_path):
         or "DOWNLOADS_PATH" in compose_text
         or "/mnt/custom/media" in compose_text
     )
+
+
+def test_uses_registry_image_only_for_non_local_refs():
+    out = _check(
+        'for ref in "" horde horde:latest ghcr.io/jm-connell/horde:latest me/horde:dev; do\n'
+        '  if horde_uses_registry_image "$ref"; then echo "pull:$ref"; else echo "build:$ref"; fi\n'
+        "done"
+    )
+    assert out.split() == [
+        "build:",
+        "build:horde",
+        "build:horde:latest",
+        "pull:ghcr.io/jm-connell/horde:latest",
+        "pull:me/horde:dev",
+    ]

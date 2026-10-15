@@ -46,7 +46,10 @@ services:
       context: .
       args:
         HORDE_GIT_SHA: ${HORDE_GIT_SHA:-unknown}
-    image: horde:latest
+    # Default builds locally from this checkout. Set HORDE_IMAGE in .env to
+    # ghcr.io/jm-connell/horde:latest to pull the CI-built image instead
+    # (update.sh then pulls rather than builds).
+    image: ${HORDE_IMAGE:-horde:latest}
     container_name: horde
     depends_on:
       - bgutil-pot

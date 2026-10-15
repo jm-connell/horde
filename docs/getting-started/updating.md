@@ -1,6 +1,6 @@
 # Updating
 
-Horde’s Docker image is **built from source** on your host (`build: .` in `docker-compose.yml`). Updating means pulling new git commits, rebuilding the `horde` image with the current commit SHA, and recreating containers.
+By default Horde’s Docker image is **built from source** on your host (`build: .` in `docker-compose.yml`). Updating means pulling new git commits, rebuilding the `horde` image with the current commit SHA, and recreating containers. With `HORDE_IMAGE` set ([below](#pre-built-image)) the rebuild becomes a `docker compose pull`.
 
 First-time install is a `git clone` plus Compose/Dockge deploy — [Install with Docker](install-docker.md) or [TrueNAS / Dockge](truenas-dockge.md). This page is only for an existing checkout.
 
@@ -25,7 +25,7 @@ The script:
 1. Snapshot live `/downloads` and `/app/data` bind mounts (and `PUID`/`PGID`) into `.env` if a Horde container already exists
 2. `git pull --ff-only --autostash` — fetch the latest code without `git reset --hard` (`.env` is gitignored and is never discarded)
 3. Refuse to recreate if the new compose would mount different host paths (override with `HORDE_FORCE_VOLUME_CHANGE=1`)
-4. `HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde` — rebuild with the commit SHA baked in (keeps in-app update checks accurate)
+4. `HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde` — rebuild with the commit SHA baked in (keeps in-app update checks accurate). With `HORDE_IMAGE` set to a registry image this is `docker compose pull horde` instead
 5. `docker compose up -d` — recreate containers from the new image (adds `--profile ai` when needed; see below)
 6. Polls `GET /api/health` until `status` is `ok` (default up to 90s) and prints a short summary (`horde_version`, `yt_dlp_version`, POT, wiki, library count)
 
@@ -34,6 +34,16 @@ On hosts that need elevated Docker access, the script uses `sudo` when invoking 
 Keep `DOWNLOADS_PATH` and `DATA_PATH` in `.env` (not hardcoded in `docker-compose.yml`). Extra compose tweaks belong in gitignored `docker-compose.override.yml`.
 
 After it finishes, hard-refresh the browser (`Ctrl+Shift+R`) if the UI still looks old.
+
+### Pre-built image
+
+CI publishes `ghcr.io/jm-connell/horde` for `linux/amd64` and `linux/arm64` after every green push to `main` (`latest` plus a tag per commit SHA). To use it instead of building on the host, add to `.env`:
+
+```bash
+HORDE_IMAGE=ghcr.io/jm-connell/horde:latest
+```
+
+Then `docker compose up -d` pulls rather than builds, and `update.sh` runs `docker compose pull horde` in place of the build step. The image appears a few minutes after a commit lands (CI must pass first), so an update run right after a push may still pull the previous build. Unset `HORDE_IMAGE` to go back to local builds.
 
 ### AI profile and health URL
 

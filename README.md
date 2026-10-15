@@ -48,8 +48,10 @@ on the host. Interactive API docs: `/docs`.
 
 ## Quick start
 
-There is no pre-built Docker Hub image. Clone this repo onto the Docker host,
-set two paths in `.env`, and Compose **builds** the image. Use a real
+Clone this repo onto the Docker host, set two paths in `.env`, and Compose
+**builds** the image. To skip the build, also set
+`HORDE_IMAGE=ghcr.io/jm-connell/horde:latest` and Compose pulls the image CI
+publishes instead. Use a real
 `git clone` (not a GitHub ZIP) so later `update.sh` can `git pull`.
 
 Do this on the **host** (SSH / TrueNAS shell) — not Dockge’s per-service

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import struct
+from collections.abc import Sequence
 from typing import Optional
 
+import numpy as np
 from sqlmodel import Session, select
 
 from ...models import Video, VideoAiMeta, VideoEmbedding, utcnow
@@ -29,16 +31,67 @@ def unpack_vector(blob: bytes, dim: Optional[int] = None) -> list[float]:
 def cosine(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
-    dot = 0.0
-    na = 0.0
-    nb = 0.0
-    for x, y in zip(a, b):
-        dot += x * y
-        na += x * x
-        nb += y * y
+    va = np.asarray(a, dtype=np.float64)
+    vb = np.asarray(b, dtype=np.float64)
+    na = float(np.dot(va, va))
+    nb = float(np.dot(vb, vb))
     if na <= 0 or nb <= 0:
         return 0.0
-    return dot / ((na ** 0.5) * (nb ** 0.5))
+    return float(np.dot(va, vb)) / ((na ** 0.5) * (nb ** 0.5))
+
+
+# Rows scored per matmul in ``cosine_scores`` — bounds the float32 copy we
+# build from the blobs (8192 x 1024 dims ≈ 32 MB).
+_SCORE_BATCH_ROWS = 8192
+
+
+def _blob_dim(blob: bytes, dim: Optional[int]) -> int:
+    """Element count ``unpack_vector`` would decode for this blob."""
+    n = dim or (len(blob) // 4)
+    if n <= 0 or len(blob) < n * 4:
+        n = len(blob) // 4
+    return n
+
+
+def cosine_scores(
+    query_vec: list[float],
+    blobs: Sequence[bytes],
+    dims: Sequence[Optional[int]],
+) -> np.ndarray:
+    """Cosine of ``query_vec`` against each packed float32 blob, vectorized.
+
+    Same result as ``cosine(query_vec, unpack_vector(blob, dim))`` per row:
+    0.0 for empty, dimension-mismatched, or zero-norm vectors.
+    """
+    n = len(blobs)
+    scores = np.zeros(n, dtype=np.float64)
+    if not query_vec or n == 0:
+        return scores
+    q = np.asarray(query_vec, dtype=np.float32)
+    d = q.shape[0]
+    q_norm = float(np.linalg.norm(q.astype(np.float64)))
+    if q_norm <= 0:
+        return scores
+    width = d * 4
+    usable = [
+        i for i in range(n) if blobs[i] and _blob_dim(blobs[i], dims[i]) == d
+    ]
+    for start in range(0, len(usable), _SCORE_BATCH_ROWS):
+        idx = usable[start : start + _SCORE_BATCH_ROWS]
+        # Slice only oversize blobs; slicing every row doubles the copy.
+        mat = np.frombuffer(
+            b"".join(
+                blobs[i] if len(blobs[i]) == width else blobs[i][:width]
+                for i in idx
+            ),
+            dtype=np.float32,
+        ).reshape(len(idx), d)
+        dots = mat @ q
+        norms = np.sqrt(np.einsum("ij,ij->i", mat, mat))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            part = np.where(norms > 0, dots / (norms * q_norm), 0.0)
+        scores[idx] = part
+    return scores
 
 
 def l2_normalize(vec: list[float]) -> list[float]:
@@ -239,14 +292,8 @@ def video_centroid(session: Session, video_id: int) -> Optional[list[float]]:
     if not vectors:
         return None
     dim = len(vectors[0])
-    acc = [0.0] * dim
-    for v in vectors:
-        if len(v) != dim:
-            continue
-        for i, x in enumerate(v):
-            acc[i] += x
-    n = float(len(vectors))
-    return [x / n for x in acc]
+    same = [v for v in vectors if len(v) == dim]
+    return (np.sum(np.asarray(same, dtype=np.float64), axis=0) / len(vectors)).tolist()
 
 
 def similar_video_hits(
@@ -259,18 +306,29 @@ def similar_video_hits(
 ) -> list[tuple[int, float, int]]:
     """Return (video_id, score, chunk_index) by best-matching chunk."""
     exclude_ids = exclude_ids or set()
-    rows = session.exec(select(VideoEmbedding)).all()
+    # Plain columns, not ORM objects: the full table is scanned per search.
+    rows = [
+        row
+        for row in session.exec(
+            select(
+                VideoEmbedding.video_id,
+                VideoEmbedding.chunk_index,
+                VideoEmbedding.dim,
+                VideoEmbedding.vector,
+            )
+        ).all()
+        if row[0] not in exclude_ids
+    ]
+    scores = cosine_scores(
+        query_vec, [r[3] for r in rows], [r[2] for r in rows]
+    )
     best: dict[int, tuple[float, int]] = {}
-    for row in rows:
-        if row.video_id in exclude_ids:
-            continue
-        vec = unpack_vector(row.vector, row.dim)
-        score = cosine(query_vec, vec)
-        if score < min_score:
-            continue
-        prev = best.get(row.video_id)
+    for i in np.flatnonzero(scores >= min_score):
+        video_id, chunk_index = rows[i][0], rows[i][1]
+        score = float(scores[i])
+        prev = best.get(video_id)
         if prev is None or score > prev[0]:
-            best[row.video_id] = (score, int(row.chunk_index))
+            best[video_id] = (score, int(chunk_index))
 
     ranked = sorted(best.items(), key=lambda kv: kv[1][0], reverse=True)
     return [(vid, sc, chunk) for vid, (sc, chunk) in ranked[:limit]]
@@ -325,13 +383,13 @@ def retrieve_video_chunks(
     if not rows:
         return []
 
-    scored: list[tuple[float, int]] = []
-    for row in rows:
-        vec = unpack_vector(row.vector, row.dim)
-        score = cosine(query_vec, vec)
-        if score < min_score:
-            continue
-        scored.append((score, int(row.chunk_index)))
+    all_scores = cosine_scores(
+        query_vec, [r.vector for r in rows], [r.dim for r in rows]
+    )
+    scored: list[tuple[float, int]] = [
+        (float(all_scores[i]), int(rows[i].chunk_index))
+        for i in np.flatnonzero(all_scores >= min_score)
+    ]
     if not scored:
         return []
 
