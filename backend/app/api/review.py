@@ -11,7 +11,7 @@ from ..config import DOWNLOADS_DIR, VIDEO_EXTENSIONS
 from ..database import get_session
 from ..models import Video
 from ..schemas import VideoRead
-from ..services import library
+from ..services import library, uploads
 from ..services.metadata import probe_is_playable
 from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
 from ..services.scanner import (
@@ -25,8 +25,6 @@ from .video_serialize import to_read as _to_read
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/review", tags=["review"])
-
-_UPLOAD_CHUNK = 1024 * 1024
 
 
 class DuplicateGroupRead(BaseModel):
@@ -94,12 +92,13 @@ async def upload_import(
     part = dest.with_name(dest.name + ".part")
     mark_active(rel_path)
     try:
-        with part.open("wb") as out:
-            while True:
-                chunk = await file.read(_UPLOAD_CHUNK)
-                if not chunk:
-                    break
-                out.write(chunk)
+        await uploads.save_upload(
+            file,
+            part,
+            max_bytes=uploads.max_video_upload_bytes(),
+            free_space_dir=DOWNLOADS_DIR,
+            headroom_bytes=uploads.IMPORT_HEADROOM_BYTES,
+        )
         if part.stat().st_size == 0:
             part.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail="Empty file")

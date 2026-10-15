@@ -23,7 +23,7 @@ from ..schemas import (
     PlaylistSizeEstimateRequest,
     PlaylistUpdate,
 )
-from ..services import downloader, library
+from ..services import downloader, library, uploads
 from ..services.playlist_sync import (
     find_subscribed_by_url,
     start_playlist_sync,
@@ -531,12 +531,12 @@ async def upload_playlist_thumbnail(
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    data = await file.read()
+    data = await uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
     try:
         dest = write_playlist_cover(playlist_id, data)
-    except Exception as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail="Could not read image") from exc
     playlist.cover_path = dest
     session.add(playlist)

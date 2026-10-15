@@ -11,6 +11,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from ..config import BACKGROUNDS_DIR, ensure_dirs
+from ..services import uploads
 
 router = APIRouter(prefix="/api/backgrounds", tags=["backgrounds"])
 
@@ -22,8 +23,14 @@ ALLOWED_EXT = {
     ".gif": "image/gif",
     ".webm": "video/webm",
 }
-# Soft abuse ceiling only — frontend warns above 10MB.
-MAX_BYTES = 100 * 1024 * 1024  # 100 MB
+# Hard ceiling is uploads.BACKGROUND_MAX_BYTES; the frontend warns above 10MB.
+_IMAGE_FORMATS = {
+    ".jpg": ("JPEG",),
+    ".jpeg": ("JPEG",),
+    ".png": ("PNG",),
+    ".webp": ("WEBP",),
+    ".gif": ("GIF",),
+}
 
 
 def _safe_id(raw: str) -> str:
@@ -95,15 +102,34 @@ async def upload_background(file: UploadFile = File(...)):
             status_code=400,
             detail="Unsupported type. Use jpg, png, webp, gif, or webm.",
         )
-    data = await file.read()
-    if len(data) > MAX_BYTES:
-        raise HTTPException(status_code=400, detail="File too large (max 100 MB)")
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty file")
+    if (
+        uploads.count_files(BACKGROUNDS_DIR, set(ALLOWED_EXT))
+        >= uploads.MAX_STORED_BACKGROUNDS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Too many backgrounds (max {uploads.MAX_STORED_BACKGROUNDS}). "
+                "Delete one first."
+            ),
+        )
 
     bg_id = uuid.uuid4().hex
     dest = BACKGROUNDS_DIR / f"{bg_id}{ext}"
-    dest.write_bytes(data)
+    size = await uploads.save_upload(file, dest, max_bytes=uploads.BACKGROUND_MAX_BYTES)
+    if size == 0:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Empty file")
+    if ext == ".webm":
+        with dest.open("rb") as fh:
+            valid = uploads.is_webm(fh.read(4))
+    else:
+        valid = uploads.verify_image_file(dest, _IMAGE_FORMATS[ext])
+    if not valid:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400, detail=f"Not a valid {ext.lstrip('.')} file"
+        )
     _write_meta(bg_id, {"filename": Path(name).name})
     mime = ALLOWED_EXT[ext]
     animated = mime in ("image/gif", "video/webm")

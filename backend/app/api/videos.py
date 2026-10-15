@@ -23,7 +23,7 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import downloader, library
+from ..services import downloader, library, uploads
 from ..services.metadata import (
     load_sprite_meta,
     sprite_image_path,
@@ -596,7 +596,13 @@ async def upload_thumbnail(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    dest = write_full_bytes(video_id, await file.read())
+    data = await uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    try:
+        dest = write_full_bytes(video_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Could not read image") from exc
     video.thumbnail_path = dest
     session.add(video)
     session.commit()

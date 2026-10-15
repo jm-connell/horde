@@ -11,6 +11,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from ..config import FONTS_DIR, ensure_dirs
+from ..services import uploads
 
 router = APIRouter(prefix="/api/fonts", tags=["fonts"])
 
@@ -20,7 +21,6 @@ ALLOWED_EXT = {
     ".ttf": "font/ttf",
     ".otf": "font/otf",
 }
-MAX_BYTES = 8 * 1024 * 1024  # 8 MB
 
 
 def _safe_id(raw: str) -> str:
@@ -95,15 +95,25 @@ async def upload_font(file: UploadFile = File(...)):
             status_code=400,
             detail="Unsupported type. Use woff2, woff, ttf, or otf.",
         )
-    data = await file.read()
-    if len(data) > MAX_BYTES:
-        raise HTTPException(status_code=400, detail="File too large (max 8 MB)")
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty file")
+    if uploads.count_files(FONTS_DIR, set(ALLOWED_EXT)) >= uploads.MAX_STORED_FONTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many fonts (max {uploads.MAX_STORED_FONTS}). Delete one first.",
+        )
 
     font_id = uuid.uuid4().hex
     dest = FONTS_DIR / f"{font_id}{ext}"
-    dest.write_bytes(data)
+    size = await uploads.save_upload(file, dest, max_bytes=uploads.FONT_MAX_BYTES)
+    if size == 0:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Empty file")
+    with dest.open("rb") as fh:
+        head = fh.read(4)
+    if not uploads.font_bytes_match_extension(ext, head):
+        dest.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400, detail=f"Not a valid {ext.lstrip('.')} font file"
+        )
     _write_meta(font_id, {"filename": Path(name).name})
     return {
         "id": font_id,
