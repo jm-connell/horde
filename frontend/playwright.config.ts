@@ -48,6 +48,18 @@ export default defineConfig({
       use: { ...desktop, baseURL: appUrl },
     },
     {
+      // Phone-sized Chromium (touch, 412x915, mobile UA) over the specs whose
+      // layout or behaviour differs on small screens.
+      name: "mobile",
+      testMatch: /(navigation|library|watch|offline)\.spec\.ts/,
+      use: {
+        ...devices["Pixel 7"],
+        locale: "en-US",
+        timezoneId: "UTC",
+        baseURL: appUrl,
+      },
+    },
+    {
       name: "setup",
       testMatch: /setup\.spec\.ts/,
       use: { ...desktop, baseURL: setupUrl },

@@ -1,4 +1,4 @@
-import { expect, openNav, test } from "./fixtures";
+import { ensureNavVisible, expect, openNav, test } from "./fixtures";
 
 test("nav reaches every primary page and legacy routes redirect", async ({
   page,
@@ -8,6 +8,7 @@ test("nav reaches every primary page and legacy routes redirect", async ({
     page.getByRole("heading", { name: "Home", level: 1 })
   ).toBeVisible();
   await expect(page.locator("[data-horde='nav']")).toBeVisible();
+  await ensureNavVisible(page);
   await expect(page.getByRole("link", { name: /^Import\b/ })).toContainText(
     "1"
   );
@@ -60,6 +61,7 @@ test("nav reaches every primary page and legacy routes redirect", async ({
 
   await page.goto("/setup");
   await expect(page).toHaveURL(/\/$/);
+  await ensureNavVisible(page);
   await expect(
     page.getByRole("link", { name: "Home", exact: true })
   ).toBeVisible();
@@ -95,29 +97,35 @@ test("an unknown URL shows the 404 page with a way home", async ({ page }) => {
 // A real render-time failure without any test hook in production code: the
 // History route is a lazy chunk, so blocking its download makes React.lazy
 // throw while rendering, exactly as a deploy-while-open or flaky network would.
-test("a route that fails to render shows the error page and recovers on navigation", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Home", level: 1 })
-  ).toBeVisible();
-  await page.route(/\/assets\/History-.*\.js/, (route) => route.abort());
+// The service worker would answer the chunk request itself, bypassing
+// page.route, so it is blocked here to make the failure deterministic.
+test.describe("route render failure", () => {
+  test.use({ serviceWorkers: "block" });
 
-  await openNav(page, "History");
-  const alert = page.locator("[data-horde='error-boundary']");
-  await expect(alert).toBeVisible();
-  await expect(
-    alert.getByRole("heading", { name: "This page could not be loaded" })
-  ).toBeVisible();
-  await expect(alert.getByRole("button", { name: "Reload" })).toBeVisible();
-  await expect(alert.getByRole("link", { name: "Go home" })).toBeVisible();
-  await alert.getByText("Error details").click();
-  await expect(alert.locator("pre")).toContainText("dynamically imported");
-  // The shell survives, so the user can simply navigate elsewhere.
-  await openNav(page, "Playlists");
-  await expect(alert).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Playlists", level: 1 })
-  ).toBeVisible();
+  test("a route that fails to render shows the error page and recovers on navigation", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { name: "Home", level: 1 })
+    ).toBeVisible();
+    await page.route(/\/assets\/History-.*\.js/, (route) => route.abort());
+
+    await openNav(page, "History");
+    const alert = page.locator("[data-horde='error-boundary']");
+    await expect(alert).toBeVisible();
+    await expect(
+      alert.getByRole("heading", { name: "This page could not be loaded" })
+    ).toBeVisible();
+    await expect(alert.getByRole("button", { name: "Reload" })).toBeVisible();
+    await expect(alert.getByRole("link", { name: "Go home" })).toBeVisible();
+    await alert.getByText("Error details").click();
+    await expect(alert.locator("pre")).toContainText("dynamically imported");
+    // The shell survives, so the user can simply navigate elsewhere.
+    await openNav(page, "Playlists");
+    await expect(alert).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Playlists", level: 1 })
+    ).toBeVisible();
+  });
 });

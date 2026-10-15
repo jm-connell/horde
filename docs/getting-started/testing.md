@@ -13,7 +13,7 @@ This is not a substitute for playing a real video on your LAN. The player still 
 | **Backend API** | pytest + FastAPI `TestClient` on a temp SQLite + temp `DOWNLOADS_DIR` | Yes | Library, review, playlists, settings, download enqueue (yt-dlp stubbed), Range streaming |
 | **Frontend unit** | Vitest (node) | Yes | Formatters, presets, catalog progress copy, URL helpers |
 | **Frontend build** | `tsc -b && vite build` | Yes | Type errors and a broken production bundle |
-| **Browser UI** | Playwright (Chromium) against the built SPA + FastAPI | Yes | Nav, library, history, download form, playlists, import, watch chrome, settings, setup wizard |
+| **Browser UI** | Playwright (Chromium) against the built SPA + FastAPI | Yes | Nav, library, history, download form, playlists, import, watch chrome, settings, setup wizard, 404 and error boundary, service-worker update prompt, axe accessibility scan of every main page |
 | **Wiki** | `mkdocs build --strict` | Yes | Broken nav / missing Markdown pages |
 | **Container** | `docker build` of the repo `Dockerfile` | Yes | The TrueNAS/Dockge artifact (frontend + wiki + Python image) |
 | **Player decode / Cast** | Manual | No | Shaka, DASH preview, mini-player reparenting, Cast, iOS — still [manual](../reference/video-player-smoke.md) |
@@ -84,6 +84,8 @@ cd frontend
 npx playwright install chromium
 npm run e2e
 ```
+
+Two Playwright projects run the app specs: `app` (desktop Chrome, every spec) and `mobile` (Pixel 7 profile on Chromium, running the navigation, library, watch and offline specs). The seeded media is VP9 in MP4, which every Chromium build can decode (H.264 needs proprietary codecs, so it is not used). `a11y.spec.ts` runs axe-core over the main pages and fails on serious or critical violations.
 
 Wiki (from the repo root):
 

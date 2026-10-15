@@ -57,12 +57,52 @@ export const test = base.extend({
 
 export { expect };
 
+/** Narrow screens keep the nav links behind a menu button; open it if needed. */
+export async function ensureNavVisible(page: Page) {
+  const toggle = page.getByRole("button", { name: "Toggle navigation menu" });
+  if (await toggle.isVisible()) {
+    const expanded = await toggle.getAttribute("aria-expanded");
+    if (expanded !== "true") await toggle.click();
+  }
+}
+
 export async function openNav(
   page: Page,
   label: "Home" | "Playlists" | "History" | "Download" | "Import" | "Settings"
 ) {
+  await ensureNavVisible(page);
   const name = label === "Home" ? "Home" : new RegExp(`^${label}\\b`);
   await page.getByRole("link", { name, exact: label === "Home" }).click();
+}
+
+/** The channel rail is `md:block` (768px); phones reach a channel via its URL/cards. */
+export function hasChannelRail(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 0) >= 768;
+}
+
+/** Phones drop the volume slider and the theater/fit buttons from the player. */
+export function hasDesktopPlayerChrome(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 0) >= 768;
+}
+
+/** Open a channel page from Home: rail button on desktop, `?channel=` on phones. */
+export async function openChannel(page: Page, name: string) {
+  if (hasChannelRail(page)) {
+    await page.getByRole("button", { name: new RegExp(name) }).click();
+  } else {
+    await page.goto(`/?channel=${encodeURIComponent(name)}`);
+  }
+}
+
+/** The header search box is behind a button on narrow screens. */
+export async function openSearchBox(page: Page) {
+  // Wide and narrow layouts each render a search input; only one is visible.
+  const box = page
+    .getByPlaceholder("Search", { exact: true })
+    .locator("visible=true");
+  if (await box.count()) return box;
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  return box;
 }
 
 export function videoCard(page: Page, title: string) {

@@ -1,4 +1,12 @@
-import { expect, feedCard, test, videoCard } from "./fixtures";
+import {
+  expect,
+  feedCard,
+  hasChannelRail,
+  openChannel,
+  openSearchBox,
+  test,
+  videoCard,
+} from "./fixtures";
 
 test("home shows the library, continue watching, tags, and search", async ({
   page,
@@ -12,8 +20,10 @@ test("home shows the library, continue watching, tags, and search", async ({
     "May 14, 2024"
   );
   await expect(videoCard(page, "Kiln fire")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Northwind/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Kiln/ })).toBeVisible();
+  if (hasChannelRail(page)) {
+    await expect(page.getByRole("button", { name: /Northwind/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Kiln/ })).toBeVisible();
+  }
 
   await page.getByRole("button", { name: "Tags" }).click();
   await page.getByRole("button", { name: /#ambient/ }).click();
@@ -23,11 +33,13 @@ test("home shows the library, continue watching, tags, and search", async ({
   await expect(videoCard(page, "Aurora Drift")).toBeVisible();
   await expect(videoCard(page, "Kiln fire")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "All channels" }).click();
-  await expect(
-    page.getByRole("switch", { name: "Toggle YouTube search results" })
-  ).toHaveAttribute("aria-checked", "false");
-  await page.getByPlaceholder("Search", { exact: true }).fill("Harbor");
+  if (hasChannelRail(page)) {
+    await page.getByRole("button", { name: "All channels" }).click();
+    await expect(
+      page.getByRole("switch", { name: "Toggle YouTube search results" })
+    ).toHaveAttribute("aria-checked", "false");
+  }
+  await (await openSearchBox(page)).fill("Harbor");
   const matches = page.locator("section").filter({
     has: page.getByRole("button", { name: /In your library/ }),
   });
@@ -42,7 +54,7 @@ test("channel page filters the local feed and switches layout", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: /Northwind/ }).click();
+  await openChannel(page, "Northwind");
   await expect(
     page.getByRole("heading", { name: "Northwind", level: 1 })
   ).toBeVisible();

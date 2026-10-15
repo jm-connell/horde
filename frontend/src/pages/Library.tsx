@@ -1380,7 +1380,7 @@ function OnlineLibrary() {
           ) : (
             <h1
               className={`group ${
-                isHome ? "hidden lg:flex" : "flex"
+                isHome ? "sr-only lg:not-sr-only lg:flex" : "flex"
               } shrink-0 items-center gap-2 text-2xl font-bold text-gray-100`}
             >
               {headline}

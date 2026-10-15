@@ -1,4 +1,4 @@
-import { expect, test, videoCard } from "./fixtures";
+import { expect, hasDesktopPlayerChrome, test, videoCard } from "./fixtures";
 
 test("watch page shows metadata, chapters, and player controls", async ({
   page,
@@ -25,24 +25,30 @@ test("watch page shows metadata, chapters, and player controls", async ({
   await expect(pause.or(play)).toBeVisible();
   if (await pause.isVisible()) await pause.click();
   await expect(play).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Mute", exact: true })
-  ).toBeVisible();
+  if (hasDesktopPlayerChrome(page)) {
+    await expect(
+      page.getByRole("button", { name: "Mute", exact: true })
+    ).toBeVisible();
+  }
   await expect(page.getByTitle("Playback speed")).toHaveText("1x");
 
-  await page.getByRole("button", { name: "Theater", exact: true }).click();
-  const theater = page.getByRole("button", { name: "Theater", exact: true });
-  await expect(theater).toHaveClass(/text-accent/);
-  await expect(theater).not.toHaveClass(/text-gray-200/);
+  if (hasDesktopPlayerChrome(page)) {
+    await page.getByRole("button", { name: "Theater", exact: true }).click();
+    const theater = page.getByRole("button", { name: "Theater", exact: true });
+    await expect(theater).toHaveClass(/text-accent/);
+    await expect(theater).not.toHaveClass(/text-gray-200/);
+  }
 
   await page.getByTitle("Playback speed").click();
   await page.getByRole("button", { name: "1.5x", exact: true }).click();
   await expect(page.getByTitle("Playback speed")).toHaveText("1.5x");
 
-  await page.getByRole("button", { name: "Mute", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Unmute", exact: true })
-  ).toBeVisible();
+  if (hasDesktopPlayerChrome(page)) {
+    await page.getByRole("button", { name: "Mute", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Unmute", exact: true })
+    ).toBeVisible();
+  }
 
   await channel.click();
   await expect(
@@ -75,7 +81,7 @@ test("more actions opens edit details", async ({ page }) => {
     0
   );
   await expect(
-    page.getByRole("link", { name: "← Back to library" })
+    page.getByRole("link", { name: /Back to library/ })
   ).toBeVisible();
 });
 
