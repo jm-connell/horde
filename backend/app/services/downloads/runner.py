@@ -62,6 +62,7 @@ from .progress import (
     set_processing_stage,
 )
 from .queue import DownloadQueue, download_queue
+from .spec import JobSpec
 from .staging import (
     cleanup_device_job_files,
     device_job_dir,
@@ -73,43 +74,10 @@ from .staging import (
 logger = logging.getLogger(__name__)
 
 
-def handoff_postprocess(
-    job_id: int,
-    final_path: Path,
-    info: dict[str, Any],
-    url: str,
-    quality_preset: str,
-    title_override: str | None,
-    channel_override: str | None,
-    normalize_volume: bool,
-    replace_video_id: int | None,
-    notes_pending: str | None,
-    cancel_event: threading.Event,
-    destination: str,
-    video_codec: str,
-    staging_dir: Path | None = None,
-    active_marks: set[str] | None = None,
-) -> None:
-    set_processing_stage(job_id, STAGE_REMUXING, progress=0.0)
-    ffmpeg_queue.enqueue(
-        PostprocessTask(
-            job_id=job_id,
-            final_path=final_path,
-            info=info,
-            url=url,
-            quality_preset=quality_preset,
-            title_override=title_override,
-            channel_override=channel_override,
-            normalize_volume=normalize_volume,
-            replace_video_id=replace_video_id,
-            notes_pending=notes_pending,
-            cancel_event=cancel_event,
-            destination=destination,
-            video_codec=video_codec,
-            staging_dir=staging_dir,
-            active_marks=set(active_marks or ()),
-        )
-    )
+def handoff_postprocess(task: PostprocessTask) -> None:
+    """Queue the finished download for remux/transcode/loudnorm and the library commit."""
+    set_processing_stage(task.job_id, STAGE_REMUXING, progress=0.0)
+    ffmpeg_queue.enqueue(task)
 
 
 def run_download(
@@ -122,25 +90,19 @@ def run_download(
     queue = queue or download_queue
     cancel = cancel_event or threading.Event()
 
-    with Session(engine) as session:
-        job = session.get(DownloadJob, job_id)
-        if job is None:
-            return None
-        url = job.url
-        quality_preset = job.quality_preset
-        title_override = job.title_override
-        channel_override = job.channel_override
-        job_title = job.title
-        job_channel = job.channel
-        normalize_volume = job.normalize_volume
-        replace_video_id = job.replace_video_id
-        notes_pending = job.notes_pending
-        destination = job.destination or DownloadDestination.library.value
-        video_codec = job.video_codec or "av1"
+    spec = JobSpec.load(job_id)
+    if spec is None:
+        return None
+    url = spec.url
+    quality_preset = spec.quality_preset
+    title_override = spec.title_override
+    channel_override = spec.channel_override
+    job_title = spec.title
+    job_channel = spec.channel
+    destination = spec.destination
+    video_codec = spec.video_codec
 
     if destination == DownloadDestination.device.value:
-        # Never overwrite a library row from an ephemeral device job.
-        replace_video_id = None
         device_job_dir(job_id).mkdir(parents=True, exist_ok=True)
         staging: Path | None = None
         out_root = device_job_dir(job_id)
@@ -402,21 +364,14 @@ def run_download(
         detail = str(title_override or effective_info.get("title") or url)
         act.finish(detail=detail)
         handoff_postprocess(
-            job_id,
-            final_path,
-            effective_info,
-            url,
-            quality_preset,
-            title_override,
-            channel_override,
-            normalize_volume,
-            replace_video_id,
-            notes_pending,
-            cancel,
-            destination,
-            video_codec,
-            staging_dir=staging,
-            active_marks=marked,
+            PostprocessTask(
+                spec=spec,
+                final_path=final_path,
+                info=effective_info,
+                cancel_event=cancel,
+                staging_dir=staging,
+                active_marks=set(marked),
+            )
         )
         handed_off = True
         return None
@@ -455,21 +410,14 @@ def run_download(
                 detail = str(title_override or effective_info.get("title") or url)
                 act.finish(detail=detail)
                 handoff_postprocess(
-                    job_id,
-                    recovered,
-                    effective_info,
-                    url,
-                    quality_preset,
-                    title_override,
-                    channel_override,
-                    normalize_volume,
-                    replace_video_id,
-                    notes_pending,
-                    cancel,
-                    destination,
-                    video_codec,
-                    staging_dir=staging,
-                    active_marks=marked,
+                    PostprocessTask(
+                        spec=spec,
+                        final_path=recovered,
+                        info=effective_info,
+                        cancel_event=cancel,
+                        staging_dir=staging,
+                        active_marks=set(marked),
+                    )
                 )
                 handed_off = True
                 return None

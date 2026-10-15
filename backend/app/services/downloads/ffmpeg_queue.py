@@ -124,22 +124,7 @@ class FfmpegQueue:
 
     def _run_task(self, task: PostprocessTask) -> None:
         try:
-            complete_download(
-                task.job_id,
-                task.final_path,
-                task.info,
-                task.url,
-                task.quality_preset,
-                task.title_override,
-                task.channel_override,
-                task.normalize_volume,
-                task.replace_video_id,
-                task.notes_pending,
-                cancel_event=task.cancel_event,
-                destination=task.destination,
-                video_codec=task.video_codec,
-                staging_dir=task.staging_dir,
-            )
+            complete_download(task)
         except DownloadCancelled:
             lifecycle.mark_job_cancelled(self._downloads, task.job_id, task.destination)
         except Exception as exc:

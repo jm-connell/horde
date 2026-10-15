@@ -1,5 +1,6 @@
 """Ephemeral download-to-device jobs: complete, serve, dismiss, GC."""
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from sqlmodel import Session, select
 
 from app.models import DownloadDestination, DownloadJob, JobStatus, Video
 from app.services.downloads import finalize, postprocess, progress, staging
+from app.services.downloads.spec import JobSpec
 
 
 def _write_media(path: Path, size: int = 64) -> None:
@@ -39,17 +41,17 @@ def test_complete_device_skips_library_row(init_db, monkeypatch):
     _write_media(final)
 
     result = finalize.complete_download(
-        job_id,
-        final,
-        {"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        "720p",
-        None,
-        None,
-        False,
-        None,
-        None,
-        destination=DownloadDestination.device.value,
+        postprocess.PostprocessTask(
+            spec=JobSpec(
+                job_id=job_id,
+                url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                quality_preset="720p",
+                destination=DownloadDestination.device.value,
+            ),
+            final_path=final,
+            info={"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
+            cancel_event=threading.Event(),
+        )
     )
     assert result is None
 
@@ -89,10 +91,12 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
     monkeypatch.setattr(postprocess, "check_quality", lambda *_a, **_k: None)
     monkeypatch.setattr(finalize, "probe_duration", lambda _p: 12.0)
     monkeypatch.setattr(finalize, "probe_dimensions", lambda _p: (1280, 720))
-    monkeypatch.setattr(finalize, "ensure_safari_mp4", fake_ensure)
-    monkeypatch.setattr(finalize, "transcode_video", fake_transcode)
+    monkeypatch.setattr(postprocess, "probe_duration", lambda _p: 12.0)
+    monkeypatch.setattr(postprocess, "probe_dimensions", lambda _p: (1280, 720))
+    monkeypatch.setattr(postprocess, "ensure_safari_mp4", fake_ensure)
+    monkeypatch.setattr(postprocess, "transcode_video", fake_transcode)
     monkeypatch.setattr(
-        finalize,
+        postprocess,
         "probe_media",
         lambda _p: MediaProbe(
             video_codec="av1",
@@ -125,18 +129,19 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
     _write_media(final)
 
     finalize.complete_download(
-        job_id,
-        final,
-        {"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        "720p",
-        None,
-        None,
-        True,
-        None,
-        None,
-        destination=DownloadDestination.device.value,
-        video_codec="h264",
+        postprocess.PostprocessTask(
+            spec=JobSpec(
+                job_id=job_id,
+                url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                quality_preset="720p",
+                normalize_volume=True,
+                destination=DownloadDestination.device.value,
+                video_codec="h264",
+            ),
+            final_path=final,
+            info={"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
+            cancel_event=threading.Event(),
+        )
     )
     assert seen == [
         ("ensure", "encoding_audio"),

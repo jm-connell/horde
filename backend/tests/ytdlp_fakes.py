@@ -18,7 +18,7 @@ from typing import Any
 import yt_dlp
 from yt_dlp.utils import prepend_extension
 
-from app.services.downloads import artifacts, finalize, runner
+from app.services.downloads import artifacts, finalize, postprocess, runner
 from app.services.downloads.ffmpeg_queue import ffmpeg_queue
 from app.services.downloads.queue import download_queue
 
@@ -170,11 +170,12 @@ class FakeYtdlp:
 def stub_media_probes(monkeypatch, *, playable: bool = True) -> None:
     """The fake media is zero bytes: stub everything that would run ffprobe/ffmpeg."""
     monkeypatch.setattr(artifacts, "validate_playable", lambda _p: playable)
-    monkeypatch.setattr(finalize, "probe_duration", lambda _p: 12.0)
-    monkeypatch.setattr(finalize, "probe_dimensions", lambda _p: (1280, 720))
+    for module in (finalize, postprocess):
+        monkeypatch.setattr(module, "probe_duration", lambda _p: 12.0)
+        monkeypatch.setattr(module, "probe_dimensions", lambda _p: (1280, 720))
     monkeypatch.setattr(finalize, "probe_stream_info", lambda _p: None)
-    monkeypatch.setattr(finalize, "probe_media", lambda _p: None)
-    monkeypatch.setattr(finalize, "ensure_safari_mp4", lambda p, **_k: p)
+    monkeypatch.setattr(postprocess, "probe_media", lambda _p: None)
+    monkeypatch.setattr(postprocess, "ensure_safari_mp4", lambda p, **_k: p)
     monkeypatch.setattr(finalize, "finalize_in_background", lambda *a, **k: None)
     monkeypatch.setattr("app.services.ai.enqueue_for_video", lambda *a, **k: None)
     monkeypatch.setattr(

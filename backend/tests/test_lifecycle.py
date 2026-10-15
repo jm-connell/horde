@@ -18,6 +18,7 @@ from app.services.auth import accounts
 from app.services.downloads import errors, postprocess
 from app.services.downloads.ffmpeg_queue import ffmpeg_queue
 from app.services.downloads.queue import download_queue
+from app.services.downloads.spec import JobSpec
 from app.services.workers import BackgroundWorker, WorkerRegistry
 
 EXPECTED_WORKERS = {
@@ -333,19 +334,12 @@ def test_shutdown_requeues_pending_postprocess_and_keeps_its_staging(init_db):
     queue.claim_ffmpeg(job_id)
     ffmpeg._pending.append(
         postprocess.PostprocessTask(
-            job_id=job_id,
+            spec=JobSpec(
+                job_id=job_id, url="https://example.com/v", quality_preset="best"
+            ),
             final_path=finished,
             info={},
-            url="https://example.com/v",
-            quality_preset="best",
-            title_override=None,
-            channel_override=None,
-            normalize_volume=False,
-            replace_video_id=None,
-            notes_pending=None,
             cancel_event=threading.Event(),
-            destination="library",
-            video_codec="av1",
             staging_dir=staging,
         )
     )
