@@ -20,7 +20,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadDestination, DownloadJob, JobStatus, Video
 from app.services import downloader, ytdlp_common
-from app.services.downloads import progress
+from app.services.downloads import errors, progress
 from app.services.paths import STAGING_DIR_NAME
 from app.services.ytdlp_common import (
     ERROR_KIND_CANCELLED,
@@ -175,7 +175,7 @@ def test_cancel_during_download_ends_cancelled_and_clean(init_db, fake):
     def wait_for_cancel(_path, _info):
         in_merge.set()
         downloader.download_queue.cancel_event(job_id).wait(10)
-        raise downloader.DownloadCancelled()
+        raise errors.DownloadCancelled()
 
     fake.before_merge = wait_for_cancel
     downloader.download_queue.enqueue(job_id)
@@ -197,7 +197,7 @@ def test_pause_requeues_the_job_and_resume_finishes_it(init_db, fake):
     def wait_for_pause(_path, _info):
         in_merge.set()
         downloader.download_queue.cancel_event(job_id).wait(10)
-        raise downloader.DownloadCancelled()
+        raise errors.DownloadCancelled()
 
     fake.before_merge = wait_for_pause
     downloader.download_queue.enqueue(job_id)

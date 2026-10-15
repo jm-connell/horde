@@ -2,13 +2,13 @@
 
 from pathlib import Path
 
-from app.services import downloader
-from app.services.downloads import artifacts
+from app.services import downloader, ytdlp_formats
+from app.services.downloads import artifacts, errors
 from app.services.paths import video_stem
 
 
 def test_format_chain_height_capped_no_unbounded_best():
-    chain = downloader._format_chain("1080p")
+    chain = ytdlp_formats.format_chain("1080p")
     assert chain
     assert all("bestvideo" in c or "best[" in c or "height" in c for c in chain)
     # Must not fall back to unrestricted best/best for capped presets.
@@ -18,13 +18,13 @@ def test_format_chain_height_capped_no_unbounded_best():
 
 
 def test_format_chain_best_and_audio():
-    best = downloader._format_chain("best")
+    best = ytdlp_formats.format_chain("best")
     assert any("vcodec^=av01" in c for c in best)
     assert any("best[ext=mp4]" in c for c in best)
-    audio = downloader._format_chain("audio")
+    audio = ytdlp_formats.format_chain("audio")
     assert any("bestaudio/best" in c for c in audio)
     assert "mp4a" in audio[0] or "aac" in audio[0]
-    capped = downloader._format_chain("audio-128")
+    capped = ytdlp_formats.format_chain("audio-128")
     assert "abr<=128" in capped[0]
     assert "mp4a" in capped[0] or "aac" in capped[0]
     assert any("bestaudio/best" in c for c in capped)
@@ -170,13 +170,11 @@ def test_video_stem():
 
 
 def test_is_recoverable_download_error():
-    assert downloader.is_recoverable_download_error(
-        Exception("Unable to rename file: ...")
-    )
-    assert downloader.is_recoverable_download_error(
+    assert errors.is_recoverable_download_error(Exception("Unable to rename file: ..."))
+    assert errors.is_recoverable_download_error(
         Exception("Postprocessing: Error merging formats")
     )
-    assert not downloader.is_recoverable_download_error(Exception("HTTP Error 403"))
+    assert not errors.is_recoverable_download_error(Exception("HTTP Error 403"))
 
 
 def test_has_audio_and_available_presets():

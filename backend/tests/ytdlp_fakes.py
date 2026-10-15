@@ -5,7 +5,7 @@ the downloader. It renders file names with the *real* yt-dlp (``prepare_filename
 with the options the downloader passes), so output-template, byte-length and
 sanitisation behaviour is exercised for real, then writes per-format
 ``.fNNN`` fragments / ``.part`` files and the merged media on disk. Tests drive
-whole jobs through ``DownloadQueue``/``_run_download`` and assert on files + DB.
+whole jobs through ``DownloadQueue``/``run_download`` and assert on files + DB.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any
 import yt_dlp
 from yt_dlp.utils import prepend_extension
 
-from app.services.downloads import artifacts, finalize
+from app.services.downloads import artifacts, finalize, runner
 
 RealYoutubeDL = yt_dlp.YoutubeDL
 
@@ -162,7 +162,7 @@ class FakeYtdlp:
                 return {**info, "ext": "mp4", "filepath": str(merged)}
 
         monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYDL)
-        monkeypatch.setattr(downloader, "extract_info_gated", fake.fetch)
+        monkeypatch.setattr(runner, "extract_info_gated", fake.fetch)
 
 
 def stub_media_probes(monkeypatch, downloader, *, playable: bool = True) -> None:
@@ -192,7 +192,7 @@ def run_job_inline(
     original = downloader.ffmpeg_queue.enqueue
     downloader.ffmpeg_queue.enqueue = enqueue  # type: ignore[method-assign]
     try:
-        downloader._run_download(job_id, cancel_event=cancel_event or threading.Event())
+        runner.run_download(job_id, cancel_event=cancel_event or threading.Event())
     finally:
         downloader.ffmpeg_queue.enqueue = original  # type: ignore[method-assign]
 

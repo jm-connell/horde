@@ -13,7 +13,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadJob, JobStatus, Video
 from app.services import downloader, scanner
-from app.services.downloads import dbwrite, finalize, staging
+from app.services.downloads import dbwrite, errors, finalize, staging
 from app.services.paths import STAGING_DIR_NAME
 
 YT = "aaaaaaaaaaa"
@@ -318,7 +318,7 @@ def test_shutdown_keeps_staged_fragments_and_the_next_run_reuses_the_dir(init_db
     def stall_until_shutdown(_path, _info):
         in_merge.set()
         downloader.download_queue.cancel_event(job_id).wait(10)
-        raise downloader.DownloadCancelled()
+        raise errors.DownloadCancelled()
 
     fake.before_merge = stall_until_shutdown
     downloader.download_queue.enqueue(job_id)

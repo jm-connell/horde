@@ -11,7 +11,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, stub_media_probes
 
 from app.models import DownloadJob, JobStatus
 from app.services import downloader, job_metadata
-from app.services.downloads import dbwrite, progress
+from app.services.downloads import dbwrite, progress, runner
 from app.services.downloads import queue as dq
 
 URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
@@ -179,7 +179,7 @@ def test_dispatch_runs_jobs_fifo_within_concurrency_end_to_end(init_db, monkeypa
     started: list[int] = []
     release = threading.Event()
     all_done = threading.Event()
-    real_run = downloader._run_download
+    real_run = runner.run_download
     lock = threading.Lock()
     running_now = {"n": 0, "max": 0}
 

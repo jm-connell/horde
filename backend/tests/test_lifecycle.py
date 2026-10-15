@@ -15,7 +15,7 @@ from app import database, main
 from app.models import DownloadJob, JobStatus
 from app.services import downloader, ffmpeg_progress, scanner, sprites
 from app.services.auth import accounts
-from app.services.downloads import postprocess
+from app.services.downloads import errors, postprocess
 from app.services.workers import BackgroundWorker, WorkerRegistry
 
 EXPECTED_WORKERS = {
@@ -190,7 +190,7 @@ def test_shutdown_requeues_running_downloads(init_db, monkeypatch):
     def blocking_download(job_id, cancel_event=None, queue=None):
         started.set()
         cancel_event.wait(30)
-        raise downloader.DownloadCancelled()
+        raise errors.DownloadCancelled()
 
     monkeypatch.setattr(downloader.download_queue, "runner", blocking_download)
     with Session(init_db["engine"]) as session:
