@@ -291,7 +291,7 @@ def _safe_queue_counts() -> dict[str, int]:
         )
 
     try:
-        from .downloader import download_queue
+        from .downloads.queue import download_queue
 
         qd = int(download_queue.queued_count())
         if qd:

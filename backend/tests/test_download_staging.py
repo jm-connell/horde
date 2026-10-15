@@ -12,8 +12,9 @@ from sqlmodel import Session, select
 from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadJob, JobStatus, Video
-from app.services import downloader, scanner
+from app.services import scanner
 from app.services.downloads import dbwrite, errors, finalize, staging
+from app.services.downloads.queue import download_queue
 from app.services.paths import STAGING_DIR_NAME
 
 YT = "aaaaaaaaaaa"
@@ -24,8 +25,8 @@ OLD = b"OLD" * 100
 @pytest.fixture
 def fake(init_db, monkeypatch):
     f = FakeYtdlp()
-    f.install(monkeypatch, downloader)
-    stub_media_probes(monkeypatch, downloader)
+    f.install(monkeypatch)
+    stub_media_probes(monkeypatch)
     f.add(URL, make_info(YT, "Clip", uploader="Chan"))
     return f
 
@@ -81,7 +82,7 @@ def test_new_download_lands_in_library_only_after_postprocess(init_db, fake):
         s.add(job)
         s.commit()
         job_id = job.id
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     assert seen == [[]], "yt-dlp wrote into the library while downloading"
     with Session(init_db["engine"]) as s:
@@ -97,7 +98,7 @@ def test_cancelled_redownload_leaves_library_file_untouched(init_db, fake, exist
     fake.before_merge = lambda _p, _i: cancel.set()
     job_id = _redownload_job(init_db, existing)
 
-    run_job_inline(downloader, job_id, cancel_event=cancel)
+    run_job_inline(job_id, cancel_event=cancel)
 
     assert (root / existing.file_path).read_bytes() == OLD
     assert _status(init_db, job_id) == JobStatus.cancelled
@@ -114,7 +115,7 @@ def test_failed_redownload_leaves_library_file_untouched(init_db, fake, existing
 
     fake.before_merge = boom
     job_id = _redownload_job(init_db, existing)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     assert (root / existing.file_path).read_bytes() == OLD
     assert _status(init_db, job_id) == JobStatus.error
@@ -125,10 +126,10 @@ def test_failed_redownload_leaves_library_file_untouched(init_db, fake, existing
 def test_unplayable_redownload_never_touches_library_file(
     init_db, fake, existing, monkeypatch
 ):
-    stub_media_probes(monkeypatch, downloader, playable=False)
+    stub_media_probes(monkeypatch, playable=False)
     root = init_db["downloads"]
     job_id = _redownload_job(init_db, existing)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
     assert (root / existing.file_path).read_bytes() == OLD
     assert _status(init_db, job_id) == JobStatus.error
 
@@ -139,7 +140,7 @@ def test_successful_redownload_replaces_atomically_and_updates_row(
     root = init_db["downloads"]
     fake.merged_bytes = 777
     job_id = _redownload_job(init_db, existing)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     path = root / existing.file_path
     assert path.stat().st_size == 777
@@ -162,7 +163,7 @@ def test_replace_into_new_folder_removes_old_copy_after_commit(
     )
     old = root / video.file_path
     job_id = _redownload_job(init_db, video)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     with Session(init_db["engine"]) as s:
         row = s.get(Video, video.id)
@@ -181,7 +182,7 @@ def test_commit_failure_restores_the_replaced_file(
 
     monkeypatch.setattr(finalize, "commit_library_video", failing)
     job_id = _redownload_job(init_db, existing)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     assert (root / existing.file_path).read_bytes() == OLD
     assert _library_media(root) == [root / existing.file_path]
@@ -249,7 +250,7 @@ def test_failed_rollback_keeps_the_displaced_original(
 ):
     root = _displaced_scenario(init_db, existing, monkeypatch)
     job_id = _redownload_job(init_db, existing)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     staging = root / STAGING_DIR_NAME / str(job_id)
     backups = [p for p in (staging / ".displaced").rglob("*") if p.is_file()]
@@ -317,13 +318,13 @@ def test_shutdown_keeps_staged_fragments_and_the_next_run_reuses_the_dir(init_db
 
     def stall_until_shutdown(_path, _info):
         in_merge.set()
-        downloader.download_queue.cancel_event(job_id).wait(10)
+        download_queue.cancel_event(job_id).wait(10)
         raise errors.DownloadCancelled()
 
     fake.before_merge = stall_until_shutdown
-    downloader.download_queue.enqueue(job_id)
+    download_queue.enqueue(job_id)
     assert in_merge.wait(10)
-    assert downloader.download_queue.stop(timeout=10)
+    assert download_queue.stop(timeout=10)
 
     assert _status(init_db, job_id) == JobStatus.queued
     fragments = sorted(p.name for p in staging.rglob("*.f1*"))
@@ -331,8 +332,8 @@ def test_shutdown_keeps_staged_fragments_and_the_next_run_reuses_the_dir(init_db
 
     # Next boot: the same job runs again in the same staging dir.
     fake.before_merge = None
-    downloader.download_queue.start()
-    downloader.download_queue.enqueue(job_id)
+    download_queue.start()
+    download_queue.enqueue(job_id)
     deadline = time.monotonic() + 20
     while _status(init_db, job_id) != JobStatus.completed:
         assert time.monotonic() < deadline, "resumed job never finished"

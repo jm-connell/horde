@@ -217,14 +217,14 @@ def enqueue_catalog_row(
     row: ChannelCatalogVideo,
     policy: ChannelAutodownload,
 ) -> int | None:
-    from . import downloader
+    from .downloads import jobs
 
     yt_id = row.yt_id
     if not yt_id:
         return None
     raw_url = row.url or f"https://www.youtube.com/watch?v={yt_id}"
     url = clean_url(raw_url, keep_playlist=False)
-    with downloader.job_mutate_lock:
+    with jobs.job_mutate_lock:
         queued = active_youtube_ids(session)
         if yt_id in queued:
             return None
@@ -245,7 +245,7 @@ def enqueue_catalog_row(
         session.refresh(job)
         job_id = job.id
     if job_id is not None:
-        downloader.enqueue_download(job_id)
+        jobs.enqueue_download(job_id)
     return job_id
 
 

@@ -31,7 +31,8 @@ from ..models import (
     VideoAiMeta,
     VideoEmbedding,
 )
-from . import app_settings, downloader, scanner
+from . import app_settings, scanner
+from .downloads.queue import download_queue
 from .video_delete import collect_video_files, remove_files
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ def reset_app(*, erase_media: bool) -> dict[str, Any]:
 
 def _pause_workers(*, cancel_downloads: bool) -> None:
     try:
-        downloader.download_queue.pause_all()
+        download_queue.pause_all()
     except Exception:
         logger.warning(
             "factory reset: could not pause the download queue",
@@ -110,7 +111,7 @@ def _pause_workers(*, cancel_downloads: bool) -> None:
             ).all()
             ids = [job.id for job in jobs if job.id is not None]
         for job_id in ids:
-            downloader.download_queue.cancel_job(job_id)
+            download_queue.cancel_job(job_id)
     except Exception:
         logger.warning(
             "factory reset: could not cancel active downloads",
@@ -120,7 +121,7 @@ def _pause_workers(*, cancel_downloads: bool) -> None:
 
 def _resume_workers() -> None:
     try:
-        downloader.download_queue.resume_all()
+        download_queue.resume_all()
     except Exception:
         logger.warning(
             "factory reset: could not resume the download queue",

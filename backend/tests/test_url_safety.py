@@ -12,6 +12,7 @@ import pytest
 from PIL import Image
 
 from app.services import url_safety
+from app.services.downloads.queue import download_queue
 from app.services.url_safety import (
     UnsafeUrlError,
     UrlFetchError,
@@ -429,7 +430,6 @@ def test_download_queue_refuses_unsafe_urls_that_bypassed_the_api(session, monke
     import threading
 
     from app.models import DownloadJob, JobStatus
-    from app.services import downloader
 
     job = DownloadJob(url="http://169.254.169.254/latest", status=JobStatus.queued)
     session.add(job)
@@ -439,9 +439,9 @@ def test_download_queue_refuses_unsafe_urls_that_bypassed_the_api(session, monke
     def must_not_run(*_a, **_k):
         raise AssertionError("yt-dlp was started for an unsafe URL")
 
-    monkeypatch.setattr(downloader.download_queue, "runner", must_not_run)
+    monkeypatch.setattr(download_queue, "runner", must_not_run)
 
-    downloader.download_queue._worker(job.id, threading.Event())
+    download_queue._worker(job.id, threading.Event())
 
     session.expire_all()
     refreshed = session.get(DownloadJob, job.id)

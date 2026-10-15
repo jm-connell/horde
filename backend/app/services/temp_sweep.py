@@ -20,7 +20,7 @@ from sqlmodel import Session, select
 from .. import config
 from ..database import engine
 from ..models import DownloadJob, JobStatus, Video
-from .downloader import remove_staging_dir
+from .downloads.staging import remove_staging_dir
 from .fsutil import is_within, restore_displaced, safe_unlink
 from .paths import COMPAT_SIDECAR_TOKEN, STAGING_DIR_NAME
 

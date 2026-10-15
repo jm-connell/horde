@@ -9,7 +9,7 @@ from sqlalchemy.exc import OperationalError
 from sqlmodel import Session
 
 from app.models import Video
-from app.services import downloader, mp4_compat, video_transcode
+from app.services import mp4_compat, video_transcode
 from app.services.downloads import finalize
 from app.services.paths import rename_video_file
 
@@ -162,8 +162,8 @@ def test_replace_keeps_old_files_when_row_commit_fails(init_db, add_video, monke
     from app.models import DownloadJob, JobStatus
 
     fake = FakeYtdlp()
-    fake.install(monkeypatch, downloader)
-    stub_media_probes(monkeypatch, downloader)
+    fake.install(monkeypatch)
+    stub_media_probes(monkeypatch)
     url = "https://www.youtube.com/watch?v=aaaaaaaaaaa"
     # Old copy lives in a different folder than the new one will.
     video = add_video(
@@ -194,7 +194,7 @@ def test_replace_keeps_old_files_when_row_commit_fails(init_db, add_video, monke
         raise OperationalError("COMMIT", {}, Exception("disk I/O error"))
 
     monkeypatch.setattr(finalize, "commit_library_video", failing)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
     monkeypatch.setattr(finalize, "commit_library_video", original)
 
     assert (root / video.file_path).is_file()

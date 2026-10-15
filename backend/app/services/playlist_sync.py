@@ -19,7 +19,7 @@ _sync_lock = threading.Lock()
 
 def sync_subscribed_playlist(playlist_id: int) -> None:
     """Rescan one subscribed playlist: attach existing ids, download missing ones."""
-    from . import downloader
+    from .downloads.playlist_import import run_playlist_entries
 
     with Session(engine) as session:
         playlist = session.get(Playlist, playlist_id)
@@ -35,7 +35,7 @@ def sync_subscribed_playlist(playlist_id: int) -> None:
             for e in (preview.get("entries") or [])
             if isinstance(e, dict) and e.get("url")
         ]
-        downloader.run_playlist_entries(playlist_id, entries, quality)
+        run_playlist_entries(playlist_id, entries, quality)
         with Session(engine) as session:
             playlist = session.get(Playlist, playlist_id)
             if playlist is None:

@@ -13,9 +13,11 @@ from sqlmodel import Session
 
 from app import database, main
 from app.models import DownloadJob, JobStatus
-from app.services import downloader, ffmpeg_progress, scanner, sprites
+from app.services import ffmpeg_progress, scanner, sprites
 from app.services.auth import accounts
 from app.services.downloads import errors, postprocess
+from app.services.downloads.ffmpeg_queue import ffmpeg_queue
+from app.services.downloads.queue import download_queue
 from app.services.workers import BackgroundWorker, WorkerRegistry
 
 EXPECTED_WORKERS = {
@@ -192,16 +194,16 @@ def test_shutdown_requeues_running_downloads(init_db, monkeypatch):
         cancel_event.wait(30)
         raise errors.DownloadCancelled()
 
-    monkeypatch.setattr(downloader.download_queue, "runner", blocking_download)
+    monkeypatch.setattr(download_queue, "runner", blocking_download)
     with Session(init_db["engine"]) as session:
         job = DownloadJob(url="https://example.com/v", status=JobStatus.queued)
         session.add(job)
         session.commit()
         job_id = job.id
 
-    downloader.download_queue.enqueue(job_id)
+    download_queue.enqueue(job_id)
     assert started.wait(5)
-    assert downloader.download_queue.stop(timeout=5)
+    assert download_queue.stop(timeout=5)
 
     with Session(init_db["engine"]) as session:
         row = session.get(DownloadJob, job_id)
@@ -209,9 +211,9 @@ def test_shutdown_requeues_running_downloads(init_db, monkeypatch):
         assert row.status == JobStatus.queued
         assert row.paused is False
     # And a stopped queue starts nothing new.
-    downloader.download_queue.enqueue(job_id)
+    download_queue.enqueue(job_id)
     time.sleep(0.2)
-    assert not downloader.download_queue.is_running(job_id)
+    assert not download_queue.is_running(job_id)
 
 
 def test_sprite_pool_never_starts_more_threads_than_its_limit(init_db, monkeypatch):
@@ -327,7 +329,7 @@ def test_shutdown_requeues_pending_postprocess_and_keeps_its_staging(init_db):
     finished = staging / "Clip.mp4"
     finished.write_bytes(b"x" * 100)
 
-    queue, ffmpeg = downloader.download_queue, downloader.ffmpeg_queue
+    queue, ffmpeg = download_queue, ffmpeg_queue
     queue.claim_ffmpeg(job_id)
     ffmpeg._pending.append(
         postprocess.PostprocessTask(

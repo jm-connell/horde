@@ -49,11 +49,14 @@ from .response_schemas import (
 from .schemas import ReadyResponse
 from .security import install_security
 from .services import app_settings as app_settings_svc
-from .services import downloader, ffmpeg_progress
+from .services import ffmpeg_progress
 from .services.ai.worker import recover_ai_jobs
 from .services.auth.accounts import AuthUser
 from .services.backup import create_backup_worker
 from .services.channel_catalog import recover_catalog_jobs
+from .services.downloads.ffmpeg_queue import ffmpeg_queue
+from .services.downloads.queue import download_queue
+from .services.downloads.staging import gc_orphaned_device_dirs
 from .services.health import HealthCache, build_readiness
 from .services.metrics import CONTENT_TYPE as metrics_content_type
 from .services.metrics import render_metrics
@@ -150,11 +153,11 @@ def _start_workers(app_: FastAPI, registry: WorkerRegistry) -> None:
     health = _health_cache(app_)
     if health.pot_base_url:
         registry.start(health.create_pot_worker())
-    registry.start(downloader.download_queue)
-    registry.start(downloader.ffmpeg_queue)
-    registry.start(downloader.download_queue.create_reaper())
-    downloader.download_queue.recover()
-    downloader.gc_orphaned_device_dirs()
+    registry.start(download_queue)
+    registry.start(ffmpeg_queue)
+    registry.start(download_queue.create_reaper())
+    download_queue.recover()
+    gc_orphaned_device_dirs()
     from .services.temp_sweep import run_boot_cleanup
 
     run_boot_cleanup()
@@ -369,7 +372,7 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
         )
 
         downloads_paused = bool(
-            downloader.download_queue.is_paused()
+            download_queue.is_paused()
             or settings_svc.load().get("download_queue_paused", False)
         )
         cookies_ok = cookie_configured()

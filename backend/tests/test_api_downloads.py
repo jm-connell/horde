@@ -1,5 +1,7 @@
 """HTTP regression: download queue without calling yt-dlp."""
 
+from app.services.downloads.queue import DownloadQueue
+
 
 def test_presets_and_queue_status(client):
     presets = client.get("/api/downloads/presets")
@@ -302,7 +304,7 @@ def test_create_download_keeps_best_until_metadata_fills(client):
 def test_change_quality_on_queued_job(client, monkeypatch):
     from app.services import downloader
 
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
         downloader,
         "extract_preview",
@@ -361,7 +363,7 @@ def test_change_quality_rejects_finished_and_unknown(client, init_db, monkeypatc
 
     from app.services import downloader
 
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
         downloader,
         "extract_preview",
@@ -386,7 +388,7 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
     from app.services import downloader
     from app.services.downloads import jobs, progress
 
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
         downloader,
         "extract_preview",
@@ -412,9 +414,7 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
         session.add(job)
         session.commit()
 
-    monkeypatch.setattr(
-        downloader.DownloadQueue, "is_running", lambda self, jid: jid == job_id
-    )
+    monkeypatch.setattr(DownloadQueue, "is_running", lambda self, jid: jid == job_id)
 
     def fake_wait(jid, timeout=30.0):
         with Session(init_db["engine"]) as session:

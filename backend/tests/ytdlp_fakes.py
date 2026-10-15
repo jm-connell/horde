@@ -1,8 +1,8 @@
 """A fake yt-dlp that writes the same files the real one does.
 
 ``FakeYtdlp`` stands in for ``yt_dlp.YoutubeDL`` and for the metadata fetch in
-the downloader. It renders file names with the *real* yt-dlp (``prepare_filename``
-with the options the downloader passes), so output-template, byte-length and
+the download pipeline. It renders file names with the *real* yt-dlp (``prepare_filename``
+with the options the runner passes), so output-template, byte-length and
 sanitisation behaviour is exercised for real, then writes per-format
 ``.fNNN`` fragments / ``.part`` files and the merged media on disk. Tests drive
 whole jobs through ``DownloadQueue``/``run_download`` and assert on files + DB.
@@ -19,6 +19,8 @@ import yt_dlp
 from yt_dlp.utils import prepend_extension
 
 from app.services.downloads import artifacts, finalize, runner
+from app.services.downloads.ffmpeg_queue import ffmpeg_queue
+from app.services.downloads.queue import download_queue
 
 RealYoutubeDL = yt_dlp.YoutubeDL
 
@@ -74,7 +76,7 @@ class FakeYtdlp:
             raise self.fetch_error
         return dict(self.infos[url])
 
-    def install(self, monkeypatch, downloader) -> None:
+    def install(self, monkeypatch) -> None:
         fake = self
 
         class FakeYDL:
@@ -165,7 +167,7 @@ class FakeYtdlp:
         monkeypatch.setattr(runner, "extract_info_gated", fake.fetch)
 
 
-def stub_media_probes(monkeypatch, downloader, *, playable: bool = True) -> None:
+def stub_media_probes(monkeypatch, *, playable: bool = True) -> None:
     """The fake media is zero bytes: stub everything that would run ffprobe/ffmpeg."""
     monkeypatch.setattr(artifacts, "validate_playable", lambda _p: playable)
     monkeypatch.setattr(finalize, "probe_duration", lambda _p: 12.0)
@@ -180,21 +182,19 @@ def stub_media_probes(monkeypatch, downloader, *, playable: bool = True) -> None
     )
 
 
-def run_job_inline(
-    downloader, job_id: int, cancel_event: threading.Event | None = None
-) -> None:
+def run_job_inline(job_id: int, cancel_event: threading.Event | None = None) -> None:
     """Run the download stage, then the ffmpeg/finish stage, on this thread."""
 
     def enqueue(task) -> None:
-        downloader.download_queue.claim_ffmpeg(task.job_id)
-        downloader.ffmpeg_queue._worker(task)
+        download_queue.claim_ffmpeg(task.job_id)
+        ffmpeg_queue._worker(task)
 
-    original = downloader.ffmpeg_queue.enqueue
-    downloader.ffmpeg_queue.enqueue = enqueue  # type: ignore[method-assign]
+    original = ffmpeg_queue.enqueue
+    ffmpeg_queue.enqueue = enqueue  # type: ignore[method-assign]
     try:
         runner.run_download(job_id, cancel_event=cancel_event or threading.Event())
     finally:
-        downloader.ffmpeg_queue.enqueue = original  # type: ignore[method-assign]
+        ffmpeg_queue.enqueue = original  # type: ignore[method-assign]
 
 
 class SideEffects:
@@ -209,7 +209,7 @@ class SideEffects:
         self.finalize: list[tuple[Any, ...]] = []
 
 
-def record_side_effects(monkeypatch, downloader) -> SideEffects:
+def record_side_effects(monkeypatch) -> SideEffects:
     """Replace what a download triggers elsewhere with recorders (call after stubbing probes)."""
     fx = SideEffects()
     monkeypatch.setattr(

@@ -107,7 +107,7 @@ def _file_size(path: Path) -> int:
 
 def render_metrics(app: FastAPI, engine: Engine) -> str:
     """The full exposition text."""
-    from . import downloader
+    from .downloads.queue import download_queue
 
     out = _Exposition()
 
@@ -122,7 +122,7 @@ def render_metrics(app: FastAPI, engine: Engine) -> str:
         "horde_download_queue_paused",
         "1 while the download queue is paused.",
         "gauge",
-        [({}, int(downloader.download_queue.is_paused()))],
+        [({}, int(download_queue.is_paused()))],
     )
     ai_jobs = _status_counts(engine, AiJob.status)
     out.metric(

@@ -10,9 +10,11 @@ from sqlmodel import Session
 from ytdlp_fakes import FakeYtdlp, make_info, stub_media_probes
 
 from app.models import DownloadJob, JobStatus
-from app.services import downloader, job_metadata
+from app.services import job_metadata
 from app.services.downloads import dbwrite, progress, runner
 from app.services.downloads import queue as dq
+from app.services.downloads.ffmpeg_queue import ffmpeg_queue
+from app.services.downloads.queue import DownloadQueue
 
 URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
@@ -48,8 +50,8 @@ def _run_worker(q, job_id):
 
 
 def test_worker_crash_ends_job_in_error(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     job_id = _job(init_db)
 
     def boom(*_a, **_k):
@@ -65,8 +67,8 @@ def test_worker_crash_ends_job_in_error(init_db, monkeypatch):
 def test_initial_status_write_failure_ends_in_error_not_downloading(
     init_db, monkeypatch
 ):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     job_id = _job(init_db)
     real = dbwrite.update_job
 
@@ -113,8 +115,8 @@ def test_non_lock_database_errors_are_not_retried(init_db, monkeypatch):
 
 
 def test_reaper_requeues_orphaned_downloading_jobs_after_grace(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     orphan = _job(init_db, status=JobStatus.downloading, progress=40.0)
     running = _job(init_db, status=JobStatus.downloading)
     encoding = _job(init_db, status=JobStatus.downloading)
@@ -132,8 +134,8 @@ def test_reaper_requeues_orphaned_downloading_jobs_after_grace(init_db, monkeypa
 
 
 def test_reaper_forgets_jobs_that_became_owned(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     job_id = _job(init_db, status=JobStatus.downloading)
     q.reap_stuck_jobs(now=0.0, grace=100)
     q._ffmpeg_running.add(job_id)  # handed to ffmpeg meanwhile
@@ -145,7 +147,7 @@ def test_reaper_forgets_jobs_that_became_owned(init_db, monkeypatch):
 
 
 def test_counts_use_sql_count(init_db):
-    q = downloader.DownloadQueue()
+    q = DownloadQueue()
     _job(init_db)
     _job(init_db, status=JobStatus.downloading)
     _job(init_db, status=JobStatus.completed)
@@ -154,7 +156,7 @@ def test_counts_use_sql_count(init_db):
 
 
 def test_next_job_id_orders_by_age_and_skips_running_and_held(init_db):
-    q = downloader.DownloadQueue()
+    q = DownloadQueue()
     a, b, c = _job(init_db), _job(init_db), _job(init_db)
     assert q._next_job_id() == a
     q._running.add(a)
@@ -168,8 +170,8 @@ def test_dispatch_runs_jobs_fifo_within_concurrency_end_to_end(init_db, monkeypa
     """Jobs run through the real dispatcher with a fake extractor."""
     monkeypatch.setattr(dq, "MAX_DOWNLOAD_CONCURRENCY", 1)
     fake = FakeYtdlp()
-    fake.install(monkeypatch, downloader)
-    stub_media_probes(monkeypatch, downloader)
+    fake.install(monkeypatch)
+    stub_media_probes(monkeypatch)
     ids = []
     for n in range(3):
         url = f"https://www.youtube.com/watch?v=aaaaaaaaa{n:02d}"
@@ -197,13 +199,13 @@ def test_dispatch_runs_jobs_fifo_within_concurrency_end_to_end(init_db, monkeypa
                 if len(started) == 3 and running_now["n"] == 0:
                     all_done.set()
 
-    q = downloader.DownloadQueue(runner=tracked)
+    q = DownloadQueue(runner=tracked)
     monkeypatch.setattr(
-        downloader.ffmpeg_queue,
+        ffmpeg_queue,
         "enqueue",
         lambda task: (
             q.claim_ffmpeg(task.job_id),
-            downloader.ffmpeg_queue._worker(task),
+            ffmpeg_queue._worker(task),
         ),
     )
     q._dispatch()
@@ -218,7 +220,7 @@ def test_dispatch_runs_jobs_fifo_within_concurrency_end_to_end(init_db, monkeypa
 
 
 def test_paused_queue_dispatches_nothing(init_db, monkeypatch):
-    q = downloader.DownloadQueue()
+    q = DownloadQueue()
     q._global_paused = True
     started = []
     monkeypatch.setattr(q, "_worker", lambda *a: started.append(a))

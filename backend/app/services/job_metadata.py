@@ -67,7 +67,7 @@ def _loop(worker: BackgroundWorker) -> None:
 
 
 def _fill_job(job_id: int) -> None:
-    from . import downloader
+    from .downloads.progress import progress_store
 
     with Session(engine) as session:
         job = session.get(DownloadJob, job_id)
@@ -132,7 +132,7 @@ def _fill_job(job_id: int) -> None:
         snap_thumb = job.thumbnail_url
         snap_preset = job.quality_preset
 
-    downloader.progress_store.merge(
+    progress_store.merge(
         job_id,
         {
             "title": snap_title,
@@ -145,13 +145,14 @@ def _fill_job(job_id: int) -> None:
 
 
 def _drop_short(job_id: int, url: str) -> None:
-    from . import downloader
+    from .downloads.progress import progress_store
+    from .downloads.queue import download_queue
 
-    downloader.download_queue.cancel_job(job_id)
+    download_queue.cancel_job(job_id)
     with Session(engine) as session:
         job = session.get(DownloadJob, job_id)
         if job is None:
-            downloader.progress_store[job_id] = {
+            progress_store[job_id] = {
                 "status": "skipped",
                 "reason": "shorts",
             }
@@ -159,7 +160,7 @@ def _drop_short(job_id: int, url: str) -> None:
         if job.status in (JobStatus.queued, JobStatus.cancelled):
             session.delete(job)
             session.commit()
-    downloader.progress_store[job_id] = {
+    progress_store[job_id] = {
         "status": "skipped",
         "reason": "shorts",
         "url": url,

@@ -274,7 +274,7 @@ def test_enqueue_catalog_row_creates_job(session, monkeypatch):
     policy = _policy(session, previous_mode="none")
     enqueued: list[int] = []
     monkeypatch.setattr(
-        "app.services.downloader.enqueue_download",
+        "app.services.downloads.jobs.enqueue_download",
         lambda job_id: enqueued.append(job_id),
     )
     job_id = ad.enqueue_catalog_row(session, row, policy)

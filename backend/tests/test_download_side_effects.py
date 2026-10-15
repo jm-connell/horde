@@ -30,8 +30,8 @@ CHANNEL_URL = "https://www.youtube.com/@chan"
 @pytest.fixture
 def fake(init_db, monkeypatch):
     f = FakeYtdlp()
-    f.install(monkeypatch, downloader)
-    stub_media_probes(monkeypatch, downloader)
+    f.install(monkeypatch)
+    stub_media_probes(monkeypatch)
     f.add(
         URL,
         make_info(
@@ -53,7 +53,7 @@ def _only_video(init_db) -> Video:
 def test_a_finished_download_queues_indexing_catalog_and_finalize(
     init_db, fake, monkeypatch
 ):
-    fx = record_side_effects(monkeypatch, downloader)
+    fx = record_side_effects(monkeypatch)
     monkeypatch.setattr(
         finalize,
         "finalize_in_background",
@@ -64,7 +64,7 @@ def test_a_finished_download_queues_indexing_catalog_and_finalize(
         s.add(job)
         s.commit()
         job_id = job.id
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     video = _only_video(init_db)
     assert fx.ai == [(video.id, {"include_tags": True, "force": False})]
@@ -79,7 +79,7 @@ def test_a_finished_download_queues_indexing_catalog_and_finalize(
 def test_background_finalize_fetches_subtitles_and_thumbnail_then_queues_work(
     init_db, add_video, monkeypatch
 ):
-    fx = record_side_effects(monkeypatch, downloader)
+    fx = record_side_effects(monkeypatch)
     video = add_video(write_file=True)
     media = init_db["downloads"] / video.file_path
 

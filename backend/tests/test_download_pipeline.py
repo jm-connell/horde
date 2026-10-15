@@ -19,8 +19,9 @@ from sqlmodel import Session, select
 from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadDestination, DownloadJob, JobStatus, Video
-from app.services import downloader, ytdlp_common
+from app.services import ytdlp_common
 from app.services.downloads import errors, progress
+from app.services.downloads.queue import download_queue
 from app.services.paths import STAGING_DIR_NAME
 from app.services.ytdlp_common import (
     ERROR_KIND_CANCELLED,
@@ -35,8 +36,8 @@ URL = f"https://www.youtube.com/watch?v={YT}"
 @pytest.fixture
 def fake(init_db, monkeypatch):
     f = FakeYtdlp()
-    f.install(monkeypatch, downloader)
-    stub_media_probes(monkeypatch, downloader)
+    f.install(monkeypatch)
+    stub_media_probes(monkeypatch)
     f.add(URL, make_info(YT, "Clip", uploader="Chan"))
     return f
 
@@ -70,7 +71,7 @@ def _wait(condition: Callable[[], bool], what: str, timeout: float = 20.0) -> No
 
 def _wait_idle(job_id: int) -> None:
     """The download thread and any ffmpeg stage of the job have ended."""
-    _wait(lambda: not downloader.download_queue.is_running(job_id), "job to stop")
+    _wait(lambda: not download_queue.is_running(job_id), "job to stop")
 
 
 def _staging(init_db, job_id: int) -> Path:
@@ -79,7 +80,7 @@ def _staging(init_db, job_id: int) -> Path:
 
 def test_queue_runs_a_new_download_to_a_library_video(init_db, fake):
     job_id = _add_job(init_db)
-    downloader.download_queue.enqueue(job_id)
+    download_queue.enqueue(job_id)
     _wait(
         lambda: _job(init_db, job_id).status == JobStatus.completed,
         "download to complete",
@@ -112,7 +113,7 @@ def test_cookie_gate_retries_once_with_cookies(init_db, fake, monkeypatch, tmp_p
 
     fake.before_merge = gate_first_attempt
     job_id = _add_job(init_db)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     assert _job(init_db, job_id).status == JobStatus.completed
     first, second = (d["opts"] for d in fake.downloads)
@@ -133,7 +134,7 @@ def test_failed_format_falls_back_to_the_next_selector(init_db, fake):
 
     fake.before_merge = first_selector_unavailable
     job_id = _add_job(init_db)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     chain = format_chain("best", "av1")
     assert [d["opts"]["format"] for d in fake.downloads] == chain[:2]
@@ -147,7 +148,7 @@ def test_every_selector_failing_ends_the_job_in_error(init_db, fake):
 
     fake.before_merge = always
     job_id = _add_job(init_db)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     job = _job(init_db, job_id)
     assert job.status == JobStatus.error
@@ -161,7 +162,7 @@ def test_every_selector_failing_ends_the_job_in_error(init_db, fake):
 def test_postprocessor_error_after_the_merge_still_completes(init_db, fake):
     fake.fail_after_merge = RuntimeError("Postprocessing: Unable to rename file")
     job_id = _add_job(init_db)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     assert _job(init_db, job_id).status == JobStatus.completed
     (video,) = _videos(init_db)
@@ -174,13 +175,13 @@ def test_cancel_during_download_ends_cancelled_and_clean(init_db, fake):
 
     def wait_for_cancel(_path, _info):
         in_merge.set()
-        downloader.download_queue.cancel_event(job_id).wait(10)
+        download_queue.cancel_event(job_id).wait(10)
         raise errors.DownloadCancelled()
 
     fake.before_merge = wait_for_cancel
-    downloader.download_queue.enqueue(job_id)
+    download_queue.enqueue(job_id)
     assert in_merge.wait(10)
-    assert downloader.download_queue.cancel_job(job_id) is True
+    assert download_queue.cancel_job(job_id) is True
     _wait_idle(job_id)
 
     job = _job(init_db, job_id)
@@ -196,14 +197,14 @@ def test_pause_requeues_the_job_and_resume_finishes_it(init_db, fake):
 
     def wait_for_pause(_path, _info):
         in_merge.set()
-        downloader.download_queue.cancel_event(job_id).wait(10)
+        download_queue.cancel_event(job_id).wait(10)
         raise errors.DownloadCancelled()
 
     fake.before_merge = wait_for_pause
-    downloader.download_queue.enqueue(job_id)
+    download_queue.enqueue(job_id)
     assert in_merge.wait(10)
     try:
-        downloader.download_queue.pause_all()
+        download_queue.pause_all()
         _wait_idle(job_id)
 
         job = _job(init_db, job_id)
@@ -214,7 +215,7 @@ def test_pause_requeues_the_job_and_resume_finishes_it(init_db, fake):
         assert progress.progress_store[job_id]["status"] == "queued"
     finally:
         fake.before_merge = None
-        downloader.download_queue.resume_all()
+        download_queue.resume_all()
     _wait(
         lambda: _job(init_db, job_id).status == JobStatus.completed,
         "resumed download to complete",
@@ -226,7 +227,7 @@ def test_pause_requeues_the_job_and_resume_finishes_it(init_db, fake):
 
 def test_device_download_stays_out_of_the_library(init_db, fake):
     job_id = _add_job(init_db, destination=DownloadDestination.device.value)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     job = _job(init_db, job_id)
     assert job.status == JobStatus.completed
@@ -241,9 +242,9 @@ def test_device_download_stays_out_of_the_library(init_db, fake):
 def test_unplayable_download_ends_in_error_and_leaves_no_files(
     init_db, fake, monkeypatch
 ):
-    stub_media_probes(monkeypatch, downloader, playable=False)
+    stub_media_probes(monkeypatch, playable=False)
     job_id = _add_job(init_db)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     assert _job(init_db, job_id).status == JobStatus.error
     assert _videos(init_db) == []
@@ -266,7 +267,7 @@ def test_members_only_video_is_reported_not_retried(init_db, fake, monkeypatch):
         "ERROR: [youtube] x: Join this channel to get access to members-only content"
     )
     job_id = _add_job(init_db)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     job = _job(init_db, job_id)
     assert (job.status, job.error_kind) == (JobStatus.error, ERROR_KIND_MEMBERS)
@@ -279,7 +280,7 @@ def test_shorts_are_skipped_and_their_job_row_removed(init_db, fake):
     short_url = "https://www.youtube.com/shorts/shortvid001"
     fake.add(short_url, make_info("shortvid001", "Tiny", duration=20))
     job_id = _add_job(init_db, url=short_url)
-    run_job_inline(downloader, job_id)
+    run_job_inline(job_id)
 
     assert _job(init_db, job_id) is None
     assert progress.progress_store[job_id] == {

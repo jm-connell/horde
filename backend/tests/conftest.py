@@ -82,13 +82,14 @@ def _join_background_workers():
     the test's ``monkeypatch`` still points the modules at its engine and tmp
     dirs). The pool reopens for the next test.
     """
-    from app.services import downloader, ffmpeg_progress
+    from app.services import ffmpeg_progress
     from app.services.channel_catalog import runtime as catalog_runtime
+    from app.services.downloads.queue import download_queue
     from app.services.sprites import sprite_pool
 
     # Lifespan tests shut these process-wide objects down; reopen them for the next test.
     sprite_pool.start()
-    downloader.download_queue.start()
+    download_queue.start()
     ffmpeg_progress.children.reopen()
     catalog_runtime._stop.clear()
     yield
@@ -267,11 +268,11 @@ def app(init_db, monkeypatch):
     from app.database import get_session
     from app.main import include_api
     from app.security import install_security
-    from app.services import downloader
     from app.services.auth.runtime import AuthConfig
+    from app.services.downloads.queue import DownloadQueue, download_queue
 
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    downloader.download_queue._global_paused = False
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    download_queue._global_paused = False
     monkeypatch.setattr(
         "app.services.ai.worker.enqueue_for_video",
         lambda *a, **k: None,

@@ -40,7 +40,8 @@ def prepare(mode: str) -> None:
     from . import models  # noqa: F401 - register tables
     from .config import DATA_DIR, DOWNLOADS_DIR
     from .database import engine, init_db
-    from .services import downloader
+    from .services.downloads.progress import progress_store
+    from .services.downloads.queue import download_queue
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     _empty_dir(DOWNLOADS_DIR)
@@ -54,7 +55,7 @@ def prepare(mode: str) -> None:
     _clear_tables(engine, keep_accounts=app_mode)
 
     _write_settings(DATA_DIR, setup_completed=app_mode)
-    _reset_queue(downloader)
+    _reset_queue(download_queue, progress_store)
 
     if not app_mode:
         return
@@ -156,8 +157,7 @@ def _write_settings(data_dir: Path, *, setup_completed: bool) -> None:
     (data_dir / "app_settings.json").write_text(json.dumps(payload, indent=2))
 
 
-def _reset_queue(downloader) -> None:
-    queue = downloader.download_queue
+def _reset_queue(queue, progress_store) -> None:
     with queue._lock:
         queue._global_paused = False
         queue._running.clear()
@@ -166,7 +166,7 @@ def _reset_queue(downloader) -> None:
         for event in queue._cancel_events.values():
             event.set()
         queue._cancel_events.clear()
-    downloader.progress_store.clear()
+    progress_store.clear()
 
 
 def _seed_library(downloads: Path) -> None:

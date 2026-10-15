@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlmodel import Session, select
 
 from app.models import DownloadJob, JobStatus
-from app.services import downloader
+from app.services.downloads.queue import DownloadQueue
 from app.services.ytdlp_common import ERROR_KIND_CANCELLED
 
 
@@ -22,8 +22,8 @@ def _add_job(session: Session, **fields) -> DownloadJob:
 
 
 def test_cancel_queued_job(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     with Session(init_db["engine"]) as session:
         job = _add_job(session)
         job_id = job.id
@@ -35,8 +35,8 @@ def test_cancel_queued_job(init_db, monkeypatch):
 
 
 def test_cancel_completed_returns_false(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     with Session(init_db["engine"]) as session:
         job = _add_job(session, status=JobStatus.completed)
         job_id = job.id
@@ -44,8 +44,8 @@ def test_cancel_completed_returns_false(init_db, monkeypatch):
 
 
 def test_pause_and_resume_all(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     with Session(init_db["engine"]) as session:
         queued = _add_job(session)
         downloading = _add_job(session, status=JobStatus.downloading)
@@ -70,8 +70,8 @@ def test_pause_and_resume_all(init_db, monkeypatch):
 
 
 def test_pause_does_not_requeue_ffmpeg_jobs(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     with Session(init_db["engine"]) as session:
         encoding = _add_job(session, status=JobStatus.downloading)
         encoding_id = encoding.id
@@ -85,8 +85,8 @@ def test_pause_does_not_requeue_ffmpeg_jobs(init_db, monkeypatch):
 
 
 def test_recover_stuck_downloading(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     with Session(init_db["engine"]) as session:
         job = _add_job(session, status=JobStatus.downloading, progress=42.0)
         job_id = job.id
@@ -99,8 +99,8 @@ def test_recover_stuck_downloading(init_db, monkeypatch):
 
 
 def test_next_job_id_skips_paused_fifo(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     now = datetime.now(UTC)
     with Session(init_db["engine"]) as session:
         older = _add_job(session, paused=True)
@@ -116,8 +116,8 @@ def test_next_job_id_skips_paused_fifo(init_db, monkeypatch):
 
 
 def test_next_job_id_skips_held(init_db, monkeypatch):
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
-    q = downloader.DownloadQueue()
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    q = DownloadQueue()
     with Session(init_db["engine"]) as session:
         held = _add_job(session)
         ready = _add_job(session)
