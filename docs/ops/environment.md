@@ -51,6 +51,28 @@ Cookie file wins over browser cookies when the file exists. Details: [YouTube ac
 |----------|---------|---------|
 | `HORDE_GITHUB_REPO` | `jm-connell/horde` | GitHub `owner/repo` for update checks. |
 | `HORDE_GIT_SHA` | `unknown` (baked at image build) | Deployed commit SHA; falls back to local `git rev-parse HEAD` in development. |
+| `HORDE_VERSION` | `dev` (baked at image build) | Release version (for example `1.2.3`) for images built from a release tag. Used by the update check. |
+
+The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `ffmpeg -version`), printed in the container log at start: `docker logs horde | grep build:`.
+
+## Container runtime
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `HORDE_ALLOW_ROOT` | `0` | The entrypoint refuses `PUID=0` / `PGID=0` unless this is `1`. |
+| `YTDLP_AUTO_UPDATE` | `0` | `1` = on start, install the latest yt-dlp into `DATA_DIR/pylib` and prefer it over the baked version (details below). |
+| `HORDE_MEM_LIMIT` | *(unlimited)* | Compose-only. Memory limit for the `horde` container, for example `4g`. |
+| `HORDE_PIDS_LIMIT` | `1024` | Compose-only. Maximum processes/threads. |
+| `FFMPEG_FLAVOR` | `jellyfin` | Build-time. `jellyfin` or `debian`; the build fails if the flavor is unavailable. |
+
+### Runtime yt-dlp updater
+
+YouTube changes its player regularly and yt-dlp ships fixes within days, faster than Horde cuts releases. With `YTDLP_AUTO_UPDATE=1` the entrypoint runs `pip install --upgrade --target $DATA_DIR/pylib yt-dlp` as the unprivileged runtime user on every start (120 s timeout) and puts that folder first on `PYTHONPATH`, so the newer yt-dlp wins.
+
+- **Failure is never fatal.** Offline or PyPI down: a warning is logged and the yt-dlp baked into the image is used. A leftover copy older than the baked one is discarded.
+- **Trade-off.** You run a yt-dlp that was not tested with this Horde release, and the container needs outbound access to PyPI at start. That is why it is off by default.
+- Remove the folder (or set the variable to `0` and delete `DATA_DIR/pylib`) to go back to the baked version.
+- `GET /api/health` reports the yt-dlp version actually in use.
 
 ## Docker Compose host paths
 
