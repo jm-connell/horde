@@ -5,10 +5,10 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, nullsfirst, nullslast
+from sqlalchemy import and_, func, nullsfirst, nullslast
 from sqlmodel import Session, select
 
-from ..models import Video
+from ..models import UserVideoState, Video
 from .search_text import keyword_match_clause
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,8 @@ SORT_COLUMNS = {
     "published_at": Video.published_at,
     "file_size": Video.file_size,
     "view_count": Video.view_count,
-    "last_watched_at": Video.last_watched_at,
+    # Watch state is per user; query_videos joins the caller's rows.
+    "last_watched_at": UserVideoState.last_watched_at,
 }
 
 
@@ -64,23 +65,12 @@ def dump_subtitles(tracks: list[dict]) -> str:
 
 
 def expire_stale_progress(session: Session) -> None:
-    """Reset watch position on videos not watched within the configured expiry period."""
+    """Reset every user's watch position on videos not watched within the expiry period."""
+    from . import user_state
     from .app_settings import load as load_app_settings
 
     expiry_days = load_app_settings().get("progress_expiry_days", PROGRESS_EXPIRY_DAYS)
-    cutoff = datetime.now(UTC) - timedelta(days=expiry_days)
-    rows = session.exec(
-        select(Video).where(
-            Video.last_watched_at.is_not(None),
-            Video.last_watched_at < cutoff,
-            Video.last_position_sec > 0,
-        )
-    ).all()
-    for video in rows:
-        video.last_position_sec = 0.0
-        session.add(video)
-    if rows:
-        session.commit()
+    user_state.expire_stale(session, datetime.now(UTC) - timedelta(days=expiry_days))
 
 
 def _apply_sort(statement, sort: str, order: str):
@@ -107,8 +97,25 @@ def query_videos(
     continue_watching: bool = False,
     watched_only: bool = False,
     seed: int | None = None,
+    user_id: int | None = None,
 ) -> list[Video]:
+    """Library rows, newest first by default.
+
+    Anything that reads watch state (``continue_watching``, ``watched_only``,
+    ``sort="last_watched_at"``) needs ``user_id``: history belongs to one user,
+    so their rows are outer-joined onto the shared library.
+    """
     statement = select(Video)
+    if continue_watching or watched_only or sort == "last_watched_at":
+        if user_id is None:
+            raise ValueError("watch state needs a user_id")
+        statement = statement.outerjoin(
+            UserVideoState,
+            and_(
+                UserVideoState.video_id == Video.id,
+                UserVideoState.user_id == user_id,
+            ),
+        )
 
     if needs_review is not None:
         statement = statement.where(Video.needs_review == needs_review)
@@ -119,16 +126,16 @@ def query_videos(
         cw_days = settings.get("continue_watching_days", CONTINUE_WATCHING_DAYS)
         cw_cutoff = datetime.now(UTC) - timedelta(days=cw_days)
         # Started but not effectively finished (within the last 10% of runtime).
-        statement = statement.where(Video.last_position_sec >= 30).where(
+        statement = statement.where(UserVideoState.position_sec >= 30).where(
             (Video.duration_sec.is_(None))
-            | (Video.last_position_sec < Video.duration_sec * 0.9)
+            | (UserVideoState.position_sec < Video.duration_sec * 0.9)
         )
-        statement = statement.where(Video.last_watched_at.is_not(None))
-        statement = statement.where(Video.last_watched_at >= cw_cutoff)
-        statement = statement.order_by(Video.last_watched_at.desc()).limit(12)
+        statement = statement.where(UserVideoState.last_watched_at.is_not(None))
+        statement = statement.where(UserVideoState.last_watched_at >= cw_cutoff)
+        statement = statement.order_by(UserVideoState.last_watched_at.desc()).limit(12)
         return list(session.exec(statement).all())
     if watched_only:
-        statement = statement.where(Video.last_watched_at.is_not(None))
+        statement = statement.where(UserVideoState.last_watched_at.is_not(None))
     if channel:
         statement = statement.where(Video.channel == channel)
     if q:

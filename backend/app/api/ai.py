@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
+from ..auth import current_user
 from ..database import get_session
 from ..services.ai import embeddings, recommend, worker
 from ..services.ai.provider import (
@@ -20,7 +21,8 @@ from ..services.ai.provider import (
     test_connection,
     test_openrouter_connection,
 )
-from .videos import _to_read
+from ..services.auth.accounts import AuthUser
+from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
 
@@ -429,6 +431,7 @@ def ai_recommendations(
     limit: int = Query(default=24, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     status = build_status()
     if not status.ready:
@@ -445,7 +448,7 @@ def ai_recommendations(
                     "title": "",
                     "kind": "category",
                     "seed_video_id": None,
-                    "videos": [_to_read(v, session) for v in result.videos],
+                    "videos": _to_read_many(result.videos, session, user_id=user.id),
                 }
             )
         return {
@@ -454,7 +457,9 @@ def ai_recommendations(
             "has_more": result.has_more,
         }
 
-    page = recommend.homepage_recommendations_page(session, limit=limit, offset=offset)
+    page = recommend.homepage_recommendations_page(
+        session, user_id=user.id, limit=limit, offset=offset
+    )
     return {
         "categories": recommend.list_categories(session),
         "sections": [
@@ -462,7 +467,7 @@ def ai_recommendations(
                 "title": "",
                 "kind": "for_you",
                 "seed_video_id": None,
-                "videos": [_to_read(v, session) for v in page.videos],
+                "videos": _to_read_many(page.videos, session, user_id=user.id),
             }
         ]
         if page.videos

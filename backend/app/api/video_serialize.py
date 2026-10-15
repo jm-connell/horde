@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, SPRITES_DIR
-from ..models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc
+from ..models import (
+    AiJob,
+    AiJobKind,
+    AiJobStatus,
+    UserVideoState,
+    Video,
+    VideoAiMeta,
+    as_utc,
+)
 from ..schemas import ChapterRead, CompatState, VideoRead
 from ..services import chapters as chapters_svc
-from ..services import library
+from ..services import library, user_state
 from ..services.metadata import sprites_exist
 
 
@@ -41,14 +50,54 @@ def _media_fields(video: Video, *, full: bool) -> dict:
     return fields
 
 
+def _watch_fields(
+    video: Video,
+    session: Session | None,
+    user_id: int | None,
+    states: Mapping[int, UserVideoState] | None,
+) -> dict:
+    """The caller's own resume position and last-watched time for ``video``."""
+    state = None
+    if video.id is not None and user_id is not None:
+        if states is not None:
+            state = states.get(video.id)
+        elif session is not None:
+            state = session.get(UserVideoState, (user_id, video.id))
+    return {
+        "last_position_sec": state.position_sec if state else 0.0,
+        "last_watched_at": as_utc(state.last_watched_at) if state else None,
+    }
+
+
+def to_read_many(
+    videos: Iterable[Video], session: Session, *, user_id: int | None, **kwargs
+) -> list[VideoRead]:
+    """Serialize a list, reading the user's watch state for all of it in one query."""
+    rows = list(videos)
+    states = (
+        user_state.get_states(session, user_id, (v.id for v in rows if v.id))
+        if user_id is not None
+        else {}
+    )
+    return [to_read(v, session, user_id=user_id, states=states, **kwargs) for v in rows]
+
+
 def to_read(
     video: Video,
     session: Session | None = None,
     *,
+    user_id: int | None,
+    states: Mapping[int, UserVideoState] | None = None,
     include_processing: bool = False,
     match_reason: dict | None = None,
     compact: bool = False,
 ) -> VideoRead:
+    """Serialize ``video`` for ``user_id`` (their history; the rest is shared).
+
+    ``user_id`` has no default on purpose: forgetting it would silently show
+    nobody's history. Pass ``states`` (see ``to_read_many``) when serializing a list.
+    """
+    watch = _watch_fields(video, session, user_id, states)
     if compact:
         return VideoRead(
             id=video.id,
@@ -73,8 +122,7 @@ def to_read(
             channel_subscriber_count=video.channel_subscriber_count,
             published_at=as_utc(video.published_at),
             added_at=as_utc(video.added_at) or video.added_at,
-            last_position_sec=video.last_position_sec,
-            last_watched_at=as_utc(video.last_watched_at),
+            **watch,
             needs_review=video.needs_review,
             platform=video.platform,
             status=video.status,
@@ -179,8 +227,7 @@ def to_read(
         channel_subscriber_count=video.channel_subscriber_count,
         published_at=as_utc(video.published_at),
         added_at=as_utc(video.added_at) or video.added_at,
-        last_position_sec=video.last_position_sec,
-        last_watched_at=as_utc(video.last_watched_at),
+        **watch,
         needs_review=video.needs_review,
         platform=video.platform,
         status=video.status,

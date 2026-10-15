@@ -7,11 +7,13 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from ..auth import current_user
 from ..config import DOWNLOADS_DIR, VIDEO_EXTENSIONS
 from ..database import get_session
 from ..models import Video
 from ..schemas import VideoRead
 from ..services import library, uploads
+from ..services.auth.accounts import AuthUser
 from ..services.metadata import probe_is_playable
 from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
 from ..services.scanner import (
@@ -21,6 +23,7 @@ from ..services.scanner import (
     unmark_active,
 )
 from .video_serialize import to_read as _to_read
+from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +46,13 @@ class ScanResult(BaseModel):
 
 
 @router.get("", response_model=list[VideoRead])
-def review_queue(session: Session = Depends(get_session)):
+def review_queue(
+    session: Session = Depends(get_session), user: AuthUser = Depends(current_user)
+):
     videos = library.query_videos(
         session, needs_review=True, sort="added_at", order="desc"
     )
-    return [_to_read(v, session) for v in videos]
+    return _to_read_many(videos, session, user_id=user.id)
 
 
 @router.post("/scan", response_model=ScanResult)
@@ -65,6 +70,7 @@ def scan_import_folder():
 def upload_import(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Stream a video into DOWNLOADS_DIR/imports and add it to the review queue."""
     name = Path(file.filename or "upload.bin").name
@@ -115,7 +121,7 @@ def upload_import(
                 raise HTTPException(status_code=409, detail="File already in library")
             dest.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail="Could not import file")
-        return _to_read(video, session)
+        return _to_read(video, session, user_id=user.id)
     except HTTPException:
         part.unlink(missing_ok=True)
         raise
@@ -134,7 +140,11 @@ def upload_import(
 
 
 @router.post("/{video_id}/skip", response_model=VideoRead)
-def skip_review(video_id: int, session: Session = Depends(get_session)):
+def skip_review(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     """Dismiss a review item without requiring a channel. The file stays in the
     library keeping its filename-derived title."""
     video = session.get(Video, video_id)
@@ -150,7 +160,7 @@ def skip_review(video_id: int, session: Session = Depends(get_session)):
         enqueue_for_video(video_id, include_tags=True, force=False)
     except Exception:
         logger.debug("AI enqueue after review skip failed", exc_info=True)
-    return _to_read(video, session)
+    return _to_read(video, session, user_id=user.id)
 
 
 def _yt_id(video: Video) -> str | None:
@@ -170,7 +180,9 @@ def _title_tokens(title: str) -> set[str]:
 
 
 @router.get("/groups")
-def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
+def duplicate_groups(
+    session: Session = Depends(get_session), user: AuthUser = Depends(current_user)
+) -> list[Any]:
     """Return heuristic clusters of likely duplicate videos in the library.
 
     Response is a list of DuplicateGroupRead objects. Older clients that expect
@@ -243,7 +255,7 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
     out: list[dict[str, Any]] = []
     for match_type, group in raw_groups:
         entry: dict[str, Any] = {
-            "videos": [_to_read(v, session) for v in group],
+            "videos": _to_read_many(group, session, user_id=user.id),
             "match_type": match_type,
             "ai_score": None,
             "ai_verdict": None,

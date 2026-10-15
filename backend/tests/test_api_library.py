@@ -122,25 +122,23 @@ def test_list_videos_are_compact(client, add_video):
     assert detail["chapters_source"] == "description"
 
 
-def test_continue_watching_get_is_read_only(client, add_video, session):
+def test_continue_watching_get_is_read_only(
+    client, add_video, session, admin_user, set_watch
+):
     from datetime import datetime, timedelta
 
-    from app.models import Video
+    from app.models import UserVideoState
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=30)
-    video = add_video(
-        title="Stale progress",
-        duration_sec=200.0,
-        last_position_sec=40.0,
-        last_watched_at=stale_cutoff,
-    )
+    video = add_video(title="Stale progress", duration_sec=200.0)
+    set_watch(admin_user, video, 40.0, stale_cutoff)
 
     client.get("/api/videos", params={"continue_watching": True})
 
     # Expiry now runs on a background tick, not this GET — position is untouched.
-    row = session.get(Video, video.id)
-    session.refresh(row)
-    assert row.last_position_sec == 40.0
+    session.expire_all()
+    row = session.get(UserVideoState, (admin_user.id, video.id))
+    assert row.position_sec == 40.0
 
 
 def test_channels_list_and_rename(client, add_video):

@@ -22,6 +22,7 @@ from ..models import (
     OpenRouterUsage,
     Playlist,
     PlaylistItem,
+    UserVideoState,
     Video,
     VideoAiChat,
     VideoAiChatMessage,
@@ -42,6 +43,7 @@ _OWNED_ROW_MODELS = (
     VideoAiMeta,
     PlaylistItem,
     AiJob,
+    UserVideoState,
 )
 # History / soft pointers that survive the video with the reference cleared.
 _NULLED_REFERENCES = (

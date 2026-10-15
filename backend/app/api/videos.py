@@ -7,9 +7,10 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session, func, select
 
+from ..auth import current_user
 from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
 from ..database import get_session
-from ..models import DownloadJob, JobStatus, Video, utcnow
+from ..models import DownloadJob, JobStatus, Video
 from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
@@ -23,7 +24,8 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import downloader, library, uploads
+from ..services import downloader, library, uploads, user_state
+from ..services.auth.accounts import AuthUser
 from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
 from ..services.metadata import (
     load_sprite_meta,
@@ -56,6 +58,9 @@ from .video_serialize import (
 from .video_serialize import (
     to_read as _to_read,
 )
+from .video_serialize import (
+    to_read_many as _to_read_many,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +86,7 @@ def list_videos(
     watched_only: bool = False,
     seed: int | None = None,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     # Expiry is a write; it now runs on a background tick, not this read path.
     if q and not continue_watching and not watched_only:
@@ -95,11 +101,15 @@ def list_videos(
             order=order,
             needs_review=False,
             seed=seed,
+            user_id=user.id,
         )
+        states = user_state.get_states(session, user.id, (v.id for v in videos if v.id))
         return [
             _to_read(
                 v,
                 session,
+                user_id=user.id,
+                states=states,
                 compact=True,
                 match_reason=explain_library_video(
                     v, q, chunk_index=chunks.get(v.id) if v.id is not None else None
@@ -118,8 +128,9 @@ def list_videos(
         continue_watching=continue_watching,
         watched_only=watched_only,
         seed=seed,
+        user_id=user.id,
     )
-    return [_to_read(v, session, compact=True) for v in videos]
+    return _to_read_many(videos, session, user_id=user.id, compact=True)
 
 
 @router.get("/tags", response_model=list[str])
@@ -201,11 +212,15 @@ def bulk_update_notes(
 
 
 @router.get("/videos/{video_id}", response_model=VideoRead)
-def get_video(video_id: int, session: Session = Depends(get_session)):
+def get_video(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, include_processing=True)
+    return _to_read(video, session, user_id=user.id, include_processing=True)
 
 
 @router.get("/videos/{video_id}/related", response_model=list[VideoRead])
@@ -214,12 +229,13 @@ def related_videos(
     limit: int = Query(8, ge=1, le=24),
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     rows = library.related_videos(session, video_id, limit=limit, offset=offset)
-    return [_to_read(v, session, compact=True) for v in rows]
+    return _to_read_many(rows, session, user_id=user.id, compact=True)
 
 
 @router.patch("/videos/{video_id}", response_model=VideoRead)
@@ -227,6 +243,7 @@ def update_video(
     video_id: int,
     payload: VideoUpdate,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -328,7 +345,7 @@ def update_video(
                 exc_info=True,
             )
 
-    return _to_read(video, session)
+    return _to_read(video, session, user_id=user.id)
 
 
 @router.patch("/videos/{video_id}/progress", status_code=204)
@@ -336,6 +353,7 @@ def update_progress(
     video_id: int,
     payload: WatchProgressUpdate,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -349,10 +367,7 @@ def update_progress(
         position = 0.0
     if position >= 5 or position == 0:
         library.expire_stale_progress(session)
-        video.last_position_sec = position
-        video.last_watched_at = utcnow()
-        session.add(video)
-        session.commit()
+        user_state.record_progress(session, user.id, video_id, position)
     return Response(status_code=204)
 
 
@@ -383,6 +398,7 @@ def redownload_video(
     video_id: int,
     payload: VideoRedownload,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -412,7 +428,7 @@ def redownload_video(
     session.refresh(job)
 
     downloader.enqueue_download(job.id)
-    return _to_read(video, session)
+    return _to_read(video, session, user_id=user.id)
 
 
 def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
@@ -465,6 +481,7 @@ def refresh_metadata(
     video_id: int,
     session: Session = Depends(get_session),
     fields: str | None = Query(None, description="Comma-separated sync fields"),
+    user: AuthUser = Depends(current_user),
 ):
     from ..services.metadata_sync import refresh_video_metadata
 
@@ -478,11 +495,15 @@ def refresh_metadata(
         raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}") from exc
     session.expire_all()
     video = session.get(Video, video_id)
-    return _to_read(video, session)
+    return _to_read(video, session, user_id=user.id)
 
 
 @router.post("/videos/{video_id}/ai/refresh-tags", response_model=VideoRead)
-def refresh_video_tags(video_id: int, session: Session = Depends(get_session)):
+def refresh_video_tags(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -496,7 +517,7 @@ def refresh_video_tags(video_id: int, session: Session = Depends(get_session)):
         raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _to_read(video, session)
+    return _to_read(video, session, user_id=user.id)
 
 
 @router.post("/videos/{video_id}/ai/summarize", response_model=VideoRead)
@@ -504,6 +525,7 @@ def summarize_video(
     video_id: int,
     force: bool = Query(False),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -522,7 +544,7 @@ def summarize_video(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, include_processing=True)
+    return _to_read(video, session, user_id=user.id, include_processing=True)
 
 
 @router.post("/videos/{video_id}/ai/chapters", response_model=VideoRead)
@@ -530,6 +552,7 @@ def generate_video_chapters(
     video_id: int,
     force: bool = Query(False),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -548,7 +571,7 @@ def generate_video_chapters(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, include_processing=True)
+    return _to_read(video, session, user_id=user.id, include_processing=True)
 
 
 class VideoAiChatRequest(BaseModel):
@@ -600,6 +623,7 @@ def upload_thumbnail(
     video_id: int,
     file: UploadFile,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -615,7 +639,7 @@ def upload_thumbnail(
     session.add(video)
     session.commit()
     session.refresh(video)
-    return _to_read(video, session)
+    return _to_read(video, session, user_id=user.id)
 
 
 @router.post("/videos/{video_id}/thumbnail/candidates")
@@ -691,6 +715,7 @@ def select_thumbnail_candidate(
     video_id: int,
     index: int,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Promote a generated candidate frame to the video's thumbnail."""
     from ..services.metadata import candidate_thumb_path
@@ -706,7 +731,7 @@ def select_thumbnail_candidate(
     session.add(video)
     session.commit()
     session.refresh(video)
-    return _to_read(video, session)
+    return _to_read(video, session, user_id=user.id)
 
 
 @router.get("/thumbnails/{video_id}")

@@ -10,7 +10,16 @@ from sqlmodel import Session, select
 
 from ...database import engine
 from ...logging_config import FailureLog, job_context
-from ...models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc, utcnow
+from ...models import (
+    AiJob,
+    AiJobKind,
+    AiJobStatus,
+    UserVideoState,
+    Video,
+    VideoAiMeta,
+    as_utc,
+    utcnow,
+)
 from .. import app_settings
 from ..workers import BackgroundWorker
 from . import embeddings, tasks
@@ -366,7 +375,13 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
                     Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
                     or_(
                         Video.added_at >= cutoff,
-                        Video.last_watched_at >= cutoff,
+                        # Watched by anyone: this is shared indexing work, so the
+                        # latest watch over all users decides.
+                        Video.id.in_(  # type: ignore[union-attr]
+                            select(UserVideoState.video_id).where(
+                                UserVideoState.last_watched_at >= cutoff
+                            )
+                        ),
                     ),
                 )
             ).all()

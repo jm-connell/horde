@@ -7,6 +7,7 @@ from sqlalchemy import delete, func
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
+from ..auth import current_user
 from ..database import get_session
 from ..models import Playlist, PlaylistItem, PlaylistSource, Video
 from ..schemas import (
@@ -25,6 +26,7 @@ from ..schemas import (
     PlaylistUpdate,
 )
 from ..services import downloader, library, uploads
+from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.playlist_sync import (
     find_subscribed_by_url,
@@ -37,7 +39,7 @@ from ..services.thumbnails import (
 )
 from ..services.url_clean import clean_url, youtube_video_id
 from ..services.url_safety import UnsafeUrlError, validate_public_url
-from .videos import _to_read
+from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
 
@@ -318,14 +320,18 @@ def reorder_playlists(
 
 
 @router.get("/{playlist_id}", response_model=PlaylistDetail)
-def get_playlist(playlist_id: int, session: Session = Depends(get_session)):
+def get_playlist(
+    playlist_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
     videos = _ordered_videos(session, playlist_id)
     base = _to_playlist_read(session, playlist)
     return PlaylistDetail(
-        **base.model_dump(), videos=[_to_read(v, session) for v in videos]
+        **base.model_dump(), videos=_to_read_many(videos, session, user_id=user.id)
     )
 
 
@@ -407,6 +413,7 @@ def add_item(
     playlist_id: int,
     payload: PlaylistItemAdd,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
@@ -431,7 +438,7 @@ def add_item(
                 ),
                 session,
             )
-            return get_playlist(playlist_id, session)
+            return get_playlist(playlist_id, session, user)
 
     if session.get(Video, video_id) is None:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -453,7 +460,7 @@ def add_item(
         )
         session.commit()
 
-    return get_playlist(playlist_id, session)
+    return get_playlist(playlist_id, session, user)
 
 
 @router.post("/{playlist_id}/items/bulk", status_code=204)
@@ -510,6 +517,7 @@ def reorder_items(
     playlist_id: int,
     payload: PlaylistReorder,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     if session.get(Playlist, playlist_id) is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
@@ -522,7 +530,7 @@ def reorder_items(
             item.position = position[item.video_id]
             session.add(item)
     session.commit()
-    return get_playlist(playlist_id, session)
+    return get_playlist(playlist_id, session, user)
 
 
 @router.get("/{playlist_id}/thumbnail")

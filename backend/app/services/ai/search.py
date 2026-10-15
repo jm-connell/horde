@@ -65,6 +65,7 @@ def hybrid_search(
     order: str = "desc",
     needs_review: bool | None = False,
     seed: int | None = None,
+    user_id: int | None = None,
 ) -> tuple[list[Video], dict[int, int]]:
     """Merge whole-word keyword hits with embedding nearest neighbors.
 
@@ -81,6 +82,7 @@ def hybrid_search(
         order=order,
         needs_review=needs_review,
         seed=seed,
+        user_id=user_id,
     )
     chunks: dict[int, int] = {}
 

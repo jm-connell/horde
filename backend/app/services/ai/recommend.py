@@ -118,14 +118,17 @@ def videos_for_category(
     return CategoryBrowsePage(videos, has_more, categories)
 
 
-def _ranked_for_you_ids(session: Session, *, pool: int = 2000) -> list[int]:
-    """Score by watch history similarity, then append remaining library by recency."""
+def _ranked_for_you_ids(
+    session: Session, *, user_id: int, pool: int = 2000
+) -> list[int]:
+    """Score by the user's own watch history, then append the rest by recency."""
     history = library.query_videos(
         session,
         watched_only=True,
         sort="last_watched_at",
         order="desc",
         needs_review=False,
+        user_id=user_id,
     )[:16]
 
     used: set[int] = {v.id for v in history if v.id is not None}
@@ -167,11 +170,14 @@ def _ranked_for_you_ids(session: Session, *, pool: int = 2000) -> list[int]:
 
 
 def homepage_recommendations_page(
-    session: Session, *, limit: int = 24, offset: int = 0
+    session: Session, *, user_id: int, limit: int = 24, offset: int = 0
 ) -> ForYouPage:
+    """The "For you" shelf, seeded from this user's watch history."""
     if get_embed_provider() is None:
         return ForYouPage([], False)
-    ranked_ids = _ranked_for_you_ids(session, pool=max(2000, offset + limit + 100))
+    ranked_ids = _ranked_for_you_ids(
+        session, user_id=user_id, pool=max(2000, offset + limit + 100)
+    )
     slice_ids = ranked_ids[offset : offset + limit + 1]
     has_more = len(slice_ids) > limit
     videos: list[Video] = []
@@ -184,10 +190,12 @@ def homepage_recommendations_page(
 
 
 def homepage_recommendations(
-    session: Session, *, limit: int = 36
+    session: Session, *, user_id: int, limit: int = 36
 ) -> list[RecommendationSection]:
     """Single For You shelf ordered by recommendation strength."""
-    page = homepage_recommendations_page(session, limit=limit, offset=0)
+    page = homepage_recommendations_page(
+        session, user_id=user_id, limit=limit, offset=0
+    )
     if not page.videos:
         return []
     return [

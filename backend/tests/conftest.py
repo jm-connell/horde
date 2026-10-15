@@ -238,6 +238,27 @@ def add_video(session, init_db) -> Callable[..., Any]:
 
 
 @pytest.fixture
+def set_watch(session) -> Callable[..., Any]:
+    """Record a user's watch state for a video (their place and when they were there)."""
+    from datetime import UTC, datetime
+
+    from app.models import UserVideoState
+
+    def _set(user, video, position_sec: float, watched_at=None) -> None:
+        session.add(
+            UserVideoState(
+                user_id=user.id,
+                video_id=video.id,
+                position_sec=position_sec,
+                last_watched_at=watched_at or datetime.now(UTC),
+            )
+        )
+        session.commit()
+
+    return _set
+
+
+@pytest.fixture
 def app(init_db, monkeypatch):
     """FastAPI app with the real routers but no production lifespan/workers."""
     from fastapi import FastAPI

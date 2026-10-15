@@ -7,6 +7,7 @@ import logging
 import re
 from typing import Any
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ...models import (
@@ -14,6 +15,7 @@ from ...models import (
     AiJobKind,
     ChannelCatalogEmbedding,
     ChannelCatalogVideo,
+    UserVideoState,
     Video,
     VideoAiMeta,
     utcnow,
@@ -677,13 +679,18 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
             out.append(video)
             cap -= 1
 
+    # Categories are shared across users, so "recently watched" is the latest
+    # watch by anyone (max over users), not any one person's history.
+    latest_watch = func.max(UserVideoState.last_watched_at)
     watched = session.exec(
         select(Video)
+        .join(UserVideoState, UserVideoState.video_id == Video.id)
         .where(
             Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
-            Video.last_watched_at.is_not(None),  # type: ignore[attr-defined]
+            UserVideoState.last_watched_at.is_not(None),  # type: ignore[union-attr]
         )
-        .order_by(Video.last_watched_at.desc())  # type: ignore[union-attr]
+        .group_by(Video.id)
+        .order_by(latest_watch.desc())
         .limit(watch_cap * 2)
     ).all()
     _take(list(watched), watch_cap)
