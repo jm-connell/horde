@@ -444,3 +444,64 @@ class AiJob(SQLModel, table=True):
     error: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+class User(SQLModel, table=True):
+    """A person who can sign in. The first one created is the administrator."""
+
+    __tablename__ = "users"
+    __table_args__ = _AUTOINCREMENT
+
+    id: int | None = Field(default=None, primary_key=True)
+    # As entered (shown in the UI); ``username_norm`` is the lowercased identity.
+    username: str
+    username_norm: str = Field(unique=True, index=True)
+    # ``scrypt$n$r$p$salt_b64$hash_b64``; see services/passwords.py.
+    password_hash: str
+    is_admin: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+    last_login_at: datetime | None = None
+    disabled: bool = Field(default=False)
+
+
+class UserSession(SQLModel, table=True):
+    """A signed-in browser. Only the SHA-256 of the cookie token is stored."""
+
+    __tablename__ = "user_sessions"
+    __table_args__ = _AUTOINCREMENT
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    token_hash: str = Field(unique=True, index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+    last_seen_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime = Field(index=True)
+    user_agent: str | None = None
+    ip: str | None = None
+
+
+class UserVideoState(SQLModel, table=True):
+    """One user's watch progress for one video (history is per user)."""
+
+    __tablename__ = "user_video_state"
+    __table_args__ = (
+        Index("ix_user_video_state_user_watched", "user_id", "last_watched_at"),
+    )
+
+    user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
+    video_id: int = Field(
+        foreign_key="videos.id", primary_key=True, index=True, ondelete="CASCADE"
+    )
+    position_sec: float = 0.0
+    last_watched_at: datetime | None = None
+
+
+class UserSettings(SQLModel, table=True):
+    """One user's UI preferences (JSON). Server-wide settings stay in app_settings."""
+
+    __tablename__ = "user_settings"
+
+    user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
+    ui_json: str = Field(default="{}")
+    updated_at: datetime = Field(default_factory=utcnow)

@@ -79,6 +79,7 @@ Then review and edit `backend/app/migrations/versions/0003_widgets.py`:
 |----------|--------------|
 | `0001_baseline` | The schema as it stood when Alembic was adopted (tables only created if missing) |
 | `0002_integrity` | Foreign keys with `ON DELETE`, `AUTOINCREMENT`, unique playlist items, all declared indexes (`IF NOT EXISTS`), orphan repair |
+| `0003_auth` | `users`, `user_sessions`, `user_video_state`, `user_settings` (accounts and per-user history; no rows, the first admin is created at runtime) |
 
 The legacy `schema_migrations` ledger table is left in place on adopted installs and ignored by Alembic.
 
