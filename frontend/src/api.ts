@@ -1,3 +1,4 @@
+import { formatValidationDetail } from "./apiErrors";
 import type {
   AiJobRow,
   AiProcessResult,
@@ -108,6 +109,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     } catch {
       // non-JSON error body; keep status text
     }
+    const validation = formatValidationDetail(detail);
+    if (validation) throw new ApiError(validation, { status: resp.status });
     if (typeof detail === "object" && detail !== null) {
       const d = detail as {
         message?: string;
@@ -884,7 +887,9 @@ export const api = {
         // non-JSON
       }
       throw new Error(
-        typeof detail === "string" ? detail : JSON.stringify(detail)
+        typeof detail === "string"
+          ? detail
+          : (formatValidationDetail(detail) ?? JSON.stringify(detail))
       );
     }
     if (!resp.body) {

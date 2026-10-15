@@ -34,6 +34,7 @@ export type SettingsPageContextValue = {
   settings: ReturnType<typeof useSettings>[0];
   update: ReturnType<typeof useSettings>[1];
   showToast: (msg: string) => void;
+  showError: (msg: string) => void;
 
   // appearance
   themeNameDraft: string;

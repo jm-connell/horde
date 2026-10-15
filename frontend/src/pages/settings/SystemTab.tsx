@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { describeError } from "../../apiErrors";
 import { useEffect, useRef, useState } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { createPortal } from "react-dom";
@@ -64,6 +65,7 @@ export default function SystemTab() {
   const {
     match,
     showToast,
+    showError,
     storage,
     health,
     updateCheck,
@@ -563,12 +565,26 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
                 openRouterCosts={openRouterCosts}
                 compact
                 onPause={async () => {
-                  await api.pauseAi().catch(() => undefined);
+                  try {
+                    await api.pauseAi();
+                  } catch (err) {
+                    showError(
+                      `Could not pause AI queue: ${describeError(err)}`
+                    );
+                    return;
+                  }
                   await saveAi({ paused: true });
                   showToast("AI queue paused");
                 }}
                 onResume={async () => {
-                  await api.resumeAi().catch(() => undefined);
+                  try {
+                    await api.resumeAi();
+                  } catch (err) {
+                    showError(
+                      `Could not resume AI queue: ${describeError(err)}`
+                    );
+                    return;
+                  }
                   await saveAi({ paused: false });
                   showToast("AI queue resumed");
                 }}

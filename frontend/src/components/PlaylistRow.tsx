@@ -1,4 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from "react";
+import { useToast } from "../context/ToastContext";
+import { describeError } from "../apiErrors";
 import { Link, useNavigate } from "react-router-dom";
 import { api, listThumbnailUrl, playlistCoverUrl } from "../api";
 import Collapse from "./Collapse";
@@ -44,6 +46,7 @@ export default function PlaylistRow({
 }) {
   const navigate = useNavigate();
   const confirm = useConfirm();
+  const { showError } = useToast();
   const { playVideo, addToQueue } = usePlayback();
   const headerRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -141,7 +144,11 @@ export default function PlaylistRow({
   };
 
   const remove = async (videoId: number) => {
-    await api.removeFromPlaylist(playlist.id, videoId).catch(() => undefined);
+    try {
+      await api.removeFromPlaylist(playlist.id, videoId);
+    } catch (err) {
+      showError(`Could not remove video: ${describeError(err)}`);
+    }
     reload();
   };
 

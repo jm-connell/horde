@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from "react";
+import { describeError } from "../apiErrors";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useSearch } from "../context/SearchContext";
@@ -64,7 +65,7 @@ import type {
 import { getItem, setItem } from "../storage";
 export default function Settings() {
   const [settings, update] = useSettings();
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
   const confirm = useConfirm();
   const { setYoutubeVideoSearch } = useSearch();
   const [searchParams] = useSearchParams();
@@ -442,9 +443,10 @@ export default function Settings() {
   const saveAi = async (patch: Partial<AiSettings>) => {
     const next = { ...aiDraft, ...patch };
     setAiDraft(next);
-    const updated = await api
-      .updateAppSettings({ ai: patch })
-      .catch(() => null);
+    const updated = await api.updateAppSettings({ ai: patch }).catch((err) => {
+      showError(`Could not save AI settings: ${describeError(err)}`);
+      return null;
+    });
     if (updated?.ai) {
       setAppSettings(updated);
       setAiDraft({ ...DEFAULT_AI, ...updated.ai });
@@ -457,7 +459,10 @@ export default function Settings() {
     if (isNaN(days) || days < 1 || days > 365) return;
     const updated = await api
       .updateAppSettings({ progress_expiry_days: days })
-      .catch(() => null);
+      .catch((err) => {
+        showError(`Could not save setting: ${describeError(err)}`);
+        return null;
+      });
     if (updated) {
       setAppSettings(updated);
       update({ progressExpiryDays: updated.progress_expiry_days });
@@ -476,7 +481,10 @@ export default function Settings() {
       >
     >
   ) => {
-    const updated = await api.updateAppSettings(patch).catch(() => null);
+    const updated = await api.updateAppSettings(patch).catch((err) => {
+      showError(`Could not save setting: ${describeError(err)}`);
+      return null;
+    });
     if (updated) {
       setAppSettings(updated);
       setCatalogMaxInput(String(updated.channel_catalog_max_videos ?? 1000));
@@ -628,11 +636,14 @@ export default function Settings() {
       showToast("Large file (>10MB) — upload may be slow");
     }
     setBgUploading(true);
-    const result = await api.uploadBackground(file).catch(() => null);
-    setBgUploading(false);
-    if (!result) {
-      showToast("Background upload failed");
+    let result: Awaited<ReturnType<typeof api.uploadBackground>>;
+    try {
+      result = await api.uploadBackground(file);
+    } catch (err) {
+      showError(`Background upload failed: ${describeError(err)}`);
       return;
+    } finally {
+      setBgUploading(false);
     }
     const name = result.filename || file.name;
     setLastUploadedName(name);
@@ -647,9 +658,19 @@ export default function Settings() {
   };
 
   const deleteLibraryBackground = async (id: string) => {
-    const result = await api.deleteBackground(id).catch(() => null);
+    const ok = await confirm({
+      title: "Delete this background?",
+      body: "The image is removed from your library and can't be restored.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    const result = await api.deleteBackground(id).catch((err) => {
+      showError(`Could not delete background: ${describeError(err)}`);
+      return null;
+    });
     if (!result?.ok) {
-      showToast("Could not delete background");
+      if (result) showError("Could not delete background");
       return;
     }
     if (settings.customBackgroundId === id) {
@@ -794,12 +815,15 @@ export default function Settings() {
     setPaletteLoading(true);
     const result = await api
       .extractBackgroundPalette(settings.customBackgroundId)
-      .catch(() => null);
+      .catch((err) => {
+        showError(`Could not extract palette: ${describeError(err)}`);
+        return null;
+      });
     setPaletteLoading(false);
-    if (!result?.colors?.length) {
-      showToast("Could not extract palette");
-      return;
+    if (result && !result.colors?.length) {
+      showError("Could not extract palette");
     }
+    if (!result?.colors?.length) return;
     setPaletteColors(result.colors);
   };
 
@@ -831,6 +855,7 @@ export default function Settings() {
     settings,
     update,
     showToast,
+    showError,
     themeNameDraft,
     setThemeNameDraft,
     saveCurrentAsTheme,

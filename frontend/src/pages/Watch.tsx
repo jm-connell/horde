@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { describeError } from "../apiErrors";
 import {
   Link,
   useLocation,
@@ -144,7 +145,7 @@ export default function Watch() {
   const activeJobIdRef = useRef<number | null>(null);
   activeJobIdRef.current = activeJobId;
 
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
   const confirm = useConfirm();
   const {
     onJobCompleted,
@@ -361,7 +362,7 @@ export default function Watch() {
             state: { resumeAt },
           });
         } catch {
-          showToast("Download finished, but could not open the video");
+          showError("Download finished, but could not open the video");
           swapPendingRef.current = false;
         }
       })();
@@ -373,6 +374,7 @@ export default function Watch() {
     playVideo,
     navigate,
     showToast,
+    showError,
   ]);
 
   useEffect(() => {
@@ -380,14 +382,14 @@ export default function Watch() {
     const live = progress[activeJobId];
     if (!live) return;
     if (live.status === "error") {
-      showToast(live.error || "Download failed");
+      showError(live.error || "Download failed");
       setActiveJobId(null);
       swapPendingRef.current = false;
     } else if (live.status === "cancelled") {
       setActiveJobId(null);
       swapPendingRef.current = false;
     }
-  }, [activeJobId, progress, showToast]);
+  }, [activeJobId, progress, showToast, showError]);
 
   // --- Library-only effects ---
   useEffect(() => {
@@ -660,7 +662,7 @@ export default function Watch() {
       await api.deleteVideo(video.id, true);
       navigate("/");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Could not delete video");
+      showError(err instanceof Error ? err.message : "Could not delete video");
     }
   };
 
@@ -921,7 +923,10 @@ export default function Watch() {
                             title: source.video.source_title!,
                             title_is_custom: false,
                           })
-                          .catch(() => null);
+                          .catch((err) => {
+                            showError(`Could not save: ${describeError(err)}`);
+                            return null;
+                          });
                         if (updated) setVideo(updated);
                       }}
                       className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-accent-soft"
@@ -935,7 +940,10 @@ export default function Watch() {
                             title: source.video.title,
                             title_is_custom: true,
                           })
-                          .catch(() => null);
+                          .catch((err) => {
+                            showError(`Could not save: ${describeError(err)}`);
+                            return null;
+                          });
                         if (updated) setVideo(updated);
                       }}
                       className="rounded-lg bg-ink-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-600"
@@ -965,7 +973,10 @@ export default function Watch() {
                               source.video.source_description ?? undefined,
                             description_is_custom: false,
                           })
-                          .catch(() => null);
+                          .catch((err) => {
+                            showError(`Could not save: ${describeError(err)}`);
+                            return null;
+                          });
                         if (updated) setVideo(updated);
                       }}
                       className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-accent-soft"
@@ -979,7 +990,10 @@ export default function Watch() {
                             description: source.video.description ?? undefined,
                             description_is_custom: true,
                           })
-                          .catch(() => null);
+                          .catch((err) => {
+                            showError(`Could not save: ${describeError(err)}`);
+                            return null;
+                          });
                         if (updated) setVideo(updated);
                       }}
                       className="rounded-lg bg-ink-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-600"

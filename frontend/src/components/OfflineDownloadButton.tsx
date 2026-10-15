@@ -94,7 +94,7 @@ export function useOfflineDownloadAction(video: Video) {
   const offline = useOfflineMode();
   // No Cache Storage / service worker outside secure contexts (plain http).
   const supported = !useOfflineDownloads().unsupported;
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
   const confirm = useConfirm();
 
   const status = item?.status;
@@ -134,7 +134,7 @@ export function useOfflineDownloadAction(video: Video) {
         await offlineManager.download(video);
         showToast("Downloading for offline viewing");
       } catch (err) {
-        showToast(err instanceof Error ? err.message : "Download failed");
+        showError(err instanceof Error ? err.message : "Download failed");
       }
       return;
     }

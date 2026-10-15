@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { describeError } from "../apiErrors";
 import {
   ApiError,
   api,
@@ -110,7 +111,7 @@ function patchJobFromEvent(
 }
 
 export function DownloadProvider({ children }: { children: React.ReactNode }) {
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
   const [settings, updateSettings] = useSettings();
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [progress, setProgress] = useState<Record<number, ProgressEvent>>({});
@@ -135,9 +136,13 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       showToast(
         `Saving \u201c${job.title || "video"}\u201d for offline viewing`
       );
-      void offlineManager.downloadJob(job).catch(() => undefined);
+      offlineManager
+        .downloadJob(job)
+        .catch((err) =>
+          showError(`Could not save for offline: ${describeError(err)}`)
+        );
     },
-    [showToast]
+    [showToast, showError]
   );
 
   const refreshJob = useCallback(

@@ -1,4 +1,6 @@
 import { api } from "../../api";
+import { describeError } from "../../apiErrors";
+import { useConfirm } from "../../context/ConfirmContext";
 import { loadSettings } from "../../hooks/useSettings";
 import type {
   BackgroundEffect,
@@ -31,12 +33,14 @@ import { useSettingsPage } from "./context";
 import CustomCssSection from "./CustomCssSection";
 
 export default function AppearanceTab() {
+  const confirm = useConfirm();
   const {
     q,
     match,
     settings,
     update,
     showToast,
+    showError,
     themeNameDraft,
     setThemeNameDraft,
     saveCurrentAsTheme,
@@ -352,8 +356,8 @@ export default function AppearanceTab() {
                         uiFont: result.id,
                       });
                       showToast(`Saved “${name}”`);
-                    } catch {
-                      showToast("Font upload failed");
+                    } catch (err) {
+                      showError(`Font upload failed: ${describeError(err)}`);
                     }
                   })();
                 }}
@@ -370,14 +374,30 @@ export default function AppearanceTab() {
           <button
             type="button"
             className={`${PANEL_BTN} mt-4`}
-            onClick={() => {
+            onClick={async () => {
               const id = settings.uiFont;
               const entry = settings.customFonts.find((f) => f.id === id);
               const next = loadSettings().customFonts.filter(
                 (f) => f.id !== id
               );
+              const ok = await confirm({
+                title: "Remove this font?",
+                body: `${entry?.name ?? "The font"} is removed from the dropdown${
+                  entry?.source === "file"
+                    ? " and its file is deleted from the server"
+                    : ""
+                }.`,
+                confirmLabel: "Remove",
+                danger: true,
+              });
+              if (!ok) return;
               if (entry?.source === "file") {
-                void api.deleteFont(id).catch(() => undefined);
+                try {
+                  await api.deleteFont(id);
+                } catch (err) {
+                  showError(`Could not delete font: ${describeError(err)}`);
+                  return;
+                }
               }
               update({
                 customFonts: next,

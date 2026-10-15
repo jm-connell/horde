@@ -46,7 +46,7 @@ export default function VideoActionsMenu({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [settings, update] = useSettings();
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
   const { flip, anchorRef } = useFlipMenu(open, 360);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const canChangeResolution = Boolean(effectiveSourceUrl(video));
@@ -92,7 +92,7 @@ export default function VideoActionsMenu({
       onVideoUpdated?.(updated);
       showToast("Tag refresh queued");
     } catch {
-      showToast("Could not refresh tags");
+      showError("Could not refresh tags");
     }
   };
 

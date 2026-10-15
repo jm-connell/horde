@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { describeError } from "../apiErrors";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import LoadingIndicator from "../components/LoadingIndicator";
@@ -68,7 +69,7 @@ interface UploadItem {
 }
 
 export default function Import() {
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
   const confirm = useConfirm();
   const [items, setItems] = useState<Video[]>([]);
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
@@ -132,7 +133,7 @@ export default function Import() {
       showToast(`Kept "${keep.title}"`);
       load();
     } catch {
-      showToast("Could not delete duplicate(s)");
+      showError("Could not delete duplicate(s)");
     }
   };
 
@@ -148,7 +149,7 @@ export default function Import() {
       await api.deleteVideo(v.id, true);
       load();
     } catch {
-      showToast("Could not delete video");
+      showError("Could not delete video");
     }
   };
 
@@ -182,7 +183,7 @@ export default function Import() {
       );
       load({ silent: true });
     } catch {
-      showToast("Could not scan for new files");
+      showError("Could not scan for new files");
     } finally {
       scanningRef.current = false;
       setScanning(false);
@@ -411,7 +412,11 @@ export default function Import() {
                   <div className="flex gap-2">
                     <button
                       onClick={async () => {
-                        await api.skipImport(v.id).catch(() => undefined);
+                        try {
+                          await api.skipImport(v.id);
+                        } catch (err) {
+                          showError(`Could not skip: ${describeError(err)}`);
+                        }
                         load();
                       }}
                       className="ui-panel ui-interactive rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"

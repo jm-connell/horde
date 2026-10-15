@@ -1,4 +1,5 @@
 import { api } from "../../../api";
+import { describeError } from "../../../apiErrors";
 import ThemedSelect from "../../../components/ThemedSelect";
 import Collapse from "../../../components/Collapse";
 import type { AiSchedule } from "../../../types";
@@ -18,6 +19,7 @@ export default function JobsPane() {
     systemStats,
     openRouterCosts,
     showToast,
+    showError,
     aiProcessingAction,
     runAiProcess,
     catchUpScope,
@@ -54,12 +56,22 @@ export default function JobsPane() {
             systemStats={systemStats}
             openRouterCosts={openRouterCosts}
             onPause={async () => {
-              await api.pauseAi().catch(() => undefined);
+              try {
+                await api.pauseAi();
+              } catch (err) {
+                showError(`Could not pause AI queue: ${describeError(err)}`);
+                return;
+              }
               await saveAi({ paused: true });
               showToast("AI queue paused");
             }}
             onResume={async () => {
-              await api.resumeAi().catch(() => undefined);
+              try {
+                await api.resumeAi();
+              } catch (err) {
+                showError(`Could not resume AI queue: ${describeError(err)}`);
+                return;
+              }
               await saveAi({ paused: false });
               showToast("AI queue resumed");
             }}
@@ -92,7 +104,10 @@ export default function JobsPane() {
                   type="button"
                   className={PANEL_BTN}
                   onClick={async () => {
-                    const res = await api.retryFailedAiJobs().catch(() => null);
+                    const res = await api.retryFailedAiJobs().catch((err) => {
+                      showError(`Could not retry jobs: ${describeError(err)}`);
+                      return null;
+                    });
                     if (res) {
                       showToast(
                         `Retried ${res.retried} job${res.retried === 1 ? "" : "s"}`
@@ -107,9 +122,10 @@ export default function JobsPane() {
                   type="button"
                   className={PANEL_BTN}
                   onClick={async () => {
-                    const res = await api
-                      .clearFailedAiJobs(0)
-                      .catch(() => null);
+                    const res = await api.clearFailedAiJobs(0).catch((err) => {
+                      showError(`Could not clear jobs: ${describeError(err)}`);
+                      return null;
+                    });
                     if (res) {
                       showToast(
                         `Cleared ${res.deleted} failed job${res.deleted === 1 ? "" : "s"}`
@@ -147,8 +163,14 @@ export default function JobsPane() {
                       type="button"
                       className="shrink-0 text-accent hover:underline"
                       onClick={async () => {
-                        await api.retryAiJob(job.id!).catch(() => undefined);
-                        showToast("Job requeued");
+                        try {
+                          await api.retryAiJob(job.id!);
+                          showToast("Job requeued");
+                        } catch (err) {
+                          showError(
+                            `Could not requeue job: ${describeError(err)}`
+                          );
+                        }
                         refreshAiStatus();
                       }}
                     >

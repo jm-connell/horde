@@ -12,7 +12,7 @@ export default function RecommendedHome({
 }: {
   sidebarCollapsed: boolean;
 }) {
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
   const [categories, setCategories] = useState<string[]>([]);
   const [feedVideos, setFeedVideos] = useState<Video[]>([]);
   const [feedOffset, setFeedOffset] = useState(0);
@@ -173,7 +173,7 @@ export default function RecommendedHome({
       void poll().finally(() => setRefreshing(false));
       return;
     } catch {
-      showToast("Could not refresh categories");
+      showError("Could not refresh categories");
       setRefreshing(false);
     }
   };

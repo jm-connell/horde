@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { describeError } from "../../../apiErrors";
 import { api } from "../../../api";
 import ThemedSelect from "../../../components/ThemedSelect";
 import Collapse from "../../../components/Collapse";
@@ -37,6 +38,7 @@ export default function ProvidersPane() {
     q,
     match,
     showToast,
+    showError,
     appSettings,
     aiDraft,
     setAiDraft,
@@ -302,12 +304,14 @@ export default function ProvidersPane() {
                         setAiTesting(true);
                         const result = await api
                           .testAiConnection(aiDraft.base_url || undefined)
-                          .catch(() => null);
+                          .catch((err) => {
+                            showError(
+                              `Connection test failed: ${describeError(err)}`
+                            );
+                            return null;
+                          });
                         setAiTesting(false);
-                        if (!result) {
-                          showToast("Connection test failed");
-                          return;
-                        }
+                        if (!result) return;
                         showToast(
                           result.ok
                             ? `Connected${result.base_url ? ` at ${result.base_url}` : ""}`
@@ -729,11 +733,15 @@ export default function ProvidersPane() {
                             .testOpenRouterConnection(
                               openRouterKeyDraft.trim() || undefined
                             )
-                            .catch(() => null);
+                            .catch((err) => {
+                              showError(
+                                `OpenRouter test failed: ${describeError(err)}`
+                              );
+                              return null;
+                            });
                           setOpenRouterTesting(false);
                           if (!result) {
                             setOpenRouterTestStatus("fail");
-                            showToast("OpenRouter test failed");
                             return;
                           }
                           setOpenRouterTestStatus(result.ok ? "ok" : "fail");

@@ -77,7 +77,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     changeJobQuality,
     refreshJobs,
   } = useDownloads();
-  const { showToast } = useToast();
+  const { showError } = useToast();
   const status = jobStatus(job, live);
   const maxBytesRef = useRef(0);
   if (status === "downloading" || status === "processing") {
@@ -334,7 +334,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
       setDeleteConfirm(false);
       refreshJobs();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Could not delete video");
+      showError(err instanceof Error ? err.message : "Could not delete video");
     } finally {
       setDeleting(false);
     }

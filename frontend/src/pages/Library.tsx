@@ -9,6 +9,7 @@ import {
   Suspense,
   type ReactNode,
 } from "react";
+import { describeError } from "../apiErrors";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
@@ -267,7 +268,7 @@ function OnlineLibrary() {
   }, []);
 
   const [settings, update] = useSettings();
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
   const { onJobCompleted, submitDownload } = useDownloads();
   const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
@@ -422,8 +423,12 @@ function OnlineLibrary() {
     const next = renameValue.trim();
     setRenaming(null);
     if (!next || next === oldName) return;
-    await api.renameChannel(oldName, next).catch(() => undefined);
-    if (activeChannel === oldName) setActiveChannel(next);
+    try {
+      await api.renameChannel(oldName, next);
+      if (activeChannel === oldName) setActiveChannel(next);
+    } catch (err) {
+      showError(`Could not rename channel: ${describeError(err)}`);
+    }
     reloadChannels();
   };
 
@@ -1123,7 +1128,7 @@ function OnlineLibrary() {
     try {
       await api.bulkDeleteVideos([...selectedIds], true);
     } catch {
-      showToast("Could not delete selected videos");
+      showError("Could not delete selected videos");
       throw new Error("Could not delete selected videos");
     }
     exitSelectMode();
@@ -1132,9 +1137,12 @@ function OnlineLibrary() {
 
   const bulkSaveNote = async () => {
     if (!selectedIds.size || !bulkNote.trim()) return;
-    await api
-      .bulkUpdateNotes([...selectedIds], bulkNote.trim())
-      .catch(() => undefined);
+    try {
+      await api.bulkUpdateNotes([...selectedIds], bulkNote.trim());
+    } catch (err) {
+      showError(`Could not save notes: ${describeError(err)}`);
+      return;
+    }
     setBulkNote("");
     setBulkNoteOpen(false);
     exitSelectMode();
@@ -1142,9 +1150,12 @@ function OnlineLibrary() {
 
   const bulkAddToPlaylist = async (playlistId: number) => {
     if (!selectedIds.size) return;
-    await api
-      .bulkAddToPlaylist(playlistId, [...selectedIds])
-      .catch(() => undefined);
+    try {
+      await api.bulkAddToPlaylist(playlistId, [...selectedIds]);
+    } catch (err) {
+      showError(`Could not add to playlist: ${describeError(err)}`);
+      return;
+    }
     setPlaylistOpen(false);
     exitSelectMode();
   };
@@ -1180,13 +1191,14 @@ function OnlineLibrary() {
   const bulkRefreshMetadata = async () => {
     if (!selectedIds.size || metadataSyncing) return;
     setMetadataSyncing(true);
-    const result = await api
-      .refreshMetadataBulk([...selectedIds])
-      .catch(() => null);
-    setMetadataSyncing(false);
-    if (!result) {
-      showToast("Metadata sync failed");
+    let result: Awaited<ReturnType<typeof api.refreshMetadataBulk>>;
+    try {
+      result = await api.refreshMetadataBulk([...selectedIds]);
+    } catch (err) {
+      showError(`Metadata sync failed: ${describeError(err)}`);
       return;
+    } finally {
+      setMetadataSyncing(false);
     }
     showToast(
       `Synced ${result.refreshed} video${result.refreshed === 1 ? "" : "s"}` +
@@ -1200,7 +1212,9 @@ function OnlineLibrary() {
     api
       .listPlaylists()
       .then(setPlaylists)
-      .catch(() => undefined);
+      .catch((err) =>
+        showError(`Could not load playlists: ${describeError(err)}`)
+      );
     setPlaylistOpen(true);
   };
 
