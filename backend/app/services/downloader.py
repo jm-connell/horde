@@ -115,11 +115,6 @@ from .ytdlp_common import (
     url_cookie_required,
     youtube_extractor_args,
 )
-from .ytdlp_extract import (
-    _list_thumbnail_url,
-    is_youtube_short_entry,
-    is_youtube_short_url,
-)
 
 # Facade: API routers and tests reach these through ``downloader.<name>`` (tests
 # monkeypatch them here), so they are re-exported explicitly (``x as x``).
@@ -128,6 +123,11 @@ from .ytdlp_extract import extract_playlist as extract_playlist
 from .ytdlp_extract import extract_playlist_entries as extract_playlist_entries
 from .ytdlp_extract import extract_preview as extract_preview
 from .ytdlp_extract import fetch_channel_feed as fetch_channel_feed
+from .ytdlp_extract import (
+    is_youtube_short_entry,
+    is_youtube_short_url,
+    list_thumbnail_url,
+)
 from .ytdlp_extract import search_youtube_channels as search_youtube_channels
 from .ytdlp_formats import (
     QUALITY_FORMATS,
@@ -1235,7 +1235,7 @@ def _complete_download(
         final_path,
         source_url,
         info.get("thumbnail"),
-        _list_thumbnail_url(info, info.get("id")),
+        list_thumbnail_url(info, info.get("id")),
     )
 
     if committed.want_sidecar:

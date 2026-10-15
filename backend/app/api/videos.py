@@ -559,14 +559,12 @@ def redownload_video(
 
 
 def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
-    from ..services.ytdlp_extract import _list_thumbnail_url
+    from ..services.ytdlp_extract import list_thumbnail_url
 
     if video.id is None:
         raise HTTPException(status_code=400, detail="Could not fetch thumbnail")
     validate_public_url(url)  # 400 with the reason instead of a generic failure
-    dest = save_from_url(
-        url, video.id, list_url=_list_thumbnail_url({"thumbnail": url})
-    )
+    dest = save_from_url(url, video.id, list_url=list_thumbnail_url({"thumbnail": url}))
     if dest is None:
         raise HTTPException(status_code=400, detail="Could not fetch thumbnail")
     video.thumbnail_path = dest

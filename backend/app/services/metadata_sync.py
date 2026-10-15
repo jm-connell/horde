@@ -20,7 +20,7 @@ from .ytdlp_common import (
     extract_info_gated,
     youtube_extractor_args,
 )
-from .ytdlp_extract import _list_thumbnail_url
+from .ytdlp_extract import list_thumbnail_url
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ def refresh_video_metadata(
             thumb_path = save_from_url(
                 info.get("thumbnail"),
                 video.id,
-                list_url=_list_thumbnail_url(info, info.get("id")),
+                list_url=list_thumbnail_url(info, info.get("id")),
             )
             if thumb_path:
                 video.thumbnail_path = thumb_path

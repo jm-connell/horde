@@ -447,7 +447,7 @@ def _best_thumbnail_url(info: dict[str, Any], vid: str | None = None) -> str | N
     return None
 
 
-def _list_thumbnail_url(info: dict[str, Any], vid: str | None = None) -> str | None:
+def list_thumbnail_url(info: dict[str, Any], vid: str | None = None) -> str | None:
     """Pick a ~320px-wide 16:9 thumb for list tiles, or YouTube mqdefault."""
     widescreen: list[tuple[int, str]] = []
     any_sized: list[tuple[int, str]] = []
