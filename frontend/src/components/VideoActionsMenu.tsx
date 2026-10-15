@@ -7,7 +7,7 @@ import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import { MenuScroll } from "./MenuFlyout";
 import { useOfflineDownloadAction } from "./OfflineDownloadButton";
 import type { Video } from "../types";
-import { effectiveSourceUrl } from "../utils";
+import { effectiveSourceUrl, safeHref } from "../utils";
 
 function sourceLinkLabel(video: Video): string {
   const platform = (video.platform || "").toLowerCase();
@@ -176,9 +176,9 @@ export default function VideoActionsMenu({
           <button onClick={downloadFile} className={itemClass}>
             Save file to device
           </button>
-          {video.source_url && (
+          {safeHref(video.source_url) && (
             <a
-              href={video.source_url}
+              href={safeHref(video.source_url)}
               target="_blank"
               rel="noreferrer"
               onClick={() => setOpen(false)}

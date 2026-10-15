@@ -14,7 +14,7 @@ import {
 import { useConfirm } from "../context/ConfirmContext";
 import { usePlayback } from "../context/PlaybackContext";
 import type { Playlist, PlaylistDetail, Video } from "../types";
-import { formatDuration, formatRelative, moveItem } from "../utils";
+import { formatDuration, formatRelative, moveItem, safeHref } from "../utils";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 
 export default function PlaylistRow({
@@ -490,9 +490,9 @@ export default function PlaylistRow({
                   >
                     Delete
                   </button>
-                  {playlist.source_url && (
+                  {safeHref(playlist.source_url) && (
                     <a
-                      href={playlist.source_url}
+                      href={safeHref(playlist.source_url)}
                       target="_blank"
                       rel="noreferrer"
                       className="shrink-0 text-sm text-accent hover:underline"

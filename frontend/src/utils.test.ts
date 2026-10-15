@@ -3,6 +3,7 @@ import {
   dedupeSubtitleTracks,
   effectiveSourceUrl,
   formatSize,
+  safeHref,
   formatTimestamp,
   formatUsdCost,
   formatOpenRouterPerMillion,
@@ -249,5 +250,24 @@ describe("moveItem", () => {
     expect(moveItem(["a", "b", "c", "d"], 0, 2)).toEqual(["b", "c", "a", "d"]);
     expect(moveItem(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
     expect(moveItem(["a", "b"], 0, 0)).toEqual(["a", "b"]);
+  });
+});
+
+describe("safeHref", () => {
+  it("passes http and https URLs", () => {
+    expect(safeHref("https://example.com/a?b=1")).toBe(
+      "https://example.com/a?b=1"
+    );
+    expect(safeHref(" http://example.com ")).toBe("http://example.com/");
+  });
+
+  it("drops every other scheme and bad input", () => {
+    expect(safeHref("javascript:alert(1)")).toBeUndefined();
+    expect(safeHref("JaVaScRiPt:alert(1)")).toBeUndefined();
+    expect(safeHref("data:text/html,<script>")).toBeUndefined();
+    expect(safeHref("//evil.example/x")).toBeUndefined();
+    expect(safeHref("not a url")).toBeUndefined();
+    expect(safeHref("")).toBeUndefined();
+    expect(safeHref(null)).toBeUndefined();
   });
 });

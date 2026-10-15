@@ -1,20 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-test.beforeEach(async ({ page, request }) => {
-  const reset = await request.post("/api/e2e/reset");
-  if (!reset.ok()) {
-    throw new Error(
-      `e2e reset failed: ${reset.status()} ${await reset.text()}`
-    );
-  }
-  await page.addInitScript(() => {
-    const key = "horde-e2e-storage-cleared";
-    if (sessionStorage.getItem(key)) return;
-    localStorage.clear();
-    sessionStorage.clear();
-    sessionStorage.setItem(key, "1");
-  });
-});
+import { expect, test } from "./fixtures";
 
 test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await page.goto("/");

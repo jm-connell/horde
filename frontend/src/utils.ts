@@ -442,3 +442,20 @@ export function backdropClick(onClose: () => void) {
     else e.stopPropagation();
   };
 }
+
+/**
+ * A URL that is safe to put in `<a href>`: http(s) only. Anything else
+ * (`javascript:`, `data:`, malformed input) yields `undefined`, so the link
+ * renders without a target. Use this at every sink fed by stored or fetched data.
+ */
+export function safeHref(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}

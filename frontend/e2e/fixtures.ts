@@ -1,9 +1,14 @@
 import { test as base, expect, type Page } from "@playwright/test";
 
+/** Mutations from outside the SPA (the test's own API calls) need the CSRF header. */
+export const CSRF_HEADERS = { "X-Horde-Request": "1" };
+
 /** Seeded app. Each test starts from the same library and empty browser storage. */
 export const test = base.extend({
   page: async ({ page, request }, use) => {
-    const reset = await request.post("/api/e2e/reset");
+    const reset = await request.post("/api/e2e/reset", {
+      headers: CSRF_HEADERS,
+    });
     if (!reset.ok()) {
       throw new Error(
         `e2e reset failed: ${reset.status()} ${await reset.text()}`

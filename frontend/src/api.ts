@@ -68,13 +68,30 @@ function isNetworkFailure(err: unknown): boolean {
   return err instanceof TypeError || isOfflineError(err);
 }
 
+/**
+ * Every state-changing request must carry this header: the server refuses
+ * mutations without it (app/security.py). A custom header forces a CORS
+ * preflight, which no route grants, so other websites cannot send one.
+ */
+export const CSRF_HEADER = "X-Horde-Request";
+
+/** Add the CSRF header to a non-GET request init. Safe methods pass through. */
+export function withCsrf(init?: RequestInit): RequestInit | undefined {
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS")
+    return init;
+  const headers = new Headers(init?.headers);
+  headers.set(CSRF_HEADER, "1");
+  return { ...init, headers };
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   // Offline mode: fail fast instead of hanging on a dead/slow connection.
   if (connectivity.offlineMode) throw offlineError();
   let resp: Response;
   const t0 = performance.now();
   try {
-    resp = await fetch(url, init);
+    resp = await fetch(url, withCsrf(init));
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw err;
@@ -831,15 +848,18 @@ export const api = {
       onEvent: (event: Record<string, unknown>) => void;
     }
   ): Promise<void> {
-    const resp = await fetch(`/api/videos/${id}/ai/chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-      },
-      body: JSON.stringify({ message }),
-      signal: opts.signal,
-    });
+    const resp = await fetch(
+      `/api/videos/${id}/ai/chat`,
+      withCsrf({
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({ message }),
+        signal: opts.signal,
+      })
+    );
     if (!resp.ok) {
       let detail = resp.statusText;
       try {
@@ -912,6 +932,7 @@ export const api = {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/review/upload");
+      xhr.setRequestHeader(CSRF_HEADER, "1");
       xhr.responseType = "json";
       xhr.upload.onprogress = (e) => {
         if (!onProgress || !e.lengthComputable) return;

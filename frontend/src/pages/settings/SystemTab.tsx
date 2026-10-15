@@ -8,7 +8,7 @@ import { saveDismissedUpdateSha } from "./helpers";
 import { api } from "../../api";
 import { useConfirm } from "../../context/ConfirmContext";
 import { downloadErrorLabel, extractFailureCopy } from "../../downloadErrors";
-import { formatSize } from "../../utils";
+import { formatSize, safeHref } from "../../utils";
 import { clearHordeBrowserState } from "../../setupStorage";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import Collapse from "../../components/Collapse";
@@ -128,9 +128,9 @@ bash update.sh`}
                     <kbd className="font-mono">Ctrl+Shift+R</kbd>
                     ). Library data stays on host volumes.
                   </p>
-                  {updateCheck.latest_html_url && (
+                  {safeHref(updateCheck.latest_html_url) && (
                     <a
-                      href={updateCheck.latest_html_url}
+                      href={safeHref(updateCheck.latest_html_url)}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-block text-accent hover:underline"
