@@ -431,35 +431,18 @@ recreate_previous() {
 }
 
 # Restore the database backup over the live one, with the app stopped, in a
-# throwaway container (root, so host permissions do not matter). The copy is
-# verified with PRAGMA integrity_check BEFORE it replaces anything, then renamed
-# into place atomically; the newer database is kept as horde.db.pre-rollback-<ts>
-# (and its -wal/-shm beside it). On any failure nothing is deleted and the
+# throwaway container (root, so host permissions do not matter) running
+# scripts/restore_db.sh: verified copy, atomic rename, newer database kept as
+# horde.db.pre-rollback-<ts>. On any failure nothing is deleted and the
 # non-zero status is returned.
 restore_database() {
   local backup_dir="$1" data="$2" image="$3" ts
   ts="$(date -u +%Y%m%dT%H%M%SZ)"
   compose stop horde >/dev/null 2>&1 || true
-  # The script below runs inside the container, so single quotes are intended.
-  # shellcheck disable=SC2016
-  docker_bin run --rm --entrypoint sh -e "TS=$ts" \
-    -v "${data}:/app/data" -v "${backup_dir}:/backup:ro" "$image" -c '
-      set -e
-      cd /app/data
-      rm -f horde.db.restoring
-      cp /backup/horde.db horde.db.restoring
-      python -c "
-import sqlite3, sys
-c = sqlite3.connect(\"horde.db.restoring\")
-sys.exit(0 if c.execute(\"PRAGMA integrity_check\").fetchone()[0] == \"ok\" else 1)"
-      chown "$(stat -c %u:%g .)" horde.db.restoring
-      if [ -f horde.db ]; then
-        ln horde.db "horde.db.pre-rollback-$TS" 2>/dev/null || cp -p horde.db "horde.db.pre-rollback-$TS"
-      fi
-      mv -f horde.db.restoring horde.db
-      for ext in wal shm; do
-        if [ -f "horde.db-$ext" ]; then mv "horde.db-$ext" "horde.db-$ext.pre-rollback-$TS"; fi
-      done' || {
+  docker_bin run --rm --entrypoint sh \
+    -v "${data}:/app/data" -v "${backup_dir}:/backup:ro" \
+    -v "$ROOT/scripts/restore_db.sh:/restore_db.sh:ro" \
+    "$image" /restore_db.sh /app/data /backup/horde.db "$ts" || {
     docker_bin run --rm --entrypoint rm -v "${data}:/app/data" "$image" -f /app/data/horde.db.restoring >/dev/null 2>&1 || true
     return 1
   }
