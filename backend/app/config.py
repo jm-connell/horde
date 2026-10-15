@@ -27,6 +27,10 @@ DATABASE_URL: str = f"sqlite:///{DB_PATH}"
 # How often the fallback poller walks the downloads tree (seconds).
 SCAN_INTERVAL_SEC: int = int(os.environ.get("SCAN_INTERVAL_SEC", "60"))
 
+# Boot-time sweep: temp/partial download artifacts older than this many hours
+# (and not owned by an active job) are deleted. 0 disables the sweep.
+TEMP_SWEEP_MAX_AGE_HOURS: float = float(os.environ.get("HORDE_TEMP_SWEEP_HOURS", "6"))
+
 # Video extensions the scanner treats as importable media.
 VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm"}
 

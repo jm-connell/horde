@@ -93,6 +93,9 @@ async def lifespan(app: FastAPI):
     await preview.init_preview_client()
     downloader.download_queue.recover()
     downloader.gc_orphaned_device_dirs()
+    from .services.temp_sweep import run_boot_cleanup
+
+    run_boot_cleanup()
     recover_ai_jobs()
     recover_catalog_jobs()
     observer = start_scanner()
