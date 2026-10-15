@@ -92,6 +92,7 @@ services:
       # Logging and nightly database backups (docs/ops/logging.md, backup-restore.md).
       - HORDE_LOG_LEVEL=${HORDE_LOG_LEVEL:-INFO}
       - HORDE_LOG_FORMAT=${HORDE_LOG_FORMAT:-text}
+      - HORDE_BACKUP_ENABLED=${HORDE_BACKUP_ENABLED:-1}
       - HORDE_BACKUP_HOUR=${HORDE_BACKUP_HOUR:-4}
       - HORDE_BACKUP_KEEP=${HORDE_BACKUP_KEEP:-7}
     volumes:

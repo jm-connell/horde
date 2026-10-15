@@ -36,6 +36,7 @@ from .security import install_security
 from .services import app_settings as app_settings_svc
 from .services import downloader, ffmpeg_progress
 from .services.ai.worker import recover_ai_jobs
+from .services.backup import create_backup_worker
 from .services.channel_catalog import recover_catalog_jobs
 from .services.health import HealthCache, build_readiness
 from .services.scanner import cleanup_orphans, create_scanner_workers
@@ -146,6 +147,9 @@ def _start_workers(app_: FastAPI, registry: WorkerRegistry) -> None:
     registry.start(job_metadata.create_worker())
     job_metadata.rehydrate_pending()
     registry.start(compat_rendition.create_probe_backfill_worker())
+    backup_worker = create_backup_worker(engine)
+    if backup_worker is not None:
+        registry.start(backup_worker)
 
 
 @asynccontextmanager

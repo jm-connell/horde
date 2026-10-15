@@ -56,7 +56,7 @@ From `main.py` `lifespan`:
 5. `cleanup_orphans()` — drop library rows for missing files  
 6. `ensure_plugins_loaded()` — load yt-dlp plugins once before workers  
 7. `preview.init_preview_client()`  
-8. `_start_workers()`: the download queue, ffmpeg queue and reaper are registered, then `download_queue.recover()` (`downloading` → `queued`; restore `download_queue_paused`), `recover_ai_jobs()`, `recover_catalog_jobs()`, then the sprite pool, scanner (watchdog + poller, which runs the first library scan), metadata sync, AI, catalog, autodownload, subtitle retry, job metadata, probe backfill  
+8. `_start_workers()`: the download queue, ffmpeg queue and reaper are registered, then `download_queue.recover()` (`downloading` → `queued`; restore `download_queue_paused`), `recover_ai_jobs()`, `recover_catalog_jobs()`, then the sprite pool, scanner (watchdog + poller, which runs the first library scan), metadata sync, AI, catalog, autodownload, subtitle retry, job metadata, probe backfill, nightly backup  
 
 On shutdown the shutdown event is set (streams end), every worker is signalled and then joined newest first, and the preview client is closed. See [Workers](workers.md#lifecycle).
 

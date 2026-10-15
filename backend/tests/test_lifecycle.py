@@ -32,6 +32,7 @@ EXPECTED_WORKERS = {
     "subtitle-retry",
     "job-metadata",
     "codec-probe-backfill",
+    "nightly-backup",
 }
 
 

@@ -31,7 +31,7 @@ ensure_dirs
     -> recover_ai_jobs()          # running→queued
     -> recover_catalog_jobs()     # indexing→queued
     -> sprite pool, scanner (the first scan runs on its poller thread)
-    -> metadata sync, AI, catalog, autodownload, subtitle retry, job metadata, probe backfill
+    -> metadata sync, AI, catalog, autodownload, subtitle retry, job metadata, probe backfill, nightly backup
 ```
 
 Stuck mid-flight download / AI / catalog work is requeued **before** workers start so a crash cannot leave jobs stranded forever. Download queue pause is restored from `download_queue_paused` in app settings.

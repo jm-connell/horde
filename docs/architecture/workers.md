@@ -22,7 +22,7 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready).
 | `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper. |
 | `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
-| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `job-metadata`, `codec-probe-backfill`, `pot-probe` | The loops described below. |
+| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `job-metadata`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
 
 Short-lived threads started by a request (bulk metadata sync, playlist sync, H.264 copies) are not registered; they are daemon threads and every database write they make is transactional.
 
@@ -129,8 +129,13 @@ English captions are fetched after the file is watchable. A timedtext **HTTP 429
 
 Videos added in the last **48 hours** that never got a metadata sync and still have empty captions are re-queued on worker start. Watch keeps showing “Subtitles loading” while `subtitles_pending` is true. Library **Resync** uses the same helper and skips timedtext while backoff is active.
 
+## Nightly backup
+
+**Start:** `backup.create_backup_worker()` unless `HORDE_BACKUP_ENABLED=0`. Checks every minute; once the configured local hour has passed and today's `horde-nightly-YYYYMMDD.db` does not exist, it writes it with `VACUUM INTO` and prunes older nightly files. A failed attempt (disk full, volume gone) is logged and retried an hour later. See [Backup & restore](../ops/backup-restore.md#nightly).
+
 ## Related
 
 - [Maintenance](../ops/maintenance.md)
 - [Overview](overview.md)
 - [AI pipeline](ai-pipeline.md)
+
