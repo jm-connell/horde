@@ -129,7 +129,7 @@ test.describe("offline downloads (mobile)", () => {
       expect((ready as { readyState: number }).readyState).toBeGreaterThanOrEqual(2);
     });
 
-    await test.step("offline home lists downloads; server-only nav disabled", async () => {
+    await test.step("offline home lists downloads; server-only nav hidden", async () => {
       await page.goto("/");
       const offlinePage = page.locator("[data-horde='offline-page']");
       await expect(offlinePage).toBeVisible({ timeout: 20_000 });
@@ -137,9 +137,7 @@ test.describe("offline downloads (mobile)", () => {
       await page.getByLabel("Toggle navigation menu").click();
       const nav = page.locator("[data-horde='nav-menu']");
       for (const label of ["Playlists", "History", "Download", "Import"]) {
-        await expect(
-          nav.locator("[aria-disabled='true']", { hasText: label })
-        ).toHaveCount(1);
+        await expect(nav.getByText(label, { exact: true })).toHaveCount(0);
       }
       await expect(nav.getByRole("link", { name: "Settings" })).toBeVisible();
     });

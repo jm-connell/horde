@@ -93,6 +93,10 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "playback",
     keywords: "playback speed speed default hold hold-click hold speed click to hold",
   },
+  {
+    tab: "playback",
+    keywords: "offline mode offline go offline connection airplane reconnect",
+  },
   // Downloads (legacy tab, redirected to library)
   {
     tab: "library",

@@ -25,7 +25,7 @@ interface NavLinkDef {
   to: string;
   label: string;
   end: boolean;
-  /** Needs the server; dimmed in offline mode. */
+  /** Needs the server; hidden in offline mode. */
   serverOnly?: boolean;
 }
 
@@ -75,10 +75,11 @@ export default function TopNav() {
     activeOffline,
     offlineSnap.liveBytes,
   ).progress;
-  const NAV_LINKS: NavLinkDef[] =
+  const NAV_LINKS: NavLinkDef[] = (
     hasOfflineItems || offlineMode
       ? [...BASE_LINKS.slice(0, 3), OFFLINE_LINK, ...BASE_LINKS.slice(3)]
-      : BASE_LINKS;
+      : BASE_LINKS
+  ).filter((link) => !(offlineMode && link.serverOnly));
   // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
   const isTheaterWide =
     !isMobile && mode === "theater" && location.pathname.startsWith("/watch");
@@ -319,21 +320,7 @@ export default function TopNav() {
         ? downloadBadge
         : null;
 
-  const disabledLink = (link: NavLinkDef, mobile: boolean) => (
-    <span
-      key={link.to}
-      aria-disabled="true"
-      title="Unavailable while offline"
-      className={`relative z-10 cursor-not-allowed rounded-lg px-4 text-sm font-medium whitespace-nowrap text-gray-600 ${
-        mobile ? "block py-3" : "py-2"
-      }`}
-    >
-      {link.label}
-    </span>
-  );
-
   const desktopLinks = NAV_LINKS.map((link) => {
-    if (offlineMode && link.serverOnly) return disabledLink(link, false);
     const active = isLinkActive(location.pathname, link.to, link.end);
     return (
       <NavLink
@@ -384,9 +371,11 @@ export default function TopNav() {
             </span>
           </NavLink>
 
-          <div ref={tagRef} className="flex shrink-0 empty:hidden">
-            <ConnectionTag />
-          </div>
+          {useHamburger && (
+            <div ref={tagRef} className="flex shrink-0 empty:hidden">
+              <ConnectionTag />
+            </div>
+          )}
 
           <div
             ref={measureRef}
@@ -411,6 +400,13 @@ export default function TopNav() {
             >
               {desktopLinks}
             </LiquidNav>
+          )}
+
+          {/* Desktop: pill sits at the far right so it never shifts the links. */}
+          {!useHamburger && (
+            <div ref={tagRef} className="ml-auto flex shrink-0 pl-4 empty:hidden">
+              <ConnectionTag popupAlign="end" />
+            </div>
           )}
 
           {useHamburger && (
@@ -567,9 +563,6 @@ export default function TopNav() {
                   dependency={location.pathname}
                 >
                   {NAV_LINKS.map((link) => {
-                    if (offlineMode && link.serverOnly) {
-                      return disabledLink(link, true);
-                    }
                     const active = isLinkActive(
                       location.pathname,
                       link.to,

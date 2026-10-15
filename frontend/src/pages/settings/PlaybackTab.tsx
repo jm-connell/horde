@@ -9,10 +9,14 @@ import {
 } from "./constants";
 import { Chip, Section, SettingRow, Toggle } from "./ui";
 import { useSettingsPage } from "./context";
+import { connectivity } from "../../offline/connectivity";
+import { useConnectivity } from "../../offline/hooks";
 import SponsorBlockSection from "./SponsorBlockSection";
 
 export default function PlaybackTab() {
   const { q, match, settings, update } = useSettingsPage();
+  const net = useConnectivity();
+  const offlineMode = net.status === "offline";
   const [holdDraft, setHoldDraft] = useState(String(settings.holdPlaybackRate));
 
   useEffect(() => {
@@ -273,6 +277,32 @@ export default function PlaybackTab() {
               />
               <span className="text-sm text-gray-400">x</span>
             </span>
+          }
+        />
+      </Section>
+
+      <Section
+        title="Offline mode"
+        description="Use Horde without the server. Only videos saved for offline are shown."
+        hidden={!match("offline mode", "offline", "connection", "airplane")}
+      >
+        <SettingRow
+          title="Offline mode"
+          description={
+            offlineMode && !net.manual
+              ? "On automatically: the server can't be reached. Turn off to retry now."
+              : net.reconnecting
+                ? "Connecting…"
+                : "Stays on until you turn it off, even on a working connection."
+          }
+          control={
+            <Toggle
+              checked={offlineMode}
+              disabled={net.reconnecting}
+              onChange={() =>
+                offlineMode ? void connectivity.reconnect() : connectivity.goOffline()
+              }
+            />
           }
         />
       </Section>
