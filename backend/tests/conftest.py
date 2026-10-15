@@ -261,7 +261,7 @@ def set_watch(session) -> Callable[..., Any]:
 @pytest.fixture
 def app(init_db, monkeypatch):
     """FastAPI app with the real routers but no production lifespan/workers."""
-    from fastapi import FastAPI
+    from fastapi import Depends, FastAPI
     from sqlmodel import Session as DBSession
 
     from app.api import (
@@ -277,8 +277,13 @@ def app(init_db, monkeypatch):
         review,
         setup,
         system,
+        users,
         videos,
     )
+    from app.api import (
+        auth as auth_api,
+    )
+    from app.auth import require_admin
     from app.database import get_session
     from app.main import health, metrics, ping, ready
     from app.security import install_security
@@ -310,10 +315,17 @@ def app(init_db, monkeypatch):
     test_app.include_router(backgrounds.router)
     test_app.include_router(fonts.router)
     test_app.include_router(setup.router)
+    test_app.include_router(auth_api.router)
+    test_app.include_router(users.router)
     test_app.add_api_route("/api/health", health, methods=["GET"])
     test_app.add_api_route("/api/ready", ready, methods=["GET"])
     test_app.add_api_route("/api/ping", ping, methods=["GET"])
-    test_app.add_api_route("/api/metrics", metrics, methods=["GET"])
+    test_app.add_api_route(
+        "/api/metrics",
+        metrics,
+        methods=["GET"],
+        dependencies=[Depends(require_admin)],
+    )
     # Explicit config so a developer's HORDE_AUTH_DISABLED never leaks into tests.
     install_security(test_app, auth_config=AuthConfig())
 

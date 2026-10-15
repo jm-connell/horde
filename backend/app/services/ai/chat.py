@@ -10,7 +10,7 @@ from typing import Any
 from sqlmodel import Session, select
 
 from ...database import engine
-from ...models import Video, VideoAiChat, VideoAiChatMessage, utcnow
+from ...models import Video, VideoAiChatMessage, utcnow
 from .. import app_settings
 from . import embeddings as ai_embeddings
 from . import text as ai_text
@@ -36,19 +36,15 @@ class ChatError(Exception):
         self.status_code = status_code
 
 
-def _get_or_create_thread(session: Session, video_id: int) -> VideoAiChat:
-    row = session.get(VideoAiChat, video_id)
-    if row is None:
-        row = VideoAiChat(video_id=video_id)
-        session.add(row)
-        session.flush()
-    return row
-
-
-def list_messages(session: Session, video_id: int) -> list[dict[str, Any]]:
+def list_messages(
+    session: Session, video_id: int, user_id: int
+) -> list[dict[str, Any]]:
     rows = session.exec(
         select(VideoAiChatMessage)
-        .where(VideoAiChatMessage.video_id == video_id)
+        .where(
+            VideoAiChatMessage.video_id == video_id,
+            VideoAiChatMessage.user_id == user_id,
+        )
         .order_by(VideoAiChatMessage.created_at.asc(), VideoAiChatMessage.id.asc())
     ).all()
     return [
@@ -64,22 +60,28 @@ def list_messages(session: Session, video_id: int) -> list[dict[str, Any]]:
     ]
 
 
-def clear_messages(session: Session, video_id: int) -> None:
+def clear_messages(session: Session, video_id: int, user_id: int) -> None:
+    """Delete this user's conversation about the video (nobody else's)."""
     rows = session.exec(
-        select(VideoAiChatMessage).where(VideoAiChatMessage.video_id == video_id)
+        select(VideoAiChatMessage).where(
+            VideoAiChatMessage.video_id == video_id,
+            VideoAiChatMessage.user_id == user_id,
+        )
     ).all()
     for row in rows:
         session.delete(row)
-    thread = session.get(VideoAiChat, video_id)
-    if thread is not None:
-        session.delete(thread)
     session.commit()
 
 
-def _history_for_prompt(session: Session, video_id: int) -> list[dict[str, str]]:
+def _history_for_prompt(
+    session: Session, video_id: int, user_id: int
+) -> list[dict[str, str]]:
     rows = session.exec(
         select(VideoAiChatMessage)
-        .where(VideoAiChatMessage.video_id == video_id)
+        .where(
+            VideoAiChatMessage.video_id == video_id,
+            VideoAiChatMessage.user_id == user_id,
+        )
         .order_by(VideoAiChatMessage.created_at.asc(), VideoAiChatMessage.id.asc())
     ).all()
     # Drop the just-persisted latest user message — it is passed as ``prompt``.
@@ -127,14 +129,16 @@ def _validate_chat_request(session: Session, video_id: int, message: str) -> Vid
     return video
 
 
-def stream_chat_events(video_id: int, message: str) -> Generator[str, None, None]:
+def stream_chat_events(
+    video_id: int, message: str, user_id: int
+) -> Generator[str, None, None]:
     """SSE generator that owns its DB session for the full stream lifetime."""
     with Session(engine) as session:
-        yield from stream_chat(session, video_id, message)
+        yield from stream_chat(session, video_id, message, user_id)
 
 
 def stream_chat(
-    session: Session, video_id: int, message: str
+    session: Session, video_id: int, message: str, user_id: int
 ) -> Generator[str, None, None]:
     """Yield SSE event strings for a chat turn.
 
@@ -169,18 +173,14 @@ def stream_chat(
         yield _sse({"type": "error", "detail": missing, "status": 503})
         return
 
-    _get_or_create_thread(session, video_id)
     user_row = VideoAiChatMessage(
         video_id=video_id,
+        user_id=user_id,
         role="user",
         content=user_text,
         created_at=utcnow(),
     )
     session.add(user_row)
-    thread = session.get(VideoAiChat, video_id)
-    if thread is not None:
-        thread.updated_at = utcnow()
-        session.add(thread)
     session.commit()
     session.refresh(user_row)
     # Re-load video after commit (expire_on_commit) before building context.
@@ -205,7 +205,7 @@ def stream_chat(
 
     context = ai_embeddings.build_chat_context(session, video, user_text)
     system = ai_text.chat_system_prompt() + "\n\n" + context
-    history = _history_for_prompt(session, video_id)
+    history = _history_for_prompt(session, video_id, user_id)
     session.commit()
 
     assistant_parts: list[str] = []
@@ -246,6 +246,7 @@ def stream_chat(
 
     assistant_row = VideoAiChatMessage(
         video_id=video_id,
+        user_id=user_id,
         role="assistant",
         content=reply,
         cost=turn_cost,
@@ -253,10 +254,6 @@ def stream_chat(
         created_at=utcnow(),
     )
     session.add(assistant_row)
-    thread = session.get(VideoAiChat, video_id)
-    if thread is not None:
-        thread.updated_at = utcnow()
-        session.add(thread)
     session.commit()
     session.refresh(assistant_row)
 

@@ -8,9 +8,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
+from ..auth import require_admin
 from ..config import BACKGROUNDS_DIR, ensure_dirs
 from ..services import uploads
 
@@ -96,7 +97,7 @@ def list_backgrounds():
     return {"items": items}
 
 
-@router.post("")
+@router.post("", dependencies=[Depends(require_admin)])
 def upload_background(file: UploadFile = File(...)):
     ensure_dirs()
     name = file.filename or "upload.bin"
@@ -155,7 +156,7 @@ def get_background(bg_id: str):
     return FileResponse(path, media_type=mime)
 
 
-@router.delete("/{bg_id}")
+@router.delete("/{bg_id}", dependencies=[Depends(require_admin)])
 def delete_background(bg_id: str):
     safe = _safe_id(bg_id)
     path = _find_file(safe)
@@ -171,7 +172,7 @@ def delete_background(bg_id: str):
     return {"ok": True}
 
 
-@router.post("/{bg_id}/palette")
+@router.post("/{bg_id}/palette", dependencies=[Depends(require_admin)])
 def extract_palette(bg_id: str):
     path = _find_file(_safe_id(bg_id))
     if path is None:

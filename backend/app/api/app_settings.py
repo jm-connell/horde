@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ..auth import CodedHTTPException, current_user
+from ..auth import current_user, ensure_admin
 from ..database import get_session
 from ..services import app_settings, user_settings
 from ..services.ai.provider import (
@@ -254,8 +254,8 @@ def update_settings(
     """Anyone may change their own ``ui`` preferences; every other field is
     server-wide and needs an administrator."""
     server_fields = payload.model_fields_set - {"ui"}
-    if server_fields and not user.is_admin:
-        raise CodedHTTPException(403, "Administrator access required", "admin_required")
+    if server_fields:
+        ensure_admin(user)
     updates: dict = {}
     ui_patch: dict[str, Any] | None = None
     if payload.progress_expiry_days is not None:

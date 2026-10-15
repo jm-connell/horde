@@ -24,7 +24,6 @@ from ..models import (
     PlaylistItem,
     UserVideoState,
     Video,
-    VideoAiChat,
     VideoAiChatMessage,
     VideoAiMeta,
     VideoEmbedding,
@@ -39,7 +38,6 @@ logger = logging.getLogger(__name__)
 _OWNED_ROW_MODELS = (
     VideoEmbedding,
     VideoAiChatMessage,
-    VideoAiChat,
     VideoAiMeta,
     PlaylistItem,
     AiJob,

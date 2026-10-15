@@ -8,9 +8,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
+from ..auth import require_admin
 from ..config import FONTS_DIR, ensure_dirs
 from ..services import uploads
 
@@ -89,7 +90,7 @@ def list_fonts():
     return {"items": items}
 
 
-@router.post("")
+@router.post("", dependencies=[Depends(require_admin)])
 def upload_font(file: UploadFile = File(...)):
     ensure_dirs()
     name = file.filename or "font.bin"
@@ -140,7 +141,7 @@ def get_font(font_id: str):
     )
 
 
-@router.delete("/{font_id}")
+@router.delete("/{font_id}", dependencies=[Depends(require_admin)])
 def delete_font(font_id: str):
     safe = _safe_id(font_id)
     path = _find_file(safe)

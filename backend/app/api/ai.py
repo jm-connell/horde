@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ..auth import current_user
+from ..auth import current_user, require_admin
 from ..database import get_session
 from ..services.ai import embeddings, recommend, worker
 from ..services.ai.provider import (
@@ -224,7 +224,7 @@ def ai_status(session: Session = Depends(get_session)):
     )
 
 
-@router.post("/apply-workload")
+@router.post("/apply-workload", dependencies=[Depends(require_admin)])
 def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()):
     """Apply a workload profile: resolve models for the Ollama GPU, save, optional pull."""
     from ..services import app_settings
@@ -265,17 +265,21 @@ def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()
     }
 
 
-@router.post("/test")
+@router.post("/test", dependencies=[Depends(require_admin)])
 def ai_test(payload: AiTestRequest):
     return test_connection(payload.base_url)
 
 
-@router.post("/openrouter/test")
+@router.post("/openrouter/test", dependencies=[Depends(require_admin)])
 def ai_openrouter_test(payload: OpenRouterTestRequest = OpenRouterTestRequest()):
     return test_openrouter_connection(payload.api_key)
 
 
-@router.get("/openrouter/models", response_model=OpenRouterModelsResponse)
+@router.get(
+    "/openrouter/models",
+    response_model=OpenRouterModelsResponse,
+    dependencies=[Depends(require_admin)],
+)
 def ai_openrouter_models():
     try:
         models = list_openrouter_models()
@@ -313,7 +317,11 @@ class OpenRouterCostsRead(BaseModel):
     blocked: bool = False
 
 
-@router.get("/openrouter/costs", response_model=OpenRouterCostsRead)
+@router.get(
+    "/openrouter/costs",
+    response_model=OpenRouterCostsRead,
+    dependencies=[Depends(require_admin)],
+)
 def ai_openrouter_costs():
     from ..services.ai.cost_ledger import budget_status, window_analytics
 
@@ -338,7 +346,9 @@ def ai_openrouter_costs():
     )
 
 
-@router.post("/process", response_model=AiProcessResult)
+@router.post(
+    "/process", response_model=AiProcessResult, dependencies=[Depends(require_admin)]
+)
 def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
     invalidate_resolved_url()
     action = payload.action
@@ -370,7 +380,7 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
     )
 
 
-@router.post("/pause")
+@router.post("/pause", dependencies=[Depends(require_admin)])
 def ai_pause():
     from ..services import app_settings
 
@@ -378,7 +388,7 @@ def ai_pause():
     return {"paused": True}
 
 
-@router.post("/resume")
+@router.post("/resume", dependencies=[Depends(require_admin)])
 def ai_resume():
     from ..services import app_settings
 
@@ -399,26 +409,26 @@ def ai_list_jobs(
     return [AiJobRow(**row) for row in rows]
 
 
-@router.post("/jobs/retry-failed")
+@router.post("/jobs/retry-failed", dependencies=[Depends(require_admin)])
 def ai_retry_failed():
     count = worker.retry_failed_jobs()
     return {"ok": True, "retried": count}
 
 
-@router.post("/jobs/clear-failed")
+@router.post("/jobs/clear-failed", dependencies=[Depends(require_admin)])
 def ai_clear_failed(keep_days: int = Query(default=0, ge=0, le=365)):
     deleted = worker.clear_failed_jobs(keep_days=keep_days)
     return {"ok": True, "deleted": deleted}
 
 
-@router.post("/jobs/{job_id}/retry")
+@router.post("/jobs/{job_id}/retry", dependencies=[Depends(require_admin)])
 def ai_retry_job(job_id: int):
     if not worker.retry_job(job_id):
         raise HTTPException(status_code=404, detail="Job not found or not retryable")
     return {"ok": True, "id": job_id}
 
 
-@router.post("/jobs/{job_id}/cancel")
+@router.post("/jobs/{job_id}/cancel", dependencies=[Depends(require_admin)])
 def ai_cancel_job(job_id: int):
     if not worker.cancel_job(job_id):
         raise HTTPException(status_code=404, detail="Job not found or not cancellable")

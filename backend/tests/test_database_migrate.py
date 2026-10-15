@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0003_auth"
+HEAD = "0004_permissions_chat"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 

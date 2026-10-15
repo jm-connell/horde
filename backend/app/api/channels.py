@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
+from ..auth import require_permission
 from ..database import get_session
 from ..schemas import (
     ChannelAutodownloadRead,
@@ -71,7 +72,11 @@ def list_channels(
     ]
 
 
-@router.patch("/channels", response_model=dict)
+@router.patch(
+    "/channels",
+    response_model=dict,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def rename_channel(payload: ChannelRename, session: Session = Depends(get_session)):
     old = payload.old_name.strip()
     new = payload.new_name.strip()
@@ -99,7 +104,11 @@ def channel_catalog_status():
     return ChannelCatalogStatusResponse(**channel_catalog.get_runtime_status())
 
 
-@router.post("/channels/catalog/index", response_model=ChannelCatalogIndexResult)
+@router.post(
+    "/channels/catalog/index",
+    response_model=ChannelCatalogIndexResult,
+    dependencies=[Depends(require_permission("download"))],
+)
 def channel_catalog_index(
     payload: ChannelCatalogIndexRequest,
     session: Session = Depends(get_session),
@@ -191,7 +200,11 @@ def get_channel_autodownload(
     )
 
 
-@router.put("/channels/autodownload", response_model=ChannelAutodownloadRead)
+@router.put(
+    "/channels/autodownload",
+    response_model=ChannelAutodownloadRead,
+    dependencies=[Depends(require_permission("download"))],
+)
 def put_channel_autodownload(
     payload: ChannelAutodownloadUpdate,
     session: Session = Depends(get_session),
@@ -354,6 +367,7 @@ def _feed_entries_from_raw(
 @router.patch(
     "/channels/catalog/youtube-search",
     response_model=ChannelCatalogYoutubeSearchPref,
+    dependencies=[Depends(require_permission("edit_metadata"))],
 )
 def channel_youtube_search_pref(
     payload: ChannelCatalogYoutubeSearchUpdate,

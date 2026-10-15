@@ -8,6 +8,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlmodel import Session, select
 
+from ..auth import (
+    current_user,
+    ensure_permission,
+    require_admin,
+    require_permission,
+)
 from ..config import DOWNLOADS_DIR
 from ..database import engine, get_session
 from ..models import DownloadDestination, DownloadJob, JobStatus, Playlist, Video
@@ -23,6 +29,7 @@ from ..schemas import (
     DownloadQueueStatus,
 )
 from ..services import downloader
+from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.paths import safe_filename
 from ..services.url_clean import (
@@ -149,7 +156,9 @@ def list_presets():
 
 
 @router.get(
-    "/preview", response_model=DownloadPreview, dependencies=[Depends(ytdlp_slot)]
+    "/preview",
+    response_model=DownloadPreview,
+    dependencies=[Depends(require_permission("download")), Depends(ytdlp_slot)],
 )
 def preview_download(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     if not url.strip():
@@ -203,7 +212,11 @@ def queue_status():
     )
 
 
-@router.post("/queue/pause", response_model=DownloadQueueStatus)
+@router.post(
+    "/queue/pause",
+    response_model=DownloadQueueStatus,
+    dependencies=[Depends(require_admin)],
+)
 def pause_queue():
     downloader.download_queue.pause_all()
     return DownloadQueueStatus(
@@ -213,7 +226,11 @@ def pause_queue():
     )
 
 
-@router.post("/queue/resume", response_model=DownloadQueueStatus)
+@router.post(
+    "/queue/resume",
+    response_model=DownloadQueueStatus,
+    dependencies=[Depends(require_admin)],
+)
 def resume_queue():
     downloader.download_queue.resume_all()
     return DownloadQueueStatus(
@@ -247,8 +264,22 @@ async def queue_events(request: Request) -> StreamingResponse:
     )
 
 
+def _require_destination_permission(user: AuthUser, destination: str) -> None:
+    """Saving to the library needs ``download``; to the caller's device, ``offline_download``."""
+    ensure_permission(
+        user, "offline_download" if destination == "device" else "download"
+    )
+
+
 @router.post("", response_model=DownloadJobRead)
-def create_download(payload: DownloadCreate, session: Session = Depends(get_session)):
+def create_download(
+    payload: DownloadCreate,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    _require_destination_permission(
+        user, payload.destination.value if payload.destination else "library"
+    )
     if not payload.url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
     validate_public_url(payload.url)
@@ -321,8 +352,11 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
 
 @router.post("/bulk", response_model=DownloadBulkResult)
 def create_downloads_bulk(
-    payload: DownloadBulkCreate, session: Session = Depends(get_session)
+    payload: DownloadBulkCreate,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
+    _require_destination_permission(user, payload.destination.value)
     """Enqueue URLs as individual jobs without blocking on metadata extract."""
     quality = (payload.quality_preset or "best").strip() or "best"
     destination = payload.destination.value if payload.destination else "library"
@@ -395,7 +429,11 @@ def create_downloads_bulk(
     )
 
 
-@router.patch("/{job_id}", response_model=DownloadJobRead)
+@router.patch(
+    "/{job_id}",
+    response_model=DownloadJobRead,
+    dependencies=[Depends(require_permission("download"))],
+)
 def update_job(
     job_id: int,
     payload: DownloadJobUpdate,
@@ -429,7 +467,11 @@ def update_job(
     return _enrich_jobs(session, [job])[0]
 
 
-@router.post("/{job_id}/retry", response_model=DownloadJobRead)
+@router.post(
+    "/{job_id}/retry",
+    response_model=DownloadJobRead,
+    dependencies=[Depends(require_permission("download"))],
+)
 def retry_job(
     job_id: int,
     payload: DownloadJobUpdate | None = Body(default=None),
@@ -464,7 +506,11 @@ def retry_job(
     return _enrich_jobs(session, [job])[0]
 
 
-@router.post("/{job_id}/quality", response_model=DownloadJobRead)
+@router.post(
+    "/{job_id}/quality",
+    response_model=DownloadJobRead,
+    dependencies=[Depends(require_permission("download"))],
+)
 def change_job_quality(
     job_id: int,
     payload: DownloadQualityUpdate,
@@ -486,7 +532,11 @@ def change_job_quality(
     return _enrich_jobs(session, [job])[0]
 
 
-@router.post("/{job_id}/cancel", response_model=DownloadJobRead)
+@router.post(
+    "/{job_id}/cancel",
+    response_model=DownloadJobRead,
+    dependencies=[Depends(require_permission("download"))],
+)
 def cancel_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(DownloadJob, job_id)
     if job is None:
@@ -508,7 +558,11 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
     return _enrich_jobs(session, [job])[0]
 
 
-@router.post("/dismiss-finished", status_code=204)
+@router.post(
+    "/dismiss-finished",
+    status_code=204,
+    dependencies=[Depends(require_permission("download"))],
+)
 def dismiss_finished_jobs(session: Session = Depends(get_session)):
     """Remove completed, failed, and cancelled jobs from the list."""
     statement = select(DownloadJob).where(
@@ -527,7 +581,9 @@ def dismiss_finished_jobs(session: Session = Depends(get_session)):
     return Response(status_code=204)
 
 
-@router.delete("/{job_id}", status_code=204)
+@router.delete(
+    "/{job_id}", status_code=204, dependencies=[Depends(require_permission("download"))]
+)
 def dismiss_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(DownloadJob, job_id)
     if job is None:
@@ -579,7 +635,9 @@ def get_job(job_id: int, session: Session = Depends(get_session)):
     return _enrich_jobs(session, [job])[0]
 
 
-@router.get("/{job_id}/file")
+@router.get(
+    "/{job_id}/file", dependencies=[Depends(require_permission("offline_download"))]
+)
 def download_device_file(job_id: int, session: Session = Depends(get_session)):
     """Serve an ephemeral device-destination download as a browser attachment."""
     job = session.get(DownloadJob, job_id)

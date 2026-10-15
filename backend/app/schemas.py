@@ -573,3 +573,79 @@ class ReadyResponse(BaseModel):
     migrations: bool
     workers: dict[str, bool]
     problems: list[str]
+
+
+# --- Accounts ---------------------------------------------------------------
+
+
+class AuthUserRead(BaseModel):
+    """The signed-in user. ``permissions`` is effective: all of them for an admin."""
+
+    id: int
+    username: str
+    is_admin: bool
+    permissions: list[str]
+
+
+class AuthState(BaseModel):
+    users_exist: bool
+    authenticated: bool
+    user: AuthUserRead | None = None
+    setup_completed: bool
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(max_length=200)
+    password: str = Field(max_length=2000)
+
+
+class BootstrapRequest(BaseModel):
+    username: str = Field(max_length=200)
+    password: str = Field(max_length=2000)
+
+
+class AuthLoginResult(BaseModel):
+    user: AuthUserRead
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(max_length=2000)
+    new_password: str = Field(max_length=2000)
+
+
+class MediaTokenRead(BaseModel):
+    token: str
+    expires_at: datetime
+
+
+class PermissionInfo(BaseModel):
+    name: str
+    label: str
+    description: str
+    default: bool
+
+
+class UserRead(BaseModel):
+    id: int
+    username: str
+    is_admin: bool
+    disabled: bool
+    #: Effective permissions (all of them for an admin).
+    permissions: list[str]
+    created_at: datetime
+    last_login_at: datetime | None = None
+
+
+class UserCreate(BaseModel):
+    username: str = Field(max_length=200)
+    password: str = Field(max_length=2000)
+    is_admin: bool = False
+    #: Members only. Omitted = the default grants (see /api/users/permissions).
+    permissions: list[str] | None = None
+
+
+class UserUpdate(BaseModel):
+    is_admin: bool | None = None
+    disabled: bool | None = None
+    password: str | None = Field(default=None, max_length=2000)
+    permissions: list[str] | None = None

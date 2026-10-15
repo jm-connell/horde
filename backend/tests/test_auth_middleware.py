@@ -44,6 +44,12 @@ def test_public_allowlist_is_exactly_the_documented_one():
     assert PUBLIC_ROUTES == EXPECTED_PUBLIC
 
 
+def test_public_routes_exist_in_the_real_app():
+    from app.main import app as real_app
+
+    assert set(_api_routes(real_app)) >= EXPECTED_PUBLIC
+
+
 def test_every_other_api_route_is_401_when_signed_out(app, anon_client):
     checked = 0
     for method, path in _api_routes(app):

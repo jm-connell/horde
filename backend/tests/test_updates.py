@@ -7,8 +7,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.auth import current_user
 from app.main import updates as updates_route
 from app.services import updates
+from app.services.auth.accounts import AuthUser
+from app.services.auth.permissions import ALL_PERMISSIONS
 
 REPO = "jm-connell/horde"
 DEPLOYED = "a" * 40
@@ -50,6 +53,11 @@ class FakeGitHub:
 def client():
     app = FastAPI()
     app.add_api_route("/api/updates", updates_route, methods=["GET"])
+    # The route alone has no middleware; stand in for a signed-in administrator
+    # (forcing a check is admin-only, tests/test_permissions.py covers refusal).
+    app.dependency_overrides[current_user] = lambda: AuthUser(
+        id=1, username="admin", is_admin=True, permissions=ALL_PERMISSIONS
+    )
     with TestClient(app) as test_client:
         yield test_client
 

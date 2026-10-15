@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -26,8 +26,13 @@ from .api import (
     review,
     setup,
     system,
+    users,
     videos,
 )
+from .api import (
+    auth as auth_api,
+)
+from .auth import current_user, ensure_admin, require_admin
 from .config import DATA_DIR, DOWNLOADS_DIR, ensure_dirs, short_git_sha
 from .database import engine, init_db
 from .logging_config import configure_logging
@@ -36,6 +41,7 @@ from .security import install_security
 from .services import app_settings as app_settings_svc
 from .services import downloader, ffmpeg_progress
 from .services.ai.worker import recover_ai_jobs
+from .services.auth.accounts import AuthUser
 from .services.backup import create_backup_worker
 from .services.channel_catalog import recover_catalog_jobs
 from .services.health import HealthCache, build_readiness
@@ -216,6 +222,8 @@ app.include_router(system.router)
 app.include_router(backgrounds.router)
 app.include_router(fonts.router)
 app.include_router(setup.router)
+app.include_router(auth_api.router)
+app.include_router(users.router)
 
 
 def _health_cache(app_: FastAPI) -> HealthCache:
@@ -399,12 +407,35 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
     }
 
 
+def _public_health(request: Request) -> dict[str, Any]:
+    """All an anonymous caller (a load balancer, the sign-in page) gets to see."""
+    from sqlmodel import Session
+
+    from .services.auth import accounts
+
+    with Session(engine) as session:
+        users = accounts.count_users(session)
+    return {
+        "status": "ok",
+        "setup_required": users == 0
+        or not app_settings_svc.load().get("setup_completed"),
+        "auth_required": not request.app.state.auth.config.disabled,
+    }
+
+
 @app.get("/api/health")
 def health(request: Request):
+    """The full payload for a signed-in user; the bare minimum for anyone else."""
+    if getattr(request.state, "user", None) is None:
+        return _public_health(request)
     return build_health_payload(request.app)
 
 
-@app.get("/api/metrics", response_class=PlainTextResponse)
+@app.get(
+    "/api/metrics",
+    response_class=PlainTextResponse,
+    dependencies=[Depends(require_admin)],
+)
 def metrics(request: Request) -> PlainTextResponse:
     """Prometheus text format: queues, workers, database size, disk, request counts."""
     return PlainTextResponse(
@@ -413,8 +444,13 @@ def metrics(request: Request) -> PlainTextResponse:
 
 
 @app.get("/api/updates")
-def updates(refresh: bool = False):
-    """Compare baked-in git SHA to GitHub main (24h cache). Soft-fails offline."""
+def updates(refresh: bool = False, user: AuthUser = Depends(current_user)):
+    """Compare baked-in git SHA to GitHub main (24h cache). Soft-fails offline.
+
+    Forcing a fresh check (``refresh``) is for administrators.
+    """
+    if refresh:
+        ensure_admin(user)
     from .services.updates import check_for_updates
 
     return check_for_updates(refresh=refresh)

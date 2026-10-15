@@ -7,7 +7,7 @@ from sqlalchemy import delete, func
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
-from ..auth import current_user
+from ..auth import current_user, require_permission
 from ..database import get_session
 from ..models import Playlist, PlaylistItem, PlaylistSource, Video
 from ..schemas import (
@@ -206,7 +206,9 @@ def _ordered_videos(session: Session, playlist_id: int) -> list[Video]:
 
 
 @router.get(
-    "/preview", response_model=PlaylistPreview, dependencies=[Depends(ytdlp_slot)]
+    "/preview",
+    response_model=PlaylistPreview,
+    dependencies=[Depends(require_permission("download")), Depends(ytdlp_slot)],
 )
 def preview_playlist(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     if not url.strip():
@@ -286,7 +288,11 @@ def list_playlists(session: Session = Depends(get_session)):
     return out
 
 
-@router.post("", response_model=PlaylistRead)
+@router.post(
+    "",
+    response_model=PlaylistRead,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def create_playlist(payload: PlaylistCreate, session: Session = Depends(get_session)):
     name = payload.name.strip()
     if not name:
@@ -304,7 +310,11 @@ def create_playlist(payload: PlaylistCreate, session: Session = Depends(get_sess
     return _to_playlist_read(session, playlist)
 
 
-@router.patch("/reorder", response_model=list[PlaylistRead])
+@router.patch(
+    "/reorder",
+    response_model=list[PlaylistRead],
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def reorder_playlists(
     payload: PlaylistListReorder,
     session: Session = Depends(get_session),
@@ -335,7 +345,11 @@ def get_playlist(
     )
 
 
-@router.patch("/{playlist_id}", response_model=PlaylistRead)
+@router.patch(
+    "/{playlist_id}",
+    response_model=PlaylistRead,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def update_playlist(
     playlist_id: int,
     payload: PlaylistUpdate,
@@ -396,7 +410,11 @@ def update_playlist(
     return _to_playlist_read(session, playlist)
 
 
-@router.delete("/{playlist_id}", status_code=204)
+@router.delete(
+    "/{playlist_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def delete_playlist(playlist_id: int, session: Session = Depends(get_session)):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
@@ -408,7 +426,11 @@ def delete_playlist(playlist_id: int, session: Session = Depends(get_session)):
     return Response(status_code=204)
 
 
-@router.post("/{playlist_id}/items", response_model=PlaylistDetail)
+@router.post(
+    "/{playlist_id}/items",
+    response_model=PlaylistDetail,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def add_item(
     playlist_id: int,
     payload: PlaylistItemAdd,
@@ -437,6 +459,7 @@ def add_item(
                     playlist_id=playlist_id,
                 ),
                 session,
+                user,
             )
             return get_playlist(playlist_id, session, user)
 
@@ -463,7 +486,11 @@ def add_item(
     return get_playlist(playlist_id, session, user)
 
 
-@router.post("/{playlist_id}/items/bulk", status_code=204)
+@router.post(
+    "/{playlist_id}/items/bulk",
+    status_code=204,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def bulk_add_items(
     playlist_id: int,
     payload: BulkPlaylistAdd,
@@ -496,7 +523,11 @@ def bulk_add_items(
     return Response(status_code=204)
 
 
-@router.delete("/{playlist_id}/items/{video_id}", status_code=204)
+@router.delete(
+    "/{playlist_id}/items/{video_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def remove_item(
     playlist_id: int, video_id: int, session: Session = Depends(get_session)
 ):
@@ -512,7 +543,11 @@ def remove_item(
     return Response(status_code=204)
 
 
-@router.patch("/{playlist_id}/reorder", response_model=PlaylistDetail)
+@router.patch(
+    "/{playlist_id}/reorder",
+    response_model=PlaylistDetail,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def reorder_items(
     playlist_id: int,
     payload: PlaylistReorder,
@@ -544,7 +579,11 @@ def get_playlist_thumbnail(playlist_id: int, session: Session = Depends(get_sess
     return FileResponse(path, media_type="image/jpeg")
 
 
-@router.post("/{playlist_id}/thumbnail", response_model=PlaylistRead)
+@router.post(
+    "/{playlist_id}/thumbnail",
+    response_model=PlaylistRead,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def upload_playlist_thumbnail(
     playlist_id: int,
     file: UploadFile,
@@ -567,7 +606,11 @@ def upload_playlist_thumbnail(
     return _to_playlist_read(session, playlist)
 
 
-@router.post("/{playlist_id}/sync", response_model=PlaylistRead)
+@router.post(
+    "/{playlist_id}/sync",
+    response_model=PlaylistRead,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def sync_playlist(playlist_id: int, session: Session = Depends(get_session)):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
@@ -580,7 +623,15 @@ def sync_playlist(playlist_id: int, session: Session = Depends(get_session)):
     return _to_playlist_read(session, playlist)
 
 
-@router.post("/import", response_model=PlaylistRead, dependencies=[Depends(ytdlp_slot)])
+@router.post(
+    "/import",
+    response_model=PlaylistRead,
+    dependencies=[
+        Depends(require_permission("manage_playlists")),
+        Depends(require_permission("download")),
+        Depends(ytdlp_slot),
+    ],
+)
 def import_playlist(payload: PlaylistImport, session: Session = Depends(get_session)):
     url = clean_url(payload.url, keep_playlist=True)
     if not url:

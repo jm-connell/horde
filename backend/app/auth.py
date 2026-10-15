@@ -38,6 +38,7 @@ from . import database
 from .e2e_mode import enabled as e2e_enabled
 from .services.auth import accounts, media_token
 from .services.auth.accounts import AuthUser
+from .services.auth.permissions import ALL_PERMISSIONS, PERMISSION_TABLE
 from .services.auth.runtime import AuthRuntime
 
 logger = logging.getLogger(__name__)
@@ -220,8 +221,42 @@ def current_user(request: Request) -> AuthUser:
     return user
 
 
-def require_admin(user: AuthUser = Depends(current_user)) -> AuthUser:
-    """Dependency for routes that change server-wide state or settings."""
+def ensure_admin(user: AuthUser) -> None:
+    """For a check that depends on the request (use ``require_admin`` otherwise)."""
     if not user.is_admin:
         raise CodedHTTPException(403, "Administrator access required", "admin_required")
+
+
+def require_admin(user: AuthUser = Depends(current_user)) -> AuthUser:
+    """Dependency for routes that change server-wide state or settings."""
+    ensure_admin(user)
     return user
+
+
+require_admin.admin_only = True  # type: ignore[attr-defined]  # marker read by tests
+
+
+def ensure_permission(user: AuthUser, permission: str) -> None:
+    """403 ``permission_denied`` unless the user holds ``permission`` (admins do)."""
+    if not user.can(permission):
+        label = next(
+            (p.label for p in PERMISSION_TABLE if p.name == permission), permission
+        )
+        raise CodedHTTPException(
+            403,
+            f"Your account is not allowed to do this ({label}). Ask an administrator.",
+            "permission_denied",
+        )
+
+
+def require_permission(permission: str):
+    """Dependency factory: ``dependencies=[Depends(require_permission("download"))]``."""
+    if permission not in ALL_PERMISSIONS:
+        raise ValueError(f"unknown permission {permission!r}")
+
+    def dependency(user: AuthUser = Depends(current_user)) -> AuthUser:
+        ensure_permission(user, permission)
+        return user
+
+    dependency.permission = permission  # type: ignore[attr-defined]  # marker read by tests
+    return dependency

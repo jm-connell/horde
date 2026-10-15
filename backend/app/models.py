@@ -367,20 +367,17 @@ class VideoAiMeta(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-class VideoAiChat(SQLModel, table=True):
-    """One chat thread per video."""
-
-    __tablename__ = "video_ai_chat"
-
-    video_id: int = Field(primary_key=True, foreign_key="videos.id", ondelete="CASCADE")
-    updated_at: datetime = Field(default_factory=utcnow)
-
-
 class VideoAiChatMessage(SQLModel, table=True):
+    """One turn of a user's conversation about a video (chat is per user)."""
+
     __tablename__ = "video_ai_chat_messages"
 
     id: int | None = Field(default=None, primary_key=True)
     video_id: int = Field(foreign_key="videos.id", index=True, ondelete="CASCADE")
+    # NULL only for history from before accounts; it is adopted by the first admin.
+    user_id: int | None = Field(
+        default=None, foreign_key="users.id", index=True, ondelete="CASCADE"
+    )
     role: str = Field(default="user", index=True)  # user | assistant
     content: str = Field(default="")
     # OpenRouter usage.cost for this assistant turn (USD/credits), when known.
@@ -463,6 +460,9 @@ class User(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
     last_login_at: datetime | None = None
     disabled: bool = Field(default=False)
+    # JSON list of granted permission names (see services/auth/permissions.py).
+    # Meaningful for members only: administrators implicitly have everything.
+    permissions: str = Field(default="[]")
 
 
 class UserSession(SQLModel, table=True):

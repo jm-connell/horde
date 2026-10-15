@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session, func, select
 
-from ..auth import current_user
+from ..auth import current_user, require_admin, require_permission
 from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
 from ..database import get_session
 from ..models import DownloadJob, JobStatus, Video
@@ -15,6 +15,7 @@ from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
     BulkVideoNotes,
+    MediaTokenRead,
     MetadataRefreshResult,
     MetadataSyncStatus,
     StorageStats,
@@ -25,6 +26,7 @@ from ..schemas import (
     WatchProgressUpdate,
 )
 from ..services import downloader, library, uploads, user_state
+from ..services.auth import media_token as media_token_svc
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
 from ..services.metadata import (
@@ -177,7 +179,11 @@ def storage_stats(session: Session = Depends(get_session)):
 
 # Static /videos/... paths must be registered before /videos/{video_id}
 # or FastAPI treats the last segment as an int and returns 422.
-@router.post("/videos/bulk-delete", status_code=204)
+@router.post(
+    "/videos/bulk-delete",
+    status_code=204,
+    dependencies=[Depends(require_permission("delete_videos"))],
+)
 def bulk_delete_videos(
     payload: BulkVideoDelete,
     session: Session = Depends(get_session),
@@ -195,7 +201,11 @@ def bulk_delete_videos(
     return Response(status_code=204)
 
 
-@router.patch("/videos/bulk-notes", status_code=204)
+@router.patch(
+    "/videos/bulk-notes",
+    status_code=204,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def bulk_update_notes(
     payload: BulkVideoNotes,
     session: Session = Depends(get_session),
@@ -238,7 +248,11 @@ def related_videos(
     return _to_read_many(rows, session, user_id=user.id, compact=True)
 
 
-@router.patch("/videos/{video_id}", response_model=VideoRead)
+@router.patch(
+    "/videos/{video_id}",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def update_video(
     video_id: int,
     payload: VideoUpdate,
@@ -371,7 +385,11 @@ def update_progress(
     return Response(status_code=204)
 
 
-@router.delete("/videos/{video_id}", status_code=204)
+@router.delete(
+    "/videos/{video_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission("delete_videos"))],
+)
 def delete_video(
     video_id: int,
     delete_file: bool = False,
@@ -393,7 +411,11 @@ def _effective_source_url(video: Video) -> str | None:
     return None
 
 
-@router.post("/videos/{video_id}/redownload", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/redownload",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("download"))],
+)
 def redownload_video(
     video_id: int,
     payload: VideoRedownload,
@@ -445,7 +467,11 @@ def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
     video.thumbnail_path = dest
 
 
-@router.post("/videos/refresh-metadata", response_model=MetadataRefreshResult)
+@router.post(
+    "/videos/refresh-metadata",
+    response_model=MetadataRefreshResult,
+    dependencies=[Depends(require_admin)],
+)
 def bulk_refresh_metadata(
     payload: BulkMetadataRefresh,
     session: Session = Depends(get_session),
@@ -476,7 +502,11 @@ def metadata_sync_status():
     return MetadataSyncStatus(**get_sync_status())
 
 
-@router.post("/videos/{video_id}/refresh-metadata", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/refresh-metadata",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def refresh_metadata(
     video_id: int,
     session: Session = Depends(get_session),
@@ -498,7 +528,11 @@ def refresh_metadata(
     return _to_read(video, session, user_id=user.id)
 
 
-@router.post("/videos/{video_id}/ai/refresh-tags", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/ai/refresh-tags",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
 def refresh_video_tags(
     video_id: int,
     session: Session = Depends(get_session),
@@ -520,7 +554,11 @@ def refresh_video_tags(
     return _to_read(video, session, user_id=user.id)
 
 
-@router.post("/videos/{video_id}/ai/summarize", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/ai/summarize",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
 def summarize_video(
     video_id: int,
     force: bool = Query(False),
@@ -547,7 +585,11 @@ def summarize_video(
     return _to_read(video, session, user_id=user.id, include_processing=True)
 
 
-@router.post("/videos/{video_id}/ai/chapters", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/ai/chapters",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
 def generate_video_chapters(
     video_id: int,
     force: bool = Query(False),
@@ -578,32 +620,47 @@ class VideoAiChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
 
 
-@router.get("/videos/{video_id}/ai/chat")
-def get_video_ai_chat(video_id: int, session: Session = Depends(get_session)):
+@router.get(
+    "/videos/{video_id}/ai/chat", dependencies=[Depends(require_permission("use_ai"))]
+)
+def get_video_ai_chat(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     from ..services.ai import chat as ai_chat
 
-    return {"messages": ai_chat.list_messages(session, video_id)}
+    return {"messages": ai_chat.list_messages(session, video_id, user.id)}
 
 
-@router.delete("/videos/{video_id}/ai/chat")
-def delete_video_ai_chat(video_id: int, session: Session = Depends(get_session)):
+@router.delete(
+    "/videos/{video_id}/ai/chat", dependencies=[Depends(require_permission("use_ai"))]
+)
+def delete_video_ai_chat(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     from ..services.ai import chat as ai_chat
 
-    ai_chat.clear_messages(session, video_id)
+    ai_chat.clear_messages(session, video_id, user.id)
     return {"ok": True}
 
 
-@router.post("/videos/{video_id}/ai/chat")
+@router.post(
+    "/videos/{video_id}/ai/chat", dependencies=[Depends(require_permission("use_ai"))]
+)
 def post_video_ai_chat(
     video_id: int,
     payload: VideoAiChatRequest,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -612,13 +669,17 @@ def post_video_ai_chat(
 
     # Own session: request-scoped session closes before SSE finishes.
     return StreamingResponse(
-        ai_chat.stream_chat_events(video_id, payload.message),
+        ai_chat.stream_chat_events(video_id, payload.message, user.id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-@router.post("/videos/{video_id}/thumbnail", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/thumbnail",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def upload_thumbnail(
     video_id: int,
     file: UploadFile,
@@ -642,7 +703,10 @@ def upload_thumbnail(
     return _to_read(video, session, user_id=user.id)
 
 
-@router.post("/videos/{video_id}/thumbnail/candidates")
+@router.post(
+    "/videos/{video_id}/thumbnail/candidates",
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def generate_thumbnail_candidates(
     video_id: int,
     count: int = Query(8, ge=1, le=16),
@@ -709,7 +773,9 @@ def get_thumbnail_candidate(
 
 
 @router.post(
-    "/videos/{video_id}/thumbnail/candidates/{index}", response_model=VideoRead
+    "/videos/{video_id}/thumbnail/candidates/{index}",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
 )
 def select_thumbnail_candidate(
     video_id: int,
@@ -888,7 +954,29 @@ def stream_video(
     return StreamingResponse(iter_file(), status_code=206, headers=headers)
 
 
-@router.get("/videos/{video_id}/file")
+@router.get("/videos/{video_id}/media-token", response_model=MediaTokenRead)
+def media_token(
+    video_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """A 12 hour signed token for ``?mt=`` on the stream, subtitle and thumbnail URLs.
+
+    Cast and AirPlay receivers fetch media themselves and send no cookie.
+    """
+    if session.get(Video, video_id) is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    token, expires_at = media_token_svc.sign(
+        request.app.state.auth.secret(), video_id, user.id
+    )
+    return MediaTokenRead(token=token, expires_at=expires_at)
+
+
+@router.get(
+    "/videos/{video_id}/file",
+    dependencies=[Depends(require_permission("offline_download"))],
+)
 def download_video_file(
     video_id: int,
     rendition: str | None = None,

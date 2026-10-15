@@ -28,11 +28,12 @@ from ...models import (
     UserSettings,
     UserVideoState,
     Video,
+    VideoAiChatMessage,
     as_utc,
     utcnow,
 )
 from .. import app_settings
-from . import passwords
+from . import passwords, permissions
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,10 @@ class UserNotFound(AccountError):
     code = "user_not_found"
 
 
+class InvalidPermission(AccountError):
+    code = "invalid_permission"
+
+
 class AlreadyBootstrapped(AccountError):
     status_code = 409
     code = "already_bootstrapped"
@@ -92,10 +97,33 @@ class AuthUser:
     id: int
     username: str
     is_admin: bool
+    #: Effective permissions: everything for an administrator.
+    permissions: frozenset[str] = frozenset()
 
     @classmethod
     def of(cls, user: User) -> AuthUser:
-        return cls(id=_uid(user), username=user.username, is_admin=user.is_admin)
+        return cls(
+            id=_uid(user),
+            username=user.username,
+            is_admin=user.is_admin,
+            permissions=effective_permissions(user),
+        )
+
+    def can(self, permission: str) -> bool:
+        return permission in self.permissions
+
+
+def effective_permissions(user: User) -> frozenset[str]:
+    if user.is_admin:
+        return permissions.ALL_PERMISSIONS
+    return permissions.parse(user.permissions)
+
+
+def _checked_permissions(names: list[str] | set[str] | frozenset[str]) -> str:
+    try:
+        return permissions.dump(permissions.validate(names))
+    except permissions.UnknownPermission as exc:
+        raise InvalidPermission(str(exc)) from exc
 
 
 def _uid(user: User) -> int:
@@ -154,7 +182,12 @@ def first_admin(session: Session) -> User | None:
 
 
 def create_user(
-    session: Session, username: str, password: str, *, is_admin: bool = False
+    session: Session,
+    username: str,
+    password: str,
+    *,
+    is_admin: bool = False,
+    granted: list[str] | set[str] | frozenset[str] | None = None,
 ) -> User:
     """Add a user. The very first user is always an administrator.
 
@@ -167,7 +200,13 @@ def create_user(
     if get_by_username(session, norm) is not None:
         raise UsernameTaken(f"The username {name!r} is already taken")
     first = count_users(session) == 0
+    grants = (
+        _checked_permissions(permissions.DEFAULT_PERMISSIONS)
+        if granted is None
+        else _checked_permissions(granted)
+    )
     user = User(
+        permissions=grants,
         username=name,
         username_norm=norm,
         password_hash=passwords.hash_password(password),
@@ -197,6 +236,11 @@ def _adopt_legacy_data(session: Session, user: User) -> None:
                 or_(Video.last_watched_at.is_not(None), Video.last_position_sec > 0)
             ),
         )
+    )
+    session.execute(
+        update(VideoAiChatMessage)
+        .where(VideoAiChatMessage.user_id.is_(None))  # type: ignore[union-attr]
+        .values(user_id=_uid(user))
     )
     ui = app_settings.load().get("ui")
     session.add(
@@ -272,6 +316,7 @@ def update_user(
     is_admin: bool | None = None,
     disabled: bool | None = None,
     password: str | None = None,
+    granted: list[str] | set[str] | frozenset[str] | None = None,
 ) -> User:
     """Admin edit of another (or the same) account.
 
@@ -296,6 +341,8 @@ def update_user(
         raise LastAdmin(
             "This is the last administrator. Make someone else an administrator first."
         )
+    if granted is not None:
+        user.permissions = _checked_permissions(granted)
     revoke = disabled is True
     if password is not None:
         _check_password(password, user.username)
@@ -321,6 +368,9 @@ def delete_user(session: Session, user_id: int) -> None:
     _delete_sessions(session, user_id)
     session.execute(delete(UserVideoState).where(UserVideoState.user_id == user_id))
     session.execute(delete(UserSettings).where(UserSettings.user_id == user_id))
+    session.execute(
+        delete(VideoAiChatMessage).where(VideoAiChatMessage.user_id == user_id)
+    )
     session.delete(user)
     session.commit()
 

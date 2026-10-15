@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from ..auth import current_user
+from ..auth import current_user, require_permission
 from ..config import DOWNLOADS_DIR, VIDEO_EXTENSIONS
 from ..database import get_session
 from ..models import Video
@@ -55,7 +55,11 @@ def review_queue(
     return _to_read_many(videos, session, user_id=user.id)
 
 
-@router.post("/scan", response_model=ScanResult)
+@router.post(
+    "/scan",
+    response_model=ScanResult,
+    dependencies=[Depends(require_permission("download"))],
+)
 def scan_import_folder():
     """Rescan the media folder and queue videos that are not in the library.
 
@@ -66,7 +70,11 @@ def scan_import_folder():
     return ScanResult(added=added, requeued=requeued)
 
 
-@router.post("/upload", response_model=VideoRead)
+@router.post(
+    "/upload",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("download"))],
+)
 def upload_import(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
@@ -139,7 +147,11 @@ def upload_import(
             logger.debug("failed closing upload stream", exc_info=True)
 
 
-@router.post("/{video_id}/skip", response_model=VideoRead)
+@router.post(
+    "/{video_id}/skip",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def skip_review(
     video_id: int,
     session: Session = Depends(get_session),

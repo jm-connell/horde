@@ -24,8 +24,9 @@ from ..models import (
     OpenRouterUsage,
     Playlist,
     PlaylistItem,
+    UserSettings,
+    UserVideoState,
     Video,
-    VideoAiChat,
     VideoAiChatMessage,
     VideoAiMeta,
     VideoEmbedding,
@@ -35,11 +36,11 @@ from .video_delete import collect_video_files, remove_files
 
 logger = logging.getLogger(__name__)
 
-_ALWAYS_CLEAR_MODELS = (AiJob, OpenRouterUsage, DownloadJob)
+# Per-user UI preferences are settings, so they reset with the server defaults.
+_ALWAYS_CLEAR_MODELS = (AiJob, OpenRouterUsage, DownloadJob, UserSettings)
 
 _ERASE_MEDIA_MODELS = (
     VideoAiChatMessage,
-    VideoAiChat,
     VideoAiMeta,
     VideoEmbedding,
     ChannelCatalogEmbedding,
@@ -50,6 +51,7 @@ _ERASE_MEDIA_MODELS = (
     PlaylistItem,
     Playlist,
     AiCategory,
+    UserVideoState,
     Video,
 )
 

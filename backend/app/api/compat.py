@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 
+from ..auth import require_admin
 from ..database import get_session
 from ..models import Video
 from ..schemas import CompatState
@@ -135,7 +136,11 @@ def compat_summary(session: Session = Depends(get_session)):
     return compat_rendition.library_summary(session)
 
 
-@router.post("/compat/backfill", response_model=CompatBulkResult)
+@router.post(
+    "/compat/backfill",
+    response_model=CompatBulkResult,
+    dependencies=[Depends(require_admin)],
+)
 def compat_backfill(session: Session = Depends(get_session)):
     """Queue H.264 copies for every library video that would benefit."""
     queued = 0
@@ -153,7 +158,11 @@ def compat_backfill(session: Session = Depends(get_session)):
     return CompatBulkResult(queued=queued, already_queued=already)
 
 
-@router.post("/compat/convert-library", response_model=CompatBulkResult)
+@router.post(
+    "/compat/convert-library",
+    response_model=CompatBulkResult,
+    dependencies=[Depends(require_admin)],
+)
 def convert_library(
     payload: ConvertLibraryRequest,
     session: Session = Depends(get_session),
@@ -180,7 +189,7 @@ def convert_library(
     return CompatBulkResult(queued=queued, already_queued=already)
 
 
-@router.post("/compat/cancel")
+@router.post("/compat/cancel", dependencies=[Depends(require_admin)])
 def compat_cancel(payload: CompatCancelRequest | None = None):
     dropped = compat_rendition.cancel_all(payload.kind if payload else None)
     return {"cancelled": dropped}
