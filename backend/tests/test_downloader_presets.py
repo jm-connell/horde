@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from app.services import downloader, ytdlp_formats
+from app.services import ytdlp_formats
 from app.services.downloads import artifacts, errors
 from app.services.paths import video_stem
 
@@ -134,7 +134,7 @@ def test_available_presets_audio_bitrate_tiers():
             {"vcodec": "none", "acodec": "opus", "abr": 64},
         ]
     }
-    presets = downloader._available_presets(info)
+    presets = ytdlp_formats._available_presets(info)
     assert "1080p" in presets
     assert "audio" in presets
     # Best is 160 → skip audio-160; keep lower caps.
@@ -149,7 +149,7 @@ def test_available_presets_audio_without_abr_metadata():
             {"vcodec": "none", "acodec": "mp4a"},
         ]
     }
-    presets = downloader._available_presets(info)
+    presets = ytdlp_formats._available_presets(info)
     assert presets == ["audio", "audio-160", "audio-128", "audio-64"]
 
 
@@ -185,14 +185,14 @@ def test_has_audio_and_available_presets():
             {"vcodec": "avc1", "acodec": "mp4a", "height": 720},
         ]
     }
-    assert downloader._has_audio(info)
-    presets = downloader._available_presets(info)
+    assert ytdlp_formats._has_audio(info)
+    presets = ytdlp_formats._available_presets(info)
     assert "720p" in presets or "1080p" in presets or "best" in presets
 
 
 def test_height_to_tier():
-    assert downloader._height_to_tier(2160) >= downloader._height_to_tier(720)
-    assert downloader._height_to_tier(480) > 0
+    assert ytdlp_formats._height_to_tier(2160) >= ytdlp_formats._height_to_tier(720)
+    assert ytdlp_formats._height_to_tier(480) > 0
 
 
 def test_resolve_quality_preset_best_to_highest_tier():
