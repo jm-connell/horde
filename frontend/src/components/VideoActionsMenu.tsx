@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, downloadFileUrl } from "../api";
 import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
@@ -48,6 +48,7 @@ export default function VideoActionsMenu({
   const [settings, update] = useSettings();
   const { showToast } = useToast();
   const { flip, anchorRef } = useFlipMenu(open, 360);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const canChangeResolution = Boolean(effectiveSourceUrl(video));
   const canNormalize = Boolean(effectiveSourceUrl(video) && onNormalizeVolume);
   const offline = useOfflineDownloadAction(video);
@@ -101,6 +102,7 @@ export default function VideoActionsMenu({
   return (
     <div ref={anchorRef} className="relative">
       <button
+        ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
         className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
         title="More actions"
@@ -110,13 +112,24 @@ export default function VideoActionsMenu({
         •••
       </button>
       {/* align left = panel extends to the right of the trigger */}
-      <FlipMenuPanel open={open} flip={flip} align="left" className="w-52">
+      <FlipMenuPanel
+        open={open}
+        flip={flip}
+        align="left"
+        className="w-52"
+        menu={{
+          label: "Video actions",
+          onClose: () => setOpen(false),
+          triggerRef,
+        }}
+      >
         <MenuScroll className="max-h-[min(24rem,calc(100vh-2rem))]">
           <button
             onClick={() => {
               onEdit();
               setOpen(false);
             }}
+            role="menuitem"
             className={itemClass}
           >
             Edit details
@@ -126,6 +139,7 @@ export default function VideoActionsMenu({
               onAddNote();
               setOpen(false);
             }}
+            role="menuitem"
             className={itemClass}
           >
             Add note
@@ -135,11 +149,13 @@ export default function VideoActionsMenu({
               update({ autoplayRelated: !settings.autoplayRelated });
               setOpen(false);
             }}
+            role="menuitemcheckbox"
+            aria-checked={settings.autoplayRelated}
             className={itemClass}
           >
             Autoplay related {settings.autoplayRelated ? "✓" : ""}
           </button>
-          <button onClick={refreshTags} className={itemClass}>
+          <button onClick={refreshTags} role="menuitem" className={itemClass}>
             Refresh tags (AI)
           </button>
           {canChangeResolution && (
@@ -148,6 +164,7 @@ export default function VideoActionsMenu({
                 onChangeResolution();
                 setOpen(false);
               }}
+              role="menuitem"
               className={itemClass}
             >
               Change resolution
@@ -159,6 +176,7 @@ export default function VideoActionsMenu({
                 onNormalizeVolume?.();
                 setOpen(false);
               }}
+              role="menuitem"
               className={itemClass}
             >
               Normalize volume
@@ -169,11 +187,12 @@ export default function VideoActionsMenu({
               setOpen(false);
               void offline.onClick();
             }}
+            role="menuitem"
             className={itemClass}
           >
             {offlineLabel}
           </button>
-          <button onClick={downloadFile} className={itemClass}>
+          <button onClick={downloadFile} role="menuitem" className={itemClass}>
             Save file to device
           </button>
           {safeHref(video.source_url) && (
@@ -182,6 +201,7 @@ export default function VideoActionsMenu({
               target="_blank"
               rel="noreferrer"
               onClick={() => setOpen(false)}
+              role="menuitem"
               className={itemClass}
             >
               {sourceLinkLabel(video)}
@@ -192,6 +212,7 @@ export default function VideoActionsMenu({
               setOpen(false);
               onDelete();
             }}
+            role="menuitem"
             className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
           >
             Delete

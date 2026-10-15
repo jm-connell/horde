@@ -1,4 +1,14 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+
+/**
+ * The wizard ignores clicks while it animates between steps and keeps both
+ * steps' headings in the DOM until the transition ends; wait for that so a
+ * click is never silently dropped.
+ */
+async function stepSettled(page: Page) {
+  await expect(page.locator("main h1")).toHaveCount(1);
+}
 
 test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await page.goto("/");
@@ -9,15 +19,19 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
     page.getByRole("link", { name: "Home", exact: true })
   ).toHaveCount(0);
 
+  await stepSettled(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Downloads" })).toBeVisible();
   await expect(page.getByText("Normalize volume on download")).toBeVisible();
 
+  await stepSettled(page);
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: "Welcome" })).toBeVisible();
+  await stepSettled(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Downloads" })).toBeVisible();
 
+  await stepSettled(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(
     page.getByRole("heading", { name: "Playback compatibility" })
@@ -30,17 +44,21 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await sidecar.click();
   await expect(sidecar).toHaveAttribute("aria-checked", "true");
 
+  await stepSettled(page);
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: "Downloads" })).toBeVisible();
+  await stepSettled(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(sidecar).toHaveAttribute("aria-checked", "true");
 
+  await stepSettled(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Look" })).toBeVisible();
   const oled = page.getByRole("button", { name: "OLED (true black)" });
   await oled.click();
   await expect(oled).toHaveAttribute("aria-pressed", "true");
 
+  await stepSettled(page);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(
     page.getByRole("heading", { name: "AI (optional)" })

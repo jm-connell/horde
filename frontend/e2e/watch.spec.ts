@@ -66,7 +66,7 @@ test("more actions opens edit details", async ({ page }) => {
   await page.goto("/");
   await videoCard(page, "Kiln fire").click();
   await page.getByTitle("More actions").click();
-  await page.getByRole("button", { name: "Edit details" }).click();
+  await page.getByRole("menuitem", { name: "Edit details" }).click();
   await expect(
     page.getByRole("button", { name: "Save changes" })
   ).toBeVisible();

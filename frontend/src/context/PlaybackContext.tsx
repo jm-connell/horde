@@ -922,6 +922,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onCancelUpNext={clearUpNext}
         onPlayUpNext={upNext ? () => playSuggested(upNext) : undefined}
         autoplayRelated={settings.autoplayRelated}
+        singleKeyShortcuts={settings.playerShortcuts}
         onAutoplayRelatedChange={(enabled) =>
           updateSettings({ autoplayRelated: enabled })
         }
@@ -965,6 +966,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onMiniResize={handleMiniResize}
         onMiniMove={handleMiniMove}
         onMiniMoveEnd={handleMiniMoveEnd}
+        singleKeyShortcuts={settings.playerShortcuts}
         onActiveQualityChange={setActiveStreamQuality}
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}

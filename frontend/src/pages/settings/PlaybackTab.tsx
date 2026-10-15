@@ -89,6 +89,21 @@ export default function PlaybackTab() {
             }
           />
           <SettingRow
+            title="Single-key player shortcuts"
+            description="Space, K, C, T, F, N, comma and period control the player while it is on screen. Turn off if these clash with speech-input or assistive software; arrow keys and Escape keep working."
+            hidden={
+              !!q && !match("shortcut", "keyboard", "keys", "hotkey", "single")
+            }
+            control={
+              <Toggle
+                checked={settings.playerShortcuts}
+                onChange={() =>
+                  update({ playerShortcuts: !settings.playerShortcuts })
+                }
+              />
+            }
+          />
+          <SettingRow
             title="Show undownloaded on channel pages"
             description="When browsing a channel, include uploads that are not yet in your library. Turn off to show only downloaded videos."
             hidden={

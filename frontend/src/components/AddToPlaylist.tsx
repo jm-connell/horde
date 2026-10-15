@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { MenuScroll } from "./MenuFlyout";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
@@ -23,6 +23,7 @@ export default function AddToPlaylist({
   const [status, setStatus] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const { flip, anchorRef } = useFlipMenu(open, 320);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     onOpenChange?.(open);
@@ -73,8 +74,11 @@ export default function AddToPlaylist({
   return (
     <div className="relative shrink-0" ref={anchorRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         className={buttonClassName}
       >
         {label}
@@ -84,7 +88,18 @@ export default function AddToPlaylist({
           {status}
         </span>
       )}
-      <FlipMenuPanel open={open} flip={flip} align="left" className="w-64">
+      <FlipMenuPanel
+        open={open}
+        flip={flip}
+        align="left"
+        className="w-64"
+        menu={{
+          kind: "popup",
+          label: "Add to playlist",
+          onClose: () => setOpen(false),
+          triggerRef,
+        }}
+      >
         <MenuScroll className="max-h-48" revision={playlists.length}>
           {playlists.length === 0 ? (
             <p className="px-3 py-2 text-xs text-muted">No playlists yet.</p>

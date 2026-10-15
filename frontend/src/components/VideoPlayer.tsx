@@ -11,6 +11,11 @@ import { absoluteUrl, api, spritesImageUrl, streamUrl } from "../api";
 import PlayerOverlays from "./PlayerOverlays";
 import SubtitleOverlay from "./SubtitleOverlay";
 import { MenuFlyout } from "./MenuFlyout";
+import {
+  isInteractiveControl,
+  isTextEntryTarget,
+  ownsArrowKeys,
+} from "../utils/keyboardTarget";
 import { useAirPlay } from "../hooks/useAirPlay";
 import { useChromecast } from "../hooks/useChromecast";
 import { usePlaybackHealth } from "../hooks/usePlaybackHealth";
@@ -194,6 +199,8 @@ interface Props {
   onCancelUpNext?: () => void;
   onPlayUpNext?: () => void;
   autoplayRelated?: boolean;
+  /** Letter/punctuation/Space shortcuts (WCAG 2.1.4); arrows + Escape stay on. */
+  singleKeyShortcuts?: boolean;
   onAutoplayRelatedChange?: (enabled: boolean) => void;
   /** Fires when the live DASH track quality changes (YouTube ladder height). */
   onActiveQualityChange?: (quality: number | null) => void;
@@ -248,6 +255,7 @@ export default function VideoPlayer({
   onCancelUpNext,
   onPlayUpNext,
   autoplayRelated = true,
+  singleKeyShortcuts = true,
   onAutoplayRelatedChange,
   onActiveQualityChange,
   onFrameInsetChange,
@@ -290,6 +298,8 @@ export default function VideoPlayer({
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
   const [showSpeed, setShowSpeed] = useState(false);
   const [showQuality, setShowQuality] = useState(false);
+  const qualityTriggerRef = useRef<HTMLButtonElement>(null);
+  const speedTriggerRef = useRef<HTMLButtonElement>(null);
   const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
     streamQualityToChoice(settings.defaultStreamQuality)
   );
@@ -1340,8 +1350,14 @@ export default function VideoPlayer({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      // Never hijack browser/OS shortcuts or typing.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isTextEntryTarget(e.target)) return;
+      // WCAG 2.1.4: character-key shortcuts can be switched off in Settings.
+      if (e.key.length === 1 && !singleKeyShortcuts) return;
+      // Buttons and menu items own Space; sliders and menus own the arrows.
+      if (e.key === " " && isInteractiveControl(e.target)) return;
+      if (e.key.startsWith("Arrow") && ownsArrowKeys(e.target)) return;
       const isPlayerKey =
         e.key === " " ||
         e.key === "k" ||
@@ -1410,6 +1426,7 @@ export default function VideoPlayer({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [
+    singleKeyShortcuts,
     togglePlay,
     toggleTheater,
     toggleWindowed,
@@ -1424,6 +1441,16 @@ export default function VideoPlayer({
     volume,
     onVolumeChange,
   ]);
+
+  // The native step is 0.1 s; match the global shortcuts (5 s) for the keyboard.
+  const onSeekKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const delta =
+      e.key === "ArrowRight" ? 5 : e.key === "ArrowLeft" ? -5 : null;
+    if (delta === null) return;
+    e.preventDefault();
+    seekTo(current + delta);
+  };
 
   const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const t = Number(e.target.value);
@@ -2277,8 +2304,13 @@ export default function VideoPlayer({
                 step={0.1}
                 value={current}
                 onChange={onSeek}
+                onKeyDown={onSeekKeyDown}
                 className="pointer-events-none accent-scrubber w-full"
                 aria-label="Seek"
+                aria-valuemin={0}
+                aria-valuemax={duration || 0}
+                aria-valuenow={current}
+                aria-valuetext={`${formatDuration(current)} of ${formatDuration(duration)}`}
                 style={{
                   background: `linear-gradient(to right, rgb(var(--accent)) ${progressPct}%, rgb(var(--ink-600)) ${progressPct}%)`,
                 }}
@@ -2311,6 +2343,7 @@ export default function VideoPlayer({
                           e.stopPropagation();
                         }}
                         title={`${formatTimestamp(ch.startSec)} — ${ch.title}`}
+                        aria-label={`Chapter ${ch.title} at ${formatTimestamp(ch.startSec)}`}
                       >
                         <span
                           className={`absolute left-1/2 top-1/2 block h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors ${
@@ -2389,6 +2422,8 @@ export default function VideoPlayer({
                     onPointerDown={onVolumePointerDown}
                     onPointerUp={onVolumePointerUp}
                     onPointerCancel={onVolumePointerUp}
+                    aria-label="Volume"
+                    aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`}
                     className="accent-scrubber w-[6.25rem] sm:w-[8.75rem] xl:w-[11.25rem]"
                   />
                 </div>
@@ -2412,7 +2447,10 @@ export default function VideoPlayer({
                   availableHeights.length > 0 && (
                     <div className="relative">
                       <button
+                        ref={qualityTriggerRef}
                         type="button"
+                        aria-haspopup="menu"
+                        aria-expanded={showQuality}
                         onClick={() => {
                           setShowSpeed(false);
                           setShowQuality((s) => !s);
@@ -2429,10 +2467,17 @@ export default function VideoPlayer({
                       <MenuFlyout
                         open={showQuality}
                         className="absolute bottom-9 right-0 z-10 w-32"
+                        menu={{
+                          label: "Stream quality",
+                          onClose: () => setShowQuality(false),
+                          triggerRef: qualityTriggerRef,
+                        }}
                       >
                         <div className="flex flex-col">
                           <button
                             type="button"
+                            role="menuitemradio"
+                            aria-checked={qualityChoice === "auto"}
                             onClick={() => {
                               pickQuality("auto");
                               setShowQuality(false);
@@ -2450,6 +2495,8 @@ export default function VideoPlayer({
                             <button
                               key={h}
                               type="button"
+                              role="menuitemradio"
+                              aria-checked={qualityChoice === h}
                               onClick={() => {
                                 pickQuality(h);
                                 setShowQuality(false);
@@ -2467,7 +2514,10 @@ export default function VideoPlayer({
                   )}
                 <div className="relative">
                   <button
+                    ref={speedTriggerRef}
                     type="button"
+                    aria-haspopup="dialog"
+                    aria-expanded={showSpeed}
                     onClick={() => {
                       setShowQuality(false);
                       setShowSpeed((s) => !s);
@@ -2482,6 +2532,12 @@ export default function VideoPlayer({
                   <MenuFlyout
                     open={showSpeed}
                     className="absolute bottom-9 right-0 z-10 w-40"
+                    menu={{
+                      kind: "popup",
+                      label: "Playback speed",
+                      onClose: () => setShowSpeed(false),
+                      triggerRef: speedTriggerRef,
+                    }}
                   >
                     <div className="p-3">
                       <div className="mb-2 grid grid-cols-3 gap-1">
@@ -2490,6 +2546,7 @@ export default function VideoPlayer({
                             type="button"
                             key={s}
                             onClick={() => setRate(s)}
+                            aria-pressed={rate === s}
                             className={`${playerMenuItem(rate === s)} tabular-nums`}
                           >
                             {s}x
@@ -2503,6 +2560,7 @@ export default function VideoPlayer({
                         step={0.05}
                         value={rate}
                         onChange={(e) => setRate(Number(e.target.value))}
+                        aria-label="Playback speed"
                         className="accent-scrubber w-full"
                       />
                     </div>
@@ -2513,6 +2571,8 @@ export default function VideoPlayer({
                     type="button"
                     onClick={cycleCaptions}
                     className={playerChromeBtn(Boolean(captionLang))}
+                    aria-label="Subtitles"
+                    aria-pressed={Boolean(captionLang)}
                     title={
                       subtitlesPending && tracks.length === 0
                         ? "Subtitles loading"
@@ -2526,6 +2586,7 @@ export default function VideoPlayer({
                   <button
                     type="button"
                     onClick={onCastClick}
+                    aria-label={casting ? "Stop casting" : "Cast to TV"}
                     className={playerChromeBtn(casting)}
                     title={
                       casting
@@ -2548,6 +2609,7 @@ export default function VideoPlayer({
                       type="button"
                       onClick={requestPiP}
                       className={playerChromeBtn(false)}
+                      aria-label="Picture in picture"
                       title="Picture in picture"
                     >
                       PiP
@@ -2564,6 +2626,8 @@ export default function VideoPlayer({
                       type="button"
                       onClick={toggleWindowed}
                       className={playerChromeBtn(mode === "windowed")}
+                      aria-label="Fit window"
+                      aria-pressed={mode === "windowed"}
                       title="Fit window (f)"
                     >
                       Fit

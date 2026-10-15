@@ -220,6 +220,8 @@ export interface Settings {
   showRelatedVideos: boolean;
   /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
   autoplayRelated: boolean;
+  /** Single-character player shortcuts (WCAG 2.1.4: must be switchable off). */
+  playerShortcuts: boolean;
   /** Muted thumbnail preview on mouse hover (desktop / fine pointer). */
   previewOnHover: boolean;
   /** Muted thumbnail preview when a card is uniquely centered (touch / phones). */
@@ -299,6 +301,7 @@ const DEFAULTS: Settings = {
   aiExpanded: true,
   showRelatedVideos: true,
   autoplayRelated: true,
+  playerShortcuts: true,
   previewOnHover: true,
   previewWhenCentered: true,
   previewMuted: false,
@@ -366,6 +369,7 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
   "aiExpanded",
   "showRelatedVideos",
   "autoplayRelated",
+  "playerShortcuts",
   "previewOnHover",
   "previewWhenCentered",
   "previewMuted",
@@ -973,6 +977,10 @@ function normalizeSettings(
     ),
     sponsorBlockCategories: normalizeSponsorBlockCategories(
       parsed.sponsorBlockCategories
+    ),
+    playerShortcuts: normalizeBool(
+      parsed.playerShortcuts,
+      DEFAULTS.playerShortcuts
     ),
     previewOnHover: normalizeBool(
       parsed.previewOnHover,

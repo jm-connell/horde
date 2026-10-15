@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import type { Playlist } from "../types";
@@ -41,6 +41,8 @@ export default function LibraryBulkBar({
   onDelete: () => void | Promise<void>;
   onCancel: () => void;
 }) {
+  const playlistTriggerRef = useRef<HTMLButtonElement>(null);
+  const noteTriggerRef = useRef<HTMLButtonElement>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const videoWord = selectedCount === 1 ? "video" : "videos";
@@ -75,9 +77,12 @@ export default function LibraryBulkBar({
 
           <div className="relative">
             <button
+              ref={playlistTriggerRef}
               onClick={() =>
                 playlistOpen ? onTogglePlaylist() : onOpenPlaylistPicker()
               }
+              aria-haspopup="menu"
+              aria-expanded={playlistOpen}
               className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
             >
               + Playlist
@@ -85,6 +90,11 @@ export default function LibraryBulkBar({
             <MenuFlyout
               open={playlistOpen}
               className="absolute bottom-10 left-0 z-50 w-56"
+              menu={{
+                label: "Add to playlist",
+                onClose: onTogglePlaylist,
+                triggerRef: playlistTriggerRef,
+              }}
             >
               <MenuScroll className="max-h-56" revision={playlists.length}>
                 {playlists.length === 0 ? (
@@ -95,6 +105,7 @@ export default function LibraryBulkBar({
                   playlists.map((p) => (
                     <button
                       key={p.id}
+                      role="menuitem"
                       onClick={() => onAddToPlaylist(p.id)}
                       className="block w-full truncate px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
                     >
@@ -108,7 +119,10 @@ export default function LibraryBulkBar({
 
           <div className="relative">
             <button
+              ref={noteTriggerRef}
               onClick={onToggleNote}
+              aria-haspopup="dialog"
+              aria-expanded={bulkNoteOpen}
               className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
             >
               Add note
@@ -116,6 +130,12 @@ export default function LibraryBulkBar({
             <MenuFlyout
               open={bulkNoteOpen}
               className="absolute bottom-10 left-0 z-50 w-72"
+              menu={{
+                kind: "popup",
+                label: "Note for selected videos",
+                onClose: onToggleNote,
+                triggerRef: noteTriggerRef,
+              }}
             >
               <div className="p-3">
                 <div className="mb-1 flex items-baseline justify-between gap-2">

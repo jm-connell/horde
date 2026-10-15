@@ -15,6 +15,7 @@ import {
 } from "react-router-dom";
 import { api, thumbnailUrl } from "../api";
 import AddToPlaylist from "../components/AddToPlaylist";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import LoadingIndicator from "../components/LoadingIndicator";
 import { MenuFlyout, MenuScroll } from "../components/MenuFlyout";
 import PlaybackQueue from "../components/PlaybackQueue";
@@ -111,6 +112,12 @@ export default function Watch() {
   const [relatedLoading, setRelatedLoading] = useState(false);
   const relatedSentinelRef = useRef<HTMLDivElement>(null);
   const [redownloadOpen, setRedownloadOpen] = useState(false);
+  const redownloadDialogRef = useRef<HTMLDivElement>(null);
+  const presetTriggerRef = useRef<HTMLButtonElement>(null);
+  useFocusTrap(redownloadDialogRef, {
+    active: redownloadOpen,
+    onEscape: () => setRedownloadOpen(false),
+  });
   const [redownloadPreset, setRedownloadPreset] = useState("1080p");
   const [presets, setPresets] = useState<string[]>(["best"]);
   const [redownloading, setRedownloading] = useState(false);
@@ -1043,12 +1050,13 @@ export default function Watch() {
                             : downloadButtonLabel(selectedPreset)}
                         </button>
                         <button
+                          ref={presetTriggerRef}
                           type="button"
                           onClick={() => setPresetMenuOpen((v) => !v)}
                           disabled={queuing}
                           aria-label="Choose download quality"
                           aria-expanded={presetMenuOpen}
-                          aria-haspopup="listbox"
+                          aria-haspopup="menu"
                           className="border-l border-ink-950/25 px-2 py-1 disabled:opacity-60"
                         >
                           <span
@@ -1063,20 +1071,23 @@ export default function Watch() {
                       <MenuFlyout
                         open={presetMenuOpen}
                         className="absolute left-0 z-30 mt-1 min-w-[12rem]"
+                        menu={{
+                          label: "Download quality",
+                          onClose: () => setPresetMenuOpen(false),
+                          triggerRef: presetTriggerRef,
+                        }}
                       >
                         <MenuScroll
                           className="max-h-60"
                           revision={presetOptions.length}
                         >
-                          <ul role="listbox" aria-label="Download quality">
+                          <ul role="none">
                             {presetOptions.map((p) => (
-                              <li
-                                key={p}
-                                role="option"
-                                aria-selected={p === selectedPreset}
-                              >
+                              <li key={p} role="none">
                                 <button
                                   type="button"
+                                  role="menuitemradio"
+                                  aria-checked={p === selectedPreset}
                                   onClick={() => {
                                     userPickedPresetRef.current = true;
                                     setSelectedPreset(p);
@@ -1321,8 +1332,18 @@ export default function Watch() {
 
       {isLibrary && redownloadOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700">
-            <h2 className="mb-1 text-lg font-semibold text-gray-100">
+          <div
+            ref={redownloadDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="redownload-title"
+            className="w-full max-w-md rounded-xl bg-ink-900 p-6 outline-none ring-1 ring-ink-700"
+          >
+            <h2
+              id="redownload-title"
+              className="mb-1 text-lg font-semibold text-gray-100"
+            >
               Change resolution
             </h2>
             <p className="mb-4 text-sm text-gray-400">
