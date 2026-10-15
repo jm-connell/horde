@@ -32,6 +32,13 @@ from .fsutil import replace_with_retries, safe_rel, safe_unlink
 from .media_info import apply_stream_info, needs_compat, probe_stream_info
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
+from .outtmpl import (
+    channel_folder,
+    fit_outtmpl,
+    flat_outtmpl,
+    library_outtmpl,
+    windows_filenames_ok,
+)
 from .paths import (
     COMPAT_SIDECAR_TOKEN,
     FRAGMENT_RE,
@@ -128,10 +135,6 @@ _STAGE_ACTIVITY_DETAIL = {
 
 # QUALITY_FORMATS / PRESET_MAX_HEIGHT / STANDARD_HEIGHTS / _format_chain: see ytdlp_formats
 
-OUTPUT_TEMPLATE = str(
-    DOWNLOADS_DIR / "%(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s"
-)
-
 # Ephemeral staging for "download to this device" jobs (not library media).
 DEVICE_STAGING_DIR = "_device"
 
@@ -141,7 +144,34 @@ def device_job_dir(job_id: int) -> Path:
 
 
 def device_outtmpl(job_id: int) -> str:
-    return str(device_job_dir(job_id) / "%(title)s [%(id)s].%(ext)s")
+    return flat_outtmpl(device_job_dir(job_id))
+
+
+def _download_outtmpl(
+    destination: str,
+    job_id: int,
+    info: dict[str, Any],
+    channel_override: str | None,
+) -> tuple[str, bool]:
+    """Output template for this download and whether yt-dlp should force Windows rules.
+
+    Byte-truncated fields keep every file name (with yt-dlp's ``.f137.mp4.part``
+    style suffixes) under the 255-byte limit; the folder is the channel the
+    library row will carry, so ``channel_override`` and the folder agree.
+    """
+    root = DOWNLOADS_DIR
+    wf = windows_filenames_ok(root)
+    if destination == DownloadDestination.device.value:
+
+        def make(budget: int) -> str:
+            return flat_outtmpl(device_job_dir(job_id), budget)
+    else:
+        folder = channel_folder(info, channel_override)
+
+        def make(budget: int) -> str:
+            return library_outtmpl(root, folder, budget)
+
+    return fit_outtmpl(make, info, windowsfilenames=wf), wf
 
 
 def is_device_staging_path(rel_path: str) -> bool:
@@ -1846,12 +1876,7 @@ def _run_download(
     if destination == DownloadDestination.device.value:
         # Never overwrite a library row from an ephemeral device job.
         replace_video_id = None
-        outtmpl = device_outtmpl(job_id)
         device_job_dir(job_id).mkdir(parents=True, exist_ok=True)
-    else:
-        outtmpl = str(
-            DOWNLOADS_DIR / "%(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s"
-        )
 
     if cancel.is_set():
         raise DownloadCancelled()
@@ -1891,7 +1916,6 @@ def _run_download(
 
     used_cookies = url_cookie_required(url)
     base_ydl_opts: dict[str, Any] = {
-        "outtmpl": outtmpl,
         "progress_hooks": [_make_progress_hook(job_id, cancel, act)],
         "postprocessor_hooks": [_make_postprocessor_hook(job_id, cancel, act)],
         "noplaylist": True,
@@ -1901,6 +1925,7 @@ def _run_download(
         "merge_output_format": "mp4",
         "ignoreerrors": True,
         "overwrites": True,
+        "windowsfilenames": windows_filenames_ok(DOWNLOADS_DIR),
         "format_sort": format_sort_for(quality_preset, video_codec),
         "file_access_retries": 10,
         "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
@@ -1964,6 +1989,11 @@ def _run_download(
                     return None
                 metadata_info = _merge_info(metadata_info, fetched)
                 info = metadata_info
+                outtmpl, _ = _download_outtmpl(
+                    destination, job_id, metadata_info, channel_override
+                )
+                base_ydl_opts["outtmpl"] = outtmpl
+                ydl_opts = {**ydl_opts, "outtmpl": outtmpl}
                 audio_fmt = pick_original_audio_format(metadata_info)
                 audio_id = str(audio_fmt.get("format_id") or "") if audio_fmt else ""
                 fmt_spec = (

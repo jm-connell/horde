@@ -675,7 +675,7 @@ def _download_native_h264(
 
     tmp_base = dest.with_name(f"{src.path.stem}{COMPAT_SIDECAR_TOKEN}dl")
     opts: dict[str, Any] = {
-        "outtmpl": f"{tmp_base}.%(ext)s",
+        "outtmpl": f"{str(tmp_base).replace('%', '%%')}.%(ext)s",
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,

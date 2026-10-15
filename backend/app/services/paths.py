@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from pathlib import Path
 
 from sqlmodel import Session, select
@@ -93,10 +94,50 @@ def find_video_by_path(session: Session, rel_path: str) -> Video | None:
     return None
 
 
-def safe_filename(name: str) -> str:
-    """Strip characters that break filesystems or Content-Disposition."""
-    cleaned = re.sub(r'[\\/:*?"<>|]', "_", name).strip()
-    return cleaned or "video"
+# Names Windows (and so SMB clients) refuse regardless of extension.
+_WINDOWS_RESERVED = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{n}" for n in "123456789\u00b9\u00b2\u00b3"}
+    | {f"LPT{n}" for n in "123456789\u00b9\u00b2\u00b3"}
+)
+_ILLEGAL_CHARS_RE = re.compile(r'[\\/:*?"<>|]')
+# Name budget that leaves room for the suffixes appended later ("(2)", ".mp4").
+DEFAULT_NAME_BYTES = 200
+
+
+def truncate_bytes(text: str, max_bytes: int) -> str:
+    """Cut ``text`` to at most ``max_bytes`` of UTF-8 without splitting a character."""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    return encoded[:max_bytes].decode("utf-8", "ignore")
+
+
+def safe_filename(
+    name: str, *, max_bytes: int = DEFAULT_NAME_BYTES, default: str = "video"
+) -> str:
+    """Make ``name`` safe as one path component on Linux, SMB and Content-Disposition.
+
+    Replaces path separators and Windows-illegal characters, drops control
+    characters, trailing dots/spaces, ``.``/``..`` and Windows reserved device
+    names (``CON``, ``NUL``, ``COM1``... with or without an extension), and
+    truncates to ``max_bytes`` of UTF-8 on a character boundary.
+    """
+    cleaned = _ILLEGAL_CHARS_RE.sub("_", name or "")
+    cleaned = "".join(
+        ch for ch in cleaned if unicodedata.category(ch) != "Cc" and ch != "\u2028"
+    )
+    cleaned = cleaned.strip()
+
+    def _finish(value: str) -> str:
+        return truncate_bytes(value, max_bytes).rstrip(". ")
+
+    cleaned = _finish(cleaned).lstrip()
+    if not cleaned or set(cleaned) <= {"."}:
+        return default
+    if cleaned.split(".", 1)[0].strip().upper() in _WINDOWS_RESERVED:
+        cleaned = _finish(f"_{cleaned}")
+    return cleaned or default
 
 
 def is_manual_import(video: Video) -> bool:
