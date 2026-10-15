@@ -12,6 +12,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, stub_media_probes
 from app.models import DownloadJob, JobStatus
 from app.services import downloader, job_metadata
 from app.services.downloads import dbwrite, progress
+from app.services.downloads import queue as dq
 
 URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
@@ -54,7 +55,7 @@ def test_worker_crash_ends_job_in_error(init_db, monkeypatch):
     def boom(*_a, **_k):
         raise RuntimeError("kaboom")
 
-    monkeypatch.setattr(downloader, "_run_download", boom)
+    q.runner = boom
     _run_worker(q, job_id)
     job = _get(init_db, job_id)
     assert job.status == JobStatus.error
@@ -165,7 +166,7 @@ def test_next_job_id_orders_by_age_and_skips_running_and_held(init_db):
 
 def test_dispatch_runs_jobs_fifo_within_concurrency_end_to_end(init_db, monkeypatch):
     """Jobs run through the real dispatcher with a fake extractor."""
-    monkeypatch.setattr(downloader, "MAX_DOWNLOAD_CONCURRENCY", 1)
+    monkeypatch.setattr(dq, "MAX_DOWNLOAD_CONCURRENCY", 1)
     fake = FakeYtdlp()
     fake.install(monkeypatch, downloader)
     stub_media_probes(monkeypatch, downloader)
@@ -182,21 +183,20 @@ def test_dispatch_runs_jobs_fifo_within_concurrency_end_to_end(init_db, monkeypa
     lock = threading.Lock()
     running_now = {"n": 0, "max": 0}
 
-    def tracked(job_id, cancel_event=None):
+    def tracked(job_id, cancel_event=None, queue=None):
         with lock:
             started.append(job_id)
             running_now["n"] += 1
             running_now["max"] = max(running_now["max"], running_now["n"])
         release.wait(5)
         try:
-            return real_run(job_id, cancel_event=cancel_event)
+            return real_run(job_id, cancel_event=cancel_event, queue=queue)
         finally:
             with lock:
                 running_now["n"] -= 1
                 if len(started) == 3 and running_now["n"] == 0:
                     all_done.set()
 
-    monkeypatch.setattr(downloader, "_run_download", tracked)
     monkeypatch.setattr(
         downloader.ffmpeg_queue,
         "enqueue",
@@ -205,7 +205,7 @@ def test_dispatch_runs_jobs_fifo_within_concurrency_end_to_end(init_db, monkeypa
             downloader.ffmpeg_queue._worker(task),
         ),
     )
-    q = downloader.DownloadQueue()
+    q = downloader.DownloadQueue(runner=tracked)
     monkeypatch.setattr(downloader, "download_queue", q)
     q._dispatch()
     release.set()

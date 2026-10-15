@@ -187,12 +187,12 @@ def test_crashed_worker_is_unhealthy_and_finished_worker_is_not():
 def test_shutdown_requeues_running_downloads(init_db, monkeypatch):
     started = threading.Event()
 
-    def blocking_download(job_id, cancel_event=None):
+    def blocking_download(job_id, cancel_event=None, queue=None):
         started.set()
         cancel_event.wait(30)
         raise downloader.DownloadCancelled()
 
-    monkeypatch.setattr(downloader, "_run_download", blocking_download)
+    monkeypatch.setattr(downloader.download_queue, "runner", blocking_download)
     with Session(init_db["engine"]) as session:
         job = DownloadJob(url="https://example.com/v", status=JobStatus.queued)
         session.add(job)

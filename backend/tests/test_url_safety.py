@@ -439,7 +439,7 @@ def test_download_queue_refuses_unsafe_urls_that_bypassed_the_api(session, monke
     def must_not_run(*_a, **_k):
         raise AssertionError("yt-dlp was started for an unsafe URL")
 
-    monkeypatch.setattr(downloader, "_run_download", must_not_run)
+    monkeypatch.setattr(downloader.download_queue, "runner", must_not_run)
 
     downloader.download_queue._worker(job.id, threading.Event())
 
