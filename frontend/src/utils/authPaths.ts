@@ -4,7 +4,8 @@
  * Browsers strip tabs and newlines inside a URL and treat a backslash like a
  * slash, so `/\evil.example` and `/<TAB>/evil.example` both become
  * `//evil.example`. Reject control characters and backslashes outright, then
- * resolve against our own origin and require the result to stay on it.
+ * resolve against our own origin, require the result to stay on it, and
+ * refuse a resolved path that starts with `//` (a protocol-relative URL).
  */
 export function safeNextPath(raw: string | null): string {
   if (!raw || !raw.startsWith("/")) return "/";
@@ -20,6 +21,9 @@ export function safeNextPath(raw: string | null): string {
     return "/";
   }
   if (url.origin !== origin) return "/";
+  // Dot segments are resolved by the parser, so `/.//evil.example` becomes the
+  // path `//evil.example`, which `location.assign` treats as another host.
+  if (url.pathname.startsWith("//")) return "/";
   if (url.pathname === "/login" || url.pathname.startsWith("/login/"))
     return "/";
   return `${url.pathname}${url.search}${url.hash}`;

@@ -34,4 +34,17 @@ describe("safeNextPath", () => {
       expect(safeNextPath(bad)).toBe("/");
     }
   });
+
+  it("refuses dot segments that resolve to a protocol-relative path", () => {
+    for (const bad of [
+      "/.//evil.example",
+      "/..//evil.example",
+      "/./..//evil.example/x?y=1",
+      "/a/..//evil.example",
+      "/login/../login",
+    ]) {
+      expect(safeNextPath(bad)).toBe("/");
+    }
+    expect(safeNextPath("/a/../library?q=1")).toBe("/library?q=1");
+  });
 });
