@@ -375,3 +375,22 @@ def test_concurrent_creation_of_the_same_name_is_a_clean_409(init_db, session):
     for t in threads:
         t.join(timeout=60)
     assert sorted(results) == ["created", "taken", "taken", "taken"]
+
+
+def test_failures_slow_a_username_across_addresses_without_locking_it():
+    now = [0.0]
+    limiter = LoginLimiter(clock=lambda: now[0])
+    for i in range(FREE_ATTEMPTS):
+        limiter.record_failure(f"9.9.9.{i}", "admin")
+    assert limiter.retry_after("2.2.2.2", "admin") == 0  # a burst is allowed
+    limiter.record_failure("1.1.1.1", "admin")
+    # Past the burst another address must wait about a second, not for minutes.
+    assert limiter.retry_after("2.2.2.2", "admin") == 2  # 1 s window, rounded up
+    now[0] += 1.1
+    assert limiter.retry_after("2.2.2.2", "admin") == 0
+    # A hundred guesses from a hundred addresses never build a lockout for a
+    # fresh address: the escalating lockouts are per address.
+    for i in range(100):
+        limiter.record_failure(f"10.0.{i}.1", "admin")
+        now[0] += 1.1
+    assert limiter.retry_after("203.0.113.9", "admin") == 0

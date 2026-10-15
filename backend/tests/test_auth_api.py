@@ -501,3 +501,18 @@ def test_websockets_on_protected_paths_are_closed(app, anon_client):
         anon_client.websocket_connect("/api/anything"),
     ):
         pass
+
+
+def test_current_password_guesses_are_throttled(client):
+    body = {"current_password": "wrong-password", "new_password": "brand-new-pass"}
+    codes = [
+        client.post("/api/auth/password", json=body).status_code
+        for _ in range(FREE_ATTEMPTS + 1)
+    ]
+    assert codes[:FREE_ATTEMPTS] == [400] * FREE_ATTEMPTS
+    assert codes[-1] == 429
+    # The right password is refused while locked, and sign-in is unaffected.
+    good = {"current_password": "admin-password", "new_password": "brand-new-pass"}
+    assert client.post("/api/auth/password", json=good).status_code == 429
+    with TestClient(client.app, headers=CSRF) as other:
+        assert _login(other).status_code == 200

@@ -160,11 +160,26 @@ def change_password(
     user: AuthUser = Depends(current_user),
 ):
     """Change your own password. Your other browsers are signed out."""
+    runtime = _runtime(request)
+    address = runtime.client_address(request)
+    # Guessing the current password is guessing the password: same throttle as
+    # sign-in, counted separately so it cannot lock the account out of signing in.
+    throttle_key = f"password:{user.username.lower()}"
+    wait = runtime.limiter.retry_after(address, throttle_key)
+    if wait:
+        raise CodedHTTPException(
+            429,
+            f"Too many failed attempts. Try again in {wait} seconds.",
+            "rate_limited",
+            headers={"Retry-After": str(wait)},
+        )
     row = accounts.get_user(session, user.id)
     if row is None or not passwords.verify_password(
         payload.current_password, row.password_hash
     ):
+        runtime.limiter.record_failure(address, throttle_key)
         raise CodedHTTPException(400, "Current password is incorrect", "wrong_password")
+    runtime.limiter.record_success(address, throttle_key)
     token = request.cookies.get(accounts.SESSION_COOKIE)
     accounts.set_password(
         session,

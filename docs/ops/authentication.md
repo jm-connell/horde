@@ -48,7 +48,7 @@ The server refuses any change that would leave **no enabled administrator**.
 - Passwords are stored as salted **scrypt** hashes (`n=2^15, r=8, p=1`), never in clear. Minimum 8 characters, no composition rules, and not equal to the username.
 - Signing in sets an `HttpOnly`, `SameSite=Lax` cookie `horde_session` (`Secure` over HTTPS). Only a hash of the token is stored. A session lasts 30 days from its last use.
 - Changing your own password signs out your other browsers. Signing out deletes the session.
-- After 5 failed sign-ins for a username from one address, further attempts wait with exponential back-off (`429` with `Retry-After`).
+- After 5 failed sign-ins for a username from one address, further attempts from that address wait with exponential back-off (`429` with `Retry-After`). Separately, once a username has more than 5 failures in a minute from anywhere, every further attempt on that name waits one second: guessing across many addresses is capped, but nobody can lock a user out for longer than that from a different address. Guessing the current password in *Change password* uses the same throttle. Behind a reverse proxy set `HORDE_TRUST_PROXY=1`, otherwise every client looks like one address and shares one back-off.
 
 ## Forgot the admin password
 

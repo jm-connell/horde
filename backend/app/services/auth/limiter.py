@@ -5,6 +5,12 @@ tests and the CLI get a fresh one. After ``FREE_ATTEMPTS`` failures the key is
 locked out for ``BASE_DELAY * 2**(failures - FREE_ATTEMPTS)`` seconds (capped).
 A second counter keyed on the address alone stops one client from walking
 through usernames to dodge the per-name counter.
+
+A third entry per username, shared by every address, only *slows*: after any
+failure beyond the first ``FREE_ATTEMPTS`` in a minute the next attempt on that name waits ``USERNAME_SLOWDOWN_SEC`` whoever
+makes it. That caps guessing across many addresses without letting one client
+lock a user out. The escalating lockouts are per address; behind a proxy that
+is not trusted every client shares one address, so set ``HORDE_TRUST_PROXY``.
 """
 
 from __future__ import annotations
@@ -22,6 +28,9 @@ FORGET_AFTER_SEC = 60 * 60.0
 #: The address-only counter tolerates more failures (shared NATs, typos).
 ADDRESS_FREE_ATTEMPTS = 20
 MAX_TRACKED_KEYS = 10_000
+USERNAME_SLOWDOWN_SEC = 1.0
+#: Failures against one name, from anywhere, are counted over this window.
+USERNAME_WINDOW_SEC = 60.0
 
 
 @dataclass
@@ -35,12 +44,12 @@ class LoginLimiter:
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
         self._lock = threading.Lock()
-        self._entries: dict[tuple[str, str | None], _Entry] = {}
+        self._entries: dict[tuple[str | None, str | None], _Entry] = {}
 
     @staticmethod
     def _keys(
         address: str, username_norm: str
-    ) -> list[tuple[tuple[str, str | None], int]]:
+    ) -> list[tuple[tuple[str | None, str | None], int]]:
         return [
             ((address, username_norm), FREE_ATTEMPTS),
             ((address, None), ADDRESS_FREE_ATTEMPTS),
@@ -51,6 +60,9 @@ class LoginLimiter:
         now = self._clock()
         with self._lock:
             wait = 0.0
+            slow = self._entries.get((None, username_norm))
+            if slow is not None and slow.locked_until > now:
+                wait = slow.locked_until - now
             for key, _free in self._keys(address, username_norm):
                 entry = self._entries.get(key)
                 if entry is not None and entry.locked_until > now:
@@ -61,6 +73,13 @@ class LoginLimiter:
         now = self._clock()
         with self._lock:
             self._prune(now)
+            slow = self._entries.setdefault((None, username_norm), _Entry())
+            if now - slow.last_failure > USERNAME_WINDOW_SEC:
+                slow.failures = 0
+            slow.failures += 1
+            slow.last_failure = now
+            if slow.failures > FREE_ATTEMPTS:
+                slow.locked_until = now + USERNAME_SLOWDOWN_SEC
             for key, free in self._keys(address, username_norm):
                 entry = self._entries.setdefault(key, _Entry())
                 entry.failures += 1
@@ -73,6 +92,7 @@ class LoginLimiter:
     def record_success(self, address: str, username_norm: str) -> None:
         with self._lock:
             self._entries.pop((address, username_norm), None)
+            self._entries.pop((None, username_norm), None)
 
     def _prune(self, now: float) -> None:
         stale = [
