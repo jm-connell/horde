@@ -302,3 +302,48 @@ def test_stop_all_never_outlasts_its_total_budget():
         release.set()
     assert len(stuck) == 6
     assert elapsed < 2.5, f"six stuck workers held shutdown for {elapsed:.1f}s"
+
+
+def test_shutdown_requeues_pending_postprocess_and_keeps_its_staging(init_db):
+    """Whatever order the registry signals the queues in, a download that is
+    waiting for its remux is requeued with its staged file, never cancelled."""
+    from app.services.paths import STAGING_DIR_NAME
+
+    with Session(init_db["engine"]) as session:
+        job = DownloadJob(url="https://example.com/v", status=JobStatus.downloading)
+        session.add(job)
+        session.commit()
+        job_id = job.id
+    staging = init_db["downloads"] / STAGING_DIR_NAME / str(job_id)
+    staging.mkdir(parents=True)
+    finished = staging / "Clip.mp4"
+    finished.write_bytes(b"x" * 100)
+
+    queue, ffmpeg = downloader.download_queue, downloader.ffmpeg_queue
+    queue.claim_ffmpeg(job_id)
+    ffmpeg._pending.append(
+        downloader._PostprocessTask(
+            job_id=job_id,
+            final_path=finished,
+            info={},
+            url="https://example.com/v",
+            quality_preset="best",
+            title_override=None,
+            channel_override=None,
+            normalize_volume=False,
+            replace_video_id=None,
+            notes_pending=None,
+            cancel_event=threading.Event(),
+            destination="library",
+            video_codec="av1",
+            staging_dir=staging,
+        )
+    )
+    registry = WorkerRegistry()
+    registry.start(queue)  # registered first, so signalled last
+    registry.start(ffmpeg)
+    assert registry.stop_all() == []
+
+    with Session(init_db["engine"]) as session:
+        assert session.get(DownloadJob, job_id).status == JobStatus.queued
+    assert finished.exists()

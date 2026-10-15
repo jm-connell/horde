@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -301,3 +302,42 @@ def test_boot_cleanup_runs_after_queue_recovery():
 
     src = inspect.getsource(main._start_workers)
     assert src.index("download_queue.recover()") < src.index("run_boot_cleanup()")
+
+
+def test_shutdown_keeps_staged_fragments_and_the_next_run_reuses_the_dir(init_db, fake):
+    root = init_db["downloads"]
+    with Session(init_db["engine"]) as s:
+        job = DownloadJob(url=URL, quality_preset="best", status=JobStatus.queued)
+        s.add(job)
+        s.commit()
+        job_id = job.id
+    staging = root / STAGING_DIR_NAME / str(job_id)
+    in_merge = threading.Event()
+
+    def stall_until_shutdown(_path, _info):
+        in_merge.set()
+        downloader.download_queue.cancel_event(job_id).wait(10)
+        raise downloader.DownloadCancelled()
+
+    fake.before_merge = stall_until_shutdown
+    downloader.download_queue.enqueue(job_id)
+    assert in_merge.wait(10)
+    assert downloader.download_queue.stop(timeout=10)
+
+    assert _status(init_db, job_id) == JobStatus.queued
+    fragments = sorted(p.name for p in staging.rglob("*.f1*"))
+    assert fragments, "shutdown deleted the staged fragments"
+
+    # Next boot: the same job runs again in the same staging dir.
+    fake.before_merge = None
+    downloader.download_queue.start()
+    downloader.download_queue.enqueue(job_id)
+    deadline = time.monotonic() + 20
+    while _status(init_db, job_id) != JobStatus.completed:
+        assert time.monotonic() < deadline, "resumed job never finished"
+        time.sleep(0.05)
+    # Both runs wrote into the one staging dir of this job.
+    assert len(fake.downloads) >= 2
+    assert {Path(d["path"]).parent for d in fake.downloads} == {
+        staging / "Chan" / "2024"
+    }

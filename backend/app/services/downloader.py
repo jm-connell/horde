@@ -994,7 +994,12 @@ class FfmpegQueue:
     def _abandon(self, task: _PostprocessTask) -> None:
         """Requeue a postprocess task that never started (shutdown)."""
         try:
-            _mark_job_cancelled(task.job_id, task.destination, task.final_path)
+            # Explicit: the download queue may not have been told to stop yet
+            # (workers are signalled newest first), and a cancel would delete the
+            # finished download that is waiting for its remux.
+            _mark_job_cancelled(
+                task.job_id, task.destination, task.final_path, requeue=True
+            )
         except Exception:
             logger.exception("could not requeue job %s at shutdown", task.job_id)
         for lib in task.active_marks:
@@ -1195,7 +1200,10 @@ def _mark_job_cancelled(
     job_id: int,
     destination: str,
     final_path: Path | None = None,
+    *,
+    requeue: bool = False,
 ) -> None:
+    """End a job that was stopped. ``requeue`` puts it back in the queue instead."""
     if destination == DownloadDestination.device.value:
         cleanup_device_job_files(job_id)
     with Session(engine) as session:
@@ -1211,7 +1219,7 @@ def _mark_job_cancelled(
         pausing = download_queue.is_paused()
         # A job interrupted by shutdown goes back to the queue, like a pause, and
         # resumes from its staged .part files on the next boot.
-        if restarting or pausing or download_queue.is_shutting_down():
+        if restarting or pausing or requeue or download_queue.is_shutting_down():
             job.status = JobStatus.queued
             job.paused = pausing
             job.progress = 0.0
@@ -2713,7 +2721,8 @@ def _run_download(
                 if recovered is not None:
                     final_path = recovered
                     break
-                _cleanup_partial_files(attempt_paths)
+                if not (cancel.is_set() and download_queue.is_shutting_down()):
+                    _cleanup_partial_files(attempt_paths)
 
         if ytdlp_logger.members_only:
             raise MembersOnlyError("Members-only video — skipped")
@@ -2754,11 +2763,14 @@ def _run_download(
         return None
 
     except DownloadCancelled:
-        _cleanup_partial_files(active_paths)
+        stopping = download_queue.is_shutting_down()
+        if not stopping:
+            # On shutdown the staged fragments stay: the job resumes from them.
+            _cleanup_partial_files(active_paths)
         restarting = download_queue.is_quality_restart(job_id)
         pausing = download_queue.is_paused()
         _mark_job_cancelled(job_id, destination)
-        if restarting or pausing:
+        if restarting or pausing or stopping:
             act.discard()
         else:
             act.finish(status="cancelled")
@@ -2766,7 +2778,8 @@ def _run_download(
 
     except Exception as exc:
         if cancel.is_set():
-            _cleanup_partial_files(active_paths)
+            if not download_queue.is_shutting_down():
+                _cleanup_partial_files(active_paths)
             _mark_job_cancelled(job_id, destination)
             act.finish(status="cancelled")
             return None
