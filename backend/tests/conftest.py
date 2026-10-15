@@ -65,6 +65,14 @@ def _rebind_imported_app_modules(monkeypatch, *, engine, dirs: dict[str, Any]) -
 
 
 @pytest.fixture(autouse=True)
+def _cheap_password_hashing(monkeypatch):
+    """scrypt at production cost takes ~100 ms; tests only need the same code path."""
+    from app.services.auth import passwords
+
+    monkeypatch.setattr(passwords, "CURRENT_PARAMS", passwords.ScryptParams(n=2**4))
+
+
+@pytest.fixture(autouse=True)
 def _join_background_workers():
     """Do not let sprite threads outlive the test that started them.
 
