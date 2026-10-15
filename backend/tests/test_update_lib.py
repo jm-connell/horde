@@ -467,3 +467,61 @@ def test_prune_backups_never_deletes_the_protected_folder(tmp_path):
         "20260101T000000Z",
         "20260103T000000Z",
     ]
+
+
+def _tag(work: Path, name: str) -> None:
+    other = work.parent / "other"
+    _git(other, "pull", "--ff-only", "origin", "main")
+    _git(other, "tag", name)
+    _git(other, "push", "origin", name)
+
+
+def test_pick_release_takes_the_highest_stable_semver_tag(stack):
+    work, push_upstream = stack
+    for name in (
+        "v1.2.0",
+        "v1.10.0",
+        "v1.9.9",
+        "v2.0.0-rc.1",
+        "v1.10.0-rc.1",
+        "nightly",
+    ):
+        _tag(work, name)
+    _git(work, "fetch", "--tags", "origin")
+
+    assert _check("horde_pick_release", cwd=work) == "v1.10.0"
+    assert _check("horde_pick_release prerelease", cwd=work) == "v2.0.0-rc.1"
+
+
+def test_pick_release_prefers_the_stable_tag_over_its_own_prerelease(stack):
+    work, _ = stack
+    for name in ("v1.0.0-rc.1", "v1.0.0"):
+        _tag(work, name)
+    _git(work, "fetch", "--tags", "origin")
+    assert _check("horde_pick_release prerelease", cwd=work) == "v1.0.0"
+
+
+def test_pick_release_is_empty_without_release_tags(stack):
+    work, _ = stack
+    _tag(work, "not-a-release")
+    _git(work, "fetch", "--tags", "origin")
+    assert _check("horde_pick_release", cwd=work) == ""
+
+
+def test_git_pull_without_release_tags_falls_back_to_main(stack):
+    work, push_upstream = stack
+    push_upstream("NEWS.txt", "news\n")
+
+    result = _run("horde_git_pull", cwd=work)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "following main until the first release" in result.stderr
+    assert (work / "NEWS.txt").is_file()
+    assert _git(work, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+
+
+def test_unknown_channel_is_rejected(stack):
+    work, _ = stack
+    result = _run("HORDE_UPDATE_CHANNEL=nightly horde_git_pull", cwd=work)
+    assert result.returncode == 1
+    assert "Unknown HORDE_UPDATE_CHANNEL" in result.stderr

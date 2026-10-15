@@ -19,6 +19,8 @@
 #   HORDE_KEEP_BACKUPS          How many .local/update-backups/<timestamp> folders to keep (default 5)
 #   HORDE_KEEP_IMAGES           How many horde:<sha> image tags to keep (default 3)
 #   HORDE_HEALTH_POLL_SEC       Seconds between health polls (default 2)
+#   HORDE_UPDATE_CHANNEL        release (default: the newest vX.Y.Z tag), prerelease, or main
+#   HORDE_ALLOW_DOWNGRADE=1     Allow switching to a release older than your checkout
 #   HORDE_FORCE_REBUILD=1       Rebuild even when the checkout is already at the running commit
 #   HORDE_AUTO_ROLLBACK=0       Do not roll back automatically when the health check fails
 #   HORDE_SKIP_DB_BACKUP=1      Continue even if the database cannot be backed up
@@ -61,6 +63,10 @@ HEALTH_URL="${HORDE_HEALTH_URL:-http://127.0.0.1:8686/api/health}"
 KEEP_BACKUPS="${HORDE_KEEP_BACKUPS:-5}"
 KEEP_IMAGES="${HORDE_KEEP_IMAGES:-3}"
 ENV_FILE="$ROOT/.env"
+# Update-channel settings may live in .env (the shell wins).
+HORDE_UPDATE_CHANNEL="${HORDE_UPDATE_CHANNEL:-$(horde_env_get "$ENV_FILE" HORDE_UPDATE_CHANNEL)}"
+HORDE_ALLOW_DOWNGRADE="${HORDE_ALLOW_DOWNGRADE:-$(horde_env_get "$ENV_FILE" HORDE_ALLOW_DOWNGRADE)}"
+export HORDE_UPDATE_CHANNEL HORDE_ALLOW_DOWNGRADE
 # The yt-dlp updater (YTDLP_AUTO_UPDATE=1) runs before the app starts, so give
 # the health wait room for it.
 HEALTH_DEFAULT=90
@@ -455,13 +461,15 @@ restore_database() {
 # off). Returns 0 ok, 2 failed, 3 refused without changing anything.
 perform_rollback() {
   local reason="$1" how="$2"
-  local prev_image prev_sha prev_branch new_sha new_image backup revision_before restore=0
+  local prev_image prev_sha prev_branch new_sha new_branch new_image backup revision_before restore=0
   local cur_branch cur_sha
 
   prev_image="$(state_get PREV_IMAGE_ID)"
   prev_sha="$(state_get PREV_GIT_SHA)"
   prev_branch="$(state_get GIT_BRANCH)"
   new_sha="$(state_get NEW_GIT_SHA)"
+  new_branch="$(state_get NEW_BRANCH)"
+  new_branch="${new_branch:-$prev_branch}"
   new_image="$(state_get NEW_IMAGE_ID)"
   backup="$(state_get DB_BACKUP)"
   revision_before="$(state_get REVISION_BEFORE)"
@@ -480,10 +488,10 @@ perform_rollback() {
   cur_sha="$(git rev-parse HEAD)"
   GIT_ACTION="none"
   if [[ "$cur_sha" != "$prev_sha" ]]; then
-    if [[ "$cur_sha" != "$new_sha" || ( -n "$prev_branch" && "$cur_branch" != "$prev_branch" ) ]]; then
+    if [[ "$cur_sha" != "$new_sha" || ( -n "$new_branch" && "$cur_branch" != "$new_branch" ) ]]; then
       {
         echo "Stopping: the checkout is at ${cur_sha:0:7} on ${cur_branch}, not where the update left it"
-        echo "(${new_sha:0:7} on ${prev_branch}). Nothing was changed."
+        echo "(${new_sha:0:7} on ${new_branch}). Nothing was changed."
         echo "To go back to the previous version yourself:"
         echo "  git switch ${prev_branch:-main} && git reset --keep ${prev_sha}"
         echo "then re-run: bash update.sh --rollback"
@@ -567,9 +575,18 @@ perform_rollback() {
   fi
 
   if [[ "$GIT_ACTION" == "reset" ]]; then
-    echo "Restoring git checkout to ${prev_sha:0:7} on ${cur_branch} ..."
-    if ! git reset --keep "$prev_sha"; then
-      echo "git reset --keep ${prev_sha} failed (local changes in the way?). The database was already handled; fix git and re-run." >&2
+    echo "Restoring git checkout to ${prev_sha:0:7} (${prev_branch:-$cur_branch}) ..."
+    local moved=0
+    if [[ "$prev_branch" == "HEAD" ]]; then
+      git checkout -q --detach "$prev_sha" && moved=1
+    elif [[ -z "$prev_branch" || "$prev_branch" == "$cur_branch" ]]; then
+      git reset --keep "$prev_sha" && moved=1
+    else
+      # The update moved from another branch (main -> horde-release): go back to it.
+      git checkout -q "$prev_branch" && { [[ "$(git rev-parse HEAD)" == "$prev_sha" ]] || git reset --keep "$prev_sha"; } && moved=1
+    fi
+    if [[ "$moved" -ne 1 ]]; then
+      echo "Could not move the checkout back to ${prev_sha} (local changes in the way?). The database was already handled; fix git and re-run." >&2
       return 2
     fi
   fi
@@ -764,6 +781,7 @@ if [[ "$REBUILD_SAME" -eq 0 ]]; then
   state_set DB_BACKUP "$DB_BACKUP_PATH"
   state_set REVISION_BEFORE "$REVISION_BEFORE"
   state_set GIT_BRANCH "$PREV_BRANCH"
+  state_set NEW_BRANCH "$(git rev-parse --abbrev-ref HEAD)"
   state_set PREV_GIT_SHA "$PREV_SHA"
   state_set PREV_IMAGE_ID "$PREV_IMAGE_ID"
   horde_prune_backups "$BACKUPS_ROOT" "$KEEP_BACKUPS" "${DB_BACKUP_PATH:+$(dirname "$DB_BACKUP_PATH")}"

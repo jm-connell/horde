@@ -59,6 +59,8 @@ The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `f
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
+| `HORDE_UPDATE_CHANNEL` | `release` | Host-side, read by `update.sh`: `release` (newest stable `vX.Y.Z` tag), `prerelease` or `main`. See [Update channels](../getting-started/updating.md#update-channels). |
+| `HORDE_ALLOW_DOWNGRADE` | *(unset)* | Host-side: `1` lets `update.sh` switch to a release older than the checkout. |
 | `HORDE_ALLOW_ROOT` | `0` | The entrypoint refuses `PUID=0` / `PGID=0` unless this is `1`. |
 | `YTDLP_AUTO_UPDATE` | `0` | `1` = on start, install the latest yt-dlp into `DATA_DIR/pylib` and prefer it over the baked version (details below). |
 | `HORDE_MEM_LIMIT` | *(unlimited)* | Compose-only. Memory limit for the `horde` container, for example `4g`. |

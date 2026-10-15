@@ -12,13 +12,19 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Upgrade notes
 
+- **`update.sh` now follows releases, not `main`.** It installs the newest stable
+  `vX.Y.Z` tag on a local `horde-release` branch (until the first release exists
+  it follows `main` as before). To keep tracking `main` set
+  `HORDE_UPDATE_CHANNEL=main` in `.env`; `prerelease` also accepts `-rc` tags. An
+  install that is ahead of the latest release is not downgraded unless you set
+  `HORDE_ALLOW_DOWNGRADE=1`.
 - **`PUID=0` / `PGID=0` no longer start.** The container now refuses to run the
   app as root. Set `PUID`/`PGID` to the owner of your media dataset, or set
   `HORDE_ALLOW_ROOT=1` in `.env` if you really want the old behaviour.
 - `DATA_PATH` must be on a local disk (SQLite WAL is unsafe on SMB/NFS).
-- A checkout that tracks `main` bakes a `git describe` version such as
+- A checkout that follows `main` bakes a `git describe` version such as
   `1.2.0-5-gabc1234`; the in-app update check then only reports **new releases**,
-  not every new commit on `main`. Run `bash update.sh` regularly to follow `main`.
+  not every new commit on `main`.
 
 ### Added
 

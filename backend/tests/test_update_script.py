@@ -122,6 +122,7 @@ if cmd == "compose":
         state["images"].append("sha256:new")
         state["tags"]["horde:latest"] = "sha256:new"
         state.setdefault("labels", {})["sha256:new"] = os.environ.get("HORDE_GIT_SHA", "")
+        state["build_version"] = os.environ.get("HORDE_VERSION", "")
         save(); out()
     if verb == "stop":
         state["running"] = False
@@ -238,11 +239,16 @@ class Harness:
         return (self.dir / "calls.log").read_text().splitlines()
 
     def publish(self) -> str:
-        (self.other / "VERSION").write_text("2\n")
+        self._published = getattr(self, "_published", 1) + 1
+        (self.other / "VERSION").write_text(f"{self._published}\n")
         _git(self.other, "add", "VERSION")
-        _git(self.other, "commit", "-m", "v2")
+        _git(self.other, "commit", "-m", f"v{self._published}")
         _git(self.other, "push", "origin", "main")
         return _git(self.other, "rev-parse", "HEAD")
+
+    def tag_upstream(self, tag: str, ref: str = "HEAD") -> None:
+        _git(self.other, "tag", tag, ref)
+        _git(self.other, "push", "origin", tag)
 
     def set(self, **changes: object) -> None:
         state = self.read_state()
@@ -624,3 +630,85 @@ def test_first_install_with_no_container_image_or_data_is_a_fresh_install(harnes
         result.stdout + result.stderr
     )
     assert not list((harness.work / ".local").glob("update-backups/*/horde.db"))
+
+
+def test_default_channel_follows_the_latest_release_and_builds_its_version(harness):
+    v2 = harness.publish()
+    harness.tag_upstream("v1.2.0", v2)
+    harness.publish()  # a later commit on main that is not released
+    harness.tag_upstream("v1.3.0-rc.1")  # pre-releases are ignored by default
+
+    result = harness.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == v2
+    assert _git(harness.work, "rev-parse", "--abbrev-ref", "HEAD") == "horde-release"
+    state = harness.read_state()
+    assert state["build_version"] == "1.2.0"
+    assert state["tags"][f"horde:{v2[:7]}"] == "sha256:new"
+    assert "NEW_BRANCH=horde-release" in _state_text(harness)
+
+
+def test_rollback_from_a_release_checkout_returns_to_the_previous_branch(harness):
+    v2 = harness.publish()
+    harness.tag_upstream("v1.2.0", v2)
+    assert harness.run().returncode == 0
+    assert _git(harness.work, "rev-parse", "--abbrev-ref", "HEAD") == "horde-release"
+
+    result = harness.run("--rollback")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _git(harness.work, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+    assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+    assert harness.read_state()["tags"]["horde:latest"] == "sha256:old"
+
+
+def test_next_release_fast_forwards_horde_release_and_rolls_back_to_the_old_tag(
+    harness,
+):
+    v2 = harness.publish()
+    harness.tag_upstream("v1.2.0", v2)
+    assert harness.run().returncode == 0
+    v3 = harness.publish()
+    harness.tag_upstream("v1.2.1", v3)
+
+    assert harness.run().returncode == 0
+    assert _git(harness.work, "rev-parse", "HEAD") == v3
+    assert harness.run("--rollback").returncode == 0
+    assert _git(harness.work, "rev-parse", "HEAD") == v2
+    assert _git(harness.work, "rev-parse", "--abbrev-ref", "HEAD") == "horde-release"
+
+
+def test_main_channel_ignores_release_tags(harness):
+    v2 = harness.publish()
+    harness.tag_upstream("v0.9.0", harness.v1)
+    v3 = harness.publish()
+
+    result = harness.run(HORDE_UPDATE_CHANNEL="main")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == v3
+    assert _git(harness.work, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+    assert v2 != v3
+
+
+def test_release_channel_refuses_to_move_a_checkout_backwards(harness):
+    v2 = harness.publish()
+    harness.tag_upstream("v1.0.0", harness.v1)
+    harness.publish()
+    _git(harness.work, "pull", "--ff-only", "origin", "main")
+    assert _git(harness.work, "rev-parse", "HEAD") != harness.v1
+    before = _git(harness.work, "rev-parse", "HEAD")
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "BACKWARDS" in result.stderr
+    assert "HORDE_UPDATE_CHANNEL=main" in result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == before
+    assert not any(c.startswith("compose build") for c in harness.calls())
+    assert v2
+
+    allowed = harness.run(HORDE_ALLOW_DOWNGRADE="1")
+    assert allowed.returncode == 0, allowed.stdout + allowed.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == harness.v1

@@ -29,7 +29,8 @@ Horde uses [Semantic Versioning](https://semver.org/). A release is a git tag
 
 ## What users see
 
-- Installs built with `update.sh` bake the nearest `v*` tag (for example `1.2.0-5-gabc1234`), and the in-app update notice compares it with the latest GitHub release. Until a first release exists, it compares commits and ignores bot and docs-only commits.
+- `update.sh` follows releases by default (`HORDE_UPDATE_CHANNEL=release`): it installs the highest stable `vX.Y.Z` tag, so **pushing a tag is what ships a change to users who build from source**. Merging to `main` alone reaches nobody on that channel. Pre-release tags are only picked up with `HORDE_UPDATE_CHANNEL=prerelease`; `main` followers get every commit.
+- The image is built with the tag as `HORDE_VERSION` and the in-app update notice compares it with the latest GitHub release. Until a first release exists, `update.sh` follows `main` and the notice compares commits, ignoring bot and docs-only commits.
 - Installs using the published image follow `latest` or the pinned version tag in `HORDE_IMAGE`. See [Updating](../getting-started/updating.md#use-the-published-image).
 
 ## Rolling back a release

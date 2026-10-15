@@ -197,23 +197,45 @@ horde_dirty_compose_files() {
   done
 }
 
-# Update the checkout with fetch + `merge --ff-only`. Never stashes, never
-# merges, never rewrites history, never discards .env (gitignored), and so
-# never leaves conflict markers behind.
+# Update the checkout. Channel (HORDE_UPDATE_CHANNEL):
+#   release     (default) the highest stable vX.Y.Z tag, on the local branch
+#               `horde-release`; falls back to main while no release tag exists
+#   prerelease  like release, but pre-release tags (v1.3.0-rc.1) count too
+#   main        fast-forward the current branch to origin (the old behaviour)
+# Never stashes, never merges, never rewrites history, never discards .env
+# (gitignored), and so never leaves conflict markers behind.
 #
 # A locally modified compose file is backed up to BACKUP_DIR (default
 # .local/update-backups/manual-<ts>) and the update STOPS with instructions,
 # unless HORDE_DISCARD_COMPOSE_EDITS=1, which restores the committed file after
 # the backup (host paths live in .env, so nothing is lost).
 # Other locally modified files are fine as long as the incoming change does not
-# touch them; otherwise git refuses the fast-forward and nothing changes.
+# touch them; otherwise git refuses and nothing changes.
+HORDE_RELEASE_BRANCH="horde-release"
+
+# Print the highest release tag (stable only unless $1 = prerelease), or nothing.
+horde_pick_release() {
+  local include_pre="${1:-}" tag
+  # versionsort.suffix makes v1.3.0-rc.1 sort before v1.3.0.
+  while IFS= read -r tag; do
+    if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+      || [[ "$include_pre" == "prerelease" && "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]; then
+      printf '%s' "$tag"
+      return 0
+    fi
+  done < <(git -c versionsort.suffix=- tag --list 'v[0-9]*' --sort=-version:refname)
+  return 0
+}
+
 horde_git_pull() {
-  local backup_dir="${1:-}" branch dirty f
-  branch="$(git rev-parse --abbrev-ref HEAD)"
-  if [[ "$branch" == "HEAD" ]]; then
-    echo "Refusing to update on a detached HEAD. Checkout main (or your branch) first." >&2
-    return 1
-  fi
+  local backup_dir="${1:-}" dirty f channel="${HORDE_UPDATE_CHANNEL:-release}"
+  case "$channel" in
+    release | prerelease | main) ;;
+    *)
+      echo "Unknown HORDE_UPDATE_CHANNEL='${channel}' (use release, prerelease or main)." >&2
+      return 1
+      ;;
+  esac
   if ! git remote get-url origin >/dev/null 2>&1; then
     echo "This checkout has no 'origin' remote, so there is nothing to pull from." >&2
     echo "Re-clone with: git clone https://github.com/jm-connell/horde.git" >&2
@@ -249,10 +271,69 @@ horde_git_pull() {
     fi
   fi
 
-  echo "Fetching latest code (preserving .env and host volume paths)..."
-  if ! git fetch origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+  echo "Fetching latest code and release tags (preserving .env and host volume paths)..."
+  if ! git fetch --tags --force origin "+refs/heads/*:refs/remotes/origin/*"; then
     echo "git fetch failed. Check network access to GitHub. Nothing was changed." >&2
     return 1
+  fi
+
+  if [[ "$channel" != "main" ]]; then
+    local tag
+    tag="$(horde_pick_release "$channel")"
+    if [[ -n "$tag" ]]; then
+      _horde_checkout_release "$tag"
+      return $?
+    fi
+    echo "No release tag (vX.Y.Z) exists yet; following main until the first release." >&2
+  fi
+  _horde_update_branch
+}
+
+# Move to release TAG on the local branch horde-release. Refuses to go backwards
+# (a checkout ahead of the release, or a moved tag) unless HORDE_ALLOW_DOWNGRADE=1:
+# a database migrated by newer code would not start on older code.
+_horde_checkout_release() {
+  local tag="$1" target head cur
+  target="$(git rev-parse "${tag}^{commit}")"
+  head="$(git rev-parse HEAD)"
+  cur="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ "$head" == "$target" && "$cur" == "$HORDE_RELEASE_BRANCH" ]]; then
+    echo "Already on release ${tag}."
+    return 0
+  fi
+  if ! git merge-base --is-ancestor "$head" "$target" && [[ "${HORDE_ALLOW_DOWNGRADE:-}" != "1" ]]; then
+    {
+      echo
+      echo "Stopping: the latest release ${tag} does not contain your current checkout"
+      echo "(${head:0:7} on ${cur}), so switching to it would go BACKWARDS. A database"
+      echo "already migrated by newer code may refuse to start on it. Nothing was changed."
+      echo "Either keep following main:  HORDE_UPDATE_CHANNEL=main bash update.sh"
+      echo "(set it in .env or your shell), or accept the downgrade:  HORDE_ALLOW_DOWNGRADE=1 bash update.sh"
+    } >&2
+    return 1
+  fi
+  echo "Switching to release ${tag} (${target:0:7}) on branch ${HORDE_RELEASE_BRANCH}."
+  if ! git checkout -q -B "$HORDE_RELEASE_BRANCH" "$target"; then
+    echo "Could not check out ${tag} (local changes in the way?). Nothing was changed." >&2
+    return 1
+  fi
+}
+
+# Main channel: fast-forward the current branch to origin/<branch>.
+_horde_update_branch() {
+  local branch
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ "$branch" == "HEAD" ]]; then
+    echo "Refusing to update on a detached HEAD. Checkout main (or your branch) first." >&2
+    return 1
+  fi
+  if [[ "$branch" == "$HORDE_RELEASE_BRANCH" ]]; then
+    branch="main" # no release yet / main channel chosen: follow main again
+    echo "Switching back from ${HORDE_RELEASE_BRANCH} to main." >&2
+    if ! git checkout -q "$branch"; then
+      echo "Could not switch to main. Nothing was changed." >&2
+      return 1
+    fi
   fi
   if ! git merge --ff-only "refs/remotes/origin/${branch}"; then
     {

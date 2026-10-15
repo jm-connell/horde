@@ -23,7 +23,7 @@ bash update.sh
 The script:
 
 1. Snapshots live `/downloads` and `/app/data` bind mounts (and `PUID`/`PGID`) into `.env` if a Horde container already exists
-2. `git fetch` + `git merge --ff-only`. It never stashes, merges or rewrites history, and `.env` (gitignored) is never touched. If you edited a compose file it **stops**, saves your copy under `.local/update-backups/<timestamp>/` and tells you what to do (see [Local compose edits](#local-compose-edits))
+2. `git fetch --tags`, then moves the checkout to the **newest release** (see [Update channels](#update-channels)); on the `main` channel it fast-forwards with `git merge --ff-only`. It never stashes, merges or rewrites history, and `.env` (gitignored) is never touched. If you edited a compose file it **stops**, saves your copy under `.local/update-backups/<timestamp>/` and tells you what to do (see [Local compose edits](#local-compose-edits))
 3. If the checkout is already at the commit the running container was built from, it prints "Already up to date" and exits without touching anything, **including the rollback point of the previous update**
 4. Refuses to recreate if the new compose would mount different host paths (override with `HORDE_FORCE_VOLUME_CHANGE=1`)
 5. Builds the image with the commit and version baked in and tags it `horde:latest` **and** `horde:<shortsha>`; the previous image is kept as `horde:<previous shortsha>`. Only the newest `HORDE_KEEP_IMAGES` (default 3) `horde:<shortsha>` tags are kept, always including the current and the previous one
@@ -59,6 +59,23 @@ Example:
 ```bash
 HORDE_COMPOSE_PROFILES=ai bash update.sh
 ```
+
+## Update channels
+
+`update.sh` follows **releases** by default, so you only get tested, tagged versions:
+
+| `HORDE_UPDATE_CHANNEL` | What `update.sh` installs |
+|------------------------|---------------------------|
+| `release` (default) | The highest stable `vX.Y.Z` tag, checked out on a local branch named `horde-release`. The image is built with that version baked in (`HORDE_VERSION`), so the in-app update notice compares release to release |
+| `prerelease` | Like `release`, but pre-release tags such as `v1.3.0-rc.1` count too (a final `v1.3.0` still wins over its own rc) |
+| `main` | The previous behaviour: fast-forward the current branch to `origin`, i.e. every commit on `main` |
+
+Set it in `.env` (`HORDE_UPDATE_CHANNEL=main`) or in the shell for one run. Notes:
+
+- **No release exists yet?** `update.sh` says so and follows `main` until the first release tag appears.
+- **Never backwards by accident.** If your checkout is ahead of the latest release (you were following `main`), switching to the release would be a downgrade, and a database migrated by newer code may refuse to start on older code. `update.sh` stops and changes nothing. Keep following `main` with `HORDE_UPDATE_CHANNEL=main`, or accept it with `HORDE_ALLOW_DOWNGRADE=1`.
+- **Rollback** remembers the branch and commit you came from. Rolling back from `horde-release` after your first switch from `main` returns you to `main` at the old commit; between two releases it moves `horde-release` back to the previous tag.
+- Your own tracked-file edits are still protected as described below; compose edits stop the update.
 
 ## Backups
 
@@ -143,7 +160,7 @@ Settings → System can show a quiet notice when a newer version is available (d
 - When the image has a release version baked in (`HORDE_VERSION`, set for tagged releases and by `update.sh` from your nearest `v*` tag), Horde compares it with the **latest GitHub release**.
 - Otherwise, or while the repository has no releases, it compares the baked commit SHA with `main` and **ignores** commits by the `github-actions[bot]` stats bot and changes that only touch docs, so a daily bot commit no longer shows up as an update.
 
-Installs that track `main` with `update.sh` bake a `git describe` version such as `1.2.0-5-gabc1234`. For them the notice only appears when a **new release** is published; commits on `main` in between do not trigger it (run `bash update.sh` to follow `main`).
+Installs on the default `release` channel bake the exact release version (for example `1.2.0`), so the notice appears when a newer release is published. Installs that follow `main` (`HORDE_UPDATE_CHANNEL=main`) bake a `git describe` version such as `1.2.0-5-gabc1234`; they only see notices for new **releases**, not for every commit on `main` in between.
 
 Both rely on identity baked at build time — another reason to use `update.sh` or set `HORDE_GIT_SHA` on rebuild.
 
