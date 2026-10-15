@@ -1,16 +1,20 @@
 import json
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlmodel import Session
 
-from ..services import app_settings
+from ..auth import CodedHTTPException, current_user
+from ..database import get_session
+from ..services import app_settings, user_settings
 from ..services.ai.provider import (
     invalidate_resolved_url,
     mask_openrouter_api_key,
     normalize_openrouter_model,
     openrouter_api_key_set,
 )
+from ..services.auth.accounts import AuthUser
 from ..services.css_sanitize import sanitize_custom_css
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -36,11 +40,10 @@ def _sanitize_ui_css(value: Any) -> Any:
     return value
 
 
-def _prepare_ui_update(ui: dict[str, Any]) -> dict[str, Any]:
+def _prepare_ui_update(ui: dict[str, Any], stored: dict[str, Any]) -> dict[str, Any]:
     """Sanitize a ``ui`` patch and refuse it if the merged blob would be too large."""
     cleaned = _sanitize_ui_css(ui)
-    stored = app_settings.load().get("ui")
-    merged = {**(stored if isinstance(stored, dict) else {}), **cleaned}
+    merged = {**stored, **cleaned}
     if len(json.dumps(merged, ensure_ascii=False).encode("utf-8")) > UI_MAX_BYTES:
         raise HTTPException(
             status_code=413,
@@ -204,8 +207,12 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     return AiSettingsRead(**filtered)
 
 
-def _settings_read(data: dict[str, Any]) -> AppSettingsRead:
-    ui = data.get("ui") if isinstance(data.get("ui"), dict) else {}
+def _settings_read(
+    data: dict[str, Any], ui: dict[str, Any] | None = None
+) -> AppSettingsRead:
+    """``ui`` is the caller's effective preferences; default: the server-wide blob."""
+    if ui is None:
+        ui = data.get("ui") if isinstance(data.get("ui"), dict) else {}
     try:
         interval = int(data.get("metadata_sync_interval_hours") or 24)
     except (TypeError, ValueError):
@@ -228,13 +235,29 @@ def _settings_read(data: dict[str, Any]) -> AppSettingsRead:
 
 
 @router.get("", response_model=AppSettingsRead)
-def get_settings():
-    return _settings_read(app_settings.load())
+def get_settings(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Server settings, with the caller's own ``ui`` preferences over the defaults."""
+    return _settings_read(
+        app_settings.load(), user_settings.effective_ui(session, user.id)
+    )
 
 
 @router.patch("", response_model=AppSettingsRead)
-def update_settings(payload: AppSettingsUpdate):
+def update_settings(
+    payload: AppSettingsUpdate,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Anyone may change their own ``ui`` preferences; every other field is
+    server-wide and needs an administrator."""
+    server_fields = payload.model_fields_set - {"ui"}
+    if server_fields and not user.is_admin:
+        raise CodedHTTPException(403, "Administrator access required", "admin_required")
     updates: dict = {}
+    ui_patch: dict[str, Any] | None = None
     if payload.progress_expiry_days is not None:
         updates["progress_expiry_days"] = payload.progress_expiry_days
     if payload.metadata_sync_interval_hours is not None:
@@ -257,7 +280,14 @@ def update_settings(payload: AppSettingsUpdate):
     if payload.setup_completed is True:
         updates["setup_completed"] = True
     if payload.ui is not None:
-        updates["ui"] = _prepare_ui_update(payload.ui)
+        shared_ui, personal_ui = user_settings.split_ui(payload.ui)
+        # The SPA saves its whole ui blob at once, server-owned keys included.
+        # For anyone but an administrator those keys are simply not applied.
+        if shared_ui and user.is_admin:
+            updates["ui"] = shared_ui
+        ui_patch = _prepare_ui_update(
+            personal_ui, user_settings.stored_ui(session, user.id)
+        )
     if payload.ai is not None:
         ai_updates = payload.ai.model_dump(exclude_unset=True)
         if "vram_gb" in ai_updates:
@@ -330,4 +360,8 @@ def update_settings(payload: AppSettingsUpdate):
 
             ai_worker.wake_worker()
     data = app_settings.save(updates) if updates else app_settings.load()
-    return _settings_read(data)
+    if ui_patch is not None:
+        ui = user_settings.save_ui(session, user.id, ui_patch)
+    else:
+        ui = user_settings.effective_ui(session, user.id)
+    return _settings_read(data, ui)

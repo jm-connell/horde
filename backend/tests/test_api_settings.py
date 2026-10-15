@@ -110,3 +110,77 @@ def test_settings_grandfathers_existing_file(client, tmp_dirs):
     body = client.get("/api/settings").json()
     assert body["setup_completed"] is True
     assert body["ui"]["theme"] == "oled"
+
+
+# --- per-user preferences ----------------------------------------------------
+
+
+def test_ui_preferences_are_private_to_each_user(client, member_client):
+    assert (
+        client.patch("/api/settings", json={"ui": {"theme": "oled"}}).status_code == 200
+    )
+    assert (
+        member_client.patch(
+            "/api/settings", json={"ui": {"theme": "nord", "fontSize": "large"}}
+        ).status_code
+        == 200
+    )
+    assert client.get("/api/settings").json()["ui"]["theme"] == "oled"
+    mine = member_client.get("/api/settings").json()["ui"]
+    assert (mine["theme"], mine["fontSize"]) == ("nord", "large")
+    assert "fontSize" not in client.get("/api/settings").json()["ui"]
+
+
+def test_ui_patch_merges_into_the_users_own_blob(member_client):
+    member_client.patch("/api/settings", json={"ui": {"theme": "nord"}})
+    member_client.patch("/api/settings", json={"ui": {"fontSize": "large"}})
+    ui = member_client.get("/api/settings").json()["ui"]
+    assert (ui["theme"], ui["fontSize"]) == ("nord", "large")
+
+
+def test_server_wide_ui_blob_is_the_default_for_people_without_choices(
+    init_db, client, member_client
+):
+    from app.services import app_settings
+
+    app_settings.save({"ui": {"theme": "terminal", "fontSize": "xl"}})
+    assert member_client.get("/api/settings").json()["ui"]["theme"] == "terminal"
+    member_client.patch("/api/settings", json={"ui": {"theme": "mocha"}})
+    ui = member_client.get("/api/settings").json()["ui"]
+    assert (ui["theme"], ui["fontSize"]) == ("mocha", "xl")
+
+
+def test_members_cannot_change_server_settings(member_client, client):
+    for body in (
+        {"progress_expiry_days": 30},
+        {"ai": {"enabled": False}},
+        {"setup_completed": True},
+        {"ui": {"theme": "oled"}, "channel_catalog_enabled": False},
+    ):
+        resp = member_client.patch("/api/settings", json=body)
+        assert resp.status_code == 403, body
+        assert resp.json()["code"] == "admin_required"
+    # The refused mixed request did not apply its ui half either.
+    assert "theme" not in member_client.get("/api/settings").json()["ui"]
+    assert client.get("/api/settings").json()["progress_expiry_days"] == 14
+
+
+def test_server_owned_ui_keys_are_shared_and_admin_only(client, member_client):
+    resp = client.patch(
+        "/api/settings",
+        json={"ui": {"download_video_codec": "sidecar", "theme": "oled"}},
+    )
+    assert resp.status_code == 200
+    # The SPA saves its whole blob, so a member's attempt is ignored, not refused.
+    resp = member_client.patch(
+        "/api/settings",
+        json={"ui": {"download_video_codec": "av1", "theme": "nord"}},
+    )
+    assert resp.status_code == 200
+    for c, theme in ((client, "oled"), (member_client, "nord")):
+        ui = c.get("/api/settings").json()["ui"]
+        assert ui["download_video_codec"] == "sidecar"
+        assert ui["theme"] == theme
+    from app.services.ytdlp_formats import default_download_video_codec
+
+    assert default_download_video_codec() == "sidecar"
