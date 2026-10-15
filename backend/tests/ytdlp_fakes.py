@@ -195,3 +195,49 @@ def run_job_inline(
         downloader._run_download(job_id, cancel_event=cancel_event or threading.Event())
     finally:
         downloader.ffmpeg_queue.enqueue = original  # type: ignore[method-assign]
+
+
+class SideEffects:
+    """Calls a finished download makes into the other subsystems."""
+
+    def __init__(self) -> None:
+        self.ai: list[tuple[Any, dict[str, Any]]] = []
+        self.sprites: list[Any] = []
+        self.catalog: list[tuple[Any, dict[str, Any]]] = []
+        self.subtitles: list[Any] = []
+        self.thumbnails: list[Any] = []
+        self.finalize: list[tuple[Any, ...]] = []
+
+
+def record_side_effects(monkeypatch, downloader) -> SideEffects:
+    """Replace what a download triggers elsewhere with recorders (call after stubbing probes)."""
+    fx = SideEffects()
+    monkeypatch.setattr(
+        "app.services.ai.enqueue_for_video",
+        lambda video_id, **kw: fx.ai.append((video_id, kw)),
+    )
+    monkeypatch.setattr(
+        "app.services.sprites.enqueue_sprite_generation",
+        lambda video_id, **_kw: fx.sprites.append(video_id),
+    )
+    monkeypatch.setattr(
+        "app.services.channel_catalog.enqueue_channel",
+        lambda url, **kw: fx.catalog.append((url, kw)),
+    )
+
+    def fetch_subtitles(media, source_url):
+        fx.subtitles.append((media, source_url))
+        from app.services.subtitle_retry import outcome_from_fetch
+
+        return outcome_from_fetch([])
+
+    monkeypatch.setattr(
+        "app.services.downloads.subtitles.download_subtitles", fetch_subtitles
+    )
+
+    def save_thumbnail(url, video_id, list_url=None):
+        fx.thumbnails.append((url, video_id, list_url))
+        return f"{video_id}.jpg"
+
+    monkeypatch.setattr(downloader, "_save_thumbnail", save_thumbnail)
+    return fx

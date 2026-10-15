@@ -257,7 +257,11 @@ def test_unplayable_download_ends_in_error_and_leaves_no_files(
     assert not _staging(init_db, job_id).exists()
 
 
-def test_members_only_video_is_reported_not_retried(init_db, fake):
+def test_members_only_video_is_reported_not_retried(init_db, fake, monkeypatch):
+    purged: list[str] = []
+    monkeypatch.setattr(
+        "app.services.channel_catalog.skips.purge_members_only_by_yt_id", purged.append
+    )
     fake.fetch_error = RuntimeError(
         "ERROR: [youtube] x: Join this channel to get access to members-only content"
     )
@@ -267,6 +271,7 @@ def test_members_only_video_is_reported_not_retried(init_db, fake):
     job = _job(init_db, job_id)
     assert (job.status, job.error_kind) == (JobStatus.error, ERROR_KIND_MEMBERS)
     assert fake.downloads == []
+    assert purged == [YT]
     assert progress.progress_store[job_id]["error_kind"] == ERROR_KIND_MEMBERS
 
 
