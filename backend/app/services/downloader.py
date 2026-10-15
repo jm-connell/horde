@@ -115,8 +115,82 @@ from .ytdlp_formats import _height_to_tier as _height_to_tier
 
 logger = logging.getLogger(__name__)
 
-# Live progress snapshots keyed by job id, consumed by the SSE endpoint.
-progress_store: dict[int, dict[str, Any]] = {}
+_TERMINAL_PROGRESS = frozenset({"completed", "error", "cancelled", "skipped"})
+PROGRESS_TTL_SECONDS = 600.0
+
+
+class ProgressStore:
+    """Live progress snapshots keyed by job id, consumed by the SSE endpoints.
+
+    Dict-like, but thread-safe: ``merge`` is an atomic read-modify-write (workers,
+    the metadata thread and ffmpeg callbacks all update the same job), and
+    snapshots of finished jobs are pruned after a TTL so the map cannot grow
+    without bound (the DB row is the source of truth afterwards).
+    """
+
+    def __init__(self, ttl: float = PROGRESS_TTL_SECONDS) -> None:
+        self._lock = threading.RLock()
+        self._data: dict[int, dict[str, Any]] = {}
+        self._finished_at: dict[int, float] = {}
+        self._ttl = ttl
+
+    def __getitem__(self, job_id: int) -> dict[str, Any]:
+        with self._lock:
+            return self._data[job_id]
+
+    def __setitem__(self, job_id: int, snapshot: dict[str, Any]) -> None:
+        with self._lock:
+            self._data[job_id] = snapshot
+            if snapshot.get("status") in _TERMINAL_PROGRESS:
+                self._finished_at[job_id] = time.monotonic()
+            else:
+                self._finished_at.pop(job_id, None)
+
+    def __contains__(self, job_id: object) -> bool:
+        with self._lock:
+            return job_id in self._data
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._data)
+
+    def get(self, job_id: int, default: Any = None) -> Any:
+        with self._lock:
+            return self._data.get(job_id, default)
+
+    def pop(self, job_id: int, *default: Any) -> Any:
+        with self._lock:
+            self._finished_at.pop(job_id, None)
+            return self._data.pop(job_id, *default)
+
+    def items(self) -> list[tuple[int, dict[str, Any]]]:
+        with self._lock:
+            return list(self._data.items())
+
+    def clear(self) -> None:
+        with self._lock:
+            self._data.clear()
+            self._finished_at.clear()
+
+    def merge(self, job_id: int, fields: dict[str, Any]) -> dict[str, Any]:
+        """Atomically overlay ``fields`` on the job's snapshot and return it."""
+        with self._lock:
+            snap = {**self._data.get(job_id, {}), **fields}
+            self[job_id] = snap
+            return snap
+
+    def prune(self, now: float | None = None) -> int:
+        """Drop snapshots of jobs that finished more than the TTL ago."""
+        cutoff = (time.monotonic() if now is None else now) - self._ttl
+        with self._lock:
+            stale = [j for j, t in self._finished_at.items() if t <= cutoff]
+            for job_id in stale:
+                self._data.pop(job_id, None)
+                self._finished_at.pop(job_id, None)
+            return len(stale)
+
+
+progress_store = ProgressStore()
 
 DUPLICATE_QUEUED = "already_queued"
 DUPLICATE_DOWNLOADING = "already_downloading"
@@ -404,6 +478,11 @@ def _purge_members_only_url(url: str) -> None:
         _purge_members_only_yt_id(yt_id)
 
 
+# A `downloading` job nobody owns for this long goes back to `queued`.
+STUCK_JOB_GRACE_SECONDS = 180.0
+REAPER_INTERVAL_SECONDS = 60.0
+
+
 class DownloadQueue:
     """FIFO download scheduler with global pause and bounded concurrency."""
 
@@ -416,6 +495,9 @@ class DownloadQueue:
         # Quality-change restart: skip dispatch until the API releases the job.
         self._held: set[int] = set()
         self._restart_ids: set[int] = set()
+        self._orphan_seen: dict[int, float] = {}
+        self._reaper: threading.Thread | None = None
+        self._reaper_stop = threading.Event()
 
     def is_paused(self) -> bool:
         with self._lock:
@@ -599,25 +681,26 @@ class DownloadQueue:
 
     def active_count(self) -> int:
         with Session(engine) as session:
-            return len(
+            return int(
                 session.exec(
-                    select(DownloadJob).where(
+                    select(func.count())
+                    .select_from(DownloadJob)
+                    .where(
                         DownloadJob.status.in_(
-                            [
-                                JobStatus.queued,
-                                JobStatus.downloading,
-                            ]
+                            [JobStatus.queued, JobStatus.downloading]
                         )
                     )
-                ).all()
+                ).one()
             )
 
     def queued_count(self) -> int:
         with Session(engine) as session:
-            return len(
+            return int(
                 session.exec(
-                    select(DownloadJob).where(DownloadJob.status == JobStatus.queued)
-                ).all()
+                    select(func.count())
+                    .select_from(DownloadJob)
+                    .where(DownloadJob.status == JobStatus.queued)
+                ).one()
             )
 
     def _dispatch(self) -> None:
@@ -626,49 +709,138 @@ class DownloadQueue:
         # Browser tests seed a queued job. Never start yt-dlp from that process.
         if e2e_browser():
             return
-        with self._lock:
-            if self._global_paused:
+        while True:
+            with self._lock:
+                if (
+                    self._global_paused
+                    or len(self._running) >= MAX_DOWNLOAD_CONCURRENCY
+                ):
+                    return
+            # The DB query runs outside the lock; the claim below re-checks.
+            job_id = self._next_job_id()
+            if job_id is None:
                 return
-            while len(self._running) < MAX_DOWNLOAD_CONCURRENCY:
-                job_id = self._next_job_id()
-                if job_id is None:
-                    break
+            with self._lock:
+                if (
+                    self._global_paused
+                    or len(self._running) >= MAX_DOWNLOAD_CONCURRENCY
+                ):
+                    return
+                if job_id in self._running or job_id in self._held:
+                    continue
                 self._running.add(job_id)
                 cancel_event = threading.Event()
                 self._cancel_events[job_id] = cancel_event
-                threading.Thread(
-                    target=self._worker,
-                    args=(job_id, cancel_event),
-                    daemon=True,
-                ).start()
+            threading.Thread(
+                target=self._worker,
+                args=(job_id, cancel_event),
+                daemon=True,
+            ).start()
 
     def _next_job_id(self) -> int | None:
-        """Return next queued job not already claimed. Caller must hold _lock."""
+        """Oldest queued, unpaused job that is neither running nor held."""
+        with self._lock:
+            excluded = list(self._running | self._held)
         with Session(engine) as session:
-            jobs = session.exec(
-                select(DownloadJob)
-                .where(
-                    DownloadJob.status == JobStatus.queued,
-                    DownloadJob.paused == False,  # noqa: E712
-                )
-                .order_by(DownloadJob.created_at.asc())
+            query = select(DownloadJob.id).where(
+                DownloadJob.status == JobStatus.queued,
+                DownloadJob.paused == False,  # noqa: E712
+            )
+            if excluded:
+                query = query.where(DownloadJob.id.notin_(excluded))  # type: ignore[union-attr]
+            return session.exec(
+                query.order_by(
+                    DownloadJob.created_at.asc(), DownloadJob.id.asc()
+                ).limit(1)
+            ).first()
+
+    # -- stuck-job reaper ------------------------------------------------
+
+    def reap_stuck_jobs(
+        self, *, now: float | None = None, grace: float = STUCK_JOB_GRACE_SECONDS
+    ) -> list[int]:
+        """Requeue ``downloading`` jobs that no worker or ffmpeg stage owns.
+
+        A job is only reaped after it has been seen orphaned for ``grace``
+        seconds, which covers the hand-off windows between stages.
+        """
+        clock = time.monotonic() if now is None else now
+        with self._lock:
+            owned = self._running | self._ffmpeg_running
+        with Session(engine) as session:
+            rows = session.exec(
+                select(DownloadJob).where(DownloadJob.status == JobStatus.downloading)
             ).all()
-            for job in jobs:
-                if (
-                    job.id is not None
-                    and job.id not in self._running
-                    and job.id not in self._held
-                ):
-                    return job.id
-            return None
+            orphans = {j.id for j in rows if j.id is not None and j.id not in owned}
+            self._orphan_seen = {
+                jid: t for jid, t in self._orphan_seen.items() if jid in orphans
+            }
+            reaped: list[int] = []
+            for job in rows:
+                if job.id not in orphans:
+                    continue
+                first = self._orphan_seen.setdefault(job.id, clock)
+                if clock - first < grace:
+                    continue
+                job.status = JobStatus.queued
+                job.progress = 0.0
+                job.paused = self.is_paused()
+                session.add(job)
+                reaped.append(job.id)
+                self._orphan_seen.pop(job.id, None)
+                logger.warning(
+                    "requeued stuck download job %s (no worker for %.0fs)",
+                    job.id,
+                    clock - first,
+                )
+            if reaped:
+                session.commit()
+        for job_id in reaped:
+            progress_store.merge(job_id, {"status": "queued", "progress": 0.0})
+        if reaped:
+            self._dispatch()
+        return reaped
+
+    def start_reaper(self, interval: float = REAPER_INTERVAL_SECONDS) -> None:
+        if self._reaper is not None and self._reaper.is_alive():
+            return
+        self._reaper_stop.clear()
+
+        def loop() -> None:
+            while not self._reaper_stop.wait(interval):
+                try:
+                    self.reap_stuck_jobs()
+                    progress_store.prune()
+                except Exception:
+                    logger.exception("stuck-job reaper pass failed")
+
+        self._reaper = threading.Thread(
+            target=loop, name="download-reaper", daemon=True
+        )
+        self._reaper.start()
+
+    def stop_reaper(self) -> None:
+        self._reaper_stop.set()
+        thread = self._reaper
+        if thread is not None:
+            thread.join(timeout=2)
+        self._reaper = None
 
     def _worker(self, job_id: int, cancel_event: threading.Event) -> None:
+        """Run one job. Total: whatever happens, the job leaves ``downloading``."""
         try:
             with Session(engine) as session:
                 job = session.get(DownloadJob, job_id)
                 if job is None or job.status != JobStatus.queued:
                     return
-            _run_download(job_id, cancel_event=cancel_event)
+                destination = job.destination or DownloadDestination.library.value
+            try:
+                _run_download(job_id, cancel_event=cancel_event)
+            except DownloadCancelled:
+                _mark_job_cancelled(job_id, destination)
+        except Exception as exc:
+            logger.exception("download worker for job %s crashed", job_id)
+            _force_job_error(job_id, exc)
         finally:
             with self._lock:
                 self._running.discard(job_id)
@@ -858,6 +1030,25 @@ def _update_job(job_id: int, **fields: Any) -> None:
             session.commit()
 
     _retry_db_locked(write, what=f"job {job_id}")
+
+
+def _force_job_error(job_id: int, exc: BaseException) -> None:
+    """Last resort for a worker that died: end the job in ``error``, never stuck."""
+    kind, message = classify_ytdlp_error(exc)
+    try:
+        _update_job(job_id, status=JobStatus.error, error=message, error_kind=kind)
+    except Exception:
+        # The reaper requeues it if even this write cannot land.
+        logger.exception("could not record failure of download job %s", job_id)
+    progress_store[job_id] = {
+        "status": "error",
+        "error": message,
+        "error_kind": kind,
+    }
+    try:
+        _discard_staging_unless_requeued(job_id)
+    except Exception:
+        logger.exception("could not clean staging for job %s", job_id)
 
 
 def _mark_job_cancelled(
@@ -1121,10 +1312,10 @@ def processing_stage_for_postprocessor(name: str | None) -> str | None:
 
 
 def _publish_job_progress(job_id: int, fields: dict[str, Any]) -> dict[str, Any]:
-    snap = {**progress_store.get(job_id, {}), **fields}
-    if snap.get("status") != "processing":
-        snap.pop("stage", None)
-    progress_store[job_id] = snap
+    snap = progress_store.merge(job_id, fields)
+    if snap.get("status") != "processing" and "stage" in snap:
+        snap = {k: v for k, v in snap.items() if k != "stage"}
+        progress_store[job_id] = snap
     return snap
 
 

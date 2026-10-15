@@ -6,7 +6,7 @@ import logging
 import queue
 import threading
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..database import engine
 from ..models import DownloadJob, JobStatus
@@ -35,6 +35,25 @@ def start_job_metadata_worker() -> None:
     _stop.clear()
     _thread = threading.Thread(target=_loop, name="job-metadata", daemon=True)
     _thread.start()
+    rehydrate_pending()
+
+
+def rehydrate_pending() -> int:
+    """Re-queue metadata fills lost on restart (the queue is in memory only)."""
+    with Session(engine) as session:
+        ids = session.exec(
+            select(DownloadJob.id).where(
+                DownloadJob.status == JobStatus.queued,
+                (DownloadJob.title == None)  # noqa: E711 - SQL IS NULL
+                | (DownloadJob.title == "")
+                | (DownloadJob.available_presets_json == None),  # noqa: E711
+            )
+        ).all()
+    for job_id in ids:
+        request_job_metadata(job_id)
+    if ids:
+        logger.info("requeued metadata for %d queued download job(s)", len(ids))
+    return len(ids)
 
 
 def stop_job_metadata_worker() -> None:
@@ -125,15 +144,16 @@ def _fill_job(job_id: int) -> None:
         snap_thumb = job.thumbnail_url
         snap_preset = job.quality_preset
 
-    prev = downloader.progress_store.get(job_id, {})
-    downloader.progress_store[job_id] = {
-        **prev,
-        "title": snap_title,
-        "channel": snap_channel,
-        "thumbnail_url": snap_thumb,
-        "quality_preset": snap_preset,
-        "available_presets": preview.get("available_presets") or [],
-    }
+    downloader.progress_store.merge(
+        job_id,
+        {
+            "title": snap_title,
+            "channel": snap_channel,
+            "thumbnail_url": snap_thumb,
+            "quality_preset": snap_preset,
+            "available_presets": preview.get("available_presets") or [],
+        },
+    )
 
 
 def _drop_short(job_id: int, url: str) -> None:

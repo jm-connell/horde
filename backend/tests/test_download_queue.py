@@ -112,8 +112,7 @@ def test_next_job_id_skips_paused_fifo(init_db, monkeypatch):
         session.commit()
         newer_id = newer.id
 
-    with q._lock:
-        assert q._next_job_id() == newer_id
+    assert q._next_job_id() == newer_id
 
 
 def test_next_job_id_skips_held(init_db, monkeypatch):
@@ -124,5 +123,4 @@ def test_next_job_id_skips_held(init_db, monkeypatch):
         ready = _add_job(session)
         held_id, ready_id = held.id, ready.id
     q._held.add(held_id)
-    with q._lock:
-        assert q._next_job_id() == ready_id
+    assert q._next_job_id() == ready_id

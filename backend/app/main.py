@@ -92,6 +92,7 @@ async def lifespan(app: FastAPI):
     ensure_plugins_loaded()
     await preview.init_preview_client()
     downloader.download_queue.recover()
+    downloader.download_queue.start_reaper()
     downloader.gc_orphaned_device_dirs()
     from .services.temp_sweep import run_boot_cleanup
 
@@ -116,6 +117,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        downloader.download_queue.stop_reaper()
         stop_probe_backfill()
         stop_job_metadata_worker()
         stop_subtitle_retry_worker()
