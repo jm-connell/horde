@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 
 from app.models import DownloadDestination, DownloadJob, JobStatus, Video
 from app.services import downloader
+from app.services.downloads import staging
 
 
 def _write_media(path: Path, size: int = 64) -> None:
@@ -233,7 +234,7 @@ def test_gc_orphaned_device_dirs(init_db):
     keep.mkdir(parents=True, exist_ok=True)
     (keep / "keep.mp4").write_bytes(b"y")
 
-    removed = downloader.gc_orphaned_device_dirs()
+    removed = staging.gc_orphaned_device_dirs()
     assert removed >= 1
     assert not orphan.exists()
     assert keep.exists()

@@ -13,6 +13,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadJob, JobStatus, Video
 from app.services import downloader, scanner
+from app.services.downloads import staging
 from app.services.paths import STAGING_DIR_NAME
 
 YT = "aaaaaaaaaaa"
@@ -204,14 +205,14 @@ def test_paused_job_keeps_its_staging_dir_for_resume(init_db, fake):
         s.add(job)
         s.commit()
         job_id = job.id
-    staging = root / STAGING_DIR_NAME / str(job_id)
-    staging.mkdir(parents=True)
-    (staging / "x.f137.mp4.part").write_bytes(b"1")
-    downloader._discard_staging_unless_requeued(job_id)
-    assert staging.exists()
+    staged = root / STAGING_DIR_NAME / str(job_id)
+    staged.mkdir(parents=True)
+    (staged / "x.f137.mp4.part").write_bytes(b"1")
+    staging.discard_staging_unless_requeued(job_id)
+    assert staged.exists()
     downloader._update_job(job_id, status=JobStatus.cancelled)
-    downloader._discard_staging_unless_requeued(job_id)
-    assert not staging.exists()
+    staging.discard_staging_unless_requeued(job_id)
+    assert not staged.exists()
 
 
 def _displaced_scenario(init_db, existing, monkeypatch):
