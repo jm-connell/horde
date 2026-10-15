@@ -43,13 +43,16 @@ fi
 
 mkdir -p "$DATA_DIR" "$DOWNLOADS_DIR"
 
-# Own the persistent data dir, but only walk it when the top-level owner is
-# wrong (first start, or PUID/PGID changed). A recursive chown on every start
-# is slow on large thumbnail caches. Downloads are left alone: the host owns
-# that mount.
+# Own the persistent data dir, but only walk it when something is wrong: the
+# top-level owner differs (first start, or PUID/PGID changed) or a cheap probe
+# finds any file inside with a different owner or group (for example a horde.db
+# restored as root by a rollback, which would leave the app with a read-only
+# database). A recursive chown on every start is slow on large thumbnail
+# caches. Downloads are left alone: the host owns that mount.
 current_owner="$(stat -c '%u:%g' "$DATA_DIR")"
-if [[ "$current_owner" != "$PUID:$PGID" ]]; then
-  log "chown -R $PUID:$PGID $DATA_DIR (was $current_owner)"
+stray="$(find "$DATA_DIR" -xdev \( ! -user "$PUID" -o ! -group "$PGID" \) -print -quit)"
+if [[ "$current_owner" != "$PUID:$PGID" || -n "$stray" ]]; then
+  log "chown -R $PUID:$PGID $DATA_DIR (top level was $current_owner${stray:+, e.g. $stray})"
   if ! chown -R "$PUID:$PGID" "$DATA_DIR"; then
     log "WARNING: could not chown $DATA_DIR; the app may be unable to write there." >&2
   fi
@@ -79,20 +82,31 @@ sys.exit(0 if key(sys.argv[1]) < key(sys.argv[2]) else 1)' "$1" "$2"
 }
 
 update_ytdlp() {
-  local staging="${YTDLP_PYLIB}.new" baked have
+  local staging="${YTDLP_PYLIB}.new" baked have fresh
+  local limit="${YTDLP_UPDATE_TIMEOUT_SEC:-45}"
   baked="$(ytdlp_version "")"
   rm -rf "$staging"
-  log "YTDLP_AUTO_UPDATE=1: checking for a newer yt-dlp (baked: ${baked:-unknown})"
-  if gosu "$PUID:$PGID" env HOME=/tmp timeout 120 \
-       pip install --quiet --disable-pip-version-check --upgrade --no-deps --retries 1 --timeout 15 \
+  log "YTDLP_AUTO_UPDATE=1: checking for a newer yt-dlp (baked: ${baked:-unknown}, ${limit}s limit)"
+  # The limit is part of the start-up time `update.sh` waits for, so it stays
+  # well under HORDE_HEALTH_TIMEOUT_SEC. Wheels only: never run a build script.
+  if gosu "$PUID:$PGID" env HOME=/tmp timeout "$limit" \
+       pip install --quiet --disable-pip-version-check --upgrade --no-deps \
+       --only-binary=:all: --retries 1 --timeout 15 \
        --target "$staging" yt-dlp; then
-    rm -rf "$YTDLP_PYLIB"
-    mv "$staging" "$YTDLP_PYLIB"
-    log "yt-dlp from $YTDLP_PYLIB: $(ytdlp_version "$YTDLP_PYLIB")"
-    return 0
+    fresh="$(ytdlp_version "$staging")"
+    if [[ -n "$baked" && -n "$fresh" ]] && version_lt "$fresh" "$baked"; then
+      log "ignoring yt-dlp $fresh from PyPI: older than the baked $baked"
+      rm -rf "$staging"
+    else
+      rm -rf "$YTDLP_PYLIB"
+      mv "$staging" "$YTDLP_PYLIB"
+      log "yt-dlp from $YTDLP_PYLIB: ${fresh:-unknown}"
+      return 0
+    fi
+  else
+    log "WARNING: yt-dlp update failed (offline?); continuing." >&2
+    rm -rf "$staging"
   fi
-  log "WARNING: yt-dlp update failed (offline?); continuing." >&2
-  rm -rf "$staging"
   # A leftover copy older than the one baked into a newer image would shadow it.
   if [[ -d "$YTDLP_PYLIB" ]]; then
     have="$(ytdlp_version "$YTDLP_PYLIB")"
