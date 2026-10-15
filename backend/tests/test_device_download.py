@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 
 from app.models import DownloadDestination, DownloadJob, JobStatus, Video
 from app.services import downloader
-from app.services.downloads import staging
+from app.services.downloads import progress, staging
 
 
 def _write_media(path: Path, size: int = 64) -> None:
@@ -62,7 +62,7 @@ def test_complete_device_skips_library_row(init_db, monkeypatch):
         assert job.device_file_path == f"_device/{job_id}/Device Clip [dQw4w9WgXcQ].mp4"
         assert session.exec(select(Video)).first() is None
 
-    snap = downloader.progress_store[job_id]
+    snap = progress.progress_store[job_id]
     assert snap["status"] == "completed"
     assert snap["destination"] == "device"
     assert "video_id" not in snap
@@ -75,19 +75,15 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
     job_id = 0
 
     def fake_ensure(path: Path, **_kwargs: object) -> Path:
-        seen.append(("ensure", downloader.progress_store.get(job_id, {}).get("stage")))
+        seen.append(("ensure", progress.progress_store.get(job_id, {}).get("stage")))
         return path
 
     def fake_transcode(path: Path, target: str, **_kwargs: object) -> Path:
-        seen.append(
-            ("transcode", downloader.progress_store.get(job_id, {}).get("stage"))
-        )
+        seen.append(("transcode", progress.progress_store.get(job_id, {}).get("stage")))
         return path
 
     def fake_loudnorm(_path: Path, **_kwargs: object) -> None:
-        seen.append(
-            ("loudnorm", downloader.progress_store.get(job_id, {}).get("stage"))
-        )
+        seen.append(("loudnorm", progress.progress_store.get(job_id, {}).get("stage")))
         return None
 
     monkeypatch.setattr(downloader, "_apply_loudnorm", fake_loudnorm)
@@ -121,7 +117,7 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
         session.refresh(job)
         job_id = job.id
 
-    downloader.progress_store[job_id] = {
+    progress.progress_store[job_id] = {
         "status": "processing",
         "progress": 99.0,
         "title": "Device Clip",

@@ -167,10 +167,10 @@ def _failed_job(init_db, **fields):
 
 
 def test_retry_failed_job_requeues_once(client, init_db):
-    from app.services import downloader
+    from app.services.downloads import progress
 
     job_id = _failed_job(init_db)
-    downloader.progress_store[job_id] = {
+    progress.progress_store[job_id] = {
         "status": "error",
         "error": "boom",
         "error_kind": "unknown",
@@ -189,7 +189,7 @@ def test_retry_failed_job_requeues_once(client, init_db):
     assert body["error_kind"] is None
     assert body["progress"] == 0.0
     assert body["title_override"] == "Retried Title"
-    assert downloader.progress_store[job_id]["status"] == "queued"
+    assert progress.progress_store[job_id]["status"] == "queued"
 
     second = client.post(f"/api/downloads/{job_id}/retry", json={})
     assert second.status_code == 200
@@ -384,6 +384,7 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
 
     from app.models import DownloadJob, JobStatus
     from app.services import downloader
+    from app.services.downloads import progress
 
     monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
@@ -435,7 +436,7 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
     assert body["quality_preset"] == "720p"
     assert body["status"] == "queued"
     assert body["progress"] == 0.0
-    assert downloader.progress_store[job_id]["status"] == "queued"
+    assert progress.progress_store[job_id]["status"] == "queued"
 
 
 def test_create_download_after_library_delete_is_allowed(client, add_video):

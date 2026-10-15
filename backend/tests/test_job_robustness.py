@@ -11,7 +11,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, stub_media_probes
 
 from app.models import DownloadJob, JobStatus
 from app.services import downloader, job_metadata
-from app.services.downloads import dbwrite
+from app.services.downloads import dbwrite, progress
 
 URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
@@ -232,7 +232,7 @@ def test_paused_queue_dispatches_nothing(init_db, monkeypatch):
 
 
 def test_progress_store_merge_is_atomic_under_threads():
-    store = downloader.ProgressStore()
+    store = progress.ProgressStore()
 
     def writer(key):
         for i in range(500):
@@ -248,7 +248,7 @@ def test_progress_store_merge_is_atomic_under_threads():
 
 
 def test_progress_store_prunes_finished_jobs_after_ttl():
-    store = downloader.ProgressStore(ttl=10)
+    store = progress.ProgressStore(ttl=10)
     store[1] = {"status": "downloading"}
     store[2] = {"status": "completed"}
     store[3] = {"status": "error"}

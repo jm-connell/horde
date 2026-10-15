@@ -20,6 +20,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadDestination, DownloadJob, JobStatus, Video
 from app.services import downloader, ytdlp_common
+from app.services.downloads import progress
 from app.services.paths import STAGING_DIR_NAME
 from app.services.ytdlp_common import (
     ERROR_KIND_CANCELLED,
@@ -91,7 +92,7 @@ def test_queue_runs_a_new_download_to_a_library_video(init_db, fake):
     assert (video.title, video.channel) == ("Clip", "Chan")
     assert (init_db["downloads"] / video.file_path).is_file()
     assert not _staging(init_db, job_id).exists()
-    snap = downloader.progress_store[job_id]
+    snap = progress.progress_store[job_id]
     assert (snap["status"], snap["video_id"]) == ("completed", video.id)
 
 
@@ -152,7 +153,7 @@ def test_every_selector_failing_ends_the_job_in_error(init_db, fake):
     assert job.status == JobStatus.error
     assert job.error_kind == ERROR_KIND_UNKNOWN
     assert job.error
-    assert downloader.progress_store[job_id]["status"] == "error"
+    assert progress.progress_store[job_id]["status"] == "error"
     assert _videos(init_db) == []
     assert not _staging(init_db, job_id).exists()
 
@@ -186,7 +187,7 @@ def test_cancel_during_download_ends_cancelled_and_clean(init_db, fake):
     assert (job.status, job.error_kind) == (JobStatus.cancelled, ERROR_KIND_CANCELLED)
     assert _videos(init_db) == []
     assert not _staging(init_db, job_id).exists()
-    assert downloader.progress_store[job_id]["status"] == "cancelled"
+    assert progress.progress_store[job_id]["status"] == "cancelled"
 
 
 def test_pause_requeues_the_job_and_resume_finishes_it(init_db, fake):
@@ -210,7 +211,7 @@ def test_pause_requeues_the_job_and_resume_finishes_it(init_db, fake):
         # The staging dir stays for the resume (only a finished, failed or
         # cancelled job drops it); a pause itself discards the partial fragments.
         assert _staging(init_db, job_id).is_dir()
-        assert downloader.progress_store[job_id]["status"] == "queued"
+        assert progress.progress_store[job_id]["status"] == "queued"
     finally:
         fake.before_merge = None
         downloader.download_queue.resume_all()
@@ -233,7 +234,7 @@ def test_device_download_stays_out_of_the_library(init_db, fake):
     assert job.device_file_path.startswith(f"_device/{job_id}/")
     assert (init_db["downloads"] / job.device_file_path).is_file()
     assert _videos(init_db) == []
-    snap = downloader.progress_store[job_id]
+    snap = progress.progress_store[job_id]
     assert (snap["status"], snap["destination"]) == ("completed", "device")
 
 
@@ -266,7 +267,7 @@ def test_members_only_video_is_reported_not_retried(init_db, fake):
     job = _job(init_db, job_id)
     assert (job.status, job.error_kind) == (JobStatus.error, ERROR_KIND_MEMBERS)
     assert fake.downloads == []
-    assert downloader.progress_store[job_id]["error_kind"] == ERROR_KIND_MEMBERS
+    assert progress.progress_store[job_id]["error_kind"] == ERROR_KIND_MEMBERS
 
 
 def test_shorts_are_skipped_and_their_job_row_removed(init_db, fake):
@@ -276,7 +277,7 @@ def test_shorts_are_skipped_and_their_job_row_removed(init_db, fake):
     run_job_inline(downloader, job_id)
 
     assert _job(init_db, job_id) is None
-    assert downloader.progress_store[job_id] == {
+    assert progress.progress_store[job_id] == {
         "status": "skipped",
         "reason": "shorts",
         "url": short_url,
