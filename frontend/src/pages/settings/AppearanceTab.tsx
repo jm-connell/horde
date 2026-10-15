@@ -838,7 +838,7 @@ export default function AppearanceTab() {
 
             <SettingRow
               title="Pause while watching"
-              description="Stop the animation on the watch page to save GPU."
+              description="Stop the animation on the watch page and while a video plays, to save GPU. Theater, fit-window and fullscreen playback always pause it."
               control={
                 <Toggle
                   checked={settings.pauseBackgroundWhileWatching}

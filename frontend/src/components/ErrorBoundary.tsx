@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { getItem, setItem } from "../storage";
 
 interface Props {
   children: ReactNode;
@@ -25,6 +26,22 @@ function isChunkLoadError(error: Error): boolean {
   );
 }
 
+const CHUNK_RELOAD_KEY = "horde.chunkReloadAt";
+const CHUNK_RELOAD_COOLDOWN_MS = 60_000;
+
+/**
+ * A lazy chunk that fails to load usually means a release replaced the files
+ * this tab was built against: one hard reload fixes it. The timestamp (kept in
+ * sessionStorage) stops a genuinely offline/broken chunk from reloading in a loop.
+ */
+function shouldAutoReload(): boolean {
+  const last = Number(getItem(CHUNK_RELOAD_KEY, "session"));
+  if (Number.isFinite(last) && Date.now() - last < CHUNK_RELOAD_COOLDOWN_MS) {
+    return false;
+  }
+  return setItem(CHUNK_RELOAD_KEY, String(Date.now()), "session");
+}
+
 export default class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null, componentStack: "" };
 
@@ -39,6 +56,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       info.componentStack
     );
     this.setState({ componentStack: info.componentStack ?? "" });
+    if (isChunkLoadError(error) && shouldAutoReload()) window.location.reload();
   }
 
   componentDidUpdate(prev: Props) {

@@ -23,7 +23,9 @@ new versions are fetched in the background but never swapped in under you:
 an **Update available** notice with a **Reload** button appears, and the new
 version starts when you press it (or the next time every Horde tab has been
 closed). Tabs that were open before an update keep working until reloaded,
-because the previous version's files are kept for one release.
+because the previous version's files are kept for one release. If you are
+coming from a release older than this one, fully close the app (all tabs) once:
+the old service worker has no update prompt.
 
 ## Downloading videos
 

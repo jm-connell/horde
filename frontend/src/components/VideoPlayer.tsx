@@ -1209,12 +1209,18 @@ export default function VideoPlayer({
   // Signal for page chrome (background effects) that a full-size player is
   // actively playing; the mini player does not count.
   useEffect(() => {
-    if (playing && !isMini) document.body.dataset.playerPlaying = "true";
-    else delete document.body.dataset.playerPlaying;
+    const body = document.body;
+    if (playing && !isMini) body.dataset.playerPlaying = "true";
+    else delete body.dataset.playerPlaying;
+    // Theater / fit-window playback covers most of the page.
+    if (playing && !isMini && (mode === "theater" || mode === "windowed")) {
+      body.dataset.playerCovering = "true";
+    } else delete body.dataset.playerCovering;
     return () => {
-      delete document.body.dataset.playerPlaying;
+      delete body.dataset.playerPlaying;
+      delete body.dataset.playerCovering;
     };
-  }, [playing, isMini]);
+  }, [playing, isMini, mode]);
 
   const stepRate = useCallback((dir: 1 | -1) => {
     setRate((r) => {

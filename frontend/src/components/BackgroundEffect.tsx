@@ -53,6 +53,7 @@ export default function BackgroundEffect() {
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
+  const [playerCovering, setPlayerCovering] = useState(false);
   const [saveData, setSaveData] = useState(dataSaverOn);
 
   const effect = settings.backgroundEffect;
@@ -64,8 +65,13 @@ export default function BackgroundEffect() {
   const pauseWhileWatching = settings.pauseBackgroundWhileWatching;
   const onWatchPage = location.pathname.startsWith("/watch/");
   // A full-size player that is playing makes the effect pure overhead.
+  // Fullscreen and playing theater/fit-window modes always pause (the effect is
+  // hidden anyway). "Pause while watching" additionally pauses behind a playing
+  // standard player and on the Watch page; with it off the effect keeps running.
   const shouldPause =
-    playerFullscreen || videoPlaying || (pauseWhileWatching && onWatchPage);
+    playerFullscreen ||
+    playerCovering ||
+    (pauseWhileWatching && (videoPlaying || onWatchPage));
   const isCustom = effect === "custom-image" && !!settings.customBackgroundId;
   const active =
     effect !== "none" &&
@@ -87,12 +93,13 @@ export default function BackgroundEffect() {
         document.body.classList.contains("player-fullscreen")
       );
       setVideoPlaying(document.body.dataset.playerPlaying === "true");
+      setPlayerCovering(document.body.dataset.playerCovering === "true");
     };
     syncFullscreen();
     const observer = new MutationObserver(syncFullscreen);
     observer.observe(document.body, {
       attributes: true,
-      attributeFilter: ["class", "data-player-playing"],
+      attributeFilter: ["class", "data-player-playing", "data-player-covering"],
     });
     return () => observer.disconnect();
   }, []);
