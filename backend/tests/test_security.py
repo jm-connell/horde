@@ -287,6 +287,28 @@ def test_wiki_gets_its_own_policy():
     assert "'unsafe-inline'" in security.WIKI_CSP.split("script-src")[1].split(";")[0]
 
 
+# --- Factory reset confirmation ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"erase_media": True},
+        {"erase_media": True, "confirm": "RESET"},
+        {"erase_media": False, "confirm": "ERASE MEDIA"},
+        {"erase_media": False, "confirm": "reset"},
+    ],
+)
+def test_reset_needs_the_typed_confirmation(client, add_video, body):
+    video = add_video(write_file=True)
+
+    resp = client.post("/api/setup/reset", json=body)
+
+    assert resp.status_code == 400
+    assert client.get(f"/api/videos/{video.id}").status_code == 200
+
+
 # --- Request size limits -------------------------------------------------------------
 
 

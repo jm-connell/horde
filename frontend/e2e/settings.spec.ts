@@ -143,8 +143,20 @@ test("AI panes and system status render without calling providers", async ({
   await page.getByRole("button", { name: "Reset Horde…" }).click();
   const dialog = page.getByRole("dialog", { name: "Reset Horde?" });
   await expect(dialog).toBeVisible();
+  // Both flavours need a typed phrase before the Reset button enables.
+  const resetButton = dialog.getByRole("button", {
+    name: "Reset",
+    exact: true,
+  });
+  await expect(resetButton).toBeDisabled();
+  await dialog.getByLabel("Type RESET to confirm").fill("RESET");
+  await expect(resetButton).toBeEnabled();
   await dialog.getByRole("checkbox", { name: /Erase all media/ }).check();
-  await expect(dialog.getByLabel("Type RESET to confirm")).toBeVisible();
+  await expect(resetButton).toBeDisabled();
+  await dialog.getByLabel("Type ERASE MEDIA to confirm").fill("RESET");
+  await expect(resetButton).toBeDisabled();
+  await dialog.getByLabel("Type ERASE MEDIA to confirm").fill("ERASE MEDIA");
+  await expect(resetButton).toBeEnabled();
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page).toHaveURL(/tab=system/);

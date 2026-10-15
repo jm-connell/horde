@@ -1,13 +1,19 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..services import factory_reset
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 
+#: Typed confirmations the caller must send. Factory reset is irreversible, so a
+#: bare request (or a forged cross-site one) must never trigger it.
+CONFIRM_RESET = "RESET"
+CONFIRM_ERASE_MEDIA = "ERASE MEDIA"
+
 
 class ResetRequest(BaseModel):
     erase_media: bool = False
+    confirm: str = ""
 
 
 class ResetResponse(BaseModel):
@@ -18,5 +24,11 @@ class ResetResponse(BaseModel):
 
 @router.post("/reset", response_model=ResetResponse)
 def reset_app(payload: ResetRequest) -> ResetResponse:
+    expected = CONFIRM_ERASE_MEDIA if payload.erase_media else CONFIRM_RESET
+    if payload.confirm != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Type "{expected}" to confirm the reset',
+        )
     result = factory_reset.reset_app(erase_media=payload.erase_media)
     return ResetResponse(**result)

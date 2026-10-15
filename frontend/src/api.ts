@@ -558,7 +558,10 @@ export const api = {
     });
   },
 
-  resetApp(eraseMedia: boolean): Promise<{
+  resetApp(
+    eraseMedia: boolean,
+    confirm: string
+  ): Promise<{
     setup_completed: boolean;
     erased_media: boolean;
     library_video_count: number;
@@ -566,7 +569,7 @@ export const api = {
     return request("/api/setup/reset", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ erase_media: eraseMedia }),
+      body: JSON.stringify({ erase_media: eraseMedia, confirm }),
     });
   },
 

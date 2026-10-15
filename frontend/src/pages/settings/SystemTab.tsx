@@ -656,7 +656,9 @@ function ResetHordePanel() {
   const [confirmText, setConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
   const videoCount = storage?.video_count ?? health?.library_video_count ?? 0;
-  const canReset = !eraseMedia || confirmText.trim() === "RESET";
+  // The server requires this exact phrase (POST /api/setup/reset).
+  const expectedPhrase = eraseMedia ? "ERASE MEDIA" : "RESET";
+  const canReset = confirmText.trim() === expectedPhrase;
 
   useEffect(() => {
     if (!open) return;
@@ -685,7 +687,7 @@ function ResetHordePanel() {
     if (resetting || !canReset) return;
     setResetting(true);
     try {
-      await api.resetApp(eraseMedia);
+      await api.resetApp(eraseMedia, confirmText.trim());
       clearHordeBrowserState();
       window.location.assign("/setup");
     } catch (err) {
@@ -758,24 +760,24 @@ function ResetHordePanel() {
                       Library files, playlists, and watch progress stay on disk.
                     </p>
                   </Collapse>
-                  <Collapse open={eraseMedia}>
-                    <div className="pt-4">
-                      <p className="text-xs text-gray-500">
-                        Type{" "}
-                        <span className="font-mono text-gray-300">RESET</span>{" "}
-                        to confirm.
-                      </p>
-                      <input
-                        type="text"
-                        value={confirmText}
-                        onChange={(e) => setConfirmText(e.target.value)}
-                        disabled={resetting}
-                        autoComplete="off"
-                        className={`${INPUT} mt-1`}
-                        aria-label="Type RESET to confirm"
-                      />
-                    </div>
-                  </Collapse>
+                  <div className="pt-4">
+                    <p className="text-xs text-gray-500">
+                      Type{" "}
+                      <span className="font-mono text-gray-300">
+                        {expectedPhrase}
+                      </span>{" "}
+                      to confirm.
+                    </p>
+                    <input
+                      type="text"
+                      value={confirmText}
+                      onChange={(e) => setConfirmText(e.target.value)}
+                      disabled={resetting}
+                      autoComplete="off"
+                      className={`${INPUT} mt-1`}
+                      aria-label={`Type ${expectedPhrase} to confirm`}
+                    />
+                  </div>
                   <div className="mt-5 flex justify-end gap-2">
                     <button
                       type="button"
