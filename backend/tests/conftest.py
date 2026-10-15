@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from collections.abc import Callable
@@ -23,6 +24,11 @@ from app.logging_config import configure_logging  # noqa: E402 - needs the sys.p
 
 configure_logging()
 
+
+# pytest can be started by git itself (a hook, ``git rebase --exec``), which exports
+# GIT_DIR and friends. The update-script tests run ``git init`` / ``git clone``; with
+# those variables set they would act on the surrounding repository instead of their
+# own. Strip every GIT_* variable so each subprocess starts clean.
 _DIR_ATTRS = (
     "DOWNLOADS_DIR",
     "THUMBNAILS_DIR",
@@ -33,6 +39,15 @@ _DIR_ATTRS = (
     "DB_PATH",
     "DATABASE_URL",
 )
+for _name in [k for k in os.environ if k.startswith("GIT_")]:
+    del os.environ[_name]
+
+
+@pytest.fixture(autouse=True)
+def _no_inherited_git_env(monkeypatch):
+    """Keep GIT_* out of every test, even if a plugin or hook sets them later."""
+    for name in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(name)
 
 
 def _rebind_imported_app_modules(monkeypatch, *, engine, dirs: dict[str, Any]) -> None:
