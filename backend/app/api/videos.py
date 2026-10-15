@@ -29,13 +29,11 @@ from ..services.metadata import (
     sprite_image_path,
     sprites_exist,
 )
-from ..services.mp4_compat import apple_webkit_playback, ensure_safari_mp4
 from ..services.paths import (
     is_manual_import,
     manual_import_rel_path,
     rename_video_file,
     resolve_compat_path,
-    to_rel_path,
 )
 from ..services.sprites import enqueue_sprite_generation
 from ..services.thumbnails import (
@@ -796,27 +794,6 @@ def stream_video(
         raise HTTPException(status_code=404, detail="Video not found")
     compat = _resolve_rendition(video, rendition)
     path = compat or _resolve_media(video)
-    ua = request.headers.get("user-agent") or ""
-    # Sidecars are written Safari-ready (AAC + faststart); only originals remux.
-    if compat is None and apple_webkit_playback(ua):
-
-        def persist_remux(new_path: Path) -> None:
-            """Point the row at the remuxed file before the original is removed."""
-            video.file_path = to_rel_path(new_path)
-            video.file_size = new_path.stat().st_size
-            session.add(video)
-            session.commit()
-
-        try:
-            path = ensure_safari_mp4(path, on_replace=persist_remux)
-        except Exception:
-            # Serve the original: the remux is an optimisation, and the helper
-            # has already undone any half-finished replacement.
-            logger.warning("Safari remux failed for video %s", video_id, exc_info=True)
-            session.rollback()
-            session.refresh(video)
-            path = _resolve_media(video)
-
     file_size = path.stat().st_size
 
     suffix = path.suffix.lower()

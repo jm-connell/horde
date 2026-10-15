@@ -15,6 +15,7 @@ from ..services import compat_rendition
 from ..services.media_info import needs_compat
 from ..services.paths import resolve_compat_path
 from ..services.ytdlp_formats import compat_copy_cap
+from .video_serialize import resolve_media
 
 router = APIRouter(prefix="/api", tags=["compat"])
 
@@ -78,6 +79,42 @@ def request_compat(
         front=True,
     )
     return CompatState(**compat_rendition.compat_status(video))
+
+
+def _safari_state(video: Video) -> dict:
+    # While a job runs the file is being swapped; do not look for it on disk.
+    busy = compat_rendition.job_state(video.id)
+    if busy is not None:
+        return {**busy, "error": None}
+    return compat_rendition.safari_status(video, resolve_media(video))
+
+
+@router.get("/videos/{video_id}/compat/safari", response_model=CompatState)
+def get_safari_prep(video_id: int, session: Session = Depends(get_session)):
+    """Is the stored original playable by WebKit (Safari, every iOS browser)?"""
+    return CompatState(**_safari_state(_video_or_404(session, video_id)))
+
+
+@router.post("/videos/{video_id}/compat/safari", response_model=CompatState)
+def request_safari_prep(video_id: int, session: Session = Depends(get_session)):
+    """Queue the in-place Safari remux (AAC audio + faststart, video copied).
+
+    GET /stream only serves files that already exist; a client that detects it
+    is WebKit calls this first and polls ``GET`` until the status is ``ready``.
+    Idempotent: a repeat call while the job is queued or running changes nothing.
+    """
+    video = _video_or_404(session, video_id)
+    state = _safari_state(video)
+    if state["status"] in ("none", "error"):
+        compat_rendition.enqueue(
+            video_id,
+            kind="safari",
+            prefer_download=False,
+            reason="Safari cannot play this file as stored",
+            front=True,
+        )
+        state = _safari_state(video)
+    return CompatState(**state)
 
 
 @router.delete("/videos/{video_id}/compat", status_code=204)

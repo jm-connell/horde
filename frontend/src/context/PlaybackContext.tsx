@@ -1,3 +1,4 @@
+import SafariPrepGate from "../components/SafariPrepGate";
 import CompatGate from "../components/CompatGate";
 import { useLibraryRendition } from "../hooks/useLibraryRendition";
 import {
@@ -855,6 +856,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const compatBlocked =
     current != null &&
     !libraryRendition.checking &&
+    !libraryRendition.safariPreparing &&
     libraryRendition.rendition == null;
 
   // Distinct keys so DASH (Shaka/MSE) does not reuse the same VideoPlayer
@@ -872,7 +874,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             : mimeFromPath(current.file_path)
         }
         blockingOverlay={
-          compatBlocked ? (
+          libraryRendition.safariPreparing ? (
+            <SafariPrepGate prep={libraryRendition.safariPrep} isMini={!dock} />
+          ) : compatBlocked ? (
             <CompatGate
               video={current}
               compat={libraryRendition.compat}

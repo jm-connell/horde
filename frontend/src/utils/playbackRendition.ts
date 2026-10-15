@@ -163,3 +163,27 @@ export function estimateCompatBytes(
 export function _resetSupportCache(): void {
   cache.clear();
 }
+
+/**
+ * True on WebKit that cannot play Opus-in-MP4 or a late-`moov` file (Safari and
+ * every iOS browser). Mirrors `apple_webkit_playback` in the backend.
+ */
+export function isAppleWebkit(
+  userAgent: string = typeof navigator === "undefined"
+    ? ""
+    : navigator.userAgent
+): boolean {
+  const ua = userAgent.toLowerCase();
+  if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) {
+    return true;
+  }
+  if (
+    ua.includes("chrome") ||
+    ua.includes("chromium") ||
+    ua.includes("edg/") ||
+    ua.includes("firefox")
+  ) {
+    return false;
+  }
+  return ua.includes("safari");
+}

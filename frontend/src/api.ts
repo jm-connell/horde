@@ -679,6 +679,18 @@ export const api = {
     });
   },
 
+  /** Is the stored original playable by WebKit (Safari, every iOS browser)? */
+  getSafariPrep(videoId: number): Promise<CompatState> {
+    return request<CompatState>(`/api/videos/${videoId}/compat/safari`);
+  },
+
+  /** Queue the in-place Safari remux. GET /stream never does this itself. */
+  requestSafariPrep(videoId: number): Promise<CompatState> {
+    return request<CompatState>(`/api/videos/${videoId}/compat/safari`, {
+      method: "POST",
+    });
+  },
+
   getCompatSummary(): Promise<CompatSummary> {
     return request<CompatSummary>("/api/compat/summary");
   },

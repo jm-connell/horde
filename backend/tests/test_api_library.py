@@ -267,31 +267,115 @@ def test_stream_range_and_missing_file(client, add_video):
     assert client.get(f"/api/videos/{missing.id}/stream").status_code == 404
 
 
-def test_stream_iphone_runs_safari_remux(client, add_video, monkeypatch):
-    called = {"n": 0}
+_IPHONE_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 "
+    "Mobile/15E148 Safari/604.1"
+)
 
-    def fake_ensure(path, **_kwargs):
-        called["n"] += 1
-        return path
 
-    monkeypatch.setattr("app.api.videos.ensure_safari_mp4", fake_ensure)
-    video = add_video(title="Phone", write_file=True, file_bytes=b"P" * 80)
-    desktop = client.get(f"/api/videos/{video.id}/stream")
-    assert desktop.status_code == 200
-    assert called["n"] == 0
+def test_stream_get_never_rewrites_the_original(client, add_video, init_db):
+    """A GET only serves what exists; even WebKit does not trigger a remux."""
+    video = add_video(
+        title="Phone",
+        file_path="Alpha/2024/Phone [pppppppppp1].mkv",
+        write_file=True,
+        file_bytes=b"P" * 80,
+    )
+    path = init_db["downloads"] / video.file_path
 
     phone = client.get(
-        f"/api/videos/{video.id}/stream",
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 "
-                "Mobile/15E148 Safari/604.1"
-            )
-        },
+        f"/api/videos/{video.id}/stream", headers={"User-Agent": _IPHONE_UA}
     )
+
     assert phone.status_code == 200
-    assert called["n"] == 1
+    assert phone.content == b"P" * 80
+    assert path.read_bytes() == b"P" * 80
+    after = client.get(f"/api/videos/{video.id}").json()
+    assert after["file_path"] == video.file_path
+
+
+def test_safari_prep_is_an_explicit_post_that_queues_the_remux(
+    client, add_video, init_db, monkeypatch
+):
+    import time
+
+    from app.services import compat_rendition
+
+    video = add_video(
+        title="Phone",
+        file_path="Alpha/2024/Phone [pppppppppp2].mkv",
+        write_file=True,
+        file_bytes=b"P" * 80,
+    )
+    original = init_db["downloads"] / video.file_path
+    remuxed = original.with_suffix(".mp4")
+
+    def fake_needs(path):
+        return path.suffix != ".mp4"
+
+    def fake_ensure(path, *, on_replace=None, **_kwargs):
+        remuxed.write_bytes(b"R" * 40)
+        if on_replace is not None:
+            on_replace(remuxed)  # the row must point at the new file first
+        path.unlink()
+        return remuxed
+
+    monkeypatch.setattr(compat_rendition, "needs_safari_prep", fake_needs)
+    monkeypatch.setattr(compat_rendition, "ensure_safari_mp4", fake_ensure)
+
+    state = client.get(f"/api/videos/{video.id}/compat/safari").json()
+    assert state["status"] == "none"
+
+    queued = client.post(f"/api/videos/{video.id}/compat/safari")
+    assert queued.status_code == 200
+    assert queued.json()["kind"] == "safari"
+
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        state = client.get(f"/api/videos/{video.id}/compat/safari").json()
+        if state["status"] == "ready":
+            break
+        time.sleep(0.05)
+    assert state["status"] == "ready"
+
+    updated = client.get(f"/api/videos/{video.id}").json()
+    assert updated["file_path"].endswith(".mp4")
+    assert updated["file_size"] == 40
+    streamed = client.get(
+        f"/api/videos/{video.id}/stream", headers={"User-Agent": _IPHONE_UA}
+    )
+    assert streamed.content == b"R" * 40
+    # Idempotent once ready: nothing is queued again.
+    again = client.post(f"/api/videos/{video.id}/compat/safari").json()
+    assert again["status"] == "ready"
+
+
+def test_safari_prep_reports_a_failed_remux(client, add_video, init_db, monkeypatch):
+    import time
+
+    from app.services import compat_rendition
+
+    video = add_video(
+        title="Broken",
+        file_path="Alpha/2024/Broken [pppppppppp3].mkv",
+        write_file=True,
+    )
+    monkeypatch.setattr(compat_rendition, "needs_safari_prep", lambda path: True)
+    monkeypatch.setattr(
+        compat_rendition, "ensure_safari_mp4", lambda path, **_kwargs: path
+    )
+
+    client.post(f"/api/videos/{video.id}/compat/safari")
+    deadline = time.time() + 10
+    state = {}
+    while time.time() < deadline:
+        state = client.get(f"/api/videos/{video.id}/compat/safari").json()
+        if state["status"] == "error":
+            break
+        time.sleep(0.05)
+    assert state["status"] == "error"
+    assert "Safari" in state["error"]
 
 
 def test_health_and_system_activity(client, add_video):

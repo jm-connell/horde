@@ -39,6 +39,7 @@ import {
   type OfflineSponsorSegment,
 } from "./db";
 import { contentRangeTotal } from "./ranges";
+import { isAppleWebkit } from "../utils/playbackRendition";
 
 export interface OfflineSnapshot {
   items: OfflineItem[];
@@ -372,7 +373,29 @@ class OfflineManager {
     }
   }
 
-  /** First request: learn the size/type (also triggers the iOS remux). */
+  /**
+   * Safari/iOS cannot play some stored originals until the server rewrites them
+   * (GET /stream no longer does that). Ask, then wait, so the offline copy is the
+   * playable file. Failures fall through: the download still proceeds.
+   */
+  private async ensureSafariReady(
+    videoId: number,
+    signal: AbortSignal
+  ): Promise<void> {
+    if (videoId <= 0 || !isAppleWebkit()) return;
+    try {
+      let state = await api.requestSafariPrep(videoId);
+      while (state.status === "queued" || state.status === "running") {
+        if (signal.aborted) return;
+        await new Promise((r) => window.setTimeout(r, 2000));
+        state = await api.getSafariPrep(videoId);
+      }
+    } catch {
+      // Best effort; the original is downloaded as stored.
+    }
+  }
+
+  /** First request: learn the size/type. */
   private async prepare(
     item: OfflineItem,
     signal: AbortSignal
@@ -382,6 +405,7 @@ class OfflineManager {
       // List responses can be compact; fetch full metadata (chapters, subs).
       video = await api.getVideo(item.videoId).catch(() => item.video);
     }
+    await this.ensureSafariReady(item.videoId, signal);
     const resp = await fetch(item.sourceUrl, {
       headers: { Range: "bytes=0-0" },
       cache: "no-store",

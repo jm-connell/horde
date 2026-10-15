@@ -4,6 +4,7 @@ import type { CompatState, Video } from "../types";
 import {
   checkOriginalSupport,
   chooseRendition,
+  isAppleWebkit,
   type OriginalSupport,
 } from "../utils/playbackRendition";
 import type { DownloadVideoCodec } from "./useSettings";
@@ -15,6 +16,9 @@ export type LibraryRenditionState = {
   support: OriginalSupport;
   /** Sidecar job progress while the device waits on it. */
   compat: CompatState | null;
+  /** True while the server rewrites the original so Safari can play it. */
+  safariPreparing: boolean;
+  safariPrep: CompatState | null;
   /** True when the original failed to play (not just predicted to). */
   originalFailed: boolean;
   requestCompat: () => void;
@@ -72,6 +76,67 @@ export function useLibraryRendition(
     ? chooseRendition(effectiveSupport, video, { forceOriginal: forced })
     : { rendition: null };
   const blocked = !checking && video != null && choice.rendition === null;
+
+  // WebKit cannot play some stored originals (Opus audio, late moov). The server
+  // rewrites them on request only (never as a side effect of GET /stream), so ask
+  // first and wait; if the request fails, fall through and try to play anyway.
+  const [safariPrep, setSafariPrep] = useState<CompatState | null>(null);
+  const [safariFailed, setSafariFailed] = useState(false);
+  const wantsSafariPrep =
+    !checking &&
+    videoId != null &&
+    !offline &&
+    choice.rendition === "original" &&
+    isAppleWebkit();
+  const safariPreparing =
+    wantsSafariPrep && !safariFailed && safariPrep?.status !== "ready";
+
+  useEffect(() => {
+    setSafariPrep(null);
+    setSafariFailed(false);
+  }, [videoId, video?.file_path]);
+
+  useEffect(() => {
+    if (!wantsSafariPrep || videoId == null || safariPrep != null) return;
+    let cancelled = false;
+    api
+      .requestSafariPrep(videoId)
+      .then((state) => {
+        if (cancelled) return;
+        setSafariPrep(state);
+        if (state.status === "none" || state.status === "error") {
+          setSafariFailed(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSafariFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsSafariPrep, videoId, safariPrep]);
+
+  const safariPending =
+    safariPrep?.status === "queued" || safariPrep?.status === "running";
+  useEffect(() => {
+    if (!safariPending || videoId == null) return;
+    const timer = window.setInterval(() => {
+      api
+        .getSafariPrep(videoId)
+        .then((state) => {
+          setSafariPrep(state);
+          if (state.status === "error") setSafariFailed(true);
+          if (state.status === "ready") {
+            api
+              .getVideo(videoId)
+              .then((v) => readyRef.current(v))
+              .catch(() => undefined);
+          }
+        })
+        .catch(() => setSafariFailed(true));
+    }, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [safariPending, videoId]);
 
   const requestCompat = useCallback(() => {
     if (videoId == null || offline) return;
@@ -135,7 +200,9 @@ export function useLibraryRendition(
   }, [video, offline, choice.rendition]);
 
   return {
-    rendition: checking ? null : choice.rendition,
+    rendition: checking || safariPreparing ? null : choice.rendition,
+    safariPreparing,
+    safariPrep,
     checking,
     support: effectiveSupport,
     compat,

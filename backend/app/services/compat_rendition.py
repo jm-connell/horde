@@ -47,7 +47,7 @@ from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
 from .fsutil import safe_unlink
 from .media_info import apply_stream_info, needs_compat, probe_stream_info
-from .mp4_compat import ensure_safari_mp4
+from .mp4_compat import ensure_safari_mp4, needs_safari_prep
 from .paths import (
     COMPAT_SIDECAR_TOKEN,
     compat_sidecar_path,
@@ -65,7 +65,9 @@ from .ytdlp_formats import (
 
 logger = logging.getLogger(__name__)
 
-JobKind = Literal["compat", "convert"]
+# "safari" rewrites the original in place (AAC audio + faststart, video copied) so
+# WebKit can play it; it exists so that GET /stream never has to do that work.
+JobKind = Literal["compat", "convert", "safari"]
 
 _ENCODE_TIMEOUT_SEC = 8 * 3600
 # Rough 1080p/720p/480p H.264 bitrates at our quality settings (for estimates).
@@ -100,6 +102,12 @@ _jobs: dict[int, _Job] = {}
 _pending: deque[int] = deque()
 _running: set[int] = set()
 _errors: dict[int, str] = {}
+_safari_errors: dict[int, str] = {}
+
+
+def _queue_group(kind: JobKind) -> str:
+    """Activity group a queued job is counted under."""
+    return "transcode" if kind == "convert" else "compat"
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +399,7 @@ def enqueue(
                 _pending.appendleft(video_id)
             return f"already_{existing.status}"
         _errors.pop(video_id, None)
+        _safari_errors.pop(video_id, None)
         _jobs[video_id] = _Job(
             video_id=video_id,
             kind=kind,
@@ -401,7 +410,7 @@ def enqueue(
             _pending.appendleft(video_id)
         else:
             _pending.append(video_id)
-    activity.note_queued("compat" if kind == "compat" else "transcode", 1)
+    activity.note_queued(_queue_group(kind), 1)
     _dispatch()
     return "queued"
 
@@ -419,7 +428,7 @@ def cancel(video_id: int) -> bool:
             queued_kind = job.kind
         else:
             return True
-    activity.note_queued("compat" if queued_kind == "compat" else "transcode", -1)
+    activity.note_queued(_queue_group(queued_kind), -1)
     return True
 
 
@@ -443,7 +452,7 @@ def _dispatch() -> None:
                 continue
             job.status = "running"
             _running.add(video_id)
-        activity.note_queued("compat" if job.kind == "compat" else "transcode", -1)
+        activity.note_queued(_queue_group(job.kind), -1)
         threading.Thread(
             target=_worker, args=(job,), daemon=True, name=f"compat-{video_id}"
         ).start()
@@ -453,6 +462,8 @@ def _worker(job: _Job) -> None:
     try:
         if job.kind == "convert":
             _run_convert(job)
+        elif job.kind == "safari":
+            _run_safari(job)
         else:
             _run_compat(job)
     except (FfmpegCancelled, _Cancelled):
@@ -461,8 +472,13 @@ def _worker(job: _Job) -> None:
         msg = str(exc) or exc.__class__.__name__
         logger.warning("compat job %s (%s) failed: %s", job.video_id, job.kind, msg)
         with _lock:
-            _errors[job.video_id] = msg[:300]
-        _save(job.video_id, compat_error=msg[:300])
+            if job.kind == "safari":
+                # Not a sidecar failure: keep it out of the video row.
+                _safari_errors[job.video_id] = msg[:300]
+            else:
+                _errors[job.video_id] = msg[:300]
+        if job.kind != "safari":
+            _save(job.video_id, compat_error=msg[:300])
     finally:
         with _lock:
             _running.discard(job.video_id)
@@ -802,6 +818,72 @@ def _encode_compat(
             safe_unlink(tmp)
             raise CompatError("H.264 encode timed out") from exc
     raise CompatError(f"ffmpeg {choice.name} failed")
+
+
+# ---------------------------------------------------------------------------
+# safari (in place remux) job
+# ---------------------------------------------------------------------------
+
+
+def safari_status(video: Video, path: Path) -> dict[str, Any]:
+    """Whether ``path`` (the stored original) is ready for WebKit, or being fixed."""
+    state = job_state(video.id) if video.id is not None else None
+    if state is not None:
+        return {**state, "error": None}
+    err = _safari_errors.get(video.id) if video.id is not None else None
+    if needs_safari_prep(path):
+        if err:
+            return {
+                "kind": "safari",
+                "status": "error",
+                "stage": None,
+                "progress": 0.0,
+                "error": err,
+            }
+        status = "none"
+    else:
+        status = "ready"
+    return {
+        "kind": "safari",
+        "status": status,
+        "stage": None,
+        "progress": 100.0 if status == "ready" else 0.0,
+        "error": None,
+    }
+
+
+def _run_safari(job: _Job) -> None:
+    src = _load_source(job.video_id)
+    if src is None:
+        return
+    _set(job, stage="encoding", progress=0.0)
+
+    def persist(new_path: Path) -> None:
+        """Point the row at the remuxed file; runs before the original is removed."""
+        new_size = new_path.stat().st_size
+        new_info = probe_stream_info(new_path)  # ffprobe before the write
+        with Session(engine) as session:
+            video = session.get(Video, job.video_id)
+            if video is None:
+                return
+            video.file_path = to_rel_path(new_path)
+            video.file_size = new_size
+            apply_stream_info(video, new_info)
+            session.add(video)
+            session.commit()
+
+    final = ensure_safari_mp4(
+        src.path,
+        cancel_event=job.cancel,
+        on_progress=lambda pct: _set(job, progress=pct),
+        duration=src.duration,
+        on_replace=persist,
+    )
+    if job.cancel.is_set():
+        raise _Cancelled()
+    if needs_safari_prep(final):
+        raise CompatError("Could not prepare this video for Safari")
+    _set(job, stage="finishing", progress=100.0)
 
 
 # ---------------------------------------------------------------------------

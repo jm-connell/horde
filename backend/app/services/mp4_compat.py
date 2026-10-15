@@ -150,6 +150,14 @@ def compat_plan(probe: MediaProbe) -> CompatPlan:
     return CompatPlan(transcode_audio=transcode_audio, faststart=True)
 
 
+def needs_safari_prep(path: Path) -> bool:
+    """True when ``path`` is a file WebKit cannot play as stored (and ffmpeg can fix)."""
+    if not ffmpeg_available():
+        return False
+    probe = probe_media(path)
+    return probe is not None and compat_plan(probe).needed
+
+
 def ffmpeg_compat_cmd(
     src: Path,
     dest: Path,
