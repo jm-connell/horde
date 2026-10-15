@@ -111,6 +111,8 @@ test.describe("route render failure", () => {
     ).toBeVisible();
     await page.route(/\/assets\/History-.*\.js/, (route) => route.abort());
 
+    let loads = 0;
+    page.on("load", () => (loads += 1));
     await openNav(page, "History");
     const alert = page.locator("[data-horde='error-boundary']");
     await expect(alert).toBeVisible();
@@ -121,6 +123,9 @@ test.describe("route render failure", () => {
     await expect(alert.getByRole("link", { name: "Go home" })).toBeVisible();
     await alert.getByText("Error details").click();
     await expect(alert.locator("pre")).toContainText("dynamically imported");
+    // A failed chunk gets exactly one automatic hard reload; the second failure
+    // shows the fallback instead of looping.
+    expect(loads).toBe(1);
     // The shell survives, so the user can simply navigate elsewhere.
     await openNav(page, "Playlists");
     await expect(alert).toHaveCount(0);
