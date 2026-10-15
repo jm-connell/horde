@@ -1,3 +1,4 @@
+import { getItem, setItem } from "../../storage";
 import { TAB_STORAGE_KEY, TABS, UPDATE_DISMISS_KEY } from "./constants";
 import type { SettingsTab } from "./types";
 
@@ -6,29 +7,17 @@ export function plural(n: number, one: string, many: string) {
 }
 
 export function loadDismissedUpdateSha(): string | null {
-  try {
-    return localStorage.getItem(UPDATE_DISMISS_KEY);
-  } catch {
-    return null;
-  }
+  return getItem(UPDATE_DISMISS_KEY);
 }
 
 export function saveDismissedUpdateSha(sha: string) {
-  try {
-    localStorage.setItem(UPDATE_DISMISS_KEY, sha);
-  } catch {
-    /* ignore */
-  }
+  setItem(UPDATE_DISMISS_KEY, sha);
 }
 
 export function loadTab(): SettingsTab {
-  try {
-    const raw = localStorage.getItem(TAB_STORAGE_KEY);
-    if (raw === "downloads") return "library";
-    if (TABS.some((t) => t.id === raw)) return raw as SettingsTab;
-  } catch {
-    /* ignore */
-  }
+  // A stored "downloads" id is renamed to "library" by a storage migration.
+  const raw = getItem(TAB_STORAGE_KEY);
+  if (TABS.some((t) => t.id === raw)) return raw as SettingsTab;
   return "appearance";
 }
 

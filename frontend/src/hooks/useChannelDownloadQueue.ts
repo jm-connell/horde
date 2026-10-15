@@ -4,6 +4,7 @@ import { isActiveJob, useDownloads } from "../context/DownloadContext";
 import { PRESET_ORDER, resolveQualityPreset } from "../presets";
 import type { ChannelFeedEntry, DownloadJob, DownloadPreview } from "../types";
 
+import { getItem, setItem } from "../storage";
 const CONFIRM_SECONDS = 5;
 const DEFAULT_PRESET_KEY = "horde.channelFeed.defaultPreset";
 
@@ -61,12 +62,7 @@ export function channelFeedItemDownloading(
 }
 
 function loadDefaultPreset(): string {
-  try {
-    const raw = localStorage.getItem(DEFAULT_PRESET_KEY);
-    return raw?.trim() || "best";
-  } catch {
-    return "best";
-  }
+  return getItem(DEFAULT_PRESET_KEY)?.trim() || "best";
 }
 
 export function useChannelDownloadQueue(channelName: string) {
@@ -89,11 +85,7 @@ export function useChannelDownloadQueue(channelName: string) {
 
   const setDefaultPreset = useCallback((preset: string) => {
     setDefaultPresetState(preset);
-    try {
-      localStorage.setItem(DEFAULT_PRESET_KEY, preset);
-    } catch {
-      /* ignore */
-    }
+    setItem(DEFAULT_PRESET_KEY, preset);
   }, []);
 
   useEffect(() => {

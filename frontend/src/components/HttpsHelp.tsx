@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { getItem, setItem } from "../storage";
 /**
  * Plain-language explanation of why offline features need HTTPS, with setup
  * pointers. Shown on the Offline page, when tapping Download over plain
@@ -81,11 +82,7 @@ export default function HttpsHelp({ compact = false }: { compact?: boolean }) {
 const NOTICE_KEY = "horde:httpsNoticeDismissed";
 
 function readDismissed(): boolean {
-  try {
-    return localStorage.getItem(NOTICE_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return getItem(NOTICE_KEY) === "1";
 }
 
 /** One-time Home notice when Horde is opened over plain http. */
@@ -95,11 +92,8 @@ export function HttpsNotice() {
   if (dismissed || isSecure()) return null;
   const dismiss = () => {
     setDismissed(true);
-    try {
-      localStorage.setItem(NOTICE_KEY, "1");
-    } catch {
-      // Blocked storage: the notice just comes back next visit.
-    }
+    // Blocked storage: the notice just comes back next visit.
+    setItem(NOTICE_KEY, "1");
   };
   return (
     <div

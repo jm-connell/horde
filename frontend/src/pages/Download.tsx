@@ -41,6 +41,7 @@ import {
   youtubeListThumbnailUrl,
 } from "../utils";
 
+import { getItem, setItem } from "../storage";
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
 const SKIP_TOAST: Record<string, string> = {
@@ -125,13 +126,9 @@ export default function Download() {
     "subscribe" | "import" | "videos"
   >("import");
 
-  const [activeCollapsed, setActiveCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(ACTIVE_COLLAPSE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [activeCollapsed, setActiveCollapsed] = useState(
+    () => getItem(ACTIVE_COLLAPSE_KEY) === "true"
+  );
   const [activeSectionVisible, setActiveSectionVisible] = useState(
     () => activeCount > 0
   );
@@ -161,7 +158,7 @@ export default function Download() {
   const toggleActiveCollapsed = () => {
     setActiveCollapsed((v) => {
       const next = !v;
-      localStorage.setItem(ACTIVE_COLLAPSE_KEY, String(next));
+      setItem(ACTIVE_COLLAPSE_KEY, String(next));
       return next;
     });
   };

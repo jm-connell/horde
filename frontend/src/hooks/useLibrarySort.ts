@@ -1,3 +1,5 @@
+import { getJson, removeItem, setJson } from "../storage";
+
 export const LIBRARY_SORT_OPTIONS = [
   { value: "added_at", label: "Recently added" },
   { value: "published_at", label: "Publish date" },
@@ -23,32 +25,35 @@ interface SavedSort extends LibrarySortState {
   savedAt: number;
 }
 
+function isSavedSort(v: unknown): v is SavedSort {
+  if (typeof v !== "object" || v === null) return false;
+  const s = v as Partial<SavedSort>;
+  return (
+    typeof s.savedAt === "number" &&
+    (s.order === "asc" || s.order === "desc") &&
+    LIBRARY_SORT_OPTIONS.some((o) => o.value === s.sort)
+  );
+}
+
 export function loadLibrarySort(defaultSort: LibrarySort): LibrarySortState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return { sort: defaultSort, order: "desc" };
-    }
-    const saved = JSON.parse(raw) as SavedSort;
-    if (Date.now() - saved.savedAt > TTL_MS) {
-      localStorage.removeItem(STORAGE_KEY);
-      return {
-        sort: defaultSort,
-        order: "desc",
-        randomSeed: defaultSort === "random" ? Date.now() : undefined,
-      };
-    }
+  const saved = getJson<SavedSort | null>(STORAGE_KEY, isSavedSort, null);
+  if (!saved) return { sort: defaultSort, order: "desc" };
+  if (Date.now() - saved.savedAt > TTL_MS) {
+    removeItem(STORAGE_KEY);
     return {
-      sort: saved.sort,
-      order: saved.order,
-      randomSeed: saved.randomSeed,
+      sort: defaultSort,
+      order: "desc",
+      randomSeed: defaultSort === "random" ? Date.now() : undefined,
     };
-  } catch {
-    return { sort: defaultSort, order: "desc" };
   }
+  return {
+    sort: saved.sort,
+    order: saved.order,
+    randomSeed: saved.randomSeed,
+  };
 }
 
 export function saveLibrarySort(state: LibrarySortState): void {
   const payload: SavedSort = { ...state, savedAt: Date.now() };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  setJson(STORAGE_KEY, payload);
 }

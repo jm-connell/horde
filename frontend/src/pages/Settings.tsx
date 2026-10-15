@@ -61,6 +61,7 @@ import type {
   SettingsTab,
 } from "./settings/types";
 
+import { getItem, setItem } from "../storage";
 export default function Settings() {
   const [settings, update] = useSettings();
   const { showToast } = useToast();
@@ -103,12 +104,8 @@ export default function Settings() {
       new URLSearchParams(window.location.search).get("pane")
     );
     if (fromUrl) return fromUrl;
-    try {
-      const v = localStorage.getItem("horde.aiPane");
-      if (v === "providers" || v === "features" || v === "jobs") return v;
-    } catch {
-      /* ignore */
-    }
+    const v = getItem("horde.aiPane");
+    if (v === "providers" || v === "features" || v === "jobs") return v;
     return "providers";
   });
   const [embedCustom, setEmbedCustom] = useState(false);
@@ -286,12 +283,8 @@ export default function Settings() {
     if (budget == null || budget <= 0) return;
     const dayKey = Math.floor(Date.now() / 86_400_000);
     const storageKey = `horde:or-budget-warn:${budget}:${dayKey}`;
-    try {
-      if (localStorage.getItem(storageKey)) return;
-      localStorage.setItem(storageKey, "1");
-    } catch {
-      /* ignore */
-    }
+    if (getItem(storageKey)) return;
+    setItem(storageKey, "1");
     const spent = formatUsdCost(openRouterCosts.d7) || "$0";
     const limit = formatUsdCost(budget) || `$${budget}`;
     if (openRouterCosts.blocked) {
@@ -309,11 +302,7 @@ export default function Settings() {
     const pane = firstMatchingAiPane(q);
     if (pane && pane !== aiPane) {
       setAiPane(pane);
-      try {
-        localStorage.setItem("horde.aiPane", pane);
-      } catch {
-        /* ignore */
-      }
+      setItem("horde.aiPane", pane);
     }
     const qq = q.toLowerCase();
     if (
@@ -428,11 +417,7 @@ export default function Settings() {
 
   const selectTab = (next: SettingsTab) => {
     setTab(next);
-    try {
-      localStorage.setItem(TAB_STORAGE_KEY, next);
-    } catch {
-      /* ignore */
-    }
+    setItem(TAB_STORAGE_KEY, next);
   };
 
   // Deep link: /settings?tab=playback&pane=jobs
@@ -442,11 +427,7 @@ export default function Settings() {
     const pane = resolveAiPaneParam(searchParams.get("pane"));
     if (pane) {
       setAiPane(pane);
-      try {
-        localStorage.setItem("horde.aiPane", pane);
-      } catch {
-        /* ignore */
-      }
+      setItem("horde.aiPane", pane);
     }
   }, [searchParams]);
 

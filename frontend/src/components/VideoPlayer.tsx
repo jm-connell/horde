@@ -24,7 +24,7 @@ import {
 } from "../sponsorBlock";
 import type { SpriteMeta } from "../types";
 import { formatDuration, formatTimestamp, type Chapter } from "../utils";
-import { trackQuality } from "../utils/decodeCapability";
+import { clearDowngrade, trackQuality } from "../utils/decodeCapability";
 import {
   miniFrameFromNorthWestResize,
   type MiniPlayerBox,
@@ -626,9 +626,7 @@ export default function VideoPlayer({
     (choice: QualityChoice) => {
       // Explicit ladder picks override a persisted auto-downgrade / AV1 blacklist.
       if (choice !== "auto") {
-        void import("../utils/decodeCapability").then((m) =>
-          m.clearDowngrade()
-        );
+        clearDowngrade();
         capabilityMaxHeightRef.current = Math.max(
           capabilityMaxHeightRef.current,
           typeof choice === "number" ? choice : 2160

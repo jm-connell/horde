@@ -29,6 +29,7 @@ import {
   WORKLOAD_TIP,
 } from "../constants";
 
+import { setItem } from "../../../storage";
 const OPTIONS_MUTED = "pointer-events-none select-none opacity-50";
 
 export default function ProvidersPane() {
@@ -175,11 +176,7 @@ export default function ProvidersPane() {
               type="button"
               onClick={() => {
                 setAiProviderPane(pane.id);
-                try {
-                  localStorage.setItem("horde.aiProviderPane", pane.id);
-                } catch {
-                  /* ignore */
-                }
+                setItem("horde.aiProviderPane", pane.id);
               }}
               className={
                 active

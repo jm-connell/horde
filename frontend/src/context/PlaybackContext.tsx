@@ -38,6 +38,8 @@ import {
 } from "../utils/miniPlayerLayout";
 import type { SubtitleTrack, Video } from "../types";
 
+import { undismissContinueWatching } from "../hooks/useContinueWatchingDismiss";
+import { getItem, getJson, removeItem, setItem, setJson } from "../storage";
 export interface StreamSession {
   url: string;
   title: string;
@@ -108,14 +110,10 @@ const DEFAULT_MINI_WIDTH_MOBILE = 224;
 const DEFAULT_MINI_WIDTH_DESKTOP = 704;
 
 function loadMiniWidth(): number | null {
-  try {
-    const raw = localStorage.getItem(MINI_WIDTH_KEY);
-    if (!raw) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) && n >= 160 && n <= 960 ? n : null;
-  } catch {
-    return null;
-  }
+  const raw = getItem(MINI_WIDTH_KEY);
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 160 && n <= 960 ? n : null;
 }
 
 function mimeFromPath(filePath: string): string {
@@ -201,12 +199,12 @@ function miniRectFromHost(host: HTMLElement): MiniPlayerRect | null {
 }
 
 function loadQueue(): Video[] {
-  try {
-    const raw = sessionStorage.getItem(QUEUE_KEY);
-    return raw ? (JSON.parse(raw) as Video[]) : [];
-  } catch {
-    return [];
-  }
+  return getJson<Video[]>(
+    QUEUE_KEY,
+    (v): v is Video[] => Array.isArray(v),
+    [],
+    "session"
+  );
 }
 
 function streamExpandPath(session: StreamSession): string {
@@ -249,22 +247,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [videoFrameInset, setVideoFrameInset] = useState(0);
   const [mediaSuspended, setMediaSuspended] = useState(false);
 
-  useEffect(() => {
-    try {
-      localStorage.removeItem("horde.mini-pos");
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   const setMiniWidth = useCallback((w: number | null) => {
     setMiniWidthState(w);
-    try {
-      if (w == null) localStorage.removeItem(MINI_WIDTH_KEY);
-      else localStorage.setItem(MINI_WIDTH_KEY, String(w));
-    } catch {
-      /* ignore */
-    }
+    if (w == null) removeItem(MINI_WIDTH_KEY);
+    else setItem(MINI_WIDTH_KEY, String(w));
   }, []);
 
   const setMiniPos = useCallback((pos: MiniPos | null) => {
@@ -315,9 +301,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       }, 5000);
       // Resuming watch (≥30s) should bring the video back to Continue watching.
       if (sec >= 30) {
-        import("../hooks/useContinueWatchingDismiss").then((m) =>
-          m.undismissContinueWatching(id)
-        );
+        undismissContinueWatching(id);
       }
       api.saveProgress(id, sec).catch(() => undefined);
     },
@@ -325,7 +309,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    sessionStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    setJson(QUEUE_KEY, queue, "session");
   }, [queue]);
 
   // Move the persistent player node into the watch dock, body (windowed), or a

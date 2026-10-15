@@ -48,6 +48,33 @@ export default tseslint.config(
     },
   },
   {
+    // Browser storage goes through src/storage.ts (safe access, validation,
+    // versioned migrations); direct use is a lint error everywhere else.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/storage.ts", "src/storage.test.ts"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        {
+          name: "localStorage",
+          message: "Use the helpers in src/storage.ts instead.",
+        },
+        {
+          name: "sessionStorage",
+          message: "Use the helpers in src/storage.ts instead.",
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "MemberExpression[property.name=/^(localStorage|sessionStorage)$/]",
+          message: "Use the helpers in src/storage.ts instead.",
+        },
+      ],
+    },
+  },
+  {
     // These modules deliberately co-locate a component with its hook/helpers
     // (context providers + useX, filter helpers next to a select, ...). Fast
     // Refresh falls back to a full reload for them, which is acceptable. New

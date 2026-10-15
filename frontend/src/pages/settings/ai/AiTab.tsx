@@ -4,6 +4,7 @@ import ProvidersPane from "./ProvidersPane";
 import FeaturesPane from "./FeaturesPane";
 import JobsPane from "./JobsPane";
 
+import { setItem } from "../../../storage";
 const PANES: { id: AiPane; label: string }[] = [
   { id: "providers", label: "Providers" },
   { id: "features", label: "Features" },
@@ -23,11 +24,7 @@ export default function AiTab() {
               type="button"
               onClick={() => {
                 setAiPane(pane.id);
-                try {
-                  localStorage.setItem("horde.aiPane", pane.id);
-                } catch {
-                  /* ignore */
-                }
+                setItem("horde.aiPane", pane.id);
               }}
               className={
                 active

@@ -46,6 +46,7 @@ import {
   isLibraryVideoGone,
 } from "./downloadJobCardState";
 
+import { getItem, setItem } from "../storage";
 interface Props {
   job: DownloadJob;
   live?: ProgressEvent;
@@ -62,11 +63,7 @@ function stripAnsi(text: string): string {
 }
 
 function skipDismissConfirm(): boolean {
-  try {
-    return localStorage.getItem(SKIP_DISMISS_CONFIRM_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return getItem(SKIP_DISMISS_CONFIRM_KEY) === "1";
 }
 
 // Memoized: unrelated SSE progress ticks re-render other cards' props by reference only.
@@ -305,11 +302,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
 
   const confirmDismiss = async () => {
     if (dontAskAgain) {
-      try {
-        localStorage.setItem(SKIP_DISMISS_CONFIRM_KEY, "1");
-      } catch {
-        /* ignore */
-      }
+      setItem(SKIP_DISMISS_CONFIRM_KEY, "1");
     }
     setDismissConfirm(false);
     await dismissJob(job.id);

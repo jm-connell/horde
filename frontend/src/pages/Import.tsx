@@ -9,6 +9,7 @@ import type { DuplicateGroup, Video } from "../types";
 import { notifyImportQueueChanged } from "../utils/importQueue";
 import { formatSize } from "../utils";
 
+import { getJson, setJson } from "../storage";
 const VIDEO_ACCEPT = ".mp4,.mkv,.webm,video/mp4,video/webm,video/x-matroska";
 const VIDEO_EXTS = new Set([".mp4", ".mkv", ".webm"]);
 const DISMISSED_DUPES_KEY = "horde.dismissedDuplicateGroups";
@@ -38,19 +39,16 @@ function duplicateGroupKey(group: DuplicateGroup): string {
 }
 
 function loadDismissedDupes(): Set<string> {
-  try {
-    const raw = localStorage.getItem(DISMISSED_DUPES_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((x): x is string => typeof x === "string"));
-  } catch {
-    return new Set();
-  }
+  const parsed = getJson(
+    DISMISSED_DUPES_KEY,
+    (v): v is unknown[] => Array.isArray(v),
+    []
+  );
+  return new Set(parsed.filter((x): x is string => typeof x === "string"));
 }
 
 function saveDismissedDupes(keys: Set<string>) {
-  localStorage.setItem(DISMISSED_DUPES_KEY, JSON.stringify([...keys]));
+  setJson(DISMISSED_DUPES_KEY, [...keys]);
 }
 
 function isVideoFile(file: File): boolean {

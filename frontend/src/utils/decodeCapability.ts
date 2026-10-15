@@ -1,4 +1,5 @@
 /** Probe decode capability for preview DASH gating. */
+import { getItem, getJson, removeItem, setItem, setJson } from "../storage";
 
 export type DecodeSupport = {
   /** True when any AV1 ladder step reports MediaCapabilities.supported. */
@@ -80,30 +81,26 @@ const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 type Cached = DecodeSupport & { at: number };
 
 function readCache(): DecodeSupport | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Cached;
-    if (!parsed || typeof parsed.at !== "number") return null;
-    if (Date.now() - parsed.at > CACHE_TTL_MS) return null;
-    return {
-      av1Supported: Boolean(parsed.av1Supported),
-      av1Efficient: Boolean(parsed.av1Efficient),
-      maxSupportedHeight: Number(parsed.maxSupportedHeight) || 1080,
-      maxEfficientHeight: Number(parsed.maxEfficientHeight) || 720,
-    };
-  } catch {
-    return null;
-  }
+  const parsed = getJson<Cached | null>(
+    CACHE_KEY,
+    (v): v is Cached =>
+      typeof v === "object" &&
+      v !== null &&
+      typeof (v as Cached).at === "number",
+    null
+  );
+  if (!parsed || Date.now() - parsed.at > CACHE_TTL_MS) return null;
+  return {
+    av1Supported: Boolean(parsed.av1Supported),
+    av1Efficient: Boolean(parsed.av1Efficient),
+    maxSupportedHeight: Number(parsed.maxSupportedHeight) || 1080,
+    maxEfficientHeight: Number(parsed.maxEfficientHeight) || 720,
+  };
 }
 
 function writeCache(support: DecodeSupport): void {
-  try {
-    const payload: Cached = { ...support, at: Date.now() };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
-  } catch {
-    // ignore quota / private mode
-  }
+  const payload: Cached = { ...support, at: Date.now() };
+  setJson(CACHE_KEY, payload);
 }
 
 async function canDecode(
@@ -210,62 +207,44 @@ export type DowngradeRecord = {
 };
 
 export function readDowngrade(): DowngradeRecord | null {
-  try {
-    const raw = localStorage.getItem(DOWNGRADE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as DowngradeRecord;
-    if (!parsed || typeof parsed.maxHeight !== "number") return null;
-    if (
-      typeof parsed.at === "number" &&
-      Date.now() - parsed.at > DOWNGRADE_TTL_MS
-    ) {
-      localStorage.removeItem(DOWNGRADE_KEY);
-      return null;
-    }
-    return parsed;
-  } catch {
+  const parsed = getJson<DowngradeRecord | null>(
+    DOWNGRADE_KEY,
+    (v): v is DowngradeRecord =>
+      typeof v === "object" &&
+      v !== null &&
+      typeof (v as DowngradeRecord).maxHeight === "number",
+    null
+  );
+  if (!parsed) return null;
+  if (
+    typeof parsed.at === "number" &&
+    Date.now() - parsed.at > DOWNGRADE_TTL_MS
+  ) {
+    removeItem(DOWNGRADE_KEY);
     return null;
   }
+  return parsed;
 }
 
 export function writeDowngrade(record: Omit<DowngradeRecord, "at">): void {
-  try {
-    localStorage.setItem(
-      DOWNGRADE_KEY,
-      JSON.stringify({ ...record, at: Date.now() })
-    );
-  } catch {
-    // ignore
-  }
+  setJson(DOWNGRADE_KEY, { ...record, at: Date.now() });
 }
 
 /** Clear a persisted auto-downgrade (e.g. user explicitly picks 4K / AV1). */
 export function clearDowngrade(): void {
-  try {
-    localStorage.removeItem(DOWNGRADE_KEY);
-  } catch {
-    // ignore
-  }
+  removeItem(DOWNGRADE_KEY);
 }
 
 const BW_KEY = "horde.abr-bandwidth.v1";
 
 export function readBandwidthEstimate(): number | null {
-  try {
-    const raw = localStorage.getItem(BW_KEY);
-    if (!raw) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 100_000 ? n : null;
-  } catch {
-    return null;
-  }
+  const raw = getItem(BW_KEY);
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 100_000 ? n : null;
 }
 
 export function writeBandwidthEstimate(bps: number): void {
   if (!Number.isFinite(bps) || bps < 100_000) return;
-  try {
-    localStorage.setItem(BW_KEY, String(Math.round(bps)));
-  } catch {
-    // ignore
-  }
+  setItem(BW_KEY, String(Math.round(bps)));
 }

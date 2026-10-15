@@ -79,6 +79,7 @@ import {
   type HomeTab,
 } from "./libraryStorage";
 
+import { getJson, setJson } from "../storage";
 const TAG_MIN_COUNT = 3;
 
 const TAG_PAGE_SIZE = 20;
@@ -95,22 +96,22 @@ const LIBRARY_CACHE_KEY = "horde:libraryCache:v1";
 
 // Lets a return to Home paint from the last list in one frame while it revalidates.
 function readLibraryCache(key: string): Video[] | null {
-  try {
-    const raw = sessionStorage.getItem(LIBRARY_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { key: string; videos: Video[] };
-    return parsed.key === key ? parsed.videos : null;
-  } catch {
-    return null;
-  }
+  const cached = getJson<{ key: string; videos: Video[] } | null>(
+    LIBRARY_CACHE_KEY,
+    (v): v is { key: string; videos: Video[] } =>
+      typeof v === "object" &&
+      v !== null &&
+      typeof (v as { key?: unknown }).key === "string" &&
+      Array.isArray((v as { videos?: unknown }).videos),
+    null,
+    "session"
+  );
+  return cached && cached.key === key ? cached.videos : null;
 }
 
 function writeLibraryCache(key: string, videos: Video[]): void {
-  try {
-    sessionStorage.setItem(LIBRARY_CACHE_KEY, JSON.stringify({ key, videos }));
-  } catch {
-    // Quota/private-mode failures are non-fatal — cache is best-effort.
-  }
+  // Quota/private-mode failures are non-fatal: the cache is best-effort.
+  setJson(LIBRARY_CACHE_KEY, { key, videos }, "session");
 }
 
 function SearchResultSection({

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { connectivity } from "../offline/connectivity";
+import { getJson, setJson } from "../storage";
 import type { ViewMode } from "../components/videoPlayerTypes";
 import {
   applyUiFont,
@@ -372,8 +373,6 @@ const SERVER_UI_KEYS: (keyof Settings)[] = [
 ];
 
 const STORAGE_KEY = "horde.settings";
-/** Pre-sync thumbnail mute flag; folded into `previewMuted` on load. */
-const LEGACY_PREVIEW_MUTE_KEY = "horde.previewMuted";
 
 const THEME_CSS_VARS = [
   "--ink-950",
@@ -1059,21 +1058,14 @@ export function applyMotionPrefs(settings: Settings): void {
 }
 
 export function loadSettings(): Settings {
+  // The pre-settings-blob preview-mute flag is folded in by a storage migration.
+  const parsed = getJson<Partial<Settings> & { liquidNav?: boolean }>(
+    STORAGE_KEY,
+    (v): v is Partial<Settings> =>
+      typeof v === "object" && v !== null && !Array.isArray(v),
+    {}
+  );
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = (raw ? JSON.parse(raw) : {}) as Partial<Settings> & {
-      liquidNav?: boolean;
-    };
-    if (parsed.previewMuted === undefined) {
-      try {
-        const legacy = localStorage.getItem(LEGACY_PREVIEW_MUTE_KEY);
-        if (legacy === "1" || legacy === "true") parsed.previewMuted = true;
-        else if (legacy === "0" || legacy === "false")
-          parsed.previewMuted = false;
-      } catch {
-        // private mode
-      }
-    }
     return normalizeSettings(parsed);
   } catch {
     return DEFAULTS;
@@ -1081,12 +1073,7 @@ export function loadSettings(): Settings {
 }
 
 function persistLocal(settings: Settings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  try {
-    localStorage.removeItem(LEGACY_PREVIEW_MUTE_KEY);
-  } catch {
-    // ignore
-  }
+  setJson(STORAGE_KEY, settings);
   window.dispatchEvent(new Event(EVENT));
 }
 
