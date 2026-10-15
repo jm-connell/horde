@@ -101,6 +101,8 @@ export async function openSearchBox(page: Page) {
     .getByPlaceholder("Search", { exact: true })
     .locator("visible=true");
   if (await box.count()) return box;
+  // After tapping a tag the page may have scrolled; the header lives at the top.
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole("button", { name: "Search", exact: true }).click();
   return box;
 }
