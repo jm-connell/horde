@@ -55,8 +55,15 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await page.getByRole("button", { name: "Skip", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: /You.re set/ })).toBeVisible();
-  const settings = await (await page.request.get("/api/settings")).json();
-  expect(JSON.stringify(settings)).toContain('"sidecar"');
+  // The UI syncs settings to the server on a short debounce, so wait for the
+  // server state instead of reading it once.
+  await expect
+    .poll(
+      async () =>
+        JSON.stringify(await (await page.request.get("/api/settings")).json()),
+      { message: "the chosen playback mode reaches the server" }
+    )
+    .toContain('"sidecar"');
   await page.getByRole("button", { name: "Go to Downloads" }).click();
   await expect(page).toHaveURL(/\/download$/);
   await expect(
