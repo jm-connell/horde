@@ -14,7 +14,7 @@ On shutdown (SIGTERM from `docker stop`, Ctrl+C):
 
 If startup fails part way, the `finally` still stops the workers that already started.
 
-The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready).
+The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `horde_worker_up` gauge on [`GET /api/metrics`](../ops/monitoring.md#metrics).
 
 | Worker (registry name) | Notes |
 |------------------------|-------|

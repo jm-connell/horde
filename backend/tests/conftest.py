@@ -236,7 +236,7 @@ def app(init_db, monkeypatch):
         videos,
     )
     from app.database import get_session
-    from app.main import health, ping, ready
+    from app.main import health, metrics, ping, ready
     from app.security import install_security
     from app.services import downloader
 
@@ -268,6 +268,7 @@ def app(init_db, monkeypatch):
     test_app.add_api_route("/api/health", health, methods=["GET"])
     test_app.add_api_route("/api/ready", ready, methods=["GET"])
     test_app.add_api_route("/api/ping", ping, methods=["GET"])
+    test_app.add_api_route("/api/metrics", metrics, methods=["GET"])
     install_security(test_app)
 
     def _override_session():

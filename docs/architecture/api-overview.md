@@ -54,12 +54,16 @@ Video payloads carry the probed codec fields, `has_compat` on lists, and `compat
 
 ### Health
 
-`GET /api/health` is kept **probe-cheap** (no remote model lists, no yt-dlp extract). It returns:
+`GET /api/ping` (liveness), `GET /api/ready` (database, migrations, workers; `503` when not ready) and `GET /api/metrics` (Prometheus text) are documented under [Monitoring](../ops/monitoring.md).
+
+`GET /api/health` is kept **probe-cheap**: it forks nothing and never waits on the network (the yt-dlp version, git SHA and ffmpeg build info are read once at startup, and the POT sidecar status is refreshed in the background every 30 s). It returns:
 
 | Field                                                             | Meaning                                                                                                                         |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `status`, `horde_sha`, `horde_version`, `yt_dlp_version`          | Process / build identity                                                                                                        |
-| `pot_provider`                                                    | bgutil POT ping (`ok` / `error`)                                                                                                |
+| `ffmpeg`                                                          | `{ flavor, version }` from the image's `/app/BUILD_INFO`; `null` outside the image                                              |
+| `pot_provider`                                                    | bgutil POT status (`ok` / `error` / `pending` before the first probe), cached up to 30 s                                        |
+| `storage_warning`                                                 | Message when `DATA_DIR` is on a network filesystem (SQLite WAL is unsafe there), else `null`                                    |
 | `ollama` / `openrouter`                                           | Enabled/ready summaries; Ollama may include `last_error`                                                                        |
 | `disk`                                                            | Free/used/total on `DOWNLOADS_DIR`                                                                                              |
 | `library_video_count`, `review_pending_count`, `active_downloads` | Library snapshot                                                                                                                |

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api import (
@@ -39,6 +39,8 @@ from .services.ai.worker import recover_ai_jobs
 from .services.backup import create_backup_worker
 from .services.channel_catalog import recover_catalog_jobs
 from .services.health import HealthCache, build_readiness
+from .services.metrics import CONTENT_TYPE as metrics_content_type
+from .services.metrics import render_metrics
 from .services.scanner import cleanup_orphans, create_scanner_workers
 from .services.storage_check import network_storage_warning
 from .services.workers import WorkerRegistry
@@ -392,6 +394,14 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
 @app.get("/api/health")
 def health(request: Request):
     return build_health_payload(request.app)
+
+
+@app.get("/api/metrics", response_class=PlainTextResponse)
+def metrics(request: Request) -> PlainTextResponse:
+    """Prometheus text format: queues, workers, database size, disk, request counts."""
+    return PlainTextResponse(
+        render_metrics(request.app, engine), media_type=metrics_content_type
+    )
 
 
 @app.get("/api/updates")

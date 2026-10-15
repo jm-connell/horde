@@ -39,6 +39,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .request_context import RequestIdMiddleware
 from .services import limits, uploads
+from .services.metrics import RequestStats
 from .services.url_safety import UnsafeUrlError
 
 logger = logging.getLogger(__name__)
@@ -452,4 +453,5 @@ def install_security(app: FastAPI, *, allowed_hosts: str | None = None) -> None:
     app.add_exception_handler(UnsafeUrlError, _unsafe_url_handler)
     app.state.extraction_gate = limits.new_extraction_gate()
     app.state.ytdlp_slots = limits.new_ytdlp_slots()
+    app.state.request_stats = RequestStats()
     app.state.thumbnail_grab_limit = limits.new_thumbnail_grab_limit()

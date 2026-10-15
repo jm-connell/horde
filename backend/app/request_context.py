@@ -1,7 +1,11 @@
-"""Request correlation: one ``request_id`` per HTTP request, echoed to the client."""
+"""Request correlation: one ``request_id`` per HTTP request, echoed to the client.
+
+The same middleware counts responses by status class for ``GET /api/metrics``.
+"""
 
 from __future__ import annotations
 
+import time
 import uuid
 
 from starlette.datastructures import MutableHeaders
@@ -34,9 +38,18 @@ class RequestIdMiddleware:
                 break
         request_id = incoming or uuid.uuid4().hex[:16]
         token = request_id_var.set(request_id)
+        stats = (
+            getattr(scope["app"].state, "request_stats", None)
+            if "app" in scope
+            else None
+        )
+        started = time.monotonic()
+        status = 500  # what the client sees if the app raises before responding
 
         async def send_with_id(message: Message) -> None:
+            nonlocal status
             if message["type"] == "http.response.start":
+                status = message["status"]
                 MutableHeaders(scope=message)[REQUEST_ID_HEADER] = request_id
             await send(message)
 
@@ -44,3 +57,5 @@ class RequestIdMiddleware:
             await self.app(scope, receive, send_with_id)
         finally:
             request_id_var.reset(token)
+            if stats is not None:
+                stats.record(status, time.monotonic() - started)
