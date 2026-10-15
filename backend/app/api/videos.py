@@ -306,7 +306,7 @@ def update_video(
                 user_tag=user_tag if isinstance(user_tag, str) else None,
             )
             session.commit()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
 
     # After leaving review, queue AI enrichment for scanner-ingested files.
@@ -315,7 +315,7 @@ def update_video(
             from ..services.ai import enqueue_for_video
 
             enqueue_for_video(video.id, include_tags=True, force=False)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
 
     return _to_read(video, session)
@@ -482,8 +482,8 @@ def refresh_metadata(
     field_list = [f.strip() for f in fields.split(",") if f.strip()] if fields else None
     try:
         refresh_video_metadata(video_id, fields=field_list)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}") from exc
     session.expire_all()
     video = session.get(Video, video_id)
     return _to_read(video, session)

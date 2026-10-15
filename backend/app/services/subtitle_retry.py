@@ -160,9 +160,7 @@ def captions_fetch_allowed(video: Video) -> bool:
     if seconds_until_global_cooldown() > 0:
         return False
     retry = as_utc(video.subtitles_retry_after)
-    if retry is not None and retry > datetime.now(UTC):
-        return False
-    return True
+    return not (retry is not None and retry > datetime.now(UTC))
 
 
 def apply_subtitle_outcome(video_id: int, outcome: SubtitleFetchOutcome) -> None:

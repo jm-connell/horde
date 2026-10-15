@@ -265,7 +265,7 @@ def _safe_queue_counts() -> dict[str, int]:
         waiting = max(0, depth - running)
         if waiting:
             out["ai"] = out.get("ai", 0) + waiting
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     try:
@@ -278,7 +278,7 @@ def _safe_queue_counts() -> dict[str, int]:
             qd = max(0, qd - 1)
         if qd:
             out["catalog"] = out.get("catalog", 0) + qd
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     try:
@@ -287,7 +287,7 @@ def _safe_queue_counts() -> dict[str, int]:
         qd = int(download_queue.queued_count())
         if qd:
             out["download"] = out.get("download", 0) + qd
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     return out

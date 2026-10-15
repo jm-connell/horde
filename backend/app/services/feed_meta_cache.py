@@ -25,7 +25,7 @@ def load() -> dict[str, dict[str, Any]]:
             data = json.loads(p.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 return {k: v for k, v in data.items() if isinstance(v, dict)}
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     return {}
 

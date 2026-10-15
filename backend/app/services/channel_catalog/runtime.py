@@ -102,9 +102,7 @@ def _identity_conflict(a: frozenset[str], b: frozenset[str]) -> bool:
     b_ids = {k for k in b if k.startswith("id:")}
     if a_handles and b_handles and a_handles != b_handles:
         return True
-    if a_ids and b_ids and a_ids != b_ids:
-        return True
-    return False
+    return bool(a_ids and b_ids and a_ids != b_ids)
 
 
 def _compatible_url_shapes(a: frozenset[str], b: frozenset[str]) -> bool:

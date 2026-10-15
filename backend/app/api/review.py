@@ -192,7 +192,7 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
     used: set[int] = set()
     raw_groups: list[tuple[str, list[Video]]] = []
 
-    for yt_id, vids in by_yt_id.items():
+    for vids in by_yt_id.values():
         if len(vids) > 1:
             raw_groups.append(("youtube_id", vids))
             for v in vids:

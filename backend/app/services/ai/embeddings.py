@@ -31,7 +31,7 @@ def cosine(a: list[float], b: list[float]) -> float:
     dot = 0.0
     na = 0.0
     nb = 0.0
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=False):
         dot += x * y
         na += x * x
         nb += y * y
@@ -58,7 +58,7 @@ def blend_vectors(
     if not b or len(a) != len(b):
         return l2_normalize(a)
     w_b = 1.0 - weight_a
-    mixed = [weight_a * x + w_b * y for x, y in zip(a, b)]
+    mixed = [weight_a * x + w_b * y for x, y in zip(a, b, strict=True)]
     return l2_normalize(mixed)
 
 
@@ -174,7 +174,7 @@ def embed_video(session: Session, video_id: int) -> bool:
         ).all()
         for row in old:
             session.delete(row)
-        for (chunk_index, _doc), vec in zip(usable, vectors):
+        for (chunk_index, _doc), vec in zip(usable, vectors, strict=False):
             session.add(
                 VideoEmbedding(
                     video_id=video_id,
@@ -379,7 +379,6 @@ def indexed_count(session: Session) -> tuple[int, int]:
 
     Ready means embed_status is ready and stored vectors use the current embed model.
     """
-    ai = app_settings.ai_settings()
     model = resolve_embed_model()
     videos = session.exec(
         select(Video).where(Video.needs_review == False)  # noqa: E712

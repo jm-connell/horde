@@ -147,7 +147,7 @@ def query_videos(
 
     results = list(session.exec(statement).all())
     if is_random:
-        rng = py_random.Random(seed)
+        rng = py_random.Random(seed)  # noqa: S311 - seeded shuffle for stable UI ordering, not security
         rng.shuffle(results)
     return results
 
@@ -400,7 +400,7 @@ def related_videos(
                         scored.append((score + boost, video))
                     scored.sort(key=lambda item: item[0], reverse=True)
                     add_candidates([v for _, v in scored])
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
 
     if len(picked) < pool_limit and source.channel:

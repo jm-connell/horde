@@ -196,7 +196,8 @@ def candidate_timestamps(duration: float, count: int = 8) -> list[float]:
     for i in range(count):
         t = lo + (hi - lo) * (i + 0.5) / count
         jitter = (hi - lo) / (count * 4)
-        t = min(hi, max(lo, t + random.uniform(-jitter, jitter)))
+        offset = random.uniform(-jitter, jitter)  # noqa: S311 - sample-time jitter
+        t = min(hi, max(lo, t + offset))
         stamps.append(round(t, 3))
     # Deduplicate while preserving order.
     seen: set[float] = set()

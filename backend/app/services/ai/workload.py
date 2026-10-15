@@ -216,9 +216,8 @@ def _parse_rocm_json(data: Any) -> dict[str, Any] | None:
                         name = text
                 elif "gpu use" in key_l or key_l.endswith("gpu_use (%)"):
                     util = _num(value)
-                elif "temperature" in key_l and "memory" not in key_l:
-                    if temp is None:
-                        temp = _num(value)
+                elif "temperature" in key_l and "memory" not in key_l and temp is None:
+                    temp = _num(value)
 
             if total is None:
                 continue
@@ -788,9 +787,9 @@ def ensure_quality_chat_model() -> str:
 
     provider = get_provider()
     if provider is not None and auto_pull:
-        try:
+        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
             ensure_models(provider)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
 
     return current

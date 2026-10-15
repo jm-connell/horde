@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from typing import Any
@@ -201,7 +202,9 @@ def format_sort_for(preset: str, codec: str = "av1") -> list[str]:
 
 
 def _primary_spec(preset: str, *, h264: bool, max_height: int | None = None) -> str:
-    pair = lambda filt: _pair(filt, h264=h264)
+    def pair(filt: str) -> str:
+        return _pair(filt, h264=h264)
+
     audio = QUALITY_FORMATS.get(preset) if is_audio_preset(preset) else None
     if audio:
         return audio
@@ -388,14 +391,10 @@ def score_audio_format(fmt: dict[str, Any], original_lang: str) -> int:
     """Higher is better. Prefers original language over a fatter dubbed track."""
     score = 0
     abr = fmt.get("abr") or fmt.get("tbr") or 0
-    try:
+    with contextlib.suppress(TypeError, ValueError):
         score += int(float(abr))
-    except (TypeError, ValueError):
-        pass
-    try:
+    with contextlib.suppress(TypeError, ValueError):
         score += int(fmt.get("asr") or 0) // 100
-    except (TypeError, ValueError):
-        pass
     acodec = str(fmt.get("acodec") or "")
     if _is_mp4_audio_codec(acodec):
         score += 2_000

@@ -221,7 +221,7 @@ def parse_vtt_cues(raw: str) -> list[tuple[float, str]]:
             continue
         if s.isdigit():
             continue
-        if s.startswith("NOTE") or s.startswith("STYLE") or s.startswith("REGION"):
+        if s.startswith(("NOTE", "STYLE", "REGION")):
             continue
         timing = _CUE_TIMING_RE.match(s)
         if timing:
@@ -802,10 +802,7 @@ def _contains_seq(hay: list[str], needle: list[str]) -> bool:
     n = len(needle)
     if n == 0 or n > len(hay):
         return False
-    for i in range(len(hay) - n + 1):
-        if hay[i : i + n] == needle:
-            return True
-    return False
+    return any(hay[i : i + n] == needle for i in range(len(hay) - n + 1))
 
 
 def _collapse_stutter(text: str) -> str:
@@ -871,10 +868,7 @@ def _repeats_clause(text: str) -> bool:
     words = _cmp_words(text)
     if len(words) < 4:
         return False
-    for n in range(2, len(words) // 2 + 1):
-        if words[:n] == words[n : n * 2]:
-            return True
-    return False
+    return any(words[:n] == words[n : n * 2] for n in range(2, len(words) // 2 + 1))
 
 
 def _cue_words_near(
@@ -893,10 +887,9 @@ def _is_contiguous_quote(title_words: list[str], cue_words: list[str]) -> bool:
     n = len(title_words)
     if n < 4 or n > len(cue_words):
         return False
-    for i in range(len(cue_words) - n + 1):
-        if cue_words[i : i + n] == title_words:
-            return True
-    return False
+    return any(
+        cue_words[i : i + n] == title_words for i in range(len(cue_words) - n + 1)
+    )
 
 
 def title_is_spoken_quote(

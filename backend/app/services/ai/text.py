@@ -72,7 +72,7 @@ def _strip_vtt(raw: str) -> str:
             continue
         if "-->" in s:
             continue
-        if s.startswith("NOTE") or s.startswith("STYLE") or s.startswith("REGION"):
+        if s.startswith(("NOTE", "STYLE", "REGION")):
             continue
         # Drop simple cue settings / tags and leftover HTML/YouTube entities.
         s = _decode_vtt_entities(s)

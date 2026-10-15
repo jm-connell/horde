@@ -80,9 +80,9 @@ async def _open_upstream(
 async def _close_upstream(upstream: httpx.Response | None) -> None:
     if upstream is None:
         return
-    try:
+    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
         await upstream.aclose()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
 
@@ -110,7 +110,7 @@ def _reresolve_preview(
                 status_code=502,
                 detail=f"Could not refresh preview media: {exc}",
             ) from exc
-    assert stream_url is not None
+    assert stream_url is not None  # noqa: S101 - type narrowing; unreachable otherwise
     logger.warning("Refreshing preview stream url=%s", stream_url[:80])
     try:
         return stream_preview.resolve_preview_stream(stream_url, force=True)
@@ -172,7 +172,7 @@ async def _proxy_upstream(
                 status_code=502, detail=f"Upstream stream failed: {exc}"
             ) from exc
 
-    assert upstream is not None
+    assert upstream is not None  # noqa: S101 - type narrowing; the retry loop always sets it
 
     if upstream.status_code >= 400:
         try:

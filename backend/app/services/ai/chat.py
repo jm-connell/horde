@@ -242,10 +242,7 @@ def stream_chat(
         return
 
     turn_cost = getattr(provider, "last_cost", None)
-    if not isinstance(turn_cost, (int, float)):
-        turn_cost = None
-    else:
-        turn_cost = float(turn_cost)
+    turn_cost = float(turn_cost) if isinstance(turn_cost, (int, float)) else None
 
     assistant_row = VideoAiChatMessage(
         video_id=video_id,

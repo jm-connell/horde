@@ -45,10 +45,7 @@ def write_list_thumbnail(video_id: int, source: Path | bytes) -> bool:
     try:
         from PIL import Image
 
-        if isinstance(source, Path):
-            data = source.read_bytes()
-        else:
-            data = source
+        data = source.read_bytes() if isinstance(source, Path) else source
         img = _open_rgb(data)
         img.thumbnail((LIST_THUMB_MAX_PX, LIST_THUMB_MAX_PX), Image.Resampling.LANCZOS)
         dest = list_path(video_id)

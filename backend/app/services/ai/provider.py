@@ -13,7 +13,7 @@ import threading
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Protocol, Union
+from typing import Any, Protocol
 
 import httpx
 
@@ -54,7 +54,7 @@ def format_provider_error(exc: BaseException) -> str:
     return f"{message} ({kind})"
 
 
-ChatFormat = Union[str, dict[str, Any], None]
+ChatFormat = str | dict[str, Any] | None
 
 
 def _json_value_has_text(value: Any) -> bool:
@@ -282,10 +282,7 @@ class OllamaProvider:
         want = (model or "").strip()
         if not want:
             return False
-        for name in self.list_models():
-            if models_equivalent(want, name):
-                return True
-        return False
+        return any(models_equivalent(want, name) for name in self.list_models())
 
     def pull_model(self, model: str) -> None:
         global _last_error, _model_cache
@@ -400,23 +397,25 @@ class OllamaProvider:
         }
         req_timeout = timeout if timeout is not None else self.timeout
         try:
-            with httpx.Client(base_url=self.base_url, timeout=req_timeout) as client:
-                with client.stream("POST", "/api/chat", json=payload) as resp:
-                    resp.raise_for_status()
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-                        try:
-                            data = json.loads(line)
-                        except Exception:  # noqa: BLE001
-                            continue
-                        if data.get("error"):
-                            raise RuntimeError(str(data["error"]))
-                        delta = (data.get("message") or {}).get("content") or ""
-                        if delta:
-                            yield str(delta)
-                        if data.get("done"):
-                            break
+            with (
+                httpx.Client(base_url=self.base_url, timeout=req_timeout) as client,
+                client.stream("POST", "/api/chat", json=payload) as resp,
+            ):
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except Exception:  # noqa: BLE001, S112 - skip malformed stream lines
+                        continue
+                    if data.get("error"):
+                        raise RuntimeError(str(data["error"]))
+                    delta = (data.get("message") or {}).get("content") or ""
+                    if delta:
+                        yield str(delta)
+                    if data.get("done"):
+                        break
             _last_error = None
         except Exception as exc:
             _last_error = format_provider_error(exc)
@@ -635,41 +634,41 @@ class OpenRouterProvider:
         req_timeout = timeout if timeout is not None else self.timeout
         last_usage_payload: dict[str, Any] | None = None
         try:
-            with self._client(timeout=req_timeout) as client:
-                with client.stream("POST", "/chat/completions", json=payload) as resp:
-                    resp.raise_for_status()
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-                        if line.startswith("data:"):
-                            line = line[5:].strip()
-                        if not line or line == "[DONE]":
-                            if line == "[DONE]":
-                                break
-                            continue
-                        try:
-                            data = json.loads(line)
-                        except Exception:  # noqa: BLE001
-                            continue
-                        if data.get("error"):
-                            err = data["error"]
-                            detail = (
-                                err.get("message")
-                                if isinstance(err, dict)
-                                else str(err)
-                            )
-                            raise RuntimeError(str(detail))
-                        if isinstance(data, dict) and data.get("usage"):
-                            last_usage_payload = data
-                        choices = data.get("choices")
-                        if not isinstance(choices, list) or not choices:
-                            continue
-                        choice = choices[0] if isinstance(choices[0], dict) else {}
-                        delta = choice.get("delta") or {}
-                        piece = delta.get("content") or ""
-                        if piece:
-                            yield str(piece)
-                        # Keep reading after finish_reason so usage chunk can arrive.
+            with (
+                self._client(timeout=req_timeout) as client,
+                client.stream("POST", "/chat/completions", json=payload) as resp,
+            ):
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    if line.startswith("data:"):
+                        line = line[5:].strip()
+                    if not line or line == "[DONE]":
+                        if line == "[DONE]":
+                            break
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except Exception:  # noqa: BLE001, S112 - skip malformed stream lines
+                        continue
+                    if data.get("error"):
+                        err = data["error"]
+                        detail = (
+                            err.get("message") if isinstance(err, dict) else str(err)
+                        )
+                        raise RuntimeError(str(detail))
+                    if isinstance(data, dict) and data.get("usage"):
+                        last_usage_payload = data
+                    choices = data.get("choices")
+                    if not isinstance(choices, list) or not choices:
+                        continue
+                    choice = choices[0] if isinstance(choices[0], dict) else {}
+                    delta = choice.get("delta") or {}
+                    piece = delta.get("content") or ""
+                    if piece:
+                        yield str(piece)
+                    # Keep reading after finish_reason so usage chunk can arrive.
             if last_usage_payload is not None:
                 self._record_usage(
                     last_usage_payload,
@@ -758,7 +757,7 @@ class OpenRouterProvider:
                                 out.append(parsed)
                         out.sort(key=lambda r: str(r["id"]).lower())
                         return out
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
         models = self.list_models()
         return [
@@ -768,8 +767,8 @@ class OpenRouterProvider:
         ]
 
 
-AnyEmbedProvider = Union[OllamaProvider, OpenRouterProvider]
-AnyLlmProvider = Union[OllamaProvider, OpenRouterProvider]
+AnyEmbedProvider = OllamaProvider | OpenRouterProvider
+AnyLlmProvider = OllamaProvider | OpenRouterProvider
 
 
 def usd_per_million(raw: Any) -> float | None:
@@ -825,9 +824,7 @@ def is_openrouter_text_llm(row: Any) -> bool:
     out_parts = {p.strip() for p in right.split("+") if p.strip()}
     if "text" not in in_parts or "text" not in out_parts:
         return False
-    if out_parts & _NON_TEXT_OUTPUT:
-        return False
-    return True
+    return not out_parts & _NON_TEXT_OUTPUT
 
 
 def parse_openrouter_catalog_row(row: Any) -> dict[str, Any] | None:
@@ -902,7 +899,7 @@ def get_openrouter_provider(
 def test_openrouter_connection(api_key: str | None = None) -> dict[str, Any]:
     """Probe OpenRouter with the given key (or stored/env key)."""
     key = (api_key or "").strip()
-    if not key or key.startswith("••••") or key.startswith("****"):
+    if not key or key.startswith(("••••", "****")):
         key = resolve_openrouter_api_key()
     if not key:
         return {"ok": False, "detail": "No OpenRouter API key configured"}
@@ -1011,9 +1008,9 @@ def openrouter_owns_embeddings() -> bool:
     if openrouter_scope() != "all":
         return False
     ai = app_settings.ai_settings()
-    if ai.get("ollama_prefer_embeddings") and get_ollama_provider() is not None:
-        return False
-    return True
+    return not (
+        ai.get("ollama_prefer_embeddings") and get_ollama_provider() is not None
+    )
 
 
 def get_ollama_provider() -> OllamaProvider | None:

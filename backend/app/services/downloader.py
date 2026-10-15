@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import re
 import shutil
@@ -11,8 +12,6 @@ from typing import Any
 
 from sqlalchemy import func
 from sqlmodel import Session, select
-
-logger = logging.getLogger(__name__)
 
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
 from ..database import engine
@@ -89,6 +88,8 @@ from .ytdlp_formats import (
 from .ytdlp_formats import _available_presets as _available_presets
 from .ytdlp_formats import _has_audio as _has_audio
 from .ytdlp_formats import _height_to_tier as _height_to_tier
+
+logger = logging.getLogger(__name__)
 
 # Live progress snapshots keyed by job id, consumed by the SSE endpoint.
 progress_store: dict[int, dict[str, Any]] = {}
@@ -243,9 +244,7 @@ def _is_intermediate_media(name: str) -> bool:
         return True
     if ".compat." in low or low.endswith(".compat.mp4"):
         return True
-    if ".xcode." in low or low.endswith(".xcode.mp4"):
-        return True
-    return False
+    return bool(".xcode." in low or low.endswith(".xcode.mp4"))
 
 
 def _find_merged_video(prepared: Path) -> Path | None:
@@ -1263,10 +1262,8 @@ def download_subtitles(media: Path, source_url: str):
                     shutil.copy2(entry, dest)
                 except OSError:
                     _safe_unlink(dest)
-                    try:
+                    with contextlib.suppress(OSError):
                         shutil.copy2(entry, dest)
-                    except OSError:
-                        pass
     except Exception as exc:  # noqa: BLE001
         last_exc = exc
 
@@ -1323,9 +1320,12 @@ def _cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) 
             if entry.name.endswith(".part") or _FRAGMENT_RE.search(entry.name):
                 _safe_unlink(entry)
                 continue
-            if remove_final and entry.suffix.lower() in VIDEO_EXTENSIONS:
-                if _FRAGMENT_RE.search(entry.name) is None:
-                    _safe_unlink(entry)
+            if (
+                remove_final
+                and entry.suffix.lower() in VIDEO_EXTENSIONS
+                and _FRAGMENT_RE.search(entry.name) is None
+            ):
+                _safe_unlink(entry)
 
 
 def _cleanup_partial_files(paths: set[str]) -> None:
@@ -1475,7 +1475,7 @@ def _finalize_in_background(
                 except Exception as exc:  # noqa: BLE001
                     outcome = outcome_from_fetch([], exc=exc)
                 apply_subtitle_outcome(video_id, outcome)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                 pass
             try:
                 thumb = _save_thumbnail(
@@ -1496,7 +1496,7 @@ def _finalize_in_background(
                 from .ai import enqueue_for_video
 
                 enqueue_for_video(video_id, include_tags=False, force=False)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                 pass
             try:
                 from .sprites import enqueue_sprite_generation
@@ -1505,7 +1505,7 @@ def _finalize_in_background(
                     video_id,
                     reason="Download finished",
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                 pass
 
     threading.Thread(target=run, daemon=True, name=f"finalize-{video_id}").start()
@@ -1779,7 +1779,7 @@ def _complete_download(
         from .ai import enqueue_for_video
 
         enqueue_for_video(video_id, include_tags=True, force=False)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     # Index channel library in the background on first download from a channel.
@@ -1792,7 +1792,7 @@ def _complete_download(
                 channel_name=catalog_channel_name,
                 force=False,
             )
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     _finalize_in_background(
@@ -2187,7 +2187,7 @@ def _run_download(
                     video_codec,
                 )
                 return None
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                 pass
 
         _cleanup_partial_files(active_paths)
@@ -2395,7 +2395,7 @@ def change_job_quality(
             session.refresh(job)
             return job
 
-        assert job.id is not None
+        assert job.id is not None  # noqa: S101 - type narrowing; the row was committed above
         download_queue.request_quality_restart(job.id)
         job.quality_preset = resolved
         job.progress = 0.0

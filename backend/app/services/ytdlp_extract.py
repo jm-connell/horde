@@ -12,8 +12,6 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from .ytdlp_common import (
     EXTRACT_PRIORITY_BACKGROUND,
     EXTRACT_PRIORITY_INTERACTIVE,
@@ -38,6 +36,8 @@ from .ytdlp_formats import (
     format_sort_for,
     is_audio_preset,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _as_info(value: Any) -> dict[str, Any]:
@@ -193,9 +193,9 @@ def _estimate_preset_sizes(info: dict[str, Any], presets: list[str]) -> dict[str
     }
     work = {**info, "formats": list(formats)}
     with yt_dlp.YoutubeDL(opts) as ydl:
-        try:
+        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
             ydl.sort_formats(work)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
         for preset in presets:
             size: int | None = None
@@ -426,7 +426,7 @@ def _best_thumbnail_url(info: dict[str, Any], vid: str | None = None) -> str | N
     thumb = info.get("thumbnail")
     if thumb:
         s = str(thumb).strip()
-        if s.startswith("//") or s.startswith("http"):
+        if s.startswith(("//", "http")):
             return _abs_thumb_url(s)
     video_id = _youtube_thumb_id(info, vid)
     if video_id:
@@ -705,7 +705,7 @@ def estimate_playlist_sizes(
             preview = extract_preview(url)
             if preview.get("preset_sizes"):
                 sizes[url] = preview["preset_sizes"]
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S112 - one bad entry must not abort the whole listing
             continue
     return sizes
 

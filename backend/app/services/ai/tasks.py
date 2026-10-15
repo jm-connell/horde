@@ -239,10 +239,7 @@ def _is_near_duplicate(tag: str, seen_norms: set[str]) -> bool:
         return True
     # Token-set equality (order-independent)
     tokens = frozenset(key.split())
-    for existing in seen_norms:
-        if frozenset(existing.split()) == tokens:
-            return True
-    return False
+    return any(frozenset(existing.split()) == tokens for existing in seen_norms)
 
 
 def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None:

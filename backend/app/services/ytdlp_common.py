@@ -8,13 +8,13 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from ..config import (
     YTDLP_COOKIE_FILE,
     YTDLP_COOKIES_FROM_BROWSER,
     YTDLP_POT_BASE_URL,
 )
+
+logger = logging.getLogger(__name__)
 
 _MEMBERS_ONLY_TITLE = re.compile(r"(?i)\[?\s*members?\s*-?\s*only\s*\]?")
 _MEMBERS_ONLY_AVAILABILITY = frozenset(
@@ -160,9 +160,7 @@ def is_members_only_entry(entry: dict[str, Any] | None) -> bool:
     ):
         return True
     title = entry.get("title")
-    if isinstance(title, str) and _MEMBERS_ONLY_TITLE.search(title):
-        return True
-    return False
+    return bool(isinstance(title, str) and _MEMBERS_ONLY_TITLE.search(title))
 
 
 def is_age_restricted_entry(entry: dict[str, Any] | None) -> bool:
@@ -589,19 +587,18 @@ def extract_has_media(info: dict[str, Any] | None) -> bool:
 
 def _info_blocked_without_auth(info: dict[str, Any], opts: dict[str, Any]) -> bool:
     """Successful extract that is still a gated stub — worth one cookie retry."""
-    if opts.get("extract_flat"):
-        # Channel/search listings stay anonymous. Single-video preview uses
-        # extract_flat in_playlist but should still cookie-retry a gated stub.
-        if info.get("_type") == "playlist" or info.get("entries"):
-            return False
+    # Channel/search listings stay anonymous. Single-video preview uses
+    # extract_flat in_playlist but should still cookie-retry a gated stub.
+    if opts.get("extract_flat") and (
+        info.get("_type") == "playlist" or info.get("entries")
+    ):
+        return False
     if not (is_members_only_entry(info) or is_age_restricted_entry(info)):
         return False
     if extract_has_media(info):
         return False
     desc = info.get("description")
-    if isinstance(desc, str) and desc.strip():
-        return False
-    return True
+    return not (isinstance(desc, str) and desc.strip())
 
 
 def extract_used_cookies() -> bool:
@@ -832,13 +829,16 @@ def extract_info_gated(
             _record_failure(exc)
             raise
 
-        if cookie_retry and _info_blocked_without_auth(info, opts):
-            if should_retry_with_cookies(opts, None, logger_members_only=True):
-                try:
-                    return _extract_with_cookies()
-                except Exception as retry_exc:
-                    _record_failure(retry_exc)
-                    raise
+        if (
+            cookie_retry
+            and _info_blocked_without_auth(info, opts)
+            and should_retry_with_cookies(opts, None, logger_members_only=True)
+        ):
+            try:
+                return _extract_with_cookies()
+            except Exception as retry_exc:
+                _record_failure(retry_exc)
+                raise
 
         _extract_tls.used_cookies = opts_have_cookies(opts)
         _cache_put(key, info)

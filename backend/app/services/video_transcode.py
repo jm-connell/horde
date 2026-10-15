@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import subprocess
 import threading
@@ -197,10 +198,8 @@ def _safe_rel(path: Path) -> str | None:
 
 
 def _safe_unlink(path: Path) -> None:
-    try:
+    with contextlib.suppress(OSError):
         path.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 def transcode_video(

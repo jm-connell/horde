@@ -38,7 +38,7 @@ def _cpu_model() -> str | None:
                     return name
             finally:
                 winreg.CloseKey(key)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     # Linux
@@ -49,7 +49,7 @@ def _cpu_model() -> str | None:
                     name = line.split(":", 1)[1].strip()
                     if name:
                         return name
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     # macOS
@@ -64,14 +64,14 @@ def _cpu_model() -> str | None:
         name = (result.stdout or "").strip()
         if name:
             return name
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     try:
         name = platform.processor().strip()
         if name and not _looks_like_arch_string(name):
             return name
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     return None
 
@@ -95,7 +95,7 @@ def _cpu_temp() -> float | None:
             for e in entries:
                 if e.current is not None:
                     return float(e.current)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     return None
 
@@ -117,7 +117,7 @@ def _cpu_ram() -> dict[str, Any]:
         out["ram_used_bytes"] = int(mem.used)
         out["ram_total_bytes"] = int(mem.total)
         out["ram_percent"] = float(mem.percent)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     return out
 
@@ -155,7 +155,7 @@ def system_stats():
             "used_bytes": usage.used,
             "free_bytes": usage.free,
         }
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     return {
         "cpu_percent": cpu_ram["cpu_percent"],

@@ -264,7 +264,7 @@ def update_settings(payload: AppSettingsUpdate):
             else:
                 raw = str(key)
                 # Ignore masked placeholders from the Settings form.
-                if raw.startswith("••••") or raw.startswith("****"):
+                if raw.startswith(("••••", "****")):
                     del ai_updates["openrouter_api_key"]
                 else:
                     ai_updates["openrouter_api_key"] = raw.strip()

@@ -9,7 +9,7 @@ from ..models import Video
 _YT_ID_IN_PATH = re.compile(r"\[([A-Za-z0-9_-]{11})\]")
 
 # "<stem>.horde-h264.mp4" beside the original; the scanner ignores the token.
-COMPAT_SIDECAR_TOKEN = ".horde-h264."
+COMPAT_SIDECAR_TOKEN = ".horde-h264."  # noqa: S105 - filename marker, not a secret
 
 
 def compat_sidecar_path(original: Path) -> Path:
@@ -55,9 +55,7 @@ def is_manual_import(video: Video) -> bool:
     """True for scanner/upload imports (not yt-dlp downloads)."""
     if video.source_url:
         return False
-    if _YT_ID_IN_PATH.search(video.file_path or ""):
-        return False
-    return True
+    return not _YT_ID_IN_PATH.search(video.file_path or "")
 
 
 def manual_import_rel_path(channel: str | None, title: str, ext: str) -> str:

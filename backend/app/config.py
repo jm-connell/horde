@@ -31,7 +31,7 @@ SCAN_INTERVAL_SEC: int = int(os.environ.get("SCAN_INTERVAL_SEC", "60"))
 VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm"}
 
 # Host/port for uvicorn (entrypoint reads these too).
-HOST: str = os.environ.get("HOST", "0.0.0.0")
+HOST: str = os.environ.get("HOST", "0.0.0.0")  # noqa: S104 - container server; bind-all is the documented default
 PORT: int = int(os.environ.get("PORT", "8080"))
 
 # Max simultaneous download workers (FIFO queue).
@@ -92,7 +92,7 @@ def resolve_git_sha() -> str:
         sha = (result.stdout or "").strip()
         if result.returncode == 0 and sha:
             return sha
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     return "unknown"
 

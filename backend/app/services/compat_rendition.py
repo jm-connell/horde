@@ -18,6 +18,7 @@ outcome is persisted on the ``videos`` row.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import subprocess
 import threading
@@ -384,10 +385,8 @@ def enqueue(
         if existing is not None:
             if front and existing.status == "queued":
                 # A viewer is waiting on this one — jump the bulk backfill.
-                try:
+                with contextlib.suppress(ValueError):
                     _pending.remove(video_id)
-                except ValueError:
-                    pass
                 _pending.appendleft(video_id)
             return f"already_{existing.status}"
         _errors.pop(video_id, None)
@@ -413,10 +412,8 @@ def cancel(video_id: int) -> bool:
             return False
         job.cancel.set()
         if job.status == "queued":
-            try:
+            with contextlib.suppress(ValueError):
                 _pending.remove(video_id)
-            except ValueError:
-                pass
             _jobs.pop(video_id, None)
             queued_kind = job.kind
         else:
@@ -499,10 +496,8 @@ def _set(job: _Job, *, stage: str | None = None, progress: float | None = None) 
 
 
 def _safe_unlink(path: Path) -> None:
-    try:
+    with contextlib.suppress(OSError):
         path.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 @dataclass(frozen=True)
@@ -880,7 +875,8 @@ def _run_convert(job: _Job) -> None:
 def eligible_video_ids(session: Session, *, kind: JobKind) -> list[int]:
     rows = session.exec(
         select(Video).where(
-            Video.status == VideoStatus.ready, Video.needs_review == False
+            Video.status == VideoStatus.ready,
+            Video.needs_review == False,  # noqa: E712 - SQL column expression
         )
     ).all()
     cap = compat_copy_cap()
@@ -906,7 +902,8 @@ def eligible_video_ids(session: Session, *, kind: JobKind) -> list[int]:
 def library_summary(session: Session) -> dict[str, Any]:
     rows = session.exec(
         select(Video).where(
-            Video.status == VideoStatus.ready, Video.needs_review == False
+            Video.status == VideoStatus.ready,
+            Video.needs_review == False,  # noqa: E712 - SQL column expression
         )
     ).all()
     total_bytes = 0

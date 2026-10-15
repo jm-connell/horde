@@ -847,7 +847,7 @@ def _compute_blocked_reason(
         budget = budget_status()
         if budget.get("blocked"):
             return "OpenRouter weekly budget hard limit reached"
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     if not has_queued:
         return None

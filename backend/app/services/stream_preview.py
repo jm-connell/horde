@@ -6,6 +6,7 @@ CDN/manifest caching used by api/preview.py.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import secrets
 import threading
@@ -15,8 +16,6 @@ from typing import Any
 from xml.sax.saxutils import escape as xml_escape
 
 import httpx
-
-logger = logging.getLogger(__name__)
 
 from .ytdlp_common import (
     EXTRACT_PRIORITY_INTERACTIVE,
@@ -30,6 +29,8 @@ from .ytdlp_common import (
 )
 from .ytdlp_extract import _best_thumbnail_url
 from .ytdlp_formats import _available_presets, pick_original_audio_format
+
+logger = logging.getLogger(__name__)
 
 
 def _as_info(value: Any) -> dict[str, Any]:
@@ -103,10 +104,8 @@ def _pick_progressive_format(info: dict[str, Any]) -> dict[str, Any] | None:
         elif ext in ("webm", "mkv"):
             score += 50_000
         tbr = fmt.get("tbr") or 0
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             score += int(float(tbr))
-        except (TypeError, ValueError):
-            pass
         candidates.append((score, fmt))
     if not candidates:
         return None
@@ -116,7 +115,7 @@ def _pick_progressive_format(info: dict[str, Any]) -> dict[str, Any] | None:
 
 def _is_mp4_video_codec(vcodec: str) -> bool:
     v = vcodec.lower()
-    return v.startswith("avc1") or v.startswith("av01") or v.startswith("avc")
+    return v.startswith(("avc1", "av01", "avc"))
 
 
 def _is_mp4_audio_codec(acodec: str) -> bool:
@@ -128,7 +127,7 @@ def _video_codec_family(vcodec: str) -> str | None:
     v = vcodec.lower()
     if v.startswith("av01"):
         return "av01"
-    if v.startswith("avc1") or v.startswith("avc"):
+    if v.startswith(("avc1", "avc")):
         return "avc1"
     return None
 
@@ -176,10 +175,8 @@ def _pick_adaptive_formats(
                 continue
             score = height * 1000
             tbr = fmt.get("tbr") or fmt.get("vbr") or 0
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 score += int(float(tbr))
-            except (TypeError, ValueError):
-                pass
             key = (family, height)
             prev = video_by_key.get(key)
             if prev is None or score > int(prev.get("_score") or 0):
@@ -385,10 +382,8 @@ def _bandwidth_bps(fmt: dict[str, Any], *, kind: str) -> int:
         filesize = fmt.get("filesize") or fmt.get("filesize_approx")
         duration = fmt.get("duration")  # rarely on format
         if filesize and duration:
-            try:
+            with contextlib.suppress(TypeError, ValueError, ZeroDivisionError):
                 avg = max(1, int(int(filesize) * 8 / float(duration)))
-            except (TypeError, ValueError, ZeroDivisionError):
-                pass
     if avg <= 0:
         avg = 1_000_000 if kind == "video" else 128_000
     pad = 1.4 if kind == "video" else 1.1
@@ -611,7 +606,7 @@ def _boundaries_aligned(
         bounds = other.get("boundaries") or []
         if len(bounds) != len(ref):
             return False
-        for a, b in zip(ref, bounds):
+        for a, b in zip(ref, bounds, strict=False):
             if abs(float(a) - float(b)) > tolerance_sec:
                 return False
     return True

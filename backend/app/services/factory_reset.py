@@ -78,13 +78,13 @@ def reset_app(*, erase_media: bool) -> dict[str, Any]:
 
 
 def _pause_workers(*, cancel_downloads: bool) -> None:
-    try:
+    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
         downloader.download_queue.pause_all()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
-    try:
+    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
         app_settings.save({"ai": {"paused": True}})
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     if not cancel_downloads:
         return
@@ -98,14 +98,14 @@ def _pause_workers(*, cancel_downloads: bool) -> None:
             ids = [job.id for job in jobs if job.id is not None]
         for job_id in ids:
             downloader.download_queue.cancel_job(job_id)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
 
 def _resume_workers() -> None:
-    try:
+    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
         downloader.download_queue.resume_all()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     try:
         from .ai.provider import invalidate_resolved_url
@@ -113,7 +113,7 @@ def _resume_workers() -> None:
 
         invalidate_resolved_url()
         wake_worker()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
 

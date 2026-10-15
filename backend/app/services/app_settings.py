@@ -241,7 +241,7 @@ def load() -> dict[str, Any]:
             else:
                 merged["setup_completed"] = bool(data.get("setup_completed"))
             return merged
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
     out = dict(DEFAULTS)
     out["ui"] = {}

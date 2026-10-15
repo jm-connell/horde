@@ -12,6 +12,7 @@ rewrites audio to AAC-LC plus ``+faststart``. There is no H.264 transcode.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import subprocess
@@ -262,10 +263,8 @@ def _replace_with_retries(src: Path, dest: Path, retries: int = 8) -> None:
 
 
 def _safe_unlink(path: Path) -> None:
-    try:
+    with contextlib.suppress(OSError):
         path.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 def _safe_rel(path: Path) -> str | None:

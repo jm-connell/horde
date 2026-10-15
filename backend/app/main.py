@@ -311,7 +311,7 @@ def health():
         cat = get_runtime_status()
         catalog_queue_depth = int(cat.get("queue_depth") or 0)
         catalog_indexing = bool(cat.get("running"))
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     return {

@@ -183,7 +183,7 @@ def refresh_video_metadata(
                 tracks_url = source_url
             outcome = download_subtitles(media, tracks_url)
             apply_subtitle_outcome(video_id, outcome)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
 
     return changed
@@ -334,9 +334,9 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
                 try:
                     for i, video in enumerate(batch):
                         act.update(done=i, detail=video.title)
-                        try:
+                        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
                             refresh_video_metadata(video.id)
-                        except Exception:  # noqa: BLE001
+                        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                             pass
                     act.finish(detail=f"{len(batch)} video(s)")
                 except Exception as exc:  # noqa: BLE001
@@ -349,14 +349,14 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
             from . import channel_catalog
 
             channel_catalog.refresh_stale_catalogs()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
 
         try:
             from .playlist_sync import sync_subscribed_playlists
 
             sync_subscribed_playlists()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
 
         # Re-read interval so Settings changes apply without restart.
@@ -367,7 +367,7 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
                 settings_svc.load().get("metadata_sync_interval_hours")
                 or interval_hours
             )
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
         threading.Event().wait(3600)
 

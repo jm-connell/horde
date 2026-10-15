@@ -215,10 +215,7 @@ def _published_fields(
     label = raw.get("published_label")
     if not label and cached and not raw.get("published_at"):
         label = cached.get("published_label")
-    if isinstance(label, str):
-        label = label.strip() or None
-    else:
-        label = None
+    label = (label.strip() or None) if isinstance(label, str) else None
     iso = feed_meta_cache.parse_upload_date(raw.get("published_at"))
     if iso is None and cached:
         iso = feed_meta_cache.parse_upload_date(cached.get("published_at"))
@@ -326,9 +323,9 @@ def _feed_entries_from_raw(
     if to_cache:
         feed_meta_cache.upsert_many(to_cache)
     if channel_url and catalog_updates:
-        try:
+        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
             channel_catalog.update_catalog_video_fields(channel_url, catalog_updates)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
     return entries
 
@@ -513,9 +510,9 @@ def channel_feed(
         )
 
     # Kick off / refresh catalog in the background without blocking the response.
-    try:
+    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
         channel_catalog.maybe_enqueue_for_feed(channel_url, channel_name=channel_name)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
         pass
 
     data = None
@@ -575,11 +572,11 @@ def channel_feed(
             indexing = False
         elif offset == 0:
             # Catalog hit — refresh newest uploads in the background.
-            try:
+            try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
                 channel_catalog.schedule_feed_head_sync(
                     channel_url, channel_name=channel_name
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                 pass
 
     lib_map = library.youtube_library_map(session, channel=channel_name)
@@ -670,11 +667,11 @@ def channel_feed(
             if e.id and (e.published_at or e.view_count is not None)
         ]
         if catalog_updates:
-            try:
+            try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
                 channel_catalog.update_catalog_video_fields(
                     channel_url, catalog_updates
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                 pass
 
     # Background-fill missing views / dates / votes (catalog + live).
@@ -746,11 +743,11 @@ def channel_feed(
                 if updates:
                     feed_meta_cache.upsert_many(updates)
                 if catalog_url and catalog_field_updates:
-                    try:
+                    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
                         channel_catalog.update_catalog_video_fields(
                             catalog_url, catalog_field_updates
                         )
-                    except Exception:  # noqa: BLE001
+                    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                         pass
 
         import threading

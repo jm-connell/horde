@@ -197,8 +197,10 @@ def preview_playlist(url: str):
         raise HTTPException(status_code=400, detail="URL is required")
     try:
         data = downloader.extract_playlist_entries(clean_url(url, keep_playlist=True))
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"Could not read playlist: {exc}")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Could not read playlist: {exc}"
+        ) from exc
     return PlaylistPreview(**data)
 
 
@@ -576,10 +578,10 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
     else:
         try:
             title, entries = downloader.extract_playlist(url)
-        except Exception as exc:  # noqa: BLE001 - surface extraction failures
+        except Exception as exc:
             raise HTTPException(
                 status_code=400, detail=f"Could not read playlist: {exc}"
-            )
+            ) from exc
         if payload.name and payload.name.strip():
             title = payload.name.strip()
 

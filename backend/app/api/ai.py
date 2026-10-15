@@ -241,7 +241,7 @@ def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()
             try:
                 ensure_models(provider)
                 pulled = True
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                 pass
 
     embed_changed = prev_embed != runtime.embed_model

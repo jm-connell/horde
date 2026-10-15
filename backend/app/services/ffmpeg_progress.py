@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import subprocess
 import threading
@@ -18,7 +19,7 @@ class FfmpegCancelled(Exception):
 def parse_out_time_seconds(line: str) -> float | None:
     """Parse one ffmpeg -progress line into seconds, if it carries out_time."""
     raw = (line or "").strip()
-    if raw.startswith("out_time_ms=") or raw.startswith("out_time_us="):
+    if raw.startswith(("out_time_ms=", "out_time_us=")):
         try:
             # ffmpeg names out_time_ms but the unit is microseconds.
             return max(0.0, int(raw.split("=", 1)[1]) / 1_000_000.0)
@@ -112,9 +113,9 @@ def run_ffmpeg(
                 out_time = parse_out_time_seconds(text)
                 if out_time is None or on_progress is None:
                     continue
-                try:
+                try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
                     on_progress(progress_percent(out_time, duration))
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                     pass
         code = proc.wait()
         err_thread.join(timeout=2)
@@ -130,15 +131,11 @@ def run_ffmpeg(
             )
         return subprocess.CompletedProcess(full, code, stdout, stderr)
     except FfmpegCancelled:
-        try:
+        with contextlib.suppress(OSError):
             proc.kill()
-        except OSError:
-            pass
         raise
     finally:
-        try:
+        with contextlib.suppress(OSError):
             proc.kill()
-        except OSError:
-            pass
         err_thread.join(timeout=1)
         watch_thread.join(timeout=1)

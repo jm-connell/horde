@@ -98,9 +98,7 @@ def _is_media(path: Path) -> bool:
     if ".compat." in name or name.endswith(".compat.mp4"):
         return False
     # H.264 compatibility sidecars (and their temps) belong to another video.
-    if COMPAT_SIDECAR_TOKEN in name:
-        return False
-    return True
+    return COMPAT_SIDECAR_TOKEN not in name
 
 
 def _is_stable(path: Path) -> bool:
@@ -202,7 +200,7 @@ def ingest_media_file(
                     video.id,
                     reason="New file found by the folder scanner",
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
                 pass
 
         return video
@@ -344,7 +342,7 @@ class _MediaEventHandler(FileSystemEventHandler):
         try:
             with Session(engine) as session:
                 _ingest_file(session, path)
-        except Exception:  # noqa: BLE001 - keep watchdog thread alive
+        except Exception:  # noqa: BLE001, S110 - keep watchdog thread alive
             pass
 
     def on_created(self, event) -> None:
@@ -359,14 +357,14 @@ class _MediaEventHandler(FileSystemEventHandler):
 def _polling_loop() -> None:
     while True:
         time.sleep(SCAN_INTERVAL_SEC)
-        try:
+        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
             scan_once()
-        except Exception:  # noqa: BLE001 - keep the poller alive across errors
+        except Exception:  # noqa: BLE001, S110 - keep the poller alive across errors
             pass
         try:
             with Session(engine) as session:
                 library.expire_stale_progress(session)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
             pass
 
 
