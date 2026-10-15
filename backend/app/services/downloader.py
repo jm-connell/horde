@@ -2936,9 +2936,36 @@ def _attach_slot(session: Session, playlist_id: int, job_id: int) -> int:
         pos += 1
 
 
+# Serializes position assignment: two ffmpeg threads finishing together must not
+# compute the same free slot (_attach_slot is read-then-insert).
+_playlist_attach_lock = threading.Lock()
+
+
 def _attach_download_to_playlist(job_id: int, video_id: int | None) -> None:
+    """Add a finished download to its playlist. Best effort; never raises.
+
+    Runs after the job is already committed as completed, so a failure here
+    (lock contention, a deleted playlist) is logged and must never change the
+    job's status.
+    """
     if video_id is None:
         return
+    try:
+        with _playlist_attach_lock:
+            _retry_db_locked(
+                lambda: _attach_once(job_id, video_id),
+                what=f"playlist attach for job {job_id}",
+            )
+    except Exception:
+        logger.warning(
+            "could not attach job %s (video %s) to its playlist",
+            job_id,
+            video_id,
+            exc_info=True,
+        )
+
+
+def _attach_once(job_id: int, video_id: int) -> None:
     with Session(engine) as session:
         job = session.get(DownloadJob, job_id)
         if job is None or job.playlist_id is None:
@@ -3137,7 +3164,7 @@ def run_playlist_entries(
             job_ids.append(ref)
         if kind == "library" and ref is not None and ref not in placed:
             placed.add(ref)
-            with Session(engine) as session:
+            with _playlist_attach_lock, Session(engine) as session:
                 _upsert_playlist_item(session, playlist_id, ref, index)
         if activity_handle is not None:
             activity_handle.update(

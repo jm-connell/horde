@@ -240,3 +240,62 @@ def test_replace_target_deleted_during_download_imports_as_new(
     with Session(init_db["engine"]) as s:
         assert s.get(DownloadJob, job_id).status == JobStatus.completed
         assert s.get(DownloadJob, job_id).video_id is not None
+
+
+def test_concurrent_completions_get_distinct_ordered_positions(
+    init_db, playlist, add_video, queued_only
+):
+    import threading
+
+    downloader.run_playlist_entries(playlist, [_url(i) for i in range(1, 7)], "best")
+    with Session(init_db["engine"]) as s:
+        job_ids = [
+            j.id for j in s.exec(select(DownloadJob).order_by(DownloadJob.id)).all()
+        ]
+    videos = [
+        add_video(yt_id=f"pppppppp{i:03d}", title=f"V{i}", file_path=f"a/v{i}.mp4")
+        for i in range(1, 7)
+    ]
+    for jid, v in zip(job_ids, videos, strict=True):
+        downloader._update_job(jid, status=JobStatus.completed, video_id=v.id)
+
+    barrier = threading.Barrier(len(job_ids))
+
+    def finish(jid, vid):
+        barrier.wait()
+        downloader._attach_download_to_playlist(jid, vid)
+
+    threads = [
+        threading.Thread(target=finish, args=(j, v.id))
+        for j, v in zip(job_ids, videos, strict=True)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    with Session(init_db["engine"]) as s:
+        positions = [
+            r.position
+            for r in s.exec(
+                select(PlaylistItem).where(PlaylistItem.playlist_id == playlist)
+            ).all()
+        ]
+    assert len(positions) == 6 and len(set(positions)) == 6
+
+
+def test_attach_failure_never_changes_job_status(
+    init_db, playlist, add_video, queued_only, monkeypatch
+):
+    video = add_video(yt_id="pppppppp001", title="V1", file_path="a/v1.mp4")
+    downloader.run_playlist_entries(playlist, [_url(1)], "best")
+    with Session(init_db["engine"]) as s:
+        job_id = s.exec(select(DownloadJob)).one().id
+    downloader._update_job(job_id, status=JobStatus.completed, video_id=video.id)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("database exploded")
+
+    monkeypatch.setattr(downloader, "_attach_slot", boom)
+    downloader._attach_download_to_playlist(job_id, video.id)  # must not raise
+    with Session(init_db["engine"]) as s:
+        assert s.get(DownloadJob, job_id).status == JobStatus.completed
