@@ -846,6 +846,9 @@ export default function Watch() {
               <div className="aspect-video w-40 shrink-0 overflow-hidden rounded-lg bg-ink-800">
                 {thumb ? (
                   <img
+                    decoding="async"
+                    width={160}
+                    height={90}
                     src={thumb}
                     alt={v.title}
                     loading="lazy"

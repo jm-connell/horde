@@ -1206,6 +1206,16 @@ export default function VideoPlayer({
     };
   }, []);
 
+  // Signal for page chrome (background effects) that a full-size player is
+  // actively playing; the mini player does not count.
+  useEffect(() => {
+    if (playing && !isMini) document.body.dataset.playerPlaying = "true";
+    else delete document.body.dataset.playerPlaying;
+    return () => {
+      delete document.body.dataset.playerPlaying;
+    };
+  }, [playing, isMini]);
+
   const stepRate = useCallback((dir: 1 | -1) => {
     setRate((r) => {
       const idx = SPEED_STEPS.indexOf(r);
@@ -2700,6 +2710,9 @@ export default function VideoPlayer({
                   }
                 >
                   <img
+                    decoding="async"
+                    width={320}
+                    height={180}
                     src={upNext.poster}
                     alt=""
                     className="h-full w-full object-cover opacity-90"

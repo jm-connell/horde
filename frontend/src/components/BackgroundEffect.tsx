@@ -14,6 +14,22 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+interface NetworkInformationLike extends EventTarget {
+  saveData?: boolean;
+}
+
+function navigatorConnection(): NetworkInformationLike | null {
+  return (
+    (navigator as Navigator & { connection?: NetworkInformationLike })
+      .connection ?? null
+  );
+}
+
+/** The user asked the browser to save data: skip decorative animation. */
+function dataSaverOn(): boolean {
+  return navigatorConnection()?.saveData === true;
+}
+
 function hexToRgb(hex: string): string {
   const h = hex.replace("#", "");
   const full =
@@ -36,6 +52,8 @@ export default function BackgroundEffect() {
   const controllerRef = useRef<EffectController | null>(null);
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [saveData, setSaveData] = useState(dataSaverOn);
 
   const effect = settings.backgroundEffect;
   const opacity = settings.backgroundOpacity;
@@ -45,11 +63,14 @@ export default function BackgroundEffect() {
   const customColor = settings.backgroundEffectColor;
   const pauseWhileWatching = settings.pauseBackgroundWhileWatching;
   const onWatchPage = location.pathname.startsWith("/watch/");
-  const shouldPause = playerFullscreen || (pauseWhileWatching && onWatchPage);
+  // A full-size player that is playing makes the effect pure overhead.
+  const shouldPause =
+    playerFullscreen || videoPlaying || (pauseWhileWatching && onWatchPage);
   const isCustom = effect === "custom-image" && !!settings.customBackgroundId;
   const active =
     effect !== "none" &&
     !reducedMotion &&
+    !saveData &&
     (effect !== "custom-image" || isCustom);
 
   useEffect(() => {
@@ -65,14 +86,23 @@ export default function BackgroundEffect() {
       setPlayerFullscreen(
         document.body.classList.contains("player-fullscreen")
       );
+      setVideoPlaying(document.body.dataset.playerPlaying === "true");
     };
     syncFullscreen();
     const observer = new MutationObserver(syncFullscreen);
     observer.observe(document.body, {
       attributes: true,
-      attributeFilter: ["class"],
+      attributeFilter: ["class", "data-player-playing"],
     });
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const connection = navigatorConnection();
+    if (!connection) return;
+    const onChange = () => setSaveData(dataSaverOn());
+    connection.addEventListener?.("change", onChange);
+    return () => connection.removeEventListener?.("change", onChange);
   }, []);
 
   useEffect(() => {
@@ -163,6 +193,7 @@ export default function BackgroundEffect() {
           />
         ) : (
           <img
+            decoding="async"
             key={url}
             src={url}
             alt=""

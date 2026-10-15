@@ -24,6 +24,7 @@ function Thumb({ item, className }: { item: OfflineItem; className: string }) {
     <div className={`relative overflow-hidden bg-ink-800 ${className}`}>
       {failed ? null : (
         <img
+          decoding="async"
           src={thumbUrl(item)}
           alt=""
           loading="lazy"

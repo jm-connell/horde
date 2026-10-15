@@ -400,6 +400,7 @@ export default function ImageCropModal({
         >
           {src && !loadError ? (
             <img
+              decoding="async"
               ref={imageElRef}
               src={src}
               alt=""

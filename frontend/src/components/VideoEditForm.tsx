@@ -280,6 +280,10 @@ export default function VideoEditForm({
           <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-ink-800">
             {previewSrc ? (
               <img
+                loading="lazy"
+                decoding="async"
+                width={320}
+                height={180}
                 src={previewSrc}
                 alt={video.title}
                 className="h-full w-full object-cover"

@@ -96,7 +96,13 @@ export function PlaylistThumb({
       className={`relative overflow-hidden rounded-md bg-ink-800 ${className}`}
     >
       {src ? (
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img
+          loading="lazy"
+          decoding="async"
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-ink-600">
           <svg

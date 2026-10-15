@@ -185,6 +185,9 @@ function FeedThumbnail({
         >
           {thumbSrc ? (
             <img
+              decoding="async"
+              width={320}
+              height={180}
               src={thumbSrc}
               alt=""
               loading="lazy"

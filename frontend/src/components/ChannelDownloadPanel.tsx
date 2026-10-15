@@ -164,6 +164,10 @@ export default function ChannelDownloadPanel({
                 <div className="h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-ink-800">
                   {thumbSrc ? (
                     <img
+                      loading="lazy"
+                      decoding="async"
+                      width={96}
+                      height={56}
                       src={thumbSrc}
                       alt=""
                       className="h-full w-full object-cover"

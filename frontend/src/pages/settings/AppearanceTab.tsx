@@ -549,6 +549,10 @@ export default function AppearanceTab() {
                           />
                         ) : (
                           <img
+                            loading="lazy"
+                            decoding="async"
+                            width={320}
+                            height={180}
                             src={item.url || `/api/backgrounds/${item.id}`}
                             alt={item.filename || "Background"}
                             className="aspect-video w-full object-cover"
@@ -585,6 +589,10 @@ export default function AppearanceTab() {
                   />
                 ) : (
                   <img
+                    loading="lazy"
+                    decoding="async"
+                    width={320}
+                    height={180}
                     src={`/api/backgrounds/${settings.customBackgroundId}`}
                     alt="Custom background preview"
                     className="max-h-40 w-full object-cover"

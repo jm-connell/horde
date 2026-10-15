@@ -780,6 +780,9 @@ export default function Download() {
                         <div className="h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
                           {thumbSrc ? (
                             <img
+                              decoding="async"
+                              width={96}
+                              height={56}
                               src={thumbSrc}
                               alt=""
                               loading="lazy"

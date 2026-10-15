@@ -140,6 +140,9 @@ export default function VideoCard({
       <div className="relative aspect-video w-full overflow-hidden">
         {thumb ? (
           <img
+            decoding="async"
+            width={320}
+            height={180}
             src={thumb}
             alt={video.title}
             loading="lazy"

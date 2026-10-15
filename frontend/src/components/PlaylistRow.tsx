@@ -672,6 +672,10 @@ export default function PlaylistRow({
                           <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
                             {thumb && (
                               <img
+                                loading="lazy"
+                                decoding="async"
+                                width={96}
+                                height={56}
                                 src={thumb}
                                 alt=""
                                 className="h-full w-full object-cover"

@@ -73,6 +73,10 @@ export default function ChannelDownloadEditModal({
         <div className="mb-4 flex gap-3">
           {thumbSrc && (
             <img
+              loading="lazy"
+              decoding="async"
+              width={112}
+              height={64}
               src={thumbSrc}
               alt=""
               className="h-16 w-28 shrink-0 rounded-lg object-cover"

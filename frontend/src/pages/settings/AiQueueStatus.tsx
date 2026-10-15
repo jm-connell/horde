@@ -55,6 +55,10 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
         </span>
         {job.has_thumbnail && job.video_id != null ? (
           <img
+            loading="lazy"
+            decoding="async"
+            width={112}
+            height={63}
             src={`/api/thumbnails/${job.video_id}`}
             alt=""
             className="aspect-video w-28 shrink-0 rounded object-cover ring-1 ring-ink-700"

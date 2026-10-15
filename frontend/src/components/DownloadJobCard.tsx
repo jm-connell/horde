@@ -564,6 +564,9 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
           >
             {thumbSrc ? (
               <img
+                loading="lazy"
+                width={96}
+                height={56}
                 key={`${job.id}-${thumbSrc}`}
                 src={thumbSrc}
                 alt=""

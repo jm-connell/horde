@@ -117,6 +117,10 @@ export default function PlaybackQueue({
                   <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-ink-800">
                     {thumb && (
                       <img
+                        loading="lazy"
+                        decoding="async"
+                        width={64}
+                        height={40}
                         src={thumb}
                         alt=""
                         className="h-full w-full object-cover"
