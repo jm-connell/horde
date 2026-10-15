@@ -13,10 +13,19 @@ const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
 type Listener = (ready: boolean) => void;
 
-class ServiceWorkerUpdates {
-  private waiting: ServiceWorker | null = null;
+/** The part of a ServiceWorker this class uses (lets tests pass fakes). */
+export interface WaitingWorker extends EventTarget {
+  state: string;
+  postMessage(message: unknown): void;
+}
+
+export class ServiceWorkerUpdates {
+  private waiting: WaitingWorker | null = null;
   private listeners = new Set<Listener>();
   private reloading = false;
+  private watched = new WeakSet<object>();
+
+  constructor(private readonly reload: () => void = () => location.reload()) {}
 
   get ready(): boolean {
     return this.waiting !== null;
@@ -28,9 +37,29 @@ class ServiceWorkerUpdates {
     return () => this.listeners.delete(listener);
   }
 
-  private setWaiting(worker: ServiceWorker | null) {
+  private setWaiting(worker: WaitingWorker | null) {
     this.waiting = worker;
     this.listeners.forEach((l) => l(this.ready));
+  }
+
+  /**
+   * Track a worker that is waiting to activate. It stops being an update as
+   * soon as it activates (another tab accepted it) or becomes redundant
+   * (superseded by a newer release).
+   */
+  adopt(worker: WaitingWorker): void {
+    if (worker.state === "activated" || worker.state === "redundant") return;
+    this.setWaiting(worker);
+    if (this.watched.has(worker)) return;
+    this.watched.add(worker);
+    worker.addEventListener("statechange", () => {
+      if (
+        (worker.state === "activated" || worker.state === "redundant") &&
+        this.waiting === worker
+      ) {
+        this.setWaiting(null);
+      }
+    });
   }
 
   /** Track `registration` and surface any worker that is waiting to activate. */
@@ -39,7 +68,7 @@ class ServiceWorkerUpdates {
     // controlled; on the very first install there is nothing to replace.
     const check = () => {
       if (registration.waiting && navigator.serviceWorker.controller) {
-        this.setWaiting(registration.waiting);
+        this.adopt(registration.waiting);
       }
     };
     check();
@@ -56,8 +85,9 @@ class ServiceWorkerUpdates {
       if (document.visibilityState === "visible") poll();
     });
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      // Only reload for an update the user asked for, never on first install.
-      if (this.reloading) window.location.reload();
+      // Only reload for an update this tab asked for, never on first install
+      // and never because another tab accepted the update.
+      if (this.reloading) this.reload();
     });
   }
 
@@ -65,6 +95,11 @@ class ServiceWorkerUpdates {
   applyUpdate(): void {
     const worker = this.waiting;
     if (!worker) return;
+    if (worker.state === "activated") {
+      // Already active (accepted elsewhere): no controllerchange will follow.
+      this.reload();
+      return;
+    }
     this.reloading = true;
     worker.postMessage({ type: "SKIP_WAITING" });
   }
