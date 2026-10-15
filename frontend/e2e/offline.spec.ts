@@ -36,6 +36,61 @@ test("service worker registers, controls the page, and ping works", async ({
   expect(await ping.json()).toMatchObject({ ok: true });
 });
 
+test("a new service worker waits for consent and activates from the update toast", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => !!navigator.serviceWorker.controller))
+    .toBe(true);
+  const activeBefore = await page.evaluate(
+    async () =>
+      (await navigator.serviceWorker.getRegistration())!.active!.scriptURL
+  );
+
+  // Registering the worker under a new script URL is how the browser sees a
+  // new release without needing a different build of sw.js.
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.register("/sw.js?e2e-release=2", {
+      scope: "/",
+      updateViaCache: "none",
+    });
+  });
+
+  const toast = page.locator("[data-horde='toast']", {
+    hasText: "Update available",
+  });
+  await expect(toast).toBeVisible();
+  // The new worker is installed but must not have taken over by itself.
+  const state = await page.evaluate(async () => {
+    const reg = (await navigator.serviceWorker.getRegistration())!;
+    return {
+      waiting: reg.waiting?.state,
+      active: reg.active?.scriptURL,
+      installing: !!reg.installing,
+    };
+  });
+  expect(state.waiting).toBe("installed");
+  expect(state.active).toBe(activeBefore);
+
+  const reloaded = page.waitForEvent("load");
+  await toast.getByRole("button", { name: "Reload" }).click();
+  await reloaded;
+  await expect
+    .poll(() =>
+      page.evaluate(
+        async () =>
+          (await navigator.serviceWorker.getRegistration())!.active?.scriptURL
+      )
+    )
+    .toContain("e2e-release=2");
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible();
+});
+
 test.describe("offline downloads (mobile)", () => {
   test.use({
     viewport: { width: 390, height: 844 },

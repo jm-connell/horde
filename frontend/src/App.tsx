@@ -32,6 +32,8 @@ import { ConfirmProvider } from "./context/ConfirmContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
 import { useSetupGate } from "./hooks/useSettings";
+import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
+import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
 
 /** Back-compat: `/playlists/:id` → `/playlists?open=:id` */
 function PlaylistOpenRedirect() {
@@ -107,6 +109,8 @@ function AppRoutes() {
 }
 
 function AppShell() {
+  useServiceWorkerUpdate();
+  useOfflineQuotaToast();
   const { ready, completed } = useSetupGate();
 
   if (!ready) {

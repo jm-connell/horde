@@ -40,6 +40,13 @@ import {
 } from "./db";
 import { contentRangeTotal } from "./ranges";
 import { isAppleWebkit } from "../utils/playbackRendition";
+import {
+  isQuotaError,
+  OFFLINE_QUOTA_EVENT,
+  quotaMessage,
+  StorageQuotaError,
+  type OfflineQuotaDetail,
+} from "./quota";
 
 export interface OfflineSnapshot {
   items: OfflineItem[];
@@ -365,12 +372,46 @@ class OfflineManager {
         await this.save({ ...current, status: "queued" });
         return;
       }
+      if (isQuotaError(err)) {
+        await this.failForQuota(current);
+        return;
+      }
       await this.save({
         ...current,
         status: "error",
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  /**
+   * Storage is full: drop the partial chunks (they are useless without the
+   * rest and keep eating the space the user needs), mark the item failed so it
+   * can be retried, and tell the UI how much room is left.
+   */
+  private async failForQuota(item: OfflineItem): Promise<void> {
+    await this.deleteStoredData(item);
+    const est = await navigator.storage?.estimate?.().catch(() => null);
+    const freeBytes = est?.quota != null ? est.quota - (est.usage ?? 0) : null;
+    const message = quotaMessage(item.video.title, freeBytes);
+    try {
+      await this.save({
+        ...item,
+        status: "error",
+        error: message,
+        chunksDone: 0,
+        extras: [],
+      });
+    } catch (err) {
+      // The metadata write can fail for the same reason; the in-memory state
+      // already shows the error and the next init resets the half-written row.
+      console.warn("Could not persist offline quota failure", err);
+    }
+    window.dispatchEvent(
+      new CustomEvent<OfflineQuotaDetail>(OFFLINE_QUOTA_EVENT, {
+        detail: { videoId: item.videoId, title: item.video.title, freeBytes },
+      })
+    );
   }
 
   /**
@@ -437,9 +478,7 @@ class OfflineManager {
     if (!est || !est.quota) return;
     const free = est.quota - (est.usage ?? 0);
     if (free < bytes * 1.02) {
-      throw new Error(
-        `Not enough storage (${formatMb(bytes)} needed, ${formatMb(free)} free)`
-      );
+      throw new StorageQuotaError(bytes, free);
     }
   }
 
@@ -535,8 +574,9 @@ class OfflineManager {
         if (!resp.ok && resp.type !== "opaque") return;
         await cache.put(url, resp);
         extras.push(url);
-      } catch {
-        // Extras are best-effort; the video still plays without them.
+      } catch (err) {
+        // Extras are best-effort, but a full disk must stop the download.
+        if (isQuotaError(err)) throw err;
       }
     };
     const v = item.video;
@@ -694,10 +734,6 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
       { once: true }
     );
   });
-}
-
-function formatMb(bytes: number): string {
-  return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
 export const offlineManager = new OfflineManager();

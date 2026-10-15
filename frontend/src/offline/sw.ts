@@ -43,8 +43,18 @@ interface SwScope {
 }
 const sw = self as unknown as SwScope;
 
-const SHELL_CACHE = `horde-shell-${__SW_VERSION__}`;
-const RUNTIME_CACHE = "horde-runtime-v1";
+// Bump when the shape of runtime-cached responses changes; activation deletes
+// every other horde-runtime-* cache.
+const RUNTIME_VERSION = 2;
+const RUNTIME_PREFIX = "horde-runtime-";
+const RUNTIME_CACHE = `${RUNTIME_PREFIX}v${RUNTIME_VERSION}`;
+const SHELL_PREFIX = "horde-shell-";
+const SHELL_CACHE = `${SHELL_PREFIX}${__SW_VERSION__}`;
+/** Remembers which shell caches were activated, oldest first. */
+const META_CACHE = "horde-sw-meta";
+const VERSIONS_URL = "/__horde-shell-versions";
+/** Shell generations kept after activation: this release plus the previous. */
+const SHELL_GENERATIONS_KEPT = 2;
 const RUNTIME_MAX_ENTRIES = 60;
 const INDEX_URL = "/index.html";
 
@@ -58,6 +68,22 @@ const NON_SPA_PREFIXES = [
   "/assets/",
 ];
 
+/*
+ * Update lifecycle
+ *
+ * A new worker installs (precaches its shell) but does NOT skipWaiting: it
+ * waits until the page asks for it (SKIP_WAITING, sent when the user accepts
+ * the "Update available" prompt) or until every old tab is closed. Taking over
+ * mid-session would swap the cache under a page whose JS still references the
+ * previous release's hashed chunks.
+ *
+ * Even after activation, tabs that were open before the update may still run
+ * the previous bundle and lazy-load its chunks (React.lazy routes), which the
+ * server no longer serves. So activation deletes only shell caches OLDER than
+ * the previous release; the previous one stays until the next update. Lookups
+ * use caches.match(), which searches every cache, so such a tab keeps working
+ * until it reloads.
+ */
 sw.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
@@ -67,7 +93,6 @@ sw.addEventListener("install", (event) => {
       await cache.addAll(
         __PRECACHE__.map((u) => new Request(u, { cache: "reload" }))
       );
-      await sw.skipWaiting();
     })()
   );
 });
@@ -75,12 +100,25 @@ sw.addEventListener("install", (event) => {
 sw.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
+      // Releases that were actually active before this one, oldest first.
+      const activated = (await readShellVersions()).filter(
+        (v) => v !== SHELL_CACHE
+      );
+      const keep = new Set([
+        ...activated.slice(-(SHELL_GENERATIONS_KEPT - 1)),
+        SHELL_CACHE,
+      ]);
       const keys = await caches.keys();
       await Promise.all(
         keys
-          .filter((k) => k.startsWith("horde-shell-") && k !== SHELL_CACHE)
+          .filter(
+            (k) =>
+              (k.startsWith(SHELL_PREFIX) && !keep.has(k)) ||
+              (k.startsWith(RUNTIME_PREFIX) && k !== RUNTIME_CACHE)
+          )
           .map((k) => caches.delete(k))
       );
+      await writeShellVersions([...keep]);
       await sw.clients.claim();
     })()
   );
@@ -89,6 +127,30 @@ sw.addEventListener("activate", (event) => {
 sw.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") void sw.skipWaiting();
 });
+
+async function readShellVersions(): Promise<string[]> {
+  const cache = await caches.open(META_CACHE);
+  const hit = await cache.match(VERSIONS_URL);
+  if (!hit) return [];
+  try {
+    const parsed: unknown = await hit.json();
+    return Array.isArray(parsed)
+      ? parsed.filter((v): v is string => typeof v === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeShellVersions(versions: string[]): Promise<void> {
+  const cache = await caches.open(META_CACHE);
+  await cache.put(
+    VERSIONS_URL,
+    new Response(JSON.stringify(versions), {
+      headers: { "Content-Type": "application/json" },
+    })
+  );
+}
 
 sw.addEventListener("fetch", (event) => {
   const req = event.request;
