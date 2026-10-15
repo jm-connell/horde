@@ -399,9 +399,11 @@ class CsrfMiddleware:
                 origin_host = urlsplit(origin).netloc.lower()
             except ValueError:
                 origin_host = ""
+            # Proxies may send a comma-joined chain; the first entry is the client's.
+            forwarded = (_header(scope, "x-forwarded-host") or "").split(",")[0]
             hosts = {
-                (_header(scope, "host") or "").lower(),
-                (_header(scope, "x-forwarded-host") or "").lower(),
+                (_header(scope, "host") or "").strip().lower(),
+                forwarded.strip().lower(),
             } - {""}
             if origin_host not in hosts:
                 return "Origin does not match this server"

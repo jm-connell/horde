@@ -422,3 +422,28 @@ def test_bulk_download_skips_unsafe_urls(client):
     body = resp.json()
     assert body["jobs"] == []
     assert {s["reason"] for s in body["skips"]} == {"invalid_url"}
+
+
+def test_download_queue_refuses_unsafe_urls_that_bypassed_the_api(session, monkeypatch):
+    """Playlist sync, autodownload and pre-upgrade rows reach the queue directly."""
+    import threading
+
+    from app.models import DownloadJob, JobStatus
+    from app.services import downloader
+
+    job = DownloadJob(url="http://169.254.169.254/latest", status=JobStatus.queued)
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    def must_not_run(*_a, **_k):
+        raise AssertionError("yt-dlp was started for an unsafe URL")
+
+    monkeypatch.setattr(downloader, "_run_download", must_not_run)
+
+    downloader.download_queue._worker(job.id, threading.Event())
+
+    session.expire_all()
+    refreshed = session.get(DownloadJob, job.id)
+    assert refreshed.status == JobStatus.error
+    assert "private network" in refreshed.error

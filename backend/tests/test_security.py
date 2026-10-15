@@ -440,3 +440,15 @@ def test_production_app_installs_the_stack_in_order():
     installed = [m.cls for m in production_app.user_middleware]
     expected = [s.cls for s in security.build_stack(HostPolicy())]
     assert installed == expected
+
+
+def test_origin_may_match_the_first_of_a_comma_joined_forwarded_host(raw_client):
+    resp = raw_client.post(
+        "/api/downloads/queue/pause",
+        headers={
+            **CSRF,
+            "Origin": "https://horde.example.com",
+            "X-Forwarded-Host": "horde.example.com, proxy.internal",
+        },
+    )
+    assert resp.status_code == 200

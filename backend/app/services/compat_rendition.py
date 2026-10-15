@@ -102,6 +102,8 @@ _jobs: dict[int, _Job] = {}
 _pending: deque[int] = deque()
 _running: set[int] = set()
 _errors: dict[int, str] = {}
+# Module-level like the queue state above (there is no compat state object to hang
+# it on yet); moves with it when the queue state is made injectable.
 _safari_errors: dict[int, str] = {}
 
 

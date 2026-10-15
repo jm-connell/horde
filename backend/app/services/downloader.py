@@ -60,6 +60,7 @@ from .paths import (
 )
 from .thumbnails import save_from_url as _save_thumbnail
 from .url_clean import clean_url, youtube_thumbnail_url, youtube_video_id
+from .url_safety import UnsafeUrlError, validate_public_url
 from .video_delete import delete_video_cascade, remove_files
 from .video_transcode import encode_target, transcode_video
 from .ytdlp_common import (
@@ -836,6 +837,16 @@ class DownloadQueue:
                 if job is None or job.status != JobStatus.queued:
                     return
                 destination = job.destination or DownloadDestination.library.value
+                job_url = job.url
+            # The API checks URLs on the way in, but playlist sync, channel
+            # autodownload and rows from before this check reach the queue too.
+            try:
+                validate_public_url(job_url)
+            except UnsafeUrlError as exc:
+                logger.warning("Refusing download job %s: %s", job_id, exc)
+                _update_job(job_id, status=JobStatus.error, error=str(exc))
+                progress_store[job_id] = {"status": "error", "error": str(exc)}
+                return
             try:
                 _run_download(job_id, cancel_event=cancel_event)
             except DownloadCancelled:

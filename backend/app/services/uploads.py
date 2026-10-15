@@ -138,7 +138,8 @@ def verify_image_file(path: Path, formats: tuple[str, ...]) -> bool:
     try:
         with Image.open(path, formats=list(formats)) as img:
             img.verify()
-    except Exception:  # noqa: BLE001 - PIL raises many types for bad input
+    except Exception as exc:  # noqa: BLE001 - PIL raises many types for bad input
+        logger.info("rejected image upload %s: %s", path.name, exc)
         return False
     return True
 
