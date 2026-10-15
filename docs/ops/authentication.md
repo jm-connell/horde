@@ -23,7 +23,7 @@ When an administrator adds or edits an account they pick its **type** in *Settin
 
 | Permission | Lets a member | Default |
 |------------|---------------|---------|
-| `delete_videos` | Delete videos and their files from the server, including bulk delete | off |
+| `delete_videos` | Delete videos and their files from the server, including bulk delete, and remove a video's H.264 playback copy | off |
 | `download` | Queue downloads, import playlists, set up channel auto-download, import or upload files | on |
 | `offline_download` | Save videos to the device for offline viewing, and fetch files from the server | on |
 | `edit_metadata` | Edit titles, descriptions, notes, tags and thumbnails; rename channels | on |

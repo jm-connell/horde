@@ -61,6 +61,8 @@ GATES: dict[tuple[str, str], str] = {
     # --- delete_videos ---
     ("POST", "/api/videos/bulk-delete"): "delete_videos",
     ("DELETE", "/api/videos/{video_id}"): "delete_videos",
+    # Removing the H.264 sidecar deletes a file from the server.
+    ("DELETE", "/api/videos/{video_id}/compat"): "delete_videos",
     # --- download ---
     **{
         (m, p): "download"
@@ -141,12 +143,13 @@ CONDITIONAL = {
     ("GET", "/api/updates"),  # ?refresh=true: admin
 }
 
-#: Mutations any signed-in user may make, on purpose.
+#: Mutations any signed-in user may make, on purpose. The compat and sprite
+#: routes only cost CPU (they build a playback copy or seek previews that
+#: watching needs, e.g. Safari), so they stay open; removing a file is gated.
 OPEN_MUTATIONS = {
     ("PATCH", "/api/videos/{video_id}/progress"),  # your own history
     ("POST", "/api/videos/{video_id}/compat"),  # playback compatibility copies
     ("POST", "/api/videos/{video_id}/compat/safari"),
-    ("DELETE", "/api/videos/{video_id}/compat"),
     ("POST", "/api/videos/{video_id}/sprites/generate"),  # seek previews
     ("POST", "/api/playlists/estimate"),  # read-only size estimate
     ("POST", "/api/auth/logout"),

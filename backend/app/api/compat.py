@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from ..auth import require_admin
+from ..auth import require_admin, require_permission
 from ..database import get_session
 from ..models import Video
 from ..schemas import CompatState
@@ -118,7 +118,11 @@ def request_safari_prep(video_id: int, session: Session = Depends(get_session)):
     return CompatState(**state)
 
 
-@router.delete("/videos/{video_id}/compat", status_code=204)
+@router.delete(
+    "/videos/{video_id}/compat",
+    status_code=204,
+    dependencies=[Depends(require_permission("delete_videos"))],
+)
 def delete_compat(video_id: int, session: Session = Depends(get_session)):
     video = _video_or_404(session, video_id)
     compat_rendition.cancel(video_id)
