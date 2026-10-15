@@ -294,7 +294,7 @@ def process_due_subtitle() -> bool:
             )
         return False
 
-    from .downloader import download_subtitles
+    from .downloads.subtitles import download_subtitles
 
     with activity.track(
         "subtitles",

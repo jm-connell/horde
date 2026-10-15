@@ -174,7 +174,7 @@ def refresh_video_metadata(
 
     if "captions" in want:
         try:
-            from .downloader import download_subtitles
+            from .downloads.subtitles import download_subtitles
             from .subtitle_retry import apply_subtitle_outcome, captions_fetch_allowed
 
             with Session(engine) as session:

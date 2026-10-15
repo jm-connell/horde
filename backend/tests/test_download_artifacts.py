@@ -12,8 +12,7 @@ from pathlib import Path
 import pytest
 from yt_dlp.utils import prepend_extension
 
-from app.services import downloader
-from app.services.downloads import artifacts
+from app.services.downloads import artifacts, subtitles
 from app.services.paths import (
     FRAGMENT_RE,
     belongs_to_stem,
@@ -129,7 +128,7 @@ def test_subtitle_collection_ignores_other_videos(init_db, monkeypatch):
     _touch(folder / "Learn.fast [dQw4w9WgXcQ].de-DE.vtt")
     _touch(folder / "Learn.fast [dQw4w9WgXcQ] extended [sibling0003].en.vtt")
     _touch(folder / "Learn [sibling0001].fr.vtt")
-    tracks = downloader._collect_subtitles(media)
+    tracks = subtitles.collect_subtitles(media)
     assert sorted(t["lang"] for t in tracks) == ["de", "en"]
 
 

@@ -171,7 +171,7 @@ def test_process_due_fetches_and_applies(add_video, session, monkeypatch):
         write_file=True,
     )
     monkeypatch.setattr(
-        "app.services.downloader.download_subtitles",
+        "app.services.downloads.subtitles.download_subtitles",
         lambda media, url: SubtitleFetchOutcome(
             tracks=[{"lang": "en", "path": "a.en.vtt", "auto": False}],
         ),
@@ -208,7 +208,7 @@ def test_metadata_sync_skips_captions_during_backoff(add_video, monkeypatch):
         called["n"] += 1
         raise AssertionError("timedtext fetch should wait out backoff")
 
-    monkeypatch.setattr("app.services.downloader.download_subtitles", boom)
+    monkeypatch.setattr("app.services.downloads.subtitles.download_subtitles", boom)
     from app.services.metadata_sync import refresh_video_metadata
 
     refresh_video_metadata(video.id, fields=["captions"])
