@@ -23,38 +23,60 @@ def _touch(path: Path, *, age_ts: float | None = OLD) -> Path:
     return path
 
 
-def test_is_temp_artifact():
+def test_is_temp_artifact_matches_only_horde_generated_names():
     for name in (
-        "a [x].f137.mp4.part",
-        "a [x].ytdl",
-        "a.temp.mp4",
-        "a.norm.123.mp4",
-        "a.compat.9.mp4",
-        "a.xcode.9.mp4",
+        "a [x].norm.140123.mp4",
+        "a [x].compat.9.mp4",
+        "a [x].xcode.9.mp4",
         "a [x].horde-h264.dl.f137.mp4",
         "a [x].horde-h264.enc.mp4",
     ):
         assert temp_sweep.is_temp_artifact(name), name
-    for name in ("a [x].mp4", "a [x].horde-h264.mp4", "a.en.vtt"):
+    for name in (
+        "a [x].mp4",
+        "a [x].horde-h264.mp4",
+        "a.en.vtt",
+        "x.temp.mkv",
+        "Season.norm.mp4",
+        "Foo.compat.mkv",
+        "wip.xcode.mkv",
+        "Dir.temp.2024.mp4",
+        "notes.part",
+        "Backup.ytdl",
+        "report.compat.pdf",
+        "My.Video.part.mp4",
+        "a [x].f137.mp4.part",
+    ):
         assert not temp_sweep.is_temp_artifact(name), name
 
 
-def test_sweep_removes_only_old_unreferenced_temp_files(init_db, add_video):
+def test_sweep_removes_only_old_unreferenced_horde_temp_files(init_db, add_video):
     root = init_db["downloads"]
-    stale = _touch(root / "Chan/2024/a [x].f137.mp4.part")
-    stale2 = _touch(root / "Chan/2024/a [x].norm.5.mp4")
-    fresh = _touch(root / "Chan/2024/b [y].f137.mp4.part", age_ts=None)
+    stale = _touch(root / "Chan/2024/a [x].norm.5.mp4")
+    stale2 = _touch(root / "Chan/2024/a [x].horde-h264.dl.f137.mp4")
+    fresh = _touch(root / "Chan/2024/b [y].xcode.7.mp4", age_ts=None)
     media = _touch(root / "Chan/2024/c [z].mp4")
     sidecar = _touch(root / "Chan/2024/c [z].horde-h264.mp4")
-    # A library video that legitimately has ".temp." in its name is kept.
-    add_video(write_file=True, file_path="Chan/notes.temp.mp4")
-    kept = root / "Chan/notes.temp.mp4"
-    os.utime(kept, (OLD, OLD))
+    user_files = [
+        _touch(root / "Chan" / name)
+        for name in (
+            "x.temp.mkv",
+            "Foo.compat.mkv",
+            "notes.part",
+            "My.Video.part.mp4",
+            "report.compat.pdf",
+            "Season.norm.mp4",
+            "Backup.ytdl",
+            "wip.xcode.mkv",
+            "Dir.temp.2024.mp4",
+        )
+    ]
 
     removed = temp_sweep.sweep_temp_artifacts(6)
 
     assert set(removed) == {stale, stale2}
-    assert fresh.exists() and media.exists() and sidecar.exists() and kept.exists()
+    assert fresh.exists() and media.exists() and sidecar.exists()
+    assert all(p.exists() for p in user_files)
 
 
 def test_sweep_spares_active_job_staging_and_reaps_finished(init_db):
@@ -93,6 +115,6 @@ def test_sweep_never_follows_symlinks_or_leaves_the_library(init_db, tmp_path):
 
 
 def test_sweep_can_be_disabled(init_db):
-    stale = _touch(init_db["downloads"] / "a.part")
+    stale = _touch(init_db["downloads"] / "a [x].norm.5.mp4")
     assert temp_sweep.sweep_temp_artifacts(0) == []
     assert stale.exists()

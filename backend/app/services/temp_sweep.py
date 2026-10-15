@@ -1,8 +1,8 @@
 """Boot-time cleanup of download leftovers under DOWNLOADS_DIR.
 
-A crash or kill can leave yt-dlp ``.part``/``.ytdl`` files, ffmpeg temp outputs
-(``.temp.``, ``.norm.``, ``.compat.``, ``.xcode.``), H.264 sidecar work files
-(``.horde-h264.dl.*``) and per-job staging dirs behind. Everything is contained
+A crash or kill can leave ffmpeg temp outputs (``.norm.<tid>.mp4`` and friends),
+H.264 sidecar work files (``.horde-h264.dl.*``) and per-job staging dirs behind.
+Only names Horde generates itself are removed. Everything is contained
 to DOWNLOADS_DIR, symlinks are never followed, and nothing that an active job
 or a library row still references is removed.
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from pathlib import Path
 
@@ -25,18 +26,21 @@ from .paths import COMPAT_SIDECAR_TOKEN, STAGING_DIR_NAME
 
 logger = logging.getLogger(__name__)
 
-_TEMP_MARKERS = (".temp.", ".norm.", ".compat.", ".xcode.", ".part-Frag")
-_TEMP_SUFFIXES = (".part", ".ytdl")
+# Only names Horde itself generates are ever swept from the library tree. User
+# files (``x.temp.mkv``, ``Show.compat.mkv``, ``notes.part``) are never touched,
+# whatever their age. ffmpeg temp outputs carry the writing thread's numeric id:
+#   ``<stem>.norm.<tid>.mp4``, ``<stem>.compat.<tid>.mp4``, ``<stem>.xcode.<tid>.mp4``
+# and the H.264 sidecar work files are ``<stem>.horde-h264.dl.*`` / ``.enc.mp4``.
+# yt-dlp output never lands in the library tree any more (it goes to
+# ``.horde-staging/<job>``), so ``.part``/``.ytdl`` are not swept here.
+_HORDE_TEMP_RE = re.compile(
+    r"\.(?:norm|compat|xcode)\.\d+\.mp4$"
+    r"|" + re.escape(COMPAT_SIDECAR_TOKEN) + r"(?:dl\.|enc\.mp4$)"
+)
 
 
 def is_temp_artifact(name: str) -> bool:
-    low = name.lower()
-    if low.endswith(_TEMP_SUFFIXES) or any(m in low for m in _TEMP_MARKERS):
-        return True
-    # "<stem>.horde-h264.mp4" is a real sidecar; "<stem>.horde-h264.dl.*" is work.
-    return COMPAT_SIDECAR_TOKEN in low and not low.endswith(
-        f"{COMPAT_SIDECAR_TOKEN}mp4"
-    )
+    return _HORDE_TEMP_RE.search(name) is not None
 
 
 def _active_job_ids() -> set[int]:

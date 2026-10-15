@@ -12,7 +12,7 @@ Horde is configured primarily through environment variables. Most values have se
 | `DOWNLOADS_DIR` | `./downloads` | Root for media files (channel/year layout, imports, sidecars). |
 | `DATA_DIR` | `./data` | SQLite DB, settings, caches, thumbnails, sprites, fonts, backgrounds. |
 | `SCAN_INTERVAL_SEC` | `60` | Fallback poll interval (seconds) for the downloads-tree scanner when the watchdog misses an event. |
-| `HORDE_TEMP_SWEEP_HOURS` | `6` | At boot, delete stale `.part`, `.ytdl`, `.temp.`, `.norm.`, `.compat.`, `.xcode.` and `.horde-h264.dl/enc` files older than this many hours that no active job or library row references. `0` disables the sweep. Staging dirs of finished or missing jobs are always removed at boot. |
+| `HORDE_TEMP_SWEEP_HOURS` | `6` | At boot, delete leftover files that Horde itself generates (`<stem>.norm.<n>.mp4`, `.compat.<n>.mp4`, `.xcode.<n>.mp4`, `.horde-h264.dl.*`, `.horde-h264.enc.mp4`) older than this many hours that no library row references. Your own files are never swept, whatever their name (`x.temp.mkv`, `notes.part`, `Show.compat.mkv`). `0` disables the sweep. Staging dirs of finished or missing jobs are always removed at boot. |
 | `HOST` | `0.0.0.0` | Bind address for uvicorn. |
 | `PORT` | `8080` | Listen port **inside** the process/container. |
 | `MAX_DOWNLOAD_CONCURRENCY` | `2` | Max simultaneous yt-dlp download workers (FIFO queue). |
