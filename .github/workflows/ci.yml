@@ -15,6 +15,41 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install ruff (version pinned in requirements-dev.txt)
+        run: pip install "$(grep '^ruff' backend/requirements-dev.txt)"
+      - name: Ruff check
+        working-directory: backend
+        run: ruff check .
+      - name: Ruff format
+        working-directory: backend
+        run: ruff format --check .
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: ESLint
+        working-directory: frontend
+        run: npm run lint
+      - name: Prettier
+        working-directory: frontend
+        run: npm run format:check
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
   backend:
     runs-on: ubuntu-latest
     defaults:
@@ -25,6 +60,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -58,6 +97,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -96,6 +139,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
       - name: Build wiki
         run: |
           python -m pip install --upgrade pip
