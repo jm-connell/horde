@@ -252,14 +252,23 @@ def ensure_safari_mp4(
     cancel_event: threading.Event | None = None,
     on_progress: Callable[[float], None] | None = None,
     duration: float | None = None,
+    on_replace: Callable[[Path], None] | None = None,
 ) -> Path:
-    """Copy video, AAC audio if needed, faststart. Returns the playable path."""
+    """Copy video, AAC audio if needed, faststart. Returns the playable path.
+
+    ``on_replace(new_path)`` is for callers whose database row points at
+    ``path``: it runs after the new file is in place and *before* the original
+    is removed, while the scanner is told to ignore both names. If it raises,
+    a new file at a different path is deleted again, the original stays, and
+    the exception propagates.
+    """
     with _lock_for(path):
         return _ensure_safari_mp4_locked(
             path,
             cancel_event=cancel_event,
             on_progress=on_progress,
             duration=duration,
+            on_replace=on_replace,
         )
 
 
@@ -269,6 +278,7 @@ def _ensure_safari_mp4_locked(
     cancel_event: threading.Event | None = None,
     on_progress: Callable[[float], None] | None = None,
     duration: float | None = None,
+    on_replace: Callable[[Path], None] | None = None,
 ) -> Path:
     if not path.exists():
         return path
@@ -315,6 +325,13 @@ def _ensure_safari_mp4_locked(
                 timeout=4 * 3600,
             )
             replace_with_retries(tmp, dest_path)
+        if on_replace is not None:
+            try:
+                on_replace(dest_path)
+            except BaseException:
+                if dest_path != path:
+                    safe_unlink(dest_path)
+                raise
         if dest_path != path:
             safe_unlink(path)
         return dest_path

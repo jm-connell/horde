@@ -836,31 +836,39 @@ def _run_convert(job: _Job) -> None:
             _set(job, progress=pct)
             handle.update(done=int(pct))
 
-        new_path = transcode_video(
+        def persist(new_path: Path) -> None:
+            """Point the row at the new file; runs before the original is removed."""
+            stale_compat: Path | None = None
+            new_size = new_path.stat().st_size
+            new_info = probe_stream_info(new_path)  # ffprobe before the write
+            with Session(engine) as session:
+                video = session.get(Video, job.video_id)
+                if video is None:
+                    return
+                video.file_path = to_rel_path(new_path)
+                video.file_size = new_size
+                apply_stream_info(video, new_info)
+                # A ≤1080p H.264 original makes the sidecar redundant.
+                if not needs_compat(video, compat_copy_cap()):
+                    stale_compat = resolve_compat_path(video)
+                    video.compat_path = None
+                    video.compat_size = None
+                    video.compat_source = None
+                video.compat_error = None
+                session.add(video)
+                session.commit()
+            if stale_compat is not None:
+                safe_unlink(stale_compat)
+
+        transcode_video(
             src.path,
             "h264",
             cancel_event=job.cancel,
             on_progress=progress,
             duration=src.duration,
+            on_replace=persist,
         )
     _set(job, stage="finishing", progress=100.0)
-    with Session(engine) as session:
-        video = session.get(Video, job.video_id)
-        if video is None:
-            return
-        video.file_path = to_rel_path(new_path)
-        video.file_size = new_path.stat().st_size
-        apply_stream_info(video, probe_stream_info(new_path))
-        # A ≤1080p H.264 original makes the sidecar redundant.
-        old_compat = resolve_compat_path(video)
-        if old_compat is not None and not needs_compat(video, compat_copy_cap()):
-            safe_unlink(old_compat)
-            video.compat_path = None
-            video.compat_size = None
-            video.compat_source = None
-        video.compat_error = None
-        session.add(video)
-        session.commit()
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 """Background fill of cheap-enqueued download jobs."""
 
 import threading
+import time
 
 from sqlmodel import Session
 
@@ -97,12 +98,13 @@ def test_worker_fills_queued_job(init_db, monkeypatch):
     try:
         job_metadata.request_job_metadata(job_id)
         assert done.wait(timeout=5)
-        for _ in range(20):
+        # `done` is already set here, so waiting on it would not pause between polls.
+        for _ in range(50):
             with Session(init_db["engine"]) as session:
                 job = session.get(DownloadJob, job_id)
                 if job and job.title == "From Worker":
                     break
-            done.wait(timeout=0.1)
+            time.sleep(0.1)
         with Session(init_db["engine"]) as session:
             job = session.get(DownloadJob, job_id)
             assert job.title == "From Worker"

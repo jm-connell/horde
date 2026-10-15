@@ -87,3 +87,57 @@ def replace_with_retries(
             time.sleep(0.2 * (attempt + 1))
     if last_exc is not None:
         raise last_exc
+
+
+class MoveJournal:
+    """File moves that can be undone when the database write that follows fails.
+
+    The rule used everywhere in Horde: never leave the DB pointing at a file
+    that is not there. Move first, commit, and on a failed commit call
+    ``rollback()`` to put every file back; call ``commit()`` once the row is
+    durable to drop the backups of files that were replaced.
+    """
+
+    def __init__(self, root: Path | None = None) -> None:
+        self._root = root
+        self._moves: list[tuple[Path, Path]] = []
+        self._backups: list[tuple[Path, Path]] = []
+
+    def move(self, src: Path, dest: Path, *, backup_dir: Path | None = None) -> None:
+        """Move ``src`` to ``dest``; an existing ``dest`` is kept in ``backup_dir``.
+
+        Without ``backup_dir`` an existing ``dest`` is an error, so a rename can
+        never silently overwrite another file.
+        """
+        if dest.exists() or dest.is_symlink():
+            if backup_dir is None:
+                raise FileExistsError(f"destination exists: {dest}")
+            backup = backup_dir / f"{len(self._backups)}-{dest.name}"
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            replace_with_retries(dest, backup, root=self._root)
+            self._backups.append((dest, backup))
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        replace_with_retries(src, dest, root=self._root)
+        self._moves.append((src, dest))
+
+    def rollback(self) -> None:
+        """Undo every move, newest first, restoring any replaced file."""
+        for src, dest in reversed(self._moves):
+            try:
+                replace_with_retries(dest, src, root=self._root)
+            except OSError:
+                logger.exception("could not move %s back to %s", dest, src)
+        for dest, backup in reversed(self._backups):
+            try:
+                replace_with_retries(backup, dest, root=self._root)
+            except OSError:
+                logger.exception("could not restore %s from %s", dest, backup)
+        self._moves.clear()
+        self._backups.clear()
+
+    def commit(self) -> None:
+        """The database now references the new files: drop the replaced originals."""
+        for _dest, backup in self._backups:
+            safe_unlink(backup, root=self._root)
+        self._moves.clear()
+        self._backups.clear()

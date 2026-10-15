@@ -270,7 +270,7 @@ def test_stream_range_and_missing_file(client, add_video):
 def test_stream_iphone_runs_safari_remux(client, add_video, monkeypatch):
     called = {"n": 0}
 
-    def fake_ensure(path):
+    def fake_ensure(path, **_kwargs):
         called["n"] += 1
         return path
 

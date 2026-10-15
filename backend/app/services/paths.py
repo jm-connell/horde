@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR
 from ..models import Video
+from .fsutil import MoveJournal
 
 _YT_ID_IN_PATH = re.compile(r"\[([A-Za-z0-9_-]{11})\]")
 
@@ -182,7 +183,14 @@ def unique_rel_path(desired: str, *, exclude: str | None = None) -> str:
 
 
 def rename_video_file(session: Session, video: Video, new_rel: str) -> None:
-    """Move the on-disk file and update video.file_path. Caller commits."""
+    """Move the video's file (and H.264 sidecar) and commit the new path.
+
+    Files move first, then the row is committed together with whatever else the
+    caller changed on ``video``. If the commit fails the files are moved back, so
+    the DB never points at a moved or missing file. The caller must not have
+    other uncommitted work it needs to keep on failure: the session is rolled
+    back.
+    """
     root = DOWNLOADS_DIR.resolve()
     old_rel = video.file_path.replace("\\", "/")
     new_rel = unique_rel_path(new_rel.replace("\\", "/"), exclude=old_rel)
@@ -201,15 +209,19 @@ def rename_video_file(session: Session, video: Video, new_rel: str) -> None:
     if not old_abs.is_file():
         raise FileNotFoundError(f"Source file missing: {old_rel}")
 
-    new_abs.parent.mkdir(parents=True, exist_ok=True)
-    old_abs.replace(new_abs)
-    video.file_path = new_rel
     old_compat = resolve_compat_path(video)
-    if old_compat is not None and old_compat.is_file():
-        new_compat = compat_sidecar_path(new_abs)
-        try:
-            old_compat.replace(new_compat)
+    new_compat = compat_sidecar_path(new_abs)
+    journal = MoveJournal(root)
+    try:
+        journal.move(old_abs, new_abs)
+        if old_compat is not None and old_compat.is_file():
+            journal.move(old_compat, new_compat)
             video.compat_path = new_compat.relative_to(root).as_posix()
-        except OSError:
-            pass
-    session.add(video)
+        video.file_path = new_rel
+        session.add(video)
+        session.commit()
+    except BaseException:
+        session.rollback()
+        journal.rollback()
+        raise
+    journal.commit()

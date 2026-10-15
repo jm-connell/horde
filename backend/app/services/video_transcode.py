@@ -197,8 +197,15 @@ def transcode_video(
     cancel_event: threading.Event | None = None,
     on_progress: Callable[[float], None] | None = None,
     duration: float | None = None,
+    on_replace: Callable[[Path], None] | None = None,
 ) -> Path:
-    """Re-encode ``path`` to H.264 or H.265 MP4. Raises TranscodeError on failure."""
+    """Re-encode ``path`` to H.264 or H.265 MP4. Raises TranscodeError on failure.
+
+    ``on_replace(new_path)`` is for callers whose database row points at
+    ``path``: it runs once the new file is in place and *before* the original is
+    removed, with the scanner ignoring both names. If it raises, a new file at a
+    different path is deleted again, the original stays, and the error propagates.
+    """
     if not path.exists():
         raise TranscodeError("source file missing")
     caps = probe_encode_capabilities()
@@ -219,8 +226,11 @@ def transcode_video(
     dest = path if path.suffix.lower() == ".mp4" else path.with_suffix(".mp4")
     tmp = dest.with_name(f"{dest.stem}.xcode.{threading.get_ident()}.mp4")
     tmp_rel = safe_rel(tmp)
+    dest_rel = safe_rel(dest) if dest != path else None
     if tmp_rel:
         scanner.mark_active(tmp_rel)
+    if dest_rel:
+        scanner.mark_active(dest_rel)
 
     cmd = ffmpeg_transcode_cmd(
         path,
@@ -252,6 +262,13 @@ def transcode_video(
                 logger.warning("transcode failed (%s): %s", choice.name, err[-800:])
                 raise TranscodeError(f"ffmpeg {choice.name} failed") from exc
             tmp.replace(dest)
+        if on_replace is not None:
+            try:
+                on_replace(dest)
+            except BaseException:
+                if dest != path:
+                    safe_unlink(dest)
+                raise
         if dest != path:
             safe_unlink(path)
         return dest
@@ -267,5 +284,7 @@ def transcode_video(
     finally:
         if tmp_rel:
             scanner.unmark_active(tmp_rel)
+        if dest_rel:
+            scanner.unmark_active(dest_rel)
         if tmp.exists():
             safe_unlink(tmp)

@@ -5,12 +5,14 @@ import shutil
 import subprocess
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func
+from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
 from ..config import DOWNLOADS_DIR, MAX_DOWNLOAD_CONCURRENCY, VIDEO_EXTENSIONS
@@ -25,7 +27,6 @@ from ..models import (
     VideoStatus,
 )
 from . import activity, compat_rendition, library, scanner
-from .compat_rendition import delete_compat_files
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
 from .fsutil import replace_with_retries, safe_rel, safe_unlink
@@ -44,6 +45,7 @@ from .paths import (
     FRAGMENT_RE,
     belongs_to_stem,
     find_video_by_path,
+    resolve_compat_path,
     to_rel_path,
     video_stem,
 )
@@ -764,15 +766,47 @@ class FfmpegQueue:
 ffmpeg_queue = FfmpegQueue()
 
 
+_DB_RETRY_ATTEMPTS = 5
+_DB_RETRY_BASE_DELAY = 0.25
+
+
+def _retry_db_locked[T](fn: Callable[[], T], *, what: str) -> T:
+    """Run a short DB write, retrying "database is locked" with backoff.
+
+    SQLite reports ``locked`` immediately (no busy wait) when a read
+    transaction cannot be upgraded because another writer got in first. The
+    work is idempotent (each attempt opens a fresh session), so retrying is safe.
+    """
+    for attempt in range(_DB_RETRY_ATTEMPTS):
+        try:
+            return fn()
+        except OperationalError as exc:
+            locked = "locked" in str(exc).lower() or "busy" in str(exc).lower()
+            if not locked or attempt == _DB_RETRY_ATTEMPTS - 1:
+                raise
+            delay = _DB_RETRY_BASE_DELAY * (2**attempt)
+            logger.warning(
+                "database locked writing %s (attempt %d); retrying in %.2fs",
+                what,
+                attempt + 1,
+                delay,
+            )
+            time.sleep(delay)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
 def _update_job(job_id: int, **fields: Any) -> None:
-    with Session(engine) as session:
-        job = session.get(DownloadJob, job_id)
-        if job is None:
-            return
-        for key, value in fields.items():
-            setattr(job, key, value)
-        session.add(job)
-        session.commit()
+    def write() -> None:
+        with Session(engine) as session:
+            job = session.get(DownloadJob, job_id)
+            if job is None:
+                return
+            for key, value in fields.items():
+                setattr(job, key, value)
+            session.add(job)
+            session.commit()
+
+    _retry_db_locked(write, what=f"job {job_id}")
 
 
 def _mark_job_cancelled(
@@ -1594,6 +1628,8 @@ def _complete_download(
         raise DownloadCancelled()
 
     rel_path = to_rel_path(final_path)
+    # Everything slow (ffprobe, stat) happens before any database write, so the
+    # write transaction below is only a handful of statements.
     file_size = final_path.stat().st_size if final_path.exists() else None
     duration = probe_duration(final_path) or info.get("duration")
     width: int | None = None
@@ -1606,13 +1642,15 @@ def _complete_download(
         raw_h = info.get("height")
         width = int(raw_w) if raw_w else None
         height = int(raw_h) if raw_h else None
+    is_device = destination == DownloadDestination.device.value
+    stream_info = None if is_device else probe_stream_info(final_path)
 
     quality_warning = _check_quality(
         quality_preset, int(height) if height else None, video_codec
     )
 
     # Ephemeral "to this device" — no library row, sprites, or AI.
-    if destination == DownloadDestination.device.value:
+    if is_device:
         with Session(engine) as session:
             job = session.get(DownloadJob, job_id)
             effective_title = (
@@ -1656,6 +1694,142 @@ def _complete_download(
         progress_store[job_id] = snapshot
         return None
 
+    committed = _retry_db_locked(
+        lambda: _commit_library_video(
+            job_id=job_id,
+            final_path=final_path,
+            rel_path=rel_path,
+            info=info,
+            source_url=source_url,
+            video_codec=video_codec,
+            quality_preset=quality_preset,
+            title_override=title_override,
+            channel_override=channel_override,
+            replace_video_id=replace_video_id,
+            notes_pending=notes_pending,
+            file_size=file_size,
+            duration=duration,
+            width=width,
+            height=height,
+            stream_info=stream_info,
+        ),
+        what=f"library row for job {job_id}",
+    )
+    video_id = committed.video_id
+
+    # The new row is durable: only now remove what it replaced (old media,
+    # subtitles, stale H.264 sidecar). Done before the finalize thread starts so
+    # it cannot delete freshly fetched subtitles that share a name.
+    for stale in committed.stale_paths:
+        safe_unlink(stale)
+
+    _remove_review_duplicates_for(info.get("id"), video_id)
+
+    # Queue metadata embed + tag enrich (subtitles re-embed after finalize).
+    try:
+        from .ai import enqueue_for_video
+
+        enqueue_for_video(video_id, include_tags=True, force=False)
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
+        pass
+
+    # Index channel library in the background on first download from a channel.
+    try:
+        if committed.channel_url:
+            from . import channel_catalog
+
+            channel_catalog.enqueue_channel(
+                committed.channel_url,
+                channel_name=committed.channel_name,
+                force=False,
+            )
+    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
+        pass
+
+    _finalize_in_background(
+        video_id,
+        final_path,
+        source_url,
+        info.get("thumbnail"),
+        _list_thumbnail_url(info, info.get("id")),
+    )
+
+    if committed.want_sidecar:
+        try:
+            compat_rendition.enqueue(
+                video_id,
+                prefer_download=True,
+                reason="Sidecar mode: H.264 copy for older devices",
+            )
+        except Exception:
+            logger.exception("could not queue H.264 sidecar for video %s", video_id)
+
+    snapshot = {
+        "status": "completed",
+        "progress": 100.0,
+        "destination": DownloadDestination.library.value,
+        "video_id": video_id,
+        "title": info.get("title"),
+        "file_size": file_size,
+    }
+    if quality_warning:
+        snapshot["quality_warning"] = quality_warning
+    if volume_warning:
+        snapshot["volume_warning"] = volume_warning
+
+    _update_job(
+        job_id,
+        status=JobStatus.completed,
+        progress=100.0,
+        title=info.get("title"),
+        video_id=video_id,
+        file_size=file_size,
+        height_px=height,
+        error=None,
+        error_kind=None,
+    )
+    _attach_download_to_playlist(job_id, video_id)
+    progress_store[job_id] = snapshot
+    return video_id
+
+
+@dataclass
+class _CommittedVideo:
+    video_id: int
+    channel_url: str | None
+    channel_name: str | None
+    want_sidecar: bool
+    # Files the previous version of a replaced video owned; delete after commit.
+    stale_paths: list[Path]
+
+
+def _commit_library_video(
+    *,
+    job_id: int,
+    final_path: Path,
+    rel_path: str,
+    info: dict[str, Any],
+    source_url: str,
+    video_codec: str,
+    quality_preset: str,
+    title_override: str | None,
+    channel_override: str | None,
+    replace_video_id: int | None,
+    notes_pending: str | None,
+    file_size: int | None,
+    duration: Any,
+    width: int | None,
+    height: int | None,
+    stream_info: Any,
+) -> _CommittedVideo:
+    """Write the library row for a finished download. Database work only.
+
+    Runs in one short transaction with no file I/O. Anything that has to be
+    deleted for a replaced video is returned, not deleted: the caller removes it
+    once this commit succeeded, so a failed commit never costs the user the
+    previous copy.
+    """
+    stale: list[Path] = []
     with Session(engine) as session:
         job = session.get(DownloadJob, job_id)
         effective_title = (job.title_override if job else None) or title_override
@@ -1678,12 +1852,15 @@ def _complete_download(
             if video is None:
                 raise RuntimeError("Video to replace not found")
             old_path = DOWNLOADS_DIR / video.file_path
-            if old_path.exists() and old_path.resolve() != final_path.resolve():
-                safe_unlink(old_path)
+            if old_path.resolve() != final_path.resolve():
+                stale.append(old_path)
             for track in library.parse_subtitles(video.subtitles):
-                sub = DOWNLOADS_DIR / track.get("path", "")
-                if sub.exists():
-                    safe_unlink(sub)
+                if track.get("path"):
+                    stale.append(DOWNLOADS_DIR / track["path"])
+            # New original → any previous H.264 sidecar is stale.
+            old_compat = resolve_compat_path(video)
+            if old_compat is not None:
+                stale.append(old_compat)
         else:
             video = find_video_by_path(session, rel_path)
             if video is None:
@@ -1745,10 +1922,7 @@ def _complete_download(
         video.file_path = rel_path
         if notes_pending:
             video.notes = notes_pending
-        apply_stream_info(video, probe_stream_info(final_path))
-        # New original → any previous H.264 sidecar is stale.
-        if video.compat_path:
-            delete_compat_files(video)
+        apply_stream_info(video, stream_info)
         video.compat_path = None
         video.compat_size = None
         video.compat_source = None
@@ -1761,79 +1935,18 @@ def _complete_download(
             and not is_audio_preset(quality_preset)
             and needs_compat(video, compat_copy_cap())
         )
+        return _CommittedVideo(
+            video_id=video.id,
+            channel_url=video.channel_url,
+            channel_name=video.channel,
+            want_sidecar=want_sidecar,
+            stale_paths=stale,
+        )
 
-        _remove_review_duplicates(session, info.get("id"), keep_id=video.id)
 
-        video_id = video.id
-        catalog_channel_url = video.channel_url
-        catalog_channel_name = video.channel
-
-    # Queue metadata embed + tag enrich (subtitles re-embed after finalize).
-    try:
-        from .ai import enqueue_for_video
-
-        enqueue_for_video(video_id, include_tags=True, force=False)
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
-
-    # Index channel library in the background on first download from a channel.
-    try:
-        if catalog_channel_url:
-            from . import channel_catalog
-
-            channel_catalog.enqueue_channel(
-                catalog_channel_url,
-                channel_name=catalog_channel_name,
-                force=False,
-            )
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
-
-    _finalize_in_background(
-        video_id,
-        final_path,
-        source_url,
-        info.get("thumbnail"),
-        _list_thumbnail_url(info, info.get("id")),
-    )
-
-    if want_sidecar:
-        try:
-            compat_rendition.enqueue(
-                video_id,
-                prefer_download=True,
-                reason="Sidecar mode: H.264 copy for older devices",
-            )
-        except Exception:
-            logger.exception("could not queue H.264 sidecar for video %s", video_id)
-
-    snapshot = {
-        "status": "completed",
-        "progress": 100.0,
-        "destination": DownloadDestination.library.value,
-        "video_id": video_id,
-        "title": info.get("title"),
-        "file_size": file_size,
-    }
-    if quality_warning:
-        snapshot["quality_warning"] = quality_warning
-    if volume_warning:
-        snapshot["volume_warning"] = volume_warning
-
-    _update_job(
-        job_id,
-        status=JobStatus.completed,
-        progress=100.0,
-        title=info.get("title"),
-        video_id=video_id,
-        file_size=file_size,
-        height_px=height,
-        error=None,
-        error_kind=None,
-    )
-    _attach_download_to_playlist(job_id, video_id)
-    progress_store[job_id] = snapshot
-    return video_id
+def _remove_review_duplicates_for(yt_id: str | None, video_id: int) -> None:
+    with Session(engine) as session:
+        _remove_review_duplicates(session, yt_id, keep_id=video_id)
 
 
 def _reject_unplayable(path: Path | None, attempt_paths: set[str]) -> Path | None:

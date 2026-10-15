@@ -1,3 +1,4 @@
+import logging
 import re
 from pathlib import Path
 
@@ -54,6 +55,8 @@ from .video_serialize import (
 from .video_serialize import (
     to_read as _to_read,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["videos"])
 
@@ -788,26 +791,23 @@ def stream_video(
     ua = request.headers.get("user-agent") or ""
     # Sidecars are written Safari-ready (AAC + faststart); only originals remux.
     if compat is None and apple_webkit_playback(ua):
-        remuxed = ensure_safari_mp4(path)
-        try:
-            new_size = remuxed.stat().st_size
-        except OSError:
-            new_size = None
-        changed = remuxed != path
-        if changed:
-            try:
-                video.file_path = to_rel_path(remuxed)
-            except ValueError:
-                pass
-            else:
-                path = remuxed
-        if new_size is not None and video.file_size != new_size:
-            video.file_size = new_size
-            changed = True
-        if changed:
+
+        def persist_remux(new_path: Path) -> None:
+            """Point the row at the remuxed file before the original is removed."""
+            video.file_path = to_rel_path(new_path)
+            video.file_size = new_path.stat().st_size
             session.add(video)
             session.commit()
-        path = remuxed if remuxed.exists() else path
+
+        try:
+            path = ensure_safari_mp4(path, on_replace=persist_remux)
+        except Exception:
+            # Serve the original: the remux is an optimisation, and the helper
+            # has already undone any half-finished replacement.
+            logger.warning("Safari remux failed for video %s", video_id, exc_info=True)
+            session.rollback()
+            session.refresh(video)
+            path = _resolve_media(video)
 
     file_size = path.stat().st_size
 
