@@ -18,6 +18,7 @@
 #   HORDE_FORCE_VOLUME_CHANGE=1 Allow recreate even if DOWNLOADS_PATH / DATA_PATH would move
 #   HORDE_KEEP_BACKUPS          How many .local/update-backups/<timestamp> folders to keep (default 5)
 #   HORDE_KEEP_IMAGES           How many horde:<sha> image tags to keep (default 3)
+#   HORDE_HEALTH_POLL_SEC       Seconds between health polls (default 2)
 #   HORDE_FORCE_REBUILD=1       Rebuild even when the checkout is already at the running commit
 #   HORDE_AUTO_ROLLBACK=0       Do not roll back automatically when the health check fails
 #   HORDE_SKIP_DB_BACKUP=1      Continue even if the database cannot be backed up
@@ -67,6 +68,7 @@ if [[ "${YTDLP_AUTO_UPDATE:-$(horde_env_get "$ENV_FILE" YTDLP_AUTO_UPDATE)}" == 
   HEALTH_DEFAULT=150
 fi
 HEALTH_TIMEOUT_SEC="${HORDE_HEALTH_TIMEOUT_SEC:-$HEALTH_DEFAULT}"
+HEALTH_POLL_SEC="${HORDE_HEALTH_POLL_SEC:-2}"
 BACKUPS_ROOT="$ROOT/.local/update-backups"
 STATE_FILE="$ROOT/.local/update-state.env"
 SHA=""
@@ -141,11 +143,14 @@ print("  library_videos:    {}".format(data.get("library_video_count", "?")))
 }
 
 wait_for_health() {
-  local deadline=$((SECONDS + HEALTH_TIMEOUT_SEC))
-  local body=""
+  # Poll every HEALTH_POLL_SEC for about HEALTH_TIMEOUT_SEC (both may be
+  # fractional; each request is capped at 5s so a hung server cannot stall it).
+  local attempts body=""
+  attempts="$(awk -v t="$HEALTH_TIMEOUT_SEC" -v p="$HEALTH_POLL_SEC" 'BEGIN { n = int(t / p); print (n < 1 ? 1 : n) }')"
   echo "Waiting for ${HEALTH_URL} (up to ${HEALTH_TIMEOUT_SEC}s) ..."
-  while (( SECONDS < deadline )); do
-    if body="$(curl -sf "$HEALTH_URL" 2>/dev/null)"; then
+  while (( attempts > 0 )); do
+    attempts=$((attempts - 1))
+    if body="$(curl -sf -m 5 "$HEALTH_URL" 2>/dev/null)"; then
       if command -v python3 >/dev/null 2>&1; then
         if python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("status")=="ok" else 1)' <<<"$body"; then
           print_health_summary "$body"
@@ -160,7 +165,7 @@ wait_for_health() {
         esac
       fi
     fi
-    sleep 2
+    sleep "$HEALTH_POLL_SEC"
   done
   echo "Horde did not become healthy at ${HEALTH_URL} within ${HEALTH_TIMEOUT_SEC}s." >&2
   echo "Check logs: sudo docker compose logs --tail=80 horde" >&2

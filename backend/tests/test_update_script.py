@@ -17,7 +17,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 
-FAKE_DOCKER = r"""#!/usr/bin/env python3
+FAKE_DOCKER = r"""#!/usr/bin/python3 -SE
 import json, os, sys
 from pathlib import Path
 
@@ -140,7 +140,7 @@ if cmd == "compose":
 sys.exit(0)
 """
 
-FAKE_CURL = r"""#!/usr/bin/env python3
+FAKE_CURL = r"""#!/usr/bin/python3 -SE
 import json, os, sys
 from pathlib import Path
 d = Path(os.environ["FAKE_DIR"])
@@ -255,7 +255,8 @@ class Harness:
             "PATH": f"{self.dir / 'bin'}:{os.environ['PATH']}",
             "FAKE_DIR": str(self.dir),
             "HORDE_HEALTH_URL": "http://127.0.0.1:1/api/health",
-            "HORDE_HEALTH_TIMEOUT_SEC": "3",
+            "HORDE_HEALTH_TIMEOUT_SEC": "1",
+            "HORDE_HEALTH_POLL_SEC": "0.25",
             **env,
         }
         return subprocess.run(
