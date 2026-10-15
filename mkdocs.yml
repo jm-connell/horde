@@ -100,6 +100,7 @@ nav:
       - API overview: architecture/api-overview.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
+      - Release process: development/release-process.md
   - Design decisions:
       - Why Horde: design/why-horde.md
       - No authentication: design/no-auth.md
