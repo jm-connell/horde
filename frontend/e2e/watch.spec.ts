@@ -78,3 +78,46 @@ test("more actions opens edit details", async ({ page }) => {
     page.getByRole("link", { name: "← Back to library" })
   ).toBeVisible();
 });
+
+test("a slow response for the previous video does not replace the current one", async ({
+  page,
+  request,
+}) => {
+  const videos: { id: number; title: string }[] = await (
+    await request.get("/api/videos")
+  ).json();
+  const slow = videos.find((v) => v.title === "Aurora Drift")!;
+  const current = videos.find((v) => v.title === "Harbor Lights")!;
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route(new RegExp(`/api/videos/${slow.id}$`), async (route) => {
+    await gate;
+    await route.continue();
+  });
+
+  const slowRequested = page.waitForRequest(
+    (req) => new URL(req.url()).pathname === `/api/videos/${slow.id}`
+  );
+  await page.goto(`/watch/${slow.id}`);
+  await slowRequested;
+  // Client-side navigation to another video while the first fetch is pending.
+  await page.evaluate((id) => {
+    window.history.pushState({}, "", `/watch/${id}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, current.id);
+  await expect(
+    page.getByRole("heading", { name: current.title, level: 1 })
+  ).toBeVisible();
+
+  release();
+  // Give the stale response time to land; the page must keep showing the
+  // video that is actually being watched.
+  await page.waitForTimeout(500);
+  await expect(
+    page.getByRole("heading", { name: current.title, level: 1 })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: slow.title, level: 1 })
+  ).toHaveCount(0);
+});

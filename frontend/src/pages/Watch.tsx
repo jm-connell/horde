@@ -161,7 +161,7 @@ export default function Watch() {
   useEffect(() => {
     // Negative ids are offline-only device downloads (see offline/manager).
     if (!Number.isFinite(libraryId) || libraryId === 0) return;
-    const cancelled = false;
+    let cancelled = false;
     suspendPlaybackMedia({ videoId: libraryId });
     setLoading(true);
     setError(null);
@@ -190,6 +190,10 @@ export default function Watch() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    return () => {
+      // Ignore a response that lands after navigating to another video.
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional handoff once
   }, [libraryId, playVideo, suspendPlaybackMedia]);
 
