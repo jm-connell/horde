@@ -26,6 +26,7 @@ from .metadata import (
 )
 from .paths import (
     COMPAT_SIDECAR_TOKEN,
+    FRAGMENT_RE,
     find_video_by_path,
     is_manual_import,
     to_rel_path,
@@ -38,7 +39,7 @@ _suspended = threading.Event()
 
 # yt-dlp writes per-format fragments like "Title [id].f137.mp4" before merging
 # them into the final file; these must never be ingested as review items.
-_FRAGMENT_RE = re.compile(r"\.f\d+\.[^.]+$")
+_FRAGMENT_RE = FRAGMENT_RE
 
 # Relative paths / source IDs the downloader is actively writing.
 _active_downloads: set[str] = set()

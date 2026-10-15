@@ -32,7 +32,14 @@ from .fsutil import replace_with_retries, safe_rel, safe_unlink
 from .media_info import apply_stream_info, needs_compat, probe_stream_info
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
-from .paths import find_video_by_path, to_rel_path
+from .paths import (
+    COMPAT_SIDECAR_TOKEN,
+    FRAGMENT_RE,
+    belongs_to_stem,
+    find_video_by_path,
+    to_rel_path,
+    video_stem,
+)
 from .thumbnails import save_from_url as _save_thumbnail
 from .url_clean import clean_url, youtube_thumbnail_url, youtube_video_id
 from .video_delete import delete_video_cascade, remove_files
@@ -156,9 +163,9 @@ def cleanup_device_job_files(job_id: int, device_file_path: str | None = None) -
             safe_unlink(full)
             parent = full.parent
             if parent.is_dir():
-                stem = full.stem
+                stem = video_stem(full)
                 for entry in list(parent.iterdir()):
-                    if entry.name.startswith(stem) or entry.suffix in {
+                    if belongs_to_stem(entry.name, stem) or entry.suffix in {
                         ".part",
                         ".ytdl",
                     }:
@@ -199,7 +206,7 @@ def gc_orphaned_device_dirs() -> int:
 
 
 # yt-dlp per-format fragments (e.g. ".f401.mp4") — not the final merged file.
-_FRAGMENT_RE = re.compile(r"\.f\d+\.[^.]+$")
+_FRAGMENT_RE = FRAGMENT_RE
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -225,13 +232,6 @@ def _is_recoverable_download_error(exc: Exception) -> bool:
         or "Postprocessing:" in msg
         or "'NoneType' object has no attribute 'get'" in msg
     )
-
-
-def _video_stem(path: Path) -> str:
-    stem = path.stem
-    if ".f" in stem:
-        return stem.rsplit(".f", 1)[0]
-    return stem
 
 
 def _is_intermediate_media(name: str) -> bool:
@@ -261,7 +261,7 @@ def _find_merged_video(prepared: Path) -> Path | None:
         return prepared
 
     parent = prepared.parent
-    stem = _video_stem(prepared)
+    stem = video_stem(prepared)
     best: Path | None = None
     best_size = 0
     if not parent.is_dir():
@@ -269,7 +269,7 @@ def _find_merged_video(prepared: Path) -> Path | None:
     for entry in parent.iterdir():
         if not entry.is_file():
             continue
-        if not entry.name.startswith(stem):
+        if not belongs_to_stem(entry.name, stem):
             continue
         if entry.suffix.lower() not in VIDEO_EXTENSIONS:
             continue
@@ -1129,6 +1129,10 @@ def _collect_tags(info: dict[str, Any]) -> list[str]:
     return collected
 
 
+# Language token between the media stem and ``.vtt`` (``en``, ``en-US``, ``zh-Hans``).
+_SUBTITLE_LANG_RE = re.compile(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*")
+
+
 def _normalize_lang(lang: str) -> str:
     return lang.split("-")[0].lower()
 
@@ -1142,11 +1146,11 @@ def _collect_subtitles(final_path: Path) -> list[dict[str, Any]]:
     for entry in parent.iterdir():
         if not entry.is_file() or entry.suffix.lower() != ".vtt":
             continue
-        if not entry.name.startswith(stem + "."):
+        if not belongs_to_stem(entry.name, stem):
             continue
         raw_lang = entry.name[len(stem) + 1 : -len(".vtt")]
         rel = safe_rel(entry)
-        if not raw_lang or not rel:
+        if not _SUBTITLE_LANG_RE.fullmatch(raw_lang) or not rel:
             continue
         lang = _normalize_lang(raw_lang)
         if lang not in by_lang or raw_lang.lower() == lang:
@@ -1160,8 +1164,8 @@ def _cleanup_subtitle_partials(parent: Path, stem: str) -> None:
     for entry in parent.iterdir():
         if (
             entry.is_file()
-            and entry.name.startswith(stem + ".")
-            and (entry.name.endswith(".part") or entry.suffix.lower() == ".part")
+            and belongs_to_stem(entry.name, stem)
+            and entry.suffix.lower() == ".part"
         ):
             safe_unlink(entry)
 
@@ -1292,11 +1296,11 @@ def _cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) 
     for rel in paths:
         full = DOWNLOADS_DIR / rel
         parent = full.parent
-        stem = _video_stem(full)
+        stem = video_stem(full)
         if not parent.is_dir():
             continue
         for entry in parent.iterdir():
-            if not entry.is_file() or not entry.name.startswith(stem):
+            if not entry.is_file() or not belongs_to_stem(entry.name, stem):
                 continue
             if entry.name.endswith(".part") or _FRAGMENT_RE.search(entry.name):
                 safe_unlink(entry)
@@ -1305,6 +1309,7 @@ def _cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) 
                 remove_final
                 and entry.suffix.lower() in VIDEO_EXTENSIONS
                 and _FRAGMENT_RE.search(entry.name) is None
+                and COMPAT_SIDECAR_TOKEN not in entry.name
             ):
                 safe_unlink(entry)
 

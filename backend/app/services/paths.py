@@ -8,6 +8,26 @@ from ..models import Video
 
 _YT_ID_IN_PATH = re.compile(r"\[([A-Za-z0-9_-]{11})\]")
 
+# Hidden per-job download staging under DOWNLOADS_DIR (never scanned or served).
+STAGING_DIR_NAME = ".horde-staging"
+
+# yt-dlp appends ``.f<format_id>`` before the container extension of every
+# per-format download that still has to be merged (``Title [id].f137.mp4``,
+# ``Title [id].f251-drc.webm``, ``Title [id].fhls-1080p.mp4``). Format ids are
+# arbitrary tokens, so outside of a digits-only id the suffix is only trusted
+# directly after the ``[id]`` token that the output template always writes.
+_AFTER_ID_BRACKET = r"(?<=\])"
+_FORMAT_SUFFIX = rf"(?:\.f\d+(?:-[A-Za-z0-9_]+)*|{_AFTER_ID_BRACKET}\.f[^.\s/\\]+)"
+FORMAT_SUFFIX_RE = re.compile(_FORMAT_SUFFIX + r"$")
+# A name that is a per-format fragment: stem + format suffix + extension.
+FRAGMENT_RE = re.compile(_FORMAT_SUFFIX + r"\.[^.]+$")
+
+# Everything that may follow a video's stem for the files that belong to it:
+# dot-separated tokens only (``.f137.mp4.part``, ``.en.vtt``, ``.horde-h264.mp4``).
+# A space or bracket after the stem means a *different* video that merely
+# starts with the same text.
+_STEM_SUFFIX_RE = re.compile(r"(?:\.[^.\s/\\\[\]]+)+")
+
 # "<stem>.horde-h264.mp4" beside the original; the scanner ignores the token.
 COMPAT_SIDECAR_TOKEN = ".horde-h264."  # noqa: S105 - filename marker, not a secret
 
@@ -28,6 +48,34 @@ def resolve_compat_path(video: Video) -> Path | None:
     except ValueError:
         return None
     return path
+
+
+def video_stem(path: Path | str) -> str:
+    """The shared stem of a download and its sidecars.
+
+    Drops the container extension and a trailing yt-dlp format suffix only:
+    ``Title [id].f137.mp4`` -> ``Title [id]``. A ``.f`` elsewhere in a title
+    (``Learn.fast tricks [id]``, ``www.facebook.com [id]``) is left alone.
+    """
+    stem = Path(path).stem
+    return FORMAT_SUFFIX_RE.sub("", stem, count=1) or stem
+
+
+def belongs_to_stem(name: str, stem: str) -> bool:
+    """True when file ``name`` is ``stem`` plus only dot-separated suffix tokens.
+
+    This is an exact match on the full stem, never a ``startswith`` prefix scan:
+    ``Learn [a].mp4`` does not belong to ``Learn`` or to ``Learn [ab]``.
+    """
+    if not stem or not name.startswith(stem):
+        return False
+    rest = name[len(stem) :]
+    return rest == "" or _STEM_SUFFIX_RE.fullmatch(rest) is not None
+
+
+def is_staging_rel_path(rel_path: str) -> bool:
+    posix = (rel_path or "").replace("\\", "/").lstrip("/")
+    return posix == STAGING_DIR_NAME or posix.startswith(f"{STAGING_DIR_NAME}/")
 
 
 def to_rel_path(path: Path) -> str:

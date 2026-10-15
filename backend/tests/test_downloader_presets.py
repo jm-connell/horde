@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from app.services import downloader
+from app.services.paths import video_stem
 
 
 def test_format_chain_height_capped_no_unbounded_best():
@@ -163,8 +164,8 @@ def test_is_intermediate_media():
 
 
 def test_video_stem():
-    assert downloader._video_stem(Path("Title [id].f137.mp4")) == "Title [id]"
-    assert downloader._video_stem(Path("Title [id].mp4")) == "Title [id]"
+    assert video_stem(Path("Title [id].f137.mp4")) == "Title [id]"
+    assert video_stem(Path("Title [id].mp4")) == "Title [id]"
 
 
 def test_is_recoverable_download_error():
