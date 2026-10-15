@@ -212,13 +212,13 @@ function FeedThumbnail({
             previewing ? "opacity-0" : "opacity-0 group-hover:opacity-100"
           }`}
         >
-          <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-gray-100 ring-1 ring-white/20">
+          <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-white ring-1 ring-white/20">
             ▶
           </span>
         </div>
         {showDuration && duration && (
           <span
-            className={`pointer-events-none absolute right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100 ${
+            className={`pointer-events-none absolute right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-white ${
               previewing ? "bottom-3.5" : "bottom-2"
             }`}
           >

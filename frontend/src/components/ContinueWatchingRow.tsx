@@ -127,7 +127,7 @@ export default function ContinueWatchingRow({
               <div key={v.id} className="group relative w-56 shrink-0 sm:w-64">
                 <button
                   onClick={() => onDismiss(v.id)}
-                  className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-gray-300 opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
+                  className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-white opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
                   title="Remove from continue watching"
                   aria-label="Remove from continue watching"
                 >

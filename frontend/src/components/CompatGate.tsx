@@ -38,7 +38,7 @@ export default function CompatGate({
 
   if (isMini) {
     return (
-      <div className="absolute inset-0 z-[7] flex items-center justify-center bg-black/85 px-3 text-center text-xs text-gray-200">
+      <div className="absolute inset-0 z-[7] flex items-center justify-center bg-black/85 px-3 text-center text-xs text-white">
         {pending
           ? `Preparing compatible copy… ${pct}%`
           : `Can’t play ${label} here`}

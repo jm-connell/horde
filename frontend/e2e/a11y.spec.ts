@@ -115,14 +115,20 @@ test("404 page has no serious accessibility violations", async ({ page }) => {
   await expectNoSeriousViolations(page, "404");
 });
 
-// The light theme's accent colour is a known low-contrast pairing for text, so
-// this scan is scoped to the muted-text token, which is what this test guards.
-test("light theme keeps muted text legible", async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("horde.settings", JSON.stringify({ theme: "light" }));
+for (const theme of ["light", "earthy", "frozen", "mocha", "nord", "sunset"]) {
+  // Themes with the lowest-contrast surfaces: muted, gray-400 and accent text
+  // must all stay AA across the whole library page.
+  test(`${theme} theme library page has no serious accessibility violations`, async ({
+    page,
+  }) => {
+    await page.addInitScript((t) => {
+      localStorage.setItem("horde.settings", JSON.stringify({ theme: t }));
+    }, theme);
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await expect(
+      page.locator("[data-horde='video-card']").first()
+    ).toBeVisible();
+    await expectNoSeriousViolations(page, `library (${theme} theme)`);
   });
-  await page.goto("/");
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await expect(page.locator("[data-horde='video-card']").first()).toBeVisible();
-  await expectNoSeriousViolations(page, "library (light theme)", ".text-muted");
-});
+}

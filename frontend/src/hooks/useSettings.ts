@@ -389,6 +389,7 @@ const THEME_CSS_VARS = [
   "--accent-soft",
   "--accent-deep",
   "--text-muted",
+  "--accent-text",
 ] as const;
 
 type Rgb = [number, number, number];
@@ -445,6 +446,20 @@ function applyCustomColors(colors: CustomColors): void {
   root.style.setProperty(
     "--text-muted",
     rgbString(mutedTextFor(surfaces, mixRgb(bg, white, 0.22)))
+  );
+  // Accent as text colour, adjusted to stay readable on the chosen surfaces.
+  root.style.setProperty(
+    "--accent-text",
+    rgbString(
+      mutedTextFor(
+        [
+          ...surfaces,
+          mixRgb(surfaces[1], accent, 0.15),
+          mixRgb(surfaces[3], accent, 0.15),
+        ],
+        accent
+      )
+    )
   );
   root.style.setProperty("--ink-950", rgbString(bg));
   root.style.setProperty("--ink-900", rgbString(mixRgb(bg, white, 0.08)));

@@ -163,7 +163,7 @@ export default function VideoCard({
         ) : null}
         {duration && (
           <span
-            className={`pointer-events-none absolute right-2 z-10 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100 ${
+            className={`pointer-events-none absolute right-2 z-10 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-white ${
               previewActive ? "bottom-3.5" : "bottom-2"
             }`}
           >
@@ -210,7 +210,7 @@ export default function VideoCard({
               addToQueue(video);
             }}
             title="Add to queue"
-            className={`absolute right-2 top-2 z-20 rounded bg-black/70 px-2 py-1 text-xs font-medium text-gray-100 transition-opacity hover:bg-accent hover:text-ink-950 ${
+            className={`absolute right-2 top-2 z-20 rounded bg-black/70 px-2 py-1 text-xs font-medium text-white transition-opacity hover:bg-accent hover:text-ink-950 ${
               hideQueueButton
                 ? "hidden"
                 : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100"

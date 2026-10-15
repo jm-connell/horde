@@ -2369,7 +2369,7 @@ export default function VideoPlayer({
               )}
             </div>
             {ccNotice && (
-              <div className="absolute left-4 top-4 rounded-lg bg-black/70 px-3 py-1.5 text-xs text-gray-300">
+              <div className="absolute left-4 top-4 rounded-lg bg-black/70 px-3 py-1.5 text-xs text-white">
                 {ccNotice}
               </div>
             )}

@@ -54,7 +54,7 @@ export default function PlayerOverlays({
       )}
 
       {(qualityNotice || compatMode) && !mediaError && !isMini && (
-        <div className="pointer-events-none absolute left-1/2 top-4 z-[6] -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs text-gray-100">
+        <div className="pointer-events-none absolute left-1/2 top-4 z-[6] -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs text-white">
           {qualityNotice ??
             (compatMode ? "Reduced quality (compatibility mode)" : null)}
         </div>

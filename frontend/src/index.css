@@ -73,6 +73,7 @@ select.ui-select-chevron {
   --accent: 34 211 238;
   --accent-soft: 103 232 249;
   --text-muted: 135 138 145;
+  --accent-text: 34 211 238;
   --accent-deep: 8 145 178;
 }
 
@@ -86,6 +87,7 @@ select.ui-select-chevron {
   --accent: 34 211 238;
   --accent-soft: 103 232 249;
   --text-muted: 127 128 134;
+  --accent-text: 34 211 238;
   --accent-deep: 8 145 178;
 }
 
@@ -100,6 +102,7 @@ select.ui-select-chevron {
   --accent: 74 222 128;
   --accent-soft: 134 239 172;
   --text-muted: 128 143 133;
+  --accent-text: 74 222 128;
   --accent-deep: 34 197 94;
 }
 
@@ -114,6 +117,7 @@ select.ui-select-chevron {
   --accent: 136 192 208;
   --accent-soft: 163 210 222;
   --text-muted: 187 191 198;
+  --accent-text: 185 218 227;
   --accent-deep: 94 153 175;
 }
 
@@ -128,6 +132,7 @@ select.ui-select-chevron {
   --accent: 20 184 166;
   --accent-soft: 45 212 191;
   --text-muted: 95 102 117;
+  --accent-text: 12 107 96;
   --accent-deep: 100 116 139;
 }
 
@@ -142,6 +147,7 @@ select.ui-select-chevron {
   --accent: 99 102 241;
   --accent-soft: 129 140 248;
   --text-muted: 151 158 182;
+  --accent-text: 161 163 247;
   --accent-deep: 79 70 229;
 }
 
@@ -156,6 +162,7 @@ select.ui-select-chevron {
   --accent: 0 245 255;
   --accent-soft: 100 250 255;
   --text-muted: 157 157 170;
+  --accent-text: 0 245 255;
   --accent-deep: 0 200 210;
 }
 
@@ -170,6 +177,7 @@ select.ui-select-chevron {
   --accent: 255 107 53;
   --accent-soft: 255 154 102;
   --text-muted: 188 169 152;
+  --accent-text: 255 165 132;
   --accent-deep: 234 88 12;
 }
 
@@ -184,6 +192,7 @@ select.ui-select-chevron {
   --accent: 34 197 94;
   --accent-soft: 74 222 128;
   --text-muted: 161 177 169;
+  --accent-text: 103 215 144;
   --accent-deep: 22 163 74;
 }
 
@@ -198,6 +207,7 @@ select.ui-select-chevron {
   --accent: 96 165 250;
   --accent-soft: 147 197 253;
   --text-muted: 168 175 183;
+  --accent-text: 152 196 252;
   --accent-deep: 59 130 246;
 }
 
@@ -212,6 +222,7 @@ select.ui-select-chevron {
   --accent: 133 77 14;
   --accent-soft: 234 88 12;
   --text-muted: 93 88 82;
+  --accent-text: 114 66 12;
   --accent-deep: 79 70 229;
 }
 
@@ -226,6 +237,7 @@ select.ui-select-chevron {
   --accent: 14 165 233;
   --accent-soft: 56 189 248;
   --text-muted: 75 93 109;
+  --accent-text: 8 92 130;
   --accent-deep: 30 64 175;
 }
 
@@ -240,6 +252,7 @@ select.ui-select-chevron {
   --accent: 167 139 250;
   --accent-soft: 74 222 128;
   --text-muted: 82 89 101;
+  --accent-text: 89 74 132;
   --accent-deep: 124 58 237;
 }
 
@@ -362,6 +375,28 @@ body {
 [data-theme="mocha"] .hover\:text-gray-100:hover,
 [data-theme="mocha"] .hover\:text-gray-200:hover {
   color: #374151;
+}
+
+/* Accent used as TEXT colour: the raw accent can fail AA on some surfaces
+   (teal on white, indigo on dark navy), so text uses a per-theme adjusted
+   --accent-text that keeps the hue. Fills, rings and borders keep --accent. */
+.text-accent,
+.hover\:text-accent:hover,
+.group:hover .group-hover\:text-accent {
+  color: rgb(var(--accent-text));
+}
+
+/* text-gray-400 is secondary text; on these mid-tone dark themes it falls
+   below 4.5:1, so it uses the AA-safe muted colour there. */
+[data-theme="nord"] .text-gray-400,
+[data-theme="nord"] .hover\:text-gray-400:hover,
+[data-theme="sunset"] .text-gray-400,
+[data-theme="sunset"] .hover\:text-gray-400:hover,
+[data-theme="forest"] .text-gray-400,
+[data-theme="forest"] .hover\:text-gray-400:hover,
+[data-theme="slate"] .text-gray-400,
+[data-theme="slate"] .hover\:text-gray-400:hover {
+  color: rgb(var(--text-muted));
 }
 
 /* Neon Cyber: subtle glow on accent controls */
