@@ -87,6 +87,7 @@ export default function HelpTip({
   useLayoutEffect(() => {
     if (!open || pointerOpen.current) return;
     placeAtAnchor();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- placeAtAnchor only reads refs; re-run on open/text changes, not on every render
   }, [open, text]);
 
   useEffect(() => {

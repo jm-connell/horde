@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ChannelStat } from "../types";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
+import { focusOnMount } from "../utils";
 import ThemedSelect from "./ThemedSelect";
 
 interface Props {
@@ -61,12 +62,11 @@ function SelectPicker({
   placeholder?: string;
 }) {
   const [custom, setCustom] = useState(false);
-
   if (custom) {
     return (
       <div className="flex gap-2">
         <input
-          autoFocus
+          ref={focusOnMount}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
@@ -147,6 +147,7 @@ function Combobox({
   const [highlight, setHighlight] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -213,6 +214,7 @@ function Combobox({
         autoComplete="off"
         role="combobox"
         aria-expanded={open}
+        aria-controls={listId}
         aria-autocomplete="list"
       />
       {tabSuggestion && open && (
@@ -225,7 +227,7 @@ function Combobox({
         className="absolute z-20 mt-1 w-full"
       >
         <MenuScroll className="max-h-60" revision={matches.length}>
-          <ul>
+          <ul id={listId}>
             {matches.slice(0, 50).map((name, i) => (
               <li key={name}>
                 <button

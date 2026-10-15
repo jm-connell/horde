@@ -161,9 +161,9 @@ export default function Playlists() {
               </button>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <label className="shrink-0 text-sm text-gray-400">
+              <span className="shrink-0 text-sm text-gray-400">
                 Max resolution
-              </label>
+              </span>
               <ThemedSelect
                 aria-label="Max resolution"
                 value={subscribePreset}

@@ -343,9 +343,12 @@ export function useChannelDownloadQueue(channelName: string) {
   );
 
   useEffect(() => {
+    // The Map instance is created once and only mutated, so capturing it here
+    // is equivalent to reading the ref at cleanup time.
+    const intervals = intervalsRef.current;
     return () => {
-      intervalsRef.current.forEach((handle) => clearInterval(handle));
-      intervalsRef.current.clear();
+      intervals.forEach((handle) => clearInterval(handle));
+      intervals.clear();
       // Leaving the channel feed (route change, library home, etc.) should
       // keep queued downloads — confirm anything still counting down.
       confirmPendingOnLeave(pendingRef.current, (tempId) => {

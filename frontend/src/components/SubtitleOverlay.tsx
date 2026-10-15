@@ -202,7 +202,7 @@ export default function SubtitleOverlay({
       el.removeEventListener("transitionend", onEnd);
       slideGenRef.current += 1;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- rollupSig is the cue identity
+    // rollupSig is the cue identity.
   }, [view.length, rollupSig]);
 
   useEffect(() => {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import type { Playlist } from "../types";
+import { focusOnMount } from "../utils";
 
 export default function LibraryBulkBar({
   selectedCount,
@@ -128,7 +129,7 @@ export default function LibraryBulkBar({
                   rows={3}
                   placeholder="Note to apply to all selected..."
                   className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                  autoFocus
+                  ref={focusOnMount}
                 />
                 <button
                   onClick={onSaveNote}

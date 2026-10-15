@@ -237,7 +237,9 @@ function PreviewSeekBar({
   return (
     <div
       ref={barRef}
-      aria-label="Seek preview"
+      // Pointer-only scrubber over a decorative, aria-hidden hover preview;
+      // keyboard users open the video from the card link instead.
+      role="presentation"
       data-horde="card-preview-seek"
       onClick={stopCardNav}
       onMouseDown={stopCardNav}
@@ -440,6 +442,7 @@ export default function CardPreviewVideo({
 
   return (
     <>
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption -- silent, aria-hidden hover preview; no audio or speech to caption */}
       <video
         ref={videoRef}
         src={src}

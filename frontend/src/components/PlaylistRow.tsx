@@ -113,7 +113,7 @@ export default function PlaylistRow({
       cancelled = true;
     };
     // onUpdated is unstable; fetch when this row opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onUpdated is an unstable parent callback; refetching on its identity would loop
   }, [open, playlist.id]);
 
   useEffect(() => {
@@ -130,7 +130,7 @@ export default function PlaylistRow({
     }, 0);
     return () => window.clearTimeout(t);
     // Only reset the draft when the editor opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset the draft only when the editor opens, not on every rename
   }, [editing]);
 
   const playAll = () => {
@@ -321,6 +321,8 @@ export default function PlaylistRow({
       <div
         ref={headerRef}
         className="flex cursor-pointer items-stretch"
+        // Pointer shortcut; the expand/collapse button below is the keyboard path.
+        role="presentation"
         onClick={onToggle}
       >
         <DragHandle

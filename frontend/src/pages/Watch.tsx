@@ -161,7 +161,7 @@ export default function Watch() {
   useEffect(() => {
     // Negative ids are offline-only device downloads (see offline/manager).
     if (!Number.isFinite(libraryId) || libraryId === 0) return;
-    let cancelled = false;
+    const cancelled = false;
     suspendPlaybackMedia({ videoId: libraryId });
     setLoading(true);
     setError(null);
@@ -406,18 +406,19 @@ export default function Watch() {
   }, [source?.kind]);
 
   const video = source?.kind === "library" ? source.video : null;
+  const videoId = video?.id;
 
   useEffect(() => {
     setChapterError(null);
     setGeneratingChapters(false);
-  }, [video?.id]);
+  }, [videoId]);
 
   useEffect(() => {
-    if (!video) return;
+    if (videoId == null) return;
     setMoreLikeThis([]);
     setRelatedHasMore(false);
     api
-      .getRelatedVideos(video.id, RELATED_PAGE, 0)
+      .getRelatedVideos(videoId, RELATED_PAGE, 0)
       .then((rows) => {
         setMoreLikeThis(rows);
         setRelatedHasMore(
@@ -425,7 +426,7 @@ export default function Watch() {
         );
       })
       .catch(() => setMoreLikeThis([]));
-  }, [video?.id]);
+  }, [videoId]);
 
   const loadMoreRelated = useCallback(async () => {
     if (!video || relatedLoading || !relatedHasMore) return;
@@ -470,17 +471,18 @@ export default function Watch() {
     return () => io.disconnect();
   }, [relatedHasMore, loadMoreRelated]);
 
-  useEffect(() => {
-    if (!video) return;
-    const pending =
-      !!video.subtitles_pending ||
+  const pollVideo =
+    !!video &&
+    (!!video.subtitles_pending ||
       !!video.processing_summary ||
       !!video.processing_sprites ||
-      !!video.processing_chapters;
-    if (!pending) return;
+      !!video.processing_chapters);
+
+  useEffect(() => {
+    if (videoId == null || !pollVideo) return;
     const timer = window.setInterval(() => {
       api
-        .getVideo(video.id)
+        .getVideo(videoId)
         .then((v) => {
           setSource({ kind: "library", video: v });
           updateCurrentVideo(v);
@@ -488,14 +490,7 @@ export default function Watch() {
         .catch(() => undefined);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [
-    video?.id,
-    video?.subtitles_pending,
-    video?.processing_summary,
-    video?.processing_sprites,
-    video?.processing_chapters,
-    updateCurrentVideo,
-  ]);
+  }, [videoId, pollVideo, updateCurrentVideo]);
 
   useEffect(() => {
     if (!source) return;
@@ -1334,9 +1329,9 @@ export default function Watch() {
                   : ""}
               </p>
             )}
-            <label className="mb-1 block text-xs font-medium text-gray-400">
+            <span className="mb-1 block text-xs font-medium text-gray-400">
               Quality
-            </label>
+            </span>
             <ThemedSelect
               aria-label="Quality"
               value={redownloadPreset}

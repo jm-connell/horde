@@ -66,7 +66,7 @@ export function useSponsorBlock(
     let cancelled = false;
     const allowed = new Set(cats);
     const encoded = encodeURIComponent(JSON.stringify(cats));
-    const useOffline = () =>
+    const applyOfflineSegments = () =>
       offlineSponsorSegments(ytId).then((segs) => {
         if (cancelled || !segs) return false;
         setSegments(
@@ -75,7 +75,7 @@ export function useSponsorBlock(
         return true;
       });
     if (connectivity.offlineMode) {
-      void useOffline().then((ok) => {
+      void applyOfflineSegments().then((ok) => {
         if (!ok && !cancelled) setSegments([]);
       });
       return () => {
@@ -106,7 +106,7 @@ export function useSponsorBlock(
         }
       )
       .catch(() =>
-        useOffline().then((ok) => {
+        applyOfflineSegments().then((ok) => {
           if (!ok && !cancelled) setSegments([]);
         })
       );

@@ -295,7 +295,7 @@ export function useShakaDashLoad({
       enqueueDestroy(active);
     };
     // Intentionally omit casting — only checked at load time for autoplay.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- casting is read once at load time; re-running would tear down the player
   }, [
     src,
     effectiveStreamType,

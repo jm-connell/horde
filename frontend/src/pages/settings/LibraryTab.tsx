@@ -383,12 +383,16 @@ export default function LibraryTab() {
             }
           />
           <div>
-            <label className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+            <label
+              htmlFor="settings-catalog-max"
+              className="mb-1 flex items-center gap-1.5 text-xs text-gray-500"
+            >
               Max videos per channel
               <HelpTip text={CATALOG_MAX_TIP} />
             </label>
             <div className="flex flex-wrap items-center gap-2">
               <input
+                id="settings-catalog-max"
                 type="number"
                 min={100}
                 max={5000}
@@ -426,12 +430,16 @@ export default function LibraryTab() {
             )}
           </div>
           <div>
-            <label className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+            <label
+              htmlFor="settings-metadata-interval"
+              className="mb-1 flex items-center gap-1.5 text-xs text-gray-500"
+            >
               Metadata / catalog refresh interval (hours)
               <HelpTip text={METADATA_INTERVAL_TIP} />
             </label>
             <div className="flex flex-wrap items-center gap-2">
               <input
+                id="settings-metadata-interval"
                 type="number"
                 min={1}
                 max={168}

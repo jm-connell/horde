@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, thumbnailUrl } from "../api";
 import type { ChannelStat, Video } from "../types";
 import { formatDuration, formatResolution, formatSize } from "../utils";
@@ -54,6 +54,7 @@ export default function VideoEditForm({
   requireChannel = false,
   focusField,
 }: Props) {
+  const fieldId = useId();
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState<DraftState>(toDraft(video));
   const [saving, setSaving] = useState(false);
@@ -117,6 +118,7 @@ export default function VideoEditForm({
     setCandidates([]);
     setCandIndex(0);
     setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset the draft only when switching videos; a refreshed `video` object must not clobber in-progress edits
   }, [video.id]);
 
   const set = (key: keyof DraftState, value: string) =>
@@ -385,8 +387,11 @@ export default function VideoEditForm({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Tags (comma separated)</label>
+              <label htmlFor={`${fieldId}-tags`} className={labelClass}>
+                Tags (comma separated)
+              </label>
               <input
+                id={`${fieldId}-tags`}
                 value={draft.tags}
                 onChange={(e) => set("tags", e.target.value)}
                 placeholder="music, live, 2024"
@@ -394,8 +399,11 @@ export default function VideoEditForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Publish date</label>
+              <label htmlFor={`${fieldId}-published_at`} className={labelClass}>
+                Publish date
+              </label>
               <input
+                id={`${fieldId}-published_at`}
                 type="date"
                 value={draft.published_at}
                 onChange={(e) => set("published_at", e.target.value)}
@@ -406,8 +414,11 @@ export default function VideoEditForm({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Source URL</label>
+              <label htmlFor={`${fieldId}-source_url`} className={labelClass}>
+                Source URL
+              </label>
               <input
+                id={`${fieldId}-source_url`}
                 value={draft.source_url}
                 onChange={(e) => set("source_url", e.target.value)}
                 placeholder="https://..."
@@ -415,8 +426,11 @@ export default function VideoEditForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Channel URL</label>
+              <label htmlFor={`${fieldId}-channel_url`} className={labelClass}>
+                Channel URL
+              </label>
               <input
+                id={`${fieldId}-channel_url`}
                 value={draft.channel_url}
                 onChange={(e) => set("channel_url", e.target.value)}
                 placeholder="https://..."
@@ -426,8 +440,11 @@ export default function VideoEditForm({
           </div>
 
           <div>
-            <label className={labelClass}>Description</label>
+            <label htmlFor={`${fieldId}-description`} className={labelClass}>
+              Description
+            </label>
             <textarea
+              id={`${fieldId}-description`}
               value={draft.description}
               onChange={(e) => set("description", e.target.value)}
               rows={3}
@@ -437,9 +454,15 @@ export default function VideoEditForm({
 
           <div>
             <div className="mb-1 flex items-baseline justify-between gap-2">
-              <label className={labelClass + " mb-0"}>Notes</label>
+              <label
+                htmlFor={`${fieldId}-notes`}
+                className={labelClass + " mb-0"}
+              >
+                Notes
+              </label>
             </div>
             <textarea
+              id={`${fieldId}-notes`}
               ref={notesRef}
               value={draft.notes}
               onChange={(e) => set("notes", e.target.value)}

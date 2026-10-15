@@ -34,6 +34,12 @@ function CardChannelName({
         e.preventDefault();
         navigate(`/?channel=${encodeURIComponent(channel)}`);
       }}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(`/?channel=${encodeURIComponent(channel)}`);
+      }}
       className={className}
     >
       {channel}

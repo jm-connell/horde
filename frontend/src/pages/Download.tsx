@@ -155,7 +155,7 @@ export default function Download() {
     if (activeCount > 0 && activeCollapsed) {
       setActiveCollapsed(false);
     }
-  }, [activeCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeCount]); // eslint-disable-line react-hooks/exhaustive-deps -- expand when downloads become active; the user can collapse again without it re-opening
 
   const toggleActiveCollapsed = () => {
     setActiveCollapsed((v) => {
@@ -653,9 +653,9 @@ export default function Download() {
             </div>
             <Collapse open={!toDevice}>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-300">
+                <span className="mb-1 block text-sm font-medium text-gray-300">
                   Channel
-                </label>
+                </span>
                 <ChannelPicker
                   value={channel}
                   onChange={setChannel}
@@ -723,10 +723,14 @@ export default function Download() {
 
             {playlistMode !== "videos" && (
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-300">
+                <label
+                  htmlFor="download-playlist-name"
+                  className="mb-1 block text-sm font-medium text-gray-300"
+                >
                   Playlist name
                 </label>
                 <input
+                  id="download-playlist-name"
                   value={playlistName}
                   onChange={(e) => setPlaylistName(e.target.value)}
                   placeholder="Playlist name"
@@ -829,9 +833,9 @@ export default function Download() {
         </Collapse>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-300">
+          <span className="mb-1 block text-sm font-medium text-gray-300">
             Quality
-          </label>
+          </span>
           <ThemedSelect
             aria-label="Quality"
             value={preset}
@@ -850,10 +854,17 @@ export default function Download() {
 
         <Collapse open={!isPlaylist}>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-300">
+            <span
+              id="download-destination-label"
+              className="mb-1 block text-sm font-medium text-gray-300"
+            >
               Destination
-            </label>
-            <div className="grid grid-cols-2 gap-2">
+            </span>
+            <div
+              role="group"
+              aria-labelledby="download-destination-label"
+              className="grid grid-cols-2 gap-2"
+            >
               <button
                 type="button"
                 onClick={() => setDestination("library")}

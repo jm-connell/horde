@@ -1,3 +1,5 @@
+import type { MouseEvent } from "react";
+
 export function formatDuration(seconds: number | null): string {
   if (seconds == null || seconds < 0) return "";
   return formatTimestamp(seconds);
@@ -417,4 +419,26 @@ export function moveItem<T>(list: T[], from: number, to: number): T[] {
   const [item] = next.splice(from, 1);
   next.splice(to, 0, item);
   return next;
+}
+
+/**
+ * Ref callback that focuses an element when it mounts. Use instead of the
+ * `autoFocus` attribute for fields that appear in response to a user action
+ * (rename, add a note, ...). Keep the reference stable (this module-level
+ * function) so React only calls it on mount.
+ */
+export function focusOnMount(el: HTMLElement | null): void {
+  el?.focus();
+}
+
+/**
+ * Click handler for a modal backdrop. Closes only when the backdrop itself was
+ * clicked; clicks that bubble up from the dialog (including through React
+ * portals) are stopped here so they never reach ancestors of the modal.
+ */
+export function backdropClick(onClose: () => void) {
+  return (e: MouseEvent) => {
+    if (e.target === e.currentTarget) onClose();
+    else e.stopPropagation();
+  };
 }

@@ -1295,6 +1295,7 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
         });
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyMotionPrefs only reads the motion/panel fields listed here; depending on the whole settings object would re-run it on unrelated changes
   }, [
     settings.navIndicator,
     settings.hoverMotion,

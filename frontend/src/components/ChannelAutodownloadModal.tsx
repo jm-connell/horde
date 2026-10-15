@@ -1,3 +1,4 @@
+import { backdropClick } from "../utils";
 import { useEffect, useState } from "react";
 import ThemedSelect from "./ThemedSelect";
 import { PRESET_LABELS, PRESET_ORDER } from "../presets";
@@ -74,14 +75,14 @@ export default function ChannelAutodownloadModal({
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="autodownload-title"
+      role="presentation"
+      onClick={backdropClick(onClose)}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="autodownload-title"
         className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-ink-700 bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>

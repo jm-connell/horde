@@ -76,6 +76,7 @@ export default function ThemedSelect<T extends string>({
     if (!open) return;
     const selectedIdx = visible.findIndex((o) => o.value === value);
     setActiveIndex(selectedIdx >= 0 ? selectedIdx : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seed the highlight when the menu opens or the query changes, not when value/options change underneath it
   }, [open, query]);
 
   useEffect(() => {
@@ -212,6 +213,8 @@ export default function ThemedSelect<T extends string>({
               ? "gap-1 rounded px-1.5 py-0.5"
               : "gap-2 rounded-lg px-3 py-2"
           } ${disabled ? "cursor-not-allowed opacity-50" : ""} ${buttonClassName}`}
+          // Pointer helper: clicking anywhere on the control focuses the search field.
+          role="presentation"
           onMouseDown={(e) => {
             if (disabled) return;
             if (e.target === inputRef.current) return;

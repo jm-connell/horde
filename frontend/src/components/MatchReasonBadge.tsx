@@ -13,6 +13,8 @@ export default function MatchReasonBadge({
     <div
       className={className}
       data-horde="match-reason"
+      // Wrapper only isolates the badge from the card link underneath it.
+      role="presentation"
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();

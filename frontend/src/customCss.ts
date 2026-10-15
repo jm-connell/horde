@@ -99,7 +99,7 @@ export const CSS_SELECTORS: CssHookRow[] = [
   },
 ];
 
-const PAGE_IDS = [
+export const PAGE_IDS = [
   "home",
   "watch",
   "settings",

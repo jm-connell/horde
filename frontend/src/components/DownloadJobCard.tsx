@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -56,6 +57,7 @@ const labelClass = "mb-1 block text-xs font-medium text-gray-400";
 const SKIP_DISMISS_CONFIRM_KEY = "horde.downloads.skip-dismiss-confirm";
 
 function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex -- matching the ESC byte is the point of stripping ANSI codes
   return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
@@ -154,6 +156,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   const [note, setNote] = useState(job.notes_pending ?? "");
   const [saved, setSaved] = useState(false);
   const [showNote, setShowNote] = useState(Boolean(job.notes_pending));
+  const noteInputId = useId();
   const [dismissConfirm, setDismissConfirm] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
@@ -189,7 +192,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     setChannel(c);
     setNote(n);
     savedChannel.current = c;
-  }, [job, live?.title, live?.channel]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [job, live?.title, live?.channel]); // eslint-disable-line react-hooks/exhaustive-deps -- resolveTitle/resolveChannel are derived from exactly these inputs
 
   useEffect(() => {
     if (!editingTitle) return;
@@ -477,6 +480,8 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   className={`min-w-0 truncate${
                     videoGone ? " text-gray-500 line-through" : ""
                   }${canEditTitle ? " cursor-text" : ""}`}
+                  // Pointer shortcut; keyboard users use the "Edit title" button.
+                  role="presentation"
                   onClick={startTitleEdit}
                   title={title || undefined}
                 >
@@ -608,7 +613,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
 
             {!cancelled && (
               <div className="w-full sm:max-w-md">
-                <label className={labelClass}>Channel</label>
+                <span className={labelClass}>Channel</span>
                 <ChannelPicker
                   value={channel}
                   onChange={setChannel}
@@ -621,9 +626,12 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
             {canEditNotes && (showNote || note) && (
               <div className="mt-3">
                 <div className="mb-1 flex items-baseline justify-between gap-2">
-                  <label className={labelClass + " mb-0"}>Note</label>
+                  <label htmlFor={noteInputId} className={labelClass + " mb-0"}>
+                    Note
+                  </label>
                 </div>
                 <textarea
+                  id={noteInputId}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
@@ -772,6 +780,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                 <div
                   data-collapse="res"
                   className="shrink-0"
+                  role="presentation"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <ThemedSelect

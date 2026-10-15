@@ -729,23 +729,18 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  useEffect(() => {
-    if (!current || stream) return;
-    const pending =
-      !!current.subtitles_pending ||
+  const pollCurrentVideo =
+    !!current &&
+    !stream &&
+    (!!current.subtitles_pending ||
       !!current.processing_chapters ||
-      !!current.processing_summary;
-    if (!pending) return;
+      !!current.processing_summary);
+
+  useEffect(() => {
+    if (!pollCurrentVideo) return;
     const timer = window.setInterval(refreshCurrentVideo, 3000);
     return () => window.clearInterval(timer);
-  }, [
-    current?.id,
-    current?.subtitles_pending,
-    current?.processing_chapters,
-    current?.processing_summary,
-    stream,
-    refreshCurrentVideo,
-  ]);
+  }, [pollCurrentVideo, refreshCurrentVideo]);
 
   const value: PlaybackValue = {
     current,

@@ -97,9 +97,9 @@ export default function ChannelDownloadPanel({
       <div style={positionStyle}>
         <div className={`${panelShell} relative p-4 pr-8`}>
           {dismissBtn}
-          <label className="mb-1 block text-xs font-medium text-gray-400">
+          <span className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution
-          </label>
+          </span>
           <ThemedSelect
             aria-label="Download resolution"
             value={defaultPreset}
@@ -126,9 +126,9 @@ export default function ChannelDownloadPanel({
       <div style={positionStyle} className="flex flex-col gap-2">
         <div className={`${panelShell} relative pr-8`}>
           {dismissBtn}
-          <label className="mb-1 block text-xs font-medium text-gray-400">
+          <span className="mb-1 block text-xs font-medium text-gray-400">
             Download resolution
-          </label>
+          </span>
           <ThemedSelect
             aria-label="Download resolution"
             value={defaultPreset}

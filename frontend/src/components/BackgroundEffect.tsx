@@ -106,7 +106,7 @@ export default function BackgroundEffect() {
         controllerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opacity/speed/size/color/pause are pushed to the live controller by their own effects; rebuilding the canvas effect on them would restart the animation
   }, [active, effect, isCustom, settings.flowingGradientPreset]);
 
   useEffect(() => {

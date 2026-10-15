@@ -61,6 +61,7 @@ export function DragHandle({
       title={label}
       aria-label={label}
       onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className="inline-flex shrink-0 cursor-grab items-center justify-center self-stretch px-1.5 text-gray-600 hover:text-gray-400 active:cursor-grabbing"

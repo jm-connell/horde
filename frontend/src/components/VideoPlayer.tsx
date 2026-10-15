@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -262,6 +263,17 @@ export default function VideoPlayer({
   const capabilityMaxHeightRef = useRef<number>(2160);
   const chromecast = useChromecast();
   const airplay = useAirPlay(videoRef, src);
+  const autoplayRelatedId = useId();
+  // Destructured so hook dependency arrays list the stable callbacks rather
+  // than the whole (per-render) hook result objects.
+  const {
+    castMedia: castChromecastMedia,
+    stop: stopChromecast,
+    remotePlay: toggleChromecastPlay,
+    remoteSeek: seekChromecast,
+    setOnSessionEnd: setChromecastOnSessionEnd,
+  } = chromecast;
+  const { showPicker: showAirPlayPicker } = airplay;
   const playerRootRef = useRef<HTMLDivElement>(null);
   const userInitiatedFullscreen = useRef(false);
   const hideControlsTimer = useRef<number | null>(null);
@@ -504,7 +516,7 @@ export default function VideoPlayer({
     setShowQuality(false);
     setQualityChoice(streamQualityToChoice(settings.defaultStreamQuality));
     // Seed from the setting once per src; in-player changes stay session-scoped.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per src; later setting changes must not reset the in-player choice
   }, [src]);
 
   useEffect(() => {
@@ -573,7 +585,7 @@ export default function VideoPlayer({
       window.clearInterval(id);
     };
     // onActiveQualityChange is stable enough via PlaybackContext setter
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onActiveQualityChange is a stable setter; re-subscribing on its identity would reset the poll
   }, [effectiveStreamType, shakaReady, dashReloadToken, src]);
 
   // Progressive / compat: report video element's decoded size when known.
@@ -600,7 +612,7 @@ export default function VideoPlayer({
       el.removeEventListener("loadedmetadata", sync);
       el.removeEventListener("resize", sync);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onActiveQualityChange is a stable setter; listeners re-bind only per stream/src
   }, [effectiveStreamType, compatMode, src]);
 
   const applyQualityChoice = useApplyShakaQuality(
@@ -805,7 +817,7 @@ export default function VideoPlayer({
   }, [skippedSegment, showSkippedNotice]);
 
   useEffect(() => {
-    chromecast.setOnSessionEnd((position) => {
+    setChromecastOnSessionEnd((position) => {
       const v = videoRef.current;
       if (!v) return;
       if (position > 0) {
@@ -815,7 +827,7 @@ export default function VideoPlayer({
       }
       v.play().catch(() => undefined);
     });
-  }, [chromecast.setOnSessionEnd, onProgress]);
+  }, [setChromecastOnSessionEnd, onProgress]);
 
   useEffect(() => {
     if (!chromecast.casting) return;
@@ -834,7 +846,7 @@ export default function VideoPlayer({
     if (!v || videoId == null) return;
     v.pause();
     try {
-      await chromecast.castMedia({
+      await castChromecastMedia({
         contentUrl: absoluteUrl(streamUrl(videoId)),
         mimeType,
         title: title ?? "Video",
@@ -856,12 +868,12 @@ export default function VideoPlayer({
     poster,
     tracks,
     captionLang,
-    chromecast.castMedia,
+    castChromecastMedia,
   ]);
 
   const onCastClick = useCallback(() => {
     if (chromecast.casting) {
-      chromecast.stop();
+      stopChromecast();
       return;
     }
     if (chromecast.available) {
@@ -869,15 +881,15 @@ export default function VideoPlayer({
       return;
     }
     if (airplay.available) {
-      airplay.showPicker();
+      showAirPlayPicker();
     }
   }, [
     chromecast.casting,
     chromecast.available,
-    chromecast.stop,
+    stopChromecast,
     startChromecast,
     airplay.available,
-    airplay.showPicker,
+    showAirPlayPicker,
   ]);
 
   const setCaptionMode = useCallback(() => {
@@ -1026,12 +1038,12 @@ export default function VideoPlayer({
       prevTimeRef.current = t;
       setCurrent(t);
       if (chromecast.casting) {
-        chromecast.remoteSeek(t);
+        seekChromecast(t);
         return;
       }
       if (videoRef.current) videoRef.current.currentTime = t;
     },
-    [chromecast.casting, chromecast.remoteSeek]
+    [chromecast.casting, seekChromecast]
   );
 
   // Listen for programmatic seek requests (e.g., clicking a chapter in Watch.tsx)
@@ -1050,6 +1062,7 @@ export default function VideoPlayer({
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = volume;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-apply the stored volume to each new source only; live volume changes are applied by the slider handlers
   }, [src]);
 
   useEffect(() => {
@@ -1075,14 +1088,14 @@ export default function VideoPlayer({
   const togglePlay = useCallback(() => {
     if (suppressClick.current) return;
     if (chromecast.casting) {
-      chromecast.remotePlay();
+      toggleChromecastPlay();
       return;
     }
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) v.play();
     else v.pause();
-  }, [chromecast.casting, chromecast.remotePlay]);
+  }, [chromecast.casting, toggleChromecastPlay]);
 
   const modeBeforeWindowed = useRef<ViewMode>("standard");
 
@@ -1943,6 +1956,7 @@ export default function VideoPlayer({
         onMouseLeave={onPlayerMouseLeave}
         onTouchStart={isMini ? revealMiniControls : revealControls}
       >
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption -- subtitle <track>s are rendered per available language below; the rule only recognises a static kind="captions" */}
         <video
           key={effectiveStreamType === "dash" ? "dash" : "file"}
           ref={videoRef}
@@ -2669,6 +2683,7 @@ export default function VideoPlayer({
                 </div>
                 {onAutoplayRelatedChange && (
                   <label
+                    htmlFor={autoplayRelatedId}
                     className={`flex items-center justify-between gap-3 border-t border-ink-700 pt-3 ${
                       compactUpNext ? "mt-3" : "mt-4"
                     }`}
@@ -2677,6 +2692,7 @@ export default function VideoPlayer({
                       Autoplay related
                     </span>
                     <button
+                      id={autoplayRelatedId}
                       type="button"
                       role="switch"
                       aria-checked={autoplayRelated}

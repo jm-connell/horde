@@ -50,6 +50,7 @@ import type {
   TagStat,
   Video,
 } from "../types";
+import { focusOnMount } from "../utils";
 import { queueDockAlignClass, queueDockStyle } from "../utils/miniPlayerLayout";
 import { Toggle } from "./settings/ui";
 import {
@@ -299,7 +300,7 @@ function OnlineLibrary() {
     if (narrowViewport && !settings.sidebarCollapsed && !sidebarOverlayOpen) {
       update({ sidebarCollapsed: true });
     }
-  }, [narrowViewport]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [narrowViewport]); // eslint-disable-line react-hooks/exhaustive-deps -- collapse only when the viewport becomes narrow; later setting changes must not re-collapse the rail
 
   const openSidebar = () => {
     if (narrowViewport) {
@@ -405,14 +406,17 @@ function OnlineLibrary() {
     };
   }, []);
 
-  const reloadChannels = () =>
-    api
-      .listChannels({
-        sort: settings.channelSort,
-        order: settings.channelOrder,
-      })
-      .then(setChannels)
-      .catch(() => undefined);
+  const reloadChannels = useCallback(
+    () =>
+      api
+        .listChannels({
+          sort: settings.channelSort,
+          order: settings.channelOrder,
+        })
+        .then(setChannels)
+        .catch(() => undefined),
+    [settings.channelSort, settings.channelOrder]
+  );
 
   const submitRename = async (oldName: string) => {
     const next = renameValue.trim();
@@ -432,7 +436,7 @@ function OnlineLibrary() {
       next.delete("tab");
       setSearchParams(next, { replace: true });
     }
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps -- sync from the URL only; update/setSearchParams are not inputs to this sync
 
   useEffect(() => {
     setFeedSearch("");
@@ -466,7 +470,7 @@ function OnlineLibrary() {
 
   useEffect(() => {
     reloadChannels();
-  }, [videos.length, settings.channelSort, settings.channelOrder]);
+  }, [videos.length, reloadChannels]);
 
   useEffect(() => {
     if (recommendedTabActive) return;
@@ -539,6 +543,7 @@ function OnlineLibrary() {
         }
       })
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- videos.length is only read to decide whether to show the loading state; re-fetching whenever the list changes would loop
   }, [
     debouncedSearch,
     activeChannel,
@@ -627,7 +632,14 @@ function OnlineLibrary() {
       ac.abort();
       youtubeMoreAcRef.current?.abort();
     };
-  }, [youtubeQuery, search, youtubeVideoSearch, activeChannel, refreshKey]);
+  }, [
+    youtubeQuery,
+    search,
+    youtubeVideoSearch,
+    setYoutubeVideoSearch,
+    activeChannel,
+    refreshKey,
+  ]);
 
   const loadMoreYoutube = useCallback(() => {
     const q = youtubeQuery.trim();
@@ -1341,7 +1353,7 @@ function OnlineLibrary() {
         >
           {activeChannel && renaming === activeChannel ? (
             <input
-              autoFocus
+              ref={focusOnMount}
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               onBlur={() => submitRename(activeChannel)}

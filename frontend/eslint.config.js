@@ -30,13 +30,39 @@ export default tseslint.config(
       "react-refresh": reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
+      // Classic hooks rules only. The React Compiler rules bundled into the
+      // v7 "recommended" preset (set-state-in-effect, refs, ...) target a
+      // compiler-first code style this codebase does not use yet.
+      "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
+      // Labels here often wrap a styled <span> around the text and a custom
+      // Toggle (a button with role="switch") instead of a bare <input>.
+      "jsx-a11y/label-has-associated-control": [
+        "error",
+        { depth: 3, controlComponents: ["Toggle"] },
+      ],
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },
       ],
     },
+  },
+  {
+    // These modules deliberately co-locate a component with its hook/helpers
+    // (context providers + useX, filter helpers next to a select, ...). Fast
+    // Refresh falls back to a full reload for them, which is acceptable. New
+    // files still get the rule; do not add to this list without a reason.
+    files: [
+      "src/context/*.tsx",
+      "src/pages/settings/context.tsx",
+      "src/hooks/useFlipMenu.tsx",
+      "src/components/HttpsHelp.tsx",
+      "src/components/MenuFlyout.tsx",
+      "src/components/OfflineDownloadButton.tsx",
+      "src/components/ThemedSelect.tsx",
+      "src/components/playlistChrome.tsx",
+    ],
+    rules: { "react-refresh/only-export-components": "off" },
   },
   {
     files: [
