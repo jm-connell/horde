@@ -262,6 +262,7 @@ def app(init_db, monkeypatch):
     from app.main import health, metrics, ping, ready
     from app.security import install_security
     from app.services import downloader
+    from app.services.auth.runtime import AuthConfig
 
     monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
     downloader.download_queue._global_paused = False
@@ -292,7 +293,8 @@ def app(init_db, monkeypatch):
     test_app.add_api_route("/api/ready", ready, methods=["GET"])
     test_app.add_api_route("/api/ping", ping, methods=["GET"])
     test_app.add_api_route("/api/metrics", metrics, methods=["GET"])
-    install_security(test_app)
+    # Explicit config so a developer's HORDE_AUTH_DISABLED never leaks into tests.
+    install_security(test_app, auth_config=AuthConfig())
 
     def _override_session():
         with DBSession(init_db["engine"]) as s:
@@ -302,21 +304,67 @@ def app(init_db, monkeypatch):
     return test_app
 
 
+ADMIN_PASSWORD = "admin-password"
+MEMBER_PASSWORD = "member-password"
+CSRF = {"X-Horde-Request": "1"}
+
+
+def _make_user(init_db, username: str, password: str, *, is_admin: bool):
+    from app.services.auth import accounts
+
+    with Session(init_db["engine"]) as s:
+        return accounts.create_user(s, username, password, is_admin=is_admin)
+
+
+def _session_cookie(init_db, user) -> dict[str, str]:
+    from app.services.auth import accounts
+
+    with Session(init_db["engine"]) as s:
+        return {accounts.SESSION_COOKIE: accounts.start_session(s, user)}
+
+
 @pytest.fixture
-def client(app):
-    """Test client that sends the CSRF header the SPA's api.ts adds to every mutation."""
+def admin_user(init_db):
+    """The administrator: the first user created, so legacy history would be theirs."""
+    return _make_user(init_db, "admin", ADMIN_PASSWORD, is_admin=True)
+
+
+@pytest.fixture
+def member_user(init_db, admin_user):
+    return _make_user(init_db, "member", MEMBER_PASSWORD, is_admin=False)
+
+
+def _client(app, *, cookies=None, csrf=True):
     from fastapi.testclient import TestClient
 
-    with TestClient(app, headers={"X-Horde-Request": "1"}) as c:
+    return TestClient(app, headers=CSRF if csrf else {}, cookies=cookies or {})
+
+
+@pytest.fixture
+def client(app, init_db, admin_user):
+    """Signed in as the administrator, sending the CSRF header the SPA's api.ts adds."""
+    with _client(app, cookies=_session_cookie(init_db, admin_user)) as c:
         yield c
 
 
 @pytest.fixture
-def raw_client(app):
-    """Test client without the CSRF header: for negative tests of app/security.py."""
-    from fastapi.testclient import TestClient
+def member_client(app, init_db, member_user):
+    """Signed in as a non-administrator."""
+    with _client(app, cookies=_session_cookie(init_db, member_user)) as c:
+        yield c
 
-    with TestClient(app) as c:
+
+@pytest.fixture
+def anon_client(app, init_db):
+    """Not signed in (users exist, as on any installed server)."""
+    with _client(app) as c:
+        yield c
+
+
+@pytest.fixture
+def raw_client(app, init_db, admin_user):
+    """Signed in but without the CSRF header: for negative tests of app/security.py."""
+    with _client(app, cookies=_session_cookie(init_db, admin_user), csrf=False) as c:
         yield c
 
 

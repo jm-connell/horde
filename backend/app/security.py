@@ -1,9 +1,9 @@
 """Request-level security for the whole app, as one ordered middleware stack.
 
-Horde has no login. It trusts the network it runs on, but a browser on that
-network will happily send requests on behalf of any web page the user visits,
-and will resolve any DNS name an attacker controls to the server's LAN address.
-This module closes those two doors so "trusted LAN" holds:
+Horde has accounts (see ``app/auth.py``), but a browser on the network will
+happily send requests on behalf of any web page the user visits, and will resolve
+any DNS name an attacker controls to the server's LAN address. This module closes
+those two doors before a request is ever looked at by the login layer:
 
 1. ``HostAllowlistMiddleware``: refuses requests for a Host the operator did not
    expect. Defeats DNS rebinding (an attacker's name pointing at the LAN IP).
@@ -13,12 +13,12 @@ This module closes those two doors so "trusted LAN" holds:
 4. ``CsrfMiddleware``: every state-changing request must carry ``X-Horde-Request``.
    A custom header forces a CORS preflight, which no route grants, so a web page on
    another site cannot send one. ``Sec-Fetch-Site`` and ``Origin`` are checked too.
-5. ``SecurityHeadersMiddleware`` (outermost, so it also covers rejections): CSP,
+5. ``AuthMiddleware``: deny by default for ``/api``; innermost of the checks, so it
+   only ever sees requests that came from this app's own pages.
+6. ``SecurityHeadersMiddleware`` (outermost, so it also covers rejections): CSP,
    ``nosniff``, referrer policy, framing policy.
 
-``MIDDLEWARE_STACK`` below is the single place the order is defined. A login layer
-slots in right after ``CsrfMiddleware`` (innermost of the security checks, before
-routing), so it only ever sees requests that came from this app's own pages.
+``build_stack`` below is the single place the order is defined.
 """
 
 from __future__ import annotations
@@ -37,8 +37,16 @@ from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .auth import (
+    AuthMiddleware,
+    CodedHTTPException,
+    account_error_handler,
+    coded_http_exception_handler,
+)
 from .request_context import RequestIdMiddleware
 from .services import limits, uploads
+from .services.auth.accounts import AccountError
+from .services.auth.runtime import AuthConfig, AuthRuntime
 from .services.metrics import RequestStats
 from .services.url_safety import UnsafeUrlError
 
@@ -430,7 +438,8 @@ def build_stack(policy: HostPolicy) -> list[MiddlewareSpec]:
         MiddlewareSpec(BodyLimitMiddleware),
         MiddlewareSpec(MediaCorsMiddleware),
         MiddlewareSpec(CsrfMiddleware),
-        # Authentication goes here: after every check above, before routing.
+        # After every check above, before routing: deny by default for /api.
+        MiddlewareSpec(AuthMiddleware),
     ]
 
 
@@ -438,10 +447,16 @@ async def _unsafe_url_handler(_request: Request, exc: Exception) -> JSONResponse
     return JSONResponse({"detail": str(exc)}, status_code=400)
 
 
-def install_security(app: FastAPI, *, allowed_hosts: str | None = None) -> None:
-    """Install the middleware stack, the URL-safety error mapping and the limits.
+def install_security(
+    app: FastAPI,
+    *,
+    allowed_hosts: str | None = None,
+    auth_config: AuthConfig | None = None,
+) -> None:
+    """Install the middleware stack, the error mappings, the limits and auth state.
 
-    ``allowed_hosts`` overrides ``HORDE_ALLOWED_HOSTS`` (used by tests).
+    ``allowed_hosts`` overrides ``HORDE_ALLOWED_HOSTS`` and ``auth_config`` the
+    ``HORDE_AUTH_DISABLED`` / ``HORDE_TRUST_PROXY`` environment (used by tests).
     """
     policy = HostPolicy.from_env(
         os.environ.get(ALLOWED_HOSTS_ENV) if allowed_hosts is None else allowed_hosts
@@ -451,6 +466,9 @@ def install_security(app: FastAPI, *, allowed_hosts: str | None = None) -> None:
     ):  # add_middleware wraps: last is outermost
         app.add_middleware(spec.cls, **spec.kwargs)
     app.add_exception_handler(UnsafeUrlError, _unsafe_url_handler)
+    app.add_exception_handler(CodedHTTPException, coded_http_exception_handler)
+    app.add_exception_handler(AccountError, account_error_handler)
+    app.state.auth = AuthRuntime(config=auth_config or AuthConfig.from_env())
     app.state.extraction_gate = limits.new_extraction_gate()
     app.state.ytdlp_slots = limits.new_ytdlp_slots()
     app.state.request_stats = RequestStats()

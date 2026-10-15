@@ -11,9 +11,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app import main
+from app import database, main
 from app.models import DownloadJob, JobStatus
 from app.services import downloader, ffmpeg_progress, scanner, sprites
+from app.services.auth import accounts
 from app.services.workers import BackgroundWorker, WorkerRegistry
 
 EXPECTED_WORKERS = {
@@ -127,6 +128,12 @@ def test_initial_library_scan_does_not_delay_startup(lifespan_env, monkeypatch):
 
 def test_event_streams_end_when_shutdown_starts(lifespan_env):
     with TestClient(main.app) as client:
+        # The stream is for signed-in users: an anonymous request ends at once.
+        with Session(database.engine) as session:
+            user = accounts.create_user(session, "reader", "reader-password")
+            client.cookies.set(
+                accounts.SESSION_COOKIE, accounts.start_session(session, user)
+            )
         done = threading.Event()
         lines: list[str] = []
 
