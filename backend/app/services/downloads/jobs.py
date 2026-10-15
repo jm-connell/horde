@@ -2,6 +2,7 @@
 
 import threading
 import time
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -111,13 +112,7 @@ def prepare_job_retry(job: DownloadJob) -> None:
     job.device_file_path = None
     job.file_size = None
     if job.id is not None:
-        progress_store[job.id] = {
-            "status": "queued",
-            "progress": 0.0,
-            "title": job.title_override or job.title,
-            "channel": job.channel_override or job.channel,
-            "destination": job.destination,
-        }
+        progress_store[job.id] = _queued_snapshot(job)
 
 
 def wait_until_job_not_running(job_id: int, timeout: float = 30.0) -> bool:
@@ -130,6 +125,82 @@ def wait_until_job_not_running(job_id: int, timeout: float = 30.0) -> bool:
     return not download_queue.is_running(job_id)
 
 
+def _queued_snapshot(job: DownloadJob) -> dict[str, Any]:
+    return {
+        "status": "queued",
+        "progress": 0.0,
+        "title": job.title_override or job.title,
+        "channel": job.channel_override or job.channel,
+        "destination": job.destination,
+    }
+
+
+def _changeable_job(session: Session, job_id: int) -> DownloadJob:
+    job = session.get(DownloadJob, job_id)
+    if job is None:
+        raise KeyError("Job not found")
+    if job.status not in (JobStatus.queued, JobStatus.downloading):
+        raise PermissionError("Job already finished")
+    return job
+
+
+def _save(session: Session, job: DownloadJob) -> DownloadJob:
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return job
+
+
+def _begin_restart(session: Session, job: DownloadJob, resolved: str) -> None:
+    """Abort the running attempt and hold the job until the new preset is in place."""
+    assert job.id is not None  # noqa: S101 - type narrowing; the row was committed above
+    download_queue.request_quality_restart(job.id)
+    job.quality_preset = resolved
+    job.progress = 0.0
+    job.error = None
+    job.error_kind = None
+    session.add(job)
+    session.commit()
+    progress_store[job.id] = _queued_snapshot(job)
+
+
+def _abort_restart(session: Session, job_id: int, previous_preset: str) -> None:
+    """The old attempt would not stop: put the previous preset back and release the job."""
+    with job_mutate_lock:
+        session.expire_all()
+        job = session.get(DownloadJob, job_id)
+        if job is not None and job.status == JobStatus.downloading:
+            job.quality_preset = previous_preset
+            _save(session, job)
+        download_queue.release_job(job_id)
+
+
+def _finish_restart(
+    session: Session, job_id: int, resolved: str, previous_preset: str
+) -> DownloadJob:
+    """The old attempt has stopped: settle the row and queue the job again."""
+    with job_mutate_lock:
+        session.expire_all()
+        job = session.get(DownloadJob, job_id)
+        if job is None:
+            download_queue.release_job(job_id)
+            raise KeyError("Job not found")
+        try:
+            if job.status == JobStatus.completed:
+                job.quality_preset = previous_preset
+                return _save(session, job)
+            job.quality_preset = resolved
+            if job.status in (JobStatus.cancelled, JobStatus.error):
+                prepare_job_retry(job)
+            else:
+                job.progress = 0.0
+            _save(session, job)
+        finally:
+            download_queue.release_job(job_id)
+        enqueue_download(job.id)
+        return job
+
+
 def change_job_quality(
     session: Session, job_id: int, requested_preset: str
 ) -> DownloadJob:
@@ -139,12 +210,7 @@ def change_job_quality(
         raise ValueError("Unknown quality preset")
 
     with job_mutate_lock:
-        job = session.get(DownloadJob, job_id)
-        if job is None:
-            raise KeyError("Job not found")
-        if job.status not in (JobStatus.queued, JobStatus.downloading):
-            raise PermissionError("Job already finished")
-
+        job = _changeable_job(session, job_id)
         available = decode_available_presets(job.available_presets_json)
         resolved = resolve_quality_preset(preset, available)
         if resolved == job.quality_preset:
@@ -161,70 +227,12 @@ def change_job_quality(
 
         previous_preset = job.quality_preset
         running = download_queue.is_running(job.id) if job.id is not None else False
-        needs_restart = running or job.status == JobStatus.downloading
-
-        if not needs_restart:
+        if not (running or job.status == JobStatus.downloading):
             job.quality_preset = resolved
-            session.add(job)
-            session.commit()
-            session.refresh(job)
-            return job
+            return _save(session, job)
+        _begin_restart(session, job, resolved)
 
-        assert job.id is not None  # noqa: S101 - type narrowing; the row was committed above
-        download_queue.request_quality_restart(job.id)
-        job.quality_preset = resolved
-        job.progress = 0.0
-        job.error = None
-        job.error_kind = None
-        session.add(job)
-        session.commit()
-        progress_store[job.id] = {
-            "status": "queued",
-            "progress": 0.0,
-            "title": job.title_override or job.title,
-            "channel": job.channel_override or job.channel,
-            "destination": job.destination,
-        }
-
-    stopped = wait_until_job_not_running(job_id)
-    if not stopped:
-        with job_mutate_lock:
-            session.expire_all()
-            job = session.get(DownloadJob, job_id)
-            if job is not None and job.status == JobStatus.downloading:
-                job.quality_preset = previous_preset
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-            download_queue.release_job(job_id)
+    if not wait_until_job_not_running(job_id):
+        _abort_restart(session, job_id, previous_preset)
         raise TimeoutError("Could not restart download")
-
-    with job_mutate_lock:
-        session.expire_all()
-        job = session.get(DownloadJob, job_id)
-        if job is None:
-            download_queue.release_job(job_id)
-            raise KeyError("Job not found")
-        try:
-            if job.status == JobStatus.completed:
-                job.quality_preset = previous_preset
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-                return job
-            if job.status == JobStatus.cancelled or job.status == JobStatus.error:
-                job.quality_preset = resolved
-                prepare_job_retry(job)
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-            else:
-                job.quality_preset = resolved
-                job.progress = 0.0
-                session.add(job)
-                session.commit()
-                session.refresh(job)
-        finally:
-            download_queue.release_job(job_id)
-        enqueue_download(job.id)
-        return job
+    return _finish_restart(session, job_id, resolved, previous_preset)
