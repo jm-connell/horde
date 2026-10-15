@@ -7,7 +7,6 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +27,13 @@ from ..models import (
     VideoStatus,
 )
 from . import activity, compat_rendition, library, scanner
+from .downloads.errors import (
+    DownloadCancelled,
+    YtdlpLogger,
+    is_recoverable_download_error,
+    purge_members_only_url,
+)
+from .downloads.infodict import as_info, collect_tags, merge_info, published_at
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
 from .fsutil import (
@@ -79,7 +85,6 @@ from .ytdlp_common import (
     extract_used_cookies,
     is_members_only_entry,
     is_members_only_error,
-    is_members_only_message,
     record_extract_failure,
     remember_cookie_required,
     should_retry_with_cookies,
@@ -325,31 +330,6 @@ def gc_orphaned_device_dirs() -> int:
 
 # yt-dlp per-format fragments (e.g. ".f401.mp4") — not the final merged file.
 _FRAGMENT_RE = STAGING_FRAGMENT_RE
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-
-
-def _strip_ansi(text: str) -> str:
-    return _ANSI_RE.sub("", text)
-
-
-def _as_info(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _merge_info(base: dict[str, Any], extra: Any) -> dict[str, Any]:
-    if not isinstance(extra, dict) or not extra:
-        return base
-    return {**base, **extra}
-
-
-def _is_recoverable_download_error(exc: Exception) -> bool:
-    msg = str(exc)
-    return (
-        "Unable to rename file" in msg
-        or "Unable to download video subtitles" in msg
-        or "Postprocessing:" in msg
-        or "'NoneType' object has no attribute 'get'" in msg
-    )
 
 
 def _is_intermediate_media(name: str) -> bool:
@@ -414,37 +394,7 @@ def _resolve_merged_video(prepared: Path | None, active_paths: set[str]) -> Path
             return found
     return None
 
-
-class DownloadCancelled(Exception):
-    """Raised from yt-dlp progress hooks when a job is cancelled or paused."""
-
-
-class _YtdlpLogger:
-    """Suppress noisy Windows file-lock rename errors from intermediate fragments."""
-
-    def __init__(self) -> None:
-        self.members_only = False
-        self.last_members_only_msg: str | None = None
-
-    def debug(self, msg: str) -> None:
-        pass
-
-    def info(self, msg: str) -> None:
-        pass
-
-    def warning(self, msg: str) -> None:
-        pass
-
-    def error(self, msg: str) -> None:
-        if "Unable to rename file" in msg:
-            return
-        if "Unable to download video subtitles" in msg:
-            return
-        if is_members_only_message(msg):
-            self.members_only = True
-            self.last_members_only_msg = msg
-            return
-        # Fall through: leave other errors to raised exceptions / default silence.
+    # Fall through: leave other errors to raised exceptions / default silence.
 
 
 class _SubtitleYtdlpLogger:
@@ -466,21 +416,6 @@ class _SubtitleYtdlpLogger:
     def error(self, msg: str) -> None:
         if msg:
             self.messages.append(str(msg))
-
-
-def _purge_members_only_yt_id(yt_id: str) -> None:
-    try:
-        from .channel_catalog.skips import purge_members_only_by_yt_id
-
-        purge_members_only_by_yt_id(yt_id)
-    except Exception:
-        logger.debug("members-only catalog purge failed", exc_info=True)
-
-
-def _purge_members_only_url(url: str) -> None:
-    yt_id = youtube_video_id(url)
-    if yt_id:
-        _purge_members_only_yt_id(yt_id)
 
 
 # A `downloading` job nobody owns for this long goes back to `queued`.
@@ -1326,7 +1261,7 @@ def _positive_int(value: Any) -> int | None:
 
 def _progress_stream_total(d: dict[str, Any]) -> int | None:
     """Whole-file size for the current stream, not the current HTTP Range."""
-    info = _as_info(d.get("info_dict"))
+    info = as_info(d.get("info_dict"))
     hint = _positive_int(info.get("filesize")) or _positive_int(
         info.get("filesize_approx")
     )
@@ -1405,7 +1340,7 @@ class _DownloadProgress:
         name = _progress_filename(d)
         if name and _is_intermediate_media(name):
             return False
-        info = _as_info(d.get("info_dict"))
+        info = as_info(d.get("info_dict"))
         hint = _positive_int(info.get("filesize")) or _positive_int(
             info.get("filesize_approx")
         )
@@ -1415,7 +1350,7 @@ class _DownloadProgress:
 
     def apply(self, d: dict[str, Any]) -> dict[str, Any] | None:
         status = d.get("status")
-        info = _as_info(d.get("info_dict"))
+        info = as_info(d.get("info_dict"))
         if status == "downloading":
             downloaded = int(d.get("downloaded_bytes", 0) or 0)
             self._note_stream_switch(downloaded)
@@ -1579,20 +1514,6 @@ def _make_postprocessor_hook(
     return hook
 
 
-def _collect_tags(info: dict[str, Any]) -> list[str]:
-    info = _as_info(info)
-    collected: list[str] = []
-    seen: set[str] = set()
-    for key in ("tags", "categories"):
-        for item in info.get(key) or []:
-            tag = str(item).strip()
-            low = tag.lower()
-            if tag and low not in seen:
-                seen.add(low)
-                collected.append(tag)
-    return collected
-
-
 # Language token between the media stem and ``.vtt`` (``en``, ``en-US``, ``zh-Hans``).
 _SUBTITLE_LANG_RE = re.compile(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*")
 
@@ -1739,16 +1660,6 @@ def _remove_review_duplicates(
         doomed += delete_video_cascade(session, row, False, commit=False)
     session.commit()
     remove_files(doomed)
-
-
-def _published_at(info: dict[str, Any]) -> datetime | None:
-    raw = info.get("upload_date")
-    if not raw:
-        return None
-    try:
-        return datetime.strptime(raw, "%Y%m%d").replace(tzinfo=UTC)
-    except ValueError:
-        return None
 
 
 def _validate_playable(path: Path) -> bool:
@@ -1976,7 +1887,7 @@ def _complete_download(
         raise DownloadCancelled()
 
     video_codec = normalize_video_codec(video_codec)
-    info = _as_info(info)
+    info = as_info(info)
     source_url = info.get("webpage_url") or url
     duration = probe_duration(final_path) or info.get("duration")
     try:
@@ -2367,14 +2278,14 @@ def _commit_library_video(
             meta = session.get(VideoAiMeta, video.id)
             tags_locked = bool(meta is not None and meta.tags_locked)
         if not tags_locked:
-            video.tags = library.dump_tags(_collect_tags(info))
+            video.tags = library.dump_tags(collect_tags(info))
 
         video.source_url = source_url
         video.duration_sec = duration
         video.file_size = file_size
         video.width_px = width
         video.height_px = height
-        video.published_at = _published_at(info)
+        video.published_at = published_at(info)
         video.view_count = info.get("view_count")
         video.channel_subscriber_count = info.get("channel_follower_count")
         video.subtitles = library.dump_subtitles([])
@@ -2518,7 +2429,7 @@ def _run_download(
     prepared: Path | None = None
     final_path: Path | None = None
     last_exc: Exception | None = None
-    ytdlp_logger = _YtdlpLogger()
+    ytdlp_logger = YtdlpLogger()
     marked: set[str] = set()
     handed_off = False
 
@@ -2611,7 +2522,7 @@ def _run_download(
                     }
                     act.discard()
                     return None
-                metadata_info = _merge_info(metadata_info, fetched)
+                metadata_info = merge_info(metadata_info, fetched)
                 info = metadata_info
                 outtmpl, _ = _download_outtmpl(
                     destination, job_id, metadata_info, channel_override, out_root
@@ -2649,7 +2560,7 @@ def _run_download(
                         downloaded = ydl.extract_info(url, download=True)
                         if ytdlp_logger.members_only:
                             raise MembersOnlyError("Members-only video — skipped")
-                        info = _merge_info(metadata_info, downloaded)
+                        info = merge_info(metadata_info, downloaded)
                         metadata_info = info
                     except Exception as exc:
                         last_exc = exc
@@ -2686,13 +2597,13 @@ def _run_download(
                                     raise MembersOnlyError(
                                         "Members-only video — skipped"
                                     ) from exc
-                                info = _merge_info(metadata_info, downloaded)
+                                info = merge_info(metadata_info, downloaded)
                                 metadata_info = info
                         elif ytdlp_logger.members_only or is_members_only_error(exc):
                             raise MembersOnlyError(
                                 "Members-only video — skipped"
                             ) from exc
-                        elif not _is_recoverable_download_error(exc):
+                        elif not is_recoverable_download_error(exc):
                             raise
                         else:
                             final_path = _resolve_merged_video(prepared, active_paths)
@@ -2741,7 +2652,7 @@ def _run_download(
         if cancel.is_set():
             raise DownloadCancelled()
 
-        effective_info = _merge_info(_as_info(metadata_info), _as_info(info))
+        effective_info = merge_info(as_info(metadata_info), as_info(info))
         detail = str(title_override or effective_info.get("title") or url)
         act.finish(detail=detail)
         _handoff_postprocess(
@@ -2787,7 +2698,7 @@ def _run_download(
             return None
         recovered = _resolve_merged_video(prepared, active_paths)
         recovered = _reject_unplayable(recovered, active_paths)
-        effective_info = _merge_info(_as_info(metadata_info), _as_info(info))
+        effective_info = merge_info(as_info(metadata_info), as_info(info))
         if (
             recovered is not None
             and recovered.exists()
@@ -2852,7 +2763,7 @@ def _run_download(
                 title=subject_title,
                 channel=subject_channel,
             )[1]
-            _purge_members_only_url(url)
+            purge_members_only_url(url)
         record_extract_failure(
             kind, message, url=url, title=subject_title, channel=subject_channel
         )

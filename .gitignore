@@ -17,7 +17,7 @@ e2e/.runtime/
 
 # App data
 data/
-downloads/
+/downloads/
 ollama/
 *.db
 backend/data/

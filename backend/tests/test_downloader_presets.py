@@ -169,17 +169,13 @@ def test_video_stem():
 
 
 def test_is_recoverable_download_error():
-    assert downloader._is_recoverable_download_error(
+    assert downloader.is_recoverable_download_error(
         Exception("Unable to rename file: ...")
     )
-    assert downloader._is_recoverable_download_error(
+    assert downloader.is_recoverable_download_error(
         Exception("Postprocessing: Error merging formats")
     )
-    assert not downloader._is_recoverable_download_error(Exception("HTTP Error 403"))
-
-
-def test_strip_ansi():
-    assert downloader._strip_ansi("\x1b[31mred\x1b[0m") == "red"
+    assert not downloader.is_recoverable_download_error(Exception("HTTP Error 403"))
 
 
 def test_has_audio_and_available_presets():
