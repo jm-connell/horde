@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 LIB = REPO / "scripts" / "update_lib.sh"
 UPDATE_SH = REPO / "update.sh"
+SQLITE_TOOL = REPO / "scripts" / "sqlite_tool.py"
 
 
 def _run(script: str, *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -166,98 +171,272 @@ def test_extract_bind_mounts_from_compose_json():
     assert lines["/app/data"] == "/mnt/data"
 
 
-def test_git_pull_keeps_env_and_recovers_compose_conflicts(tmp_path):
+_GIT_ENV = {
+    **os.environ,
+    "GIT_AUTHOR_NAME": "Test",
+    "GIT_AUTHOR_EMAIL": "test@example.com",
+    "GIT_COMMITTER_NAME": "Test",
+    "GIT_COMMITTER_EMAIL": "test@example.com",
+}
+
+_COMPOSE = (
+    "services:\n"
+    "  horde:\n"
+    "    volumes:\n"
+    "      - ${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}:/downloads\n"
+    "      - ${DATA_PATH:-/opt/dockge/horde/data}:/app/data\n"
+)
+
+
+def _git(repo: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_GIT_ENV,
+    )
+    return result.stdout.strip()
+
+
+@pytest.fixture
+def stack(tmp_path):
+    """A user's checkout (``work``) cloned from ``origin``; ``other`` pushes upstream."""
     work = tmp_path / "stack"
     other = tmp_path / "other"
     origin = tmp_path / "origin.git"
     work.mkdir()
-
-    def git(repo: Path, *args: str) -> None:
-        env = {
-            **os.environ,
-            "GIT_AUTHOR_NAME": "Test",
-            "GIT_AUTHOR_EMAIL": "test@example.com",
-            "GIT_COMMITTER_NAME": "Test",
-            "GIT_COMMITTER_EMAIL": "test@example.com",
-        }
-        subprocess.run(
-            ["git", "-C", str(repo), *args],
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-
-    init = subprocess.run(
-        ["git", "init", "-b", "main", str(work)],
-        capture_output=True,
-        text=True,
-        check=False,
+    subprocess.run(
+        ["git", "init", "-b", "main", str(work)], check=True, capture_output=True
     )
-    if init.returncode != 0:
-        subprocess.run(["git", "init", str(work)], check=True, capture_output=True)
-        git(work, "checkout", "-B", "main")
-    git(work, "config", "user.email", "test@example.com")
-    git(work, "config", "user.name", "Test")
-    (work / ".gitignore").write_text(".env\n", encoding="utf-8")
-    (work / "docker-compose.yml").write_text(
-        "services:\n"
-        "  horde:\n"
-        "    volumes:\n"
-        "      - ${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}:/downloads\n"
-        "      - ${DATA_PATH:-/opt/dockge/horde/data}:/app/data\n",
-        encoding="utf-8",
-    )
+    (work / ".gitignore").write_text(".env\n.local/\n", encoding="utf-8")
+    (work / "docker-compose.yml").write_text(_COMPOSE, encoding="utf-8")
+    (work / "README.txt").write_text("readme\n", encoding="utf-8")
     (work / ".env").write_text(
         "DOWNLOADS_PATH=/mnt/custom/media\nDATA_PATH=/mnt/custom/data\n",
         encoding="utf-8",
     )
-    git(work, "add", ".gitignore", "docker-compose.yml")
-    git(work, "commit", "-m", "initial")
+    _git(work, "add", ".gitignore", "docker-compose.yml", "README.txt")
+    _git(work, "commit", "-m", "initial")
     subprocess.run(
         ["git", "clone", "--bare", str(work), str(origin)],
         check=True,
         capture_output=True,
     )
-    git(work, "remote", "add", "origin", str(origin))
-    git(work, "push", "-u", "origin", "main")
-
+    _git(work, "remote", "add", "origin", str(origin))
+    _git(work, "fetch", "origin")
+    _git(work, "branch", "--set-upstream-to=origin/main", "main")
     subprocess.run(
         ["git", "clone", str(origin), str(other)], check=True, capture_output=True
     )
-    git(other, "config", "user.email", "test@example.com")
-    git(other, "config", "user.name", "Test")
-    compose = (other / "docker-compose.yml").read_text(encoding="utf-8")
-    (other / "docker-compose.yml").write_text(
-        compose + "    image: horde:latest\n",
-        encoding="utf-8",
-    )
-    git(other, "add", "docker-compose.yml")
-    git(other, "commit", "-m", "upstream compose tweak")
-    git(other, "push", "origin", "main")
 
-    # Dockge-style local edit: hardcode volume paths in the tracked compose file.
-    (work / "docker-compose.yml").write_text(
-        "services:\n"
-        "  horde:\n"
-        "    volumes:\n"
-        "      - /mnt/custom/media:/downloads\n"
-        "      - /mnt/custom/data:/app/data\n",
-        encoding="utf-8",
-    )
+    def push_upstream(name: str, content: str) -> None:
+        (other / name).write_text(content, encoding="utf-8")
+        _git(other, "add", name)
+        _git(other, "commit", "-m", f"upstream {name}")
+        _git(other, "push", "origin", "main")
+
+    return work, push_upstream
+
+
+def test_git_pull_fast_forwards_and_keeps_env(stack):
+    work, push_upstream = stack
+    push_upstream("docker-compose.yml", _COMPOSE + "    image: horde:latest\n")
 
     result = _run("horde_git_pull", cwd=work)
     assert result.returncode == 0, result.stdout + "\n" + result.stderr
 
-    env_text = (work / ".env").read_text(encoding="utf-8")
-    assert "DOWNLOADS_PATH=/mnt/custom/media" in env_text
-    assert "DATA_PATH=/mnt/custom/data" in env_text
+    assert "image: horde:latest" in (work / "docker-compose.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "DOWNLOADS_PATH=/mnt/custom/media" in (work / ".env").read_text(
+        encoding="utf-8"
+    )
+    assert _git(work, "rev-parse", "HEAD") == _git(work, "rev-parse", "origin/main")
 
-    compose_text = (work / "docker-compose.yml").read_text(encoding="utf-8")
-    assert "<<<<<<<" not in compose_text
-    assert ">>>>>>>" not in compose_text
+
+def test_git_pull_stops_on_edited_compose_and_never_stashes(stack):
+    work, push_upstream = stack
+    push_upstream("docker-compose.yml", _COMPOSE + "    image: horde:latest\n")
+    edited = _COMPOSE.replace(
+        "${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}", "/mnt/custom/media"
+    )
+    (work / "docker-compose.yml").write_text(edited, encoding="utf-8")
+    head_before = _git(work, "rev-parse", "HEAD")
+
+    result = _run("horde_git_pull .local/backup", cwd=work)
+
+    assert result.returncode != 0
+    assert "docker-compose.override.yml" in result.stderr
+    # The user's file is untouched, a copy is kept, and nothing was merged or stashed.
+    assert (work / "docker-compose.yml").read_text(encoding="utf-8") == edited
+    assert (work / ".local/backup/docker-compose.yml.local-edit").read_text(
+        encoding="utf-8"
+    ) == edited
+    assert _git(work, "rev-parse", "HEAD") == head_before
+    assert _git(work, "stash", "list") == ""
+    assert "<<<<<<<" not in edited
+
+
+def test_git_pull_can_discard_compose_edits_after_backing_them_up(stack):
+    work, push_upstream = stack
+    push_upstream("docker-compose.yml", _COMPOSE + "    image: horde:latest\n")
+    (work / "docker-compose.yml").write_text("services: {}\n# mine\n", encoding="utf-8")
+
+    result = _run(
+        "HORDE_DISCARD_COMPOSE_EDITS=1 horde_git_pull .local/backup", cwd=work
+    )
+    assert result.returncode == 0, result.stdout + "\n" + result.stderr
+
+    compose = (work / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "image: horde:latest" in compose
+    assert "<<<<<<<" not in compose
+    assert "# mine" in (work / ".local/backup/docker-compose.yml.local-edit").read_text(
+        encoding="utf-8"
+    )
+    assert "DATA_PATH=/mnt/custom/data" in (work / ".env").read_text(encoding="utf-8")
+
+
+def test_git_pull_keeps_unrelated_local_edits(stack):
+    work, push_upstream = stack
+    push_upstream("NEWS.txt", "news\n")
+    (work / "README.txt").write_text("my notes\n", encoding="utf-8")
+
+    result = _run("horde_git_pull", cwd=work)
+    assert result.returncode == 0, result.stdout + "\n" + result.stderr
+    assert (work / "NEWS.txt").is_file()
+    assert (work / "README.txt").read_text(encoding="utf-8") == "my notes\n"
+
+
+def test_git_pull_refuses_diverged_history_without_merging(stack):
+    work, push_upstream = stack
+    push_upstream("NEWS.txt", "news\n")
+    (work / "LOCAL.txt").write_text("local\n", encoding="utf-8")
+    _git(work, "add", "LOCAL.txt")
+    _git(work, "commit", "-m", "local commit")
+    head_before = _git(work, "rev-parse", "HEAD")
+
+    result = _run("horde_git_pull", cwd=work)
+
+    assert result.returncode != 0
+    assert "Cannot fast-forward" in result.stderr
+    assert _git(work, "rev-parse", "HEAD") == head_before
+    assert not (work / "NEWS.txt").exists()
+
+
+def test_git_pull_refuses_detached_head(stack):
+    work, _ = stack
+    _git(work, "checkout", "--detach")
+    result = _run("horde_git_pull", cwd=work)
+    assert result.returncode != 0
+    assert "detached HEAD" in result.stderr
+
+
+def test_prune_backups_keeps_newest_n(tmp_path):
+    root = tmp_path / "update-backups"
+    for stamp in (
+        "20260101T000000Z",
+        "20260102T000000Z",
+        "20260103T000000Z",
+        "20260104T000000Z",
+    ):
+        (root / stamp).mkdir(parents=True)
+        (root / stamp / "horde.db").write_text(stamp, encoding="utf-8")
+
+    _check(f"horde_prune_backups '{root}' 2")
+
+    assert sorted(p.name for p in root.iterdir()) == [
+        "20260103T000000Z",
+        "20260104T000000Z",
+    ]
+    # Missing dir and junk N must not fail or delete everything.
+    _check(f"horde_prune_backups '{tmp_path / 'nope'}' 5")
+    _check(f"horde_prune_backups '{root}' abc")
+    assert len(list(root.iterdir())) == 2
+
+
+def test_ledger_changed_decides_database_restore():
+    out = _check(
+        """
+        horde_ledger_changed "a,b" "a,b,c" && echo changed1
+        horde_ledger_changed "a,b" "a,b" || echo same
+        horde_ledger_changed "" "a" || echo unknown_before
+        horde_ledger_changed "none" "none" || echo none_none
+        """
+    )
+    assert out.split() == ["changed1", "same", "unknown_before", "none_none"]
+
+
+def test_version_string_uses_nearest_release_tag(stack):
+    work, _ = stack
+    assert _check("horde_version_string", cwd=work) == "dev"
+    _git(work, "tag", "v1.4.0")
+    assert _check("horde_version_string", cwd=work) == "1.4.0"
+    (work / "NEW.txt").write_text("x", encoding="utf-8")
+    _git(work, "add", "NEW.txt")
+    _git(work, "commit", "-m", "later")
+    assert _check("horde_version_string", cwd=work).startswith("1.4.0-1-g")
+
+
+def _make_db(path: Path, ledger: list[str]) -> sqlite3.Connection:
+    conn = sqlite3.connect(path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(
+        "CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT)"
+    )
+    conn.executemany(
+        "INSERT INTO schema_migrations VALUES (?, 'now')", [(i,) for i in ledger]
+    )
+    conn.execute("CREATE TABLE video (id INTEGER PRIMARY KEY, title TEXT)")
+    conn.execute("INSERT INTO video (title) VALUES ('kept')")
+    conn.commit()
+    return conn
+
+
+def _tool(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SQLITE_TOOL), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_sqlite_tool_backs_up_a_live_wal_database(tmp_path):
+    db = tmp_path / "horde.db"
+    live = _make_db(db, ["2026_07_additive_columns", "2026_08_next"])
+    # A write still sitting in the WAL (connection open, app "running") must be in the copy.
+    live.execute("INSERT INTO video (title) VALUES ('only in wal')")
+    live.commit()
+    assert (tmp_path / "horde.db-wal").exists()
+
+    dest = tmp_path / "backup" / "horde.db"
+    dest.parent.mkdir()
+    result = _tool("backup", str(dest), str(db))
+    assert result.returncode == 0, result.stderr
+    live.close()
+
+    copy = sqlite3.connect(dest)
+    titles = [row[0] for row in copy.execute("SELECT title FROM video ORDER BY id")]
+    copy.close()
+    assert titles == ["kept", "only in wal"]
+
+    ledger = _tool("ledger", str(dest))
+    assert ledger.stdout.strip() == "2026_07_additive_columns,2026_08_next"
+
+
+def test_sqlite_tool_ledger_handles_legacy_and_missing_databases(tmp_path):
+    legacy = tmp_path / "legacy.db"
+    conn = sqlite3.connect(legacy)
+    conn.execute("CREATE TABLE video (id INTEGER)")
+    conn.commit()
+    conn.close()
+    assert _tool("ledger", str(legacy)).stdout.strip() == "none"
+
+    missing = _tool("ledger", str(tmp_path / "nope.db"))
+    assert missing.returncode != 0
+    assert not (tmp_path / "nope.db").exists(), "must not create an empty database"
     assert (
-        "horde:latest" in compose_text
-        or "DOWNLOADS_PATH" in compose_text
-        or "/mnt/custom/media" in compose_text
+        _tool("backup", str(tmp_path / "out.db"), str(tmp_path / "nope.db")).returncode
+        != 0
     )

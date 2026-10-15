@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helpers for update.sh — keep host volume paths and .env across git pull.
 # Sourced, not executed. Callers should enable `set -euo pipefail`.
 
@@ -183,52 +184,119 @@ horde_extract_horde_bind_mounts() {
   python3 "$parser"
 }
 
-# Fast-forward pull that will not discard .env (gitignored) or require reset --hard.
-# On compose-file stash conflicts, keep the incoming compose and rely on .env paths.
+HORDE_COMPOSE_FILES=(docker-compose.yml docker-compose.yaml compose.yml compose.yaml)
+
+# Print tracked compose files that have local modifications (one per line).
+horde_dirty_compose_files() {
+  local f
+  for f in "${HORDE_COMPOSE_FILES[@]}"; do
+    if git ls-files --error-unmatch "$f" >/dev/null 2>&1 \
+      && ! git diff --quiet HEAD -- "$f"; then
+      printf '%s\n' "$f"
+    fi
+  done
+}
+
+# Update the checkout with fetch + `merge --ff-only`. Never stashes, never
+# merges, never rewrites history, never discards .env (gitignored), and so
+# never leaves conflict markers behind.
+#
+# A locally modified compose file is backed up to BACKUP_DIR (default
+# .local/update-backups/manual-<ts>) and the update STOPS with instructions,
+# unless HORDE_DISCARD_COMPOSE_EDITS=1, which restores the committed file after
+# the backup (host paths live in .env, so nothing is lost).
+# Other locally modified files are fine as long as the incoming change does not
+# touch them; otherwise git refuses the fast-forward and nothing changes.
 horde_git_pull() {
-  local branch stashed=0
+  local backup_dir="${1:-}" branch dirty f
   branch="$(git rev-parse --abbrev-ref HEAD)"
   if [[ "$branch" == "HEAD" ]]; then
     echo "Refusing to update on a detached HEAD. Checkout main (or your branch) first." >&2
     return 1
   fi
-
-  echo "Pulling latest code (preserving .env and host volume paths)..."
-  if git pull --ff-only --autostash origin "$branch"; then
-    _horde_clear_compose_conflicts
-    return 0
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    echo "This checkout has no 'origin' remote, so there is nothing to pull from." >&2
+    echo "Re-clone with: git clone https://github.com/jm-connell/horde.git" >&2
+    return 1
   fi
 
-  echo "Fast-forward with --autostash failed; trying an explicit stash + pull..." >&2
-  if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-    git stash push -m "horde-update.sh autostash"
-    stashed=1
-  fi
-  if git pull --ff-only origin "$branch" || git pull origin "$branch"; then
-    if [[ "$stashed" -eq 1 ]]; then
-      git stash pop || true
+  dirty="$(horde_dirty_compose_files)"
+  if [[ -n "$dirty" ]]; then
+    [[ -n "$backup_dir" ]] || backup_dir=".local/update-backups/manual-$(date -u +%Y%m%dT%H%M%SZ)"
+    mkdir -p "$backup_dir"
+    while IFS= read -r f; do
+      cp -p "$f" "$backup_dir/$f.local-edit"
+      echo "Backed up your edited $f to $backup_dir/$f.local-edit" >&2
+    done <<<"$dirty"
+    if [[ "${HORDE_DISCARD_COMPOSE_EDITS:-}" == "1" ]]; then
+      while IFS= read -r f; do
+        git checkout HEAD -- "$f"
+        echo "HORDE_DISCARD_COMPOSE_EDITS=1: restored the committed $f." >&2
+      done <<<"$dirty"
+      echo "Host paths come from .env; re-apply other tweaks in docker-compose.override.yml (gitignored)." >&2
+    else
+      {
+        echo
+        echo "Stopping: you have local edits in: $(tr '\n' ' ' <<<"$dirty")"
+        echo "Horde will not stash or merge them (that can leave conflict markers in the compose file)."
+        echo "Your copy is saved in ${backup_dir}/."
+        echo "Host volume paths belong in .env (already seeded from the running container)."
+        echo "Put other tweaks in docker-compose.override.yml (gitignored), then either:"
+        echo "  git checkout -- $(tr '\n' ' ' <<<"$dirty")  # drop the edits, then re-run update.sh"
+        echo "  HORDE_DISCARD_COMPOSE_EDITS=1 bash update.sh   # same, in one step"
+      } >&2
+      return 1
     fi
-    _horde_clear_compose_conflicts
-    return 0
   fi
-  echo "git pull failed. Your .env was not modified; fix git state and retry." >&2
-  return 1
+
+  echo "Fetching latest code (preserving .env and host volume paths)..."
+  if ! git fetch origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+    echo "git fetch failed. Check network access to GitHub. Nothing was changed." >&2
+    return 1
+  fi
+  if ! git merge --ff-only "refs/remotes/origin/${branch}"; then
+    {
+      echo
+      echo "Cannot fast-forward '${branch}' to origin/${branch}. Nothing was changed."
+      echo "Either you have local commits or edits that overlap the incoming change."
+      echo "Inspect with: git status && git log --oneline origin/${branch}..HEAD"
+    } >&2
+    return 1
+  fi
+  return 0
 }
 
-_horde_clear_compose_conflicts() {
-  local f conflicted=0
-  for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
-    if [[ -f "$f" ]] && grep -q -E '^(<<<<<<<|=======|>>>>>>>)' "$f"; then
-      conflicted=1
-      echo "Compose file ${f} has merge conflict markers; keeping the pulled version." >&2
-      if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
-        git checkout HEAD -- "$f"
-      fi
-    fi
-  done
-  if [[ "$conflicted" -eq 1 ]]; then
-    git stash drop >/dev/null 2>&1 || true
-    echo "Local compose edits were not re-applied. Host paths stay in .env." >&2
-    echo "Re-apply other compose tweaks in docker-compose.override.yml (gitignored)." >&2
+# Print the version to bake into the image: the nearest v* tag with the number of
+# commits since it (e.g. 1.2.0-5-gabc1234) or "dev" when the clone has no tags.
+horde_version_string() {
+  local described
+  described="$(git describe --tags --match 'v[0-9]*' 2>/dev/null || true)"
+  if [[ -z "$described" ]]; then
+    printf 'dev'
+    return 0
   fi
+  printf '%s' "${described#v}"
+}
+
+# Keep the newest KEEP entries of DIR (timestamped names sort chronologically).
+horde_prune_backups() {
+  local dir="$1" keep="${2:-5}" entry count=0 i
+  local -a entries=()
+  [[ -d "$dir" ]] || return 0
+  [[ "$keep" =~ ^[0-9]+$ && "$keep" -ge 1 ]] || keep=5
+  while IFS= read -r entry; do
+    entries+=("$entry")
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort -r)
+  count="${#entries[@]}"
+  for ((i = keep; i < count; i++)); do
+    rm -rf -- "${entries[$i]}"
+  done
+}
+
+# Decide whether the database must be restored when going back to the previous
+# release: only when the migration ledger changed. Additive column changes do
+# not appear in the ledger and old code tolerates extra columns.
+horde_ledger_changed() {
+  local before="$1" after="$2"
+  [[ -n "$before" && -n "$after" && "$before" != "$after" ]]
 }

@@ -15,6 +15,8 @@ Back up both volume roots used by Compose (or your local dirs):
 | `DOWNLOADS_PATH` | `DOWNLOADS_DIR` (`/downloads`) | Media library, imports, subtitle sidecars |
 | `DATA_PATH` | `DATA_DIR` (`/app/data`) | `horde.db` (and WAL sidecars `horde.db-wal` / `horde.db-shm`), settings, caches, user fonts/backgrounds |
 
+`update.sh` additionally takes a verified online SQLite backup before every update (see [Updating](../getting-started/updating.md#backups)); it only covers `horde.db`.
+
 A consistent snapshot of **both** keeps file paths and DB rows aligned. Backing up only the DB without media leaves broken library entries; media without the DB loses titles, tags, progress, playlists, and AI meta.
 
 !!! tip "Stop or quiesce"

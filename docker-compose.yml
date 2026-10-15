@@ -53,10 +53,11 @@ services:
         # `jellyfin` (default; hardware-encoder-capable) or `debian`. The build
         # fails if the chosen flavor cannot be installed.
         FFMPEG_FLAVOR: ${FFMPEG_FLAVOR:-jellyfin}
+        HORDE_VERSION: ${HORDE_VERSION:-dev}
     # Built locally by default (update.sh also tags horde:<shortsha> for rollback).
     # Set HORDE_IMAGE to use a published image instead; see docs/getting-started/updating.md.
     image: ${HORDE_IMAGE:-horde:latest}
-    pull_policy: ${HORDE_PULL_POLICY:-build}
+    pull_policy: ${HORDE_PULL_POLICY:-missing}
     container_name: horde
     init: true
     depends_on:

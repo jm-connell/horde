@@ -22,12 +22,14 @@ bash update.sh
 
 The script:
 
-1. Snapshot live `/downloads` and `/app/data` bind mounts (and `PUID`/`PGID`) into `.env` if a Horde container already exists
-2. `git pull --ff-only --autostash` — fetch the latest code without `git reset --hard` (`.env` is gitignored and is never discarded)
-3. Refuse to recreate if the new compose would mount different host paths (override with `HORDE_FORCE_VOLUME_CHANGE=1`)
-4. `HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde` — rebuild with the commit SHA baked in (keeps in-app update checks accurate)
-5. `docker compose up -d` — recreate containers from the new image (adds `--profile ai` when needed; see below)
-6. Polls `GET /api/health` until `status` is `ok` (default up to 90s) and prints a short summary (`horde_version`, `yt_dlp_version`, POT, wiki, library count)
+1. Snapshots live `/downloads` and `/app/data` bind mounts (and `PUID`/`PGID`) into `.env` if a Horde container already exists
+2. `git fetch` + `git merge --ff-only`. It never stashes, merges or rewrites history, and `.env` (gitignored) is never touched. If you edited a compose file it **stops**, saves your copy under `.local/update-backups/<timestamp>/` and tells you what to do (see [Local compose edits](#local-compose-edits))
+3. Refuses to recreate if the new compose would mount different host paths (override with `HORDE_FORCE_VOLUME_CHANGE=1`)
+4. **Backs up the SQLite database** with SQLite's online backup (consistent while Horde runs, no downtime) into `.local/update-backups/<timestamp>/horde.db`, and verifies it with `PRAGMA integrity_check`
+5. Builds the image with the commit and version baked in and tags it `horde:latest` **and** `horde:<shortsha>`; the previous image is kept as `horde:<previous shortsha>`
+6. `docker compose up -d` — recreates containers from the new image (adds `--profile ai` when needed; see below)
+7. Polls `GET /api/health` until `status` is `ok` (default up to 90s) and prints a short summary (`horde_version`, `yt_dlp_version`, POT, wiki, library count)
+8. **If the new version is not healthy, it rolls back automatically** (see [Rollback](#rollback)) and exits non-zero
 
 On hosts that need elevated Docker access, the script uses `sudo` when invoking compose (as in the repo’s `update.sh`).
 
@@ -44,12 +46,59 @@ After it finishes, hard-refresh the browser (`Ctrl+Shift+R`) if the UI still loo
 | `HORDE_HEALTH_URL` | Override the readiness URL (default `http://127.0.0.1:8686/api/health`, or the live host port when the container is already mapped elsewhere) |
 | `HORDE_HEALTH_TIMEOUT_SEC` | Seconds to wait for health (default `90`) |
 | `HORDE_FORCE_VOLUME_CHANGE` | Set to `1` only if you **intend** to move `DOWNLOADS_PATH` / `DATA_PATH`. Otherwise `update.sh` aborts when a recreate would remount empty defaults |
+| `HORDE_KEEP_BACKUPS` | How many `.local/update-backups/<timestamp>/` folders to keep (default `5`) |
+| `HORDE_AUTO_ROLLBACK` | `0` disables the automatic rollback on a failed health check |
+| `HORDE_SKIP_DB_BACKUP` | `1` continues even if the database cannot be backed up (otherwise the update aborts before touching the running stack) |
+| `HORDE_DISCARD_COMPOSE_EDITS` | `1` backs up and then discards local edits to the compose file (see below) |
 
 Example:
 
 ```bash
 HORDE_COMPOSE_PROFILES=ai bash update.sh
 ```
+
+## Backups
+
+Every update writes `.local/update-backups/<timestamp>/` (gitignored) containing `horde.db` (the online backup), the `.env` before and after seeding, and the snapshot of the live mounts. Only the newest `HORDE_KEEP_BACKUPS` folders (default 5) are kept. This is a pre-update safety net, not a replacement for the regular backups in [Backup & restore](../ops/backup-restore.md).
+
+## Rollback
+
+`update.sh` remembers where it came from in `.local/update-state.env`: the previous git commit, the previous image id, the database backup and the schema-migration ledger before the update.
+
+**Automatic.** If the new container is not healthy within `HORDE_HEALTH_TIMEOUT_SEC`, `update.sh`:
+
+1. keeps the failed container's log in the backup folder (`failed-container.log`),
+2. retags the previous image as `horde:latest`,
+3. moves the git checkout back to the previous commit (the branch pointer moves back; the next `update.sh` fast-forwards again),
+4. restores the database backup **only if a schema migration ran** (the `schema_migrations` ledger differs from before the update). Restoring discards everything written since the backup — minutes at most for an automatic rollback — and the newer file is kept as `horde.db.pre-rollback-<timestamp>` next to it. Purely additive column changes do not trigger a restore because the previous version ignores unknown columns,
+5. recreates the containers without building or pulling, and exits non-zero with a clear message.
+
+**Manual.** To undo an update that is healthy but wrong:
+
+```bash
+bash update.sh --rollback              # code + image only
+bash update.sh --rollback --restore-db # also restore the pre-update database backup
+```
+
+If a migration ran, `--rollback` tells you and does **not** restore the database by itself, because by then you may have days of new data. Use `--restore-db` only if the previous version refuses to start on the migrated database and you accept losing that data. Only the most recent update can be rolled back; the old image tags (`horde:<shortsha>`) stay on the host until you `docker image rm` them.
+
+!!! note "Upstream is unchanged"
+    Rolling back does not change GitHub. Running `update.sh` again pulls the same upstream commit. Wait for a fix, or stay on the old version until you want to retry.
+
+## Local compose edits
+
+Keep host paths in `.env` and other tweaks in `docker-compose.override.yml` (gitignored). If you edited `docker-compose.yml` directly, `update.sh` saves a copy to `.local/update-backups/<timestamp>/docker-compose.yml.local-edit` and stops without changing anything, rather than stashing and merging (which can leave conflict markers in the file). Then either `git checkout -- docker-compose.yml` and re-run, or run `HORDE_DISCARD_COMPOSE_EDITS=1 bash update.sh` to do both steps at once. Edits to other tracked files are kept as long as the incoming change does not touch the same files.
+
+## Use the published image
+
+Tagged releases are published as multi-arch (`amd64`, `arm64`) images to `ghcr.io/jm-connell/horde` with the tags `X.Y.Z`, `X.Y`, the commit SHA and `latest`. Building from source remains the default. To skip the build instead, put this in `.env`:
+
+```env
+HORDE_IMAGE=ghcr.io/jm-connell/horde:1.2.3   # or :latest to follow releases
+HORDE_PULL_POLICY=always
+```
+
+`update.sh` then runs `docker compose pull horde` instead of building (the git checkout is still updated for compose and docs changes), and backs up the database and rolls back exactly as above. Pin an exact version to control when you move; `latest` follows the newest release. Without `update.sh`: `docker compose pull horde && docker compose up -d`.
 
 ## Manual steps
 
@@ -84,13 +133,18 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose --profile ai up -d
 
 ## Update notices in the UI
 
-Settings → System can show a quiet notice when a newer commit is available on GitHub (dismissible until a still-newer commit appears). That check relies on the SHA baked at build time — another reason to use `update.sh` or set `HORDE_GIT_SHA` on rebuild.
+Settings → System can show a quiet notice when a newer version is available (dismissible until a still-newer one appears). The check runs at most once a day and fails silently when GitHub is unreachable.
+
+- When the image has a release version baked in (`HORDE_VERSION`, set for tagged releases and by `update.sh` from your nearest `v*` tag), Horde compares it with the **latest GitHub release**.
+- Otherwise, or while the repository has no releases, it compares the baked commit SHA with `main` and **ignores** commits by the `github-actions[bot]` stats bot and changes that only touch docs, so a daily bot commit no longer shows up as an update.
+
+Both rely on identity baked at build time — another reason to use `update.sh` or set `HORDE_GIT_SHA` on rebuild.
 
 Override the repo used for checks with `HORDE_GITHUB_REPO` if needed ([Environment variables](../ops/environment.md)).
 
 ## yt-dlp freshness
 
-YouTube changes often. Horde pins an exact yt-dlp version in `backend/requirements.txt` and installs it at image build time (the container does **not** auto-upgrade yt-dlp on start). Pulling and rebuilding Horde is the normal way to pick up a newer pin along with app fixes.
+YouTube changes often. Horde pins an exact yt-dlp version in `backend/requirements.txt` and installs it at image build time. The container does **not** upgrade yt-dlp on start unless you opt in with `YTDLP_AUTO_UPDATE=1` ([Environment variables](../ops/environment.md#runtime-yt-dlp-updater)). Pulling and rebuilding Horde is the normal way to pick up a newer pin along with app fixes.
 
 If downloads fail with format or extractor errors after YouTube changes, [bump yt-dlp](../ops/maintenance.md#bumping-yt-dlp), rebuild (`update.sh`), confirm `yt_dlp_version` on Settings → System / `GET /api/health`, and retry. For local-dev-only upgrades, reinstall the venv from `requirements.txt` after changing the pin.
 
@@ -101,6 +155,6 @@ If downloads fail with format or extractor errors after YouTube changes, [bump y
 1. Health summary shows `status: ok`, expected `horde_version`, and a sensible `yt_dlp_version` (schema migrate + boot succeeded if health returns).
 2. `http://<server-ip>:8686` loads (host **8686**, not 8080); hard-refresh if assets look cached.
 3. Smoke-test a short download if you care about yt-dlp changes.
-4. If the health wait failed: `sudo docker compose logs --tail=80 horde`.
+4. If the health wait failed, `update.sh` already rolled back; read `.local/update-backups/<timestamp>/failed-container.log`.
 
 Next: [First run](first-run.md) refresher, [Maintenance](../ops/maintenance.md) (including [bumping yt-dlp](../ops/maintenance.md#bumping-yt-dlp)), [Backup & restore](../ops/backup-restore.md).
