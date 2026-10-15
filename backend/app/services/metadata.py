@@ -1,8 +1,11 @@
 import json
+import logging
 import subprocess
 from pathlib import Path
 
 from .ffmpeg_bin import ffmpeg_bin, ffprobe_bin
+
+logger = logging.getLogger(__name__)
 
 
 def probe_duration(path: Path) -> float | None:
@@ -29,6 +32,7 @@ def probe_duration(path: Path) -> float | None:
         duration = data.get("format", {}).get("duration")
         return float(duration) if duration is not None else None
     except (subprocess.SubprocessError, ValueError, OSError):
+        logger.debug("ffprobe duration failed", exc_info=True)
         return None
 
 
@@ -74,6 +78,7 @@ def probe_is_playable(path: Path) -> bool:
             return False
         return float(duration) > 0
     except (subprocess.SubprocessError, ValueError, OSError):
+        logger.debug("ffprobe playability check failed", exc_info=True)
         return False
 
 
@@ -108,6 +113,7 @@ def probe_dimensions(path: Path) -> tuple[int, int] | None:
             return int(width), int(height)
         return None
     except (subprocess.SubprocessError, ValueError, OSError):
+        logger.debug("ffprobe dimensions failed", exc_info=True)
         return None
 
 
@@ -144,6 +150,7 @@ def probe_frame_rate(path: Path) -> float | None:
                 return round(int(num) / int(den), 3)
         return None
     except (subprocess.SubprocessError, ValueError, OSError, ZeroDivisionError):
+        logger.debug("ffprobe frame rate failed", exc_info=True)
         return None
 
 
@@ -177,6 +184,7 @@ def grab_frame(
         )
         return result.returncode == 0 and output_path.exists()
     except (subprocess.SubprocessError, OSError):
+        logger.debug("ffmpeg frame grab failed", exc_info=True)
         return False
 
 
@@ -273,6 +281,7 @@ def load_sprite_meta(sprites_dir: Path, video_id: int) -> dict | None:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, ValueError):
+        logger.debug("sprite metadata unreadable", exc_info=True)
         return None
 
 
@@ -333,6 +342,7 @@ def _sprite_via_ffmpeg_tile(
         )
         return result.returncode == 0 and image_path.is_file()
     except (subprocess.SubprocessError, OSError):
+        logger.debug("ffmpeg tile sprite failed", exc_info=True)
         return False
 
 
@@ -351,6 +361,7 @@ def _sprite_via_frame_montage(
     try:
         from PIL import Image
     except ImportError:
+        logger.debug("Pillow is not available; skipping the frame-montage sprite")
         return False
 
     tmp_dir = sprites_dir / f".{video_id}_sprite_tmp"
@@ -382,6 +393,7 @@ def _sprite_via_frame_montage(
         sheet.save(image_path, format="JPEG", quality=85)
         return image_path.is_file()
     except (OSError, ValueError):
+        logger.debug("frame-montage sprite failed", exc_info=True)
         return False
     finally:
         if tmp_dir.exists():
@@ -441,7 +453,7 @@ def generate_sprite_sheet(
                 tile_width = max(1, sheet_w // columns)
                 tile_height = max(1, sheet_h // rows)
     except (OSError, ImportError, ValueError):
-        pass
+        logger.debug("could not measure the sprite sheet image", exc_info=True)
 
     _write_sprite_meta(
         meta_path,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import struct
 
 from sqlmodel import Session, select
@@ -10,6 +11,8 @@ from ...models import Video, VideoAiMeta, VideoEmbedding, utcnow
 from .. import app_settings
 from . import text as ai_text
 from .provider import get_embed_provider, resolve_embed_model
+
+logger = logging.getLogger(__name__)
 
 
 def pack_vector(vec: list[float]) -> bytes:
@@ -214,7 +217,8 @@ def embed_query(query: str) -> list[float] | None:
     model = resolve_embed_model(provider)
     try:
         return provider.embed(query.strip(), model, usage_kind="embed")
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("embedding the search query failed", exc_info=True)
         return None
 
 
@@ -381,7 +385,7 @@ def indexed_count(session: Session) -> tuple[int, int]:
     """
     model = resolve_embed_model()
     videos = session.exec(
-        select(Video).where(Video.needs_review == False)  # noqa: E712
+        select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).all()
     total = len(videos)
     ready = 0
@@ -408,7 +412,7 @@ def videos_needing_embed(
     model = resolve_embed_model()
     skip_ids = exclude_ids or set()
     videos = session.exec(
-        select(Video).where(Video.needs_review == False)  # noqa: E712
+        select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).all()
     need: list[int] = []
     for video in videos:

@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 
 from app.services.limits import YtdlpSlots
 
@@ -238,7 +239,7 @@ def test_the_slot_limit_is_exact(slots):
                 peak = max(peak, inside)
                 await anyio.sleep(0.1)
                 inside -= 1
-        except Exception:  # the 429 for those that waited too long
+        except HTTPException:  # the 429 for those that waited too long
             return
 
     async def main() -> None:

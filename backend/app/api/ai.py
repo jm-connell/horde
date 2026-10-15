@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,6 +21,8 @@ from ..services.ai.provider import (
     test_openrouter_connection,
 )
 from .videos import _to_read
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -241,8 +244,11 @@ def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()
             try:
                 ensure_models(provider)
                 pulled = True
-            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                pass
+            except Exception:
+                logger.warning(
+                    "could not pull the recommended AI models",
+                    exc_info=True,
+                )
 
     embed_changed = prev_embed != runtime.embed_model
     return {
@@ -278,7 +284,8 @@ def ai_openrouter_models():
     embed_models: list[dict[str, Any]] = []
     try:
         embed_models = list_openrouter_embedding_models()
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("OpenRouter embedding model list unavailable", exc_info=True)
         embed_models = []
     return OpenRouterModelsResponse(
         presets=openrouter_preset_list(),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -38,6 +39,8 @@ from ..services.ytdlp_extract import (
     search_youtube_channel_videos,
     search_youtube_videos,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["channels"])
 
@@ -337,10 +340,14 @@ def _feed_entries_from_raw(
     if to_cache:
         feed_meta_cache.upsert_many(to_cache)
     if channel_url and catalog_updates:
-        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+        try:
             channel_catalog.update_catalog_video_fields(channel_url, catalog_updates)
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.warning(
+                "could not store feed metadata in the catalog for %s",
+                channel_url,
+                exc_info=True,
+            )
     return entries
 
 
@@ -534,10 +541,14 @@ def channel_feed(
         )
 
     # Kick off / refresh catalog in the background without blocking the response.
-    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+    try:
         channel_catalog.maybe_enqueue_for_feed(channel_url, channel_name=channel_name)
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "could not queue a catalog refresh for %s",
+            channel_url,
+            exc_info=True,
+        )
 
     data = None
     from_catalog = False
@@ -559,7 +570,10 @@ def channel_feed(
                 indexing = bool(catalog_page.get("indexing"))
             else:
                 from_catalog = False
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            logger.debug(
+                "live channel feed sync failed for %s", channel_url, exc_info=True
+            )
             # Fall back to catalog or live flat extract below.
             data = None
             live_error = exc
@@ -571,8 +585,11 @@ def channel_feed(
                     channel_url, offset=offset, limit=limit
                 )
                 from_catalog = False
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 err = live_error or exc
+                logger.warning(
+                    "could not load channel feed %s", channel_url, exc_info=True
+                )
                 raise HTTPException(
                     status_code=400, detail=f"Could not load channel feed: {err}"
                 ) from err
@@ -596,12 +613,16 @@ def channel_feed(
             indexing = False
         elif offset == 0:
             # Catalog hit — refresh newest uploads in the background.
-            try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+            try:
                 channel_catalog.schedule_feed_head_sync(
                     channel_url, channel_name=channel_name
                 )
-            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                pass
+            except Exception:
+                logger.warning(
+                    "could not schedule a feed-head sync for %s",
+                    channel_url,
+                    exc_info=True,
+                )
 
     lib_map = library.youtube_library_map(session, channel=channel_name)
     yt_ids = [str(e["id"]) for e in (data.get("entries") or []) if e.get("id")]
@@ -691,12 +712,16 @@ def channel_feed(
             if e.id and (e.published_at or e.view_count is not None)
         ]
         if catalog_updates:
-            try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+            try:
                 channel_catalog.update_catalog_video_fields(
                     channel_url, catalog_updates
                 )
-            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                pass
+            except Exception:
+                logger.warning(
+                    "could not store feed metadata in the catalog for %s",
+                    channel_url,
+                    exc_info=True,
+                )
 
     # Background-fill missing views / dates / votes (catalog + live).
     missing_meta = [
@@ -731,7 +756,10 @@ def channel_feed(
                 for yt_id, entry_url in meta_rows:
                     try:
                         preview = downloader.extract_preview(entry_url)
-                    except Exception:  # noqa: BLE001
+                    except Exception:
+                        logger.debug(
+                            "feed enrichment failed for %s", entry_url, exc_info=True
+                        )
                         done += 1
                         handle.update(done=done, detail=f"{done}/{total}")
                         continue
@@ -767,12 +795,16 @@ def channel_feed(
                 if updates:
                     feed_meta_cache.upsert_many(updates)
                 if catalog_url and catalog_field_updates:
-                    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+                    try:
                         channel_catalog.update_catalog_video_fields(
                             catalog_url, catalog_field_updates
                         )
-                    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                        pass
+                    except Exception:
+                        logger.warning(
+                            "could not store enriched feed metadata in the catalog for %s",
+                            catalog_url,
+                            exc_info=True,
+                        )
 
         import threading
 

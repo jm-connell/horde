@@ -177,7 +177,7 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
     ``list[list[VideoRead]]`` can still read ``.videos`` from each group.
     """
     all_videos = session.exec(
-        select(Video).where(Video.needs_review == False)  # noqa: E712
+        select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).all()
 
     # Group 1: same YouTube video ID
@@ -235,7 +235,8 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
                 annotate = True
             else:
                 ai_unavailable_reason = "AI unavailable (no chat provider)"
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.warning("AI annotation of duplicate groups unavailable", exc_info=True)
         annotate = False
         ai_unavailable_reason = "AI unavailable"
 
@@ -256,7 +257,8 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
 
                 scored = annotate_group(session, group)
                 entry.update(scored)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
+                logger.warning("AI duplicate check failed", exc_info=True)
                 entry["ai_error"] = str(exc)[:200]
         elif match_type == "heuristic" and ai_unavailable_reason:
             entry["ai_error"] = ai_unavailable_reason

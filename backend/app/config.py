@@ -1,6 +1,9 @@
+import logging
 import os
 import subprocess
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _env_path(name: str, default: str) -> Path:
@@ -102,8 +105,11 @@ def resolve_git_sha() -> str:
         sha = (result.stdout or "").strip()
         if result.returncode == 0 and sha:
             return sha
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "git rev-parse failed; version is unknown",
+            exc_info=True,
+        )
     return "unknown"
 
 

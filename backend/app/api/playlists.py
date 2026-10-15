@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
@@ -37,6 +38,8 @@ from ..services.thumbnails import (
 from ..services.url_clean import clean_url, youtube_video_id
 from ..services.url_safety import UnsafeUrlError, validate_public_url
 from .videos import _to_read
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
 
@@ -593,7 +596,8 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
             try:
                 preview = downloader.extract_playlist_entries(url)
                 title = preview.get("title") or "Imported playlist"
-            except Exception:  # noqa: BLE001
+            except Exception:
+                logger.debug("could not read the playlist title", exc_info=True)
                 title = "Imported playlist"
         entries = selected_entries
     else:

@@ -42,7 +42,7 @@ def rehydrate_pending() -> int:
                 DownloadJob.status == JobStatus.queued,
                 (DownloadJob.title == None)  # noqa: E711 - SQL IS NULL
                 | (DownloadJob.title == "")
-                | (DownloadJob.available_presets_json == None),  # noqa: E711
+                | (DownloadJob.available_presets_json == None),  # noqa: E711 - SQL column comparison, not a Python truth test
             )
         ).all()
     for job_id in ids:

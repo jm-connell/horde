@@ -579,7 +579,7 @@ class DownloadQueue:
                 for job in session.exec(
                     select(DownloadJob).where(
                         DownloadJob.status == JobStatus.queued,
-                        DownloadJob.paused == False,  # noqa: E712
+                        DownloadJob.paused == False,  # noqa: E712 - SQL column comparison, not a Python truth test
                     )
                 ).all():
                     job.paused = True
@@ -588,7 +588,7 @@ class DownloadQueue:
                 for job in session.exec(
                     select(DownloadJob).where(
                         DownloadJob.status == JobStatus.queued,
-                        DownloadJob.paused == True,  # noqa: E712
+                        DownloadJob.paused == True,  # noqa: E712 - SQL column comparison, not a Python truth test
                     )
                 ).all():
                     job.paused = False
@@ -638,7 +638,7 @@ class DownloadQueue:
             for job in session.exec(
                 select(DownloadJob).where(
                     DownloadJob.status == JobStatus.queued,
-                    DownloadJob.paused == True,  # noqa: E712
+                    DownloadJob.paused == True,  # noqa: E712 - SQL column comparison, not a Python truth test
                 )
             ).all():
                 job.paused = False
@@ -799,7 +799,7 @@ class DownloadQueue:
         with Session(engine) as session:
             query = select(DownloadJob.id).where(
                 DownloadJob.status == JobStatus.queued,
-                DownloadJob.paused == False,  # noqa: E712
+                DownloadJob.paused == False,  # noqa: E712 - SQL column comparison, not a Python truth test
             )
             if excluded:
                 query = query.where(DownloadJob.id.notin_(excluded))  # type: ignore[union-attr]
@@ -922,7 +922,8 @@ def ffmpeg_slot_limit() -> int:
 
         caps = probe_encode_capabilities()
         return 2 if caps.ffmpeg_has_hw_encoder else 1
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("encoder probe failed; using one ffmpeg slot", exc_info=True)
         return 1
 
 
@@ -1056,7 +1057,8 @@ class FfmpegQueue:
                 task.destination,
                 task.final_path,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            logger.warning("postprocess of job %s failed", task.job_id, exc_info=True)
             _fail_postprocess_job(task.job_id, task.destination, exc)
         finally:
             for lib in task.active_marks:
@@ -1527,7 +1529,8 @@ def _make_progress_hook(
                 )
         except DownloadCancelled:
             raise
-        except Exception:  # noqa: BLE001 — never fail a download over progress UI
+        except Exception:
+            logger.debug("download progress update failed", exc_info=True)
             return
 
     return hook
@@ -1559,7 +1562,8 @@ def _make_postprocessor_hook(
                 )
         except DownloadCancelled:
             raise
-        except Exception:  # noqa: BLE001 — never fail a download over progress UI
+        except Exception:
+            logger.debug("download progress update failed", exc_info=True)
             return
 
     return hook
@@ -1698,7 +1702,8 @@ def download_subtitles(media: Path, source_url: str):
                     safe_unlink(dest)
                     with contextlib.suppress(OSError):
                         shutil.copy2(entry, dest)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
+        logger.debug("subtitle fetch attempt failed", exc_info=True)
         last_exc = exc
 
     return outcome_from_fetch(
@@ -1715,7 +1720,7 @@ def _remove_review_duplicates(
         return
     token = f"[{video_id}]"
     rows = session.exec(
-        select(Video).where(Video.needs_review == True)  # noqa: E712
+        select(Video).where(Video.needs_review == True)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).all()
     doomed: list[Path] = []
     for row in rows:
@@ -1886,16 +1891,24 @@ def _finalize_in_background(
 
                 try:
                     outcome = download_subtitles(final_path, source_url)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
+                    logger.debug(
+                        "subtitle fetch failed for video %s", video_id, exc_info=True
+                    )
                     outcome = outcome_from_fetch([], exc=exc)
                 apply_subtitle_outcome(video_id, outcome)
-            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                pass
+            except Exception:
+                logger.warning(
+                    "could not fetch subtitles for video %s", video_id, exc_info=True
+                )
             try:
                 thumb = _save_thumbnail(
                     thumbnail_url, video_id, list_url=list_thumbnail_url
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:
+                logger.warning(
+                    "could not save the thumbnail for video %s", video_id, exc_info=True
+                )
                 thumb = None
             if thumb:
                 with Session(engine) as session:
@@ -1910,8 +1923,12 @@ def _finalize_in_background(
                 from .ai import enqueue_for_video
 
                 enqueue_for_video(video_id, include_tags=False, force=False)
-            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                pass
+            except Exception:
+                logger.warning(
+                    "could not queue AI indexing for video %s",
+                    video_id,
+                    exc_info=True,
+                )
             try:
                 from .sprites import enqueue_sprite_generation
 
@@ -1919,8 +1936,12 @@ def _finalize_in_background(
                     video_id,
                     reason="Download finished",
                 )
-            except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-                pass
+            except Exception:
+                logger.warning(
+                    "could not queue sprite generation for video %s",
+                    video_id,
+                    exc_info=True,
+                )
 
     threading.Thread(target=run, daemon=True, name=f"finalize-{video_id}").start()
 
@@ -2147,8 +2168,12 @@ def _complete_download(
         from .ai import enqueue_for_video
 
         enqueue_for_video(video_id, include_tags=True, force=False)
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "could not queue AI enrichment for video %s",
+            video_id,
+            exc_info=True,
+        )
 
     # Index channel library in the background on first download from a channel.
     try:
@@ -2160,8 +2185,12 @@ def _complete_download(
                 channel_name=committed.channel_name,
                 force=False,
             )
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "could not refresh the catalog after downloading video %s",
+            video_id,
+            exc_info=True,
+        )
 
     _finalize_in_background(
         video_id,

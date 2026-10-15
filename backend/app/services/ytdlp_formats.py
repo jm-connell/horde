@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Audio-only bitrate caps (kbps). Shown as labeled presets when the source has audio.
 AUDIO_ABR_TIERS: tuple[int, ...] = (160, 128, 64)
@@ -64,7 +67,8 @@ def compat_copy_cap() -> int:
 
         ui = (load() or {}).get("ui") or {}
         mode = normalize_compat_resolution(ui.get("compat_copy_resolution"))
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("compat resolution setting unreadable; using 1080p", exc_info=True)
         mode = "1080p"
     return H264_MAX_SHORT_SIDE if mode == "source" else COMPAT_MAX_HEIGHT
 
@@ -89,7 +93,8 @@ def default_download_video_codec() -> str:
 
         ui = (load() or {}).get("ui") or {}
         return normalize_video_codec(ui.get("download_video_codec"))
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("download codec setting unreadable; using av1", exc_info=True)
         return "av1"
 
 

@@ -263,7 +263,8 @@ class OllamaProvider:
                     return True
                 resp = client.get("/api/tags")
                 return resp.is_success
-        except Exception:  # noqa: BLE001
+        except Exception:
+            logger.debug("Ollama health probe failed", exc_info=True)
             return False
 
     def list_models(self) -> list[str]:
@@ -407,7 +408,10 @@ class OllamaProvider:
                         continue
                     try:
                         data = json.loads(line)
-                    except Exception:  # noqa: BLE001, S112 - skip malformed stream lines
+                    except Exception:
+                        logger.debug(
+                            "skipping a malformed Ollama stream line", exc_info=True
+                        )
                         continue
                     if data.get("error"):
                         raise RuntimeError(str(data["error"]))
@@ -475,7 +479,8 @@ class OpenRouterProvider:
             with self._client(timeout=httpx.Timeout(5.0, connect=3.0)) as client:
                 resp = client.get("/models")
                 return resp.is_success
-        except Exception:  # noqa: BLE001
+        except Exception:
+            logger.debug("OpenRouter health probe failed", exc_info=True)
             return False
 
     def list_models(self) -> list[dict[str, Any]]:
@@ -650,7 +655,10 @@ class OpenRouterProvider:
                         continue
                     try:
                         data = json.loads(line)
-                    except Exception:  # noqa: BLE001, S112 - skip malformed stream lines
+                    except Exception:
+                        logger.debug(
+                            "skipping a malformed OpenRouter stream line", exc_info=True
+                        )
                         continue
                     if data.get("error"):
                         err = data["error"]
@@ -757,8 +765,11 @@ class OpenRouterProvider:
                                 out.append(parsed)
                         out.sort(key=lambda r: str(r["id"]).lower())
                         return out
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.debug(
+                "OpenRouter embedding catalog unavailable; falling back to the chat model list",
+                exc_info=True,
+            )
         models = self.list_models()
         return [
             m
@@ -906,7 +917,8 @@ def test_openrouter_connection(api_key: str | None = None) -> dict[str, Any]:
     provider = OpenRouterProvider(key, timeout=10.0)
     try:
         models = provider.list_models()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
+        logger.debug("provider connection test failed", exc_info=True)
         return {"ok": False, "detail": str(exc)}
     return {
         "ok": True,
@@ -1140,7 +1152,8 @@ def ensure_models(provider: OllamaProvider) -> tuple[bool, bool]:
                 try:
                     provider.pull_model(m)
                     handle.finish(detail=m)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
+                    logger.warning("model pull failed", exc_info=True)
                     handle.finish(status="failed", error=str(exc)[:500])
 
             # Drop stale "present" cache so status shows the pull promptly.
@@ -1198,7 +1211,8 @@ def _cached_model_presence(
         try:
             embed_ok = provider.has_model(embed_model)
             chat_ok = provider.has_model(chat_model)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            logger.debug("model availability check failed", exc_info=True)
             global _last_error
             _last_error = format_provider_error(exc)
             embed_ok, chat_ok = False, False
@@ -1328,7 +1342,8 @@ def build_status(
                 chat_model,
                 pull=not quick and bool(ai.get("auto_pull_models", True)),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            logger.debug("provider status check failed", exc_info=True)
             _last_error = format_provider_error(exc)
             reachable = False
 
@@ -1364,7 +1379,8 @@ def test_connection(base_url: str | None = None) -> dict[str, Any]:
             return {"ok": False, "base_url": url, "detail": "Unreachable"}
         try:
             models = provider.list_models()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            logger.debug("listing Ollama models failed", exc_info=True)
             return {"ok": False, "base_url": url, "detail": str(exc)}
         return {"ok": True, "base_url": url, "models": models}
 
@@ -1374,6 +1390,7 @@ def test_connection(base_url: str | None = None) -> dict[str, Any]:
     provider = OllamaProvider(url, timeout=5.0)
     try:
         models = provider.list_models()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
+        logger.debug("listing Ollama models failed", exc_info=True)
         return {"ok": False, "base_url": url, "detail": str(exc)}
     return {"ok": True, "base_url": url, "models": models}

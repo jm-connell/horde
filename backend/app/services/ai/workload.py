@@ -7,11 +7,14 @@ local GPU probe), not necessarily the Horde process host.
 from __future__ import annotations
 
 import glob
+import logging
 import os
 import re
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 WorkloadProfile = Literal["light", "normal", "heavy"]
 VramTier = Literal["critical", "small", "medium", "large", "unknown"]
@@ -171,7 +174,8 @@ def probe_nvidia_gpu() -> dict[str, Any] | None:
             else None,
             vram_total_bytes=int(mem_total_mib * 1024 * 1024),
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("nvidia-smi GPU probe failed", exc_info=True)
         return None
 
 
@@ -260,7 +264,8 @@ def probe_amd_rocm_gpu() -> dict[str, Any] | None:
             return None
         data = json.loads(result.stdout)
         return _parse_rocm_json(data)
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("rocm-smi GPU probe failed", exc_info=True)
         return None
 
 
@@ -361,7 +366,8 @@ def probe_local_gpu() -> dict[str, Any] | None:
     for probe in (probe_nvidia_gpu, probe_amd_rocm_gpu, probe_drm_sysfs_gpu):
         try:
             result = probe()
-        except Exception:  # noqa: BLE001
+        except Exception:
+            logger.debug("GPU probe %s failed", probe.__name__, exc_info=True)
             result = None
         if not result:
             continue
@@ -394,7 +400,8 @@ def is_same_host_ollama(url: str | None) -> bool:
         return True
     try:
         parsed = urlparse(str(url).strip())
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("unparseable Ollama URL", exc_info=True)
         return False
     host = (parsed.hostname or "").strip().lower()
     if not host:
@@ -423,7 +430,8 @@ def probe_ollama_gpu(base_url: str) -> GpuInfo | None:
             if not resp.is_success:
                 return None
             data = resp.json()
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("Ollama GPU info unavailable", exc_info=True)
         return None
 
     if not isinstance(data, dict):
@@ -500,7 +508,8 @@ def detect_gpu_for_ai(
             from .provider import resolve_base_url
 
             url = resolve_base_url()
-        except Exception:  # noqa: BLE001
+        except Exception:
+            logger.debug("could not resolve the Ollama base URL", exc_info=True)
             url = None
     if not url:
         from ...config import OLLAMA_BASE_URL
@@ -787,9 +796,12 @@ def ensure_quality_chat_model() -> str:
 
     provider = get_provider()
     if provider is not None and auto_pull:
-        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+        try:
             ensure_models(provider)
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.warning(
+                "could not pull the quality chat model",
+                exc_info=True,
+            )
 
     return current

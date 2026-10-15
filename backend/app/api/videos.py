@@ -138,16 +138,16 @@ def tag_stats(channel: str | None = None, session: Session = Depends(get_session
 def storage_stats(session: Session = Depends(get_session)):
     video_bytes = session.exec(
         select(func.coalesce(func.sum(Video.file_size), 0)).where(
-            Video.needs_review == False  # noqa: E712
+            Video.needs_review == False  # noqa: E712 - SQL column comparison, not a Python truth test
         )
     ).one()
     video_count = session.exec(
-        select(func.count(Video.id)).where(Video.needs_review == False)  # noqa: E712
+        select(func.count(Video.id)).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).one()
     compat_bytes = session.exec(
         select(func.coalesce(func.sum(Video.compat_size), 0)).where(
-            Video.needs_review == False,  # noqa: E712
-            Video.compat_path != None,  # noqa: E711
+            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+            Video.compat_path != None,  # noqa: E711 - SQL column comparison, not a Python truth test
         )
     ).one()
     thumbnail_bytes = 0
@@ -308,8 +308,12 @@ def update_video(
                 user_tag=user_tag if isinstance(user_tag, str) else None,
             )
             session.commit()
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.warning(
+                "could not record tag provenance for video %s",
+                video.id,
+                exc_info=True,
+            )
 
     # After leaving review, queue AI enrichment for scanner-ingested files.
     if was_review and not video.needs_review and video.id is not None:
@@ -317,8 +321,12 @@ def update_video(
             from ..services.ai import enqueue_for_video
 
             enqueue_for_video(video.id, include_tags=True, force=False)
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.warning(
+                "could not queue AI enrichment for video %s",
+                video.id,
+                exc_info=True,
+            )
 
     return _to_read(video, session)
 

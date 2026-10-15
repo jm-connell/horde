@@ -270,7 +270,7 @@ def test_concurrent_readers_and_writers_never_see_defaults(tmp_dirs):
         while not stop.is_set():
             try:
                 data = settings_svc.load()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - the thread reports any failure for the test to assert on
                 failures.append(f"load raised {exc!r}")
                 return
             if data["setup_completed"] is not True:

@@ -680,7 +680,7 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
     watched = session.exec(
         select(Video)
         .where(
-            Video.needs_review == False,  # noqa: E712
+            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
             Video.last_watched_at.is_not(None),  # type: ignore[attr-defined]
         )
         .order_by(Video.last_watched_at.desc())  # type: ignore[union-attr]
@@ -690,7 +690,7 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
 
     recent = session.exec(
         select(Video)
-        .where(Video.needs_review == False)  # noqa: E712
+        .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         .order_by(nullslast(Video.added_at.desc()))
         .limit(add_cap * 2)
     ).all()
@@ -701,7 +701,7 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
 
     rest = session.exec(
         select(Video)
-        .where(Video.needs_review == False)  # noqa: E712
+        .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         .order_by(nullslast(Video.added_at.desc()))
     ).all()
     by_channel: dict[str, list[Video]] = defaultdict(list)

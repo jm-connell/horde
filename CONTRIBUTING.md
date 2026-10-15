@@ -27,7 +27,7 @@ Auto-fix helpers: `ruff check --fix . && ruff format .` (in `backend/`) and `npm
 
 ## Code
 
-- No silent `except: pass`. Log the exception, or catch the narrowest type and handle it.
+- No silent `except: pass`. Log the exception (`logger.debug` / `logger.warning` with `exc_info=True`), or catch the narrowest type and handle it. `tests/test_code_conventions.py` enforces this.
 - Every `noqa` / `eslint-disable` needs a reason.
 - New API endpoints declare response models. Schema changes go through the migration system in `backend/app/database.py`.
 - Update the docs, README and `.env.example` when behaviour or configuration changes.

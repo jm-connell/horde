@@ -37,7 +37,7 @@ def prepare(mode: str) -> None:
     if not enabled():
         raise RuntimeError("e2e seed refused: HORDE_E2E is not set")
 
-    from . import models  # noqa: F401 — register tables
+    from . import models  # noqa: F401 - register tables
     from .config import DATA_DIR, DOWNLOADS_DIR
     from .database import engine, init_db
     from .services import downloader

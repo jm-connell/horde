@@ -6,6 +6,7 @@ burning CPU (ffmpeg, yt-dlp, Ollama, etc.) and why each job started.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import uuid
@@ -14,6 +15,8 @@ from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # kind -> group for UI badges / queued chips
 KIND_GROUPS: dict[str, str] = {
@@ -265,8 +268,11 @@ def _safe_queue_counts() -> dict[str, int]:
         waiting = max(0, depth - running)
         if waiting:
             out["ai"] = out.get("ai", 0) + waiting
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "AI queue depth unavailable for activity counts",
+            exc_info=True,
+        )
 
     try:
         from .channel_catalog import get_runtime_status
@@ -278,8 +284,11 @@ def _safe_queue_counts() -> dict[str, int]:
             qd = max(0, qd - 1)
         if qd:
             out["catalog"] = out.get("catalog", 0) + qd
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "catalog queue depth unavailable for activity counts",
+            exc_info=True,
+        )
 
     try:
         from .downloader import download_queue
@@ -287,8 +296,11 @@ def _safe_queue_counts() -> dict[str, int]:
         qd = int(download_queue.queued_count())
         if qd:
             out["download"] = out.get("download", 0) + qd
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "download queue depth unavailable for activity counts",
+            exc_info=True,
+        )
 
     return out
 

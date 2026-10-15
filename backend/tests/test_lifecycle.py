@@ -242,7 +242,7 @@ def test_cancelling_ffmpeg_ends_its_whole_process_group(tmp_path):
     def run() -> None:
         try:
             ffmpeg_progress.run_ffmpeg([cmd], cancel_event=cancel)
-        except BaseException as exc:
+        except ffmpeg_progress.FfmpegCancelled as exc:
             outcome.append(exc)
 
     thread = threading.Thread(target=run, name="ffmpeg-test")

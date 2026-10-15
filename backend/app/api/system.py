@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import shutil
@@ -9,6 +10,8 @@ import subprocess
 from typing import Any
 
 from fastapi import APIRouter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -38,8 +41,11 @@ def _cpu_model() -> str | None:
                     return name
             finally:
                 winreg.CloseKey(key)
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "could not read the CPU model from the Windows registry",
+            exc_info=True,
+        )
 
     # Linux
     try:
@@ -49,8 +55,11 @@ def _cpu_model() -> str | None:
                     name = line.split(":", 1)[1].strip()
                     if name:
                         return name
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "could not read the CPU model from /proc/cpuinfo",
+            exc_info=True,
+        )
 
     # macOS
     try:
@@ -64,15 +73,21 @@ def _cpu_model() -> str | None:
         name = (result.stdout or "").strip()
         if name:
             return name
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "could not read the CPU model via sysctl",
+            exc_info=True,
+        )
 
     try:
         name = platform.processor().strip()
         if name and not _looks_like_arch_string(name):
             return name
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "could not read the CPU model from platform",
+            exc_info=True,
+        )
     return None
 
 
@@ -95,8 +110,11 @@ def _cpu_temp() -> float | None:
             for e in entries:
                 if e.current is not None:
                     return float(e.current)
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "could not read CPU temperature sensors",
+            exc_info=True,
+        )
     return None
 
 
@@ -117,8 +135,11 @@ def _cpu_ram() -> dict[str, Any]:
         out["ram_used_bytes"] = int(mem.used)
         out["ram_total_bytes"] = int(mem.total)
         out["ram_percent"] = float(mem.percent)
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "could not read CPU and memory usage",
+            exc_info=True,
+        )
     return out
 
 
@@ -143,7 +164,8 @@ def system_stats():
         from ..services.encode_probe import probe_encode_capabilities
 
         encode = probe_encode_capabilities().to_dict()
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("encode capabilities unavailable", exc_info=True)
         encode = None
     disk = None
     try:
@@ -155,8 +177,12 @@ def system_stats():
             "used_bytes": usage.used,
             "free_bytes": usage.free,
         }
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "could not read disk usage of %s",
+            DOWNLOADS_DIR,
+            exc_info=True,
+        )
     return {
         "cpu_percent": cpu_ram["cpu_percent"],
         "cpu_model": cpu_ram["cpu_model"],

@@ -115,10 +115,13 @@ async def _open_upstream(
 async def _close_upstream(upstream: httpx.Response | None) -> None:
     if upstream is None:
         return
-    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+    try:
         await upstream.aclose()
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.debug(
+            "closing the upstream preview response failed",
+            exc_info=True,
+        )
 
 
 async def _in_ytdlp_thread(request: Request, fn, *args, **kwargs):
@@ -225,7 +228,8 @@ async def _proxy_upstream(
     if upstream.status_code >= 400:
         try:
             detail = (await upstream.aread())[:200]
-        except Exception:  # noqa: BLE001
+        except Exception:
+            logger.debug("could not read the upstream error body", exc_info=True)
             detail = b""
         status = upstream.status_code
         await _close_upstream(upstream)

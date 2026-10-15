@@ -340,7 +340,8 @@ def _probe_mp4_ranges(
             ).body
         except UnsafeUrlError:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            logger.debug("preview probe range request failed", exc_info=True)
             last_err = exc
             continue
 
@@ -771,9 +772,9 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
             try:
                 rep = fut.result()
                 reps[rep["itag"]] = rep
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 errors.append(exc)
-                logger.warning("Preview probe failed: %s", exc)
+                logger.warning("Preview probe failed", exc_info=True)
 
     video_reps = [r for r in reps.values() if r.get("kind") == "video"]
     audio_reps = [r for r in reps.values() if r.get("kind") == "audio"]

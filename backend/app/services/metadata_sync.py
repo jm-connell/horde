@@ -249,7 +249,10 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
                 with _sync_lock:
                     refresh_video_metadata(vid, fields=want)
                 _set_job(done=_job_state["done"] + 1)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
+                logger.warning(
+                    "metadata refresh failed for video %s", vid, exc_info=True
+                )
                 _set_job(
                     failed=_job_state["failed"] + 1,
                     last_error=str(exc),

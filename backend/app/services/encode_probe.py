@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -13,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from .ffmpeg_bin import ffmpeg_bin
+
+logger = logging.getLogger(__name__)
 
 _CACHE_TTL_SEC = 60.0
 
@@ -223,7 +226,8 @@ def _gpu_label() -> tuple[str | None, str | None]:
         from .ai.workload import probe_local_gpu
 
         gpu = probe_local_gpu()
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("GPU lookup for encoder selection failed", exc_info=True)
         gpu = None
     if not isinstance(gpu, dict):
         return None, None

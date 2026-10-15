@@ -225,8 +225,8 @@ def stream_chat(
                 continue
             assistant_parts.append(delta)
             yield _sse({"type": "token", "text": delta})
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("chat stream failed video_id=%s: %s", video_id, exc)
+    except Exception as exc:
+        logger.warning("chat stream failed video_id=%s", video_id, exc_info=True)
         yield _sse({"type": "error", "detail": str(exc), "status": 502})
         return
 

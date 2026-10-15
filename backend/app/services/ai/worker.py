@@ -271,7 +271,7 @@ def enqueue_missing_tags(*, limit: int | None = None) -> dict:
     candidates: list[tuple[int, object, int]] = []
     with Session(engine) as session:
         videos = session.exec(
-            select(Video).where(Video.needs_review == False)  # noqa: E712
+            select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         ).all()
         for video in videos:
             if video.id is None:
@@ -304,7 +304,7 @@ def enqueue_full_tag_refresh(*, limit: int | None = None) -> dict:
     ids: list[int] = []
     with Session(engine) as session:
         videos = session.exec(
-            select(Video).where(Video.needs_review == False)  # noqa: E712
+            select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         ).all()
         for video in videos:
             if video.id is None:
@@ -363,7 +363,7 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
         recent_ids = list(
             session.exec(
                 select(Video.id).where(
-                    Video.needs_review == False,  # noqa: E712
+                    Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
                     or_(
                         Video.added_at >= cutoff,
                         Video.last_watched_at >= cutoff,
@@ -846,8 +846,11 @@ def _compute_blocked_reason(
         budget = budget_status()
         if budget.get("blocked"):
             return "OpenRouter weekly budget hard limit reached"
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "could not read the AI budget status",
+            exc_info=True,
+        )
     if not has_queued:
         return None
     wait = _waiting_reason(llm_ok=llm_ok, embed_ok=embed_ok)
@@ -964,7 +967,11 @@ def _run_claimed_job(
             ai_engine = embed_backend_name() or "ollama"
         else:
             ai_engine = llm_backend_name() or "ollama"
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug(
+            "could not resolve the AI backend name for the activity entry",
+            exc_info=True,
+        )
         ai_engine = "ollama"
 
     act = None
@@ -979,7 +986,8 @@ def _run_claimed_job(
             detail=detail,
             video_id=video_id,
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("could not start an activity entry for an AI job", exc_info=True)
         act = None
 
     try:
@@ -1001,8 +1009,8 @@ def _run_claimed_job(
                 session.commit()
         if act is not None:
             act.finish(detail=detail)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("AI job %s failed: %s", job_id, exc)
+    except Exception as exc:
+        logger.warning("AI job %s failed", job_id, exc_info=True)
         from .provider import invalidate_resolved_url
 
         invalidate_resolved_url()

@@ -1,4 +1,5 @@
 import json
+import logging
 import random as py_random
 import re
 from dataclasses import dataclass
@@ -9,6 +10,8 @@ from sqlmodel import Session, select
 
 from ..models import Video
 from .search_text import keyword_match_clause
+
+logger = logging.getLogger(__name__)
 
 PROGRESS_EXPIRY_DAYS = 14
 CONTINUE_WATCHING_DAYS = 7
@@ -177,7 +180,7 @@ def channel_stats(
             func.max(Video.channel_url),
         )
         .where(Video.channel.is_not(None))
-        .where(Video.needs_review == False)  # noqa: E712
+        .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         .group_by(Video.channel)
     )
     rows = [
@@ -325,7 +328,7 @@ def tag_stats(session: Session, channel: str | None = None) -> list[tuple[str, i
 
     When ``channel`` is given, only tags from that channel's videos are counted.
     """
-    statement = select(Video.tags).where(Video.needs_review == False)  # noqa: E712
+    statement = select(Video.tags).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     if channel:
         statement = statement.where(Video.channel == channel)
     rows = session.exec(statement).all()
@@ -400,8 +403,12 @@ def related_videos(
                         scored.append((score + boost, video))
                     scored.sort(key=lambda item: item[0], reverse=True)
                     add_candidates([v for _, v in scored])
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.warning(
+                "embedding-based related videos unavailable for video %s",
+                source.id,
+                exc_info=True,
+            )
 
     if len(picked) < pool_limit and source.channel:
         channel_rows = query_videos(

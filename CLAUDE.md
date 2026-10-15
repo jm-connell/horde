@@ -22,7 +22,7 @@ Backend commands (from `backend/`): `PYTHONPATH=. pytest -q`, `ruff check .`, `r
 
 ## Conventions
 
-- No new broad `except Exception` without logging the error (`logger.exception` / `logger.warning(..., exc_info=True)`). Silent `pass` handlers are not acceptable; existing ones carry a `noqa` marker and are being removed.
+- No new broad `except Exception` without logging the error (`logger.exception` / `logger.warning(..., exc_info=True)`). Silent `pass` handlers are not acceptable and none remain: `tests/test_code_conventions.py` fails on any `noqa: S110` / `SIM105` or a `noqa` without a reason, and ruff (`S110`, `BLE001`) has no per-file exemptions. Log at `debug` for routine, noisy failures and `warning` otherwise, with `exc_info=True`.
 - Every `# noqa` and `// eslint-disable` needs a reason after ` - ` / ` -- `. Fix the finding instead whenever it is cheap.
 - No new module-level mutable state in new code (module dicts/sets/locks that tests have to reset). Hold state on an object that is created in `lifespan` or injected, so tests can build a fresh one.
 - New endpoints declare `response_model` (and request models in `schemas.py`); do not return ad-hoc dicts.

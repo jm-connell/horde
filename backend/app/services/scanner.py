@@ -240,7 +240,7 @@ def _requeue_unimported(session: Session) -> int:
     A manual scan treats those as not yet imported.
     """
     rows = session.exec(
-        select(Video).where(Video.needs_review == False)  # noqa: E712
+        select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).all()
     count = 0
     now = utcnow()
@@ -335,7 +335,7 @@ def cleanup_orphans() -> int:
     removed = 0
     doomed: list[Path] = []
     with Session(engine) as session:
-        rows = session.exec(select(Video).where(Video.needs_review == True)).all()  # noqa: E712
+        rows = session.exec(select(Video).where(Video.needs_review == True)).all()  # noqa: E712 - SQL column comparison, not a Python truth test
         for video in rows:
             if (DOWNLOADS_DIR / video.file_path).exists():
                 continue

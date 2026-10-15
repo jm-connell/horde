@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,8 @@ from fastapi.responses import FileResponse
 
 from ..config import BACKGROUNDS_DIR, ensure_dirs
 from ..services import uploads
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/backgrounds", tags=["backgrounds"])
 
@@ -51,7 +54,8 @@ def _read_meta(bg_id: str) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("background metadata unreadable", exc_info=True)
         return {}
 
 
@@ -195,5 +199,6 @@ def extract_palette(bg_id: str):
         ranked.sort(key=lambda x: x[0], reverse=True)
         colors = [c for _, c in ranked[:6]]
         return {"colors": colors}
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.warning("palette extraction failed", exc_info=True)
         return {"colors": []}

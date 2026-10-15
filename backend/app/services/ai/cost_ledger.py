@@ -75,9 +75,9 @@ def record_cost(
         if _is_sqlite_lock_error(exc):
             logger.warning("OpenRouter usage not recorded (database locked)")
         else:
-            logger.warning("OpenRouter usage not recorded: %s", exc)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("OpenRouter usage not recorded: %s", exc)
+            logger.warning("OpenRouter usage not recorded", exc_info=True)
+    except Exception:
+        logger.warning("OpenRouter usage not recorded", exc_info=True)
     if persisted:
         try:
             _maybe_pause_on_hard_budget()
@@ -237,5 +237,8 @@ def _maybe_pause_on_hard_budget() -> None:
         from . import worker as ai_worker
 
         ai_worker.wake_worker()
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "could not wake the AI worker after the budget pause",
+            exc_info=True,
+        )

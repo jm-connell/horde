@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlmodel import Session, col, func, select
@@ -27,6 +28,8 @@ from .runtime import (
     get_catalog_by_url,
 )
 from .skips import skipped_yt_ids
+
+logger = logging.getLogger(__name__)
 
 
 def catalog_progress(session: Session, channel_url: str) -> dict[str, Any]:
@@ -337,7 +340,8 @@ def _semantic_catalog_hits(
                 )
         scored.sort(key=lambda x: x[0], reverse=True)
         return scored[:limit]
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.warning("catalog search failed", exc_info=True)
         return []
 
 

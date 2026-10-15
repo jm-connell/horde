@@ -219,7 +219,7 @@ def recover_unsynced_missing_captions() -> int:
         rows = session.exec(
             select(Video).where(
                 Video.source_url.is_not(None),  # type: ignore[attr-defined]
-                Video.subtitles_pending == False,  # noqa: E712
+                Video.subtitles_pending == False,  # noqa: E712 - SQL column comparison, not a Python truth test
             )
         ).all()
         now = datetime.now(UTC)
@@ -249,7 +249,7 @@ def next_due_video(session: Session) -> Video | None:
     now = datetime.now(UTC)
     rows = session.exec(
         select(Video).where(
-            Video.subtitles_pending == True,  # noqa: E712
+            Video.subtitles_pending == True,  # noqa: E712 - SQL column comparison, not a Python truth test
             Video.source_url.is_not(None),  # type: ignore[attr-defined]
         )
     ).all()

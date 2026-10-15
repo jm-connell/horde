@@ -643,11 +643,11 @@ def index_catalog(catalog_id: int) -> None:
                 session.add(catalog)
                 session.commit()
         act.finish(detail=channel_name or channel_url)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _kind, message = classify_ytdlp_error(
             exc, url=channel_url, channel=channel_name
         )
-        logger.warning("Catalog index failed for %s: %s", channel_url, exc)
+        logger.warning("Catalog index failed for %s", channel_url, exc_info=True)
         with Session(engine) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is not None:

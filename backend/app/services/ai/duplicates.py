@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -13,6 +14,8 @@ from .. import app_settings
 from . import embeddings
 from . import text as ai_text
 from .provider import get_llm_provider, resolve_llm_model
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_json_object(raw: str) -> dict[str, Any]:
@@ -97,7 +100,8 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
             result["ai_reason"] = reason[:200]
         if result["ai_score"] is None and result["ai_confidence"] is not None:
             result["ai_score"] = result["ai_confidence"]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
+        logger.warning("AI duplicate confirmation failed", exc_info=True)
         result["ai_error"] = str(exc)[:200]
     return result
 

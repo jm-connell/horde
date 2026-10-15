@@ -162,7 +162,8 @@ def _estimate_preset_bytes(
     try:
         selector = ydl.build_format_selector(format_spec)
         selected = list(selector(_format_selector_context(formats)))
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("yt-dlp format selection failed", exc_info=True)
         return None
     if not selected:
         return None
@@ -193,16 +194,22 @@ def _estimate_preset_sizes(info: dict[str, Any], presets: list[str]) -> dict[str
     }
     work = {**info, "formats": list(formats)}
     with yt_dlp.YoutubeDL(opts) as ydl:
-        try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+        try:
             ydl.sort_formats(work)
-        except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-            pass
+        except Exception:
+            logger.debug(
+                "yt-dlp could not sort formats for size estimates",
+                exc_info=True,
+            )
         for preset in presets:
             size: int | None = None
             for format_spec in format_chain(preset, codec):
                 try:
                     size = _estimate_preset_bytes(ydl, work, format_spec)
-                except Exception:  # noqa: BLE001
+                except Exception:
+                    logger.debug(
+                        "size estimate failed for format %s", format_spec, exc_info=True
+                    )
                     size = None
                 if size:
                     break
@@ -211,7 +218,12 @@ def _estimate_preset_sizes(info: dict[str, Any], presets: list[str]) -> dict[str
                     extra = _estimate_preset_bytes(
                         ydl, work, compat_format_spec(PRESET_MAX_HEIGHT.get(preset))
                     )
-                except Exception:  # noqa: BLE001
+                except Exception:
+                    logger.debug(
+                        "extra size estimate failed for preset %s",
+                        preset,
+                        exc_info=True,
+                    )
                     extra = None
                 # Full-res copies of >1080p tiers are encoded here at roughly
                 # the AV1 size × 2 (H.264 needs ~2× the bits at 1440p/4K).
@@ -705,7 +717,8 @@ def estimate_playlist_sizes(
             preview = extract_preview(url)
             if preview.get("preset_sizes"):
                 sizes[url] = preview["preset_sizes"]
-        except Exception:  # noqa: BLE001, S112 - one bad entry must not abort the whole listing
+        except Exception:
+            logger.debug("preset size estimate failed for %s", url, exc_info=True)
             continue
     return sizes
 
@@ -905,7 +918,8 @@ def search_youtube_channels(query: str, *, limit: int = 8) -> list[dict[str, Any
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = _as_info(ydl.extract_info(search_url, download=False))
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.warning("YouTube search failed", exc_info=True)
         return []
 
     for entry in info.get("entries") or []:

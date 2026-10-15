@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,8 @@ from fastapi.responses import FileResponse
 
 from ..config import FONTS_DIR, ensure_dirs
 from ..services import uploads
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/fonts", tags=["fonts"])
 
@@ -41,7 +44,8 @@ def _read_meta(font_id: str) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("font metadata unreadable", exc_info=True)
         return {}
 
 

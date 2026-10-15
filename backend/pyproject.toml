@@ -34,7 +34,6 @@ ignore = [
   "S105",  # fake tokens/passwords in fixtures
   "S106",  # fake tokens/passwords in fixtures
   "S108",  # hardcoded /tmp paths in fixtures
-  "BLE001",  # tests may catch broad exceptions to assert on them
 ]
 
 [tool.ruff.lint.isort]

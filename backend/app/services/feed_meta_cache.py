@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
+
+logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 
@@ -25,8 +28,11 @@ def load() -> dict[str, dict[str, Any]]:
             data = json.loads(p.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 return {k: v for k, v in data.items() if isinstance(v, dict)}
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "feed metadata cache unreadable; starting empty",
+            exc_info=True,
+        )
     return {}
 
 

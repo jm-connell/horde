@@ -72,7 +72,7 @@ def init_db(eng: Engine | None = None) -> None:
     rebind it).
     """
     # Import models so SQLModel registers tables for Alembic's metadata.
-    from . import models  # noqa: F401
+    from . import models  # noqa: F401 - import registers the tables with SQLModel metadata
     from .migrations.runner import upgrade_database
 
     upgrade_database(eng if eng is not None else engine)

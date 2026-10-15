@@ -66,7 +66,7 @@ def start_playlist_sync(playlist_id: int) -> None:
 
 
 def subscribed_playlist_ids(session: Session) -> list[int]:
-    rows = session.exec(select(Playlist.id).where(Playlist.subscribed == True)).all()  # noqa: E712
+    rows = session.exec(select(Playlist.id).where(Playlist.subscribed == True)).all()  # noqa: E712 - SQL column comparison, not a Python truth test
     return [pid for pid in rows if pid is not None]
 
 
@@ -106,7 +106,7 @@ def find_subscribed_by_url(
     session: Session, source_url: str, *, exclude_id: int | None = None
 ) -> Playlist | None:
     query = select(Playlist).where(
-        Playlist.subscribed == True,  # noqa: E712
+        Playlist.subscribed == True,  # noqa: E712 - SQL column comparison, not a Python truth test
         Playlist.source_url == source_url,
     )
     for row in session.exec(query).all():

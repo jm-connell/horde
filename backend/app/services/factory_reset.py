@@ -81,16 +81,22 @@ def reset_app(*, erase_media: bool) -> dict[str, Any]:
 
 
 def _pause_workers(*, cancel_downloads: bool) -> None:
-    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+    try:
         downloader.download_queue.pause_all()
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "factory reset: could not pause the download queue",
+            exc_info=True,
+        )
     try:
         app_settings.save({"ai": {"paused": True}})
     except app_settings.SettingsError:
         logger.warning("Could not pause AI before reset", exc_info=True)
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "factory reset: could not pause AI",
+            exc_info=True,
+        )
     if not cancel_downloads:
         return
     try:
@@ -103,23 +109,32 @@ def _pause_workers(*, cancel_downloads: bool) -> None:
             ids = [job.id for job in jobs if job.id is not None]
         for job_id in ids:
             downloader.download_queue.cancel_job(job_id)
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "factory reset: could not cancel active downloads",
+            exc_info=True,
+        )
 
 
 def _resume_workers() -> None:
-    try:  # noqa: SIM105 - best-effort cleanup, intentionally silent until the silent-except audit
+    try:
         downloader.download_queue.resume_all()
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "factory reset: could not resume the download queue",
+            exc_info=True,
+        )
     try:
         from .ai.provider import invalidate_resolved_url
         from .ai.worker import wake_worker
 
         invalidate_resolved_url()
         wake_worker()
-    except Exception:  # noqa: BLE001, S110 - best-effort cleanup, intentionally silent until the silent-except audit
-        pass
+    except Exception:
+        logger.warning(
+            "factory reset: could not wake the AI worker",
+            exc_info=True,
+        )
 
 
 def _erase_media() -> None:

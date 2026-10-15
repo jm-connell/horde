@@ -120,7 +120,7 @@ def get_policy(session: Session, channel_url: str) -> ChannelAutodownload | None
 def list_enabled_policies(session: Session) -> list[ChannelAutodownload]:
     return list(
         session.exec(
-            select(ChannelAutodownload).where(ChannelAutodownload.enabled == True)  # noqa: E712
+            select(ChannelAutodownload).where(ChannelAutodownload.enabled == True)  # noqa: E712 - SQL column comparison, not a Python truth test
         ).all()
     )
 

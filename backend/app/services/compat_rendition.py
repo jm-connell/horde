@@ -375,7 +375,8 @@ def _slot_limit() -> int:
         return config.MAX_FFMPEG_CONCURRENCY
     try:
         return 2 if probe_encode_capabilities().hw_h264 else 1
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("encoder probe failed; using one ffmpeg slot", exc_info=True)
         return 1
 
 
@@ -470,9 +471,11 @@ def _worker(job: _Job) -> None:
             _run_compat(job)
     except (FfmpegCancelled, _Cancelled):
         logger.info("compat job %s cancelled", job.video_id)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         msg = str(exc) or exc.__class__.__name__
-        logger.warning("compat job %s (%s) failed: %s", job.video_id, job.kind, msg)
+        logger.warning(
+            "compat job %s (%s) failed: %s", job.video_id, job.kind, msg, exc_info=True
+        )
         with _lock:
             if job.kind == "safari":
                 # Not a sidecar failure: keep it out of the video row.
@@ -618,10 +621,12 @@ def _run_compat(job: _Job) -> None:
                 produced = _download_native_h264(src, dest, job.cancel, progress)
             except _Cancelled:
                 raise
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 download_note = str(exc)
                 logger.info(
-                    "native H.264 download failed for %s: %s", job.video_id, exc
+                    "native H.264 download failed for %s",
+                    job.video_id,
+                    exc_info=True,
                 )
                 produced = None
         if job.cancel.is_set():
@@ -1056,7 +1061,7 @@ def _probe_backfill_loop(worker: BackgroundWorker) -> None:
     while not worker.stopping:
         with Session(engine) as session:
             query = select(Video).where(
-                Video.media_probed_at == None,  # noqa: E711
+                Video.media_probed_at == None,  # noqa: E711 - SQL column comparison, not a Python truth test
                 Video.status == VideoStatus.ready,
             )
             if skipped:

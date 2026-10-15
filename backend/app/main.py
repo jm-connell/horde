@@ -242,7 +242,7 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
         video_count = session.scalar(select(func.count(Video.id))) or 0
         review_count = (
             session.scalar(
-                select(func.count(Video.id)).where(Video.needs_review == True)  # noqa: E712
+                select(func.count(Video.id)).where(Video.needs_review == True)  # noqa: E712 - SQL column comparison, not a Python truth test
             )
             or 0
         )
