@@ -2893,45 +2893,40 @@ def start_download(
     enqueue_download(job_id)
 
 
-def _wait_for_job_video_id(job_id: int) -> int | None:
-    while True:
-        with Session(engine) as session:
-            job = session.get(DownloadJob, job_id)
-            if job is None:
-                return None
-            if job.status in (
-                JobStatus.completed,
-                JobStatus.error,
-                JobStatus.cancelled,
-            ):
-                return job.video_id
-        threading.Event().wait(1.0)
+def _attach_slot(session: Session, playlist_id: int, job_id: int) -> int:
+    """Playlist position for a job's video, so import order survives async finishing.
 
-
-def append_playlist_item(session: Session, playlist_id: int, video_id: int) -> bool:
-    """Append a video to a playlist if it is not already a member."""
-    existing = session.exec(
-        select(PlaylistItem).where(
-            PlaylistItem.playlist_id == playlist_id,
-            PlaylistItem.video_id == video_id,
-        )
-    ).first()
-    if existing is not None:
-        return False
-    count = session.exec(
-        select(func.count())
-        .select_from(PlaylistItem)
-        .where(PlaylistItem.playlist_id == playlist_id)
-    ).one()
-    session.add(
-        PlaylistItem(
-            playlist_id=playlist_id,
-            video_id=video_id,
-            position=int(count or 0),
-        )
+    A playlist import enqueues one job per missing entry, in playlist order, so
+    job ids ascend with playlist order. Entries already in the library were
+    placed at their playlist index during the import, leaving holes where the
+    jobs go. A job takes the first free position *after* the holes reserved by
+    the still-active jobs with a lower id, so a later entry that finishes first
+    cannot jump ahead of an earlier one that is still downloading.
+    """
+    earlier_active = int(
+        session.exec(
+            select(func.count())
+            .select_from(DownloadJob)
+            .where(
+                DownloadJob.playlist_id == playlist_id,
+                DownloadJob.id < job_id,
+                DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading]),
+            )
+        ).one()
     )
-    session.commit()
-    return True
+    occupied = set(
+        session.exec(
+            select(PlaylistItem.position).where(PlaylistItem.playlist_id == playlist_id)
+        ).all()
+    )
+    pos = 0
+    skipped = 0
+    while True:
+        if pos not in occupied:
+            if skipped >= earlier_active:
+                return pos
+            skipped += 1
+        pos += 1
 
 
 def _attach_download_to_playlist(job_id: int, video_id: int | None) -> None:
@@ -2945,7 +2940,24 @@ def _attach_download_to_playlist(job_id: int, video_id: int | None) -> None:
             return
         if session.get(Video, video_id) is None:
             return
-        append_playlist_item(session, job.playlist_id, video_id)
+        if (
+            session.exec(
+                select(PlaylistItem).where(
+                    PlaylistItem.playlist_id == job.playlist_id,
+                    PlaylistItem.video_id == video_id,
+                )
+            ).first()
+            is not None
+        ):
+            return
+        session.add(
+            PlaylistItem(
+                playlist_id=job.playlist_id,
+                video_id=video_id,
+                position=_attach_slot(session, job.playlist_id, job_id),
+            )
+        )
+        session.commit()
 
 
 def _upsert_playlist_item(
@@ -2995,56 +3007,63 @@ def _find_active_job_for_url(session: Session, url: str) -> DownloadJob | None:
     return find_active_job_for_identity(session, url)
 
 
-def _resolve_library_or_download(entry_url: str, quality_preset: str) -> int | None:
-    """Return a library video id, downloading only if the YouTube id is new."""
-    cleaned = clean_url(entry_url, keep_playlist=False)
-    if not cleaned:
-        return None
-    if is_youtube_short_url(cleaned) or is_youtube_short_url(entry_url):
-        return None
+def _enqueue_playlist_entry(
+    playlist_id: int, entry_url: str, quality_preset: str
+) -> tuple[str, int | None]:
+    """Resolve one playlist entry without waiting for any download.
 
-    with Session(engine) as session:
-        existing = library_video_for_url(session, cleaned)
-        if existing is not None:
-            return existing.id
-        active = find_active_job_for_identity(session, cleaned)
-        if active is not None and active.id is not None:
-            return _wait_for_job_video_id(active.id)
+    Returns ``("library", video_id)`` when the video is already in the library,
+    ``("job", job_id)`` when a download job carries ``playlist_id`` (a new one, or
+    an active one for the same video) so it attaches itself on completion, and
+    ``("skip", None)`` for Shorts and unparseable URLs.
+    """
+    cleaned = clean_url(entry_url, keep_playlist=False)
+    if not cleaned or is_youtube_short_url(cleaned) or is_youtube_short_url(entry_url):
+        return "skip", None
 
     yt_id = youtube_video_id(cleaned)
     thumb = youtube_thumbnail_url(yt_id) if yt_id else None
     created_job_id: int | None = None
     with job_mutate_lock, Session(engine) as session:
         existing = library_video_for_url(session, cleaned)
-        if existing is not None:
-            return existing.id
+        if existing is not None and existing.id is not None:
+            return "library", existing.id
         active = find_active_job_for_identity(session, cleaned)
         if active is not None and active.id is not None:
-            job_id = active.id
-        else:
-            job = DownloadJob(
-                url=cleaned,
-                quality_preset=quality_preset or "best",
-                status=JobStatus.queued,
-                thumbnail_url=thumb,
-                video_codec=default_download_video_codec(),
-                destination=DownloadDestination.library.value,
-                paused=download_queue.is_paused(),
-            )
-            session.add(job)
-            session.commit()
-            session.refresh(job)
-            job_id = job.id
-            created_job_id = job_id
+            if active.playlist_id is None:
+                active.playlist_id = playlist_id
+                session.add(active)
+                session.commit()
+            elif active.playlist_id != playlist_id:
+                # One job can attach to one playlist only (no schema for more).
+                logger.warning(
+                    "job %s already feeds playlist %s; not also attaching to %s",
+                    active.id,
+                    active.playlist_id,
+                    playlist_id,
+                )
+            return "job", active.id
+        job = DownloadJob(
+            url=cleaned,
+            quality_preset=quality_preset or "best",
+            status=JobStatus.queued,
+            thumbnail_url=thumb,
+            video_codec=default_download_video_codec(),
+            destination=DownloadDestination.library.value,
+            playlist_id=playlist_id,
+            paused=download_queue.is_paused(),
+        )
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        created_job_id = job.id
 
+    from .job_metadata import request_job_metadata
+
+    request_job_metadata(created_job_id)
     if created_job_id is not None:
-        from .job_metadata import request_job_metadata
-
-        request_job_metadata(created_job_id)
         enqueue_download(created_job_id)
-    if job_id is None:
-        return None
-    return _wait_for_job_video_id(job_id)
+    return "job", created_job_id
 
 
 def run_playlist_entries(
@@ -3054,23 +3073,45 @@ def run_playlist_entries(
     *,
     activity_handle: Any = None,
 ) -> None:
-    """Attach playlist entries in order; skip re-download when the library already has the id."""
+    """Enqueue a playlist's entries; never blocks on a download.
+
+    Videos already in the library are placed at their playlist index right away.
+    Every other entry becomes an ordinary queue job tagged with ``playlist_id``
+    (so it honours concurrency and pause, and survives a restart) and is
+    attached by ``_attach_download_to_playlist`` when it completes; see
+    ``_attach_slot`` for how playlist order is kept. Items on the playlist that
+    are not on the remote list stay after the remote entries.
+    """
     total = len(entries)
-    placed: list[int] = []
-    seen: set[int] = set()
+    placed: set[int] = set()
+    job_ids: list[int] = []
     for index, entry_url in enumerate(entries):
-        video_id = _resolve_library_or_download(entry_url, quality_preset)
-        if video_id is not None and video_id not in seen:
-            seen.add(video_id)
-            placed.append(video_id)
+        kind, ref = _enqueue_playlist_entry(playlist_id, entry_url, quality_preset)
+        if kind == "job" and ref is not None:
+            job_ids.append(ref)
+        if kind == "library" and ref is not None and ref not in placed:
+            placed.add(ref)
             with Session(engine) as session:
-                _upsert_playlist_item(session, playlist_id, video_id, len(placed) - 1)
+                _upsert_playlist_item(session, playlist_id, ref, index)
         if activity_handle is not None:
             activity_handle.update(
                 done=index + 1,
-                detail=f"{index + 1}/{total} videos",
+                detail=f"{index + 1}/{total} queued",
             )
-    _append_unlisted_playlist_items(playlist_id, seen, start_pos=len(placed))
+    if job_ids:
+        # Jobs that already finished attached themselves in playlist order.
+        with Session(engine) as session:
+            placed.update(
+                vid
+                for vid in session.exec(
+                    select(DownloadJob.video_id).where(
+                        DownloadJob.id.in_(job_ids),  # type: ignore[union-attr]
+                        DownloadJob.video_id != None,  # noqa: E711 - SQL IS NOT NULL
+                    )
+                ).all()
+                if vid is not None
+            )
+    _append_unlisted_playlist_items(playlist_id, placed, start_pos=total)
 
 
 def _run_playlist_import(
@@ -3082,7 +3123,7 @@ def _run_playlist_import(
         "Importing playlist",
         reason="Playlist import started",
         engine="yt-dlp",
-        detail=f"0/{total} videos",
+        detail=f"0/{total} queued",
         total=total,
         done=0,
     ) as handle:
