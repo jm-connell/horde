@@ -2,8 +2,8 @@
 
 Run the FastAPI backend and Vite frontend on your machine for UI and API work. Clone the repo first (`git clone https://github.com/jm-connell/horde.git`), then work from that checkout. This path does not require Docker, though you can still use Compose for a production-like stack ([Install with Docker](install-docker.md)).
 
-!!! warning "LAN only — no authentication"
-    Even in dev, Horde has **no login**. Do not expose the Vite or uvicorn ports beyond a trusted network.
+!!! warning "Trusted network"
+    Even in dev the first visit creates an admin account. Do not expose the Vite or uvicorn ports beyond a trusted network.
 
 ## Prerequisites
 

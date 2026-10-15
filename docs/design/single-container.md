@@ -41,7 +41,7 @@ For day-to-day coding you typically run Vite and Uvicorn separately (see [Local 
 
 ## Why one container
 
-- Matches the [single-admin](no-auth.md) / one-homelab-box mental model
+- Matches the [accounts](../ops/authentication.md) / one-homelab-box mental model
 - Dockge / Compose stacks stay short: one service, two volumes (`/downloads`, `/app/data`)
 - No version skew between “API image” and “UI image”
 - Wiki and app ship together — docs match the build you are running

@@ -12,6 +12,23 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Upgrade notes
 
+- **Horde now has accounts.** The first visit after upgrading asks you to create
+  the administrator account; until you do, nothing else can be used. Your
+  existing watch history, continue-watching positions, saved look and layout and
+  AI chat history move to that account (the other server settings are
+  unchanged). Add everyone else under *Settings → Users*; each person then has
+  their own history, chats and preferences, while the library, playlists, tags,
+  notes, AI summaries and downloads stay shared. Members can be given
+  permissions (delete videos, download, save for offline, edit details, manage
+  playlists, use AI); by default only admins can delete. Lost the password:
+  `docker exec -it horde python -m app.cli reset-password <user>`. Behind an
+  authenticating reverse proxy see `HORDE_AUTH_DISABLED` in
+  [docs/ops/authentication.md](docs/ops/authentication.md). Migrations `0003_auth`
+  and `0004_permissions_chat` run automatically (a database backup is taken
+  first); they cannot be reversed, so keep that backup if you may roll back. The
+  legacy `videos.last_position_sec` / `last_watched_at` columns remain in the
+  database, unused, until a later cleanup.
+
 - **`update.sh` now follows releases, not `main`.** It installs the newest stable
   `vX.Y.Z` tag on a local `horde-release` branch (until the first release exists
   it follows `main` as before). To keep tracking `main` set
@@ -28,6 +45,9 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Added
 
+- Accounts: sign-in, an admin plus members with per-account permissions, per-user
+  watch history, AI chat and UI preferences, signed media URLs for Chromecast and
+  AirPlay, and a recovery CLI (`python -m app.cli`).
 - Versioned releases: tagging `vX.Y.Z` publishes multi-arch (amd64, arm64)
   images to `ghcr.io/jm-connell/horde` and creates a GitHub Release.
 - Optional use of the published image instead of building from source

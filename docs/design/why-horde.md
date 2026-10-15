@@ -24,7 +24,7 @@ Horde is built for that archive. The product metaphor is closer to a **personal 
 | Scope | YouTube-first, but any [yt-dlp](https://github.com/yt-dlp/yt-dlp)-supported URL |
 | Disk layout | [Channel / year / title](channel-year-layout.md) so SMB browsing matches the UI |
 | Watching | Custom player with mini player, theater, cast, SponsorBlock, chapters |
-| Ops | [One container](single-container.md), TrueNAS / Dockge friendly, [no auth](no-auth.md) on a trusted LAN |
+| Ops | [One container](single-container.md), TrueNAS / Dockge friendly, [simple accounts](no-auth.md) on a trusted LAN |
 | Intelligence | Optional [local or cloud AI](local-vs-cloud-ai.md) for search, tags, summaries, recommendations |
 
 If TubeArchivist already fits your habits, use it. Horde exists for people who wanted the UI, layout, and AI layer shaped a particular way — and who were willing to [vibecode](vibecoded.md) toward that shape.
@@ -47,4 +47,4 @@ It is not primarily a live YouTube client. Stream preview exists so you can chec
 
 - Day-to-day use: [Library](../guides/library.md), [Downloads](../guides/downloads.md), [Watching](../guides/watching.md)
 - Install: [Docker](../getting-started/install-docker.md), [TrueNAS / Dockge](../getting-started/truenas-dockge.md)
-- Design siblings: [no auth](no-auth.md), [single container](single-container.md), [vibecoded](vibecoded.md)
+- Design siblings: [security model](no-auth.md), [single container](single-container.md), [vibecoded](vibecoded.md)

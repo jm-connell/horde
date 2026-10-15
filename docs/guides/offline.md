@@ -142,8 +142,8 @@ This stays private to your tailnet: nothing is exposed to the internet.
 
 Any reverse proxy with a trusted certificate works, for example
 [Caddy](../ops/remote-access.md#caddy-basic-auth), Nginx Proxy Manager or
-Traefik. Horde has **no login**, so if the hostname is reachable from the
-internet, put authentication on the proxy as the remote-access guide
+Traefik. Horde has its own sign-in, but if the hostname is reachable from the
+internet, also put authentication on the proxy as the remote-access guide
 describes.
 
 ### Check that it worked

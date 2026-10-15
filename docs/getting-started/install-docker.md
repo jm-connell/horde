@@ -6,8 +6,8 @@ There is **no image on Docker Hub**. You clone this git repository onto the Dock
 
 On **TrueNAS with Dockge**, clone into the Dockge stacks directory and deploy from the UI: [TrueNAS / Dockge](truenas-dockge.md).
 
-!!! warning "LAN only — no authentication"
-    Horde has **no login**. Bind it to a trusted LAN only. Do not publish it to the public internet or reverse-proxy it without your own access control in front.
+!!! warning "Trusted network"
+    The first visit creates the admin account ([accounts](../ops/authentication.md)). Keep Horde on a trusted LAN or VPN; do not publish it to the public internet.
 
 ## Requirements
 

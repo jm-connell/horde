@@ -1,9 +1,9 @@
 # API overview
 
-Horde exposes an HTTP JSON API under the **`/api`** prefix, served by the same process as the UI. There is **no authentication**.
+Horde exposes an HTTP JSON API under the **`/api`** prefix, served by the same process as the UI. Every route requires a signed-in session (cookie `horde_session`) except a short public list; see [Accounts and sign-in](../ops/authentication.md).
 
 !!! danger "LAN trust"
-Any client that can reach the port can mutate the library and settings. See [No authentication](../design/no-auth.md) and [Ports & networking](../ops/ports-networking.md).
+Signed-in clients can mutate the library; server settings need an administrator and several actions need a [permission](../ops/authentication.md#account-types-and-permissions). See [Security model](../design/no-auth.md) and [Ports & networking](../ops/ports-networking.md).
 
 ## Conventions
 

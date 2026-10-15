@@ -1,6 +1,6 @@
 # Security
 
-Horde has **no login** ([why](../design/no-auth.md)). It trusts the network it runs on. This page describes what Horde still enforces so that a web page you visit, or a hostile DNS name, cannot use your browser to reach into that trusted network.
+Horde has [accounts](authentication.md) ([model](../design/no-auth.md)) and is meant for a network you trust. This page describes what Horde enforces so that a web page you visit, or a hostile DNS name, cannot use your signed-in browser to reach into that network. Sign-in is checked after these protections.
 
 !!! danger "Still LAN only"
     None of this replaces access control. Do not publish the port to the internet. See [Remote access](remote-access.md).

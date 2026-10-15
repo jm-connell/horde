@@ -4,7 +4,7 @@ Horde uses **SQLite** as its only application database (typically `data/horde.db
 
 ## Why SQLite
 
-The product is a [single-admin](no-auth.md), single-instance homelab app:
+The product is a [small-group](no-auth.md), single-instance homelab app:
 
 - One writer process (the FastAPI / worker container)
 - Modest library sizes compared to multi-tenant SaaS

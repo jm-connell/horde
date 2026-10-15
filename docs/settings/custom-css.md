@@ -30,7 +30,7 @@ When enabled, Settings includes a collapsed **Selector reference** next to the C
 Cap: **64 000** characters. `</style` sequences are neutralized so the payload cannot break out of the style tag.
 
 !!! warning "You can hide the UI"
-    Custom CSS runs as the admin of this [no-auth](../design/no-auth.md) instance. A rule like `* { display: none }` will hide Settings too. Turn **Enable custom CSS** off if you can still reach Settings, clear the box, or remove `custom_css` from `app_settings.json` → `ui` and refresh.
+    Custom CSS runs in your own account. A rule like `* { display: none }` will hide Settings too. Turn **Enable custom CSS** off if you can still reach Settings, clear the box, or ask an administrator, or as a last resort remove your row from the `user_settings` table, and refresh.
 
 ## CSS variables
 

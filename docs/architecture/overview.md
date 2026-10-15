@@ -53,7 +53,7 @@ Shutdown signals every registered worker and joins them in reverse start order w
 | **React SPA** | Library, player, settings; providers for download/playback/search/toast |
 
 !!! warning "Trust boundary"
-    No authentication — treat the network as the security boundary. See [No authentication](../design/no-auth.md) and [Single container](../design/single-container.md).
+    Sign-in is required; the network is still treated as untrusted-by-default for the internet. See [Security model](../design/no-auth.md) and [Single container](../design/single-container.md).
 
 ## Related
 

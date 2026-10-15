@@ -15,7 +15,7 @@ Compose always starts a [bgutil POT](https://github.com/Brainicism/bgutil-ytdlp-
 sidecar for YouTube; Ollama is an optional profile. Built for TrueNAS / Dockge,
 works on any Docker host.
 
-**No authentication.** Single-admin, trusted LAN only. Do not port-forward it.
+**Accounts.** The first visit creates the admin, who adds other people (each with their own watch history). Built for a trusted LAN or VPN: do not port-forward it. See [Accounts and sign-in](docs/ops/authentication.md).
 
 Full docs ship in the image: **Settings → System → Documentation**, or `/wiki/`
 on the host. Interactive API docs: `/docs`.

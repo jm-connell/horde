@@ -23,12 +23,12 @@ Browser ──► host:8686 ──► container:8080 (FastAPI)
 
 Only the video stream, subtitle and thumbnail routes send CORS headers (`Access-Control-Allow-Origin: *`, methods `GET`, `HEAD`, `OPTIONS`, `Range` allowed), so Chromecast can fetch them cross-origin. All other routes send none. Horde also only answers LAN-style `Host` names; behind a reverse proxy set `HORDE_ALLOWED_HOSTS`. See [Security](security.md).
 
-## LAN-only, no authentication
+## LAN-only
 
 !!! danger "Do not expose to the internet"
-    Horde has **no login, no API keys, no reverse-proxy auth of its own**. Anyone who can reach the port can download, delete, change settings, and read your library.
+    Horde has accounts ([details](authentication.md)) but no two-factor sign-in and no hardening against a determined remote attacker. Anyone who can reach the port can try passwords, and any signed-in user can read the library.
 
-    Keep it on a trusted LAN, VPN, or a gateway that terminates auth. Recipes: [Remote access](remote-access.md). Design: [No authentication](../design/no-auth.md).
+    Keep it on a trusted LAN, VPN, or a gateway that terminates auth. Recipes: [Remote access](remote-access.md). Design: [Security model](../design/no-auth.md).
 
 ## Local development
 

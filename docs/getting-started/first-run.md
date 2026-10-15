@@ -2,8 +2,8 @@
 
 You have Horde running (Docker or local dev). This page walks through the first useful loop: the setup wizard, a test download, confirm it on disk and in the library, and know where settings live.
 
-!!! warning "LAN only — no authentication"
-    There is **no login screen**. Anyone who can reach the URL can manage downloads and the library. Stay on a trusted LAN.
+!!! info "Create the admin account first"
+    The first screen asks you to create the administrator account (username and password). Add other people later in *Settings → Users*. See [Accounts and sign-in](../ops/authentication.md). Stay on a trusted LAN.
 
 ## Open the UI
 

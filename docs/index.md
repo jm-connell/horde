@@ -16,8 +16,8 @@ I strongly recommend using Tailscale (or something similar) if you aren't alread
 
 The majority of this wiki beyond this point is AI-generated, but accurate. It provides a good overview of features and how-to's regarding Horde. If you have more advanced questions then I recommend you clone the repo, open in your IDE of choice, and ask your favorite model.
 
-!!! warning "LAN only — no authentication"
-    Horde is a single-admin app with **no login**. Keep it on a trusted LAN. Do not expose it to the public internet.
+!!! warning "Trusted network"
+    Horde asks everyone to sign in ([accounts](ops/authentication.md)), but it is built for a trusted LAN or VPN. Do not expose it to the public internet.
 
 ##  Feature highlights
 
