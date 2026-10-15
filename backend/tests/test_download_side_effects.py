@@ -20,6 +20,7 @@ from ytdlp_fakes import (
 
 from app.models import DownloadJob, JobStatus, Video
 from app.services import downloader
+from app.services.downloads import finalize
 
 YT = "sideeffect01"
 URL = f"https://www.youtube.com/watch?v={YT}"
@@ -54,8 +55,8 @@ def test_a_finished_download_queues_indexing_catalog_and_finalize(
 ):
     fx = record_side_effects(monkeypatch, downloader)
     monkeypatch.setattr(
-        downloader,
-        "_finalize_in_background",
+        finalize,
+        "finalize_in_background",
         lambda *args, **_kw: fx.finalize.append(args),
     )
     with Session(init_db["engine"]) as s:
@@ -82,7 +83,7 @@ def test_background_finalize_fetches_subtitles_and_thumbnail_then_queues_work(
     video = add_video(write_file=True)
     media = init_db["downloads"] / video.file_path
 
-    downloader._finalize_in_background(
+    finalize.finalize_in_background(
         video.id,
         media,
         URL,

@@ -10,6 +10,7 @@ from sqlmodel import Session
 
 from app.models import Video
 from app.services import downloader, mp4_compat, video_transcode
+from app.services.downloads import finalize
 from app.services.paths import rename_video_file
 
 
@@ -187,14 +188,14 @@ def test_replace_keeps_old_files_when_row_commit_fails(init_db, add_video, monke
         s.commit()
         job_id = job.id
 
-    original = downloader._commit_library_video
+    original = finalize.commit_library_video
 
     def failing(**_kw):
         raise OperationalError("COMMIT", {}, Exception("disk I/O error"))
 
-    monkeypatch.setattr(downloader, "_commit_library_video", failing)
+    monkeypatch.setattr(finalize, "commit_library_video", failing)
     run_job_inline(downloader, job_id)
-    monkeypatch.setattr(downloader, "_commit_library_video", original)
+    monkeypatch.setattr(finalize, "commit_library_video", original)
 
     assert (root / video.file_path).is_file()
     assert sub.is_file()

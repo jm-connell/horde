@@ -13,7 +13,7 @@ from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadJob, JobStatus, Video
 from app.services import downloader, scanner
-from app.services.downloads import dbwrite, staging
+from app.services.downloads import dbwrite, finalize, staging
 from app.services.paths import STAGING_DIR_NAME
 
 YT = "aaaaaaaaaaa"
@@ -179,7 +179,7 @@ def test_commit_failure_restores_the_replaced_file(
     def failing(**_kw):
         raise OperationalError("COMMIT", {}, Exception("disk I/O error"))
 
-    monkeypatch.setattr(downloader, "_commit_library_video", failing)
+    monkeypatch.setattr(finalize, "commit_library_video", failing)
     job_id = _redownload_job(init_db, existing)
     run_job_inline(downloader, job_id)
 
@@ -240,7 +240,7 @@ def _displaced_scenario(init_db, existing, monkeypatch):
         state["armed"] = True
         raise OperationalError("COMMIT", {}, Exception("disk I/O error"))
 
-    monkeypatch.setattr(downloader, "_commit_library_video", failing_commit)
+    monkeypatch.setattr(finalize, "commit_library_video", failing_commit)
     return root
 
 

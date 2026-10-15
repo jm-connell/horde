@@ -7,8 +7,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.models import DownloadDestination, DownloadJob, JobStatus, Video
-from app.services import downloader
-from app.services.downloads import progress, staging
+from app.services.downloads import finalize, postprocess, progress, staging
 
 
 def _write_media(path: Path, size: int = 64) -> None:
@@ -17,10 +16,10 @@ def _write_media(path: Path, size: int = 64) -> None:
 
 
 def test_complete_device_skips_library_row(init_db, monkeypatch):
-    monkeypatch.setattr(downloader, "_apply_loudnorm", lambda _p: None)
-    monkeypatch.setattr(downloader, "_check_quality", lambda *_a, **_k: None)
-    monkeypatch.setattr(downloader, "probe_duration", lambda _p: 12.0)
-    monkeypatch.setattr(downloader, "probe_dimensions", lambda _p: (1280, 720))
+    monkeypatch.setattr(postprocess, "apply_loudnorm", lambda _p: None)
+    monkeypatch.setattr(postprocess, "check_quality", lambda *_a, **_k: None)
+    monkeypatch.setattr(finalize, "probe_duration", lambda _p: 12.0)
+    monkeypatch.setattr(finalize, "probe_dimensions", lambda _p: (1280, 720))
 
     downloads = init_db["downloads"]
     with Session(init_db["engine"]) as session:
@@ -39,7 +38,7 @@ def test_complete_device_skips_library_row(init_db, monkeypatch):
     final = downloads / "_device" / str(job_id) / "Device Clip [dQw4w9WgXcQ].mp4"
     _write_media(final)
 
-    result = downloader._complete_download(
+    result = finalize.complete_download(
         job_id,
         final,
         {"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
@@ -86,14 +85,14 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
         seen.append(("loudnorm", progress.progress_store.get(job_id, {}).get("stage")))
         return None
 
-    monkeypatch.setattr(downloader, "_apply_loudnorm", fake_loudnorm)
-    monkeypatch.setattr(downloader, "_check_quality", lambda *_a, **_k: None)
-    monkeypatch.setattr(downloader, "probe_duration", lambda _p: 12.0)
-    monkeypatch.setattr(downloader, "probe_dimensions", lambda _p: (1280, 720))
-    monkeypatch.setattr(downloader, "ensure_safari_mp4", fake_ensure)
-    monkeypatch.setattr(downloader, "transcode_video", fake_transcode)
+    monkeypatch.setattr(postprocess, "apply_loudnorm", fake_loudnorm)
+    monkeypatch.setattr(postprocess, "check_quality", lambda *_a, **_k: None)
+    monkeypatch.setattr(finalize, "probe_duration", lambda _p: 12.0)
+    monkeypatch.setattr(finalize, "probe_dimensions", lambda _p: (1280, 720))
+    monkeypatch.setattr(finalize, "ensure_safari_mp4", fake_ensure)
+    monkeypatch.setattr(finalize, "transcode_video", fake_transcode)
     monkeypatch.setattr(
-        downloader,
+        finalize,
         "probe_media",
         lambda _p: MediaProbe(
             video_codec="av1",
@@ -125,7 +124,7 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
     final = downloads / "_device" / str(job_id) / "Device Clip [dQw4w9WgXcQ].mp4"
     _write_media(final)
 
-    downloader._complete_download(
+    finalize.complete_download(
         job_id,
         final,
         {"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},

@@ -15,6 +15,7 @@ from app import database, main
 from app.models import DownloadJob, JobStatus
 from app.services import downloader, ffmpeg_progress, scanner, sprites
 from app.services.auth import accounts
+from app.services.downloads import postprocess
 from app.services.workers import BackgroundWorker, WorkerRegistry
 
 EXPECTED_WORKERS = {
@@ -329,7 +330,7 @@ def test_shutdown_requeues_pending_postprocess_and_keeps_its_staging(init_db):
     queue, ffmpeg = downloader.download_queue, downloader.ffmpeg_queue
     queue.claim_ffmpeg(job_id)
     ffmpeg._pending.append(
-        downloader._PostprocessTask(
+        postprocess.PostprocessTask(
             job_id=job_id,
             final_path=finished,
             info={},
