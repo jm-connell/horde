@@ -112,7 +112,10 @@ class MoveJournal:
         if dest.exists() or dest.is_symlink():
             if backup_dir is None:
                 raise FileExistsError(f"destination exists: {dest}")
-            backup = backup_dir / f"{len(self._backups)}-{dest.name}"
+            # Mirror the library-relative path so a backup can be restored by
+            # anyone who finds it later (see restore_displaced).
+            rel = safe_rel(dest, self._root)
+            backup = backup_dir / (rel if rel else f"{len(self._backups)}-{dest.name}")
             backup.parent.mkdir(parents=True, exist_ok=True)
             replace_with_retries(dest, backup, root=self._root)
             self._backups.append((dest, backup))
@@ -120,20 +123,33 @@ class MoveJournal:
         replace_with_retries(src, dest, root=self._root)
         self._moves.append((src, dest))
 
-    def rollback(self) -> None:
-        """Undo every move, newest first, restoring any replaced file."""
+    def rollback(self) -> bool:
+        """Undo every move, newest first, restoring any replaced file.
+
+        Returns False when something could not be restored. A replaced file's
+        backup is then still on disk and must not be deleted.
+        """
+        ok = True
         for src, dest in reversed(self._moves):
             try:
                 replace_with_retries(dest, src, root=self._root)
             except OSError:
+                ok = False
                 logger.exception("could not move %s back to %s", dest, src)
         for dest, backup in reversed(self._backups):
             try:
                 replace_with_retries(backup, dest, root=self._root)
             except OSError:
-                logger.exception("could not restore %s from %s", dest, backup)
+                ok = False
+                logger.error(
+                    "could not restore %s; the previous copy is kept at %s",
+                    dest,
+                    backup,
+                    exc_info=True,
+                )
         self._moves.clear()
         self._backups.clear()
+        return ok
 
     def commit(self) -> None:
         """The database now references the new files: drop the replaced originals."""
@@ -141,3 +157,38 @@ class MoveJournal:
             safe_unlink(backup, root=self._root)
         self._moves.clear()
         self._backups.clear()
+
+
+DISPLACED_DIR = ".displaced"
+
+
+def has_displaced_files(staging: Path) -> bool:
+    """True when ``staging/.displaced`` holds a previous copy of a library file."""
+    root = staging / DISPLACED_DIR
+    if not root.is_dir() or root.is_symlink():
+        return False
+    return any(p.is_file() for p in root.rglob("*"))
+
+
+def restore_displaced(staging: Path, root: Path | None = None) -> int:
+    """Put displaced originals back where they were when nothing is there now.
+
+    Returns how many were restored. A file whose destination exists again is
+    left in place (the new copy may be what the database references).
+    """
+    base = _root(root)
+    displaced = staging / DISPLACED_DIR
+    restored = 0
+    if not displaced.is_dir() or displaced.is_symlink():
+        return 0
+    for backup in sorted(p for p in displaced.rglob("*") if p.is_file()):
+        dest = base / backup.relative_to(displaced)
+        if dest.exists() or dest.is_symlink() or not is_within(dest, base):
+            continue
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            replace_with_retries(backup, dest, root=base)
+            restored += 1
+        except OSError:
+            logger.exception("could not restore %s from %s", dest, backup)
+    return restored

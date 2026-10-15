@@ -48,7 +48,7 @@ Files dropped or uploaded for the [import / review](../guides/import-review.md) 
 downloads/.horde-staging/{job_id}/
 ```
 
-Every library download (new, re-download, change quality, replace) runs in its own staging dir with the same folder layout. Only after the file is validated and post-processed is it moved into the library (a same-path replace is atomic and the old copy is restored if the database write fails), so cancelling or failing a re-download never damages the file a library row points at. Paused jobs keep their staging dir so partial files resume. The scanner ignores it. At boot, staging dirs of finished or missing jobs are removed, and stale `.part` / `.ytdl` / ffmpeg temp files older than `HORDE_TEMP_SWEEP_HOURS` (default 6) that nothing references are swept.
+Every library download (new, re-download, change quality, replace) runs in its own staging dir with the same folder layout. Only after the file is validated and post-processed is it moved into the library (a same-path replace is atomic and the old copy is restored if the database write fails), so cancelling or failing a re-download never damages the file a library row points at. Paused jobs keep their staging dir so partial files resume. If restoring a replaced file ever fails, its previous copy is kept under `.horde-staging/<job>/.displaced/` (mirroring its library path) and logged at ERROR; boot restores it when its place is empty and never deletes it. The scanner ignores it. At boot, staging dirs of finished or missing jobs are removed, and stale `.part` / `.ytdl` / ffmpeg temp files older than `HORDE_TEMP_SWEEP_HOURS` (default 6) that nothing references are swept.
 
 ### Device staging (ephemeral)
 

@@ -30,7 +30,9 @@ from . import activity, compat_rendition, library, scanner
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
 from .fsutil import (
+    DISPLACED_DIR,
     MoveJournal,
+    has_displaced_files,
     is_within,
     replace_with_retries,
     safe_rel,
@@ -1007,15 +1009,34 @@ def _discard_staging_unless_requeued(job_id: int) -> None:
     remove_staging_dir(root)
 
 
-def remove_staging_dir(path: Path) -> None:
-    """Delete one staging dir (never following a symlink out of the library)."""
+def remove_staging_dir(path: Path) -> bool:
+    """Delete one staging dir (never following a symlink out of the library).
+
+    A non-empty ``.displaced`` holds the only copy of a library file that a
+    re-download replaced; it is never deleted. Everything else in the dir is
+    removed and False is returned so callers know the dir was kept.
+    """
     if path.is_symlink():
         safe_unlink(path)
-        return
+        return True
     if not is_within(path):
         logger.warning("refusing to remove staging dir outside the library: %s", path)
-        return
+        return False
+    if has_displaced_files(path):
+        logger.error(
+            "keeping %s: it holds the previous copy of a replaced library file",
+            path / DISPLACED_DIR,
+        )
+        for child in path.iterdir():
+            if child.name == DISPLACED_DIR:
+                continue
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                safe_unlink(child)
+        return False
     shutil.rmtree(path, ignore_errors=True)
+    return True
 
 
 def _update_job(job_id: int, **fields: Any) -> None:
@@ -1906,7 +1927,7 @@ def _complete_download(
         try:
             final_path = _promote_from_staging(journal, final_path, staging_dir)
         except BaseException:
-            journal.rollback()
+            _rollback_or_log(journal)
             raise
         rel_path = to_rel_path(final_path)
         scanner.mark_active(rel_path)
@@ -1980,7 +2001,7 @@ def _complete_download(
         )
     except BaseException:
         if journal is not None:
-            journal.rollback()
+            _rollback_or_log(journal)
         raise
     else:
         if journal is not None:
@@ -1993,7 +2014,12 @@ def _complete_download(
     # subtitles, stale H.264 sidecar). Done before the finalize thread starts so
     # it cannot delete freshly fetched subtitles that share a name.
     for stale in committed.stale_paths:
-        safe_unlink(stale)
+        if not safe_unlink(stale):
+            logger.warning(
+                "could not remove the replaced file %s after commit; "
+                "delete it manually if it is still there",
+                stale,
+            )
 
     _remove_review_duplicates_for(info.get("id"), video_id)
 
@@ -2228,6 +2254,13 @@ def _remove_review_duplicates_for(yt_id: str | None, video_id: int) -> None:
         _remove_review_duplicates(session, yt_id, keep_id=video_id)
 
 
+def _rollback_or_log(journal: MoveJournal) -> None:
+    if not journal.rollback():
+        logger.error(
+            "rolling back a library promote failed; displaced files stay in staging"
+        )
+
+
 def _promote_from_staging(
     journal: MoveJournal, final_path: Path, staging_dir: Path
 ) -> Path:
@@ -2239,7 +2272,7 @@ def _promote_from_staging(
     """
     rel = final_path.resolve().relative_to(staging_dir.resolve())
     dest = DOWNLOADS_DIR / rel
-    backup_dir = staging_dir / ".displaced"
+    backup_dir = staging_dir / DISPLACED_DIR
     stem = video_stem(final_path, staging=True)
     for entry in sorted(final_path.parent.iterdir()):
         if entry == final_path or not entry.is_file():

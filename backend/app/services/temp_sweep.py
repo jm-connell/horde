@@ -21,7 +21,7 @@ from .. import config
 from ..database import engine
 from ..models import DownloadJob, JobStatus, Video
 from .downloader import remove_staging_dir
-from .fsutil import is_within, safe_unlink
+from .fsutil import is_within, restore_displaced, safe_unlink
 from .paths import COMPAT_SIDECAR_TOKEN, STAGING_DIR_NAME
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,15 @@ def reap_staging_dirs() -> list[Path]:
     for child in sorted(root.iterdir()):
         if child.name.isdigit() and int(child.name) in active:
             continue
-        if child.is_dir() or child.is_symlink():
+        if child.is_dir() and not child.is_symlink():
+            # A crash between promote and commit can leave the previous copy of
+            # a replaced file here: put it back if its place is empty.
+            restored = restore_displaced(child)
+            if restored:
+                logger.warning("restored %d displaced file(s) from %s", restored, child)
+            if not remove_staging_dir(child):
+                continue
+        elif child.is_symlink():
             remove_staging_dir(child)
         else:
             safe_unlink(child)

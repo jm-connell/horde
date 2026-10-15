@@ -217,3 +217,7 @@ See [Troubleshooting — error kinds](../ops/troubleshooting.md#download-error_k
 - [Playlists](playlists.md) — after YouTube import
 - [Download pipeline](../architecture/downloads-pipeline.md)
 - [Environment variables](../ops/environment.md) — `MAX_DOWNLOAD_CONCURRENCY`
+
+## Upgrading: file and folder names
+
+New downloads use byte-limited names and a folder that matches the channel Horde stores for the video (see [storage layout](../ops/storage-layout.md)). Existing files are never renamed. For channels with a very long name (more than 80 bytes), or whose names end in a dot or space, new videos can therefore land in a different folder than older ones from the same channel. Re-downloading a video whose channel you edited also moves it to the edited channel's folder.
