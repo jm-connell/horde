@@ -12,12 +12,10 @@ rewrites audio to AAC-LC plus ``+faststart``. There is no H.264 transcode.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import subprocess
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +23,7 @@ from pathlib import Path
 from . import activity, scanner
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin, ffprobe_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
-from .paths import to_rel_path
+from .fsutil import replace_with_retries, safe_rel, safe_unlink
 
 logger = logging.getLogger(__name__)
 
@@ -242,38 +240,6 @@ def _lock_for(path: Path) -> threading.Lock:
         return lock
 
 
-def _replace_with_retries(src: Path, dest: Path, retries: int = 8) -> None:
-    last_exc: OSError | None = None
-    for attempt in range(retries):
-        try:
-            src.replace(dest)
-            return
-        except PermissionError as exc:
-            last_exc = exc
-            time.sleep(0.2 * (attempt + 1))
-        except OSError as exc:
-            if getattr(exc, "winerror", None) not in (5, 32) and not isinstance(
-                exc, PermissionError
-            ):
-                raise
-            last_exc = exc
-            time.sleep(0.2 * (attempt + 1))
-    if last_exc is not None:
-        raise last_exc
-
-
-def _safe_unlink(path: Path) -> None:
-    with contextlib.suppress(OSError):
-        path.unlink(missing_ok=True)
-
-
-def _safe_rel(path: Path) -> str | None:
-    try:
-        return to_rel_path(path)
-    except ValueError:
-        return None
-
-
 def _dest_mp4(path: Path) -> Path:
     if path.suffix.lower() in _MP4_SUFFIXES and path.suffix.lower() != ".mov":
         return path
@@ -318,8 +284,8 @@ def _ensure_safari_mp4_locked(
 
     dest_path = _dest_mp4(path)
     tmp = dest_path.with_name(f"{dest_path.stem}.compat.{threading.get_ident()}.mp4")
-    tmp_rel = _safe_rel(tmp)
-    dest_rel = _safe_rel(dest_path)
+    tmp_rel = safe_rel(tmp)
+    dest_rel = safe_rel(dest_path)
     if tmp_rel:
         scanner.mark_active(tmp_rel)
     if dest_rel and dest_path != path:
@@ -348,16 +314,16 @@ def _ensure_safari_mp4_locked(
                 cancel_event=cancel_event,
                 timeout=4 * 3600,
             )
-            _replace_with_retries(tmp, dest_path)
+            replace_with_retries(tmp, dest_path)
         if dest_path != path:
-            _safe_unlink(path)
+            safe_unlink(path)
         return dest_path
     except FfmpegCancelled:
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         raise
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
         logger.warning("Safari MP4 remux failed for %s: %s", path.name, exc)
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         return path
     finally:
         if tmp_rel:
@@ -365,4 +331,4 @@ def _ensure_safari_mp4_locked(
         if dest_rel and dest_path != path:
             scanner.unmark_active(dest_rel)
         if tmp.exists():
-            _safe_unlink(tmp)
+            safe_unlink(tmp)

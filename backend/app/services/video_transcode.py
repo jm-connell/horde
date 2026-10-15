@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import subprocess
 import threading
@@ -13,8 +12,8 @@ from . import activity, scanner
 from .encode_probe import EncoderChoice, pick_encoder, probe_encode_capabilities
 from .ffmpeg_bin import ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
+from .fsutil import safe_rel, safe_unlink
 from .mp4_compat import codec_family, is_aac_audio, probe_media
-from .paths import to_rel_path
 from .ytdlp_formats import is_audio_preset, normalize_video_codec
 
 logger = logging.getLogger(__name__)
@@ -190,18 +189,6 @@ def ffmpeg_transcode_cmd(
     return cmd
 
 
-def _safe_rel(path: Path) -> str | None:
-    try:
-        return to_rel_path(path)
-    except ValueError:
-        return None
-
-
-def _safe_unlink(path: Path) -> None:
-    with contextlib.suppress(OSError):
-        path.unlink(missing_ok=True)
-
-
 def transcode_video(
     path: Path,
     target: str,
@@ -231,7 +218,7 @@ def transcode_video(
 
     dest = path if path.suffix.lower() == ".mp4" else path.with_suffix(".mp4")
     tmp = dest.with_name(f"{dest.stem}.xcode.{threading.get_ident()}.mp4")
-    tmp_rel = _safe_rel(tmp)
+    tmp_rel = safe_rel(tmp)
     if tmp_rel:
         scanner.mark_active(tmp_rel)
 
@@ -266,19 +253,19 @@ def transcode_video(
                 raise TranscodeError(f"ffmpeg {choice.name} failed") from exc
             tmp.replace(dest)
         if dest != path:
-            _safe_unlink(path)
+            safe_unlink(path)
         return dest
     except FfmpegCancelled:
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         raise
     except subprocess.TimeoutExpired as exc:
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         raise TranscodeError("ffmpeg transcode timed out") from exc
     except OSError as exc:
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         raise TranscodeError(f"ffmpeg transcode failed: {exc}") from exc
     finally:
         if tmp_rel:
             scanner.unmark_active(tmp_rel)
         if tmp.exists():
-            _safe_unlink(tmp)
+            safe_unlink(tmp)

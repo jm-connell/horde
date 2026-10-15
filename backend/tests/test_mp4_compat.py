@@ -164,8 +164,9 @@ def _have_ffmpeg_tools() -> bool:
 
 
 @pytest.mark.skipif(not _have_ffmpeg_tools(), reason="ffmpeg/ffprobe not installed")
-def test_ensure_safari_mp4_keeps_av1_rewrites_opus(tmp_path: Path):
-    src = tmp_path / "clip.mp4"
+def test_ensure_safari_mp4_keeps_av1_rewrites_opus(init_db):
+    # Media always lives under DOWNLOADS_DIR; the fs helpers refuse anything else.
+    src = init_db["downloads"] / "clip.mp4"
     # Tiny AV1 + Opus MP4 — the combo desktop Chrome plays and iPhone Safari rejects.
     result = subprocess.run(
         [

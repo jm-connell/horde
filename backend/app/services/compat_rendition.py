@@ -45,6 +45,7 @@ from .encode_probe import (
 )
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
+from .fsutil import safe_unlink
 from .media_info import apply_stream_info, needs_compat, probe_stream_info
 from .mp4_compat import ensure_safari_mp4
 from .paths import (
@@ -495,11 +496,6 @@ def _set(job: _Job, *, stage: str | None = None, progress: float | None = None) 
             job.progress = max(0.0, min(100.0, progress))
 
 
-def _safe_unlink(path: Path) -> None:
-    with contextlib.suppress(OSError):
-        path.unlink(missing_ok=True)
-
-
 @dataclass(frozen=True)
 class _Source:
     path: Path
@@ -787,7 +783,7 @@ def _encode_compat(
             )
             return tmp
         except FfmpegCancelled:
-            _safe_unlink(tmp)
+            safe_unlink(tmp)
             raise
         except subprocess.CalledProcessError as exc:
             raw = exc.stderr or exc.stdout or b""
@@ -801,9 +797,9 @@ def _encode_compat(
                 tonemap,
                 last_err[-600:],
             )
-            _safe_unlink(tmp)
+            safe_unlink(tmp)
         except subprocess.TimeoutExpired as exc:
-            _safe_unlink(tmp)
+            safe_unlink(tmp)
             raise CompatError("H.264 encode timed out") from exc
     raise CompatError(f"ffmpeg {choice.name} failed")
 
@@ -858,7 +854,7 @@ def _run_convert(job: _Job) -> None:
         # A ≤1080p H.264 original makes the sidecar redundant.
         old_compat = resolve_compat_path(video)
         if old_compat is not None and not needs_compat(video, compat_copy_cap()):
-            _safe_unlink(old_compat)
+            safe_unlink(old_compat)
             video.compat_path = None
             video.compat_size = None
             video.compat_source = None
@@ -951,7 +947,7 @@ def library_summary(session: Session) -> dict[str, Any]:
 def delete_compat_files(video: Video) -> None:
     path = resolve_compat_path(video)
     if path is not None:
-        _safe_unlink(path)
+        safe_unlink(path)
 
 
 # ---------------------------------------------------------------------------

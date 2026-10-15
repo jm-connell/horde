@@ -28,6 +28,7 @@ from . import activity, compat_rendition, library, scanner
 from .compat_rendition import delete_compat_files
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
+from .fsutil import replace_with_retries, safe_rel, safe_unlink
 from .media_info import apply_stream_info, needs_compat, probe_stream_info
 from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
@@ -152,7 +153,7 @@ def cleanup_device_job_files(job_id: int, device_file_path: str | None = None) -
         except ValueError:
             pass
         else:
-            _safe_unlink(full)
+            safe_unlink(full)
             parent = full.parent
             if parent.is_dir():
                 stem = full.stem
@@ -161,7 +162,7 @@ def cleanup_device_job_files(job_id: int, device_file_path: str | None = None) -
                         ".part",
                         ".ytdl",
                     }:
-                        _safe_unlink(entry)
+                        safe_unlink(entry)
     job_dir = device_job_dir(job_id)
     try:
         resolved = job_dir.resolve()
@@ -1128,13 +1129,6 @@ def _collect_tags(info: dict[str, Any]) -> list[str]:
     return collected
 
 
-def _safe_rel(path: Path) -> str | None:
-    try:
-        return to_rel_path(path)
-    except ValueError:
-        return None
-
-
 def _normalize_lang(lang: str) -> str:
     return lang.split("-")[0].lower()
 
@@ -1151,27 +1145,13 @@ def _collect_subtitles(final_path: Path) -> list[dict[str, Any]]:
         if not entry.name.startswith(stem + "."):
             continue
         raw_lang = entry.name[len(stem) + 1 : -len(".vtt")]
-        rel = _safe_rel(entry)
+        rel = safe_rel(entry)
         if not raw_lang or not rel:
             continue
         lang = _normalize_lang(raw_lang)
         if lang not in by_lang or raw_lang.lower() == lang:
             by_lang[lang] = {"lang": lang, "path": rel, "auto": False}
     return list(by_lang.values())
-
-
-def _safe_unlink(path: Path, retries: int = 5) -> None:
-    """Delete a file, retrying on Windows file-lock errors."""
-    for attempt in range(retries):
-        try:
-            path.unlink(missing_ok=True)
-            return
-        except PermissionError:
-            if attempt == retries - 1:
-                return
-            time.sleep(0.15 * (attempt + 1))
-        except OSError:
-            return
 
 
 def _cleanup_subtitle_partials(parent: Path, stem: str) -> None:
@@ -1183,7 +1163,7 @@ def _cleanup_subtitle_partials(parent: Path, stem: str) -> None:
             and entry.name.startswith(stem + ".")
             and (entry.name.endswith(".part") or entry.suffix.lower() == ".part")
         ):
-            _safe_unlink(entry)
+            safe_unlink(entry)
 
 
 def _subtitle_ydl_opts(
@@ -1261,7 +1241,7 @@ def download_subtitles(media: Path, source_url: str):
                 try:
                     shutil.copy2(entry, dest)
                 except OSError:
-                    _safe_unlink(dest)
+                    safe_unlink(dest)
                     with contextlib.suppress(OSError):
                         shutil.copy2(entry, dest)
     except Exception as exc:  # noqa: BLE001
@@ -1319,14 +1299,14 @@ def _cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) 
             if not entry.is_file() or not entry.name.startswith(stem):
                 continue
             if entry.name.endswith(".part") or _FRAGMENT_RE.search(entry.name):
-                _safe_unlink(entry)
+                safe_unlink(entry)
                 continue
             if (
                 remove_final
                 and entry.suffix.lower() in VIDEO_EXTENSIONS
                 and _FRAGMENT_RE.search(entry.name) is None
             ):
-                _safe_unlink(entry)
+                safe_unlink(entry)
 
 
 def _cleanup_partial_files(paths: set[str]) -> None:
@@ -1341,7 +1321,7 @@ def _cleanup_partial_files(paths: set[str]) -> None:
         if full.suffix.lower() not in VIDEO_EXTENSIONS:
             continue
         if not _validate_playable(full):
-            _safe_unlink(full)
+            safe_unlink(full)
 
 
 def _check_quality(
@@ -1361,28 +1341,6 @@ def _check_quality(
     return None
 
 
-def _replace_with_retries(src: Path, dest: Path, retries: int = 8) -> None:
-    """Atomically replace dest with src, retrying Windows file-lock errors."""
-    last_exc: OSError | None = None
-    for attempt in range(retries):
-        try:
-            src.replace(dest)
-            return
-        except PermissionError as exc:
-            last_exc = exc
-            time.sleep(0.2 * (attempt + 1))
-        except OSError as exc:
-            # WinError 5 (access denied) can also be transient on Windows.
-            if getattr(exc, "winerror", None) not in (5, 32) and not isinstance(
-                exc, PermissionError
-            ):
-                raise
-            last_exc = exc
-            time.sleep(0.2 * (attempt + 1))
-    if last_exc is not None:
-        raise last_exc
-
-
 def _apply_loudnorm(
     path: Path,
     *,
@@ -1395,7 +1353,7 @@ def _apply_loudnorm(
         return "Volume normalization skipped: ffmpeg not found"
     # Unique sidecar so concurrent workers / scanner never share one .norm.mp4.
     tmp = path.with_name(f"{path.stem}.norm.{threading.get_ident()}.mp4")
-    tmp_rel = _safe_rel(tmp)
+    tmp_rel = safe_rel(tmp)
     if tmp_rel:
         scanner.mark_active(tmp_rel)
     cmd = [
@@ -1428,19 +1386,19 @@ def _apply_loudnorm(
                 cancel_event=cancel_event,
                 timeout=3600,
             )
-            _replace_with_retries(tmp, path)
+            replace_with_retries(tmp, path)
         return None
     except FfmpegCancelled:
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         raise
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         return "Volume normalization failed"
     finally:
         if tmp_rel:
             scanner.unmark_active(tmp_rel)
         if tmp.exists():
-            _safe_unlink(tmp)
+            safe_unlink(tmp)
 
 
 def _finalize_in_background(
@@ -1686,11 +1644,11 @@ def _complete_download(
                 raise RuntimeError("Video to replace not found")
             old_path = DOWNLOADS_DIR / video.file_path
             if old_path.exists() and old_path.resolve() != final_path.resolve():
-                _safe_unlink(old_path)
+                safe_unlink(old_path)
             for track in library.parse_subtitles(video.subtitles):
                 sub = DOWNLOADS_DIR / track.get("path", "")
                 if sub.exists():
-                    _safe_unlink(sub)
+                    safe_unlink(sub)
         else:
             video = find_video_by_path(session, rel_path)
             if video is None:
@@ -1849,7 +1807,7 @@ def _reject_unplayable(path: Path | None, attempt_paths: set[str]) -> Path | Non
         return None
     if _validate_playable(path):
         return path
-    rel = _safe_rel(path)
+    rel = safe_rel(path)
     if rel:
         _cleanup_download_artifacts({rel}, remove_final=True)
     _cleanup_partial_files(attempt_paths)
@@ -2015,7 +1973,7 @@ def _run_download(
                         raise MembersOnlyError("Members-only video — skipped")
                     prepared = Path(ydl.prepare_filename(metadata_info))
                     for candidate in (prepared, prepared.with_suffix(".mp4")):
-                        rel = _safe_rel(candidate)
+                        rel = safe_rel(candidate)
                         if rel:
                             attempt_paths.add(rel)
                             active_paths.add(rel)
@@ -2059,7 +2017,7 @@ def _run_download(
                                     prepared,
                                     prepared.with_suffix(".mp4"),
                                 ):
-                                    rel = _safe_rel(candidate)
+                                    rel = safe_rel(candidate)
                                     if rel:
                                         attempt_paths.add(rel)
                                         active_paths.add(rel)
