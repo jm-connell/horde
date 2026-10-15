@@ -2,7 +2,6 @@ import logging
 import re
 import threading
 import time
-from collections.abc import Callable
 from pathlib import Path
 
 from sqlalchemy.exc import IntegrityError
@@ -129,10 +128,12 @@ def ingest_media_file(
     path: Path,
     *,
     require_stable: bool = True,
+    cancel_event: threading.Event | None = None,
 ) -> Video | None:
     """Insert a newly discovered file as a review-needed video.
 
-    Returns the Video row if added, otherwise None.
+    Returns the Video row if added, otherwise None. ``cancel_event`` ends the
+    thumbnail grab early (the row is already committed without a thumbnail).
     """
     try:
         rel_path = to_rel_path(path)
@@ -199,7 +200,7 @@ def ingest_media_file(
 
         handle.update(engine="ffmpeg", detail=video.title)
         thumb_path = THUMBNAILS_DIR / f"{video.id}.jpg"
-        if grab_frame(path, thumb_path):
+        if grab_frame(path, thumb_path, cancel_event=cancel_event):
             video.thumbnail_path = str(thumb_path)
             if video.id is not None:
                 write_list_thumbnail(video.id, thumb_path)
@@ -224,9 +225,14 @@ def ingest_media_file(
         return video
 
 
-def _ingest_file(session: Session, path: Path) -> bool:
+def _ingest_file(
+    session: Session, path: Path, cancel_event: threading.Event | None = None
+) -> bool:
     """Insert a newly discovered file as a review-needed video. Returns True if added."""
-    return ingest_media_file(session, path, require_stable=True) is not None
+    return (
+        ingest_media_file(session, path, require_stable=True, cancel_event=cancel_event)
+        is not None
+    )
 
 
 def _has_library_channel(video: Video) -> bool:
@@ -267,9 +273,11 @@ def scan_once(
     requeue_skipped: bool = False,
     record_empty: bool = False,
     reason: str = "Looking for new or dropped media files",
-    should_stop: Callable[[], bool] | None = None,
+    stop_event: threading.Event | None = None,
 ) -> tuple[int, int]:
     """Walk the downloads tree once, ingesting any unseen media files.
+
+    ``stop_event`` ends the walk and any thumbnail grab in progress.
 
     Returns ``(added, requeued)``. When the scan lock is already held and
     ``blocking`` is false, returns ``(0, 0)`` without walking the tree.
@@ -289,9 +297,9 @@ def scan_once(
         try:
             with Session(engine) as session:
                 for path in DOWNLOADS_DIR.rglob("*"):
-                    if _suspended.is_set() or (should_stop and should_stop()):
+                    if _suspended.is_set() or (stop_event and stop_event.is_set()):
                         break
-                    if _is_media(path) and _ingest_file(session, path):
+                    if _is_media(path) and _ingest_file(session, path, stop_event):
                         added += 1
                         handle.update(done=added, detail=f"{added} new file(s)")
                 if requeue_skipped:
@@ -383,7 +391,7 @@ def _scan_pass(
     expire_progress: bool,
 ) -> None:
     try:
-        scan_once(should_stop=lambda: worker.stopping)
+        scan_once(stop_event=worker.stop_event)
         scan_failures.ok()
     except Exception:  # noqa: BLE001 - FailureLog logs the traceback
         # Keep the poller alive: the next pass retries. A NAS that is offline fails

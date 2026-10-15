@@ -151,7 +151,7 @@ def test_scanner_imports_user_files_that_look_vaguely_like_fragments(
     monkeypatch.setattr(scanner, "probe_dimensions", lambda _p: (640, 360))
     monkeypatch.setattr(scanner, "probe_duration", lambda _p: 10.0)
     monkeypatch.setattr(scanner, "probe_frame_rate", lambda _p: 30.0)
-    monkeypatch.setattr(scanner, "grab_frame", lambda *_a: False)
+    monkeypatch.setattr(scanner, "grab_frame", lambda *_a, **_k: False)
     monkeypatch.setattr("app.services.media_info.probe_stream_info", lambda _p: None)
     monkeypatch.setattr(
         "app.services.sprites.enqueue_sprite_generation", lambda *a, **k: None

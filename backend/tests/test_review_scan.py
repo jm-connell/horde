@@ -1,11 +1,14 @@
 """Manual Import-page folder scan: new files and skipped (unimported) videos."""
 
+import threading
 from pathlib import Path
 
 from sqlmodel import Session
 
 from app.models import Video
-from app.services import scanner
+from app.services import metadata, scanner
+from app.services.ffmpeg_progress import FfmpegCancelled
+from app.services.workers import BackgroundWorker
 
 
 def _write_media(path: Path, size: int = 256) -> None:
@@ -147,3 +150,35 @@ def test_scan_readds_file_after_db_row_deleted(client, add_video, init_db, monke
     assert len(queue) == 1
     assert queue[0]["file_path"] == "imports/removed.mp4"
     assert queue[0]["needs_review"] is True
+
+
+def test_stopping_the_poller_ends_the_thumbnail_grab_of_a_new_file(
+    init_db, monkeypatch
+):
+    _stub_ingest(monkeypatch)
+    monkeypatch.setattr(scanner, "grab_frame", metadata.grab_frame)
+    monkeypatch.setattr(metadata, "ffmpeg_bin", lambda: "ffmpeg")
+    monkeypatch.setattr(
+        "app.services.sprites.enqueue_sprite_generation", lambda *a, **k: None
+    )
+    _write_media(init_db["downloads"] / "imports" / "slow.mp4")
+    grabbing = threading.Event()
+
+    release = threading.Event()
+
+    def blocked_ffmpeg(_cmd, *, timeout, cancel_event=None, **_kw):
+        # Like a real ffmpeg: runs until it is cancelled (or, with no cancel event,
+        # until the safety release below).
+        grabbing.set()
+        (cancel_event or release).wait(10)
+        raise FfmpegCancelled()
+
+    monkeypatch.setattr(metadata, "run_ffmpeg", blocked_ffmpeg)
+    worker = BackgroundWorker("scanner-poller", scanner._polling_loop)
+    worker.start()
+    try:
+        assert grabbing.wait(10), "the poller never reached the thumbnail grab"
+        assert worker.stop(timeout=5), "scanner-poller did not stop"
+    finally:
+        release.set()
+        worker.stop(timeout=15)
