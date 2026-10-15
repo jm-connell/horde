@@ -24,7 +24,6 @@ from ..schemas import (
 )
 from ..services import downloader, library
 from ..services.metadata import (
-    delete_sprite_files,
     load_sprite_meta,
     sprite_image_path,
     sprites_exist,
@@ -42,9 +41,9 @@ from ..services.thumbnails import (
     copy_full,
     ensure_list_thumbnail,
     save_from_url,
-    unlink_for_video,
     write_full_bytes,
 )
+from ..services.video_delete import delete_video_cascade, remove_files
 from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
 from .video_serialize import (
     resolve_media as _resolve_media,
@@ -168,17 +167,16 @@ def bulk_delete_videos(
     payload: BulkVideoDelete,
     session: Session = Depends(get_session),
 ):
+    doomed: list[Path] = []
     for vid_id in payload.video_ids:
         video = session.get(Video, vid_id)
         if video is None:
             continue
-        if payload.delete_files:
-            _delete_media_files(video)
-        unlink_for_video(video.id, video.thumbnail_path)
-        if video.id is not None:
-            delete_sprite_files(SPRITES_DIR, video.id)
-        session.delete(video)
+        doomed += delete_video_cascade(
+            session, video, payload.delete_files, commit=False
+        )
     session.commit()
+    remove_files(doomed)
     return Response(status_code=204)
 
 
@@ -355,27 +353,8 @@ def delete_video(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    if delete_file:
-        _delete_media_files(video)
-    unlink_for_video(video.id, video.thumbnail_path)
-    if video.id is not None:
-        delete_sprite_files(SPRITES_DIR, video.id)
-    session.delete(video)
-    session.commit()
+    delete_video_cascade(session, video, delete_file)
     return Response(status_code=204)
-
-
-def _delete_media_files(video: Video) -> None:
-    media = DOWNLOADS_DIR / video.file_path
-    if media.exists():
-        media.unlink(missing_ok=True)
-    compat = resolve_compat_path(video)
-    if compat is not None:
-        compat.unlink(missing_ok=True)
-    for track in library.parse_subtitles(video.subtitles):
-        sub = DOWNLOADS_DIR / track.get("path", "")
-        if sub.exists():
-            sub.unlink(missing_ok=True)
 
 
 def _effective_source_url(video: Video) -> str | None:

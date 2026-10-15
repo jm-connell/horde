@@ -29,8 +29,8 @@ from ..models import (
     VideoAiMeta,
     VideoEmbedding,
 )
-from . import app_settings, downloader, library, scanner
-from .thumbnails import unlink_for_video
+from . import app_settings, downloader, scanner
+from .video_delete import collect_video_files, remove_files
 
 _ALWAYS_CLEAR_MODELS = (AiJob, OpenRouterUsage, DownloadJob)
 
@@ -118,7 +118,7 @@ def _resume_workers() -> None:
 
 
 def _erase_media() -> None:
-    from ..config import DOWNLOADS_DIR, SPRITES_DIR
+    from ..config import DOWNLOADS_DIR
     from .compat_rendition import cancel_all
 
     cancel_all()
@@ -126,30 +126,8 @@ def _erase_media() -> None:
     with Session(engine) as session:
         videos = session.exec(select(Video)).all()
         for video in videos:
-            _delete_media_files(video)
-            unlink_for_video(video.id, video.thumbnail_path)
-            if video.id is not None:
-                from .metadata import delete_sprite_files
-
-                delete_sprite_files(SPRITES_DIR, video.id)
+            remove_files(collect_video_files(video, include_media=True))
     _wipe_dir_contents(DOWNLOADS_DIR)
-
-
-def _delete_media_files(video: Video) -> None:
-    from ..config import DOWNLOADS_DIR
-
-    media = DOWNLOADS_DIR / video.file_path
-    if media.exists():
-        media.unlink(missing_ok=True)
-    from .paths import resolve_compat_path
-
-    compat = resolve_compat_path(video)
-    if compat is not None:
-        compat.unlink(missing_ok=True)
-    for track in library.parse_subtitles(video.subtitles):
-        sub = DOWNLOADS_DIR / track.get("path", "")
-        if sub.exists():
-            sub.unlink(missing_ok=True)
 
 
 def _delete_rows(models: tuple[type, ...]) -> None:

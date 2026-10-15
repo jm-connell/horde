@@ -30,7 +30,8 @@ from .paths import (
     is_manual_import,
     to_rel_path,
 )
-from .thumbnails import unlink_for_video, write_list_thumbnail
+from .thumbnails import write_list_thumbnail
+from .video_delete import delete_video_cascade, remove_files
 
 _scan_lock = threading.Lock()
 _suspended = threading.Event()
@@ -315,16 +316,17 @@ def cleanup_orphans() -> int:
     a yt-dlp fragment that was ingested and then deleted once the merge ran.
     """
     removed = 0
+    doomed: list[Path] = []
     with Session(engine) as session:
         rows = session.exec(select(Video).where(Video.needs_review == True)).all()  # noqa: E712
         for video in rows:
             if (DOWNLOADS_DIR / video.file_path).exists():
                 continue
-            unlink_for_video(video.id, video.thumbnail_path)
-            session.delete(video)
+            doomed += delete_video_cascade(session, video, False, commit=False)
             removed += 1
         if removed:
             session.commit()
+            remove_files(doomed)
     return removed
 
 

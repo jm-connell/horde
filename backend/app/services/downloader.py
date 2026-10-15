@@ -33,8 +33,8 @@ from .metadata import probe_dimensions, probe_duration, probe_is_playable
 from .mp4_compat import CompatPlan, compat_plan, ensure_safari_mp4, probe_media
 from .paths import find_video_by_path, to_rel_path
 from .thumbnails import save_from_url as _save_thumbnail
-from .thumbnails import unlink_for_video
 from .url_clean import clean_url, youtube_thumbnail_url, youtube_video_id
+from .video_delete import delete_video_cascade, remove_files
 from .video_transcode import encode_target, transcode_video
 from .ytdlp_common import (
     ERROR_KIND_CANCELLED,
@@ -1283,12 +1283,13 @@ def _remove_review_duplicates(
     rows = session.exec(
         select(Video).where(Video.needs_review == True)  # noqa: E712
     ).all()
+    doomed: list[Path] = []
     for row in rows:
         if row.id == keep_id or token not in row.file_path:
             continue
-        unlink_for_video(row.id, row.thumbnail_path)
-        session.delete(row)
+        doomed += delete_video_cascade(session, row, False, commit=False)
     session.commit()
+    remove_files(doomed)
 
 
 def _published_at(info: dict[str, Any]) -> datetime | None:

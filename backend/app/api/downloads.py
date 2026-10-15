@@ -105,7 +105,13 @@ def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobR
 
     out: list[DownloadJobRead] = []
     for j in jobs:
-        video_missing = bool(j.video_id is not None and j.video_id not in existing)
+        # Deleting a video nulls job.video_id (ON DELETE SET NULL); a finished
+        # library job always had one, so a missing id means the video is gone.
+        video_missing = (j.video_id is not None and j.video_id not in existing) or (
+            j.video_id is None
+            and j.status == JobStatus.completed
+            and j.destination != DownloadDestination.device.value
+        )
         superseded = False
         if j.status == JobStatus.completed:
             if j.video_id is not None and latest_by_video.get(j.video_id) != j.id:
