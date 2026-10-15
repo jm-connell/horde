@@ -130,3 +130,52 @@ def test_subtitle_collection_ignores_other_videos(init_db, monkeypatch):
     _touch(folder / "Learn [sibling0001].fr.vtt")
     tracks = downloader._collect_subtitles(media)
     assert sorted(t["lang"] for t in tracks) == ["de", "en"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["Movie [2020].final.mp4", "Movie [2020].fixed.mp4", "x [1080p].fps60.mp4"],
+)
+def test_scanner_imports_user_files_that_look_vaguely_like_fragments(
+    init_db, monkeypatch, name
+):
+    from sqlmodel import Session, select
+
+    from app.models import Video
+    from app.services import scanner
+
+    path = _touch(init_db["downloads"] / "Library" / name, size=2048)
+    assert not FRAGMENT_RE.search(name)
+    assert scanner._is_media(path)
+    monkeypatch.setattr(scanner, "probe_is_playable", lambda _p: True)
+    monkeypatch.setattr(scanner, "probe_dimensions", lambda _p: (640, 360))
+    monkeypatch.setattr(scanner, "probe_duration", lambda _p: 10.0)
+    monkeypatch.setattr(scanner, "probe_frame_rate", lambda _p: 30.0)
+    monkeypatch.setattr(scanner, "grab_frame", lambda *_a: False)
+    monkeypatch.setattr("app.services.media_info.probe_stream_info", lambda _p: None)
+    monkeypatch.setattr(
+        "app.services.sprites.enqueue_sprite_generation", lambda *a, **k: None
+    )
+    with Session(init_db["engine"]) as s:
+        assert scanner.ingest_media_file(s, path, require_stable=False) is not None
+        assert s.exec(select(Video)).one().file_path == f"Library/{name}"
+
+
+@pytest.mark.parametrize(
+    "fmt_id", ["137", "251-drc", "hls-1080p", "dash-video-1", "http-720p"]
+)
+def test_real_yt_dlp_fragments_are_still_ignored_by_the_scanner(init_db, fmt_id):
+    from app.services import scanner
+
+    name = f"Clip [dQw4w9WgXcQ].f{fmt_id}.mp4"
+    assert scanner._is_media(_touch(init_db["downloads"] / "C" / name)) is False
+
+
+def test_staging_scope_accepts_any_format_id():
+    from app.services.paths import STAGING_FRAGMENT_RE
+
+    assert STAGING_FRAGMENT_RE.search("Clip [dQw4w9WgXcQ].fmp4-1080.mp4")
+    assert video_stem(Path("Clip [dQw4w9WgXcQ].fmp4-1080.mp4"), staging=True) == (
+        "Clip [dQw4w9WgXcQ]"
+    )
+    assert video_stem(Path("Movie [2020].final.mp4")) == "Movie [2020].final"

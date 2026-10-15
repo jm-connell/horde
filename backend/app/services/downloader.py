@@ -48,7 +48,7 @@ from .outtmpl import (
 )
 from .paths import (
     COMPAT_SIDECAR_TOKEN,
-    FRAGMENT_RE,
+    STAGING_FRAGMENT_RE,
     belongs_to_stem,
     find_video_by_path,
     resolve_compat_path,
@@ -276,7 +276,7 @@ def cleanup_device_job_files(job_id: int, device_file_path: str | None = None) -
             safe_unlink(full)
             parent = full.parent
             if parent.is_dir():
-                stem = video_stem(full)
+                stem = video_stem(full, staging=True)
                 for entry in list(parent.iterdir()):
                     if belongs_to_stem(entry.name, stem) or entry.suffix in {
                         ".part",
@@ -319,7 +319,7 @@ def gc_orphaned_device_dirs() -> int:
 
 
 # yt-dlp per-format fragments (e.g. ".f401.mp4") — not the final merged file.
-_FRAGMENT_RE = FRAGMENT_RE
+_FRAGMENT_RE = STAGING_FRAGMENT_RE
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -374,7 +374,7 @@ def _find_merged_video(prepared: Path) -> Path | None:
         return prepared
 
     parent = prepared.parent
-    stem = video_stem(prepared)
+    stem = video_stem(prepared, staging=True)
     best: Path | None = None
     best_size = 0
     if not parent.is_dir():
@@ -1606,7 +1606,7 @@ def _cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) 
     for rel in paths:
         full = DOWNLOADS_DIR / rel
         parent = full.parent
-        stem = video_stem(full)
+        stem = video_stem(full, staging=True)
         if not parent.is_dir():
             continue
         for entry in parent.iterdir():
@@ -2240,7 +2240,7 @@ def _promote_from_staging(
     rel = final_path.resolve().relative_to(staging_dir.resolve())
     dest = DOWNLOADS_DIR / rel
     backup_dir = staging_dir / ".displaced"
-    stem = video_stem(final_path)
+    stem = video_stem(final_path, staging=True)
     for entry in sorted(final_path.parent.iterdir()):
         if entry == final_path or not entry.is_file():
             continue

@@ -15,14 +15,25 @@ STAGING_DIR_NAME = ".horde-staging"
 
 # yt-dlp appends ``.f<format_id>`` before the container extension of every
 # per-format download that still has to be merged (``Title [id].f137.mp4``,
-# ``Title [id].f251-drc.webm``, ``Title [id].fhls-1080p.mp4``). Format ids are
-# arbitrary tokens, so outside of a digits-only id the suffix is only trusted
-# directly after the ``[id]`` token that the output template always writes.
+# ``Title [id].f251-drc.webm``, ``Title [id].fhls-1080p.mp4``).
+#
+# Two scopes. In the library tree (scanner, stem matching) only real yt-dlp
+# format-id shapes count, so user files like ``Movie [2020].final.mp4`` or
+# ``x [1080p].fps60.mp4`` are never mistaken for fragments: ``f`` + digit, or
+# ``f`` + a known protocol/kind prefix. Inside a staging dir (only yt-dlp writes
+# there) any token directly after the ``[id]`` bracket is a format suffix.
+_STRICT_FORMAT_SUFFIX = (
+    r"\.f(?:\d+(?:-[A-Za-z0-9_]+)*"
+    r"|(?:hls|dash|http|https|m3u8|rtmp|sb|audio|video)[-\w]*)"
+)
 _AFTER_ID_BRACKET = r"(?<=\])"
-_FORMAT_SUFFIX = rf"(?:\.f\d+(?:-[A-Za-z0-9_]+)*|{_AFTER_ID_BRACKET}\.f[^.\s/\\]+)"
-FORMAT_SUFFIX_RE = re.compile(_FORMAT_SUFFIX + r"$")
-# A name that is a per-format fragment: stem + format suffix + extension.
-FRAGMENT_RE = re.compile(_FORMAT_SUFFIX + r"\.[^.]+$")
+_STAGING_FORMAT_SUFFIX = (
+    rf"(?:\.f\d+(?:-[A-Za-z0-9_]+)*|{_AFTER_ID_BRACKET}\.f[^.\s/\\]+)"
+)
+FORMAT_SUFFIX_RE = re.compile(_STRICT_FORMAT_SUFFIX + r"$")
+FRAGMENT_RE = re.compile(_STRICT_FORMAT_SUFFIX + r"\.[^.]+$")
+STAGING_FORMAT_SUFFIX_RE = re.compile(_STAGING_FORMAT_SUFFIX + r"$")
+STAGING_FRAGMENT_RE = re.compile(_STAGING_FORMAT_SUFFIX + r"\.[^.]+$")
 
 # Everything that may follow a video's stem for the files that belong to it:
 # dot-separated tokens only (``.f137.mp4.part``, ``.en.vtt``, ``.horde-h264.mp4``).
@@ -52,15 +63,17 @@ def resolve_compat_path(video: Video) -> Path | None:
     return path
 
 
-def video_stem(path: Path | str) -> str:
+def video_stem(path: Path | str, *, staging: bool = False) -> str:
     """The shared stem of a download and its sidecars.
 
     Drops the container extension and a trailing yt-dlp format suffix only:
     ``Title [id].f137.mp4`` -> ``Title [id]``. A ``.f`` elsewhere in a title
     (``Learn.fast tricks [id]``, ``www.facebook.com [id]``) is left alone.
+    ``staging=True`` accepts any format id (only yt-dlp writes there).
     """
     stem = Path(path).stem
-    return FORMAT_SUFFIX_RE.sub("", stem, count=1) or stem
+    pattern = STAGING_FORMAT_SUFFIX_RE if staging else FORMAT_SUFFIX_RE
+    return pattern.sub("", stem, count=1) or stem
 
 
 def belongs_to_stem(name: str, stem: str) -> bool:
