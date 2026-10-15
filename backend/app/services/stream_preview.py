@@ -15,8 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 from xml.sax.saxutils import escape as xml_escape
 
-import httpx
-
+from .url_safety import UnsafeUrlError, fetch_bytes
 from .ytdlp_common import (
     EXTRACT_PRIORITY_INTERACTIVE,
     MembersOnlyError,
@@ -333,14 +332,14 @@ def _probe_mp4_ranges(
     for nbytes in _PREVIEW_PROBE_SIZES:
         req_headers["Range"] = f"bytes=0-{nbytes - 1}"
         try:
-            with httpx.Client(
-                timeout=httpx.Timeout(20.0, read=60.0),
-                follow_redirects=True,
-            ) as client:
-                resp = client.get(direct_url, headers=req_headers)
-            if resp.status_code not in (200, 206):
-                raise RuntimeError(f"Probe failed with status {resp.status_code}")
-            data = resp.content
+            # direct_url came from the extractor: fetch it through the SSRF gate
+            # (public addresses only, redirects re-checked). A server that ignores
+            # Range and sends more than the window fails the size cap.
+            data = fetch_bytes(
+                direct_url, max_bytes=nbytes, timeout=60.0, headers=req_headers
+            ).body
+        except UnsafeUrlError:
+            raise
         except Exception as exc:  # noqa: BLE001
             last_err = exc
             continue

@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_SCHEMES = frozenset({"http", "https"})
 MAX_REDIRECTS = 5
-_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
@@ -210,7 +210,7 @@ def fetch_bytes(
                     with client.stream(
                         "GET", target, headers=req_headers, extensions=extensions
                     ) as resp:
-                        if resp.status_code in _REDIRECT_STATUSES:
+                        if resp.status_code in REDIRECT_STATUSES:
                             location = resp.headers.get("location")
                             if not location:
                                 raise UrlFetchError(

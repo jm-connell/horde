@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -18,7 +18,7 @@ from ..schemas import StreamPreviewMeta
 from ..services import library, stream_preview
 from ..services.limits import ExtractionGate, extraction_gate
 from ..services.url_clean import _youtube_video_id, clean_url
-from ..services.url_safety import validate_public_url
+from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
 from ..services.ytdlp_common import (
     ERROR_KIND_UNKNOWN,
     MembersOnlyError,
@@ -52,7 +52,7 @@ async def init_preview_client() -> None:
             max_keepalive_connections=16,
             keepalive_expiry=60.0,
         ),
-        follow_redirects=True,
+        follow_redirects=False,  # redirects are followed by _send_validated
     )
 
 
@@ -73,13 +73,43 @@ def _require_video_url(url: str) -> str:
     return cleaned
 
 
+async def _send_validated(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    headers: dict[str, str],
+    *,
+    stream: bool,
+) -> httpx.Response:
+    """Send a request to a URL an extractor returned, checking every hop.
+
+    yt-dlp can return any URL for a page it was pointed at, and CDNs redirect, so
+    each URL (the first and every redirect target) must pass the same public-address
+    check as user-supplied URLs. Raises UnsafeUrlError (HTTP 400) otherwise.
+    """
+    for _hop in range(MAX_REDIRECTS + 1):
+        await run_in_threadpool(validate_public_url, url)
+        request = client.build_request(method, url, headers=headers)
+        response = await client.send(request, stream=stream)
+        if response.status_code not in REDIRECT_STATUSES:
+            return response
+        location = response.headers.get("location")
+        if stream:
+            await response.aclose()
+        if not location:
+            raise HTTPException(
+                status_code=502, detail="Upstream redirect had no target"
+            )
+        url = urljoin(url, location)
+    raise HTTPException(status_code=502, detail="Upstream redirected too many times")
+
+
 async def _open_upstream(
     client: httpx.AsyncClient,
     direct_url: str,
     headers: dict[str, str],
 ) -> httpx.Response:
-    upstream_req = client.build_request("GET", direct_url, headers=headers)
-    return await client.send(upstream_req, stream=True)
+    return await _send_validated(client, "GET", direct_url, headers, stream=True)
 
 
 async def _close_upstream(upstream: httpx.Response | None) -> None:
@@ -252,7 +282,9 @@ async def _head_upstream(
         upstream_headers["Range"] = range_header
 
     try:
-        resp = await client.head(resolved["direct_url"], headers=upstream_headers)
+        resp = await _send_validated(
+            client, "HEAD", resolved["direct_url"], upstream_headers, stream=False
+        )
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=502, detail=f"Upstream HEAD failed: {exc}"
@@ -264,7 +296,9 @@ async def _head_upstream(
         if range_header:
             upstream_headers["Range"] = range_header
         try:
-            resp = await client.head(resolved["direct_url"], headers=upstream_headers)
+            resp = await _send_validated(
+                client, "HEAD", resolved["direct_url"], upstream_headers, stream=False
+            )
         except httpx.HTTPError as exc:
             raise HTTPException(
                 status_code=502, detail=f"Upstream HEAD failed: {exc}"
@@ -372,7 +406,9 @@ async def preview_subtitles(
     headers = dict(resolved.get("http_headers") or {})
 
     try:
-        resp = await client.get(resolved["direct_url"], headers=headers)
+        resp = await _send_validated(
+            client, "GET", resolved["direct_url"], headers, stream=False
+        )
     except httpx.HTTPError as exc:
         logger.warning("Upstream subtitle fetch failed: %s", exc)
         raise HTTPException(
@@ -399,7 +435,9 @@ async def preview_subtitles(
             ) from exc
         headers = dict(resolved.get("http_headers") or {})
         try:
-            resp = await client.get(resolved["direct_url"], headers=headers)
+            resp = await _send_validated(
+                client, "GET", resolved["direct_url"], headers, stream=False
+            )
         except httpx.HTTPError as exc:
             logger.warning("Upstream subtitle retry failed: %s", exc)
             raise HTTPException(
