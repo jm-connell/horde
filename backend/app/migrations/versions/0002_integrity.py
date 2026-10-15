@@ -203,6 +203,8 @@ def _rebuild(table: str, *, unique_playlist_pair: bool = False) -> None:
     wanted = [fk for fk in _FOREIGN_KEYS if fk[0] == table]
     wanted_columns = {column for _, column, _, _ in wanted}
     existing = sa.inspect(op.get_bind()).get_foreign_keys(table)
+    rows = op.get_bind().execute(sa.text(f"SELECT count(*) FROM {table}")).scalar()  # noqa: S608 - table names come from the constants above
+    logger.info("0002_integrity: rebuilding %s (%d rows)", table, rows)
     kwargs = {"sqlite_autoincrement": True} if table in _AUTOINCREMENT_TABLES else {}
     with op.batch_alter_table(
         table, recreate="always", naming_convention=_NAMING, table_kwargs=kwargs
@@ -233,6 +235,7 @@ def upgrade() -> None:
     _repair_data(bind)
 
     tables = {fk[0] for fk in _FOREIGN_KEYS} | _AUTOINCREMENT_TABLES
+    logger.info("0002_integrity: rebuilding %d tables", len(tables))
     for table in sorted(tables):
         _rebuild(table, unique_playlist_pair=(table == "playlist_items"))
 

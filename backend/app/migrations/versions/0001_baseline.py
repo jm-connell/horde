@@ -16,11 +16,237 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+_BASELINE_COLUMNS: dict[str, set[str]] = {
+    "ai_categories": {"id", "name", "blurb", "embedding", "dim", "model", "updated_at"},
+    "channel_autodownloads": {
+        "id",
+        "channel_url",
+        "channel_name",
+        "enabled",
+        "previous_mode",
+        "previous_count",
+        "quality_preset",
+        "include_completed_streams",
+        "anchor_ready",
+        "updated_at",
+    },
+    "channel_catalogs": {
+        "id",
+        "channel_url",
+        "channel_name",
+        "status",
+        "indexed_count",
+        "channel_total",
+        "complete",
+        "max_videos",
+        "direct_youtube_search",
+        "phase",
+        "last_error",
+        "started_at",
+        "finished_at",
+        "updated_at",
+    },
+    "openrouter_usage": {
+        "id",
+        "kind",
+        "cost",
+        "model",
+        "video_id",
+        "prompt_tokens",
+        "completion_tokens",
+        "created_at",
+    },
+    "playlists": {
+        "id",
+        "name",
+        "description",
+        "source_type",
+        "source_url",
+        "subscribed",
+        "quality_preset",
+        "last_synced_at",
+        "sync_error",
+        "position",
+        "cover_video_id",
+        "cover_path",
+        "created_at",
+    },
+    "videos": {
+        "id",
+        "title",
+        "channel",
+        "channel_url",
+        "tags",
+        "description",
+        "notes",
+        "source_url",
+        "thumbnail_path",
+        "sprite_path",
+        "subtitles",
+        "file_path",
+        "duration_sec",
+        "file_size",
+        "width_px",
+        "height_px",
+        "view_count",
+        "channel_subscriber_count",
+        "published_at",
+        "added_at",
+        "last_position_sec",
+        "last_watched_at",
+        "needs_review",
+        "platform",
+        "status",
+        "frame_rate",
+        "metadata_synced_at",
+        "source_title",
+        "source_description",
+        "title_is_custom",
+        "description_is_custom",
+        "subtitles_pending",
+        "subtitles_retry_after",
+        "subtitles_fetch_attempts",
+        "source_chapters",
+        "vcodec",
+        "acodec",
+        "codec_string",
+        "bit_depth",
+        "is_hdr",
+        "media_probed_at",
+        "compat_path",
+        "compat_size",
+        "compat_source",
+        "compat_error",
+    },
+    "channel_catalog_skips": {"id", "catalog_id", "yt_id", "reason", "skipped_at"},
+    "channel_catalog_videos": {
+        "id",
+        "catalog_id",
+        "yt_id",
+        "url",
+        "title",
+        "duration",
+        "view_count",
+        "published_at",
+        "thumbnail_url",
+        "description",
+        "live_status",
+        "position",
+        "indexed_at",
+    },
+    "download_jobs": {
+        "id",
+        "url",
+        "quality_preset",
+        "available_presets_json",
+        "status",
+        "progress",
+        "title",
+        "title_override",
+        "channel",
+        "channel_override",
+        "thumbnail_url",
+        "notes_pending",
+        "paused",
+        "normalize_volume",
+        "video_codec",
+        "destination",
+        "device_file_path",
+        "replace_video_id",
+        "playlist_id",
+        "error",
+        "error_kind",
+        "video_id",
+        "file_size",
+        "height_px",
+        "created_at",
+    },
+    "playlist_items": {"id", "playlist_id", "video_id", "position"},
+    "video_ai_chat": {"video_id", "updated_at"},
+    "video_ai_chat_messages": {
+        "id",
+        "video_id",
+        "role",
+        "content",
+        "cost",
+        "model",
+        "created_at",
+    },
+    "video_ai_meta": {
+        "video_id",
+        "embed_status",
+        "content_hash",
+        "summary",
+        "summary_length",
+        "summary_cost",
+        "summary_model",
+        "ai_tags",
+        "user_tags",
+        "tags_enriched_at",
+        "tags_locked",
+        "embed_error",
+        "chapters",
+        "chapters_skip_reason",
+        "updated_at",
+    },
+    "video_embeddings": {
+        "id",
+        "video_id",
+        "chunk_index",
+        "model",
+        "dim",
+        "vector",
+        "content_hash",
+        "updated_at",
+    },
+    "ai_jobs": {
+        "id",
+        "kind",
+        "video_id",
+        "catalog_video_id",
+        "status",
+        "attempts",
+        "run_after",
+        "error",
+        "created_at",
+        "updated_at",
+    },
+    "channel_catalog_embeddings": {
+        "id",
+        "catalog_video_id",
+        "model",
+        "dim",
+        "vector",
+        "content_hash",
+        "updated_at",
+    },
+}
+
+
+def _check_existing_tables(inspector: sa.Inspector, existing: set[str]) -> None:
+    """Adopted tables must already have the baseline columns (legacy migrator ran)."""
+    expected: dict[str, set[str]] = {}
+    for column_table, columns in _BASELINE_COLUMNS.items():
+        if column_table in existing:
+            expected[column_table] = columns
+    for table, columns in expected.items():
+        have = {c["name"] for c in inspector.get_columns(table)}
+        missing = sorted(columns - have)
+        if missing:
+            raise RuntimeError(
+                f"Existing table {table!r} is missing columns {missing}; it is "
+                "not at the schema Alembic adopts as 0001_baseline. Restore a "
+                "backup or repair the table by hand."
+            )
+
+
 def upgrade() -> None:
     # Pre-Alembic installs are adopted into this revision after the legacy
     # migrator ran; their tables already exist and are left alone (missing
     # indexes are added by 0002_integrity). A fresh database has none.
-    existing = set(sa.inspect(op.get_bind()).get_table_names())
+    inspector = sa.inspect(op.get_bind())
+    existing = set(inspector.get_table_names())
+    _check_existing_tables(inspector, existing)
 
     if "ai_categories" not in existing:
         op.create_table(

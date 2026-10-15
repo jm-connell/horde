@@ -404,3 +404,21 @@ def test_engine_registers_regexp(init_db):
         ).scalar()
     assert hit == 1
     assert miss == 0
+
+
+def test_adopting_a_table_with_missing_columns_fails_clearly(tmp_dirs):
+    from app.database import init_db
+
+    with tmp_dirs["engine"].begin() as conn:
+        conn.execute(
+            text("CREATE TABLE videos (id INTEGER PRIMARY KEY, title VARCHAR)")
+        )
+        conn.execute(
+            text("CREATE TABLE schema_migrations (id VARCHAR, applied_at VARCHAR)")
+        )
+        for step in ("2026_07_additive_columns", "2026_09_playlist_positions"):
+            conn.execute(
+                text("INSERT INTO schema_migrations VALUES (:s, 'x')"), {"s": step}
+            )
+    with pytest.raises(RuntimeError, match=r"'videos'.*file_path"):
+        init_db()

@@ -112,6 +112,12 @@ def upgrade_database(engine: Engine) -> None:
         if current == head:
             return
         _backup_database(engine, f"{current}-to-{head}")
+        logger.info(
+            "Migrating database (%s -> %s); this can take several minutes on "
+            "large libraries",
+            current,
+            head,
+        )
         command.upgrade(cfg, "head")
         return
 
@@ -125,6 +131,11 @@ def upgrade_database(engine: Engine) -> None:
     logger.info("Adopting a pre-Alembic database into the Alembic baseline")
     _backup_database(engine, "alembic-adoption")
     legacy_migrations.run_legacy_migrations(engine)
+    logger.info(
+        "Migrating database (pre-Alembic -> %s); this can take several minutes "
+        "on large libraries",
+        head,
+    )
     # From "base": 0001 only creates tables that are still missing, which
     # adopts the existing schema as the baseline; later revisions then apply
     # in the same transaction.
