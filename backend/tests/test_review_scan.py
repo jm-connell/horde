@@ -123,9 +123,7 @@ def test_scan_does_not_requeue_youtube_download_without_channel(
     assert client.get("/api/review").json() == []
 
 
-def test_scan_readds_file_after_db_row_deleted(
-    client, add_video, init_db, monkeypatch
-):
+def test_scan_readds_file_after_db_row_deleted(client, add_video, init_db, monkeypatch):
     _stub_ingest(monkeypatch)
     video = add_video(
         title="Removed",

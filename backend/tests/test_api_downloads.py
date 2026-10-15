@@ -92,9 +92,7 @@ def test_create_download_requires_url(client):
     assert resp.status_code == 400
 
 
-def test_bulk_skips_existing_and_does_not_create_playlist(
-    client, add_video
-):
+def test_bulk_skips_existing_and_does_not_create_playlist(client, add_video):
     existing = add_video(title="Have it", yt_id="dQw4w9WgXcQ")
     resp = client.post(
         "/api/downloads/bulk",
@@ -114,9 +112,7 @@ def test_bulk_skips_existing_and_does_not_create_playlist(
     assert body["jobs"][0]["url"] == "https://www.youtube.com/watch?v=newvideoid1"
     reasons = {skip["reason"] for skip in body["skips"]}
     assert reasons == {"already_in_library", "playlist"}
-    assert existing.id not in [
-        job.get("replace_video_id") for job in body["jobs"]
-    ]
+    assert existing.id not in [job.get("replace_video_id") for job in body["jobs"]]
     playlists = client.get("/api/playlists").json()
     assert playlists == []
 
@@ -221,7 +217,9 @@ def test_retry_cancelled_job(client, init_db):
 def test_retry_completed_and_missing(client, init_db):
     from app.models import JobStatus
 
-    job_id = _failed_job(init_db, status=JobStatus.completed, error=None, error_kind=None)
+    job_id = _failed_job(
+        init_db, status=JobStatus.completed, error=None, error_kind=None
+    )
     assert client.post(f"/api/downloads/{job_id}/retry", json={}).status_code == 409
     assert client.post("/api/downloads/99999/retry", json={}).status_code == 404
 
@@ -345,7 +343,9 @@ def test_change_quality_on_queued_job(client, monkeypatch):
 def test_change_quality_rejects_finished_and_unknown(client, init_db, monkeypatch):
     from app.models import JobStatus
 
-    job_id = _failed_job(init_db, status=JobStatus.completed, error=None, error_kind=None)
+    job_id = _failed_job(
+        init_db, status=JobStatus.completed, error=None, error_kind=None
+    )
     assert (
         client.post(
             f"/api/downloads/{job_id}/quality", json={"quality_preset": "720p"}
@@ -375,9 +375,7 @@ def test_change_quality_rejects_finished_and_unknown(client, init_db, monkeypatc
         },
     )
     job_id = created.json()["id"]
-    bad = client.post(
-        f"/api/downloads/{job_id}/quality", json={"quality_preset": "8k"}
-    )
+    bad = client.post(f"/api/downloads/{job_id}/quality", json={"quality_preset": "8k"})
     assert bad.status_code == 400
 
 
@@ -516,4 +514,3 @@ def test_queue_events_route_registered(client):
     paths = [getattr(route, "path", "") for route in client.app.routes]
     assert "/api/downloads/events" in paths
     assert "/api/downloads/{job_id}/events" in paths
-

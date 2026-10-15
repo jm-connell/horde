@@ -38,7 +38,7 @@ def cosine(a: list[float], b: list[float]) -> float:
         nb += y * y
     if na <= 0 or nb <= 0:
         return 0.0
-    return dot / ((na ** 0.5) * (nb ** 0.5))
+    return dot / ((na**0.5) * (nb**0.5))
 
 
 def l2_normalize(vec: list[float]) -> list[float]:
@@ -99,9 +99,7 @@ def delete_embeddings(session: Session, video_id: int) -> None:
     session.commit()
 
 
-def _embeddings_match_model(
-    session: Session, video_id: int, model: str
-) -> bool:
+def _embeddings_match_model(session: Session, video_id: int, model: str) -> bool:
     """True when the video has at least one embedding row, all using ``model``."""
     rows = session.exec(
         select(VideoEmbedding).where(VideoEmbedding.video_id == video_id)
@@ -166,14 +164,10 @@ def embed_video(session: Session, video_id: int) -> bool:
     try:
         embed_many = getattr(provider, "embed_many", None)
         if callable(embed_many):
-            vectors = embed_many(
-                texts, model, usage_kind="embed", video_id=video_id
-            )
+            vectors = embed_many(texts, model, usage_kind="embed", video_id=video_id)
         else:
             vectors = [
-                provider.embed(
-                    doc, model, usage_kind="embed", video_id=video_id
-                )
+                provider.embed(doc, model, usage_kind="embed", video_id=video_id)
                 for doc in texts
             ]
         old = session.exec(
@@ -433,9 +427,7 @@ def videos_needing_embed(
         ):
             continue
         stale_content = (
-            meta is None
-            or meta.embed_status != "ready"
-            or meta.content_hash != digest
+            meta is None or meta.embed_status != "ready" or meta.content_hash != digest
         )
         if stale_content or not _embeddings_match_model(session, video.id, model):
             need.append(video.id)
@@ -469,7 +461,11 @@ def sync_tag_provenance(
     current_lower = {t.lower() for t in current}
 
     ai = [t for t in lib.parse_tags(meta.ai_tags or "[]") if t.lower() in current_lower]
-    user = [t for t in lib.parse_tags(getattr(meta, "user_tags", None) or "[]") if t.lower() in current_lower]
+    user = [
+        t
+        for t in lib.parse_tags(getattr(meta, "user_tags", None) or "[]")
+        if t.lower() in current_lower
+    ]
 
     if user_tag:
         cleaned = user_tag.strip()

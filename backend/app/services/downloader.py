@@ -403,9 +403,7 @@ class DownloadQueue:
 
         with Session(engine) as session:
             for job in session.exec(
-                select(DownloadJob).where(
-                    DownloadJob.status == JobStatus.downloading
-                )
+                select(DownloadJob).where(DownloadJob.status == JobStatus.downloading)
             ).all():
                 if job.id not in self._running:
                     job.status = JobStatus.queued
@@ -455,9 +453,7 @@ class DownloadQueue:
         with Session(engine) as session:
             for job in session.exec(
                 select(DownloadJob).where(
-                    DownloadJob.status.in_(
-                        [JobStatus.queued, JobStatus.downloading]
-                    )
+                    DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading])
                 )
             ).all():
                 if job.id in ffmpeg_ids:
@@ -589,9 +585,7 @@ class DownloadQueue:
         with Session(engine) as session:
             return len(
                 session.exec(
-                    select(DownloadJob).where(
-                        DownloadJob.status == JobStatus.queued
-                    )
+                    select(DownloadJob).where(DownloadJob.status == JobStatus.queued)
                 ).all()
             )
 
@@ -920,9 +914,7 @@ class _DownloadProgress:
             self.last_stream_downloaded = 0
             self.last_stream_total = 0
 
-    def _apply_downloaded(
-        self, downloaded: int, stream_total: Optional[int]
-    ) -> None:
+    def _apply_downloaded(self, downloaded: int, stream_total: Optional[int]) -> None:
         self.last_stream_downloaded = max(self.last_stream_downloaded, downloaded)
         if stream_total:
             self.last_stream_total = max(self.last_stream_total, stream_total)
@@ -977,8 +969,7 @@ class _DownloadProgress:
             return self._downloading_snapshot(info)
         if status == "finished":
             downloaded = (
-                _positive_int(d.get("downloaded_bytes"))
-                or self.last_stream_downloaded
+                _positive_int(d.get("downloaded_bytes")) or self.last_stream_downloaded
             )
             if downloaded:
                 self._note_stream_switch(downloaded)
@@ -1196,8 +1187,10 @@ def _cleanup_subtitle_partials(parent: Path, stem: str) -> None:
     if not parent.is_dir():
         return
     for entry in parent.iterdir():
-        if entry.is_file() and entry.name.startswith(stem + ".") and (
-            entry.name.endswith(".part") or entry.suffix.lower() == ".part"
+        if (
+            entry.is_file()
+            and entry.name.startswith(stem + ".")
+            and (entry.name.endswith(".part") or entry.suffix.lower() == ".part")
         ):
             _safe_unlink(entry)
 
@@ -1324,9 +1317,7 @@ def _validate_playable(path: Path) -> bool:
     return probe_is_playable(path)
 
 
-def _cleanup_download_artifacts(
-    paths: set[str], *, remove_final: bool = False
-) -> None:
+def _cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) -> None:
     """Remove in-progress fragments and optionally corrupt final files."""
     for rel in paths:
         full = DOWNLOADS_DIR / rel
@@ -1410,9 +1401,7 @@ def _apply_loudnorm(
     if not ffmpeg_available():
         return "Volume normalization skipped: ffmpeg not found"
     # Unique sidecar so concurrent workers / scanner never share one .norm.mp4.
-    tmp = path.with_name(
-        f"{path.stem}.norm.{threading.get_ident()}.mp4"
-    )
+    tmp = path.with_name(f"{path.stem}.norm.{threading.get_ident()}.mp4")
     tmp_rel = _safe_rel(tmp)
     if tmp_rel:
         scanner.mark_active(tmp_rel)
@@ -1576,7 +1565,11 @@ def _complete_download(
                 duration=duration_f,
             )
 
-        if video_codec != "av1" and final_path.exists() and not is_audio_preset(quality_preset):
+        if (
+            video_codec != "av1"
+            and final_path.exists()
+            and not is_audio_preset(quality_preset)
+        ):
             probe = probe_media(final_path)
             dims = probe_dimensions(final_path)
             height_now = dims[1] if dims else None
@@ -1857,9 +1850,7 @@ def _complete_download(
     return video_id
 
 
-def _reject_unplayable(
-    path: Optional[Path], attempt_paths: set[str]
-) -> Optional[Path]:
+def _reject_unplayable(path: Optional[Path], attempt_paths: set[str]) -> Optional[Path]:
     """Return path if playable; otherwise remove corrupt artifacts and return None."""
     if path is None or not path.exists() or path.stat().st_size <= 0:
         return None
@@ -1903,8 +1894,7 @@ def _run_download(
         device_job_dir(job_id).mkdir(parents=True, exist_ok=True)
     else:
         outtmpl = str(
-            DOWNLOADS_DIR
-            / "%(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s"
+            DOWNLOADS_DIR / "%(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s"
         )
 
     if cancel.is_set():
@@ -1947,9 +1937,7 @@ def _run_download(
     base_ydl_opts: dict[str, Any] = {
         "outtmpl": outtmpl,
         "progress_hooks": [_make_progress_hook(job_id, cancel, act)],
-        "postprocessor_hooks": [
-            _make_postprocessor_hook(job_id, cancel, act)
-        ],
+        "postprocessor_hooks": [_make_postprocessor_hook(job_id, cancel, act)],
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
@@ -1990,9 +1978,7 @@ def _run_download(
                     )
                 except Exception as exc:
                     if is_members_only_error(exc):
-                        raise MembersOnlyError(
-                            "Members-only video — skipped"
-                        ) from exc
+                        raise MembersOnlyError("Members-only video — skipped") from exc
                     raise
 
                 if extract_used_cookies():
@@ -2023,9 +2009,7 @@ def _run_download(
                 metadata_info = _merge_info(metadata_info, fetched)
                 info = metadata_info
                 audio_fmt = pick_original_audio_format(metadata_info)
-                audio_id = (
-                    str(audio_fmt.get("format_id") or "") if audio_fmt else ""
-                )
+                audio_id = str(audio_fmt.get("format_id") or "") if audio_fmt else ""
                 fmt_spec = (
                     apply_audio_format_id([fmt], audio_id)[0] if audio_id else fmt
                 )
@@ -2087,30 +2071,22 @@ def _run_download(
                                         attempt_paths.add(rel)
                                         active_paths.add(rel)
                                         scanner.mark_active(rel)
-                                downloaded = ydl_auth.extract_info(
-                                    url, download=True
-                                )
+                                downloaded = ydl_auth.extract_info(url, download=True)
                                 if ytdlp_logger.members_only:
                                     raise MembersOnlyError(
                                         "Members-only video — skipped"
                                     ) from exc
                                 info = _merge_info(metadata_info, downloaded)
                                 metadata_info = info
-                        elif ytdlp_logger.members_only or is_members_only_error(
-                            exc
-                        ):
+                        elif ytdlp_logger.members_only or is_members_only_error(exc):
                             raise MembersOnlyError(
                                 "Members-only video — skipped"
                             ) from exc
                         elif not _is_recoverable_download_error(exc):
                             raise
                         else:
-                            final_path = _resolve_merged_video(
-                                prepared, active_paths
-                            )
-                            final_path = _reject_unplayable(
-                                final_path, attempt_paths
-                            )
+                            final_path = _resolve_merged_video(prepared, active_paths)
+                            final_path = _reject_unplayable(final_path, attempt_paths)
                             if final_path is None:
                                 raise
 
@@ -2144,7 +2120,11 @@ def _run_download(
         if final_path is None or not final_path.exists():
             final_path = _resolve_merged_video(prepared, active_paths)
         final_path = _reject_unplayable(final_path, active_paths)
-        if final_path is None or not final_path.exists() or final_path.stat().st_size <= 0:
+        if (
+            final_path is None
+            or not final_path.exists()
+            or final_path.stat().st_size <= 0
+        ):
             raise last_exc or RuntimeError("Download produced no file")
 
         if cancel.is_set():
@@ -2197,9 +2177,7 @@ def _run_download(
             and not cancel.is_set()
         ):
             try:
-                detail = str(
-                    title_override or effective_info.get("title") or url
-                )
+                detail = str(title_override or effective_info.get("title") or url)
                 act.finish(detail=detail)
                 _handoff_postprocess(
                     job_id,
@@ -2299,9 +2277,7 @@ job_mutate_lock = threading.Lock()
 _ACTIVE_JOB_STATUSES = (JobStatus.queued, JobStatus.downloading)
 
 
-def find_active_job_for_identity(
-    session: Session, url: str
-) -> Optional[DownloadJob]:
+def find_active_job_for_identity(session: Session, url: str) -> Optional[DownloadJob]:
     """Queued/downloading job for the same YouTube id (or cleaned URL)."""
     yt_id = youtube_video_id(url)
     cleaned = clean_url(url, keep_playlist=False) or url
@@ -2387,7 +2363,9 @@ def wait_until_job_not_running(job_id: int, timeout: float = 30.0) -> bool:
     return not download_queue.is_running(job_id)
 
 
-def change_job_quality(session: Session, job_id: int, requested_preset: str) -> DownloadJob:
+def change_job_quality(
+    session: Session, job_id: int, requested_preset: str
+) -> DownloadJob:
     """Change quality on a queued/downloading job. Restarts in-flight work silently."""
     preset = (requested_preset or "").strip()
     if preset not in QUALITY_FORMATS:
@@ -2604,9 +2582,7 @@ def _find_active_job_for_url(session: Session, url: str) -> Optional[DownloadJob
     return find_active_job_for_identity(session, url)
 
 
-def _resolve_library_or_download(
-    entry_url: str, quality_preset: str
-) -> Optional[int]:
+def _resolve_library_or_download(entry_url: str, quality_preset: str) -> Optional[int]:
     """Return a library video id, downloading only if the YouTube id is new."""
     cleaned = clean_url(entry_url, keep_playlist=False)
     if not cleaned:
@@ -2712,6 +2688,7 @@ def start_playlist_import(
         daemon=True,
     )
     thread.start()
+
 
 # Re-exports for callers that still import preview/extract helpers from downloader.
 from .stream_preview import (  # noqa: E402

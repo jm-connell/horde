@@ -50,7 +50,9 @@ def dump_tags(tags: list[str]) -> str:
 def parse_subtitles(raw: Optional[str]) -> list[dict]:
     try:
         value = json.loads(raw or "[]")
-        return [t for t in value if isinstance(t, dict)] if isinstance(value, list) else []
+        return (
+            [t for t in value if isinstance(t, dict)] if isinstance(value, list) else []
+        )
     except (json.JSONDecodeError, TypeError):
         return []
 
@@ -62,6 +64,7 @@ def dump_subtitles(tracks: list[dict]) -> str:
 def expire_stale_progress(session: Session) -> None:
     """Reset watch position on videos not watched within the configured expiry period."""
     from .app_settings import load as load_app_settings
+
     expiry_days = load_app_settings().get("progress_expiry_days", PROGRESS_EXPIRY_DAYS)
     cutoff = datetime.now(timezone.utc) - timedelta(days=expiry_days)
     rows = session.exec(
@@ -318,9 +321,7 @@ def all_tags(session: Session) -> list[str]:
     return sorted(seen)
 
 
-def tag_stats(
-    session: Session, channel: Optional[str] = None
-) -> list[tuple[str, int]]:
+def tag_stats(session: Session, channel: Optional[str] = None) -> list[tuple[str, int]]:
     """Return (tag, count) pairs ordered by most common first.
 
     When ``channel`` is given, only tags from that channel's videos are counted.

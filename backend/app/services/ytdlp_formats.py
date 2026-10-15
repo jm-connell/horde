@@ -96,13 +96,7 @@ def _pair(height_filter: str, *, h264: bool = False) -> str:
     """Video+audio selector: preferred codec + AAC, then that codec, then any."""
     h = height_filter
     pref = _H264 if h264 else _AV1
-    return (
-        f"bv*{h}{pref}+ba{_AAC}/"
-        f"bv*{h}{pref}+ba/"
-        f"bv*{h}+ba{_AAC}/"
-        f"bv*{h}+ba/"
-        f"b{h}"
-    )
+    return f"bv*{h}{pref}+ba{_AAC}/bv*{h}{pref}+ba/bv*{h}+ba{_AAC}/bv*{h}+ba/b{h}"
 
 
 QUALITY_FORMATS = {
@@ -116,8 +110,7 @@ QUALITY_FORMATS = {
     "audio": f"ba{_AAC}/ba/b",
     **{
         f"audio-{abr}": (
-            f"ba{_AAC}[abr<={abr}]/ba[abr<={abr}]/"
-            f"bestaudio[abr<={abr}]/ba/b"
+            f"ba{_AAC}[abr<={abr}]/ba[abr<={abr}]/bestaudio[abr<={abr}]/ba/b"
         )
         for abr in AUDIO_ABR_TIERS
     },
@@ -139,8 +132,26 @@ STANDARD_HEIGHTS = (2160, 1440, 1080, 720, 480)
 # Must match download YoutubeDL opts so preview sizes pick the same stream.
 # vcodec:av01 beats a fatter VP9/H.264 at the same height; AAC for iPhone MP4.
 # lang before abr so dubbed higher-bitrate tracks lose to the original.
-FORMAT_SORT = ["res", "fps", "hdr:12", "vcodec:av01", "lang", "acodec:mp4a", "vbr", "abr"]
-FORMAT_SORT_H264 = ["res", "fps", "hdr:12", "vcodec:h264", "lang", "acodec:mp4a", "vbr", "abr"]
+FORMAT_SORT = [
+    "res",
+    "fps",
+    "hdr:12",
+    "vcodec:av01",
+    "lang",
+    "acodec:mp4a",
+    "vbr",
+    "abr",
+]
+FORMAT_SORT_H264 = [
+    "res",
+    "fps",
+    "hdr:12",
+    "vcodec:h264",
+    "lang",
+    "acodec:mp4a",
+    "vbr",
+    "abr",
+]
 
 
 def is_audio_preset(preset: str) -> bool:
@@ -172,7 +183,9 @@ def effective_max_height(preset: str, codec: str = "av1") -> Optional[int]:
     return max_h
 
 
-def compat_format_spec(max_height: Optional[int] = None, *, vertical: bool = False) -> str:
+def compat_format_spec(
+    max_height: Optional[int] = None, *, vertical: bool = False
+) -> str:
     """yt-dlp selector for the native H.264 sidecar (≤1080p avc1 + AAC when offered).
 
     ``max_height`` is the short-side cap; vertical video caps width instead so a
@@ -180,11 +193,7 @@ def compat_format_spec(max_height: Optional[int] = None, *, vertical: bool = Fal
     """
     cap = min(max_height or COMPAT_MAX_HEIGHT, COMPAT_MAX_HEIGHT)
     h = f"[width<={cap}]" if vertical else f"[height<={cap}]"
-    return (
-        f"bv*{h}{_H264}+ba{_AAC}/"
-        f"bv*{h}{_H264}+ba/"
-        f"b{h}{_H264}"
-    )
+    return f"bv*{h}{_H264}+ba{_AAC}/bv*{h}{_H264}+ba/b{h}{_H264}"
 
 
 def format_sort_for(preset: str, codec: str = "av1") -> list[str]:
@@ -353,7 +362,9 @@ def decode_available_presets(raw: str | None) -> list[str]:
     return [str(p) for p in data if p]
 
 
-def quality_from_preview(requested: str, preview: dict[str, Any] | None) -> tuple[str, str | None]:
+def quality_from_preview(
+    requested: str, preview: dict[str, Any] | None
+) -> tuple[str, str | None]:
     """Return (resolved_preset, encoded available_presets) from a preview dict."""
     available: list[str] = []
     if isinstance(preview, dict):

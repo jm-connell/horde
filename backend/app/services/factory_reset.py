@@ -92,9 +92,7 @@ def _pause_workers(*, cancel_downloads: bool) -> None:
         with Session(engine) as session:
             jobs = session.exec(
                 select(DownloadJob).where(
-                    DownloadJob.status.in_(
-                        [JobStatus.queued, JobStatus.downloading]
-                    )
+                    DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading])
                 )
             ).all()
             ids = [job.id for job in jobs if job.id is not None]

@@ -160,7 +160,9 @@ def to_read(
         description=video.description,
         notes=video.notes,
         source_url=video.source_url,
-        has_thumbnail=bool(video.thumbnail_path and Path(video.thumbnail_path).exists()),
+        has_thumbnail=bool(
+            video.thumbnail_path and Path(video.thumbnail_path).exists()
+        ),
         has_sprites=bool(video.id is not None and sprites_exist(SPRITES_DIR, video.id)),
         subtitles=[
             {"lang": t.get("lang"), "auto": t.get("auto", False)}

@@ -149,10 +149,8 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     filtered["openrouter_scope"] = app_settings.normalize_openrouter_scope(
         filtered.get("openrouter_scope")
     )
-    filtered["openrouter_embed_model"] = (
-        app_settings.normalize_openrouter_embed_model(
-            filtered.get("openrouter_embed_model")
-        )
+    filtered["openrouter_embed_model"] = app_settings.normalize_openrouter_embed_model(
+        filtered.get("openrouter_embed_model")
     )
     filtered["ollama_prefer_embeddings"] = bool(
         filtered.get("ollama_prefer_embeddings")
@@ -160,10 +158,8 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     filtered["openrouter_show_costs"] = bool(
         filtered.get("openrouter_show_costs", False)
     )
-    filtered["openrouter_weekly_budget_usd"] = (
-        app_settings.clamp_weekly_budget_usd(
-            filtered.get("openrouter_weekly_budget_usd")
-        )
+    filtered["openrouter_weekly_budget_usd"] = app_settings.clamp_weekly_budget_usd(
+        filtered.get("openrouter_weekly_budget_usd")
     )
     filtered["openrouter_budget_hard_limit"] = bool(
         filtered.get("openrouter_budget_hard_limit")
@@ -252,10 +248,8 @@ def update_settings(payload: AppSettingsUpdate):
                 ai_updates["openrouter_model"]
             )
         if "openrouter_scope" in ai_updates:
-            ai_updates["openrouter_scope"] = (
-                app_settings.normalize_openrouter_scope(
-                    ai_updates["openrouter_scope"]
-                )
+            ai_updates["openrouter_scope"] = app_settings.normalize_openrouter_scope(
+                ai_updates["openrouter_scope"]
             )
         if "openrouter_embed_model" in ai_updates:
             ai_updates["openrouter_embed_model"] = (

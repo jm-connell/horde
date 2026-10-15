@@ -49,9 +49,7 @@ def test_whole_word_not_substring():
     assert not query_in_text("car", "The RTX 4090 graphics card")
     assert not query_in_text("car", "Switch carriers and save on your phone plan")
     assert query_in_text("paint", "I painted his House to Fix his WiFi")
-    assert (
-        explain_match("car", title="The RTX 4090 graphics card") is None
-    )
+    assert explain_match("car", title="The RTX 4090 graphics card") is None
     assert (
         explain_match(
             "car",

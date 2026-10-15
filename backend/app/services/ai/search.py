@@ -83,11 +83,7 @@ def hybrid_search(
     )
     chunks: dict[int, int] = {}
 
-    if (
-        get_embed_provider() is None
-        or not q.strip()
-        or not query_allows_semantic(q)
-    ):
+    if get_embed_provider() is None or not q.strip() or not query_allows_semantic(q):
         return keyword, chunks
 
     query_vec = embeddings.embed_query(q)

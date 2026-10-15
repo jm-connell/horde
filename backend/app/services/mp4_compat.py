@@ -318,9 +318,7 @@ def _ensure_safari_mp4_locked(
         return path
 
     dest_path = _dest_mp4(path)
-    tmp = dest_path.with_name(
-        f"{dest_path.stem}.compat.{threading.get_ident()}.mp4"
-    )
+    tmp = dest_path.with_name(f"{dest_path.stem}.compat.{threading.get_ident()}.mp4")
     tmp_rel = _safe_rel(tmp)
     dest_rel = _safe_rel(dest_path)
     if tmp_rel:

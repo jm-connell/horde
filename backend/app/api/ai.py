@@ -201,7 +201,9 @@ def ai_status(session: Session = Depends(get_session)):
         deferred_count=int(stats.get("deferred_count") or 0),
         waiting_count=int(stats.get("waiting_count") or 0),
         error_count=int(stats.get("error_count") or 0),
-        recent_failures=[AiJobFailure(**row) for row in worker.recent_failures(limit=10)],
+        recent_failures=[
+            AiJobFailure(**row) for row in worker.recent_failures(limit=10)
+        ],
         workload_profile=runtime.profile,
         recommended_profile=runtime.recommended_profile,
         profile_locked=runtime.profile_locked,
@@ -270,7 +272,9 @@ def ai_openrouter_models():
     try:
         models = list_openrouter_models()
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=str(exc) or "Could not list models") from exc
+        raise HTTPException(
+            status_code=400, detail=str(exc) or "Could not list models"
+        ) from exc
     embed_models: list[dict[str, Any]] = []
     try:
         embed_models = list_openrouter_embedding_models()
@@ -347,7 +351,9 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
         else:
             result = worker.enqueue_library_backlog(force=True)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(exc) or "Enqueue failed") from exc
+        raise HTTPException(
+            status_code=500, detail=str(exc) or "Enqueue failed"
+        ) from exc
     return AiProcessResult(
         enqueued=result["enqueued"],
         breakdown=result["breakdown"],
@@ -441,9 +447,7 @@ def ai_recommendations(
             "has_more": result.has_more,
         }
 
-    page = recommend.homepage_recommendations_page(
-        session, limit=limit, offset=offset
-    )
+    page = recommend.homepage_recommendations_page(session, limit=limit, offset=offset)
     return {
         "categories": recommend.list_categories(session),
         "sections": [

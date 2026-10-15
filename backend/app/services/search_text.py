@@ -175,9 +175,7 @@ def keyword_match_clause(query: str, *fields: Any) -> Any:
         ]
         if not per_field:
             continue
-        token_clauses.append(
-            or_(*per_field) if len(per_field) > 1 else per_field[0]
-        )
+        token_clauses.append(or_(*per_field) if len(per_field) > 1 else per_field[0])
     if not token_clauses:
         return None
     return and_(*token_clauses) if len(token_clauses) > 1 else token_clauses[0]
@@ -198,9 +196,7 @@ def phrase_in_hay(hay: str, phrase: str) -> bool:
     if len(parts) == 1:
         return _group_in_hay(hay, token_variants(parts[0]))
     body = r"\s+".join(re.escape(p) for p in parts)
-    return (
-        re.search(rf"(?i)(?<![a-z0-9]){body}(?![a-z0-9])", hay) is not None
-    )
+    return re.search(rf"(?i)(?<![a-z0-9]){body}(?![a-z0-9])", hay) is not None
 
 
 def query_in_text(query: str, text: str) -> bool:

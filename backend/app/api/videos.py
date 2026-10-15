@@ -126,9 +126,7 @@ def list_tags(session: Session = Depends(get_session)):
 
 
 @router.get("/tags/stats", response_model=list[TagStat])
-def tag_stats(
-    channel: Optional[str] = None, session: Session = Depends(get_session)
-):
+def tag_stats(channel: Optional[str] = None, session: Session = Depends(get_session)):
     return [
         TagStat(tag=t, count=n) for t, n in library.tag_stats(session, channel=channel)
     ]
@@ -259,7 +257,10 @@ def update_video(
             video.title_is_custom = True
     if "description" in data:
         new_desc = data["description"]
-        if video.source_description is not None and new_desc == video.source_description:
+        if (
+            video.source_description is not None
+            and new_desc == video.source_description
+        ):
             video.description_is_custom = False
         else:
             video.description_is_custom = True
@@ -335,12 +336,7 @@ def update_progress(
     # Near-complete watches (>=90%) are treated as finished — clear progress.
     position = max(0.0, payload.position_sec)
     duration = video.duration_sec
-    if (
-        duration
-        and duration > 0
-        and position > 0
-        and position >= duration * 0.9
-    ):
+    if duration and duration > 0 and position > 0 and position >= duration * 0.9:
         position = 0.0
     if position >= 5 or position == 0:
         library.expire_stale_progress(session)
@@ -687,7 +683,9 @@ def get_thumbnail_candidate(
     return FileResponse(path, media_type="image/jpeg")
 
 
-@router.post("/videos/{video_id}/thumbnail/candidates/{index}", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/thumbnail/candidates/{index}", response_model=VideoRead
+)
 def select_thumbnail_candidate(
     video_id: int,
     index: int,

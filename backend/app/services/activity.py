@@ -77,7 +77,15 @@ class ActivityHandle:
         engine: Optional[str] = None,
         reason: Optional[str] = None,
     ) -> None:
-        update(self.id, done=done, total=total, detail=detail, label=label, engine=engine, reason=reason)
+        update(
+            self.id,
+            done=done,
+            total=total,
+            detail=detail,
+            label=label,
+            engine=engine,
+            reason=reason,
+        )
 
     def finish(
         self,
@@ -286,7 +294,9 @@ def _safe_queue_counts() -> dict[str, int]:
 
 def snapshot() -> dict[str, Any]:
     with _lock:
-        running = [t.to_dict() for t in sorted(_running.values(), key=lambda t: t.started_at)]
+        running = [
+            t.to_dict() for t in sorted(_running.values(), key=lambda t: t.started_at)
+        ]
         recent = [t.to_dict() for t in list(_recent)]
     return {
         "running": running,

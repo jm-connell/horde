@@ -188,6 +188,7 @@ def direct_youtube_search_effective(override: Any, system: Any = None) -> bool:
 
 def _path() -> Path:
     from ..config import DATA_DIR
+
     return DATA_DIR / "app_settings.json"
 
 
@@ -210,12 +211,8 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     merged["openrouter_embed_model"] = normalize_openrouter_embed_model(
         merged.get("openrouter_embed_model")
     )
-    merged["ollama_prefer_embeddings"] = bool(
-        merged.get("ollama_prefer_embeddings")
-    )
-    merged["openrouter_show_costs"] = bool(
-        merged.get("openrouter_show_costs", False)
-    )
+    merged["ollama_prefer_embeddings"] = bool(merged.get("ollama_prefer_embeddings"))
+    merged["openrouter_show_costs"] = bool(merged.get("openrouter_show_costs", False))
     merged["openrouter_weekly_budget_usd"] = clamp_weekly_budget_usd(
         merged.get("openrouter_weekly_budget_usd")
     )
@@ -257,7 +254,9 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
     with _lock:
         current = load()
         if "ui" in updates and isinstance(updates["ui"], dict):
-            existing_ui = current.get("ui") if isinstance(current.get("ui"), dict) else {}
+            existing_ui = (
+                current.get("ui") if isinstance(current.get("ui"), dict) else {}
+            )
             current["ui"] = {**existing_ui, **updates["ui"]}
             updates = {k: v for k, v in updates.items() if k != "ui"}
         if "ai" in updates and isinstance(updates["ai"], dict):

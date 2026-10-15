@@ -209,9 +209,7 @@ class ChannelCatalog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     channel_url: str = Field(index=True, unique=True)
     channel_name: Optional[str] = Field(default=None, index=True)
-    status: ChannelCatalogStatus = Field(
-        default=ChannelCatalogStatus.idle, index=True
-    )
+    status: ChannelCatalogStatus = Field(default=ChannelCatalogStatus.idle, index=True)
     indexed_count: int = 0
     # Best-known total uploads on the YouTube channel (from yt-dlp playlist_count).
     channel_total: Optional[int] = None

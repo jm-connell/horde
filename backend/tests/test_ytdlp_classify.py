@@ -22,7 +22,9 @@ from app.services.ytdlp_common import (
 
 
 def test_members_only_message_and_error():
-    assert is_members_only_message("Join this channel to get access to members-only content")
+    assert is_members_only_message(
+        "Join this channel to get access to members-only content"
+    )
     assert not is_members_only_message("normal failure")
     kind, msg = classify_ytdlp_error(MembersOnlyError("locked"))
     assert kind == ERROR_KIND_MEMBERS
@@ -47,10 +49,7 @@ def test_describe_extract_target():
         describe_extract_target("https://www.youtube.com/@LinusTechTips")
         == "@LinusTechTips"
     )
-    assert (
-        describe_extract_target("ytsearch40:t480 mod")
-        == 'YouTube search "t480 mod"'
-    )
+    assert describe_extract_target("ytsearch40:t480 mod") == 'YouTube search "t480 mod"'
     assert (
         describe_extract_target(
             "https://www.youtube.com/@LinusTechTips/search?query=paint"
@@ -60,9 +59,7 @@ def test_describe_extract_target():
 
 
 def test_classify_cookies_explains_anonymous_and_names_target(monkeypatch):
-    monkeypatch.setattr(
-        "app.services.ytdlp_common.cookie_configured", lambda: False
-    )
+    monkeypatch.setattr("app.services.ytdlp_common.cookie_configured", lambda: False)
     kind, msg = classify_ytdlp_error(
         "Login required / age-restricted",
         url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -102,9 +99,7 @@ def test_record_extract_failure_stores_target():
 
 
 def test_classify_bot_pot_cookies(monkeypatch):
-    monkeypatch.setattr(
-        "app.services.ytdlp_common.cookie_configured", lambda: False
-    )
+    monkeypatch.setattr("app.services.ytdlp_common.cookie_configured", lambda: False)
     monkeypatch.setattr(
         "app.services.ytdlp_common.pot_provider_configured", lambda: False
     )
@@ -167,7 +162,9 @@ def test_http_detail_for_error_shape(monkeypatch):
 def test_is_members_only_entry():
     assert is_members_only_entry({"availability": "subscriber_only"})
     assert is_members_only_entry({"title": "[Members only] Hangout"})
-    assert not is_members_only_entry({"title": "Public video", "availability": "public"})
+    assert not is_members_only_entry(
+        {"title": "Public video", "availability": "public"}
+    )
     assert not is_members_only_entry(None)
 
 

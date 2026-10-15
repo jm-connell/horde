@@ -25,7 +25,13 @@ from ..schemas import (
     ChannelSearchResponse,
     ChannelStat,
 )
-from ..services import channel_autodownload, channel_catalog, downloader, feed_meta_cache, library
+from ..services import (
+    channel_autodownload,
+    channel_catalog,
+    downloader,
+    feed_meta_cache,
+    library,
+)
 from ..services import app_settings as app_settings_svc
 from ..services.ytdlp_common import cookie_configured, is_members_only_entry
 from ..services.ytdlp_extract import (
@@ -35,6 +41,7 @@ from ..services.ytdlp_extract import (
 from .video_serialize import to_read
 
 router = APIRouter(prefix="/api", tags=["channels"])
+
 
 @router.get("/channels", response_model=list[ChannelStat])
 def list_channels(
@@ -70,9 +77,7 @@ def search_channels(
     limit: int = Query(8, ge=1, le=20),
 ):
     hits = downloader.search_youtube_channels(q, limit=limit)
-    return ChannelSearchResponse(
-        results=[ChannelSearchHit(**h) for h in hits]
-    )
+    return ChannelSearchResponse(results=[ChannelSearchHit(**h) for h in hits])
 
 
 @router.get("/channels/catalog/status", response_model=ChannelCatalogStatusResponse)
@@ -325,9 +330,7 @@ def _feed_entries_from_raw(
         feed_meta_cache.upsert_many(to_cache)
     if channel_url and catalog_updates:
         try:
-            channel_catalog.update_catalog_video_fields(
-                channel_url, catalog_updates
-            )
+            channel_catalog.update_catalog_video_fields(channel_url, catalog_updates)
         except Exception:  # noqa: BLE001
             pass
     return entries
@@ -393,9 +396,7 @@ def channel_youtube_search(
     empty.direct_youtube_search_effective = effective
     if not effective:
         return empty
-    raw_entries = search_youtube_channel_videos(
-        channel_url, q, limit=limit
-    )
+    raw_entries = search_youtube_channel_videos(channel_url, q, limit=limit)
     entries = _feed_entries_from_raw(
         session,
         raw_entries,
@@ -510,13 +511,13 @@ def channel_feed(
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
     if not channel_url:
-        return ChannelFeedPage(channel=channel_name, channel_url=None, entries=[], has_more=False)
+        return ChannelFeedPage(
+            channel=channel_name, channel_url=None, entries=[], has_more=False
+        )
 
     # Kick off / refresh catalog in the background without blocking the response.
     try:
-        channel_catalog.maybe_enqueue_for_feed(
-            channel_url, channel_name=channel_name
-        )
+        channel_catalog.maybe_enqueue_for_feed(channel_url, channel_name=channel_name)
     except Exception:  # noqa: BLE001
         pass
 
@@ -640,8 +641,7 @@ def channel_feed(
             ChannelFeedEntry(
                 id=yt_id,
                 url=raw["url"],
-                title=raw.get("title")
-                or (cached.get("title") if cached else None),
+                title=raw.get("title") or (cached.get("title") if cached else None),
                 duration=duration,
                 thumbnail_url=thumbnail_url,
                 view_count=view_count,
@@ -682,9 +682,7 @@ def channel_feed(
 
     # Background-fill missing views / dates / votes (catalog + live).
     missing_meta = [
-        e
-        for e in entries
-        if e.id and (e.view_count is None or not e.published_at)
+        e for e in entries if e.id and (e.view_count is None or not e.published_at)
     ][:8]
     missing_votes = [
         e for e in entries if e.id and (e.like_count is None or e.dislike_count is None)
@@ -787,8 +785,7 @@ def channel_feed(
         catalog_indexed=int(
             data.get("catalog_indexed")
             if data.get("catalog_indexed") is not None
-            else progress.get("catalog_indexed")
-            or 0
+            else progress.get("catalog_indexed") or 0
         ),
         catalog_total=(
             data.get("catalog_total")
@@ -806,5 +803,3 @@ def channel_feed(
             else progress.get("catalog_status")
         ),
     )
-
-

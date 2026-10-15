@@ -38,6 +38,7 @@ PORT: int = int(os.environ.get("PORT", "8080"))
 # Max simultaneous download workers (FIFO queue).
 MAX_DOWNLOAD_CONCURRENCY: int = int(os.environ.get("MAX_DOWNLOAD_CONCURRENCY", "2"))
 
+
 # Max simultaneous ffmpeg postprocess workers (remux / transcode / loudnorm).
 # Empty = 2 when a GPU encoder is available, otherwise 1.
 def _optional_positive_int(name: str) -> Optional[int]:
@@ -70,9 +71,10 @@ OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "").strip()
 OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "").strip()
 
 # Update checks — baked at Docker build time; falls back to local git in dev.
-HORDE_GITHUB_REPO: str = os.environ.get(
-    "HORDE_GITHUB_REPO", "jm-connell/horde"
-).strip() or "jm-connell/horde"
+HORDE_GITHUB_REPO: str = (
+    os.environ.get("HORDE_GITHUB_REPO", "jm-connell/horde").strip()
+    or "jm-connell/horde"
+)
 
 
 def resolve_git_sha() -> str:

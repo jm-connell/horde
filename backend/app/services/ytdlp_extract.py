@@ -184,9 +184,7 @@ def _estimate_preset_bytes(
     return total if total else None
 
 
-def _estimate_preset_sizes(
-    info: dict[str, Any], presets: list[str]
-) -> dict[str, int]:
+def _estimate_preset_sizes(info: dict[str, Any], presets: list[str]) -> dict[str, int]:
     import yt_dlp
 
     sizes: dict[str, int] = {}
@@ -614,7 +612,14 @@ def _channel_videos_url(channel_url: str) -> str:
     url = channel_url.strip().rstrip("/")
     if url.endswith("/videos"):
         return url
-    for suffix in ("/shorts", "/streams", "/playlists", "/featured", "/about", "/search"):
+    for suffix in (
+        "/shorts",
+        "/streams",
+        "/playlists",
+        "/featured",
+        "/about",
+        "/search",
+    ):
         if url.endswith(suffix):
             return url[: -len(suffix)] + "/videos"
     return f"{url}/videos"
@@ -688,7 +693,9 @@ def fetch_channel_feed(
     fetched = len(raw_entries)
     result = {
         "channel": info.get("uploader") or info.get("channel"),
-        "channel_url": info.get("uploader_url") or info.get("channel_url") or channel_url,
+        "channel_url": info.get("uploader_url")
+        or info.get("channel_url")
+        or channel_url,
         "entries": entries,
         "has_more": fetched == limit,
         "fetched": fetched,
@@ -782,9 +789,7 @@ def search_youtube_channel_videos(
     channel_name = info.get("uploader") or info.get("channel")
     playlist_channel_url = info.get("uploader_url") or info.get("channel_url")
     if playlist_channel_url:
-        playlist_channel_url = str(playlist_channel_url).split("/videos")[0].rstrip(
-            "/"
-        )
+        playlist_channel_url = str(playlist_channel_url).split("/videos")[0].rstrip("/")
     entries: list[dict[str, Any]] = []
     for raw in info.get("entries") or []:
         if not isinstance(raw, dict) or is_youtube_short_entry(raw):
@@ -945,5 +950,3 @@ def search_youtube_channels(query: str, *, limit: int = 8) -> list[dict[str, Any
         if len(results) >= limit:
             break
     return results
-
-

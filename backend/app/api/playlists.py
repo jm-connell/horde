@@ -122,9 +122,7 @@ def _to_playlist_read(
     member_set = set(members)
     first_id = members[0] if members else None
     has_custom = bool(playlist.cover_path and Path(playlist.cover_path).is_file())
-    pinned = (
-        playlist.cover_video_id if playlist.cover_video_id in member_set else None
-    )
+    pinned = playlist.cover_video_id if playlist.cover_video_id in member_set else None
     thumb_video = None if has_custom else (pinned if pinned is not None else first_id)
     has_thumb = has_custom or (
         thumb_video is not None and thumbs.get(thumb_video, False)
@@ -232,12 +230,16 @@ def list_playlists(session: Session = Depends(get_session)):
         p.cover_video_id for p in playlists if p.cover_video_id is not None
     )
     thumbs = _thumb_ok(session, video_ids)
-    existing = {
-        video.id
-        for video in session.exec(
-            select(Video).where(Video.id.in_(list(dict.fromkeys(video_ids))))
-        ).all()
-    } if video_ids else set()
+    existing = (
+        {
+            video.id
+            for video in session.exec(
+                select(Video).where(Video.id.in_(list(dict.fromkeys(video_ids))))
+            ).all()
+        }
+        if video_ids
+        else set()
+    )
     out: list[PlaylistRead] = []
     for playlist in playlists:
         plist = grouped.get(playlist.id, [])
@@ -294,7 +296,9 @@ def get_playlist(playlist_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Playlist not found")
     videos = _ordered_videos(session, playlist_id)
     base = _to_playlist_read(session, playlist)
-    return PlaylistDetail(**base.model_dump(), videos=[_to_read(v, session) for v in videos])
+    return PlaylistDetail(
+        **base.model_dump(), videos=[_to_read(v, session) for v in videos]
+    )
 
 
 @router.patch("/{playlist_id}", response_model=PlaylistRead)
@@ -341,7 +345,9 @@ def update_playlist(
     if "cover_video_id" in data:
         cover_id = data["cover_video_id"]
         if cover_id is not None:
-            members = set(_member_video_ids(session, _playlist_items(session, playlist.id)))
+            members = set(
+                _member_video_ids(session, _playlist_items(session, playlist.id))
+            )
             if cover_id not in members:
                 raise HTTPException(
                     status_code=400, detail="Video is not in this playlist"
@@ -496,9 +502,7 @@ def reorder_items(
 
 
 @router.get("/{playlist_id}/thumbnail")
-def get_playlist_thumbnail(
-    playlist_id: int, session: Session = Depends(get_session)
-):
+def get_playlist_thumbnail(playlist_id: int, session: Session = Depends(get_session)):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
@@ -572,7 +576,9 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
         try:
             title, entries = downloader.extract_playlist(url)
         except Exception as exc:  # noqa: BLE001 - surface extraction failures
-            raise HTTPException(status_code=400, detail=f"Could not read playlist: {exc}")
+            raise HTTPException(
+                status_code=400, detail=f"Could not read playlist: {exc}"
+            )
         if payload.name and payload.name.strip():
             title = payload.name.strip()
 

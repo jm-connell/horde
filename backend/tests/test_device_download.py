@@ -176,7 +176,10 @@ def test_device_file_endpoint_and_dismiss_cleanup(init_db):
 
     with Session(init_db["engine"]) as session:
         resp = downloads_api.download_device_file(job_id, session)
-    assert resp.path == str(media.resolve()) or Path(resp.path).resolve() == media.resolve()
+    assert (
+        resp.path == str(media.resolve())
+        or Path(resp.path).resolve() == media.resolve()
+    )
     assert resp.filename and "My Save" in resp.filename
 
     with Session(init_db["engine"]) as session:

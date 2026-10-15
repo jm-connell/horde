@@ -507,9 +507,7 @@ class OpenRouterProvider:
         system: Optional[str] = None,
         messages: Optional[list[dict[str, str]]] = None,
     ) -> list[dict[str, str]]:
-        return OllamaProvider._build_messages(
-            prompt, system=system, messages=messages
-        )
+        return OllamaProvider._build_messages(prompt, system=system, messages=messages)
 
     def _record_usage(
         self,
@@ -773,7 +771,6 @@ AnyEmbedProvider = Union[OllamaProvider, OpenRouterProvider]
 AnyLlmProvider = Union[OllamaProvider, OpenRouterProvider]
 
 
-
 def usd_per_million(raw: Any) -> Optional[float]:
     """Convert OpenRouter USD-per-token list prices to USD per 1M tokens."""
     if raw is None or raw == "":
@@ -805,9 +802,7 @@ def is_openrouter_text_llm(row: Any) -> bool:
     outputs = arch.get("output_modalities")
     if isinstance(outputs, list) and outputs:
         out_set = {
-            str(x).strip().lower()
-            for x in outputs
-            if x is not None and str(x).strip()
+            str(x).strip().lower() for x in outputs if x is not None and str(x).strip()
         }
         if "text" not in out_set or out_set & _NON_TEXT_OUTPUT:
             return False
@@ -1092,9 +1087,7 @@ def embed_backend_name() -> Optional[str]:
     return None
 
 
-def require_llm_chat_model(
-    provider: AnyLlmProvider, chat_model: str
-) -> Optional[str]:
+def require_llm_chat_model(provider: AnyLlmProvider, chat_model: str) -> Optional[str]:
     """Return an error if the chat model is unavailable (Ollama only)."""
     if isinstance(provider, OpenRouterProvider):
         if not (chat_model or "").strip():
@@ -1215,7 +1208,9 @@ def _cached_model_presence(
     return embed_ok, chat_ok
 
 
-def _openrouter_status_fields(ai: dict[str, Any], *, quick: bool = False) -> dict[str, Any]:
+def _openrouter_status_fields(
+    ai: dict[str, Any], *, quick: bool = False
+) -> dict[str, Any]:
     from .. import app_settings as settings_mod
 
     enabled = bool(ai.get("openrouter_enabled"))
@@ -1267,7 +1262,11 @@ def build_status(
     or_fields = _openrouter_status_fields(ai, quick=quick)
 
     # Effective embed model for status (may be OpenRouter).
-    effective_embed = resolve_embed_model() if (enabled or openrouter_owns_embeddings()) else embed_model
+    effective_embed = (
+        resolve_embed_model()
+        if (enabled or openrouter_owns_embeddings())
+        else embed_model
+    )
 
     if not enabled and not openrouter_owns_embeddings():
         return ProviderStatus(
@@ -1295,8 +1294,14 @@ def build_status(
         return ProviderStatus(
             enabled=enabled or bool(ai.get("openrouter_enabled")),
             provider="openrouter" if openrouter_owns_embeddings() else provider_name,
-            ready=bool(or_fields.get("openrouter_reachable") or or_fields.get("openrouter_api_key_set")),
-            reachable=bool(or_fields.get("openrouter_reachable") or or_fields.get("openrouter_api_key_set")),
+            ready=bool(
+                or_fields.get("openrouter_reachable")
+                or or_fields.get("openrouter_api_key_set")
+            ),
+            reachable=bool(
+                or_fields.get("openrouter_reachable")
+                or or_fields.get("openrouter_api_key_set")
+            ),
             base_url=_settings_url() or None,
             embed_model=effective_embed,
             chat_model=resolve_llm_model() if openrouter_configured() else chat_model,

@@ -91,9 +91,7 @@ def videos_for_category(
 ) -> CategoryBrowsePage:
     """Return a page of category matches (no For You filler)."""
     categories = list_categories(session)
-    row = session.exec(
-        select(AiCategory).where(AiCategory.name == category)
-    ).first()
+    row = session.exec(select(AiCategory).where(AiCategory.name == category)).first()
     if row is None:
         return CategoryBrowsePage([], False, categories)
 

@@ -135,7 +135,10 @@ def parse_ffmpeg_hwaccels(text: str) -> frozenset[str]:
     for raw in text.splitlines():
         line = raw.strip().lower()
         if not started:
-            if "hardware acceleration" in line or line == "hardware acceleration methods:":
+            if (
+                "hardware acceleration" in line
+                or line == "hardware acceleration methods:"
+            ):
                 started = True
             continue
         if line:
@@ -179,7 +182,9 @@ def list_filters() -> frozenset[str]:
     global _filters_cache
     with _filters_lock:
         if _filters_cache is None:
-            _filters_cache = parse_ffmpeg_filters(_run_ffmpeg(["-hide_banner", "-filters"]))
+            _filters_cache = parse_ffmpeg_filters(
+                _run_ffmpeg(["-hide_banner", "-filters"])
+            )
         return _filters_cache
 
 

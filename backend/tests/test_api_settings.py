@@ -39,9 +39,7 @@ def test_settings_get_defaults_and_patch_roundtrip(client):
 
 
 def test_settings_direct_youtube_search_roundtrip(client):
-    patched = client.patch(
-        "/api/settings", json={"direct_youtube_search": False}
-    )
+    patched = client.patch("/api/settings", json={"direct_youtube_search": False})
     assert patched.status_code == 200
     assert patched.json()["direct_youtube_search"] is False
     again = client.get("/api/settings").json()
@@ -49,9 +47,7 @@ def test_settings_direct_youtube_search_roundtrip(client):
 
 
 def test_settings_youtube_video_search_roundtrip(client):
-    patched = client.patch(
-        "/api/settings", json={"youtube_video_search": False}
-    )
+    patched = client.patch("/api/settings", json={"youtube_video_search": False})
     assert patched.status_code == 200
     assert patched.json()["youtube_video_search"] is False
     again = client.get("/api/settings").json()

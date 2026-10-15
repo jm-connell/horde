@@ -60,15 +60,11 @@ def test_get_patch_delete_video(client, add_video):
 def test_watch_progress_and_continue_watching(client, add_video):
     video = add_video(title="Long watch", duration_sec=200.0, last_position_sec=0.0)
     # Positions under 5s are ignored (except exact 0).
-    ignored = client.patch(
-        f"/api/videos/{video.id}/progress", json={"position_sec": 2}
-    )
+    ignored = client.patch(f"/api/videos/{video.id}/progress", json={"position_sec": 2})
     assert ignored.status_code == 204
     assert client.get(f"/api/videos/{video.id}").json()["last_position_sec"] == 0.0
 
-    saved = client.patch(
-        f"/api/videos/{video.id}/progress", json={"position_sec": 40}
-    )
+    saved = client.patch(f"/api/videos/{video.id}/progress", json={"position_sec": 40})
     assert saved.status_code == 204
     body = client.get(f"/api/videos/{video.id}").json()
     assert body["last_position_sec"] == 40.0
@@ -78,9 +74,7 @@ def test_watch_progress_and_continue_watching(client, add_video):
     assert [item["id"] for item in row] == [video.id]
 
     # Near-complete (>=90%) clears progress so it leaves continue-watching.
-    done = client.patch(
-        f"/api/videos/{video.id}/progress", json={"position_sec": 190}
-    )
+    done = client.patch(f"/api/videos/{video.id}/progress", json={"position_sec": 190})
     assert done.status_code == 204
     body = client.get(f"/api/videos/{video.id}").json()
     assert body["last_position_sec"] == 0.0
@@ -213,9 +207,7 @@ def test_bulk_delete_and_notes(client, add_video):
     assert client.get(f"/api/videos/{a.id}").json()["notes"] == "batch"
     assert client.get(f"/api/videos/{c.id}").json()["notes"] is None
 
-    deleted = client.post(
-        "/api/videos/bulk-delete", json={"video_ids": [a.id, b.id]}
-    )
+    deleted = client.post("/api/videos/bulk-delete", json={"video_ids": [a.id, b.id]})
     assert deleted.status_code == 204
     assert client.get(f"/api/videos/{a.id}").status_code == 404
     assert client.get(f"/api/videos/{c.id}").status_code == 200
@@ -334,9 +326,7 @@ def test_health_and_system_activity(client, add_video):
 def test_health_last_extract_failure_names_video(client, monkeypatch):
     from app.services.ytdlp_common import classify_ytdlp_error, record_extract_failure
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_common.cookie_configured", lambda: False
-    )
+    monkeypatch.setattr("app.services.ytdlp_common.cookie_configured", lambda: False)
     kind, message = classify_ytdlp_error(
         "Login required / age-restricted",
         url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",

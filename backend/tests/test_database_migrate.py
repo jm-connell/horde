@@ -115,14 +115,10 @@ def test_engine_registers_regexp(init_db):
 
     with engine.connect() as conn:
         hit = conn.execute(
-            text(
-                "SELECT 'a used car' REGEXP '(?i)(?<![a-z0-9])car(?![a-z0-9])'"
-            )
+            text("SELECT 'a used car' REGEXP '(?i)(?<![a-z0-9])car(?![a-z0-9])'")
         ).scalar()
         miss = conn.execute(
-            text(
-                "SELECT 'graphics card' REGEXP '(?i)(?<![a-z0-9])car(?![a-z0-9])'"
-            )
+            text("SELECT 'graphics card' REGEXP '(?i)(?<![a-z0-9])car(?![a-z0-9])'")
         ).scalar()
     assert hit == 1
     assert miss == 0

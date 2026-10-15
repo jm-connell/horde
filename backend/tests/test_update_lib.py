@@ -159,7 +159,9 @@ def test_extract_bind_mounts_from_compose_json():
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    lines = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    lines = dict(
+        line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
+    )
     assert lines["/downloads"] == "/mnt/media"
     assert lines["/app/data"] == "/mnt/data"
 
@@ -220,7 +222,9 @@ def test_git_pull_keeps_env_and_recovers_compose_conflicts(tmp_path):
     git(work, "remote", "add", "origin", str(origin))
     git(work, "push", "-u", "origin", "main")
 
-    subprocess.run(["git", "clone", str(origin), str(other)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "clone", str(origin), str(other)], check=True, capture_output=True
+    )
     git(other, "config", "user.email", "test@example.com")
     git(other, "config", "user.name", "Test")
     compose = (other / "docker-compose.yml").read_text(encoding="utf-8")

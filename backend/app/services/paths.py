@@ -60,9 +60,7 @@ def is_manual_import(video: Video) -> bool:
     return True
 
 
-def manual_import_rel_path(
-    channel: str | None, title: str, ext: str
-) -> str:
+def manual_import_rel_path(channel: str | None, title: str, ext: str) -> str:
     """Build Channel/Title.ext or imports/Title.ext for a manual import."""
     safe_title = safe_filename(title)
     suffix = ext if ext.startswith(".") else f".{ext}"

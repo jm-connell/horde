@@ -20,9 +20,7 @@ _CHAPTER_LINE_RE = re.compile(
 )
 _PAREN_TITLE_RE = re.compile(r"^\((.+)\)$")
 
-_CUE_TS_RE = re.compile(
-    r"^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?$"
-)
+_CUE_TS_RE = re.compile(r"^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?$")
 _CUE_TIMING_RE = re.compile(
     r"^((?:\d{1,2}:)?\d{1,2}:\d{2}(?:\.\d{1,3})?)\s*-->\s*"
     r"((?:\d{1,2}:)?\d{1,2}:\d{2}(?:\.\d{1,3})?)"
@@ -266,9 +264,7 @@ def load_timed_cues(video: Video) -> list[tuple[float, str]]:
     return []
 
 
-def format_timed_transcript(
-    cues: list[tuple[float, str]], *, max_chars: int
-) -> str:
+def format_timed_transcript(cues: list[tuple[float, str]], *, max_chars: int) -> str:
     windows = _downsample_cues(cues, CUE_WINDOW_SEC)
     if not windows:
         return ""
@@ -411,9 +407,7 @@ def snap_and_validate(
             deduped[i + 1]["start_sec"]
             if i + 1 < len(deduped)
             else (
-                duration
-                if duration is not None
-                else chapter["start_sec"] + min_seg + 1
+                duration if duration is not None else chapter["start_sec"] + min_seg + 1
             )
         )
         if next_start - chapter["start_sec"] < min_seg:
@@ -424,7 +418,9 @@ def snap_and_validate(
         if last["start_sec"] - first["start_sec"] >= min_seg:
             filtered = [first, last]
     if len(filtered) < 2:
-        filtered = _ensure_two_chapters(filtered or deduped, cue_starts, duration, min_seg)
+        filtered = _ensure_two_chapters(
+            filtered or deduped, cue_starts, duration, min_seg
+        )
     cap = max_chapter_count(duration)
     if len(filtered) > cap:
         idxs = _even_indices(len(filtered), cap)
@@ -586,9 +582,7 @@ def _parse_start_value(raw: Any) -> Optional[float]:
     clock = _CUE_TS_RE.match(text)
     if clock:
         return _parse_cue_ts(text)
-    embedded = re.search(
-        r"(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?", text
-    )
+    embedded = re.search(r"(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?", text)
     if embedded:
         return _parse_cue_ts(embedded.group(0))
     return None
@@ -604,11 +598,7 @@ def _ensure_two_chapters(
         return chapters
     if not cue_starts:
         return []
-    first = (
-        dict(chapters[0])
-        if chapters
-        else {"start_sec": 0.0, "title": "Intro"}
-    )
+    first = dict(chapters[0]) if chapters else {"start_sec": 0.0, "title": "Intro"}
     first["start_sec"] = 0.0
     if not first.get("title"):
         first["title"] = "Intro"
@@ -820,7 +810,9 @@ def _contains_seq(hay: list[str], needle: list[str]) -> bool:
 
 def _collapse_stutter(text: str) -> str:
     """Drop a clause that repeats the previous one, or keep the longer extension."""
-    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if p.strip()]
+    parts = [
+        p.strip() for p in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if p.strip()
+    ]
     if len(parts) < 2:
         return (text or "").strip()
     out: list[str] = []
@@ -886,7 +878,9 @@ def _repeats_clause(text: str) -> bool:
 
 
 def _cue_words_near(
-    cues: list[tuple[float, str]], start_sec: float, window: float = _QUOTE_CUE_WINDOW_SEC
+    cues: list[tuple[float, str]],
+    start_sec: float,
+    window: float = _QUOTE_CUE_WINDOW_SEC,
 ) -> list[str]:
     words: list[str] = []
     for ts, text in cues:
@@ -922,9 +916,7 @@ def title_is_spoken_quote(
     return _is_contiguous_quote(words, _cue_words_near(cues, start_sec))
 
 
-def titles_need_rewrite(
-    chapters: list[Chapter], cues: list[tuple[float, str]]
-) -> bool:
+def titles_need_rewrite(chapters: list[Chapter], cues: list[tuple[float, str]]) -> bool:
     return any(
         title_is_spoken_quote(str(chapter["title"]), cues, float(chapter["start_sec"]))
         for chapter in chapters
@@ -1035,9 +1027,7 @@ def title_rewrite_system_prompt() -> str:
     )
 
 
-def title_rewrite_prompt(
-    chapters: list[Chapter], cues: list[tuple[float, str]]
-) -> str:
+def title_rewrite_prompt(chapters: list[Chapter], cues: list[tuple[float, str]]) -> str:
     blocks: list[str] = []
     for i, chapter in enumerate(chapters):
         start = float(chapter["start_sec"])
@@ -1060,15 +1050,13 @@ def title_rewrite_prompt(
         blocks.append(
             f"start_sec: {start_label}\n"
             f"current_title: {chapter['title']}\n"
-            "transcript:\n"
-            + ("\n".join(lines) if lines else "(no captions)")
+            "transcript:\n" + ("\n".join(lines) if lines else "(no captions)")
         )
     return (
         "Rewrite every current_title into a 2–6 word topic label. "
         "Keep start_sec the same. "
         "If the transcript is people talking about digging and getting rich, "
-        'write "Digging for treasure", not a line they said.\n\n'
-        + "\n\n".join(blocks)
+        'write "Digging for treasure", not a line they said.\n\n' + "\n\n".join(blocks)
     )
 
 
@@ -1168,9 +1156,7 @@ def _content_tokens(text: str) -> set[str]:
     return toks | extra
 
 
-def _fit_transcript_windows(
-    windows: list[tuple[float, str]], max_chars: int
-) -> str:
+def _fit_transcript_windows(windows: list[tuple[float, str]], max_chars: int) -> str:
     """Keep every window timestamp if possible by shortening cue text first."""
 
     def render(max_words: int) -> str:
@@ -1261,6 +1247,9 @@ def _snap_to_cues(start_sec: float, cue_starts: list[float]) -> float:
         earlier = [ts for ts in cue_starts if ts <= start_sec]
         if earlier:
             last_before = max(earlier)
-            if start_sec - last_before <= abs(nearest - start_sec) + SNAP_EARLIER_TIE_SEC:
+            if (
+                start_sec - last_before
+                <= abs(nearest - start_sec) + SNAP_EARLIER_TIE_SEC
+            ):
                 return last_before
     return nearest

@@ -345,9 +345,7 @@ def start_subtitle_retry_worker() -> None:
     if _thread is not None and _thread.is_alive():
         return
     _stop.clear()
-    _thread = threading.Thread(
-        target=_worker_loop, daemon=True, name="subtitle-retry"
-    )
+    _thread = threading.Thread(target=_worker_loop, daemon=True, name="subtitle-retry")
     _thread.start()
 
 

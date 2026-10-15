@@ -237,9 +237,7 @@ def test_list_thumbnail_uses_mqdefault_when_only_letterboxed_hq_exists():
 
 
 def test_list_thumbnail_rewrites_ytimg_webp_url():
-    info = {
-        "thumbnail": "https://i.ytimg.com/vi_webp/pgW-BapPWHM/maxresdefault.webp"
-    }
+    info = {"thumbnail": "https://i.ytimg.com/vi_webp/pgW-BapPWHM/maxresdefault.webp"}
     assert _list_thumbnail_url(info) == (
         "https://i.ytimg.com/vi/pgW-BapPWHM/mqdefault.jpg"
     )

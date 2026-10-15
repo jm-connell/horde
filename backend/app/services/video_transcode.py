@@ -144,9 +144,13 @@ def ffmpeg_transcode_cmd(
             ]
         )
     elif name == "hevc_amf":
-        cmd.extend(["-c:v", "hevc_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "20"])
+        cmd.extend(
+            ["-c:v", "hevc_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "20"]
+        )
     elif name == "h264_amf":
-        cmd.extend(["-c:v", "h264_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "20"])
+        cmd.extend(
+            ["-c:v", "h264_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "20"]
+        )
     elif name == "hevc_videotoolbox":
         cmd.extend(["-c:v", "hevc_videotoolbox", "-q:v", "65"])
     elif name == "h264_videotoolbox":
@@ -165,7 +169,9 @@ def ffmpeg_transcode_cmd(
             ]
         )
     else:
-        cmd.extend(["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-profile:v", "high"])
+        cmd.extend(
+            ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-profile:v", "high"]
+        )
 
     cmd.extend(["-pix_fmt", "yuv420p"])
     if name.startswith("hevc_") or name == "libx265":
@@ -220,7 +226,9 @@ def transcode_video(
 
     probe = probe_media(path)
     has_audio = bool(probe and probe.audio_codec)
-    transcode_audio = bool(probe and probe.audio_codec and not is_aac_audio(probe.audio_codec))
+    transcode_audio = bool(
+        probe and probe.audio_codec and not is_aac_audio(probe.audio_codec)
+    )
 
     dest = path if path.suffix.lower() == ".mp4" else path.with_suffix(".mp4")
     tmp = dest.with_name(f"{dest.stem}.xcode.{threading.get_ident()}.mp4")

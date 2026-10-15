@@ -191,10 +191,7 @@ def test_rename_channel(session, add_video):
     add_video(title="B", channel="Old")
     add_video(title="C", channel="Keep")
     assert library.rename_channel(session, "Old", "New") == 2
-    names = {
-        v.channel
-        for v in library.query_videos(session, needs_review=False)
-    }
+    names = {v.channel for v in library.query_videos(session, needs_review=False)}
     assert names == {"New", "Keep"}
 
 

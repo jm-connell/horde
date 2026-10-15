@@ -34,9 +34,7 @@ def start_job_metadata_worker() -> None:
     if _thread is not None and _thread.is_alive():
         return
     _stop.clear()
-    _thread = threading.Thread(
-        target=_loop, name="job-metadata", daemon=True
-    )
+    _thread = threading.Thread(target=_loop, name="job-metadata", daemon=True)
     _thread.start()
 
 
@@ -88,7 +86,11 @@ def _fill_job(job_id: int) -> None:
         return
 
     if is_youtube_short_entry(
-        {**(preview if isinstance(preview, dict) else {}), "url": url, "webpage_url": url}
+        {
+            **(preview if isinstance(preview, dict) else {}),
+            "url": url,
+            "webpage_url": url,
+        }
     ):
         _drop_short(job_id, url)
         return

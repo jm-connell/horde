@@ -29,9 +29,7 @@ from .skips import skipped_yt_ids
 from ..ytdlp_extract import is_youtube_short_entry
 
 
-def catalog_progress(
-    session: Session, channel_url: str
-) -> dict[str, Any]:
+def catalog_progress(session: Session, channel_url: str) -> dict[str, Any]:
     """Indexed/total/complete/status for a channel URL (empty defaults if none)."""
     catalog = get_catalog_by_url(session, channel_url)
     if catalog is None:
@@ -43,7 +41,9 @@ def catalog_progress(
             "indexing": False,
         }
     status = (
-        catalog.status.value if hasattr(catalog.status, "value") else str(catalog.status)
+        catalog.status.value
+        if hasattr(catalog.status, "value")
+        else str(catalog.status)
     )
     return {
         "catalog_indexed": catalog.indexed_count,
@@ -191,7 +191,9 @@ def catalog_feed_page(
         "catalog_total": catalog.channel_total,
         "catalog_complete": bool(catalog.complete),
         "catalog_status": (
-            catalog.status.value if hasattr(catalog.status, "value") else str(catalog.status)
+            catalog.status.value
+            if hasattr(catalog.status, "value")
+            else str(catalog.status)
         ),
     }
 
@@ -262,9 +264,7 @@ def _keyword_catalog_rows(
         ).all()
         ranked = sorted(
             rows,
-            key=lambda r: keyword_rank_key(
-                r.title, r.description, query, r.position
-            ),
+            key=lambda r: keyword_rank_key(r.title, r.description, query, r.position),
         )
         return [(r, None) for r in ranked[:limit]]
 
@@ -468,5 +468,3 @@ def search_all_catalogs(
         keyword_ids={v.yt_id for v, _ in keyword_hits},
         query=q,
     )
-
-

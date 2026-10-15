@@ -147,7 +147,11 @@ def codec_string_for(stream: dict[str, Any]) -> Optional[str]:
     depth = bit_depth_from_pix_fmt(stream.get("pix_fmt")) or 8
     width = _int(stream.get("width")) or 1920
     height = _int(stream.get("height")) or 1080
-    fps = _parse_rate(stream.get("avg_frame_rate")) or _parse_rate(stream.get("r_frame_rate")) or 30.0
+    fps = (
+        _parse_rate(stream.get("avg_frame_rate"))
+        or _parse_rate(stream.get("r_frame_rate"))
+        or 30.0
+    )
 
     if family == "h264":
         pidc = _H264_PROFILES.get(profile, 100)
@@ -166,7 +170,11 @@ def codec_string_for(stream: dict[str, Any]) -> Optional[str]:
         return f"vp09.{p:02d}.{lvl:02d}.{depth:02d}"
     if family == "av1":
         p = {"main": 0, "high": 1, "professional": 2}.get(profile, 0)
-        lvl = level if level is not None and 0 <= level <= 31 else _av1_level(width, height, fps)
+        lvl = (
+            level
+            if level is not None and 0 <= level <= 31
+            else _av1_level(width, height, fps)
+        )
         return f"av01.{p}.{lvl:02d}M.{depth:02d}"
     return None
 

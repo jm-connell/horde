@@ -77,7 +77,9 @@ def _entry_for(path: Path) -> dict[str, Any]:
 def list_backgrounds():
     ensure_dirs()
     items: list[dict[str, Any]] = []
-    for path in sorted(BACKGROUNDS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+    for path in sorted(
+        BACKGROUNDS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
         if path.is_file() and path.suffix.lower() in ALLOWED_EXT:
             items.append(_entry_for(path))
     return {"items": items}

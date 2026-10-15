@@ -68,8 +68,9 @@ def test_normalize_helpers():
     assert settings_svc.normalize_ai_chapters_mode("nope") == "on_download"
     assert settings_svc.normalize_openrouter_scope("all") == "all"
     assert settings_svc.normalize_openrouter_scope("weird") == "specialized"
-    assert settings_svc.normalize_openrouter_embed_model("") == (
-        settings_svc.AI_DEFAULTS["openrouter_embed_model"]
+    assert (
+        settings_svc.normalize_openrouter_embed_model("")
+        == (settings_svc.AI_DEFAULTS["openrouter_embed_model"])
     )
 
 
@@ -91,9 +92,7 @@ def test_load_missing_file_returns_defaults(tmp_dirs):
 
 def test_load_grandfathers_missing_setup_completed(tmp_dirs):
     path = tmp_dirs["data"] / "app_settings.json"
-    path.write_text(
-        json.dumps({"progress_expiry_days": 21, "ui": {"theme": "oled"}})
-    )
+    path.write_text(json.dumps({"progress_expiry_days": 21, "ui": {"theme": "oled"}}))
     data = settings_svc.load()
     assert data["setup_completed"] is True
     assert data["progress_expiry_days"] == 21

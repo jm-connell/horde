@@ -394,9 +394,7 @@ def after_catalog_update(
     return enqueued
 
 
-def apply_saved_policy(
-    channel_url: str, *, channel_name: Optional[str] = None
-) -> None:
+def apply_saved_policy(channel_url: str, *, channel_name: Optional[str] = None) -> None:
     """Sync the feed head (and maybe full index) then enqueue per the saved policy."""
     from .channel_catalog import enqueue_channel, sync_feed_head
     from .channel_catalog.runtime import _normalize_channel_url, get_catalog_by_url
@@ -446,9 +444,7 @@ def poll_enabled_channels() -> None:
         try:
             sync_feed_head(channel_url, channel_name=channel_name, limit=50)
         except Exception:  # noqa: BLE001
-            logger.debug(
-                "autodownload poll failed for %s", channel_url, exc_info=True
-            )
+            logger.debug("autodownload poll failed for %s", channel_url, exc_info=True)
 
 
 def _worker_loop() -> None:

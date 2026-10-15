@@ -23,6 +23,7 @@ from ..ytdlp_common import (
     is_members_only_entry,
 )
 
+
 def skipped_yt_ids(session: Session, catalog_id: int) -> set[str]:
     rows = session.exec(
         select(ChannelCatalogSkip.yt_id).where(
@@ -157,9 +158,7 @@ def _reject_members_or_skipped(
         return None
     yt_id = str(yt_id)
     skip_set = (
-        skipped
-        if skipped is not None
-        else skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
+        skipped if skipped is not None else skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
     )
     reason = _skip_reason_for_entry(raw)
     if reason is not None and allow_gated:
@@ -188,5 +187,3 @@ def _reject_members_or_skipped(
         )[:500]
         session.add(catalog)
     return yt_id
-
-

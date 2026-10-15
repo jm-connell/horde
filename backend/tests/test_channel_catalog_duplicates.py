@@ -15,7 +15,9 @@ HANDLE = "https://www.youtube.com/@omnidroid_v10"
 CHANNEL_ID = "https://www.youtube.com/channel/UCNNZkE3vPc0Wlbp3iqi5vQw"
 
 
-def _add_catalog(session, *, url: str, status: ChannelCatalogStatus, **kwargs) -> ChannelCatalog:
+def _add_catalog(
+    session, *, url: str, status: ChannelCatalogStatus, **kwargs
+) -> ChannelCatalog:
     catalog = ChannelCatalog(
         channel_url=url,
         channel_name="Omnidroid v10",
@@ -29,13 +31,16 @@ def _add_catalog(session, *, url: str, status: ChannelCatalogStatus, **kwargs) -
 
 
 def test_normalize_strips_www_and_videos_tab():
-    assert _normalize_channel_url(
-        "https://www.youtube.com/@Omnidroid_v10/videos"
-    ) == "https://youtube.com/@omnidroid_v10"
+    assert (
+        _normalize_channel_url("https://www.youtube.com/@Omnidroid_v10/videos")
+        == "https://youtube.com/@omnidroid_v10"
+    )
 
 
 def test_get_catalog_by_url_matches_handle_variants(session):
-    _add_catalog(session, url=HANDLE, status=ChannelCatalogStatus.ready, indexed_count=60)
+    _add_catalog(
+        session, url=HANDLE, status=ChannelCatalogStatus.ready, indexed_count=60
+    )
     hit = get_catalog_by_url(session, "https://youtube.com/@omnidroid_v10/videos")
     assert hit is not None
     assert hit.channel_url == HANDLE
@@ -45,9 +50,7 @@ def test_get_catalog_by_url_matches_channel_id_by_name(session):
     ready = _add_catalog(
         session, url=HANDLE, status=ChannelCatalogStatus.ready, indexed_count=60
     )
-    hit = get_catalog_by_url(
-        session, CHANNEL_ID, channel_name="Omnidroid v10"
-    )
+    hit = get_catalog_by_url(session, CHANNEL_ID, channel_name="Omnidroid v10")
     assert hit is not None
     assert hit.id == ready.id
 
@@ -62,7 +65,11 @@ def test_reconcile_drops_stale_channel_id_error(session):
         last_error="name '_stop' is not defined",
     )
     ready = _add_catalog(
-        session, url=HANDLE, status=ChannelCatalogStatus.ready, indexed_count=60, complete=True
+        session,
+        url=HANDLE,
+        status=ChannelCatalogStatus.ready,
+        indexed_count=60,
+        complete=True,
     )
     session.add(
         ChannelCatalogVideo(

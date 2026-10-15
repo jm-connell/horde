@@ -235,7 +235,9 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
                 _set_job(current_title=title, current_video_id=vid)
                 act.update(
                     detail=title,
-                    done=_job_state["done"] + _job_state["failed"] + _job_state["skipped"],
+                    done=_job_state["done"]
+                    + _job_state["failed"]
+                    + _job_state["skipped"],
                 )
             try:
                 with _sync_lock:
@@ -273,7 +275,11 @@ def start_bulk_sync(
     """Queue a background bulk metadata sync. Returns immediate status."""
     with _job_lock:
         if _job_state["running"]:
-            return {"started": False, "detail": "Metadata sync already running", **dict(_job_state)}
+            return {
+                "started": False,
+                "detail": "Metadata sync already running",
+                **dict(_job_state),
+            }
 
     with Session(engine) as session:
         if video_ids:

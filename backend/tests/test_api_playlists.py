@@ -10,7 +10,9 @@ def test_playlist_crud_and_items(client, add_video):
     assert empty.status_code == 200
     assert empty.json() == []
 
-    created = client.post("/api/playlists", json={"name": "  Mix  ", "description": "d"})
+    created = client.post(
+        "/api/playlists", json={"name": "  Mix  ", "description": "d"}
+    )
     assert created.status_code == 200
     playlist = created.json()
     assert playlist["name"] == "Mix"
@@ -215,7 +217,9 @@ def test_sync_attaches_existing_library_video(session, add_video, monkeypatch):
 
 def test_playlist_404s(client):
     assert client.get("/api/playlists/1").status_code == 404
-    assert client.post("/api/playlists/1/items", json={"video_id": 1}).status_code == 404
+    assert (
+        client.post("/api/playlists/1/items", json={"video_id": 1}).status_code == 404
+    )
     assert client.patch("/api/playlists/1", json={"name": "x"}).status_code == 404
     assert client.delete("/api/playlists/1").status_code == 404
     assert client.get("/api/playlists/1/thumbnail").status_code == 404

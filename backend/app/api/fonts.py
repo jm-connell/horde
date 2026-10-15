@@ -52,7 +52,11 @@ def _write_meta(font_id: str, meta: dict[str, Any]) -> None:
 def _find_file(font_id: str) -> Optional[Path]:
     ensure_dirs()
     for path in FONTS_DIR.iterdir():
-        if path.is_file() and path.stem == font_id and path.suffix.lower() in ALLOWED_EXT:
+        if (
+            path.is_file()
+            and path.stem == font_id
+            and path.suffix.lower() in ALLOWED_EXT
+        ):
             return path
     return None
 
@@ -73,7 +77,9 @@ def _entry_for(path: Path) -> dict[str, Any]:
 def list_fonts():
     ensure_dirs()
     items: list[dict[str, Any]] = []
-    for path in sorted(FONTS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+    for path in sorted(
+        FONTS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
         if path.is_file() and path.suffix.lower() in ALLOWED_EXT:
             items.append(_entry_for(path))
     return {"items": items}

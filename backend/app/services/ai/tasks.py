@@ -9,7 +9,15 @@ from typing import Any, Optional
 
 from sqlmodel import Session, select
 
-from ...models import AiCategory, AiJobKind, ChannelCatalogEmbedding, ChannelCatalogVideo, Video, VideoAiMeta, utcnow
+from ...models import (
+    AiCategory,
+    AiJobKind,
+    ChannelCatalogEmbedding,
+    ChannelCatalogVideo,
+    Video,
+    VideoAiMeta,
+    utcnow,
+)
 from .. import app_settings, chapters as chapters_svc, library
 from . import embeddings, text as ai_text
 from .provider import (
@@ -154,7 +162,9 @@ def run_embed_video(session: Session, video_id: Optional[int]) -> Optional[SkipR
     if video.needs_review:
         return "needs_review"
     if get_embed_provider() is None:
-        raise RuntimeError("No embed provider available (enable Ollama or OpenRouter All)")
+        raise RuntimeError(
+            "No embed provider available (enable Ollama or OpenRouter All)"
+        )
     return "embed_skipped"
 
 
@@ -168,7 +178,9 @@ def run_embed_catalog_video(
         return "catalog_video_missing"
     provider = get_embed_provider()
     if provider is None:
-        raise RuntimeError("No embed provider available (enable Ollama or OpenRouter All)")
+        raise RuntimeError(
+            "No embed provider available (enable Ollama or OpenRouter All)"
+        )
     model = resolve_embed_model(provider)
     from .. import channel_catalog
 
@@ -362,12 +374,7 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
         )
 
     meta = session.get(VideoAiMeta, video_id)
-    if (
-        not force
-        and meta is not None
-        and meta.summary
-        and str(meta.summary).strip()
-    ):
+    if not force and meta is not None and meta.summary and str(meta.summary).strip():
         return str(meta.summary).strip()
 
     provider = get_llm_provider()
@@ -591,9 +598,7 @@ def run_chapters(session: Session, video_id: int, *, force: bool = False) -> lis
             video_id=video_id,
         )
         payload = chapters_svc.chapters_from_model_output(raw)
-        cleaned = chapters_svc.snap_and_validate(
-            payload, cues, video.duration_sec
-        )
+        cleaned = chapters_svc.snap_and_validate(payload, cues, video.duration_sec)
         if cleaned:
             break
         logger.warning(
@@ -829,7 +834,9 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
         usage_kind="categories",
     )
     data = _parse_json_object(raw)
-    raw_cats = data.get("categories") if isinstance(data.get("categories"), list) else []
+    raw_cats = (
+        data.get("categories") if isinstance(data.get("categories"), list) else []
+    )
     cleaned = _parse_category_items(raw_cats)
     # Need a few solid chips before wiping the existing table.
     if len(cleaned) < 3:
@@ -860,9 +867,7 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
         example_titles = [
             (v.title or "").strip() for _, v, _ in examples if (v.title or "").strip()
         ]
-        doc = ai_text.category_embed_text(
-            name, blurb, example_titles=example_titles
-        )
+        doc = ai_text.category_embed_text(name, blurb, example_titles=example_titles)
         text_vec = embed_provider.embed(doc, embed_model, usage_kind="embed")
         cent = embeddings.mean_vectors([c for _, _, c in examples])
         if cent is None:

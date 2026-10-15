@@ -276,7 +276,9 @@ def _drm_card_dirs() -> list[str]:
 
 
 def _drm_hwmon_temp(device_dir: str) -> Optional[float]:
-    for temp_path in glob.glob(os.path.join(device_dir, "hwmon", "hwmon*", "temp*_input")):
+    for temp_path in glob.glob(
+        os.path.join(device_dir, "hwmon", "hwmon*", "temp*_input")
+    ):
         raw = _read_sysfs(temp_path)
         millideg = _num(raw)
         if millideg is not None and millideg > 0:
@@ -415,7 +417,9 @@ def probe_ollama_gpu(base_url: str) -> Optional[GpuInfo]:
 
     url = base_url.rstrip("/")
     try:
-        with httpx.Client(base_url=url, timeout=httpx.Timeout(1.5, connect=0.5)) as client:
+        with httpx.Client(
+            base_url=url, timeout=httpx.Timeout(1.5, connect=0.5)
+        ) as client:
             resp = client.get("/api/info")
             if not resp.is_success:
                 return None
@@ -633,8 +637,14 @@ def _scale_intensity(
 
     sample = int(base["sample"] * mult)
     budget = int(base["budget"] * mult)
-    desc = int(base["desc"] * (0.7 if profile == "light" else 1.0 if profile == "normal" else 1.2))
-    sub = int(base["sub"] * (0.5 if profile == "light" else 1.0 if profile == "normal" else 1.4))
+    desc = int(
+        base["desc"]
+        * (0.7 if profile == "light" else 1.0 if profile == "normal" else 1.2)
+    )
+    sub = int(
+        base["sub"]
+        * (0.5 if profile == "light" else 1.0 if profile == "normal" else 1.4)
+    )
     score = float(base["score"]) + score_delta
     score = max(0.20, min(0.90, score))
     embed_limit = max(500, int(base["embed_limit"] * limit_mult))
@@ -784,4 +794,3 @@ def ensure_quality_chat_model() -> str:
             pass
 
     return current
-

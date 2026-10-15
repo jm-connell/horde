@@ -29,7 +29,9 @@ def _catalog(session, *, max_videos: int = 2) -> ChannelCatalog:
     return catalog
 
 
-def _video(session, catalog_id: int, *, yt_id: str, position: int) -> ChannelCatalogVideo:
+def _video(
+    session, catalog_id: int, *, yt_id: str, position: int
+) -> ChannelCatalogVideo:
     row = ChannelCatalogVideo(
         catalog_id=catalog_id,
         yt_id=yt_id,

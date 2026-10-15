@@ -29,7 +29,11 @@ def test_format_chain_best_and_audio():
 
 
 def test_format_chain_h264_1080_prefers_avc():
-    from app.services.ytdlp_formats import format_chain, format_sort_for, uses_native_h264
+    from app.services.ytdlp_formats import (
+        format_chain,
+        format_sort_for,
+        uses_native_h264,
+    )
 
     assert uses_native_h264("1080p", "h264_convert")
     assert uses_native_h264("720p", "h265")  # legacy → h264_convert
@@ -69,7 +73,11 @@ def test_h264_native_caps_every_video_preset_at_1080():
 
 
 def test_sidecar_mode_downloads_av1_original():
-    from app.services.ytdlp_formats import format_chain, format_sort_for, uses_native_h264
+    from app.services.ytdlp_formats import (
+        format_chain,
+        format_sort_for,
+        uses_native_h264,
+    )
 
     assert not uses_native_h264("1080p", "sidecar")
     assert any("av01" in c for c in format_chain("2160p", "sidecar"))
@@ -166,9 +174,7 @@ def test_is_recoverable_download_error():
     assert downloader._is_recoverable_download_error(
         Exception("Postprocessing: Error merging formats")
     )
-    assert not downloader._is_recoverable_download_error(
-        Exception("HTTP Error 403")
-    )
+    assert not downloader._is_recoverable_download_error(Exception("HTTP Error 403"))
 
 
 def test_strip_ansi():
@@ -223,4 +229,3 @@ def test_apply_audio_format_id_pins_ba_not_bestaudio():
     pinned = apply_audio_format_id(chain, "140")
     assert pinned[0] == "bv*+140/bv*+140/bestaudio/best"
     assert pinned[1] == "140/140/bestaudio/best"
-

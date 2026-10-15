@@ -8,6 +8,7 @@ from ...models import ChannelCatalogVideo
 
 _MAX_DESC_CHARS = 4000
 
+
 def catalog_document(video: ChannelCatalogVideo) -> str:
     parts = [f"Title: {video.title or ''}"]
     if video.description:

@@ -54,6 +54,7 @@ from ..channel_autodownload import after_catalog_update, is_active_live_status
 
 logger = logging.getLogger(__name__)
 
+
 def _fetch_flat_page(channel_url: str, offset: int, limit: int) -> dict[str, Any]:
     from ..ytdlp_extract import fetch_channel_feed
 
@@ -331,14 +332,10 @@ def _fetch_description(
             exc, url=url, title=title, channel=channel
         )
         if is_skippable_catalog_kind(kind) or is_members_only_error(exc):
-            skip_kind = (
-                kind if is_skippable_catalog_kind(kind) else ERROR_KIND_MEMBERS
-            )
+            skip_kind = kind if is_skippable_catalog_kind(kind) else ERROR_KIND_MEMBERS
             raise CatalogSkipError(
                 skip_kind,
-                catalog_skip_message(
-                    skip_kind, url=url, title=title, channel=channel
-                ),
+                catalog_skip_message(skip_kind, url=url, title=title, channel=channel),
             ) from exc
         return None, None
     desc = info.get("description")
@@ -382,9 +379,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
             )
         except (CatalogSkipError, MembersOnlyError) as skip:
             skip_kind = getattr(skip, "kind", ERROR_KIND_MEMBERS)
-            reason = (
-                "members_only" if skip_kind == ERROR_KIND_MEMBERS else skip_kind
-            )
+            reason = "members_only" if skip_kind == ERROR_KIND_MEMBERS else skip_kind
             purge_catalog_video(session, row, reason=reason)
             if not catalog.last_error:
                 catalog.last_error = str(skip)[:500]
@@ -514,9 +509,7 @@ def index_catalog(catalog_id: int) -> None:
                 listing_skips += 1
                 _note_catalog_warning(
                     catalog_id,
-                    catalog_skip_message(
-                        kind, url=channel_url, channel=channel_name
-                    ),
+                    catalog_skip_message(kind, url=channel_url, channel=channel_name),
                 )
                 if listing_skips >= 3:
                     reached_end = True
@@ -554,9 +547,7 @@ def index_catalog(catalog_id: int) -> None:
                 session.add(catalog)
                 session.commit()
             try:
-                after_catalog_update(
-                    channel_url, new_yt_ids=new_ids, source="index"
-                )
+                after_catalog_update(channel_url, new_yt_ids=new_ids, source="index")
             except Exception:  # noqa: BLE001
                 logger.debug(
                     "autodownload after index page failed for %s",
@@ -680,5 +671,3 @@ def index_catalog(catalog_id: int) -> None:
             total=0,
             catalog_id=None,
         )
-
-

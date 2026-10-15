@@ -16,9 +16,7 @@ from ..config import (
     YTDLP_POT_BASE_URL,
 )
 
-_MEMBERS_ONLY_TITLE = re.compile(
-    r"(?i)\[?\s*members?\s*-?\s*only\s*\]?"
-)
+_MEMBERS_ONLY_TITLE = re.compile(r"(?i)\[?\s*members?\s*-?\s*only\s*\]?")
 _MEMBERS_ONLY_AVAILABILITY = frozenset(
     {"subscriber_only", "premium_only", "needs_auth"}
 )
@@ -269,8 +267,11 @@ def describe_extract_target(
 
     search_q = query.get("query", [None])[0] if tab == "search" else None
     if search_q:
-        loc = handle or userish or channel_s or (
-            f"channel {_clip_label(channel_id, 24)}" if channel_id else "channel"
+        loc = (
+            handle
+            or userish
+            or channel_s
+            or (f"channel {_clip_label(channel_id, 24)}" if channel_id else "channel")
         )
         return f'{loc} search "{_clip_label(unquote(str(search_q)))}"'
 
@@ -325,6 +326,7 @@ def classify_ytdlp_error(
     channel: Optional[str] = None,
 ) -> tuple[str, str]:
     """Map a yt-dlp exception/message to (error_kind, user_facing_message)."""
+
     def _finish(kind: str, message: str) -> tuple[str, str]:
         return kind, _with_extract_target(
             message, url=url, title=title, channel=channel
@@ -413,8 +415,7 @@ def classify_ytdlp_error(
     if _POSTPROCESS_MESSAGE.search(raw):
         return _finish(
             ERROR_KIND_POSTPROCESS,
-            "Download post-processing failed (merge/subtitles/ffmpeg). "
-            f"Details: {raw}",
+            f"Download post-processing failed (merge/subtitles/ffmpeg). Details: {raw}",
         )
 
     return _finish(ERROR_KIND_UNKNOWN, raw)
@@ -688,9 +689,7 @@ def _acquire_extract_gate(priority: int) -> None:
             _extract_held = True
             return
         waiter = threading.Event()
-        heapq.heappush(
-            _extract_waiters, (int(priority), _extract_waiter_seq, waiter)
-        )
+        heapq.heappush(_extract_waiters, (int(priority), _extract_waiter_seq, waiter))
         _extract_waiter_seq += 1
     waiter.wait()
 
@@ -779,12 +778,8 @@ def extract_info_gated(
     ensure_plugins_loaded()
 
     def _record_failure(exc: BaseException) -> None:
-        kind, message = classify_ytdlp_error(
-            exc, url=url, title=title, channel=channel
-        )
-        record_extract_failure(
-            kind, message, url=url, title=title, channel=channel
-        )
+        kind, message = classify_ytdlp_error(exc, url=url, title=title, channel=channel)
+        record_extract_failure(kind, message, url=url, title=title, channel=channel)
 
     def _extract_with_cookies(*, known: bool = False) -> dict[str, Any]:
         cookie_opts = apply_cookie_opts(opts)
@@ -793,9 +788,7 @@ def extract_info_gated(
         if known:
             logger.info("Using cookies for previously gated video: %s", url)
         else:
-            logger.info(
-                "Retrying extract with cookies after age/members gate: %s", url
-            )
+            logger.info("Retrying extract with cookies after age/members gate: %s", url)
         info = _ytdlp_extract(url, cookie_opts)
         _extract_tls.used_cookies = True
         remember_cookie_required(url)

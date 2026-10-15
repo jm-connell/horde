@@ -29,7 +29,9 @@ def ffmpeg_bin() -> str:
 
 
 def ffprobe_bin() -> str:
-    env = (os.environ.get("FFPROBE_BIN") or os.environ.get("FFPROBE_PATH") or "").strip()
+    env = (
+        os.environ.get("FFPROBE_BIN") or os.environ.get("FFPROBE_PATH") or ""
+    ).strip()
     if env and _executable(env):
         return env
     ffmpeg = ffmpeg_bin()

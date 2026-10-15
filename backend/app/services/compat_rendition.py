@@ -35,12 +35,22 @@ from ..config import DOWNLOADS_DIR
 from ..database import engine
 from ..models import Video, VideoStatus
 from . import activity
-from .encode_probe import EncoderChoice, list_filters, pick_encoder, probe_encode_capabilities
+from .encode_probe import (
+    EncoderChoice,
+    list_filters,
+    pick_encoder,
+    probe_encode_capabilities,
+)
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
 from .media_info import apply_stream_info, needs_compat, probe_stream_info
 from .mp4_compat import ensure_safari_mp4
-from .paths import COMPAT_SIDECAR_TOKEN, compat_sidecar_path, resolve_compat_path, to_rel_path
+from .paths import (
+    COMPAT_SIDECAR_TOKEN,
+    compat_sidecar_path,
+    resolve_compat_path,
+    to_rel_path,
+)
 from .ytdlp_formats import (
     COMPAT_MAX_HEIGHT,
     compat_copy_cap,
@@ -161,7 +171,12 @@ def compat_ffmpeg_cmd(
         cmd.extend(["-hwaccel", "cuda"])
     if encoder.kind == "vaapi":
         cmd.extend(
-            ["-init_hw_device", "vaapi=va:/dev/dri/renderD128", "-filter_hw_device", "va"]
+            [
+                "-init_hw_device",
+                "vaapi=va:/dev/dri/renderD128",
+                "-filter_hw_device",
+                "va",
+            ]
         )
     cmd.extend(["-i", str(src), "-map", "0:v:0"])
 
@@ -185,25 +200,77 @@ def compat_ffmpeg_cmd(
     if name == "h264_nvenc":
         cmd.extend(
             [
-                "-c:v", "h264_nvenc", "-preset", "p5", "-tune", "hq",
-                "-rc", "vbr", "-cq", "23", "-b:v", "0",
-                "-maxrate", maxrate, "-bufsize", bufsize,
-                "-profile:v", "high", "-spatial-aq", "1", "-rc-lookahead", "20",
+                "-c:v",
+                "h264_nvenc",
+                "-preset",
+                "p5",
+                "-tune",
+                "hq",
+                "-rc",
+                "vbr",
+                "-cq",
+                "23",
+                "-b:v",
+                "0",
+                "-maxrate",
+                maxrate,
+                "-bufsize",
+                bufsize,
+                "-profile:v",
+                "high",
+                "-spatial-aq",
+                "1",
+                "-rc-lookahead",
+                "20",
             ]
         )
     elif name == "h264_qsv":
-        cmd.extend(["-c:v", "h264_qsv", "-preset", "medium", "-global_quality", "25", "-profile:v", "high"])
+        cmd.extend(
+            [
+                "-c:v",
+                "h264_qsv",
+                "-preset",
+                "medium",
+                "-global_quality",
+                "25",
+                "-profile:v",
+                "high",
+            ]
+        )
     elif name == "h264_vaapi":
         cmd.extend(["-c:v", "h264_vaapi", "-qp", "24", "-profile:v", "high"])
     elif name == "h264_amf":
-        cmd.extend(["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "23", "-qp_p", "25"])
+        cmd.extend(
+            [
+                "-c:v",
+                "h264_amf",
+                "-quality",
+                "balanced",
+                "-rc",
+                "cqp",
+                "-qp_i",
+                "23",
+                "-qp_p",
+                "25",
+            ]
+        )
     elif name == "h264_videotoolbox":
         cmd.extend(["-c:v", "h264_videotoolbox", "-q:v", "55", "-profile:v", "high"])
     else:
         cmd.extend(
             [
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                "-maxrate", maxrate, "-bufsize", bufsize, "-profile:v", "high",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-maxrate",
+                maxrate,
+                "-bufsize",
+                bufsize,
+                "-profile:v",
+                "high",
             ]
         )
     cmd.extend(["-g", gop])
@@ -249,11 +316,31 @@ def compat_status(video: Video) -> dict[str, Any]:
         return {**state, "error": None}
     path = resolve_compat_path(video)
     if path is not None and path.is_file():
-        return {"kind": "compat", "status": "ready", "stage": None, "progress": 100.0, "error": None}
-    err = video.compat_error or (_errors.get(video.id) if video.id is not None else None)
+        return {
+            "kind": "compat",
+            "status": "ready",
+            "stage": None,
+            "progress": 100.0,
+            "error": None,
+        }
+    err = video.compat_error or (
+        _errors.get(video.id) if video.id is not None else None
+    )
     if err:
-        return {"kind": "compat", "status": "error", "stage": None, "progress": 0.0, "error": err}
-    return {"kind": "compat", "status": "none", "stage": None, "progress": 0.0, "error": None}
+        return {
+            "kind": "compat",
+            "status": "error",
+            "stage": None,
+            "progress": 0.0,
+            "error": err,
+        }
+    return {
+        "kind": "compat",
+        "status": "none",
+        "stage": None,
+        "progress": 0.0,
+        "error": None,
+    }
 
 
 def queue_counts() -> dict[str, int]:
@@ -402,7 +489,9 @@ def _save(video_id: int, **fields: Any) -> None:
             session.rollback()
 
 
-def _set(job: _Job, *, stage: Optional[str] = None, progress: Optional[float] = None) -> None:
+def _set(
+    job: _Job, *, stage: Optional[str] = None, progress: Optional[float] = None
+) -> None:
     with _lock:
         if stage is not None:
             job.stage = stage
@@ -461,7 +550,11 @@ def _load_source(video_id: int) -> Optional[_Source]:
 
 def _is_youtube(src: _Source) -> bool:
     url = (src.source_url or "").lower()
-    return "youtube" in (src.platform or "").lower() or "youtube.com" in url or "youtu.be" in url
+    return (
+        "youtube" in (src.platform or "").lower()
+        or "youtube.com" in url
+        or "youtu.be" in url
+    )
 
 
 def _run_compat(job: _Job) -> None:
@@ -519,7 +612,9 @@ def _run_compat(job: _Job) -> None:
                 raise
             except Exception as exc:  # noqa: BLE001
                 download_note = str(exc)
-                logger.info("native H.264 download failed for %s: %s", job.video_id, exc)
+                logger.info(
+                    "native H.264 download failed for %s: %s", job.video_id, exc
+                )
                 produced = None
         if job.cancel.is_set():
             raise _Cancelled()
@@ -540,7 +635,9 @@ def _run_compat(job: _Job) -> None:
                 cap=cap,
             )
             if download_note:
-                logger.debug("compat %s fell back to encode: %s", job.video_id, download_note)
+                logger.debug(
+                    "compat %s fell back to encode: %s", job.video_id, download_note
+                )
 
         _set(job, stage="finishing", progress=100.0)
         final = ensure_safari_mp4(produced, cancel_event=job.cancel)
@@ -565,7 +662,11 @@ def _download_native_h264(
     """Fetch YouTube's avc1 stream (≤1080p) to ``dest``. None when not offered."""
     import yt_dlp
 
-    from .ytdlp_common import apply_cookie_opts, url_cookie_required, youtube_extractor_args
+    from .ytdlp_common import (
+        apply_cookie_opts,
+        url_cookie_required,
+        youtube_extractor_args,
+    )
 
     url = src.source_url or ""
     vertical = bool(src.width and src.height and src.height > src.width)
@@ -696,7 +797,9 @@ def _encode_compat(
             raise
         except subprocess.CalledProcessError as exc:
             raw = exc.stderr or exc.stdout or b""
-            last_err = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+            last_err = (
+                raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+            )
             logger.warning(
                 "compat encode failed (%s, hw_decode=%s, tonemap=%s): %s",
                 choice.name,
@@ -777,7 +880,9 @@ def _run_convert(job: _Job) -> None:
 
 def eligible_video_ids(session: Session, *, kind: JobKind) -> list[int]:
     rows = session.exec(
-        select(Video).where(Video.status == VideoStatus.ready, Video.needs_review == False)  # noqa: E712
+        select(Video).where(
+            Video.status == VideoStatus.ready, Video.needs_review == False
+        )  # noqa: E712
     ).all()
     cap = compat_copy_cap()
     out: list[int] = []
@@ -801,7 +906,9 @@ def eligible_video_ids(session: Session, *, kind: JobKind) -> list[int]:
 
 def library_summary(session: Session) -> dict[str, Any]:
     rows = session.exec(
-        select(Video).where(Video.status == VideoStatus.ready, Video.needs_review == False)  # noqa: E712
+        select(Video).where(
+            Video.status == VideoStatus.ready, Video.needs_review == False
+        )  # noqa: E712
     ).all()
     total_bytes = 0
     compat_ready = 0

@@ -78,12 +78,14 @@ def test_maybe_enqueue_index_catchup_on_download(monkeypatch):
     monkeypatch.setattr(
         worker,
         "enqueue_missing_embeds",
-        lambda **kwargs: captured.append(kwargs)
-        or {
-            "enqueued": 1,
-            "breakdown": {"embed": 1, "tags": 0, "categories": 0},
-            "detail": "1 embed",
-        },
+        lambda **kwargs: (
+            captured.append(kwargs)
+            or {
+                "enqueued": 1,
+                "breakdown": {"embed": 1, "tags": 0, "categories": 0},
+                "detail": "1 embed",
+            }
+        ),
     )
     result = worker.maybe_enqueue_index_catchup()
     assert captured == [{"skip_failed": True, "skip_empty_document": True}]
@@ -98,12 +100,14 @@ def test_maybe_enqueue_index_catchup_skips_on_request(monkeypatch):
     monkeypatch.setattr(
         worker,
         "enqueue_missing_embeds",
-        lambda **kwargs: captured.append(kwargs)
-        or {
-            "enqueued": 1,
-            "breakdown": {"embed": 1, "tags": 0, "categories": 0},
-            "detail": "1 embed",
-        },
+        lambda **kwargs: (
+            captured.append(kwargs)
+            or {
+                "enqueued": 1,
+                "breakdown": {"embed": 1, "tags": 0, "categories": 0},
+                "detail": "1 embed",
+            }
+        ),
     )
     result = worker.maybe_enqueue_index_catchup()
     assert captured == []
@@ -116,12 +120,14 @@ def test_maybe_enqueue_index_catchup_respects_pause(monkeypatch):
     monkeypatch.setattr(
         worker,
         "enqueue_missing_embeds",
-        lambda **kwargs: captured.append(kwargs)
-        or {
-            "enqueued": 1,
-            "breakdown": {"embed": 1, "tags": 0, "categories": 0},
-            "detail": "1 embed",
-        },
+        lambda **kwargs: (
+            captured.append(kwargs)
+            or {
+                "enqueued": 1,
+                "breakdown": {"embed": 1, "tags": 0, "categories": 0},
+                "detail": "1 embed",
+            }
+        ),
     )
     result = worker.maybe_enqueue_index_catchup()
     assert captured == []

@@ -199,9 +199,7 @@ def _unit_phrase(n: int, singular: str) -> str:
     return f"{n} {singular}s ago"
 
 
-def format_relative_ago(
-    dt: datetime, *, now: Optional[datetime] = None
-) -> str:
+def format_relative_ago(dt: datetime, *, now: Optional[datetime] = None) -> str:
     """YouTube-style age string. Does not invent a calendar day."""
     now = now or datetime.now(timezone.utc)
     if dt.tzinfo is None:
@@ -263,9 +261,7 @@ def parse_upload_date(raw: Any) -> Optional[str]:
     if len(s) == 8 and s.isdigit():
         try:
             return (
-                datetime.strptime(s, "%Y%m%d")
-                .replace(tzinfo=timezone.utc)
-                .isoformat()
+                datetime.strptime(s, "%Y%m%d").replace(tzinfo=timezone.utc).isoformat()
             )
         except ValueError:
             return None

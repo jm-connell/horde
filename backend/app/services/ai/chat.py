@@ -75,9 +75,7 @@ def clear_messages(session: Session, video_id: int) -> None:
     session.commit()
 
 
-def _history_for_prompt(
-    session: Session, video_id: int
-) -> list[dict[str, str]]:
+def _history_for_prompt(session: Session, video_id: int) -> list[dict[str, str]]:
     rows = session.exec(
         select(VideoAiChatMessage)
         .where(VideoAiChatMessage.video_id == video_id)
@@ -100,7 +98,9 @@ def _validate_chat_request(session: Session, video_id: int, message: str) -> Vid
     ai = app_settings.ai_settings()
     allowed, reason = llm_features_allowed()
     if not allowed:
-        raise ChatError(reason or "AI is disabled", status_code=409 if ai.get("paused") else 400)
+        raise ChatError(
+            reason or "AI is disabled", status_code=409 if ai.get("paused") else 400
+        )
     if not ai.get("ai_chat", True):
         raise ChatError("AI video chat is disabled", status_code=400)
 
@@ -285,4 +285,3 @@ def stream_chat(
 
 def _sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-

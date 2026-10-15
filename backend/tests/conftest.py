@@ -89,7 +89,12 @@ def tmp_dirs(tmp_path, monkeypatch):
         },
     )
 
-    return {"data": data, "downloads": downloads, "engine": new_engine, "db_path": db_path}
+    return {
+        "data": data,
+        "downloads": downloads,
+        "engine": new_engine,
+        "db_path": db_path,
+    }
 
 
 @pytest.fixture
@@ -230,4 +235,3 @@ def client(app):
 
     with TestClient(app) as c:
         yield c
-

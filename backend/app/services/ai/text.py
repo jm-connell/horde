@@ -96,6 +96,7 @@ def load_subtitle_text(video: Video, *, max_chars: int = _MAX_SUBTITLE_CHARS) ->
     tracks = library.parse_subtitles(video.subtitles)
     if not tracks:
         return ""
+
     # Prefer non-auto English-ish tracks, then any non-auto, then auto.
     def rank(t: dict) -> tuple[int, int]:
         lang = str(t.get("lang") or "").lower()
@@ -302,9 +303,7 @@ def trim_to_max_words(text: str, max_words: int) -> str:
     truncated = " ".join(words[:max_words]).strip()
     # Prefer ending on a sentence if we still have most of the budget.
     sentences = [
-        s.strip()
-        for s in re.split(r"(?<=[.!?])\s+", truncated)
-        if s and s.strip()
+        s.strip() for s in re.split(r"(?<=[.!?])\s+", truncated) if s and s.strip()
     ]
     if len(sentences) >= 2:
         kept: list[str] = []
@@ -374,11 +373,11 @@ def format_summary_paragraphs(
     def _normalize_part(p: str) -> str:
         lines = [ln.rstrip() for ln in p.split("\n")]
         list_lines = sum(
-            1
-            for ln in lines
-            if re.match(r"^\s*(?:[-*+]|\d+[.)])\s+\S", ln)
+            1 for ln in lines if re.match(r"^\s*(?:[-*+]|\d+[.)])\s+\S", ln)
         )
-        if list_lines >= 1 and list_lines >= max(1, len([ln for ln in lines if ln.strip()]) - 1):
+        if list_lines >= 1 and list_lines >= max(
+            1, len([ln for ln in lines if ln.strip()]) - 1
+        ):
             # Preserve newlines for list-heavy blocks; drop empties inside.
             kept = [ln.strip() for ln in lines if ln.strip()]
             return "\n".join(kept)
@@ -395,22 +394,12 @@ def format_summary_paragraphs(
         lines = [ln for ln in p.split("\n") if ln.strip()]
         if not lines:
             return False
-        hits = sum(
-            1
-            for ln in lines
-            if re.match(r"^\s*(?:[-*+]|\d+[.)])\s+\S", ln)
-        )
+        hits = sum(1 for ln in lines if re.match(r"^\s*(?:[-*+]|\d+[.)])\s+\S", ln))
         return hits >= 1 and hits >= len(lines) - 1
 
-    if (
-        len(parts) == 1
-        and length_key != "short"
-        and not _is_list_part(parts[0])
-    ):
+    if len(parts) == 1 and length_key != "short" and not _is_list_part(parts[0]):
         sentences = [
-            s.strip()
-            for s in _SENTENCE_SPLIT.split(parts[0])
-            if s and s.strip()
+            s.strip() for s in _SENTENCE_SPLIT.split(parts[0]) if s and s.strip()
         ]
         if len(sentences) >= 2:
             # Chunk sentences into ~target_paras groups.
@@ -477,18 +466,18 @@ def summary_prompt(
         f"{spec['length_rule']}\n"
         f"- Detail: {spec['detail_rule']}\n"
         "- Open with the substance of this video (topic, action, or subject) — "
-        "not framing like \"In this archived video…\", \"In the video…\", "
-        "\"The creator [name] does…\", or \"This video is about…\". "
+        'not framing like "In this archived video…", "In the video…", '
+        '"The creator [name] does…", or "This video is about…". '
         "Do not invent example topics from these instructions.\n"
         + (
             f"- Prefer using the channel name ({channel}) as a natural subject "
-            "when it fits; do not introduce them as \"the creator\".\n"
+            'when it fits; do not introduce them as "the creator".\n'
             if channel
             else ""
         )
         + "- Cover the main topics and tone; stay spoiler-light.\n"
-        "- Recognize sponsor/ad reads (phrases like \"thanks to today's sponsor\", "
-        "\"brought to you by\", \"this video is sponsored by\") and skip them — "
+        '- Recognize sponsor/ad reads (phrases like "thanks to today\'s sponsor", '
+        '"brought to you by", "this video is sponsored by") and skip them — '
         "do not summarize the ad pitch as part of the video; focus on the actual content.\n"
         "- Do not invent details absent from the captions/metadata.\n"
         "- Do not use bullet lists or headings.\n\n"
@@ -506,15 +495,15 @@ def tag_enrich_prompt(video: Video, existing_tags: list[str]) -> str:
     desc = (video.description or "")[:2000]
     return (
         "Suggest a complete set of short topical tags for this archived video.\n"
-        "Return JSON: {\"tags\": [\"tag1\", \"tag2\", ...], \"remove\": [\"bad1\", ...]}.\n"
+        'Return JSON: {"tags": ["tag1", "tag2", ...], "remove": ["bad1", ...]}.\n'
         "Rules:\n"
-        "- In \"tags\", return 3-12 short tags (1-3 words each) that fill real gaps "
+        '- In "tags", return 3-12 short tags (1-3 words each) that fill real gaps '
         "for browsing/search (or fewer / empty if coverage is already good).\n"
         "- Compare carefully against Existing tags; only add tags that fill real gaps.\n"
         "- Do not repeat existing tags or near-duplicates (singular/plural, "
-        "\"Fight\" vs \"Fights\", reordered words, minor wording changes).\n"
+        '"Fight" vs "Fights", reordered words, minor wording changes).\n'
         "- Prefer general topics over proper nouns unless distinctive.\n"
-        "- In \"remove\", list Existing tags that are wrong, off-topic, or redundant "
+        '- In "remove", list Existing tags that are wrong, off-topic, or redundant '
         "for this video. Prefer removing poor AI guesses; leave correct tags alone. "
         "Use an empty list when nothing should be removed.\n"
         "- If existing tags already cover the video well, return fewer new tags "
@@ -639,8 +628,8 @@ def duplicate_prompt(a: Video, b: Video) -> str:
     return (
         "Decide if these two library entries are the same video, similar content, "
         "or different. Return JSON: "
-        "{\"verdict\": \"same\"|\"similar\"|\"different\", \"confidence\": 0.0-1.0, "
-        "\"reason\": \"short\"}.\n\n"
+        '{"verdict": "same"|"similar"|"different", "confidence": 0.0-1.0, '
+        '"reason": "short"}.\n\n'
         f"A title: {a.title}\n"
         f"A channel: {a.channel or ''}\n"
         f"A duration_sec: {a.duration_sec}\n"

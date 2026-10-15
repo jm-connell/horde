@@ -72,10 +72,7 @@ def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobR
         return []
 
     video_ids = {
-        vid
-        for j in jobs
-        for vid in (j.video_id, j.replace_video_id)
-        if vid is not None
+        vid for j in jobs for vid in (j.video_id, j.replace_video_id) if vid is not None
     }
     existing: set[int] = set()
     height_by_video: dict[int, Optional[int]] = {}
@@ -175,9 +172,7 @@ def preview_download(url: str):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         kind, _ = classify_ytdlp_error(exc, url=cleaned)
-        detail = http_detail_for_error(
-            exc, prefix="Could not read link", url=cleaned
-        )
+        detail = http_detail_for_error(exc, prefix="Could not read link", url=cleaned)
         if kind == ERROR_KIND_UNKNOWN:
             logger.exception("download preview extract failed for %r", url)
             raise HTTPException(status_code=500, detail=detail) from exc
@@ -243,9 +238,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
         raise HTTPException(status_code=400, detail="URL is required")
 
     if is_youtube_short_url(payload.url):
-        raise HTTPException(
-            status_code=400, detail="Don't watch Shorts"
-        )
+        raise HTTPException(status_code=400, detail="Don't watch Shorts")
 
     url = clean_url(payload.url, keep_playlist=False)
     destination = payload.destination.value if payload.destination else "library"
@@ -257,9 +250,7 @@ def create_download(payload: DownloadCreate, session: Session = Depends(get_sess
             playlist_id = None
 
     if is_youtube_short_url(url):
-        raise HTTPException(
-            status_code=400, detail="Don't watch Shorts"
-        )
+        raise HTTPException(status_code=400, detail="Don't watch Shorts")
     if is_playlist_only_url(payload.url) or is_playlist_only_url(url):
         raise HTTPException(
             status_code=400,
@@ -319,9 +310,7 @@ def create_downloads_bulk(
     """Enqueue URLs as individual jobs without blocking on metadata extract."""
     quality = (payload.quality_preset or "best").strip() or "best"
     destination = payload.destination.value if payload.destination else "library"
-    codec = normalize_video_codec(
-        payload.video_codec or default_download_video_codec()
-    )
+    codec = normalize_video_codec(payload.video_codec or default_download_video_codec())
     jobs: list[DownloadJob] = []
     skips: list[DownloadBulkSkip] = []
     seen_urls: set[str] = set()
@@ -540,11 +529,7 @@ def list_jobs(session: Session = Depends(get_session)):
     active = list(
         session.exec(
             select(DownloadJob)
-            .where(
-                DownloadJob.status.in_(
-                    [JobStatus.queued, JobStatus.downloading]
-                )
-            )
+            .where(DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading]))
             .order_by(DownloadJob.created_at.asc())
         ).all()
     )
@@ -580,9 +565,7 @@ def download_device_file(job_id: int, session: Session = Depends(get_session)):
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     if job.destination != DownloadDestination.device.value:
-        raise HTTPException(
-            status_code=409, detail="Job is not a device download"
-        )
+        raise HTTPException(status_code=409, detail="Job is not a device download")
     if job.status != JobStatus.completed or not job.device_file_path:
         raise HTTPException(status_code=409, detail="File not ready")
 

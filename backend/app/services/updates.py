@@ -84,11 +84,7 @@ def check_for_updates(*, refresh: bool = False) -> dict[str, Any]:
     now = time.monotonic()
 
     with _lock:
-        if (
-            not refresh
-            and _cache is not None
-            and (now - _cache_at) < CACHE_TTL_SEC
-        ):
+        if not refresh and _cache is not None and (now - _cache_at) < CACHE_TTL_SEC:
             # Re-resolve current SHA in case env changed without restart (dev).
             cached = dict(_cache)
             cached["current_sha"] = current

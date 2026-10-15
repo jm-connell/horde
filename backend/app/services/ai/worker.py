@@ -114,9 +114,7 @@ def enqueue_for_video(
             if video is not None and ai_text.has_subtitle_text(video):
                 meta = session.get(VideoAiMeta, video_id)
                 has_summary = bool(
-                    meta is not None
-                    and meta.summary
-                    and str(meta.summary).strip()
+                    meta is not None and meta.summary and str(meta.summary).strip()
                 )
                 should_summarize = not has_summary
         if should_summarize:
@@ -282,9 +280,7 @@ def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
             meta = session.get(VideoAiMeta, video.id)
             if meta is not None and meta.tags_locked:
                 continue
-            enriched_at = (
-                as_utc(meta.tags_enriched_at) if meta is not None else None
-            )
+            enriched_at = as_utc(meta.tags_enriched_at) if meta is not None else None
             if enriched_at is None:
                 candidates.append((0, now, video.id))
             elif enriched_at < cutoff:
@@ -572,7 +568,9 @@ def recent_failures(*, limit: int = 10) -> list[dict]:
                     "title": _job_title(session, job),
                     "attempts": job.attempts,
                     "error": job.error,
-                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                    "updated_at": job.updated_at.isoformat()
+                    if job.updated_at
+                    else None,
                 }
             )
     return out
@@ -601,7 +599,9 @@ def list_jobs(
         out: list[dict] = []
         for job in rows:
             kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
-            st_val = job.status.value if hasattr(job.status, "value") else str(job.status)
+            st_val = (
+                job.status.value if hasattr(job.status, "value") else str(job.status)
+            )
             out.append(
                 {
                     "id": job.id,
@@ -613,8 +613,12 @@ def list_jobs(
                     "attempts": job.attempts,
                     "error": job.error,
                     "run_after": job.run_after.isoformat() if job.run_after else None,
-                    "created_at": job.created_at.isoformat() if job.created_at else None,
-                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                    "created_at": job.created_at.isoformat()
+                    if job.created_at
+                    else None,
+                    "updated_at": job.updated_at.isoformat()
+                    if job.updated_at
+                    else None,
                 }
             )
         return out
@@ -864,9 +868,7 @@ def _compute_blocked_reason(
     return None
 
 
-def _next_job(
-    session: Session, *, llm_ok: bool, embed_ok: bool
-) -> Optional[AiJob]:
+def _next_job(session: Session, *, llm_ok: bool, embed_ok: bool) -> Optional[AiJob]:
     now = utcnow()
     jobs = session.exec(
         select(AiJob)
@@ -907,7 +909,9 @@ def _process_one() -> bool:
         return False
 
     if not llm_ok and not embed_ok:
-        reason = _waiting_reason(llm_ok=False, embed_ok=False) or "No AI provider reachable"
+        reason = (
+            _waiting_reason(llm_ok=False, embed_ok=False) or "No AI provider reachable"
+        )
         _set_blocked_reason(reason if has_queued else None)
         if has_queued:
             _stamp_waiting_jobs(reason)
@@ -1070,9 +1074,8 @@ def _timer_loop() -> None:
         try:
             ai = app_settings.ai_settings()
             schedule = str(ai.get("schedule") or "")
-            if (
-                (ai.get("enabled", True) or openrouter_configured())
-                and not ai.get("paused")
+            if (ai.get("enabled", True) or openrouter_configured()) and not ai.get(
+                "paused"
             ):
                 if schedule == "timer":
                     hours = float(ai.get("timer_hours") or 6)

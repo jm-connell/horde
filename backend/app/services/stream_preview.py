@@ -154,7 +154,12 @@ def _pick_adaptive_formats(
         # Skip storyboard / image formats.
         if str(fmt.get("format_note") or "").lower().startswith("storyboard"):
             continue
-        if fmt.get("protocol") in ("mhtml", "m3u8", "m3u8_native", "http_dash_segments"):
+        if fmt.get("protocol") in (
+            "mhtml",
+            "m3u8",
+            "m3u8_native",
+            "http_dash_segments",
+        ):
             continue
         # SegmentBase DASH needs a single-file URL with sidx, not a fragment list.
         if fmt.get("fragments"):
@@ -337,9 +342,7 @@ def _probe_mp4_ranges(
             ) as client:
                 resp = client.get(direct_url, headers=req_headers)
             if resp.status_code not in (200, 206):
-                raise RuntimeError(
-                    f"Probe failed with status {resp.status_code}"
-                )
+                raise RuntimeError(f"Probe failed with status {resp.status_code}")
             data = resp.content
         except Exception as exc:  # noqa: BLE001
             last_err = exc
@@ -415,11 +418,7 @@ def _build_representation(
 
     mime = "video/mp4" if kind == "video" else "audio/mp4"
     codecs = _codecs_string(fmt, kind=kind)
-    family = (
-        fmt.get("_codec_family")
-        or _video_codec_family(codecs)
-        or "unknown"
-    )
+    family = fmt.get("_codec_family") or _video_codec_family(codecs) or "unknown"
     rep: dict[str, Any] = {
         "itag": itag,
         "kind": kind,
@@ -566,8 +565,7 @@ def list_preview_subtitles(url: str, *, force: bool = False) -> list[dict[str, A
     """Return [{lang, auto}] for English captions available on a stream URL."""
     info = _extract_preview_info(url, force=force)
     return [
-        {"lang": t["lang"], "auto": t["auto"]}
-        for t in _collect_preview_subtitles(info)
+        {"lang": t["lang"], "auto": t["auto"]} for t in _collect_preview_subtitles(info)
     ]
 
 
@@ -629,7 +627,7 @@ def _segment_base_xml(rep: dict[str, Any]) -> list[str]:
         attrs.append(f'timescale="{timescale}"')
         attrs.append(f'presentationTimeOffset="{ept}"')
     return [
-        f'<SegmentBase {" ".join(attrs)}>',
+        f"<SegmentBase {' '.join(attrs)}>",
         f'<Initialization range="{init_r}"/>',
         "</SegmentBase>",
     ]
@@ -654,14 +652,9 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
             duration = float(duration)
         except (TypeError, ValueError):
             duration = None
-    source = (
-        info.get("webpage_url")
-        or info.get("original_url")
-        or url
-    )
+    source = info.get("webpage_url") or info.get("original_url") or url
     subtitles = [
-        {"lang": t["lang"], "auto": t["auto"]}
-        for t in _collect_preview_subtitles(info)
+        {"lang": t["lang"], "auto": t["auto"]} for t in _collect_preview_subtitles(info)
     ]
     return {
         "id": info.get("id"),
@@ -703,9 +696,7 @@ def resolve_preview_stream(url: str, *, force: bool = False) -> dict[str, Any]:
         info = _extract_preview_info(url, force=force)
         fmt = _pick_progressive_format(info)
         if fmt is None:
-            raise RuntimeError(
-                "No progressive preview format available for this video"
-            )
+            raise RuntimeError("No progressive preview format available for this video")
         direct = fmt.get("url")
         if not direct:
             raise RuntimeError("Preview format has no URL")
@@ -765,14 +756,12 @@ def _store_manifest_entry(url: str, entry: dict[str, Any]) -> None:
 def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
     videos, audios = _pick_adaptive_formats(info)
     if not videos or not audios:
-        raise RuntimeError(
-            "No MP4 adaptive formats available for DASH preview"
-        )
+        raise RuntimeError("No MP4 adaptive formats available for DASH preview")
 
     # Probe representations concurrently; extract semaphore already released.
-    jobs: list[tuple[str, dict[str, Any]]] = [
-        ("video", fmt) for fmt in videos
-    ] + [("audio", fmt) for fmt in audios]
+    jobs: list[tuple[str, dict[str, Any]]] = [("video", fmt) for fmt in videos] + [
+        ("audio", fmt) for fmt in audios
+    ]
     reps: dict[str, dict[str, Any]] = {}
     errors: list[Exception] = []
 
@@ -782,8 +771,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
     workers = min(6, max(1, len(jobs)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(_probe_one, kind, fmt): (kind, fmt)
-            for kind, fmt in jobs
+            pool.submit(_probe_one, kind, fmt): (kind, fmt) for kind, fmt in jobs
         }
         for fut in as_completed(futures):
             try:
@@ -803,9 +791,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
 
     # Prefer exact sidx-derived duration over yt-dlp's rounded seconds.
     sidx_durs = [
-        float(r["duration_sec"])
-        for r in reps.values()
-        if r.get("duration_sec")
+        float(r["duration_sec"]) for r in reps.values() if r.get("duration_sec")
     ]
     duration_f = max(sidx_durs) if sidx_durs else None
     if duration_f is None:
@@ -815,11 +801,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, ValueError):
             duration_f = None
 
-    heights = [
-        int(r["height"])
-        for r in video_reps
-        if r.get("height")
-    ]
+    heights = [int(r["height"]) for r in video_reps if r.get("height")]
     max_height = max(heights) if heights else None
 
     return {
@@ -832,9 +814,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _do_resolve_preview_manifest(
-    url: str, *, force: bool = False
-) -> dict[str, Any]:
+def _do_resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]:
     """Internal resolve without single-flight wrapping."""
     now = time.time()
     if not force:
@@ -969,18 +949,14 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
     set_id = 0
     for family in family_order:
         family_reps = by_family[family]
-        family_reps.sort(
-            key=lambda r: int(r.get("height") or 0), reverse=True
-        )
+        family_reps.sort(key=lambda r: int(r.get("height") or 0), reverse=True)
         aligned = _boundaries_aligned(family_reps)
         widths = [int(r.get("width") or 0) for r in family_reps]
         heights = [int(r.get("height") or 0) for r in family_reps]
         fps_vals = [int(r["fps"]) for r in family_reps if r.get("fps")]
         align_attrs = ""
         if aligned:
-            align_attrs = (
-                ' segmentAlignment="true" subsegmentAlignment="true"'
-            )
+            align_attrs = ' segmentAlignment="true" subsegmentAlignment="true"'
         max_w = max(widths) if widths else 0
         max_h = max(heights) if heights else 0
         max_fps = max(fps_vals) if fps_vals else 0
@@ -996,9 +972,7 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
             f'mimeType="video/mp4" startWithSAP="1" '
             f'subsegmentStartsWithSAP="1"{align_attrs}{extra}>'
         )
-        lines.append(
-            '<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>'
-        )
+        lines.append('<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>')
         for rep in family_reps:
             itag = xml_escape(str(rep["itag"]))
             codecs = xml_escape(str(rep.get("codecs") or "avc1.4D401F"))
@@ -1017,10 +991,7 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
                 attrs.append(f'height="{height}"')
             if fps:
                 attrs.append(f'frameRate="{int(fps)}"')
-            base = (
-                f"/api/preview/media?token={xml_escape(token)}"
-                f"&amp;itag={itag}"
-            )
+            base = f"/api/preview/media?token={xml_escape(token)}&amp;itag={itag}"
             lines.append(f"<Representation {' '.join(attrs)}>")
             lines.append(f"<BaseURL>{base}</BaseURL>")
             lines.extend(_segment_base_xml(rep))
@@ -1032,9 +1003,7 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
         aligned_a = _boundaries_aligned(audios)
         align_attrs = ""
         if aligned_a:
-            align_attrs = (
-                ' segmentAlignment="true" subsegmentAlignment="true"'
-            )
+            align_attrs = ' segmentAlignment="true" subsegmentAlignment="true"'
         lang = xml_escape(str(audios[0].get("lang") or "und"))
         lines.append(
             f'<AdaptationSet id="{set_id}" contentType="audio" '
@@ -1046,16 +1015,13 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
             codecs = xml_escape(str(rep.get("codecs") or "mp4a.40.2"))
             bandwidth = int(rep.get("bandwidth") or 128_000)
             channels = int(rep.get("audio_channels") or 2)
-            base = (
-                f"/api/preview/media?token={xml_escape(token)}"
-                f"&amp;itag={itag}"
-            )
+            base = f"/api/preview/media?token={xml_escape(token)}&amp;itag={itag}"
             lines.append(
                 f'<Representation id="{itag}" bandwidth="{bandwidth}" '
                 f'codecs="{codecs}">'
             )
             lines.append(
-                '<AudioChannelConfiguration '
+                "<AudioChannelConfiguration "
                 'schemeIdUri="urn:mpeg:dash:23003:3:'
                 'audio_channel_configuration:2011" '
                 f'value="{channels}"/>'

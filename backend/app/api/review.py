@@ -46,7 +46,9 @@ class ScanResult(BaseModel):
 
 @router.get("", response_model=list[VideoRead])
 def review_queue(session: Session = Depends(get_session)):
-    videos = library.query_videos(session, needs_review=True, sort="added_at", order="desc")
+    videos = library.query_videos(
+        session, needs_review=True, sort="added_at", order="desc"
+    )
     return [_to_read(v, session) for v in videos]
 
 
@@ -203,7 +205,7 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
             continue
         tokens_a = _title_tokens(va.title)
         cluster = [va]
-        for vb in all_videos[i + 1:]:
+        for vb in all_videos[i + 1 :]:
             if vb.id in used or vb.channel != va.channel:
                 continue
             if not vb.title or not vb.duration_sec:

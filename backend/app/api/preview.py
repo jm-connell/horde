@@ -96,9 +96,7 @@ def _reresolve_preview(
         token, itag = allow_refresh
         logger.warning("Refreshing preview media token=%s itag=%s", token[:8], itag)
         try:
-            return stream_preview.lookup_preview_media(
-                token, itag, refresh=True
-            )
+            return stream_preview.lookup_preview_media(token, itag, refresh=True)
         except stream_preview.PreviewRefreshError as exc:
             logger.warning("Preview media refresh failed: %s", exc)
             raise HTTPException(
@@ -201,9 +199,7 @@ async def _proxy_upstream(
         )
     if status not in (200, 206):
         await _close_upstream(upstream)
-        raise HTTPException(
-            status_code=502, detail=f"Unexpected status {status}"
-        )
+        raise HTTPException(status_code=502, detail=f"Unexpected status {status}")
 
     out_headers = {
         "Accept-Ranges": "bytes",
@@ -251,9 +247,7 @@ async def _head_upstream(
         upstream_headers["Range"] = range_header
 
     try:
-        resp = await client.head(
-            resolved["direct_url"], headers=upstream_headers
-        )
+        resp = await client.head(resolved["direct_url"], headers=upstream_headers)
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=502, detail=f"Upstream HEAD failed: {exc}"
@@ -265,9 +259,7 @@ async def _head_upstream(
         if range_header:
             upstream_headers["Range"] = range_header
         try:
-            resp = await client.head(
-                resolved["direct_url"], headers=upstream_headers
-            )
+            resp = await client.head(resolved["direct_url"], headers=upstream_headers)
         except httpx.HTTPError as exc:
             raise HTTPException(
                 status_code=502, detail=f"Upstream HEAD failed: {exc}"
@@ -419,12 +411,8 @@ async def preview_subtitles(
     if body.startswith(b"\xef\xbb\xbf"):
         body = body[3:]
     if not body.lstrip().startswith(b"WEBVTT"):
-        logger.warning(
-            "Upstream subtitle was not WEBVTT (prefix=%r)", body[:40]
-        )
-        raise HTTPException(
-            status_code=502, detail="Upstream subtitle was not WEBVTT"
-        )
+        logger.warning("Upstream subtitle was not WEBVTT (prefix=%r)", body[:40])
+        raise HTTPException(status_code=502, detail="Upstream subtitle was not WEBVTT")
 
     return Response(
         content=body,
@@ -490,9 +478,7 @@ async def preview_media(
             status_code=400, detail=f"Could not open preview media: {exc}"
         ) from exc
 
-    return await _proxy_upstream(
-        request, resolved, allow_refresh=(token, itag)
-    )
+    return await _proxy_upstream(request, resolved, allow_refresh=(token, itag))
 
 
 @router.head("/media")
@@ -518,9 +504,7 @@ async def preview_media_head(
             status_code=400, detail=f"Could not open preview media: {exc}"
         ) from exc
 
-    return await _head_upstream(
-        request, resolved, allow_refresh=(token, itag)
-    )
+    return await _head_upstream(request, resolved, allow_refresh=(token, itag))
 
 
 @router.get("/stream")

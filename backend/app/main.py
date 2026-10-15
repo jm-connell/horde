@@ -55,6 +55,7 @@ from .services.job_metadata import (
     stop_job_metadata_worker,
 )
 
+
 def _frontend_dir() -> Path:
     """Production image uses backend/static. Browser e2e points at frontend/dist."""
     override = os.environ.get("HORDE_FRONTEND_DIR", "").strip()
@@ -96,6 +97,7 @@ async def lifespan(app: FastAPI):
     observer = start_scanner()
 
     from .services.metadata_sync import start_sync_worker
+
     settings = app_settings_svc.load()
     start_sync_worker(interval_hours=settings.get("metadata_sync_interval_hours", 24))
     start_ai_worker()
@@ -201,14 +203,20 @@ def health():
 
     with Session(engine) as session:
         video_count = session.scalar(select(func.count(Video.id))) or 0
-        review_count = session.scalar(
-            select(func.count(Video.id)).where(Video.needs_review == True)  # noqa: E712
-        ) or 0
-        active_downloads = session.scalar(
-            select(func.count(DownloadJob.id)).where(
-                DownloadJob.status.in_([JobStatus.downloading, JobStatus.queued])  # type: ignore[attr-defined]
+        review_count = (
+            session.scalar(
+                select(func.count(Video.id)).where(Video.needs_review == True)  # noqa: E712
             )
-        ) or 0
+            or 0
+        )
+        active_downloads = (
+            session.scalar(
+                select(func.count(DownloadJob.id)).where(
+                    DownloadJob.status.in_([JobStatus.downloading, JobStatus.queued])  # type: ignore[attr-defined]
+                )
+            )
+            or 0
+        )
 
     disk = None
     try:
@@ -279,7 +287,12 @@ def health():
             cookie_configured,
             get_last_extract_failure,
         )
-        from .services.ai.worker import blocked_reason, error_count, queue_breakdown, queue_depth
+        from .services.ai.worker import (
+            blocked_reason,
+            error_count,
+            queue_breakdown,
+            queue_depth,
+        )
         from .services.channel_catalog import get_runtime_status
 
         downloads_paused = bool(
