@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Link,
   useLocation,
@@ -14,7 +21,7 @@ import PlaybackQueue from "../components/PlaybackQueue";
 import ThemedSelect from "../components/ThemedSelect";
 import OfflineDownloadButton from "../components/OfflineDownloadButton";
 import VideoActionsMenu from "../components/VideoActionsMenu";
-import VideoAiPanel from "../components/VideoAiPanel";
+import { VideoAiPanel } from "../components/lazy";
 import VideoCard from "../components/VideoCard";
 import VideoEditForm from "../components/VideoEditForm";
 import WatchMeta from "../components/WatchMeta";
@@ -1162,14 +1169,16 @@ export default function Watch() {
             >
               <div className="min-w-0 space-y-4">
                 {isLibrary && showAiSection && (
-                  <VideoAiPanel
-                    video={source.video}
-                    canSummarize={canAiSummarize}
-                    canChat={canAiChat}
-                    showCosts={showAiCosts}
-                    onVideoUpdate={setVideo}
-                    showToast={showToast}
-                  />
+                  <Suspense fallback={<LoadingIndicator className="py-4" />}>
+                    <VideoAiPanel
+                      video={source.video}
+                      canSummarize={canAiSummarize}
+                      canChat={canAiChat}
+                      showCosts={showAiCosts}
+                      onVideoUpdate={setVideo}
+                      showToast={showToast}
+                    />
+                  </Suspense>
                 )}
 
                 <WatchMeta

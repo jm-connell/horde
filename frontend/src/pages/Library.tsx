@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  Suspense,
   type ReactNode,
 } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -40,7 +41,7 @@ import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
 import { useOfflineMode } from "../offline/hooks";
 import { offlineManager } from "../offline/manager";
-import OfflinePage from "./Offline";
+import { OfflinePage } from "./lazy";
 import { HttpsNotice } from "../components/HttpsHelp";
 import type {
   ChannelAutodownload,
@@ -2030,7 +2031,12 @@ function OnlineLibrary() {
 
 export default function Library() {
   const offline = useOfflineMode();
-  if (offline) return <OfflinePage embedded />;
+  if (offline)
+    return (
+      <Suspense fallback={<LoadingIndicator label="Loading" />}>
+        <OfflinePage embedded />
+      </Suspense>
+    );
   return (
     <>
       <HttpsNotice />

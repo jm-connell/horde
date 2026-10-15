@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, listThumbnailUrl, playlistCoverUrl } from "../api";
 import Collapse from "./Collapse";
-import ImageCropModal from "./ImageCropModal";
+import { ImageCropModal } from "./lazy";
 import LoadingIndicator from "./LoadingIndicator";
 import {
   CoverEditIcon,
@@ -706,13 +706,15 @@ export default function PlaylistRow({
         </div>
       </Collapse>
       {coverDraft ? (
-        <ImageCropModal
-          file={coverDraft}
-          title="Edit playlist cover"
-          confirmLabel="Use cover"
-          onCancel={clearCoverDraft}
-          onConfirm={onUploadCover}
-        />
+        <Suspense fallback={null}>
+          <ImageCropModal
+            file={coverDraft}
+            title="Edit playlist cover"
+            confirmLabel="Use cover"
+            onCancel={clearCoverDraft}
+            onConfirm={onUploadCover}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

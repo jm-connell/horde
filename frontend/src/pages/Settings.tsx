@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useSearch } from "../context/SearchContext";
@@ -29,8 +29,8 @@ import LiquidNav from "../components/LiquidNav";
 import AppearanceTab from "./settings/AppearanceTab";
 import LibraryTab from "./settings/LibraryTab";
 import PlaybackTab from "./settings/PlaybackTab";
-import SystemTab from "./settings/SystemTab";
-import AiTab from "./settings/ai/AiTab";
+import LoadingIndicator from "../components/LoadingIndicator";
+import { AiTab, SystemTab } from "./settings/lazy";
 import {
   CHAT_MODEL_OPTIONS,
   DEFAULT_AI,
@@ -968,8 +968,10 @@ export default function Settings() {
           {tab === "appearance" && <AppearanceTab />}
           {tab === "library" && <LibraryTab />}
           {tab === "playback" && <PlaybackTab />}
-          {tab === "ai" && <AiTab />}
-          {tab === "system" && <SystemTab />}
+          <Suspense fallback={<LoadingIndicator label="Loading" />}>
+            {tab === "ai" && <AiTab />}
+            {tab === "system" && <SystemTab />}
+          </Suspense>
         </div>
       </SettingsPageProvider>
     </div>

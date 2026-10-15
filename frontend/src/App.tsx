@@ -6,17 +6,21 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { applyPageId } from "./customCss";
 import Library from "./pages/Library";
-import History from "./pages/History";
-import Download from "./pages/Download";
-import Import from "./pages/Import";
-import Watch from "./pages/Watch";
-import Settings from "./pages/Settings";
-import Setup from "./pages/Setup";
-import Playlists from "./pages/Playlists";
-import OfflinePage from "./pages/Offline";
+import {
+  Download,
+  History,
+  Import,
+  NotFound,
+  OfflinePage,
+  Playlists,
+  Settings,
+  Setup,
+  Watch,
+} from "./pages/lazy";
+import ErrorBoundary from "./components/ErrorBoundary";
 import ConnectionTag from "./components/ConnectionTag";
 import TopNav from "./components/TopNav";
 import BackgroundEffect from "./components/BackgroundEffect";
@@ -75,21 +79,29 @@ function AppRoutes() {
       data-horde="main"
       className="page-shell relative z-10 mx-auto max-w-[1920px] px-3 py-6 md:px-6"
     >
-      <Routes>
-        <Route path="/" element={<Library />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/offline" element={<OfflinePage />} />
-        <Route path="/download" element={<Download />} />
-        <Route path="/playlists" element={<Playlists />} />
-        <Route path="/playlists/:id" element={<PlaylistOpenRedirect />} />
-        <Route path="/import" element={<Import />} />
-        <Route path="/review" element={<Navigate to="/import" replace />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/setup" element={<Navigate to="/" replace />} />
-        <Route path="/watch/:id" element={<Watch />} />
-        <Route path="/watch" element={<Watch />} />
-        <Route path="/preview" element={<PreviewRedirect />} />
-      </Routes>
+      {/* A render error stays inside <main> so the nav still works, and
+          resets on navigation. Lazy routes suspend here until their chunk
+          arrives (a failed chunk fetch throws into the boundary). */}
+      <ErrorBoundary scope="route" resetKey={location.key}>
+        <Suspense fallback={<LoadingIndicator label="Loading" />}>
+          <Routes>
+            <Route path="/" element={<Library />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/offline" element={<OfflinePage />} />
+            <Route path="/download" element={<Download />} />
+            <Route path="/playlists" element={<Playlists />} />
+            <Route path="/playlists/:id" element={<PlaylistOpenRedirect />} />
+            <Route path="/import" element={<Import />} />
+            <Route path="/review" element={<Navigate to="/import" replace />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/setup" element={<Navigate to="/" replace />} />
+            <Route path="/watch/:id" element={<Watch />} />
+            <Route path="/watch" element={<Watch />} />
+            <Route path="/preview" element={<PreviewRedirect />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </main>
   );
 }
@@ -113,10 +125,14 @@ function AppShell() {
       <div className="relative min-h-full overflow-x-hidden">
         <BackgroundEffect />
         <main className="relative z-10">
-          <Routes>
-            <Route path="/setup" element={<Setup />} />
-            <Route path="*" element={<Navigate to="/setup" replace />} />
-          </Routes>
+          <ErrorBoundary scope="setup">
+            <Suspense fallback={<LoadingIndicator label="Loading" />}>
+              <Routes>
+                <Route path="/setup" element={<Setup />} />
+                <Route path="*" element={<Navigate to="/setup" replace />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     );
@@ -133,17 +149,19 @@ function AppShell() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <ConfirmProvider>
-        <DownloadProvider>
-          <SearchProvider>
-            <PlaybackProvider>
-              <AppShell />
-              <OverlayScrollThumb viewport />
-            </PlaybackProvider>
-          </SearchProvider>
-        </DownloadProvider>
-      </ConfirmProvider>
-    </ToastProvider>
+    <ErrorBoundary scope="app" fullPage>
+      <ToastProvider>
+        <ConfirmProvider>
+          <DownloadProvider>
+            <SearchProvider>
+              <PlaybackProvider>
+                <AppShell />
+                <OverlayScrollThumb viewport />
+              </PlaybackProvider>
+            </SearchProvider>
+          </DownloadProvider>
+        </ConfirmProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
