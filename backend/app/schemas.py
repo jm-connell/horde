@@ -175,6 +175,7 @@ class DownloadPreview(BaseModel):
     entry_count: int | None
     view_count: int | None = None
     published_at: str | None = None
+    published_label: str | None = None
     available_presets: list[str] = []
     preset_sizes: dict[str, int] = {}
 
@@ -213,7 +214,7 @@ class DownloadJobRead(BaseModel):
     paused: bool
     error: str | None
     error_kind: str | None = None
-    destination: str = DownloadDestination.library.value
+    destination: DownloadDestination = DownloadDestination.library
     device_file_path: str | None = None
     video_id: int | None
     replace_video_id: int | None = None
