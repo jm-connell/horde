@@ -142,6 +142,11 @@ export function normalizeCustomCss(value: unknown): string {
  * Remote-fetch stripping. Mirrors backend/app/services/css_sanitize.py (which is
  * what runs when settings are saved); both are tested against the same vectors in
  * customCssSanitize.vectors.json. Keep the two implementations in step.
+ *
+ * The scanner splits the text into tokens the way a browser does (CSS Syntax
+ * Level 3: the url token, bad url tokens, hash tokens and newline
+ * preprocessing), so a quote, a comment opener or an escape cannot make it skip
+ * text that the browser reads as a url().
  */
 
 const URL_FUNCTIONS = new Set([
@@ -153,31 +158,56 @@ const URL_FUNCTIONS = new Set([
   "cross-fade",
   "-webkit-cross-fade",
 ]);
-const CSS_WS = " \t\n\r\f";
+/** Functions whose value is only known once the browser substitutes it. */
+const SUBSTITUTION_FUNCTIONS = new Set(["var", "env", "attr", "if", "inherit"]);
+/** Whitespace after preprocessing (CR, CR LF and FF have become LF). */
+const CSS_WS = " \t\n";
+const CLOSER: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
 const isHex = (ch: string | undefined): boolean =>
   ch !== undefined && /^[0-9a-fA-F]$/.test(ch);
 const isIdentChar = (ch: string): boolean =>
   /^[A-Za-z0-9_-]$/.test(ch) || ch.charCodeAt(0) > 0x7f;
+const isWs = (ch: string | undefined): boolean =>
+  ch !== undefined && CSS_WS.includes(ch);
+const isNonPrintable = (ch: string): boolean => {
+  const code = ch.charCodeAt(0);
+  return (
+    code <= 0x08 ||
+    code === 0x0b ||
+    (code >= 0x0e && code <= 0x1f) ||
+    code === 0x7f
+  );
+};
+
+/** CSS Syntax 3 preprocessing: CR LF, CR and FF are newlines; NUL is dropped. */
+function preprocess(css: string): string {
+  return css.replace(/\0/g, "").replace(/\r\n?|\f/g, "\n");
+}
+
+function isValidEscape(css: string, i: number): boolean {
+  return css[i] === "\\" && css[i + 1] !== "\n";
+}
+
+/** Index just past the escape whose backslash is at `i`. */
+function escapeEnd(css: string, i: number): number {
+  const n = css.length;
+  i += 1;
+  if (i >= n) return n;
+  if (!isHex(css[i])) return i + 1;
+  let j = i;
+  while (j < n && isHex(css[j]) && j - i < 6) j += 1;
+  if (isWs(css[j])) j += 1;
+  return j;
+}
 
 function identEnd(css: string, start: number): number {
   let i = start;
   const n = css.length;
   while (i < n) {
-    const ch = css[i];
-    if (ch === "\\") {
-      if (i + 1 >= n) return i + 1;
-      i += 1;
-      if (isHex(css[i])) {
-        let digits = 0;
-        while (i < n && isHex(css[i]) && digits < 6) {
-          i += 1;
-          digits += 1;
-        }
-        if (i < n && CSS_WS.includes(css[i])) i += 1;
-      } else {
-        i += 1;
-      }
-    } else if (isIdentChar(ch)) {
+    if (css[i] === "\\") {
+      if (!isValidEscape(css, i)) break;
+      i = escapeEnd(css, i);
+    } else if (isIdentChar(css[i])) {
       i += 1;
     } else {
       break;
@@ -203,10 +233,9 @@ function cssUnescape(text: string): string {
       let j = i;
       while (j < n && isHex(text[j]) && j - i < 6) j += 1;
       const code = parseInt(text.slice(i, j), 16);
-      out +=
-        code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "\ufffd";
+      out += code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "�";
       i = j;
-      if (i < n && CSS_WS.includes(text[i])) i += 1;
+      if (isWs(text[i])) i += 1;
     } else if (text[i] === "\n") {
       i += 1;
     } else {
@@ -217,7 +246,26 @@ function cssUnescape(text: string): string {
   return out;
 }
 
-function stringEnd(css: string, start: number): number {
+type TokenKind =
+  | "comment"
+  | "string"
+  | "whitespace"
+  | "delim"
+  | "hash"
+  | "at-keyword"
+  | "ident"
+  | "function"
+  | "url"
+  | "bad-url";
+
+/** `arg`: lowercased unescaped name, raw string/url contents, or the delimiter. */
+interface Token {
+  kind: TokenKind;
+  end: number;
+  arg: string;
+}
+
+function stringToken(css: string, start: number): Token {
   const quote = css[start];
   let i = start + 1;
   const n = css.length;
@@ -227,11 +275,15 @@ function stringEnd(css: string, start: number): number {
       i += 2;
       continue;
     }
-    if (ch === quote) return i + 1;
-    if (ch === "\n") return i;
+    if (ch === quote) {
+      return { kind: "string", end: i + 1, arg: css.slice(start + 1, i) };
+    }
+    if (ch === "\n") {
+      return { kind: "string", end: i, arg: css.slice(start + 1, i) };
+    }
     i += 1;
   }
-  return n;
+  return { kind: "string", end: n, arg: css.slice(start + 1) };
 }
 
 function commentEnd(css: string, start: number): number {
@@ -239,58 +291,126 @@ function commentEnd(css: string, start: number): number {
   return end < 0 ? css.length : end + 2;
 }
 
-function parensEnd(css: string, openIdx: number): number {
-  let depth = 0;
-  let i = openIdx;
+function badUrlEnd(css: string, i: number): number {
   const n = css.length;
   while (i < n) {
-    const ch = css[i];
-    if (ch === "\\") {
-      i += 2;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      i = stringEnd(css, i);
-      continue;
-    }
-    if (ch === "/" && css.startsWith("/*", i)) {
-      i = commentEnd(css, i);
-      continue;
-    }
-    if (ch === "(") depth += 1;
-    else if (ch === ")") {
-      depth -= 1;
-      if (depth === 0) return i + 1;
-    }
-    i += 1;
+    if (css[i] === ")") return i + 1;
+    i = isValidEscape(css, i) ? escapeEnd(css, i) : i + 1;
   }
   return n;
 }
 
-function statementEnd(css: string, start: number): number {
-  let i = start;
+/** The url or bad-url token whose `url(` ends at `start` ("consume a url token"). */
+function urlToken(css: string, start: number): Token {
   const n = css.length;
+  let i = start;
+  while (isWs(css[i])) i += 1;
+  const valueStart = i;
+  const bad = (from: number): Token => ({
+    kind: "bad-url",
+    end: badUrlEnd(css, from),
+    arg: "",
+  });
   while (i < n) {
     const ch = css[i];
+    if (ch === ")") {
+      return { kind: "url", end: i + 1, arg: css.slice(valueStart, i) };
+    }
+    if (isWs(ch)) {
+      const valueEnd = i;
+      while (isWs(css[i])) i += 1;
+      if (i >= n) {
+        return { kind: "url", end: n, arg: css.slice(valueStart, valueEnd) };
+      }
+      if (css[i] === ")") {
+        return {
+          kind: "url",
+          end: i + 1,
+          arg: css.slice(valueStart, valueEnd),
+        };
+      }
+      return bad(i);
+    }
+    if (ch === '"' || ch === "'" || ch === "(" || isNonPrintable(ch)) {
+      return bad(i);
+    }
     if (ch === "\\") {
-      i += 2;
+      if (!isValidEscape(css, i)) return bad(i);
+      i = escapeEnd(css, i);
       continue;
     }
-    if (ch === '"' || ch === "'") {
-      i = stringEnd(css, i);
-      continue;
-    }
-    if (ch === "/" && css.startsWith("/*", i)) {
-      i = commentEnd(css, i);
-      continue;
-    }
-    if (ch === "(") {
-      i = parensEnd(css, i);
-      continue;
-    }
-    if (ch === ";") return i + 1;
-    if (ch === "{" || ch === "}") return i;
     i += 1;
+  }
+  return { kind: "url", end: n, arg: css.slice(valueStart) };
+}
+
+function nextToken(css: string, i: number): Token {
+  const ch = css[i];
+  if (css.startsWith("/*", i)) {
+    return { kind: "comment", end: commentEnd(css, i), arg: "" };
+  }
+  if (ch === '"' || ch === "'") return stringToken(css, i);
+  if (isWs(ch)) {
+    let end = i + 1;
+    while (isWs(css[end])) end += 1;
+    return { kind: "whitespace", end, arg: "" };
+  }
+  if (ch === "#" || ch === "@") {
+    const end = identEnd(css, i + 1);
+    if (end === i + 1) return { kind: "delim", end, arg: ch };
+    return {
+      kind: ch === "#" ? "hash" : "at-keyword",
+      end,
+      arg: cssUnescape(css.slice(i + 1, end)).toLowerCase(),
+    };
+  }
+  if (isIdentChar(ch) || isValidEscape(css, i)) {
+    const end = identEnd(css, i);
+    const name = cssUnescape(css.slice(i, end)).toLowerCase();
+    if (css[end] !== "(") return { kind: "ident", end, arg: name };
+    if (name === "url") {
+      let j = end + 1;
+      while (isWs(css[j])) j += 1;
+      if (css[j] !== '"' && css[j] !== "'") return urlToken(css, end + 1);
+    }
+    return { kind: "function", end: end + 1, arg: name };
+  }
+  return { kind: "delim", end: i + 1, arg: ch };
+}
+
+/** Index just past the `closer` ending the block whose contents start at `i`. */
+function blockEnd(css: string, i: number, closer: string): number {
+  const stack = [closer];
+  const n = css.length;
+  while (i < n) {
+    const tok = nextToken(css, i);
+    if (tok.kind === "function") {
+      stack.push(")");
+    } else if (tok.kind === "delim" && tok.arg in CLOSER) {
+      stack.push(CLOSER[tok.arg]);
+    } else if (tok.kind === "delim" && tok.arg === stack[stack.length - 1]) {
+      stack.pop();
+      if (stack.length === 0) return tok.end;
+    }
+    i = tok.end;
+  }
+  return n;
+}
+
+/** End of an at-rule prelude: just past `;`, or before `{` / `}`. */
+function preludeEnd(css: string, i: number): number {
+  const n = css.length;
+  while (i < n) {
+    const tok = nextToken(css, i);
+    let end = tok.end;
+    if (tok.kind === "delim" && tok.arg === ";") return end;
+    if (tok.kind === "delim" && (tok.arg === "{" || tok.arg === "}")) return i;
+    if (tok.kind === "function") {
+      end = blockEnd(css, end, ")");
+    } else if (tok.kind === "delim" && (tok.arg === "(" || tok.arg === "[")) {
+      end = blockEnd(css, end, CLOSER[tok.arg]);
+    }
+    i = end;
   }
   return n;
 }
@@ -307,81 +427,51 @@ export function cssUrlAllowed(value: string): boolean {
   return !(v.startsWith("//") || /^[a-z][a-z0-9+.-]*:/.test(v));
 }
 
-function stringValues(text: string): string[] {
-  const values: string[] = [];
-  let i = 0;
-  const n = text.length;
-  while (i < n) {
-    const ch = text[i];
-    if (ch === "/" && text.startsWith("/*", i)) {
-      i = commentEnd(text, i);
-    } else if (ch === '"' || ch === "'") {
-      const end = stringEnd(text, i);
-      values.push(text.slice(i + 1, end > i + 1 ? end - 1 : end));
-      i = end;
-    } else if (ch === "\\") {
-      i += 2;
-    } else {
-      i += 1;
+/** Every URL an image function's arguments (`css[start, stop)`) name is allowed. */
+function argumentsSafe(css: string, start: number, stop: number): boolean {
+  let i = start;
+  while (i < stop) {
+    const tok = nextToken(css, i);
+    if (tok.kind === "bad-url") return false;
+    if (
+      (tok.kind === "url" || tok.kind === "string") &&
+      !cssUrlAllowed(tok.arg)
+    ) {
+      return false;
     }
-  }
-  return values;
-}
-
-function callIsSafe(name: string, inner: string): boolean {
-  if (name === "url") {
-    let value = inner.trim();
-    if (value[0] === "'" || value[0] === '"') {
-      const end = stringEnd(value, 0);
-      value = value.slice(1, end > 1 ? end - 1 : end);
+    if (
+      tok.kind === "function" &&
+      (SUBSTITUTION_FUNCTIONS.has(tok.arg) || tok.arg.startsWith("--"))
+    ) {
+      return false;
     }
-    return cssUrlAllowed(value);
+    i = tok.end;
   }
-  if (!stringValues(inner).every(cssUrlAllowed)) return false;
-  return stripRemoteCss(inner) === inner;
+  return true;
 }
 
 /** Remove `@import` and any URL that is not `data:` or same-origin relative. */
 export function stripRemoteCss(input: string): string {
-  const css = input.replace(/\0/g, "");
+  const css = preprocess(input);
   let out = "";
   let i = 0;
   const n = css.length;
   while (i < n) {
-    const ch = css[i];
-    if (ch === "/" && css.startsWith("/*", i)) {
-      const end = commentEnd(css, i);
-      out += css.slice(i, end);
-      i = end;
-    } else if (ch === '"' || ch === "'") {
-      const end = stringEnd(css, i);
-      out += css.slice(i, end);
-      i = end;
-    } else if (ch === "@") {
-      const end = identEnd(css, i + 1);
-      if (cssUnescape(css.slice(i + 1, end)).toLowerCase() === "import") {
-        i = statementEnd(css, end);
-        continue;
-      }
-      out += css.slice(i, end);
-      i = end;
-    } else if (ch === "\\" || isIdentChar(ch)) {
-      const end = identEnd(css, i);
-      const name = cssUnescape(css.slice(i, end)).toLowerCase();
-      if (end < n && css[end] === "(" && URL_FUNCTIONS.has(name)) {
-        const close = parensEnd(css, end);
-        const closed = close <= n && css[close - 1] === ")";
-        const inner = css.slice(end + 1, closed ? close - 1 : close);
-        out += callIsSafe(name, inner) ? css.slice(i, close) : "none";
-        i = close;
-      } else {
-        out += css.slice(i, end);
-        i = end;
-      }
+    const tok = nextToken(css, i);
+    let end = tok.end;
+    if (tok.kind === "at-keyword" && tok.arg === "import") {
+      end = preludeEnd(css, end);
+    } else if (tok.kind === "url" || tok.kind === "bad-url") {
+      const keep = tok.kind === "url" && cssUrlAllowed(tok.arg);
+      out += keep ? css.slice(i, end) : "none";
+    } else if (tok.kind === "function" && URL_FUNCTIONS.has(tok.arg)) {
+      const close = blockEnd(css, end, ")");
+      out += argumentsSafe(css, end, close) ? css.slice(i, close) : "none";
+      end = close;
     } else {
-      out += ch;
-      i += 1;
+      out += css.slice(i, end);
     }
+    i = end;
   }
   return out;
 }

@@ -9,11 +9,19 @@ Policy, applied when settings are saved:
 * ``@import`` rules are removed.
 * ``url()`` and the image functions that take URLs keep only ``data:`` URLs and
   same-origin relative URLs (for example an uploaded background). Anything with a
-  scheme, a ``//host`` prefix or a backslash trick is replaced by ``none``.
+  scheme, a ``//host`` prefix or a backslash trick is replaced by ``none``, and so
+  is a malformed (bad) url token.
+* An image function whose arguments use a substitution function (``var()``,
+  ``env()``, ``attr()``, ``if()``, a custom ``--function()``) is replaced by
+  ``none`` too, because the URL it would load is not visible in the text.
 
-The scanner decodes CSS escapes before it compares names and values, so
-``\\75rl(...)`` and ``@\\69mport`` do not slip through. Comments, strings and
-everything else are copied through untouched, so a user's stylesheet round-trips.
+The scanner splits the text into tokens the way a browser does (CSS Syntax
+Level 3, including the special url token, bad url tokens, hash tokens and the
+newline preprocessing), so a quote, a ``/*`` or an escape cannot make it skip
+text that the browser reads as a ``url()``. It decodes escapes before it compares
+names and values, so ``\\75rl(...)`` and ``@\\69mport`` do not slip through.
+Comments, strings and everything else are copied through untouched, so a user's
+stylesheet round-trips.
 
 ``frontend/src/customCss.ts`` implements the same algorithm for the live preview;
 both are exercised by the same test vectors.
@@ -37,13 +45,58 @@ _URL_FUNCTIONS = frozenset(
     }
 )
 
+#: Functions whose value is only known once the browser substitutes it.
+_SUBSTITUTION_FUNCTIONS = frozenset({"var", "env", "attr", "if", "inherit"})
+
 _HEX = "0123456789abcdefABCDEF"
-_WHITESPACE = " \t\n\r\f"
+#: Whitespace after preprocessing (CR, CR LF and FF have become LF).
+_WHITESPACE = " \t\n"
 _SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.\-]*:")
+_CLOSER = {"(": ")", "[": "]", "{": "}"}
 
 
 def _is_ident_char(ch: str) -> bool:
     return ch.isalnum() and ch.isascii() or ch in "-_" or ord(ch) > 0x7F
+
+
+def _is_non_printable(ch: str) -> bool:
+    code = ord(ch)
+    return code <= 0x08 or code == 0x0B or 0x0E <= code <= 0x1F or code == 0x7F
+
+
+def _preprocess(css: str) -> str:
+    """CSS Syntax 3 input preprocessing: CR LF, CR and FF are newlines.
+
+    NUL is dropped rather than turned into U+FFFD, which only makes the
+    sanitizer see more as one identifier than a browser would.
+    """
+    return (
+        css.replace("\0", "")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\f", "\n")
+    )
+
+
+def _is_valid_escape(css: str, i: int) -> bool:
+    """True when ``css[i]`` is a backslash that starts an escape."""
+    return css[i : i + 1] == "\\" and css[i + 1 : i + 2] != "\n"
+
+
+def _escape_end(css: str, i: int) -> int:
+    """Index just past the escape whose backslash is at ``i``."""
+    i += 1
+    n = len(css)
+    if i >= n:
+        return n
+    if css[i] not in _HEX:
+        return i + 1
+    j = i
+    while j < n and css[j] in _HEX and j - i < 6:
+        j += 1
+    if j < n and css[j] in _WHITESPACE:
+        j += 1
+    return j
 
 
 def _ident_end(css: str, start: int) -> int:
@@ -51,21 +104,11 @@ def _ident_end(css: str, start: int) -> int:
     i = start
     n = len(css)
     while i < n:
-        ch = css[i]
-        if ch == "\\":
-            if i + 1 >= n:
-                return i + 1
-            i += 1
-            if css[i] in _HEX:
-                digits = 0
-                while i < n and css[i] in _HEX and digits < 6:
-                    i += 1
-                    digits += 1
-                if i < n and css[i] in _WHITESPACE:
-                    i += 1
-            else:
-                i += 1
-        elif _is_ident_char(ch):
+        if css[i] == "\\":
+            if not _is_valid_escape(css, i):
+                break
+            i = _escape_end(css, i)
+        elif _is_ident_char(css[i]):
             i += 1
         else:
             break
@@ -103,22 +146,22 @@ def unescape(text: str) -> str:
     return "".join(out)
 
 
-def _string_end(css: str, start: int) -> int:
-    """Index just past the quoted string that opens at ``start``."""
+def _string_token(css: str, start: int) -> tuple[int, str]:
+    """End of the string that opens at ``start``, and its raw contents."""
     quote = css[start]
     i = start + 1
     n = len(css)
     while i < n:
         ch = css[i]
         if ch == "\\":
-            i += 2
+            i += 2  # an escaped newline continues the string
             continue
         if ch == quote:
-            return i + 1
+            return i + 1, css[start + 1 : i]
         if ch == "\n":
-            return i  # unterminated string ends at the newline
+            return i, css[start + 1 : i]  # bad string: ends before the newline
         i += 1
-    return n
+    return n, css[start + 1 :]
 
 
 def _comment_end(css: str, start: int) -> int:
@@ -126,55 +169,129 @@ def _comment_end(css: str, start: int) -> int:
     return len(css) if end < 0 else end + 2
 
 
-def _parens_end(css: str, open_idx: int) -> int:
-    """Index just past the ``)`` matching the ``(`` at ``open_idx``."""
-    depth = 0
-    i = open_idx
+def _bad_url_end(css: str, i: int) -> int:
+    """Consume the remnants of a bad url: up to and including the next ``)``."""
     n = len(css)
     while i < n:
-        ch = css[i]
-        if ch == "\\":
-            i += 2
-            continue
-        if ch in "\"'":
-            i = _string_end(css, i)
-            continue
-        if ch == "/" and css.startswith("/*", i):
-            i = _comment_end(css, i)
-            continue
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-            if depth == 0:
-                return i + 1
-        i += 1
+        if css[i] == ")":
+            return i + 1
+        i = _escape_end(css, i) if _is_valid_escape(css, i) else i + 1
     return n
 
 
-def _statement_end(css: str, start: int) -> int:
-    """End of an at-rule that has no block: just past ``;``, or before ``{``/``}``."""
-    i = start
+def _url_token(css: str, start: int) -> tuple[str, int, str]:
+    """The url (or bad-url) token whose ``url(`` ends at ``start``.
+
+    Follows "consume a url token": quotes, ``(``, whitespace inside the value,
+    non-printable characters and a backslash before a newline make it a bad url,
+    which runs to the next unescaped ``)``. ``/*`` is ordinary URL text.
+    """
     n = len(css)
+    i = start
+    while i < n and css[i] in _WHITESPACE:
+        i += 1
+    value_start = i
     while i < n:
         ch = css[i]
+        if ch == ")":
+            return "url", i + 1, css[value_start:i]
+        if ch in _WHITESPACE:
+            value_end = i
+            while i < n and css[i] in _WHITESPACE:
+                i += 1
+            if i >= n:
+                return "url", n, css[value_start:value_end]
+            if css[i] == ")":
+                return "url", i + 1, css[value_start:value_end]
+            return "bad-url", _bad_url_end(css, i), ""
+        if ch in "\"'(" or _is_non_printable(ch):
+            return "bad-url", _bad_url_end(css, i), ""
         if ch == "\\":
-            i += 2
+            if not _is_valid_escape(css, i):
+                return "bad-url", _bad_url_end(css, i), ""
+            i = _escape_end(css, i)
             continue
-        if ch in "\"'":
-            i = _string_end(css, i)
-            continue
-        if ch == "/" and css.startswith("/*", i):
-            i = _comment_end(css, i)
-            continue
-        if ch == "(":
-            i = _parens_end(css, i)
-            continue
-        if ch == ";":
-            return i + 1
-        if ch in "{}":
-            return i
         i += 1
+    return "url", n, css[value_start:]
+
+
+def _token(css: str, i: int) -> tuple[str, int, str]:
+    """``(kind, end, arg)`` of the token that starts at ``i``.
+
+    ``arg`` is the lowercased, unescaped name of an ident, function, hash or
+    at-keyword, the raw contents of a string or url, or the character of a
+    delimiter. Digits are read as part of an identifier: a number followed by a
+    name is a dimension in CSS, which is never a function either.
+    """
+    n = len(css)
+    ch = css[i]
+    if css.startswith("/*", i):
+        return "comment", _comment_end(css, i), ""
+    if ch in "\"'":
+        end, value = _string_token(css, i)
+        return "string", end, value
+    if ch in _WHITESPACE:
+        end = i + 1
+        while end < n and css[end] in _WHITESPACE:
+            end += 1
+        return "whitespace", end, ""
+    if ch in "#@":
+        end = _ident_end(css, i + 1)
+        if end == i + 1:
+            return "delim", end, ch
+        kind = "hash" if ch == "#" else "at-keyword"
+        return kind, end, unescape(css[i + 1 : end]).lower()
+    if _is_ident_char(ch) or _is_valid_escape(css, i):
+        end = _ident_end(css, i)
+        name = unescape(css[i:end]).lower()
+        if css[end : end + 1] != "(":
+            return "ident", end, name
+        if name == "url":
+            j = end + 1
+            while j < n and css[j] in _WHITESPACE:
+                j += 1
+            if css[j : j + 1] not in ('"', "'"):
+                return _url_token(css, end + 1)
+        return "function", end + 1, name
+    return "delim", i + 1, ch
+
+
+def _block_end(css: str, i: int, closer: str) -> int:
+    """Index just past the ``closer`` that ends the block whose contents start at ``i``.
+
+    Nested functions and ``(``/``[``/``{`` blocks are skipped as a whole, and a
+    closing bracket of another kind is part of the contents, as in a browser.
+    """
+    stack = [closer]
+    n = len(css)
+    while i < n:
+        kind, end, arg = _token(css, i)
+        if kind == "function":
+            stack.append(")")
+        elif kind == "delim" and arg in _CLOSER:
+            stack.append(_CLOSER[arg])
+        elif kind == "delim" and arg == stack[-1]:
+            stack.pop()
+            if not stack:
+                return end
+        i = end
+    return n
+
+
+def _prelude_end(css: str, i: int) -> int:
+    """End of an at-rule prelude: just past ``;``, or before ``{``/``}``."""
+    n = len(css)
+    while i < n:
+        kind, end, arg = _token(css, i)
+        if kind == "delim" and arg == ";":
+            return end
+        if kind == "delim" and arg in ("{", "}"):
+            return i
+        if kind == "function":
+            end = _block_end(css, end, ")")
+        elif kind == "delim" and arg in ("(", "["):
+            end = _block_end(css, end, _CLOSER[arg])
+        i = end
     return n
 
 
@@ -187,77 +304,43 @@ def url_allowed(value: str) -> bool:
     return not (v.startswith("//") or _SCHEME_RE.match(v))
 
 
-def _string_values(text: str) -> list[str]:
-    """Contents of every quoted string in ``text`` (outside comments)."""
-    values: list[str] = []
-    i = 0
-    n = len(text)
-    while i < n:
-        ch = text[i]
-        if ch == "/" and text.startswith("/*", i):
-            i = _comment_end(text, i)
-        elif ch in "\"'":
-            end = _string_end(text, i)
-            values.append(text[i + 1 : end - 1 if end > i + 1 else end])
-            i = end
-        elif ch == "\\":
-            i += 2
-        else:
-            i += 1
-    return values
-
-
-def _call_is_safe(name: str, inner: str) -> bool:
-    if name == "url":
-        value = inner.strip()
-        if value[:1] in ("'", '"'):
-            end = _string_end(value, 0)
-            value = value[1 : end - 1 if end > 1 else end]
-        return url_allowed(value)
-    # image-set(), src(), cross-fade(): every string and nested url() must be safe.
-    if not all(url_allowed(v) for v in _string_values(inner)):
-        return False
-    return sanitize_custom_css(inner) == inner
+def _arguments_safe(css: str, start: int, stop: int) -> bool:
+    """Every URL an image function's arguments (``css[start:stop]``) name is allowed."""
+    i = start
+    while i < stop:
+        kind, end, arg = _token(css, i)
+        if kind == "bad-url":
+            return False
+        if kind in ("url", "string") and not url_allowed(arg):
+            return False
+        if kind == "function" and (
+            arg in _SUBSTITUTION_FUNCTIONS or arg.startswith("--")
+        ):
+            return False
+        i = end
+    return True
 
 
 def sanitize_custom_css(css: str) -> str:
     """Return ``css`` with ``@import`` and non-local URLs removed."""
-    css = css.replace("\0", "")
+    css = _preprocess(css)
     out: list[str] = []
     i = 0
     n = len(css)
     while i < n:
-        ch = css[i]
-        if ch == "/" and css.startswith("/*", i):
-            end = _comment_end(css, i)
-            out.append(css[i:end])
-            i = end
-        elif ch in "\"'":
-            end = _string_end(css, i)
-            out.append(css[i:end])
-            i = end
-        elif ch == "@":
-            end = _ident_end(css, i + 1)
-            if unescape(css[i + 1 : end]).lower() == "import":
-                i = _statement_end(css, end)
-                continue
-            out.append(css[i:end])
-            i = end
-        elif ch == "\\" or _is_ident_char(ch):
-            end = _ident_end(css, i)
-            name = unescape(css[i:end]).lower()
-            if end < n and css[end] == "(" and name in _URL_FUNCTIONS:
-                close = _parens_end(css, end)
-                closed = close <= n and css[close - 1 : close] == ")"
-                inner = css[end + 1 : close - 1 if closed else close]
-                out.append(css[i:close] if _call_is_safe(name, inner) else "none")
-                i = close
-            else:
-                out.append(css[i:end])
-                i = end
+        kind, end, arg = _token(css, i)
+        if kind == "at-keyword" and arg == "import":
+            end = _prelude_end(css, end)
+        elif kind in ("url", "bad-url"):
+            keep = kind == "url" and url_allowed(arg)
+            out.append(css[i:end] if keep else "none")
+        elif kind == "function" and arg in _URL_FUNCTIONS:
+            close = _block_end(css, end, ")")
+            out.append(css[i:close] if _arguments_safe(css, end, close) else "none")
+            end = close
         else:
-            out.append(ch)
-            i += 1
+            out.append(css[i:end])
+        i = end
     return "".join(out)
 
 

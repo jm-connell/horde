@@ -112,7 +112,7 @@ Rounder library cards:
 }
 ```
 
-`@import` is allowed if you want to pull a hosted stylesheet or extra `@font-face`. Remote URLs depend on this browser reaching that host.
+Custom CSS cannot load anything from another site. When you save, Horde removes `@import` rules and replaces with `none` every `url()`, `image-set()`, `image()`, `cross-fade()` or `src()` that points elsewhere (a scheme such as `https:`, or a `//host` prefix), that is malformed, or that takes its address from `var()`, `env()` or `attr()`. `data:` URLs and same-origin paths such as an uploaded background (`url(/api/backgrounds/...)`) keep working. To use another typeface, add it under [Appearance → Fonts](appearance.md#fonts) instead of importing it.
 
 ## Saved themes
 

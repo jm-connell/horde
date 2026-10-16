@@ -37,7 +37,7 @@
   {
     "name": "replaces a javascript: url()",
     "input": "a{background:url(javascript:alert(1))}",
-    "output": "a{background:none}"
+    "output": "a{background:none)}"
   },
   {
     "name": "is case-insensitive about URL() and the scheme",
@@ -128,5 +128,110 @@
     "name": "drops NUL bytes",
     "input": "a{color:red}\u0000",
     "output": "a{color:red}"
+  },
+  {
+    "name": "a double quote makes an unquoted url() a bad url",
+    "input": "a{background:url(/\")} b{background:url(https://evil.example/leak)} c{x:\")\"}",
+    "output": "a{background:none} b{background:none} c{x:\")\"}"
+  },
+  {
+    "name": "an apostrophe makes an unquoted url() a bad url",
+    "input": "a{background:url(/')} b{background:url(https://evil.example/leak)} c{x:')'}",
+    "output": "a{background:none} b{background:none} c{x:')'}"
+  },
+  {
+    "name": "/* inside an unquoted url() is url text, not a comment",
+    "input": "a{background:url(/*)} b{background:url(https://evil.example/leak)} c{x:\"*/)\"}",
+    "output": "a{background:url(/*)} b{background:none} c{x:\"*/)\"}"
+  },
+  {
+    "name": "a bad url ends at the first unescaped )",
+    "input": "a{background:url(/\"\\)x)} b{background:url(https://evil.example/leak)} c{x:\")\"}",
+    "output": "a{background:none} b{background:none} c{x:\")\"}"
+  },
+  {
+    "name": "a backslash before a newline makes a bad url",
+    "input": "a{background:url(/a\\\nb)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "whitespace inside an unquoted url() makes a bad url",
+    "input": "a{background:url(/a b)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "a carriage return ends a string like a newline",
+    "input": "a{x:\"\r} b{background:url(https://evil.example/leak)} c{x:\"}",
+    "output": "a{x:\"\n} b{background:none} c{x:\"}"
+  },
+  {
+    "name": "a form feed ends a string like a newline",
+    "input": "a{x:\"\f} b{background:url(https://evil.example/leak)} c{x:\"}",
+    "output": "a{x:\"\n} b{background:none} c{x:\"}"
+  },
+  {
+    "name": "image-set() cannot hide a remote string behind url(/*)",
+    "input": "a{background:image-set(url(/*) 1x, \"https://evil.example/leak\" 2x /**/)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "image-set() with var() is replaced",
+    "input": "a{--u:\"https://evil.example/leak\";background:image-set(var(--u) 1x)}",
+    "output": "a{--u:\"https://evil.example/leak\";background:none}"
+  },
+  {
+    "name": "image-set() with attr() is replaced",
+    "input": "a{background:image-set(attr(data-u) 1x)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "image-set() with a custom function is replaced",
+    "input": "a{background:-webkit-image-set(--leak() 1x)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "#url( is a hash token, not a url",
+    "input": "a{x:#url(/*) \" */)} b{background:url(https://evil.example/leak)} c{x:\"}",
+    "output": "a{x:#url(/*) \" */)} b{background:none} c{x:\"}"
+  },
+  {
+    "name": "a backslash before a newline does not escape it in a name",
+    "input": "a{b:u\\\nrl(/*) \" */)} c{background:url(https://evil.example/leak)} d{x:\"}",
+    "output": "a{b:u\\\nrl(/*) \" */)} c{background:none} d{x:\"}"
+  },
+  {
+    "name": "@import with a bad url in its prelude is dropped",
+    "input": "@import url(/\");a{color:red}",
+    "output": "a{color:red}"
+  },
+  {
+    "name": "a quoted url() may have spaces around the string",
+    "input": "a{background:url(  \"/ok.png\"  )}",
+    "output": "a{background:url(  \"/ok.png\"  )}"
+  },
+  {
+    "name": "an unclosed url() at the end is still checked",
+    "input": "a{background:url(https://evil.example/leak",
+    "output": "a{background:none"
+  },
+  {
+    "name": "a control character makes a bad url",
+    "input": "a{background:url(/a\u0001b)}",
+    "output": "a{background:none}"
+  },
+  {
+    "name": "keeps an unquoted url() with an escaped )",
+    "input": "a{background:url(/a\\)b.png)}",
+    "output": "a{background:url(/a\\)b.png)}"
+  },
+  {
+    "name": "keeps image-set() with local urls",
+    "input": "a{background:image-set(url(/a.png) 1x, \"/b.png\" 2x)}",
+    "output": "a{background:image-set(url(/a.png) 1x, \"/b.png\" 2x)}"
+  },
+  {
+    "name": "replaces a remote @font-face source next to unicode-range",
+    "input": "@font-face{unicode-range:U+0-7F;src:url(//evil.example/f.woff2)}",
+    "output": "@font-face{unicode-range:U+0-7F;src:none}"
   }
 ]

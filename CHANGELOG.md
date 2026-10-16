@@ -120,6 +120,11 @@ level. Detailed per-area entries are added by the maintainer at release time.
   startup in `app_settings.json` (only rewritten when something changes) and
   when the first administrator adopts the old look, so an `@import` or remote
   `url()` from an old install is never applied.
+- Security: the custom CSS sanitizer now reads `url(...)` the way browsers do.
+  A quote, apostrophe or `/*` inside an unquoted `url()`, a carriage return or
+  form feed inside a string, or a `var()`/`attr()` inside `image-set()` could
+  hide a remote URL from it, so a saved stylesheet could still load
+  `https://...` resources. Malformed `url()` values are now replaced by `none`.
 - Unknown API paths spelled with a doubled slash or another case (`//api/x`,
   `/API/x`) now get the JSON 404 instead of the web app's page.
 - The bare `/api` path, also when percent-encoded (`/%61pi`), now reaches the
