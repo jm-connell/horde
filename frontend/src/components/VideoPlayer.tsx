@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import PlayerOverlays from "./PlayerOverlays";
-import {
-  BUFFERING_INDICATOR_DELAY_MS,
-  SPEED_STEPS,
-  snapRateToStep,
-} from "./player/constants";
+import { SPEED_STEPS, snapRateToStep } from "./player/constants";
 import { useChapters } from "./player/useChapters";
 import SkipNoticeChip from "./player/SkipNotice";
 import { useSkipSegments } from "./player/useSkipSegments";
 import MiniPlayerFrame from "./player/MiniPlayerFrame";
 import { useMiniPlayer } from "./player/useMiniPlayer";
 import ControlBar from "./player/ControlBar";
+import { usePlayerSource } from "./player/usePlayerSource";
+import { useStreamQuality } from "./player/useStreamQuality";
 import { useControlsVisibility } from "./player/useControlsVisibility";
 import { useHoldToSpeed } from "./player/useHoldToSpeed";
 import { useFullscreen } from "./player/useFullscreen";
@@ -21,24 +19,13 @@ import { useCasting } from "./player/useCasting";
 import { usePlayerMenu } from "./player/usePlayerMenu";
 import { usePlayerKeyboard } from "./player/usePlayerKeyboard";
 import SubtitleOverlay from "./SubtitleOverlay";
-import { usePlaybackHealth } from "../hooks/usePlaybackHealth";
 import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { useApplyShakaQuality, useShakaDashLoad } from "../hooks/useShakaDash";
-import { clearDowngrade, trackQuality } from "../utils/decodeCapability";
+import { useShakaDashLoad } from "../hooks/useShakaDash";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
-import type {
-  StreamType,
-  ViewMode,
-  VideoPlayerProps,
-} from "./videoPlayerTypes";
+import type { ViewMode, VideoPlayerProps } from "./videoPlayerTypes";
 import UpNextOverlay from "./player/UpNextOverlay";
-import {
-  abrRestrictions,
-  streamQualityToChoice,
-  type QualityChoice,
-} from "./videoPlayerQuality";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
 
@@ -93,7 +80,6 @@ export default function VideoPlayer({
   const [settings] = useSettings();
   const videoRef = useRef<HTMLVideoElement>(null);
   const shakaPlayerRef = useRef<ShakaPlayer | null>(null);
-  const capabilityMaxHeightRef = useRef<number>(2160);
   const playerRootRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -125,22 +111,6 @@ export default function VideoPlayer({
   });
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
   const { openMenu, menuOpen, toggleMenu, closeMenu } = usePlayerMenu();
-  const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
-    streamQualityToChoice(settings.defaultStreamQuality)
-  );
-  /** Distinct short-side qualities (min(w,h)), not raw frame heights. */
-  const [availableHeights, setAvailableHeights] = useState<number[]>([]);
-  /** Live ABR / selected track quality (YouTube ladder), when known. */
-  const [activeQuality, setActiveQuality] = useState<number | null>(null);
-  const qualityChoiceRef = useRef(qualityChoice);
-  qualityChoiceRef.current = qualityChoice;
-  const variantTracksRef = useRef<
-    {
-      width?: number | null;
-      height?: number | null;
-      bandwidth?: number;
-    }[]
-  >([]);
   const {
     isNativeFullscreen,
     toggleNativeFullscreen,
@@ -212,124 +182,75 @@ export default function VideoPlayer({
     sponsorShowNotice,
   });
   const { noteSeek } = skip;
-  const pendingSeekRef = useRef(initialPosition);
-  const [buffering, setBuffering] = useState(true);
-  const bufferingShowTimer = useRef<number | null>(null);
-  const mediaSuspendedRef = useRef(mediaSuspended);
-  mediaSuspendedRef.current = mediaSuspended;
-
-  const hideBuffering = useCallback(() => {
-    if (mediaSuspendedRef.current) return;
-    if (bufferingShowTimer.current != null) {
-      window.clearTimeout(bufferingShowTimer.current);
-      bufferingShowTimer.current = null;
-    }
-    setBuffering(false);
-  }, []);
-
-  const scheduleBuffering = useCallback(() => {
-    const el = videoRef.current;
-    if (!el || el.paused || el.ended || isSeekingRef.current) return;
-    if (el.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) return;
-    if (bufferingShowTimer.current != null) return;
-    bufferingShowTimer.current = window.setTimeout(() => {
-      bufferingShowTimer.current = null;
-      const v = videoRef.current;
-      if (!v || v.paused || v.ended || isSeekingRef.current) return;
-      if (v.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) return;
-      setBuffering(true);
-    }, BUFFERING_INDICATOR_DELAY_MS);
-  }, []);
-  const [mediaError, setMediaError] = useState<string | null>(null);
-  const [qualityNotice, setQualityNotice] = useState<string | null>(null);
-  const qualityNoticeTimer = useRef<number | null>(null);
-  /** When DASH fails, switch to progressive fallback without remounting the page. */
-  const [compatMode, setCompatMode] = useState(false);
-  const [dashReloadToken, setDashReloadToken] = useState(0);
-  const [shakaReady, setShakaReady] = useState(false);
   const { hoveredChapter, setHoveredChapterSec, nextChapterStart } =
     useChapters(chapters);
   const scrubberRef = useRef<HTMLDivElement>(null);
 
-  const effectiveStreamType: StreamType =
-    compatMode || streamType !== "dash" ? "file" : "dash";
-  const effectiveSrc =
-    compatMode && progressiveFallbackSrc ? progressiveFallbackSrc : src;
-
-  useEffect(() => {
-    pendingSeekRef.current = initialPosition;
-    const el = videoRef.current;
-    if (!el || initialPosition <= 1) return;
-    // Do not treat a leftover Shaka MediaSource as "already loaded" file
-    // metadata — seeking/playing on it hangs after preview → library handoff.
-    if (el.srcObject) return;
-    if (effectiveStreamType === "dash") return;
-    if (mediaSuspended) return;
-    if (
-      el.readyState >= 1 &&
-      Number.isFinite(el.duration) &&
-      initialPosition < el.duration
-    ) {
-      if (Math.abs(el.currentTime - initialPosition) > 1.25) {
-        el.currentTime = initialPosition;
-      }
-      pendingSeekRef.current = 0;
-      if (!chromecastCasting) {
-        el.play().catch(() => undefined);
-      }
-    }
-  }, [
-    initialPosition,
-    src,
-    chromecastCasting,
+  const {
     effectiveStreamType,
+    effectiveSrc,
+    compatMode,
+    shakaReady,
+    setShakaReady,
+    dashReloadToken,
+    setDashReloadToken,
+    pendingSeekRef,
+    buffering,
+    setBuffering,
+    hideBuffering,
+    scheduleBuffering,
+    mediaError,
+    setMediaError,
+    qualityNotice,
+    showQualityNotice,
+    enterCompatMode,
+    retryPlayback,
+    resetSource,
+  } = usePlayerSource({
+    videoRef,
+    shakaPlayerRef,
+    isSeekingRef,
+    src,
+    streamType,
+    progressiveFallbackSrc,
+    initialPosition,
     mediaSuspended,
-  ]);
+    casting: chromecastCasting,
+  });
 
-  const showQualityNotice = useCallback((msg: string) => {
-    setQualityNotice(msg);
-    if (qualityNoticeTimer.current !== null) {
-      clearTimeout(qualityNoticeTimer.current);
-    }
-    qualityNoticeTimer.current = window.setTimeout(() => {
-      setQualityNotice(null);
-      qualityNoticeTimer.current = null;
-    }, 4000);
-  }, []);
-
-  const enterCompatMode = useCallback(() => {
-    if (!progressiveFallbackSrc) return false;
-    const el = videoRef.current;
-    if (el && Number.isFinite(el.currentTime) && el.currentTime > 1) {
-      pendingSeekRef.current = el.currentTime;
-    }
-    // Drop the ref so the DASH effect cleanup owns destroy(). The <video>
-    // key switches with effectiveStreamType so the MSE element is not reused.
-    shakaPlayerRef.current = null;
-    setShakaReady(false);
-    setCompatMode(true);
-    setMediaError(null);
-    setBuffering(true);
-    showQualityNotice("Reduced quality (compatibility mode)");
-    return true;
-  }, [progressiveFallbackSrc, showQualityNotice]);
+  const {
+    qualityChoice,
+    setQualityChoice,
+    qualityChoiceRef,
+    availableHeights,
+    setAvailableHeights,
+    activeQuality,
+    capabilityMaxHeightRef,
+    variantTracksRef,
+    pickQuality,
+    resetQuality,
+  } = useStreamQuality({
+    videoRef,
+    shakaPlayerRef,
+    src,
+    streamType: effectiveStreamType,
+    compatMode,
+    shakaReady,
+    dashReloadToken,
+    setDashReloadToken,
+    pendingSeekRef,
+    defaultStreamQuality: settings.defaultStreamQuality,
+    showQualityNotice,
+    onActiveQualityChange,
+  });
 
   useEffect(() => {
     skip.reset();
     prevTimeRef.current = 0;
     clearCcNotice();
-    setMediaError(null);
-    if (bufferingShowTimer.current != null) {
-      window.clearTimeout(bufferingShowTimer.current);
-      bufferingShowTimer.current = null;
-    }
-    setBuffering(true);
-    setCompatMode(false);
-    setShakaReady(false);
-    setAvailableHeights([]);
-    setActiveQuality(null);
+    resetSource();
+    resetQuality();
     closeMenu("quality");
-    setQualityChoice(streamQualityToChoice(settings.defaultStreamQuality));
     // Seed from the setting once per src; in-player changes stay session-scoped.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per src; later setting changes must not reset the in-player choice
   }, [src]);
@@ -339,15 +260,7 @@ export default function VideoPlayer({
     setBuffering(true);
     setPlaying(false);
     videoRef.current?.pause();
-  }, [mediaSuspended]);
-
-  useEffect(() => {
-    return () => {
-      if (bufferingShowTimer.current != null) {
-        window.clearTimeout(bufferingShowTimer.current);
-      }
-    };
-  }, []);
+  }, [mediaSuspended, setBuffering]);
 
   useShakaDashLoad({
     src,
@@ -367,154 +280,6 @@ export default function VideoPlayer({
     setMediaError,
     setBuffering,
   });
-
-  // Keep the quality chip honest: Auto often sits well below the ladder ceiling.
-  useEffect(() => {
-    if (effectiveStreamType !== "dash" || !shakaReady) {
-      setActiveQuality(null);
-      onActiveQualityChange?.(null);
-      return;
-    }
-    const p = shakaPlayerRef.current;
-    if (!p) return;
-
-    const sync = () => {
-      try {
-        const tracks = p.getVariantTracks() ?? [];
-        variantTracksRef.current = tracks;
-        const active = tracks.find((t) => t.active);
-        const q = active ? trackQuality(active) : null;
-        setActiveQuality(q);
-        onActiveQualityChange?.(q);
-      } catch {
-        // player may be mid-destroy
-      }
-    };
-    sync();
-    p.addEventListener("adaptation", sync);
-    p.addEventListener("variantchanged", sync);
-    const id = window.setInterval(sync, 2500);
-    return () => {
-      p.removeEventListener("adaptation", sync);
-      p.removeEventListener("variantchanged", sync);
-      window.clearInterval(id);
-    };
-    // onActiveQualityChange is stable enough via PlaybackContext setter
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onActiveQualityChange is a stable setter; re-subscribing on its identity would reset the poll
-  }, [effectiveStreamType, shakaReady, dashReloadToken, src]);
-
-  // Progressive / compat: report video element's decoded size when known.
-  useEffect(() => {
-    if (effectiveStreamType === "dash" && !compatMode) return;
-    const el = videoRef.current;
-    if (!el) {
-      onActiveQualityChange?.(null);
-      return;
-    }
-    const sync = () => {
-      const q = trackQuality({
-        width: el.videoWidth || null,
-        height: el.videoHeight || null,
-      });
-      const next = q > 0 ? q : null;
-      setActiveQuality(next);
-      onActiveQualityChange?.(next);
-    };
-    sync();
-    el.addEventListener("loadedmetadata", sync);
-    el.addEventListener("resize", sync);
-    return () => {
-      el.removeEventListener("loadedmetadata", sync);
-      el.removeEventListener("resize", sync);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onActiveQualityChange is a stable setter; listeners re-bind only per stream/src
-  }, [effectiveStreamType, compatMode, src]);
-
-  const applyQualityChoice = useApplyShakaQuality(
-    shakaPlayerRef,
-    capabilityMaxHeightRef,
-    variantTracksRef,
-    setQualityChoice
-  );
-
-  const pickQuality = useCallback(
-    (choice: QualityChoice) => {
-      // Explicit ladder picks override a persisted auto-downgrade / AV1 blacklist.
-      if (choice !== "auto") {
-        clearDowngrade();
-        capabilityMaxHeightRef.current = Math.max(
-          capabilityMaxHeightRef.current,
-          typeof choice === "number" ? choice : 2160
-        );
-      }
-      applyQualityChoice(choice);
-    },
-    [applyQualityChoice]
-  );
-
-  usePlaybackHealth({
-    enabled: effectiveStreamType === "dash" && shakaReady,
-    player: shakaReady ? shakaPlayerRef.current : null,
-    onDowngrade: ({ maxHeight, blacklistAv1, notice }) => {
-      const p = shakaPlayerRef.current;
-      if (!p) return;
-      capabilityMaxHeightRef.current = Math.min(
-        capabilityMaxHeightRef.current,
-        maxHeight
-      );
-      // Relabel the menu to the new ceiling so UI matches what can play.
-      setQualityChoice(maxHeight);
-      try {
-        if (blacklistAv1) {
-          // Codec family change needs a reload so Shaka re-filters AdaptationSets.
-          // readDowngrade() is consulted on the next load.
-          const t = videoRef.current?.currentTime ?? 0;
-          if (t > 1) pendingSeekRef.current = t;
-          setDashReloadToken((n) => n + 1);
-        } else {
-          const tracks = p.getVariantTracks() ?? [];
-          variantTracksRef.current = tracks;
-          p.configure({
-            abr: { enabled: false },
-            restrictions: abrRestrictions(maxHeight, tracks),
-          });
-          const candidates = tracks.filter((t) => trackQuality(t) <= maxHeight);
-          candidates.sort((a, b) => {
-            const qa = trackQuality(a);
-            const qb = trackQuality(b);
-            if (qb !== qa) return qb - qa;
-            return (b.bandwidth ?? 0) - (a.bandwidth ?? 0);
-          });
-          if (candidates[0]) {
-            p.selectVariantTrack(candidates[0], true);
-          }
-        }
-      } catch (err) {
-        console.warn("[preview-health] configure failed", err);
-      }
-      showQualityNotice(notice);
-    },
-  });
-
-  const retryPlayback = useCallback(() => {
-    setMediaError(null);
-    setBuffering(true);
-    if (effectiveStreamType === "dash" && shakaPlayerRef.current) {
-      try {
-        const ok = shakaPlayerRef.current.retryStreaming();
-        if (ok) return;
-      } catch {
-        // fall through to full reload
-      }
-      setDashReloadToken((n) => n + 1);
-      return;
-    }
-    const el = videoRef.current;
-    if (el) {
-      el.load();
-      el.play().catch(() => undefined);
-    }
-  }, [effectiveStreamType]);
 
   const {
     nativeTextActive,
