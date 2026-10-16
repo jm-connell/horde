@@ -68,7 +68,8 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 | Route | Why |
 |-------|-----|
 | `GET /api/ping` | Connectivity probe for the installed app |
-| `GET /api/health` | Readiness probe. Anonymous callers get only `status`, `setup_required` and `auth_required` |
+| `GET /api/ready` | Readiness probe: database, migrations and worker health (see [Monitoring](monitoring.md#ready)) |
+| `GET /api/health` | Health summary. Anonymous callers get only `status`, `setup_required` and `auth_required` |
 | `GET /api/auth/state` | The app asks who is signed in |
 | `POST /api/auth/login` | Sign in |
 | `POST /api/auth/bootstrap` | Create the first admin; `409` once any account exists |

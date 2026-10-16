@@ -19,6 +19,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 |-------|---------|
 | `channel_catalogs` | Per-channel index status, phase, caps, completeness |
 | `channel_catalog_videos` | Flat (+ described) upload rows (`catalog_id` + `yt_id` unique) |
+| `channel_autodownloads` | Per-channel automatic download policy (enabled, how many earlier uploads, quality preset) |
 | `channel_catalog_skips` | Permanent skips (e.g. members-only) |
 | `channel_catalog_embeddings` | Embeddings for catalog videos (recommend / hybrid catalog search) |
 
@@ -29,13 +30,23 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `video_tags` | Derived tag index (`video_id`, `tag`, `source` = `user`\|`ai`\|`source`), trigger-maintained from `videos.tags` and `video_ai_meta`; see [SQLite and migrations](../design/sqlite-and-migrations.md) |
 | `video_embeddings` | Per-video vectors; `chunk_index` **-1** = metadata doc, **0+** = caption chunks |
 | `video_ai_meta` | Embed status, summary, AI/user tags, locks, LLM chapters |
-| `video_ai_chat` | One chat thread per video |
-| `video_ai_chat_messages` | User/assistant turns (+ optional OpenRouter cost/model) |
+| `video_ai_chat_messages` | User/assistant turns of one person's chat about a video (`user_id`; + optional OpenRouter cost/model) |
 | `openrouter_usage` | Append-only cost ledger |
 | `ai_categories` | Recommendation category chips (name, blurb, embedding) |
 | `ai_jobs` | Background job queue (`embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize`, `chapters`) |
 | `alembic_version` | Current Alembic revision (`version_num`) |
 | `schema_migrations` | Legacy ledger from before Alembic (adopted installs only; unused) |
+
+### Accounts and per-user data
+
+| Table | Purpose |
+|-------|---------|
+| `users` | Accounts: `username_norm` (unique), scrypt `password_hash`, `is_admin`, `disabled`, `permissions` (JSON list of granted names; admins implicitly have all) |
+| `user_sessions` | One row per signed-in browser: SHA-256 of the cookie token, `expires_at` (30 days from last use), user agent, address |
+| `user_video_state` | **Per-user** watch position and last-watched time, keyed `(user_id, video_id)`. Read and written only through `services/user_state.py` |
+| `user_settings` | **Per-user** UI preferences (`ui_json`); server-wide settings stay in `app_settings.json` |
+
+All four reference `users` with `ON DELETE CASCADE`, so deleting a person removes their history, chats and preferences and leaves the videos. The legacy `videos.last_position_sec` / `last_watched_at` columns are unused; the first admin adopts them. Which data is shared and which is per user is summarised in the [architecture map](../design/architecture.md#data-model-and-ownership).
 
 ## Schema lifecycle
 
