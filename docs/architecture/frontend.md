@@ -8,6 +8,7 @@ React + Vite SPA under `frontend/`. The Docker build compiles it into `/app/stat
 |------|------|
 | `/` | Library |
 | `/history` | Watch history / continue watching |
+| `/offline` | Videos saved on this device (works without the server) |
 | `/download` | Download queue & URL ingest |
 | `/playlists` | Playlists (expand a row; `?open=<id>` opens one) |
 | `/playlists/:id` | Redirect → `/playlists?open=:id` |
@@ -27,7 +28,10 @@ Mounted in `App.tsx` (outer → inner):
 
 | Provider | Role |
 |----------|------|
+| `ErrorBoundary` (`scope="app"`) | Last-resort render-error page; routes get their own boundary inside `<main>` |
 | `ToastProvider` | Transient toasts |
+| `ConfirmProvider` | Promise-based confirm dialogs |
+| `AuthProvider` + `AuthGate` | Who is signed in and their permissions; shows sign-in or *Create the admin account* instead of the app. `RequirePermission` hides routes and controls the account cannot use (the server enforces) |
 | `DownloadProvider` | Download queue state / actions |
 | `SearchProvider` | Shared search query / library search coordination |
 | `PlaybackProvider` | Current video, queue, mini-player, navigation into `/watch` |
@@ -55,6 +59,8 @@ Edits patch local state immediately and **debounced sync** to the server (~**300
 | `components/VideoPlayer.tsx` | Orchestration; types/quality in `videoPlayerTypes` / `videoPlayerQuality`; DASH load in `hooks/useShakaDash`; overlays in `PlayerOverlays` |
 | `hooks/useSettings.ts` | Hydrate + debounced PATCH; `ViewMode` type from `videoPlayerTypes` |
 | `customCss.ts` | User CSS overlay (`#horde-custom-css`) and `data-page` / `data-horde` hooks |
+
+See also the [architecture map](../design/architecture.md#frontend) for where new frontend and backend code belongs.
 
 ## Related
 
