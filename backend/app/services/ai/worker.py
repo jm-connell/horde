@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...context import current, get_engine
 from ...logging_config import FailureLog, job_context
@@ -46,13 +46,13 @@ def _active_job_exists(
 ) -> bool:
     statement = select(AiJob).where(
         AiJob.kind == kind,
-        AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running]),  # type: ignore[attr-defined]
+        col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running]),
     )
     if catalog_video_id is not None:
         statement = statement.where(AiJob.catalog_video_id == catalog_video_id)
     elif video_id is None:
-        statement = statement.where(AiJob.video_id.is_(None))  # type: ignore[attr-defined]
-        statement = statement.where(AiJob.catalog_video_id.is_(None))  # type: ignore[attr-defined]
+        statement = statement.where(col(AiJob.video_id).is_(None))
+        statement = statement.where(col(AiJob.catalog_video_id).is_(None))
     else:
         statement = statement.where(AiJob.video_id == video_id)
     return session.exec(statement).first() is not None
@@ -156,7 +156,7 @@ def _failed_video_ids(session: Session, kind: AiJobKind) -> set[int]:
         select(AiJob.video_id).where(
             AiJob.kind == kind,
             AiJob.status == AiJobStatus.error,
-            AiJob.video_id.is_not(None),  # type: ignore[attr-defined]
+            col(AiJob.video_id).is_not(None),
         )
     ).all()
     return {vid for vid in rows if vid is not None}
@@ -367,24 +367,24 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
     need_embed: list[int] = []
     need_tags: list[int] = []
     with Session(get_engine()) as session:
-        recent_ids = list(
+        recent_rows = list(
             session.exec(
-                select(Video.id).where(
+                select(col(Video.id)).where(
                     Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
                     or_(
-                        Video.added_at >= cutoff,
+                        col(Video.added_at) >= cutoff,
                         # Watched by anyone: this is shared indexing work, so the
                         # latest watch over all users decides.
-                        Video.id.in_(  # type: ignore[union-attr]
+                        col(Video.id).in_(
                             select(UserVideoState.video_id).where(
-                                UserVideoState.last_watched_at >= cutoff
+                                col(UserVideoState.last_watched_at) >= cutoff
                             )
                         ),
                     ),
                 )
             ).all()
         )
-        recent_ids = [vid for vid in recent_ids if vid is not None]
+        recent_ids = [vid for vid in recent_rows if vid is not None]
 
         need_embed_all = set(embeddings.videos_needing_embed(session, limit=limit * 2))
         for vid in recent_ids:
@@ -397,7 +397,7 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
             rescan_days = app_settings.clamp_tag_rescan_days(ai.get("tag_rescan_days"))
             now = utcnow()
             tag_cutoff = now - timedelta(days=rescan_days)
-            tag_candidates: list[tuple[int, object, int]] = []
+            tag_candidates: list[tuple[int, datetime, int]] = []
             for vid in recent_ids:
                 meta = session.get(VideoAiMeta, vid)
                 if meta is not None and meta.tags_locked:
@@ -461,9 +461,7 @@ def queue_depth() -> int:
             session.exec(
                 select(func.count())
                 .select_from(AiJob)
-                .where(
-                    AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
-                )
+                .where(col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running]))
             ).one()
         )
 
@@ -481,7 +479,7 @@ def queue_breakdown() -> dict[str, int]:
     with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(
-                AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
+                col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running])
             )
         ).all()
         for job in rows:
@@ -520,20 +518,24 @@ def _job_titles(session: Session, jobs: list[AiJob]) -> dict[int, str | None]:
     videos: dict[int, str | None] = {}
     if video_ids:
         videos = {
-            int(vid): title
+            vid: title
             for vid, title in session.exec(
-                select(Video.id, Video.title).where(Video.id.in_(video_ids))  # type: ignore[attr-defined]
+                select(col(Video.id), col(Video.title)).where(
+                    col(Video.id).in_(video_ids)
+                )
             ).all()
+            if vid is not None
         }
     catalog: dict[int, str | None] = {}
     if catalog_ids:
         catalog = {
-            int(cid): title
+            cid: title
             for cid, title in session.exec(
-                select(ChannelCatalogVideo.id, ChannelCatalogVideo.title).where(
-                    ChannelCatalogVideo.id.in_(catalog_ids)  # type: ignore[attr-defined]
-                )
+                select(
+                    col(ChannelCatalogVideo.id), col(ChannelCatalogVideo.title)
+                ).where(col(ChannelCatalogVideo.id).in_(catalog_ids))
             ).all()
+            if cid is not None
         }
     out: dict[int, str | None] = {}
     for job in jobs:
@@ -561,7 +563,7 @@ def queue_stats() -> dict:
     with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(
-                AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
+                col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running])
             )
         ).all()
         for job in rows:
@@ -593,7 +595,7 @@ def recent_failures(*, limit: int = 10) -> list[dict]:
         rows = session.exec(
             select(AiJob)
             .where(AiJob.status == AiJobStatus.error)
-            .order_by(AiJob.updated_at.desc())
+            .order_by(col(AiJob.updated_at).desc())
             .limit(limit)
         ).all()
         titles = _job_titles(session, list(rows))
@@ -623,7 +625,7 @@ def list_jobs(
 ) -> list[dict]:
     limit = max(1, min(int(limit), 200))
     with Session(get_engine()) as session:
-        statement = select(AiJob).order_by(AiJob.updated_at.desc()).limit(limit)
+        statement = select(AiJob).order_by(col(AiJob.updated_at).desc()).limit(limit)
         if status:
             try:
                 st = AiJobStatus(status)
@@ -632,7 +634,7 @@ def list_jobs(
             statement = (
                 select(AiJob)
                 .where(AiJob.status == st)
-                .order_by(AiJob.updated_at.desc())
+                .order_by(col(AiJob.updated_at).desc())
                 .limit(limit)
             )
         rows = session.exec(statement).all()
@@ -727,7 +729,7 @@ def clear_failed_jobs(*, keep_days: int = 0) -> int:
     with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(
-                AiJob.status.in_([AiJobStatus.error, AiJobStatus.cancelled])  # type: ignore[attr-defined]
+                col(AiJob.status).in_([AiJobStatus.error, AiJobStatus.cancelled])
             )
         ).all()
         for job in rows:
@@ -749,7 +751,7 @@ def current_job_info() -> dict | None:
         job = session.exec(
             select(AiJob)
             .where(AiJob.status == AiJobStatus.running)
-            .order_by(AiJob.updated_at.desc())
+            .order_by(col(AiJob.updated_at).desc())
             .limit(1)
         ).first()
         if job is None:
@@ -915,8 +917,8 @@ def _next_job(session: Session, *, llm_ok: bool, embed_ok: bool) -> AiJob | None
     jobs = session.exec(
         select(AiJob)
         .where(AiJob.status == AiJobStatus.queued)
-        .where((AiJob.run_after.is_(None)) | (AiJob.run_after <= now))  # type: ignore[attr-defined]
-        .order_by(AiJob.created_at.asc())
+        .where((col(AiJob.run_after).is_(None)) | (col(AiJob.run_after) <= now))
+        .order_by(col(AiJob.created_at).asc())
         .limit(32)
     ).all()
     for job in jobs:
@@ -962,13 +964,13 @@ def _process_one() -> bool:
     with Session(get_engine()) as session:
         job = _next_job(session, llm_ok=llm_ok, embed_ok=embed_ok)
         if job is None:
-            reason = _compute_blocked_reason(
+            blocked = _compute_blocked_reason(
                 paused=False, llm_ok=llm_ok, embed_ok=embed_ok, has_queued=has_queued
             )
-            _set_blocked_reason(reason)
-            if reason and has_queued:
-                _stamp_waiting_jobs(reason)
-            elif not reason:
+            _set_blocked_reason(blocked)
+            if blocked and has_queued:
+                _stamp_waiting_jobs(blocked)
+            elif not blocked:
                 _clear_waiting_notes()
             return False
         _set_blocked_reason(None)

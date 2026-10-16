@@ -8,7 +8,7 @@ from collections.abc import Callable, Generator
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...context import get_engine
 from ...models import Video, VideoAiChatMessage, utcnow
@@ -47,7 +47,9 @@ def list_messages(
             VideoAiChatMessage.video_id == video_id,
             VideoAiChatMessage.user_id == user_id,
         )
-        .order_by(VideoAiChatMessage.created_at.asc(), VideoAiChatMessage.id.asc())
+        .order_by(
+            col(VideoAiChatMessage.created_at).asc(), col(VideoAiChatMessage.id).asc()
+        )
     ).all()
     return [
         {
@@ -84,7 +86,9 @@ def _history_for_prompt(
             VideoAiChatMessage.video_id == video_id,
             VideoAiChatMessage.user_id == user_id,
         )
-        .order_by(VideoAiChatMessage.created_at.asc(), VideoAiChatMessage.id.asc())
+        .order_by(
+            col(VideoAiChatMessage.created_at).asc(), col(VideoAiChatMessage.id).asc()
+        )
     ).all()
     # Drop the just-persisted latest user message — it is passed as ``prompt``.
     if rows and rows[-1].role == "user":
@@ -198,10 +202,11 @@ def stream_chat(
     session.commit()
     session.refresh(user_row)
     # Re-load video after commit (expire_on_commit) before building context.
-    video = session.get(Video, video_id)
-    if video is None:
+    fresh_video = session.get(Video, video_id)
+    if fresh_video is None:
         yield _sse({"type": "error", "detail": "Video not found", "status": 404})
         return
+    video = fresh_video
 
     yield _sse(
         {

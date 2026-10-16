@@ -6,7 +6,7 @@ import logging
 import struct
 
 from sqlalchemy import case, func
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...models import Video, VideoAiMeta, VideoEmbedding, utcnow
 from .. import app_settings
@@ -383,7 +383,7 @@ def _model_matched_video_ids(session: Session, model: str) -> set[int]:
             func.sum(
                 case((func.coalesce(VideoEmbedding.model, "") == model, 1), else_=0)
             ),
-        ).group_by(VideoEmbedding.video_id)
+        ).group_by(col(VideoEmbedding.video_id))
     ).all()
     return {int(vid) for vid, total, matching in rows if total and total == matching}
 

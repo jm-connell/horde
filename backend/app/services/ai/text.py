@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from ...context import get_paths
 from ...models import Video
@@ -269,8 +269,9 @@ SUMMARY_MAX_CHARS = int(_SUMMARY_LENGTH_SPEC["long"]["max_chars"])
 
 def normalize_summary_length(raw: Any) -> SummaryLength:
     value = str(raw or "").strip().lower()
-    if value in _SUMMARY_LENGTH_SPEC:
-        return value  # type: ignore[return-value]
+    for length in get_args(SummaryLength):
+        if value == length:
+            return length
     return "short"
 
 

@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...models import (
     AiCategory,
@@ -287,8 +287,10 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
         video_id=video_id,
     )
     data = _parse_json_object(raw)
-    suggested = data.get("tags") if isinstance(data.get("tags"), list) else []
-    remove_raw = data.get("remove") if isinstance(data.get("remove"), list) else []
+    suggested_raw = data.get("tags")
+    suggested = suggested_raw if isinstance(suggested_raw, list) else []
+    remove_value = data.get("remove")
+    remove_raw = remove_value if isinstance(remove_value, list) else []
 
     if meta is None:
         meta = VideoAiMeta(video_id=video_id)
@@ -684,12 +686,12 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
     latest_watch = func.max(UserVideoState.last_watched_at)
     watched = session.exec(
         select(Video)
-        .join(UserVideoState, UserVideoState.video_id == Video.id)
+        .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
         .where(
             Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
-            UserVideoState.last_watched_at.is_not(None),  # type: ignore[union-attr]
+            col(UserVideoState.last_watched_at).is_not(None),
         )
-        .group_by(Video.id)
+        .group_by(col(Video.id))
         .order_by(latest_watch.desc())
         .limit(watch_cap * 2)
     ).all()
@@ -698,7 +700,7 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
     recent = session.exec(
         select(Video)
         .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-        .order_by(nullslast(Video.added_at.desc()))
+        .order_by(nullslast(col(Video.added_at).desc()))
         .limit(add_cap * 2)
     ).all()
     _take(list(recent), add_cap)
@@ -709,7 +711,7 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
     rest = session.exec(
         select(Video)
         .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-        .order_by(nullslast(Video.added_at.desc()))
+        .order_by(nullslast(col(Video.added_at).desc()))
     ).all()
     by_channel: dict[str, list[Video]] = defaultdict(list)
     for video in rest:
@@ -840,9 +842,8 @@ def run_refresh_categories(session: Session, _video_id: int | None = None) -> No
         usage_kind="categories",
     )
     data = _parse_json_object(raw)
-    raw_cats = (
-        data.get("categories") if isinstance(data.get("categories"), list) else []
-    )
+    categories_value = data.get("categories")
+    raw_cats = categories_value if isinstance(categories_value, list) else []
     cleaned = _parse_category_items(raw_cats)
     # Need a few solid chips before wiping the existing table.
     if len(cleaned) < 3:
@@ -885,13 +886,13 @@ def run_refresh_categories(session: Session, _video_id: int | None = None) -> No
     existing = session.exec(select(AiCategory)).all()
     for row in existing:
         session.delete(row)
-    for name, blurb, store_vec in prepared:
+    for cat_name, cat_blurb, cat_vec in prepared:
         session.add(
             AiCategory(
-                name=name,
-                blurb=blurb,
-                embedding=embeddings.pack_vector(store_vec),
-                dim=len(store_vec),
+                name=cat_name,
+                blurb=cat_blurb,
+                embedding=embeddings.pack_vector(cat_vec),
+                dim=len(cat_vec),
                 model=embed_model,
                 updated_at=utcnow(),
             )

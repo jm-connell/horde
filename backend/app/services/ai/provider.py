@@ -1384,9 +1384,10 @@ def test_connection(base_url: str | None = None) -> dict[str, Any]:
             return {"ok": False, "base_url": url, "detail": str(exc)}
         return {"ok": True, "base_url": url, "models": models}
 
-    url = resolve_base_url(force=True)
-    if not url:
+    resolved_url = resolve_base_url(force=True)
+    if not resolved_url:
         return {"ok": False, "base_url": None, "detail": "Ollama not reachable"}
+    url = resolved_url
     provider = OllamaProvider(url, timeout=5.0)
     try:
         models = provider.list_models()

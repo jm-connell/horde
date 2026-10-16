@@ -27,13 +27,14 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import cast
 
 import numpy as np
 from sqlalchemy import event, func
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session as OrmSession
 from sqlalchemy.orm import object_session
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...models import VideoEmbedding
 
@@ -123,12 +124,12 @@ class EmbeddingMatrixCache:
         with Session(engine) as fresh:
             rows = fresh.exec(
                 select(
-                    VideoEmbedding.video_id,
-                    func.count(VideoEmbedding.id),  # type: ignore[arg-type]
-                    func.max(VideoEmbedding.id),  # type: ignore[arg-type]
-                ).group_by(VideoEmbedding.video_id)
+                    col(VideoEmbedding.video_id),
+                    func.count(col(VideoEmbedding.id)),
+                    func.max(col(VideoEmbedding.id)),
+                ).group_by(col(VideoEmbedding.video_id))
             ).all()
-        return {int(v): (int(c), int(m)) for v, c, m in rows}
+        return {v: (int(c), int(m)) for v, c, m in rows if m is not None}
 
     @staticmethod
     def _load_rows(engine: Engine, video_ids: list[int] | None):
@@ -148,11 +149,9 @@ class EmbeddingMatrixCache:
                     VideoEmbedding.chunk_index,
                     VideoEmbedding.dim,
                     VideoEmbedding.vector,
-                ).order_by(VideoEmbedding.id)  # type: ignore[arg-type]
+                ).order_by(col(VideoEmbedding.id))
                 if batch is not None:
-                    statement = statement.where(
-                        VideoEmbedding.video_id.in_(batch)  # type: ignore[attr-defined]
-                    )
+                    statement = statement.where(col(VideoEmbedding.video_id).in_(batch))
                 yield from fresh.exec(statement.execution_options(yield_per=2000))
 
     @staticmethod
@@ -169,21 +168,21 @@ class EmbeddingMatrixCache:
                 block = blocks[n] = _Block(n, int(expected * 1.25))
             block.append(int(video_id), int(chunk_index), blob)
 
-    def _full_build(self, engine: Engine, fingerprints) -> None:
+    def _full_build(self, engine: Engine, fingerprints) -> dict[int, _Block]:
         total = sum(count for count, _ in fingerprints.values())
         blocks: dict[int, _Block] = {}
         self._add_rows(blocks, self._load_rows(engine, None), total)
         self._blocks = blocks
         self._fingerprints = fingerprints
         self.full_builds += 1
+        return blocks
 
     def _refresh(self, engine: Engine) -> dict[int, _Block]:
         dirty = self._take_dirty()
         try:
             fingerprints = self._fingerprints_now(engine)
             if self._blocks is None:
-                self._full_build(engine, fingerprints)
-                return self._blocks  # type: ignore[return-value]
+                return self._full_build(engine, fingerprints)
             old = self._fingerprints
             changed = set(dirty)
             changed |= {v for v, fp in fingerprints.items() if old.get(v) != fp}
@@ -193,8 +192,7 @@ class EmbeddingMatrixCache:
             if len(changed) > max(
                 _REBUILD_MIN_VIDEOS, _REBUILD_FRACTION * len(fingerprints)
             ):
-                self._full_build(engine, fingerprints)
-                return self._blocks  # type: ignore[return-value]
+                return self._full_build(engine, fingerprints)
             ids = np.fromiter(changed, np.int64, len(changed))
             for block in self._blocks.values():
                 block.mask(ids)
@@ -262,10 +260,15 @@ def _existing_cache(engine: Engine) -> EmbeddingMatrixCache | None:
     return getattr(engine, _ENGINE_ATTR, None)
 
 
+def _bind_engine(session: Session) -> Engine:
+    """The engine behind ``session`` (the app never binds a session to a connection)."""
+    return cast(Engine, session.get_bind())
+
+
 def cache_for(session: Session) -> EmbeddingMatrixCache:
-    engine = session.get_bind()
+    engine = _bind_engine(session)
     with _CREATE_LOCK:
-        cache = _existing_cache(engine)  # type: ignore[arg-type]
+        cache = _existing_cache(engine)
         if cache is None:
             cache = EmbeddingMatrixCache()
             setattr(engine, _ENGINE_ATTR, cache)
@@ -282,7 +285,7 @@ def top_chunks(
 ) -> list[tuple[int, float, int]]:
     """(video_id, score, chunk_index) for each video's best chunk, best first."""
     return cache_for(session).top_chunks(
-        session.get_bind(),  # type: ignore[arg-type]
+        _bind_engine(session),
         query_vec,
         limit=limit,
         exclude_ids=exclude_ids,

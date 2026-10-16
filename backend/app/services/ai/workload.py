@@ -11,7 +11,7 @@ import logging
 import os
 import re
 from dataclasses import asdict, dataclass
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ _SAME_HOST_NAMES = frozenset(
     }
 )
 
-_PCI_VENDOR = {
+_PCI_VENDOR: dict[str, GpuVendor] = {
     "0x10de": "nvidia",
     "10de": "nvidia",
     "0x1002": "amd",
@@ -112,7 +112,7 @@ def _vendor_from_pci(raw: str | None) -> GpuVendor:
     if not raw:
         return "unknown"
     key = raw.strip().lower()
-    return _PCI_VENDOR.get(key, "unknown")  # type: ignore[return-value]
+    return _PCI_VENDOR.get(key, "unknown")
 
 
 def _gpu_dict(
@@ -453,6 +453,8 @@ def probe_ollama_gpu(base_url: str) -> GpuInfo | None:
         total = row.get("total_memory")
         if total is None:
             total = row.get("total_vram") or row.get("memory_total")
+        if total is None:
+            continue
         try:
             total_i = int(total)
         except (TypeError, ValueError):
@@ -677,8 +679,9 @@ def _scale_intensity(
 
 def normalize_profile(raw: Any) -> WorkloadProfile:
     value = str(raw or "normal").strip().lower()
-    if value in ("light", "normal", "heavy"):
-        return value  # type: ignore[return-value]
+    for profile in get_args(WorkloadProfile):
+        if value == profile:
+            return profile
     return "normal"
 
 
