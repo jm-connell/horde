@@ -79,6 +79,29 @@ def test_progress_rejects_positions_that_are_not_a_plausible_time(
     assert client.get(f"/api/videos/{video.id}").json()["last_position_sec"] == 0.0
 
 
+def test_progress_ping_leaves_other_stale_positions_to_the_background_tick(
+    client, add_video, admin_user, set_watch, session
+):
+    """A ping writes its own row only; expiring everyone else's is the scanner's job."""
+    from datetime import datetime, timedelta
+
+    from app.models import UserVideoState
+
+    stale, playing = add_video(title="Old"), add_video(title="Now", duration_sec=200.0)
+    set_watch(admin_user, stale, 50.0, datetime.now(UTC) - timedelta(days=60))
+
+    assert (
+        client.patch(
+            f"/api/videos/{playing.id}/progress", json={"position_sec": 40}
+        ).status_code
+        == 204
+    )
+
+    session.expire_all()
+    assert session.get(UserVideoState, (admin_user.id, stale.id)).position_sec == 50.0
+    assert session.get(UserVideoState, (admin_user.id, playing.id)).position_sec == 40.0
+
+
 def test_watch_progress_and_continue_watching(client, add_video):
     video = add_video(title="Long watch", duration_sec=200.0, last_position_sec=0.0)
     # Positions under 5s are ignored (except exact 0).

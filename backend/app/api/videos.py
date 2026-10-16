@@ -525,7 +525,6 @@ def update_progress(
     if duration and duration > 0 and position > 0 and position >= duration * 0.9:
         position = 0.0
     if position >= 5 or position == 0:
-        library.expire_stale_progress(session)
         user_state.record_progress(session, user.id, video_id, position)
     return Response(status_code=204)
 

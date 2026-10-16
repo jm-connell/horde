@@ -150,6 +150,29 @@ def test_expire_stale_progress(session, add_video, admin_user, set_watch):
     assert session.get(UserVideoState, (admin_user.id, fresh.id)).position_sec == 50.0
 
 
+def test_the_scanner_tick_expires_stale_progress(
+    session, add_video, admin_user, set_watch, monkeypatch
+):
+    """Expiry left the progress ping; the scanner's periodic pass must still run it."""
+    from app.logging_config import FailureLog
+    from app.models import UserVideoState
+    from app.services import scanner
+
+    stale = add_video(title="Old")
+    set_watch(admin_user, stale, 50.0, _ago(days=30))
+    monkeypatch.setattr(scanner, "scan_once", lambda **_k: None)
+    worker = type("W", (), {"stopping": False})()
+    failures = FailureLog(scanner.logger, "test")
+
+    scanner._scan_pass(worker, failures, failures, expire_progress=False)
+    session.expire_all()
+    assert session.get(UserVideoState, (admin_user.id, stale.id)).position_sec == 50.0
+
+    scanner._scan_pass(worker, failures, failures, expire_progress=True)
+    session.expire_all()
+    assert session.get(UserVideoState, (admin_user.id, stale.id)).position_sec == 0.0
+
+
 def test_channel_stats_skips_review_and_sorts(session, add_video):
     older = _ago(days=2)
     newer = _ago(hours=1)
