@@ -280,3 +280,5 @@ export function useAppearanceState() {
     setNavPreview,
   };
 }
+
+export type AppearanceState = ReturnType<typeof useAppearanceState>;
