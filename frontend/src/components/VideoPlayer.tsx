@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -27,16 +26,18 @@ import SubtitleOverlay from "./SubtitleOverlay";
 import { useAirPlay } from "../hooks/useAirPlay";
 import { useChromecast } from "../hooks/useChromecast";
 import { usePlaybackHealth } from "../hooks/usePlaybackHealth";
-import { useSettings, type SubtitleSize } from "../hooks/useSettings";
+import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useApplyShakaQuality, useShakaDashLoad } from "../hooks/useShakaDash";
-import type { SponsorSegment } from "../hooks/useSponsorBlock";
-import type { SponsorBlockSkipMode } from "../sponsorBlock";
-import type { Chapter } from "../utils";
 import { clearDowngrade, trackQuality } from "../utils/decodeCapability";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
-import type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
+import type {
+  StreamType,
+  ViewMode,
+  VideoPlayerProps,
+} from "./videoPlayerTypes";
+import UpNextOverlay from "./player/UpNextOverlay";
 import {
   abrRestrictions,
   streamQualityToChoice,
@@ -44,75 +45,6 @@ import {
 } from "./videoPlayerQuality";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
-
-interface Props {
-  src: string;
-  /** Progressive local/remote file (default) or adaptive DASH manifest. */
-  streamType?: StreamType;
-  /**
-   * Progressive (<=720p) URL used when DASH is unsupported or fails critically.
-   * Typically `/api/preview/stream?url=...`.
-   */
-  progressiveFallbackSrc?: string;
-  videoId?: number;
-  mimeType?: string;
-  poster?: string | null;
-  mode: ViewMode;
-  onModeChange: (mode: ViewMode) => void;
-  tracks?: SubtitleSource[];
-  onEnded?: () => void;
-  variant?: "full" | "mini";
-  title?: string;
-  onExpand?: () => void;
-  onClose?: () => void;
-  subtitleSize?: SubtitleSize;
-  subtitleLeft?: number;
-  subtitleOffset?: number;
-  onSubtitlePositionChange?: (left: number, offset: number) => void;
-  defaultRate?: number;
-  volume?: number;
-  onVolumeChange?: (volume: number) => void;
-  initialPosition?: number;
-  onProgress?: (sec: number) => void;
-  chapters?: Chapter[];
-  sponsorSegments?: SponsorSegment[];
-  sponsorShowNotice?: boolean;
-  sponsorSkipMode?: SponsorBlockSkipMode;
-  subtitlesPending?: boolean;
-  onSubtitlesRefresh?: () => void;
-  miniWidth?: number | null;
-  onMiniResize?: (
-    width: number,
-    origin: { left: number; top: number; height: number }
-  ) => void;
-  onMiniMove?: (left: number, top: number) => void;
-  onMiniMoveEnd?: () => void;
-  upNext?: {
-    title: string;
-    channel: string | null;
-    poster: string | null;
-    seconds: number;
-  } | null;
-  onCancelUpNext?: () => void;
-  onPlayUpNext?: () => void;
-  autoplayRelated?: boolean;
-  /** Letter/punctuation/Space shortcuts (WCAG 2.1.4); arrows + Escape stay on. */
-  singleKeyShortcuts?: boolean;
-  onAutoplayRelatedChange?: (enabled: boolean) => void;
-  /** Fires when the live DASH track quality changes (YouTube ladder height). */
-  onActiveQualityChange?: (quality: number | null) => void;
-  /** Fires with the pillarbox inset (px) when the picture doesn't fill its box. */
-  onFrameInsetChange?: (inset: number) => void;
-  /**
-   * Unload live media (abort DASH fetches) while keeping the player shell.
-   * Used so a newly clicked preview can load without waiting on the current one.
-   */
-  mediaSuspended?: boolean;
-  /** Covers the video (e.g. "this device can't decode AV1"); src may be "". */
-  blockingOverlay?: React.ReactNode;
-  /** Library file failed to decode; return true when the caller recovers. */
-  onSourceError?: () => boolean;
-}
 
 export default function VideoPlayer({
   src,
@@ -159,7 +91,7 @@ export default function VideoPlayer({
   mediaSuspended = false,
   blockingOverlay,
   onSourceError,
-}: Props) {
+}: VideoPlayerProps) {
   const isMini = variant === "mini";
   const isMobile = useIsMobile();
   const [settings] = useSettings();
@@ -173,7 +105,6 @@ export default function VideoPlayer({
     return withMediaToken(src, token);
   }, [videoId, src]);
   const airplay = useAirPlay(videoRef, src, signedAirPlaySrc);
-  const autoplayRelatedId = useId();
   // Destructured so hook dependency arrays list the stable callbacks rather
   // than the whole (per-render) hook result objects.
   const {
@@ -1582,100 +1513,14 @@ export default function VideoPlayer({
         )}
 
         {upNext && !isMini && (
-          <div className="ui-up-next-scrim absolute inset-0 z-30 flex items-center justify-center overflow-hidden bg-black/65 p-4">
-            <div
-              className={`ui-panel ui-panel-legible w-full max-w-sm overflow-hidden rounded-xl border border-ink-700 bg-ink-900 shadow-2xl ring-1 ring-ink-600 ${
-                compactUpNext
-                  ? "flex max-h-full flex-col sm:max-h-[min(100%,16rem)]"
-                  : ""
-              }`}
-            >
-              {upNext.poster && (
-                <div
-                  className={
-                    compactUpNext
-                      ? "max-h-[4.5rem] w-full shrink-0 overflow-hidden bg-ink-800 sm:max-h-[5.5rem]"
-                      : "aspect-video w-full overflow-hidden bg-ink-800"
-                  }
-                >
-                  <img
-                    decoding="async"
-                    width={320}
-                    height={180}
-                    src={upNext.poster}
-                    alt=""
-                    className="h-full w-full object-cover opacity-90"
-                  />
-                </div>
-              )}
-              <div
-                className={
-                  compactUpNext ? "min-h-0 flex-1 overflow-y-auto p-3" : "p-4"
-                }
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-                  Playing next
-                  {upNext.seconds > 0 ? ` in ${upNext.seconds}s` : ""}
-                </p>
-                <p className="mt-1 line-clamp-2 text-sm font-medium text-gray-100">
-                  {upNext.title}
-                </p>
-                {upNext.channel && (
-                  <p className="mt-0.5 truncate text-xs text-muted">
-                    {upNext.channel}
-                  </p>
-                )}
-                <div
-                  className={`flex flex-wrap items-center gap-3 ${
-                    compactUpNext ? "mt-3" : "mt-4"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={onPlayUpNext}
-                    className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft"
-                  >
-                    Play now
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onCancelUpNext}
-                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-3 py-2 text-sm text-gray-200 hover:bg-ink-700"
-                  >
-                    Cancel
-                  </button>
-                </div>
-                {onAutoplayRelatedChange && (
-                  <label
-                    htmlFor={autoplayRelatedId}
-                    className={`flex items-center justify-between gap-3 border-t border-ink-700 pt-3 ${
-                      compactUpNext ? "mt-3" : "mt-4"
-                    }`}
-                  >
-                    <span className="text-xs text-gray-400">
-                      Autoplay related
-                    </span>
-                    <button
-                      id={autoplayRelatedId}
-                      type="button"
-                      role="switch"
-                      aria-checked={autoplayRelated}
-                      onClick={() => onAutoplayRelatedChange(!autoplayRelated)}
-                      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                        autoplayRelated ? "bg-accent" : "bg-ink-700"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                          autoplayRelated ? "translate-x-4" : "translate-x-0"
-                        }`}
-                      />
-                    </button>
-                  </label>
-                )}
-              </div>
-            </div>
-          </div>
+          <UpNextOverlay
+            upNext={upNext}
+            compact={compactUpNext}
+            autoplayRelated={autoplayRelated}
+            onAutoplayRelatedChange={onAutoplayRelatedChange}
+            onPlayNow={onPlayUpNext}
+            onCancel={onCancelUpNext}
+          />
         )}
       </div>
     </div>
