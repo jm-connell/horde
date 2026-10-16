@@ -111,6 +111,10 @@ test("a channel filter drops the other channels and a search narrows to its matc
   await page.goto("/");
   await expect(videoCard(page, "Kiln fire")).toBeVisible();
   await (await openSearchBox(page)).fill("Bulk video 0123");
-  await expect(videoCard(page, "Bulk video 0123").first()).toBeVisible();
-  await expect(videoCard(page, "Bulk video 0124")).toHaveCount(0);
+  // The page lists the matches first and every other video below them.
+  const matches = page.locator("section").filter({
+    has: page.getByRole("button", { name: /In your library/ }),
+  });
+  await expect(videoCard(matches, "Bulk video 0123")).toBeVisible();
+  await expect(videoCard(matches, "Bulk video 0124")).toHaveCount(0);
 });
