@@ -1152,8 +1152,8 @@ export const api = {
     });
   },
 
-  listJobs(): Promise<DownloadJob[]> {
-    return request<DownloadJob[]>("/api/downloads");
+  listJobs(opts?: ReadOptions): Promise<DownloadJob[]> {
+    return request<DownloadJob[]>("/api/downloads", opts);
   },
 
   getJob(jobId: number): Promise<DownloadJob> {
@@ -1204,8 +1204,8 @@ export const api = {
     return request<void>("/api/downloads/dismiss-finished", { method: "POST" });
   },
 
-  getQueueStatus(): Promise<DownloadQueueStatus> {
-    return request<DownloadQueueStatus>("/api/downloads/queue/status");
+  getQueueStatus(opts?: ReadOptions): Promise<DownloadQueueStatus> {
+    return request<DownloadQueueStatus>("/api/downloads/queue/status", opts);
   },
 
   pauseQueue(): Promise<DownloadQueueStatus> {

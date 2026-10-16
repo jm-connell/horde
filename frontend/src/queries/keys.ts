@@ -29,6 +29,7 @@ export const queryKeys = {
   },
   downloads: {
     jobs: ["downloads", "jobs"] as const,
+    progress: ["downloads", "progress"] as const,
     queue: ["downloads", "queue"] as const,
   },
   videos: {
