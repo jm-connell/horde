@@ -87,7 +87,9 @@ npx playwright install chromium
 npm run e2e
 ```
 
-Two Playwright projects run the app specs: `app` (desktop Chrome, every spec) and `mobile` (Pixel 7 profile on Chromium, running the navigation, library, watch and offline specs). The seeded media is VP9 in MP4, which every Chromium build can decode (H.264 needs proprietary codecs, so it is not used). `a11y.spec.ts` runs axe-core over the main pages and fails on serious or critical violations.
+Two Playwright projects run the app specs: `app` (desktop Chrome, every spec) and `mobile` (Pixel 7 profile on Chromium, running the navigation, library, watch and offline specs). The seeded media is VP9 in MP4, which every Chromium build can decode (H.264 needs proprietary codecs, so it is not used). `a11y.spec.ts` runs axe-core over the main pages and fails on serious or critical violations. `a11y-states.spec.ts` does the same for states reached by interaction (an open playlist, the user editor).
+
+Two e2e-only endpoints exist while `HORDE_E2E=1`: `POST /api/e2e/reset` restores the seeded library before every test, and `POST /api/e2e/bulk-videos?count=N` adds filler videos so a spec can cross the library's cursor page boundary (`library-paging.spec.ts`). Specs that sign in or out should do so from a fresh context: the seeded accounts' sessions are shared by every spec and survive resets.
 
 Wiki (from the repo root):
 
