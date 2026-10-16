@@ -3,6 +3,14 @@
  * queryKey: queryKeys.videos.all })` hits every list and detail of that area.
  */
 export const queryKeys = {
+  app: {
+    settings: ["app", "settings"] as const,
+    presets: ["app", "presets"] as const,
+  },
+  preview: {
+    meta: (url: string) => ["preview", "meta", url] as const,
+    download: (url: string) => ["preview", "download", url] as const,
+  },
   ai: {
     status: ["ai", "status"] as const,
     costs: ["ai", "costs"] as const,

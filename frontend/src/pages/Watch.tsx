@@ -15,7 +15,16 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, thumbnailUrl } from "../api";
+import { usePresets } from "../queries/app";
+import { queryKeys } from "../queries/keys";
+import { useAiStatus } from "../queries/status";
+import {
+  replaceVideoInLists,
+  useRelatedVideos,
+  videoDetailQuery,
+} from "../queries/videos";
 import AddToPlaylist from "../components/AddToPlaylist";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import LoadingIndicator from "../components/LoadingIndicator";
@@ -58,9 +67,6 @@ import {
   peekWatchResume,
   setWatchResume,
 } from "../utils/watchHandoff";
-
-const RELATED_PAGE = 8;
-const RELATED_MAX = 48;
 
 const STAY_DOWNLOAD_TOAST =
   "Downloading - Video will switch to full quality when ready";
@@ -110,9 +116,6 @@ export default function Watch() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
-  const [moreLikeThis, setMoreLikeThis] = useState<Video[]>([]);
-  const [relatedHasMore, setRelatedHasMore] = useState(false);
-  const [relatedLoading, setRelatedLoading] = useState(false);
   const relatedSentinelRef = useRef<HTMLDivElement>(null);
   const [redownloadOpen, setRedownloadOpen] = useState(false);
   const redownloadDialogRef = useRef<HTMLDivElement>(null);
@@ -122,16 +125,8 @@ export default function Watch() {
     onEscape: () => setRedownloadOpen(false),
   });
   const [redownloadPreset, setRedownloadPreset] = useState("1080p");
-  const [presets, setPresets] = useState<string[]>(["best"]);
-  const [redownloading, setRedownloading] = useState(false);
+  const presets = usePresets();
   const [settings] = useSettings();
-  const [aiSummariesEnabled, setAiSummariesEnabled] = useState(false);
-  const [aiChaptersEnabled, setAiChaptersEnabled] = useState(false);
-  const [aiChaptersMode, setAiChaptersMode] =
-    useState<AiChaptersMode>("on_download");
-  const [aiChatEnabled, setAiChatEnabled] = useState(false);
-  const [showAiCosts, setShowAiCosts] = useState(false);
-  const [generatingChapters, setGeneratingChapters] = useState(false);
   const [chapterError, setChapterError] = useState<string | null>(null);
 
   // Stream download controls
@@ -149,6 +144,7 @@ export default function Watch() {
 
   const { showToast, showError } = useToast();
   const confirm = useConfirm();
+  const queryClient = useQueryClient();
   const {
     onJobCompleted,
     refreshJobs,
@@ -175,54 +171,82 @@ export default function Watch() {
   const dockRef = useRef<HTMLDivElement>(null);
 
   // --- Load library video ---
-  useEffect(() => {
+  const libraryValid = Number.isFinite(libraryId) && libraryId !== 0;
+  const libraryQuery = useQuery({
+    ...videoDetailQuery(libraryId),
     // Negative ids are offline-only device downloads (see offline/manager).
-    if (!Number.isFinite(libraryId) || libraryId === 0) return;
-    let cancelled = false;
+    enabled: libraryValid,
+    // Keep this page's copy current while the server is still working on it
+    // (subtitles, summary, sprites, chapters).
+    refetchInterval: (query) => {
+      const v = query.state.data;
+      return v &&
+        (v.subtitles_pending ||
+          v.processing_summary ||
+          v.processing_sprites ||
+          v.processing_chapters)
+        ? 3000
+        : false;
+    },
+  });
+  const handedOffRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!libraryValid) return;
+    handedOffRef.current = null;
     suspendPlaybackMedia({ videoId: libraryId });
     setLoading(true);
     setError(null);
+  }, [libraryId, libraryValid, suspendPlaybackMedia]);
+
+  useEffect(() => {
+    if (!libraryValid) return;
+    if (libraryQuery.isError) {
+      setError("Video not found");
+      setLoading(false);
+      return;
+    }
+    const v = libraryQuery.data;
+    if (!v) return;
+    if (handedOffRef.current === libraryId) {
+      // A later refresh of the same video: update, do not restart playback.
+      setSource({ kind: "library", video: v });
+      updateCurrentVideo(v);
+      return;
+    }
+    handedOffRef.current = libraryId;
     const fromHandoff = peekWatchResume(libraryId);
     const navResume = (location.state as { resumeAt?: number } | null)
       ?.resumeAt;
     const resumeAt =
       fromHandoff ??
       (typeof navResume === "number" && navResume > 1 ? navResume : null);
-
-    api
-      .getVideo(libraryId)
-      .then((v) => {
-        if (cancelled) return;
-        const merged =
-          resumeAt != null && resumeAt > 1
-            ? { ...v, last_position_sec: resumeAt }
-            : v;
-        clearWatchResume(libraryId);
-        setSource({ kind: "library", video: merged });
-        playVideo(merged);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Video not found");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      // Ignore a response that lands after navigating to another video.
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional handoff once
-  }, [libraryId, playVideo, suspendPlaybackMedia]);
+    const merged =
+      resumeAt != null && resumeAt > 1
+        ? { ...v, last_position_sec: resumeAt }
+        : v;
+    clearWatchResume(libraryId);
+    setSource({ kind: "library", video: merged });
+    playVideo(merged);
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional handoff once per video; the resume position comes from the navigation state at that moment
+  }, [libraryQuery.data, libraryQuery.isError, libraryId, libraryValid]);
 
   // --- Load stream meta ---
+  const streamMode = !libraryValid && !!streamUrlParam;
+  const metaQuery = useQuery({
+    queryKey: queryKeys.preview.meta(streamUrlParam),
+    queryFn: ({ signal }) => api.getPreviewMeta(streamUrlParam, { signal }),
+    enabled: streamMode,
+  });
+
   useEffect(() => {
-    if (Number.isFinite(libraryId) && libraryId !== 0) return;
+    if (libraryValid) return;
     if (!streamUrlParam) {
       setError("Missing video URL");
       setLoading(false);
       return;
     }
-    let cancelled = false;
     suspendPlaybackMedia({ streamUrl: streamUrlParam });
     setLoading(true);
     setError(null);
@@ -232,27 +256,32 @@ export default function Watch() {
     setPresetSizes({});
     setPresetMenuOpen(false);
     userPickedPresetRef.current = false;
-    api
-      .getPreviewMeta(streamUrlParam)
-      .then((meta) => {
-        if (cancelled) return;
-        if (meta.library_video_id != null) {
-          navigate(`/watch/${meta.library_video_id}`, { replace: true });
-          return;
-        }
-        setSource({ kind: "stream", url: streamUrlParam, meta });
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Could not load stream");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [streamUrlParam, libraryId, navigate, suspendPlaybackMedia]);
+  }, [streamUrlParam, libraryValid, suspendPlaybackMedia]);
+
+  useEffect(() => {
+    if (!streamMode) return;
+    if (metaQuery.isError) {
+      const err = metaQuery.error;
+      setError(err instanceof Error ? err.message : "Could not load stream");
+      setLoading(false);
+      return;
+    }
+    const meta = metaQuery.data;
+    if (!meta) return;
+    if (meta.library_video_id != null) {
+      navigate(`/watch/${meta.library_video_id}`, { replace: true });
+      return;
+    }
+    setSource({ kind: "stream", url: streamUrlParam, meta });
+    setLoading(false);
+  }, [
+    streamMode,
+    metaQuery.data,
+    metaQuery.isError,
+    metaQuery.error,
+    streamUrlParam,
+    navigate,
+  ]);
 
   // Start stream playback
   useEffect(() => {
@@ -270,12 +299,18 @@ export default function Watch() {
   }, [source, channelParam, playStream]);
 
   // Resolve download presets for stream
+  const streamSource = source?.kind === "stream" ? source : null;
+  const streamPreview = useQuery({
+    queryKey: queryKeys.preview.download(streamSource?.url ?? ""),
+    queryFn: ({ signal }) =>
+      api.previewDownload(streamSource?.url ?? "", { signal }),
+    enabled: !!streamSource,
+  });
+  const streamMetaPresets = streamSource?.meta.available_presets;
+  const streamPreviewData = streamPreview.data;
   useEffect(() => {
-    if (source?.kind !== "stream") return;
-    const { url, meta } = source;
-    let cancelled = false;
     const applyPresets = (presetsList: string[]) => {
-      if (cancelled || presetsList.length === 0) return;
+      if (presetsList.length === 0) return;
       const ordered = orderPresets(presetsList);
       if (ordered.length === 0) return;
       setAvailablePresets(ordered);
@@ -283,21 +318,14 @@ export default function Watch() {
         setSelectedPreset(bestAvailablePreset(ordered));
       }
     };
-    if (meta.available_presets?.length) applyPresets(meta.available_presets);
-    api
-      .previewDownload(url)
-      .then((p) => {
-        if (cancelled || p.is_playlist) return;
-        if (p.available_presets?.length) applyPresets(p.available_presets);
-        if (p.preset_sizes && Object.keys(p.preset_sizes).length > 0) {
-          setPresetSizes(p.preset_sizes);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [source]);
+    if (streamMetaPresets?.length) applyPresets(streamMetaPresets);
+    const p = streamPreviewData;
+    if (!p || p.is_playlist) return;
+    if (p.available_presets?.length) applyPresets(p.available_presets);
+    if (p.preset_sizes && Object.keys(p.preset_sizes).length > 0) {
+      setPresetSizes(p.preset_sizes);
+    }
+  }, [streamMetaPresets, streamPreviewData]);
 
   useEffect(() => {
     if (!presetMenuOpen) return;
@@ -350,7 +378,10 @@ export default function Watch() {
           if (sec >= 5) {
             await api.saveProgress(completedId, sec).catch(() => undefined);
           }
-          const video = await api.getVideo(completedId);
+          const video = await queryClient.fetchQuery({
+            ...videoDetailQuery(completedId),
+            staleTime: 0,
+          });
           const resumeAt = sec > 1 ? sec : video.last_position_sec;
           setWatchResume(completedId, resumeAt);
           const handedOff = {
@@ -377,6 +408,7 @@ export default function Watch() {
     navigate,
     showToast,
     showError,
+    queryClient,
   ]);
 
   useEffect(() => {
@@ -393,91 +425,58 @@ export default function Watch() {
     }
   }, [activeJobId, progress, showToast, showError]);
 
-  // --- Library-only effects ---
-  useEffect(() => {
-    if (source?.kind !== "library") return;
-    let cancelled = false;
-    Promise.all([api.getAppSettings(), api.getAiStatus()])
-      .then(([s, status]) => {
-        if (cancelled) return;
-        const openRouterConnected =
-          !!status.openrouter_enabled && !!status.openrouter_api_key_set;
-        const localConnected = !!status.enabled && !!status.reachable;
-        const llmConnected = openRouterConnected || localConnected;
-        setAiSummariesEnabled(llmConnected && !!s.ai.ai_summaries);
-        setAiChaptersEnabled(llmConnected && !!s.ai.ai_chapters);
-        setAiChaptersMode(
-          s.ai.ai_chapters_mode === "on_watch" ? "on_watch" : "on_download"
-        );
-        setAiChatEnabled(llmConnected && !!s.ai.ai_chat);
-        setShowAiCosts(
-          openRouterConnected && s.ai.openrouter_show_costs === true
-        );
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setAiSummariesEnabled(false);
-        setAiChaptersEnabled(false);
-        setAiChaptersMode("on_download");
-        setAiChatEnabled(false);
-        setShowAiCosts(false);
-      });
-    return () => {
-      cancelled = true;
+  // --- Library-only: which AI features this install offers ---
+  const isLibrarySource = source?.kind === "library";
+  const appSettings = useQuery({
+    queryKey: queryKeys.app.settings,
+    queryFn: ({ signal }) => api.getAppSettings({ signal }),
+    enabled: isLibrarySource,
+  }).data;
+  const aiStatus = useAiStatus({ enabled: isLibrarySource }).data;
+  const aiFeatures = useMemo(() => {
+    if (!appSettings || !aiStatus) {
+      return {
+        summaries: false,
+        chapters: false,
+        chaptersMode: "on_download" as AiChaptersMode,
+        chat: false,
+        costs: false,
+      };
+    }
+    const ai = appSettings.ai;
+    const openRouterConnected =
+      !!aiStatus.openrouter_enabled && !!aiStatus.openrouter_api_key_set;
+    const localConnected = !!aiStatus.enabled && !!aiStatus.reachable;
+    const llmConnected = openRouterConnected || localConnected;
+    return {
+      summaries: llmConnected && !!ai.ai_summaries,
+      chapters: llmConnected && !!ai.ai_chapters,
+      chaptersMode: (ai.ai_chapters_mode === "on_watch"
+        ? "on_watch"
+        : "on_download") as AiChaptersMode,
+      chat: llmConnected && !!ai.ai_chat,
+      costs: openRouterConnected && ai.openrouter_show_costs === true,
     };
-  }, [source?.kind]);
+  }, [appSettings, aiStatus]);
+  const aiSummariesEnabled = aiFeatures.summaries;
+  const aiChaptersEnabled = aiFeatures.chapters;
+  const aiChaptersMode = aiFeatures.chaptersMode;
+  const aiChatEnabled = aiFeatures.chat;
+  const showAiCosts = aiFeatures.costs;
 
   const video = source?.kind === "library" ? source.video : null;
   const videoId = video?.id;
 
   useEffect(() => {
     setChapterError(null);
-    setGeneratingChapters(false);
   }, [videoId]);
 
-  useEffect(() => {
-    if (videoId == null) return;
-    setMoreLikeThis([]);
-    setRelatedHasMore(false);
-    api
-      .getRelatedVideos(videoId, RELATED_PAGE, 0)
-      .then((rows) => {
-        setMoreLikeThis(rows);
-        setRelatedHasMore(
-          rows.length >= RELATED_PAGE && rows.length < RELATED_MAX
-        );
-      })
-      .catch(() => setMoreLikeThis([]));
-  }, [videoId]);
-
-  const loadMoreRelated = useCallback(async () => {
-    if (!video || relatedLoading || !relatedHasMore) return;
-    if (moreLikeThis.length >= RELATED_MAX) {
-      setRelatedHasMore(false);
-      return;
-    }
-    setRelatedLoading(true);
-    try {
-      const rows = await api.getRelatedVideos(
-        video.id,
-        RELATED_PAGE,
-        moreLikeThis.length
-      );
-      setMoreLikeThis((prev) => {
-        const seen = new Set(prev.map((v) => v.id));
-        const next = [...prev, ...rows.filter((v) => !seen.has(v.id))];
-        return next.slice(0, RELATED_MAX);
-      });
-      setRelatedHasMore(
-        rows.length >= RELATED_PAGE &&
-          moreLikeThis.length + rows.length < RELATED_MAX
-      );
-    } catch {
-      setRelatedHasMore(false);
-    } finally {
-      setRelatedLoading(false);
-    }
-  }, [video, relatedLoading, relatedHasMore, moreLikeThis.length]);
+  const {
+    videos: moreLikeThis,
+    hasMore: relatedHasMore,
+    loadingMore: relatedLoading,
+    loadMore: loadMoreRelated,
+  } = useRelatedVideos(videoId);
 
   useEffect(() => {
     if (!relatedHasMore) return;
@@ -485,34 +484,13 @@ export default function Watch() {
     if (!el) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) void loadMoreRelated();
+        if (entries.some((e) => e.isIntersecting)) loadMoreRelated();
       },
       { rootMargin: "200px" }
     );
     io.observe(el);
     return () => io.disconnect();
   }, [relatedHasMore, loadMoreRelated]);
-
-  const pollVideo =
-    !!video &&
-    (!!video.subtitles_pending ||
-      !!video.processing_summary ||
-      !!video.processing_sprites ||
-      !!video.processing_chapters);
-
-  useEffect(() => {
-    if (videoId == null || !pollVideo) return;
-    const timer = window.setInterval(() => {
-      api
-        .getVideo(videoId)
-        .then((v) => {
-          setSource({ kind: "library", video: v });
-          updateCurrentVideo(v);
-        })
-        .catch(() => undefined);
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [videoId, pollVideo, updateCurrentVideo]);
 
   useEffect(() => {
     if (!source) return;
@@ -521,13 +499,6 @@ export default function Watch() {
     // Do not depend on mode — re-registering on theater toggle briefly clears
     // the dock and can collapse the player into mini layout.
   }, [registerDock, source]);
-
-  useEffect(() => {
-    api
-      .listPresets()
-      .then(setPresets)
-      .catch(() => undefined);
-  }, []);
 
   useEffect(() => {
     return onJobCompleted((completedId, event) => {
@@ -541,7 +512,10 @@ export default function Watch() {
           if (sec >= 5) {
             await api.saveProgress(video.id, sec).catch(() => undefined);
           }
-          const updated = await api.getVideo(video.id);
+          const updated = await queryClient.fetchQuery({
+            ...videoDetailQuery(video.id),
+            staleTime: 0,
+          });
           const resumeAt = sec > 1 ? sec : updated.last_position_sec;
           const merged = { ...updated, last_position_sec: resumeAt };
           setSource({ kind: "library", video: merged });
@@ -552,69 +526,114 @@ export default function Watch() {
             showToast("Redownload complete — switching to new quality");
           }
         } catch {
-          api
-            .getVideo(video.id)
+          queryClient
+            .fetchQuery({ ...videoDetailQuery(video.id), staleTime: 0 })
             .then((v) => setSource({ kind: "library", video: v }))
             .catch(() => undefined);
           showToast(event?.quality_warning || "Redownload complete.");
         }
       })();
     });
-  }, [onJobCompleted, video, showToast, getCurrentPosition, playVideo]);
+  }, [
+    onJobCompleted,
+    video,
+    showToast,
+    getCurrentPosition,
+    playVideo,
+    queryClient,
+  ]);
 
   const setVideo = useCallback(
     (v: Video) => {
       setSource({ kind: "library", video: v });
       updateCurrentVideo(v);
+      // The library lists and this page's copy show the edit too.
+      queryClient.setQueryData(queryKeys.videos.detail(v.id), v);
+      replaceVideoInLists(queryClient, v);
     },
-    [updateCurrentVideo]
+    [updateCurrentVideo, queryClient]
   );
 
+  const chaptersMutation = useMutation({
+    mutationFn: ({ id, force }: { id: number; force: boolean }) =>
+      api.generateVideoChapters(id, { force }),
+    onMutate: () => {
+      setChapterError(null);
+    },
+    onSuccess: setVideo,
+    onError: (err) => {
+      const msg = describeError(err) || "Could not generate chapters";
+      setChapterError(msg);
+      showError(msg);
+    },
+  });
+  const generatingChapters = chaptersMutation.isPending;
   const generateChapters = useCallback(
     async (force: boolean) => {
       if (!video) return;
-      setGeneratingChapters(true);
-      setChapterError(null);
-      try {
-        const updated = await api.generateVideoChapters(video.id, { force });
-        setVideo(updated);
-      } catch (err) {
-        const msg =
-          err instanceof Error ? err.message : "Could not generate chapters";
-        setChapterError(msg);
-        showToast(msg);
-      } finally {
-        setGeneratingChapters(false);
-      }
+      await chaptersMutation.mutateAsync({ id: video.id, force }).catch(() => {
+        // reported by the mutation's onError
+      });
     },
-    [video, setVideo, showToast]
+    [video, chaptersMutation]
   );
 
-  const onRedownload = async () => {
-    if (!video) return;
-    setRedownloading(true);
-    try {
-      redownloadPending.current = true;
-      await api.redownloadVideo(
-        video.id,
-        redownloadPreset,
-        settings.normalizeVolumeOnDownload,
+  const redownloadMutation = useMutation({
+    mutationFn: (v: {
+      id: number;
+      preset: string;
+      normalize: boolean;
+      message: string;
+      closeDialog: boolean;
+    }) =>
+      api.redownloadVideo(
+        v.id,
+        v.preset,
+        v.normalize,
         settings.downloadVideoCodec
-      );
-      showToast("Download started — check the Download page for progress.");
+      ),
+    onMutate: () => {
+      redownloadPending.current = true;
+    },
+    onSuccess: (_video, v) => {
+      showToast(v.message);
       refreshJobs();
-      setRedownloadOpen(false);
-    } catch (err) {
+      if (v.closeDialog) setRedownloadOpen(false);
+    },
+    onError: (err) => {
       redownloadPending.current = false;
-      showToast(
-        err instanceof Error ? err.message : "Could not start download"
-      );
-    } finally {
-      setRedownloading(false);
-    }
+      showError(describeError(err) || "Could not start download");
+    },
+  });
+  const redownloading = redownloadMutation.isPending;
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.deleteVideo(id, true),
+    onSuccess: () => {
+      for (const queryKey of [
+        queryKeys.videos.all,
+        queryKeys.channels.all,
+        queryKeys.tags.all,
+      ]) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+      navigate("/");
+    },
+    onError: (err) => showError(describeError(err) || "Could not delete video"),
+  });
+
+  const onRedownload = () => {
+    if (!video) return;
+    redownloadMutation.mutate({
+      id: video.id,
+      preset: redownloadPreset,
+      normalize: settings.normalizeVolumeOnDownload,
+      message: "Download started — check the Download page for progress.",
+      closeDialog: true,
+    });
   };
 
-  const onNormalizeVolume = async () => {
+  const onNormalizeVolume = () => {
     if (!video) return;
     const h = video.height_px;
     let preset = "best";
@@ -628,27 +647,14 @@ export default function Watch() {
     if (!presets.includes(preset)) {
       preset = presets.includes("1080p") ? "1080p" : (presets[0] ?? "best");
     }
-    setRedownloading(true);
-    try {
-      redownloadPending.current = true;
-      await api.redownloadVideo(
-        video.id,
-        preset,
-        true,
-        settings.downloadVideoCodec
-      );
-      showToast(
-        "Normalizing via redownload — check the Download page for progress."
-      );
-      refreshJobs();
-    } catch (err) {
-      redownloadPending.current = false;
-      showToast(
-        err instanceof Error ? err.message : "Could not start download"
-      );
-    } finally {
-      setRedownloading(false);
-    }
+    redownloadMutation.mutate({
+      id: video.id,
+      preset,
+      normalize: true,
+      message:
+        "Normalizing via redownload — check the Download page for progress.",
+      closeDialog: false,
+    });
   };
 
   const onDelete = async () => {
@@ -660,12 +666,7 @@ export default function Watch() {
       danger: true,
     });
     if (!ok) return;
-    try {
-      await api.deleteVideo(video.id, true);
-      navigate("/");
-    } catch (err) {
-      showError(err instanceof Error ? err.message : "Could not delete video");
-    }
+    deleteMutation.mutate(video.id);
   };
 
   async function handleStreamDownload() {
