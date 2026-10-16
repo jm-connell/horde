@@ -167,6 +167,7 @@ def test_backups_can_run_while_other_threads_write(init_db):
     from app.models import Video
 
     stop = threading.Event()
+    wrote_one = threading.Event()
     errors: list[BaseException] = []
 
     def writer() -> None:
@@ -179,13 +180,14 @@ def test_backups_can_run_while_other_threads_write(init_db):
                         Video(title=f"v{n}", channel="C", file_path=f"C/v{n}.mp4")
                     )
                     session.commit()
+                wrote_one.set()
         except Exception as exc:  # noqa: BLE001 - handed to the main thread below
             errors.append(exc)
 
     thread = threading.Thread(target=writer)
     thread.start()
     try:
-        time.sleep(0.1)
+        assert wrote_one.wait(10), "the writer never committed a row"
         path = backup.run_nightly_backup(init_db["engine"], now=_day(), keep=7)
     finally:
         stop.set()
