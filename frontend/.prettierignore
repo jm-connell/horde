@@ -6,3 +6,4 @@ blob-report
 package-lock.json
 public
 e2e/.auth
+src/api/schema.d.ts

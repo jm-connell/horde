@@ -71,6 +71,7 @@ if [[ ! -d "$ROOT/frontend/node_modules" ]]; then
   echo "frontend/node_modules missing; run 'npm ci' in frontend/ first" >&2
   failed+=("npm ci (not run)")
 else
+  gate "api types up to date" in_dir "$ROOT/frontend" npm run --silent gen:api:check
   gate "eslint" in_dir "$ROOT/frontend" npm run --silent lint
   gate "prettier --check" in_dir "$ROOT/frontend" npm run --silent format:check
   gate "tsc" in_dir "$ROOT/frontend" npm run --silent typecheck
