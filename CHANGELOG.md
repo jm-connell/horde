@@ -85,6 +85,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - Build identity in `/app/BUILD_INFO` and OCI labels (version, commit, ffmpeg).
 - CI: image smoke test, security scanning (pip-audit, npm audit, Trivy,
   gitleaks), Dependabot and a daily yt-dlp bump pull request.
+- Tests: a Playwright check loads every custom CSS sanitizer vector and 3000
+  generated inputs, cleaned by both the web app's and the server's sanitizer,
+  in Chromium and fails if any of them makes the browser contact another host
+  (`frontend/e2e/custom-css-network.spec.ts`).
 
 ### Changed
 
