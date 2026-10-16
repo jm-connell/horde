@@ -31,6 +31,7 @@ import {
 } from "./player/useChapters";
 import SkipNoticeChip from "./player/SkipNotice";
 import { useSkipSegments } from "./player/useSkipSegments";
+import { usePlayerMenu } from "./player/usePlayerMenu";
 import { usePlayerKeyboard } from "./player/usePlayerKeyboard";
 import { playerChromeBtn, playerMenuItem } from "./player/playerChrome";
 import SubtitleOverlay from "./SubtitleOverlay";
@@ -216,8 +217,7 @@ export default function VideoPlayer({
   /** PiP / iOS native fullscreen — overlay can't paint; use native cues. */
   const [nativeTextActive, setNativeTextActive] = useState(false);
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
-  const [showSpeed, setShowSpeed] = useState(false);
-  const [showQuality, setShowQuality] = useState(false);
+  const { openMenu, menuOpen, toggleMenu, closeMenu } = usePlayerMenu();
   const qualityTriggerRef = useRef<HTMLButtonElement>(null);
   const speedTriggerRef = useRef<HTMLButtonElement>(null);
   const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
@@ -428,7 +428,7 @@ export default function VideoPlayer({
     setShakaReady(false);
     setAvailableHeights([]);
     setActiveQuality(null);
-    setShowQuality(false);
+    closeMenu("quality");
     setQualityChoice(streamQualityToChoice(settings.defaultStreamQuality));
     // Seed from the setting once per src; in-player changes stay session-scoped.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per src; later setting changes must not reset the in-player choice
@@ -1082,13 +1082,12 @@ export default function VideoPlayer({
 
   const scheduleHideControls = useCallback(() => {
     clearHideControlsTimer();
-    if (!playing || showSpeed || showQuality || controlsInteracting.current)
-      return;
+    if (!playing || menuOpen || controlsInteracting.current) return;
     hideControlsTimer.current = window.setTimeout(() => {
       setControlsVisible(false);
       hideControlsTimer.current = null;
     }, CONTROLS_HIDE_DELAY_MS);
-  }, [playing, showSpeed, showQuality, clearHideControlsTimer]);
+  }, [playing, menuOpen, clearHideControlsTimer]);
 
   const revealControls = useCallback(() => {
     setControlsVisible(true);
@@ -1125,17 +1124,10 @@ export default function VideoPlayer({
   }, [isMini, revealControls, revealMiniControls]);
 
   const onPlayerMouseLeave = useCallback(() => {
-    if (
-      isMini ||
-      !playing ||
-      showSpeed ||
-      showQuality ||
-      controlsInteracting.current
-    )
-      return;
+    if (isMini || !playing || menuOpen || controlsInteracting.current) return;
     clearHideControlsTimer();
     setControlsVisible(false);
-  }, [isMini, playing, showSpeed, showQuality, clearHideControlsTimer]);
+  }, [isMini, playing, menuOpen, clearHideControlsTimer]);
 
   const onControlsInteractionStart = useCallback(() => {
     controlsInteracting.current = true;
@@ -1654,20 +1646,13 @@ export default function VideoPlayer({
 
   useEffect(() => {
     if (isMini) return;
-    if (showSpeed || showQuality) {
+    if (menuOpen) {
       clearHideControlsTimer();
       setControlsVisible(true);
     } else if (playing) {
       scheduleHideControls();
     }
-  }, [
-    isMini,
-    showSpeed,
-    showQuality,
-    playing,
-    clearHideControlsTimer,
-    scheduleHideControls,
-  ]);
+  }, [isMini, menuOpen, playing, clearHideControlsTimer, scheduleHideControls]);
 
   useEffect(() => () => clearHideControlsTimer(), [clearHideControlsTimer]);
 
@@ -2155,13 +2140,10 @@ export default function VideoPlayer({
                         ref={qualityTriggerRef}
                         type="button"
                         aria-haspopup="menu"
-                        aria-expanded={showQuality}
-                        onClick={() => {
-                          setShowSpeed(false);
-                          setShowQuality((s) => !s);
-                        }}
+                        aria-expanded={openMenu === "quality"}
+                        onClick={() => toggleMenu("quality")}
                         className={`${playerChromeBtn(
-                          qualityChoice !== "auto" || showQuality
+                          qualityChoice !== "auto" || openMenu === "quality"
                         )} tabular-nums`}
                         title="Stream quality"
                       >
@@ -2170,11 +2152,11 @@ export default function VideoPlayer({
                           : qualityMenuLabel(qualityChoice)}
                       </button>
                       <MenuFlyout
-                        open={showQuality}
+                        open={openMenu === "quality"}
                         className="absolute bottom-9 right-0 z-10 w-32"
                         menu={{
                           label: "Stream quality",
-                          onClose: () => setShowQuality(false),
+                          onClose: () => closeMenu("quality"),
                           triggerRef: qualityTriggerRef,
                         }}
                       >
@@ -2185,7 +2167,7 @@ export default function VideoPlayer({
                             aria-checked={qualityChoice === "auto"}
                             onClick={() => {
                               pickQuality("auto");
-                              setShowQuality(false);
+                              closeMenu("quality");
                             }}
                             className={`${playerMenuItem(
                               qualityChoice === "auto"
@@ -2204,7 +2186,7 @@ export default function VideoPlayer({
                               aria-checked={qualityChoice === h}
                               onClick={() => {
                                 pickQuality(h);
-                                setShowQuality(false);
+                                closeMenu("quality");
                               }}
                               className={`${playerMenuItem(
                                 qualityChoice === h
@@ -2222,25 +2204,22 @@ export default function VideoPlayer({
                     ref={speedTriggerRef}
                     type="button"
                     aria-haspopup="dialog"
-                    aria-expanded={showSpeed}
-                    onClick={() => {
-                      setShowQuality(false);
-                      setShowSpeed((s) => !s);
-                    }}
+                    aria-expanded={openMenu === "speed"}
+                    onClick={() => toggleMenu("speed")}
                     className={`${playerChromeBtn(
-                      rate !== 1 || showSpeed
+                      rate !== 1 || openMenu === "speed"
                     )} tabular-nums`}
                     title="Playback speed"
                   >
                     {rate}x
                   </button>
                   <MenuFlyout
-                    open={showSpeed}
+                    open={openMenu === "speed"}
                     className="absolute bottom-9 right-0 z-10 w-40"
                     menu={{
                       kind: "popup",
                       label: "Playback speed",
-                      onClose: () => setShowSpeed(false),
+                      onClose: () => closeMenu("speed"),
                       triggerRef: speedTriggerRef,
                     }}
                   >
