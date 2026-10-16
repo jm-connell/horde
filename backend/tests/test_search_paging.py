@@ -149,3 +149,23 @@ def test_member_without_use_ai_gets_keyword_results_and_no_embedding_call(
         }
     assert found == keyword_ids
     assert embedder.calls == []
+
+
+def test_catalog_search_embeds_only_for_use_ai(
+    app, client, init_db, member_user, embedder
+):
+    from tests.conftest import _client, _session_cookie
+
+    client.get("/api/channels/catalog/search", params={"q": QUERY})
+    assert embedder.calls, "control: an administrator's catalog search embeds"
+    embedder.calls.clear()
+
+    with Session(init_db["engine"]) as s:
+        user = s.get(User, member_user.id)
+        user.permissions = permissions.dump(frozenset({"download"}))
+        s.add(user)
+        s.commit()
+    with _client(app, cookies=_session_cookie(init_db, member_user)) as member:
+        resp = member.get("/api/channels/catalog/search", params={"q": QUERY})
+        assert resp.status_code == 200
+    assert embedder.calls == []
