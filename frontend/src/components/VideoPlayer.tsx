@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link } from "react-router-dom";
 import {
   absoluteUrl,
   api,
@@ -30,6 +29,8 @@ import {
   isChapterActive,
   useChapters,
 } from "./player/useChapters";
+import SkipNoticeChip from "./player/SkipNotice";
+import { useSkipSegments } from "./player/useSkipSegments";
 import { playerChromeBtn, playerMenuItem } from "./player/playerChrome";
 import SubtitleOverlay from "./SubtitleOverlay";
 import { MenuFlyout } from "./MenuFlyout";
@@ -45,10 +46,7 @@ import { useSettings, type SubtitleSize } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useApplyShakaQuality, useShakaDashLoad } from "../hooks/useShakaDash";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
-import {
-  sponsorBlockSegmentLabel,
-  type SponsorBlockSkipMode,
-} from "../sponsorBlock";
+import type { SponsorBlockSkipMode } from "../sponsorBlock";
 import type { SpriteMeta } from "../types";
 import { formatDuration, formatTimestamp, type Chapter } from "../utils";
 import { clearDowngrade, trackQuality } from "../utils/decodeCapability";
@@ -66,10 +64,6 @@ import {
   streamQualityToChoice,
   type QualityChoice,
 } from "./videoPlayerQuality";
-import {
-  sponsorSegmentKey,
-  suppressSponsorSegmentsOnBackwardSeek,
-} from "./videoPlayerSponsor";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
 
@@ -297,21 +291,17 @@ export default function VideoPlayer({
   const pointerDownOnVideo = useRef(false);
   const volumePointerActive = useRef(false);
 
-  // SponsorBlock skip notice
-  const [skipNotice, setSkipNotice] = useState<string | null>(null);
-  const [skipNoticeKind, setSkipNoticeKind] = useState<
-    "prompt" | "skipped" | null
-  >(null);
-  const [skippedSegment, setSkippedSegment] = useState<{
-    startSec: number;
-    endSec: number;
-    label: string;
-  } | null>(null);
-  const skipNoticeTimer = useRef<number | null>(null);
-  const skipNoticeKindRef = useRef<"prompt" | "skipped" | null>(null);
-  const promptKeyRef = useRef<string | null>(null);
   const prevTimeRef = useRef(0);
   const isSeekingRef = useRef(false);
+  const skip = useSkipSegments({
+    videoRef,
+    prevTimeRef,
+    isSeekingRef,
+    sponsorSegments,
+    sponsorSkipMode,
+    sponsorShowNotice,
+  });
+  const { noteSeek } = skip;
   const pendingSeekRef = useRef(initialPosition);
   const [buffering, setBuffering] = useState(true);
   const bufferingShowTimer = useRef<number | null>(null);
@@ -340,11 +330,6 @@ export default function VideoPlayer({
       setBuffering(true);
     }, BUFFERING_INDICATOR_DELAY_MS);
   }, []);
-  const suppressedSegmentsRef = useRef(new Set<string>());
-  const sponsorSegmentsRef = useRef(sponsorSegments);
-  sponsorSegmentsRef.current = sponsorSegments;
-  const sponsorSkipModeRef = useRef(sponsorSkipMode);
-  sponsorSkipModeRef.current = sponsorSkipMode;
   const [ccNotice, setCcNotice] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [qualityNotice, setQualityNotice] = useState<string | null>(null);
@@ -434,13 +419,8 @@ export default function VideoPlayer({
   }, [progressiveFallbackSrc, showQualityNotice]);
 
   useEffect(() => {
-    suppressedSegmentsRef.current.clear();
+    skip.reset();
     prevTimeRef.current = 0;
-    promptKeyRef.current = null;
-    skipNoticeKindRef.current = null;
-    setSkippedSegment(null);
-    setSkipNotice(null);
-    setSkipNoticeKind(null);
     setCcNotice(null);
     setMediaError(null);
     if (bufferingShowTimer.current != null) {
@@ -696,63 +676,6 @@ export default function VideoPlayer({
     };
   }, [isMini, videoId]);
 
-  const clearSkipNotice = useCallback(() => {
-    promptKeyRef.current = null;
-    skipNoticeKindRef.current = null;
-    setSkipNotice(null);
-    setSkipNoticeKind(null);
-    setSkippedSegment(null);
-    if (skipNoticeTimer.current !== null) {
-      clearTimeout(skipNoticeTimer.current);
-      skipNoticeTimer.current = null;
-    }
-  }, []);
-
-  const showSkippedNotice = useCallback(
-    (
-      seg: { startSec: number; endSec: number; label: string },
-      timed: boolean
-    ) => {
-      promptKeyRef.current = null;
-      skipNoticeKindRef.current = "skipped";
-      setSkipNoticeKind("skipped");
-      setSkippedSegment(seg);
-      setSkipNotice(`Skipped: ${seg.label}`);
-      if (skipNoticeTimer.current !== null) {
-        clearTimeout(skipNoticeTimer.current);
-        skipNoticeTimer.current = null;
-      }
-      if (timed) {
-        skipNoticeTimer.current = window.setTimeout(() => {
-          setSkipNotice(null);
-          setSkippedSegment(null);
-          skipNoticeKindRef.current = null;
-          setSkipNoticeKind(null);
-          skipNoticeTimer.current = null;
-        }, 4000);
-      }
-    },
-    []
-  );
-
-  const undoSkip = useCallback(() => {
-    const seg = skippedSegment;
-    const v = videoRef.current;
-    if (!seg || !v) return;
-    suppressedSegmentsRef.current.add(sponsorSegmentKey(seg));
-    v.currentTime = seg.startSec;
-    clearSkipNotice();
-  }, [skippedSegment, clearSkipNotice]);
-
-  const skipPromptedSegment = useCallback(() => {
-    const seg = skippedSegment;
-    const v = videoRef.current;
-    if (!seg || !v) return;
-    v.currentTime = seg.endSec;
-    prevTimeRef.current = seg.endSec;
-    showSkippedNotice(seg, true);
-  }, [skippedSegment, showSkippedNotice]);
-
   useEffect(() => {
     setChromecastOnSessionEnd((position) => {
       const v = videoRef.current;
@@ -964,16 +887,7 @@ export default function VideoPlayer({
         videoRef.current?.currentTime ?? 0,
         prevTimeRef.current
       );
-      // Timeline / arrow seeks set isSeeking and jump currentTime, so the
-      // timeupdate "moving backward" check never sees the jump. Record it here.
-      if (sponsorSkipModeRef.current !== "prompt") {
-        suppressSponsorSegmentsOnBackwardSeek(
-          from,
-          t,
-          sponsorSegmentsRef.current,
-          suppressedSegmentsRef.current
-        );
-      }
+      noteSeek(from, t);
       isSeekingRef.current = true;
       prevTimeRef.current = t;
       setCurrent(t);
@@ -983,7 +897,7 @@ export default function VideoPlayer({
       }
       if (videoRef.current) videoRef.current.currentTime = t;
     },
-    [chromecast.casting, seekChromecast]
+    [chromecast.casting, seekChromecast, noteSeek]
   );
 
   // Listen for programmatic seek requests (e.g., clicking a chapter in Watch.tsx)
@@ -1951,87 +1865,7 @@ export default function VideoPlayer({
             if (t > prev + 0.02 && !e.currentTarget.paused) {
               hideBuffering();
             }
-            // SponsorBlock: auto-skip on forward playback; seeking back into a
-            // segment suppresses it for the rest of this source.
-            // Skip while a programmatic/user seek is in flight so distant
-            // chapter jumps aren't redirected mid-seek.
-            if (sponsorSegments.length > 0 && !isSeekingRef.current) {
-              const movingForward = t >= prev - 0.05;
-              const promptMode = sponsorSkipMode === "prompt";
-              if (!promptMode) {
-                suppressSponsorSegmentsOnBackwardSeek(
-                  prev,
-                  t,
-                  sponsorSegments,
-                  suppressedSegmentsRef.current
-                );
-              }
-              let insidePrompt: SponsorSegment | null = null;
-              for (const seg of sponsorSegments) {
-                const key = sponsorSegmentKey(seg);
-                if (suppressedSegmentsRef.current.has(key)) {
-                  continue;
-                }
-                if (
-                  movingForward &&
-                  t >= seg.startSec &&
-                  t < seg.endSec - 0.3
-                ) {
-                  if (promptMode) {
-                    insidePrompt = seg;
-                    break;
-                  }
-                  e.currentTarget.currentTime = seg.endSec;
-                  prevTimeRef.current = seg.endSec;
-                  if (sponsorShowNotice) {
-                    showSkippedNotice(
-                      {
-                        startSec: seg.startSec,
-                        endSec: seg.endSec,
-                        label: sponsorBlockSegmentLabel(seg.category),
-                      },
-                      true
-                    );
-                  }
-                  break;
-                }
-              }
-              if (promptMode) {
-                if (insidePrompt) {
-                  const key = `${insidePrompt.startSec}-${insidePrompt.endSec}`;
-                  if (promptKeyRef.current !== key) {
-                    promptKeyRef.current = key;
-                    if (skipNoticeTimer.current !== null) {
-                      clearTimeout(skipNoticeTimer.current);
-                      skipNoticeTimer.current = null;
-                    }
-                    const label = sponsorBlockSegmentLabel(
-                      insidePrompt.category
-                    );
-                    skipNoticeKindRef.current = "prompt";
-                    setSkipNoticeKind("prompt");
-                    setSkippedSegment({
-                      startSec: insidePrompt.startSec,
-                      endSec: insidePrompt.endSec,
-                      label,
-                    });
-                    setSkipNotice(label);
-                  }
-                } else if (skipNoticeKindRef.current === "prompt") {
-                  promptKeyRef.current = null;
-                  skipNoticeKindRef.current = null;
-                  setSkipNoticeKind(null);
-                  setSkipNotice(null);
-                  setSkippedSegment(null);
-                }
-              } else if (skipNoticeKindRef.current === "prompt") {
-                promptKeyRef.current = null;
-                skipNoticeKindRef.current = null;
-                setSkipNoticeKind(null);
-                setSkipNotice(null);
-                setSkippedSegment(null);
-              }
-            }
+            skip.handleTimeUpdate(e.currentTarget, t, prev);
           }}
           onSeeked={() => {
             isSeekingRef.current = false;
@@ -2586,43 +2420,14 @@ export default function VideoPlayer({
           </div>
         )}
 
-        {skipNotice && (
-          <div
-            className={`ui-panel ui-panel-legible pointer-events-auto absolute right-3 z-[8] flex cursor-auto items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 shadow-lg ring-1 ring-ink-600 transition-[bottom] duration-300 ease-out ${
-              isMini
-                ? "bottom-2"
-                : controlsVisible
-                  ? "bottom-[4.5rem]"
-                  : "bottom-3"
-            }`}
-            role="status"
-          >
-            <Link
-              to="/settings?tab=playback"
-              className="text-xs font-medium text-gray-200 hover:text-accent"
-              title="Open SponsorBlock settings"
-            >
-              {skipNotice}
-            </Link>
-            {skipNoticeKind === "prompt" && skippedSegment && (
-              <button
-                type="button"
-                onClick={skipPromptedSegment}
-                className="rounded-md bg-accent px-2 py-0.5 text-[11px] font-semibold text-ink-950 hover:bg-accent-soft"
-              >
-                Skip
-              </button>
-            )}
-            {skipNoticeKind === "skipped" && skippedSegment && (
-              <button
-                type="button"
-                onClick={undoSkip}
-                className="rounded-md border border-ink-600 bg-ink-800 px-2 py-0.5 text-[11px] font-medium text-gray-200 hover:border-accent hover:text-accent"
-              >
-                Go back
-              </button>
-            )}
-          </div>
+        {skip.notice && (
+          <SkipNoticeChip
+            notice={skip.notice}
+            isMini={isMini}
+            controlsVisible={controlsVisible}
+            onSkip={skip.skipPromptedSegment}
+            onUndo={skip.undoSkip}
+          />
         )}
 
         {upNext && !isMini && (
