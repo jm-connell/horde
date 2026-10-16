@@ -145,3 +145,76 @@ def test_stream_stays_open_while_access_holds(
         # The recheck passed, so the tick that ran it was a keepalive, not an exit.
         assert results[0] is True
         assert lines.count(": keepalive") >= 1
+
+
+# --- Proxy identities ---------------------------------------------------------------
+
+
+def _proxied_app(config):
+    from fastapi import FastAPI
+
+    from app.api import downloads
+    from app.security import install_security
+
+    proxied = FastAPI()
+    proxied.include_router(downloads.router)
+    install_security(proxied, auth_config=config)
+    proxied.state.auth.stream_recheck_seconds = _RECHECK
+    return proxied
+
+
+def _stream_ends_after(proxied, headers: dict[str, str], revoke) -> None:
+    from fastapi.testclient import TestClient
+
+    with TestClient(proxied, headers=headers) as c:
+        lines: list[str] = []
+        done = threading.Event()
+        reader = threading.Thread(
+            target=_read_stream,
+            args=(c, "/api/downloads/events", lines, done),
+            daemon=True,
+        )
+        reader.start()
+        try:
+            time.sleep(0.4)
+            assert not done.is_set(), "the stream ended before the identity changed"
+            revoke()
+            assert done.wait(5), "the stream outlived the identity it started with"
+        finally:
+            _stop_streams(proxied)
+            reader.join(5)
+
+
+def test_a_trusted_header_stream_ends_when_that_account_is_disabled(
+    init_db, admin_user
+):
+    from app.services.auth.runtime import AuthConfig
+
+    with Session(init_db["engine"]) as s:
+        kid = accounts.create_user(s, "kid", "kid-password-1")
+    proxied = _proxied_app(
+        AuthConfig(disabled=True, trust_proxy=True, trusted_user_header="x-user")
+    )
+
+    def revoke() -> None:
+        with Session(init_db["engine"]) as s:
+            accounts.update_user(s, kid.id, disabled=True)
+
+    _stream_ends_after(proxied, {"X-User": "kid"}, revoke)
+
+
+def test_a_sign_in_disabled_stream_ends_when_the_acting_admin_changes(
+    init_db, admin_user
+):
+    """With sign-in off every request acts as the first enabled administrator."""
+    from app.services.auth.runtime import AuthConfig
+
+    with Session(init_db["engine"]) as s:
+        accounts.create_user(s, "second", "second-password", is_admin=True)
+    proxied = _proxied_app(AuthConfig(disabled=True))
+
+    def revoke() -> None:
+        with Session(init_db["engine"]) as s:
+            accounts.update_user(s, admin_user.id, disabled=True)
+
+    _stream_ends_after(proxied, {}, revoke)
