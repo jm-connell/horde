@@ -183,3 +183,27 @@ def test_related_videos_rank_by_shared_tags(session, add_video):
 def test_video_model_keeps_youtube_id_without_session_helpers():
     video = Video(title="x", file_path="a/b [abcdefghijk].mp4")
     assert video.youtube_id is None  # filled by the flush listener, not __init__
+
+
+def test_accented_and_non_latin_titles_are_searchable(session, add_video):
+    cafe = add_video(title="Café Müller tour")
+    naive = add_video(title="Naïve art")
+    strasse = add_video(title="Straße walk")
+    tokyo = add_video(title="東京 旅行 vlog")
+    russian = add_video(title="Привет мир")
+    add_video(title="Plain clip")
+
+    def ids(q):
+        return [v.id for v in library.query_videos(session, q=q)]
+
+    # Typed with or without the accents: FTS5 folds diacritics like unicode61.
+    for q in ("café", "cafe", "CAFÉ", "müller", "muller"):
+        assert ids(q) == [cafe.id], q
+    assert ids("naïve") == ids("naive") == [naive.id]
+    # unicode61 keeps ß as a letter (it does not fold it to ss); the literal works.
+    assert ids("straße") == [strasse.id]
+    assert ids("東京") == [tokyo.id]
+    assert ids("привет мир") == [russian.id]
+    # Whole words only: a prefix of an accented word is not a match.
+    assert ids("caf") == []
+    assert ids("stra") == []
