@@ -6,15 +6,8 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  absoluteUrl,
-  api,
-  spritesImageUrl,
-  streamUrl,
-  withMediaToken,
-} from "../api";
+import { absoluteUrl, api, streamUrl, withMediaToken } from "../api";
 import PlayerOverlays from "./PlayerOverlays";
-import FullscreenButton from "./player/FullscreenButton";
 import {
   BUFFERING_INDICATOR_DELAY_MS,
   CONTROLS_HIDE_DELAY_MS,
@@ -24,18 +17,13 @@ import {
   SPEED_STEPS,
   snapRateToStep,
 } from "./player/constants";
-import {
-  activeChapterAt,
-  isChapterActive,
-  useChapters,
-} from "./player/useChapters";
+import { useChapters } from "./player/useChapters";
 import SkipNoticeChip from "./player/SkipNotice";
 import { useSkipSegments } from "./player/useSkipSegments";
+import ControlBar from "./player/ControlBar";
 import { usePlayerMenu } from "./player/usePlayerMenu";
 import { usePlayerKeyboard } from "./player/usePlayerKeyboard";
-import { playerChromeBtn, playerMenuItem } from "./player/playerChrome";
 import SubtitleOverlay from "./SubtitleOverlay";
-import { MenuFlyout } from "./MenuFlyout";
 import { useAirPlay } from "../hooks/useAirPlay";
 import { useChromecast } from "../hooks/useChromecast";
 import { usePlaybackHealth } from "../hooks/usePlaybackHealth";
@@ -44,8 +32,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useApplyShakaQuality, useShakaDashLoad } from "../hooks/useShakaDash";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import type { SponsorBlockSkipMode } from "../sponsorBlock";
-import type { SpriteMeta } from "../types";
-import { formatDuration, formatTimestamp, type Chapter } from "../utils";
+import type { Chapter } from "../utils";
 import { clearDowngrade, trackQuality } from "../utils/decodeCapability";
 import {
   miniFrameFromNorthWestResize,
@@ -54,10 +41,8 @@ import {
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
 import type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
-import { scrubPositionFromClientX } from "./playerSeek";
 import {
   abrRestrictions,
-  qualityMenuLabel,
   streamQualityToChoice,
   type QualityChoice,
 } from "./videoPlayerQuality";
@@ -218,8 +203,6 @@ export default function VideoPlayer({
   const [nativeTextActive, setNativeTextActive] = useState(false);
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
   const { openMenu, menuOpen, toggleMenu, closeMenu } = usePlayerMenu();
-  const qualityTriggerRef = useRef<HTMLButtonElement>(null);
-  const speedTriggerRef = useRef<HTMLButtonElement>(null);
   const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
     streamQualityToChoice(settings.defaultStreamQuality)
   );
@@ -285,7 +268,6 @@ export default function VideoPlayer({
   const wasPlayingBeforeHold = useRef(false);
   const suppressClick = useRef(false);
   const pointerDownOnVideo = useRef(false);
-  const volumePointerActive = useRef(false);
 
   const prevTimeRef = useRef(0);
   const isSeekingRef = useRef(false);
@@ -334,11 +316,6 @@ export default function VideoPlayer({
   const [compatMode, setCompatMode] = useState(false);
   const [dashReloadToken, setDashReloadToken] = useState(0);
   const [shakaReady, setShakaReady] = useState(false);
-  const [spriteMeta, setSpriteMeta] = useState<SpriteMeta | null>(null);
-  const [scrubHover, setScrubHover] = useState<{
-    time: number;
-    pct: number;
-  } | null>(null);
   const { hoveredChapter, setHoveredChapterSec, nextChapterStart } =
     useChapters(chapters);
   const scrubberRef = useRef<HTMLDivElement>(null);
@@ -615,62 +592,6 @@ export default function VideoPlayer({
       el.play().catch(() => undefined);
     }
   }, [effectiveStreamType]);
-
-  // Lazy-load seek-preview sprites for full library playback.
-  useEffect(() => {
-    if (isMini || videoId == null) {
-      setSpriteMeta(null);
-      setScrubHover(null);
-      return;
-    }
-    let cancelled = false;
-    let pollTimer: number | null = null;
-    const pollDeadline = Date.now() + 60_000;
-
-    const applyMeta = (meta: SpriteMeta) => {
-      if (!cancelled) setSpriteMeta(meta);
-    };
-
-    const load = async () => {
-      try {
-        const meta = await api.getSpriteMeta(videoId);
-        applyMeta(meta);
-        return;
-      } catch {
-        // missing — kick off generation
-      }
-      if (cancelled) return;
-      try {
-        const { status } = await api.ensureSprites(videoId);
-        if (status === "ready") {
-          const meta = await api.getSpriteMeta(videoId);
-          applyMeta(meta);
-          return;
-        }
-      } catch {
-        return;
-      }
-
-      const poll = async () => {
-        if (cancelled || Date.now() > pollDeadline) return;
-        try {
-          const meta = await api.getSpriteMeta(videoId);
-          applyMeta(meta);
-          return;
-        } catch {
-          pollTimer = window.setTimeout(poll, 2000);
-        }
-      };
-      pollTimer = window.setTimeout(poll, 2000);
-    };
-
-    setSpriteMeta(null);
-    void load();
-    return () => {
-      cancelled = true;
-      if (pollTimer !== null) clearTimeout(pollTimer);
-    };
-  }, [isMini, videoId]);
 
   useEffect(() => {
     setChromecastOnSessionEnd((position) => {
@@ -1140,64 +1061,6 @@ export default function VideoPlayer({
     scheduleHideControls();
   }, [scheduleHideControls]);
 
-  const scrubFromClientX = useCallback(
-    (clientX: number, hoverOnly = false) => {
-      const el = scrubberRef.current;
-      if (!el) return;
-      const pos = scrubPositionFromClientX(
-        clientX,
-        el.getBoundingClientRect(),
-        duration
-      );
-      if (!pos) return;
-      setScrubHover(pos);
-      if (!hoverOnly) seekTo(pos.time);
-    },
-    [duration, seekTo]
-  );
-
-  const onScrubPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.button !== 0) return;
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-      onControlsInteractionStart();
-      scrubFromClientX(e.clientX);
-    },
-    [onControlsInteractionStart, scrubFromClientX]
-  );
-
-  const onScrubPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      const dragging = e.currentTarget.hasPointerCapture(e.pointerId);
-      scrubFromClientX(e.clientX, !dragging);
-    },
-    [scrubFromClientX]
-  );
-
-  const onScrubPointerUp = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-      onControlsInteractionEnd();
-    },
-    [onControlsInteractionEnd]
-  );
-
-  const onScrubPointerLeave = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) return;
-      setScrubHover(null);
-    },
-    []
-  );
-
   const applyVolume = useCallback(
     (value: number, persist: boolean) => {
       setVolume(value);
@@ -1233,40 +1096,6 @@ export default function VideoPlayer({
     stepRate,
     revealControls,
   });
-
-  // The native step is 0.1 s; match the global shortcuts (5 s) for the keyboard.
-  const onSeekKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const delta =
-      e.key === "ArrowRight" ? 5 : e.key === "ArrowLeft" ? -5 : null;
-    if (delta === null) return;
-    e.preventDefault();
-    seekTo(current + delta);
-  };
-
-  const onSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const t = Number(e.target.value);
-    seekTo(t);
-    if (duration > 0) {
-      setScrubHover({ time: t, pct: (t / duration) * 100 });
-    }
-  };
-
-  const onVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
-    applyVolume(Number(e.target.value), !volumePointerActive.current);
-  };
-
-  const onVolumePointerDown = () => {
-    volumePointerActive.current = true;
-    onControlsInteractionStart();
-  };
-
-  const onVolumePointerUp = (e: React.PointerEvent<HTMLInputElement>) => {
-    const value = Number(e.currentTarget.value);
-    if (Number.isFinite(value)) onVolumeChange?.(value);
-    volumePointerActive.current = false;
-    onControlsInteractionEnd();
-  };
 
   const toggleMute = () => {
     const v = videoRef.current;
@@ -1656,43 +1485,6 @@ export default function VideoPlayer({
 
   useEffect(() => () => clearHideControlsTimer(), [clearHideControlsTimer]);
 
-  const progressPct = duration > 0 ? (current / duration) * 100 : 0;
-
-  const scrubPreview =
-    scrubHover && duration > 0
-      ? (() => {
-          const { time, pct } = scrubHover;
-          let tileStyle: React.CSSProperties | undefined;
-          if (spriteMeta && videoId != null && spriteMeta.count > 0) {
-            const idx = Math.min(
-              spriteMeta.count - 1,
-              Math.max(0, Math.floor(time / spriteMeta.interval_sec))
-            );
-            const col = idx % spriteMeta.columns;
-            const row = Math.floor(idx / spriteMeta.columns);
-            const rows = Math.max(
-              1,
-              Math.ceil(spriteMeta.count / spriteMeta.columns)
-            );
-            const sheetW = spriteMeta.columns * spriteMeta.tile_width;
-            const sheetH = rows * spriteMeta.tile_height;
-            tileStyle = {
-              width: spriteMeta.tile_width,
-              height: spriteMeta.tile_height,
-              backgroundImage: `url(${spritesImageUrl(videoId)})`,
-              backgroundRepeat: "no-repeat",
-              backgroundSize: `${sheetW}px ${sheetH}px`,
-              backgroundPosition: `-${col * spriteMeta.tile_width}px -${row * spriteMeta.tile_height}px`,
-            };
-          }
-          return {
-            time,
-            pct: Math.min(92, Math.max(8, pct)),
-            tileStyle,
-          };
-        })()
-      : null;
-
   const wrapperClass = isMini
     ? `player-mini relative w-full overflow-hidden bg-black leading-none${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
     : isNativeFullscreen
@@ -1938,393 +1730,53 @@ export default function VideoPlayer({
             </div>
           </>
         ) : (
-          <div
-            className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent px-4 pb-2 pt-10 transition-opacity duration-300 ${
-              controlsVisible
-                ? "pointer-events-auto opacity-100"
-                : "pointer-events-none opacity-0"
-            }`}
-          >
-            <div
-              ref={scrubberRef}
-              className="relative -my-1.5 flex h-4 cursor-pointer touch-none items-center"
-              onPointerDown={onScrubPointerDown}
-              onPointerMove={onScrubPointerMove}
-              onPointerUp={onScrubPointerUp}
-              onPointerCancel={onScrubPointerUp}
-              onPointerLeave={onScrubPointerLeave}
-            >
-              {scrubPreview && (
-                <div
-                  className="pointer-events-none absolute bottom-full z-30 mb-2 -translate-x-1/2"
-                  style={{ left: `${scrubPreview.pct}%` }}
-                >
-                  <div className="flex flex-col items-center gap-1">
-                    {scrubPreview.tileStyle && (
-                      <div
-                        className="overflow-hidden rounded-lg border border-white/20 bg-black shadow-lg"
-                        style={scrubPreview.tileStyle}
-                      />
-                    )}
-                    <span
-                      className={`rounded bg-black/90 px-1.5 py-0.5 text-xs ${
-                        hoveredChapter
-                          ? "max-w-[min(280px,70vw)] whitespace-normal text-center text-gray-100"
-                          : "font-mono text-accent"
-                      }`}
-                    >
-                      {hoveredChapter ? (
-                        <>
-                          <span className="font-mono text-accent">
-                            {formatTimestamp(hoveredChapter.startSec)}
-                          </span>{" "}
-                          {hoveredChapter.title}
-                        </>
-                      ) : (
-                        formatTimestamp(scrubPreview.time)
-                      )}
-                    </span>
-                  </div>
-                </div>
-              )}
-              <input
-                type="range"
-                min={0}
-                max={duration || 0}
-                step={0.1}
-                value={current}
-                onChange={onSeek}
-                onKeyDown={onSeekKeyDown}
-                className="pointer-events-none accent-scrubber w-full"
-                aria-label="Seek"
-                aria-valuemin={0}
-                aria-valuemax={duration || 0}
-                aria-valuenow={current}
-                aria-valuetext={`${formatDuration(current)} of ${formatDuration(duration)}`}
-                style={{
-                  background: `linear-gradient(to right, rgb(var(--accent)) ${progressPct}%, rgb(var(--ink-600)) ${progressPct}%)`,
-                }}
-              />
-              {/* Chapter markers */}
-              {chapters.length > 0 && duration > 0 && (
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-full">
-                  {chapters.slice(1).map((ch, i) => {
-                    const chapterIndex = i + 1;
-                    const active = isChapterActive(
-                      chapters,
-                      chapterIndex,
-                      current
-                    );
-                    return (
-                      <button
-                        key={ch.startSec}
-                        type="button"
-                        className="group pointer-events-auto absolute top-1/2 z-10 h-4 w-3 -translate-x-1/2 -translate-y-1/2"
-                        style={{ left: `${(ch.startSec / duration) * 100}%` }}
-                        onPointerEnter={() => setHoveredChapterSec(ch.startSec)}
-                        onPointerLeave={() => setHoveredChapterSec(null)}
-                        onPointerDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          seekTo(ch.startSec);
-                        }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        title={`${formatTimestamp(ch.startSec)} — ${ch.title}`}
-                        aria-label={`Chapter ${ch.title} at ${formatTimestamp(ch.startSec)}`}
-                      >
-                        <span
-                          className={`absolute left-1/2 top-1/2 block h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors ${
-                            active
-                              ? "bg-accent"
-                              : "bg-white/50 group-hover:bg-accent"
-                          }`}
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            {ccNotice && (
-              <div className="absolute left-4 top-4 rounded-lg bg-black/70 px-3 py-1.5 text-xs text-white">
-                {ccNotice}
-              </div>
-            )}
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-gray-100">
-              <button
-                type="button"
-                onClick={togglePlay}
-                className="ui-player-chrome text-xl leading-none hover:text-accent"
-                aria-label={playing ? "Pause" : "Play"}
-              >
-                {playing ? "❚❚" : "►"}
-              </button>
-
-              {!isMobile && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={toggleMute}
-                    className="ui-nav-icon ui-player-chrome flex items-center justify-center hover:text-accent"
-                    title={muted || volume === 0 ? "Unmute" : "Mute"}
-                    aria-label={muted || volume === 0 ? "Unmute" : "Mute"}
-                  >
-                    {muted || volume === 0 ? (
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
-                      >
-                        <path d="M11 5 6 9H2v6h4l5 4V5z" />
-                        <path d="m22 9-6 6M16 9l6 6" />
-                      </svg>
-                    ) : (
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
-                      >
-                        <path d="M11 5 6 9H2v6h4l5 4V5z" />
-                        <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-                        <path d="M18.5 5.5a9 9 0 0 1 0 13" />
-                      </svg>
-                    )}
-                  </button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={muted ? 0 : volume}
-                    onChange={onVolume}
-                    onPointerDown={onVolumePointerDown}
-                    onPointerUp={onVolumePointerUp}
-                    onPointerCancel={onVolumePointerUp}
-                    aria-label="Volume"
-                    aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`}
-                    className="accent-scrubber w-[6.25rem] sm:w-[8.75rem] xl:w-[11.25rem]"
-                  />
-                </div>
-              )}
-
-              <span className="text-xs tabular-nums text-gray-300">
-                {formatDuration(current)} / {formatDuration(duration)}
-                {chapters.length > 0 &&
-                  (() => {
-                    const ch = activeChapterAt(chapters, current);
-                    return ch ? (
-                      <span className="ml-2 max-w-[140px] truncate text-gray-400">
-                        · {ch.title}
-                      </span>
-                    ) : null;
-                  })()}
-              </span>
-
-              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
-                {effectiveStreamType === "dash" &&
-                  availableHeights.length > 0 && (
-                    <div className="relative">
-                      <button
-                        ref={qualityTriggerRef}
-                        type="button"
-                        aria-haspopup="menu"
-                        aria-expanded={openMenu === "quality"}
-                        onClick={() => toggleMenu("quality")}
-                        className={`${playerChromeBtn(
-                          qualityChoice !== "auto" || openMenu === "quality"
-                        )} tabular-nums`}
-                        title="Stream quality"
-                      >
-                        {qualityChoice === "auto" && activeQuality
-                          ? `Auto · ${qualityMenuLabel(activeQuality)}`
-                          : qualityMenuLabel(qualityChoice)}
-                      </button>
-                      <MenuFlyout
-                        open={openMenu === "quality"}
-                        className="absolute bottom-9 right-0 z-10 w-32"
-                        menu={{
-                          label: "Stream quality",
-                          onClose: () => closeMenu("quality"),
-                          triggerRef: qualityTriggerRef,
-                        }}
-                      >
-                        <div className="flex flex-col">
-                          <button
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={qualityChoice === "auto"}
-                            onClick={() => {
-                              pickQuality("auto");
-                              closeMenu("quality");
-                            }}
-                            className={`${playerMenuItem(
-                              qualityChoice === "auto"
-                            )} text-left`}
-                          >
-                            Auto
-                            {activeQuality && qualityChoice === "auto"
-                              ? ` · ${qualityMenuLabel(activeQuality)}`
-                              : ""}
-                          </button>
-                          {availableHeights.map((h) => (
-                            <button
-                              key={h}
-                              type="button"
-                              role="menuitemradio"
-                              aria-checked={qualityChoice === h}
-                              onClick={() => {
-                                pickQuality(h);
-                                closeMenu("quality");
-                              }}
-                              className={`${playerMenuItem(
-                                qualityChoice === h
-                              )} text-left tabular-nums`}
-                            >
-                              {qualityMenuLabel(h)}
-                            </button>
-                          ))}
-                        </div>
-                      </MenuFlyout>
-                    </div>
-                  )}
-                <div className="relative">
-                  <button
-                    ref={speedTriggerRef}
-                    type="button"
-                    aria-haspopup="dialog"
-                    aria-expanded={openMenu === "speed"}
-                    onClick={() => toggleMenu("speed")}
-                    className={`${playerChromeBtn(
-                      rate !== 1 || openMenu === "speed"
-                    )} tabular-nums`}
-                    title="Playback speed"
-                  >
-                    {rate}x
-                  </button>
-                  <MenuFlyout
-                    open={openMenu === "speed"}
-                    className="absolute bottom-9 right-0 z-10 w-40"
-                    menu={{
-                      kind: "popup",
-                      label: "Playback speed",
-                      onClose: () => closeMenu("speed"),
-                      triggerRef: speedTriggerRef,
-                    }}
-                  >
-                    <div className="p-3">
-                      <div className="mb-2 grid grid-cols-3 gap-1">
-                        {SPEED_STEPS.map((s) => (
-                          <button
-                            type="button"
-                            key={s}
-                            onClick={() => setRate(s)}
-                            aria-pressed={rate === s}
-                            className={`${playerMenuItem(rate === s)} tabular-nums`}
-                          >
-                            {s}x
-                          </button>
-                        ))}
-                      </div>
-                      <input
-                        type="range"
-                        min={0.25}
-                        max={3}
-                        step={0.05}
-                        value={rate}
-                        onChange={(e) => setRate(Number(e.target.value))}
-                        aria-label="Playback speed"
-                        className="accent-scrubber w-full"
-                      />
-                    </div>
-                  </MenuFlyout>
-                </div>
-                {(tracks.length > 0 || subtitlesPending) && (
-                  <button
-                    type="button"
-                    onClick={cycleCaptions}
-                    className={playerChromeBtn(Boolean(captionLang))}
-                    aria-label="CC (subtitles)"
-                    aria-pressed={Boolean(captionLang)}
-                    title={
-                      subtitlesPending && tracks.length === 0
-                        ? "Subtitles loading"
-                        : "Subtitles"
-                    }
-                  >
-                    CC
-                  </button>
-                )}
-                {castAvailable && (
-                  <button
-                    type="button"
-                    onClick={onCastClick}
-                    aria-label={casting ? "Stop casting" : "Cast to TV"}
-                    className={playerChromeBtn(casting)}
-                    title={
-                      casting
-                        ? `Casting to ${castDeviceName ?? "TV"}`
-                        : "Cast to TV"
-                    }
-                  >
-                    Cast
-                  </button>
-                )}
-                {isMobile && (
-                  <FullscreenButton
-                    active={isNativeFullscreen}
-                    onClick={toggleNativeFullscreen}
-                  />
-                )}
-                {!isMobile && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={requestPiP}
-                      className={playerChromeBtn(false)}
-                      aria-label="PiP (picture in picture)"
-                      title="Picture in picture"
-                    >
-                      PiP
-                    </button>
-                    <button
-                      type="button"
-                      onClick={toggleTheater}
-                      className={playerChromeBtn(mode === "theater")}
-                      title="Theater mode (t)"
-                    >
-                      Theater
-                    </button>
-                    <button
-                      type="button"
-                      onClick={toggleWindowed}
-                      className={playerChromeBtn(mode === "windowed")}
-                      aria-label="Fit window"
-                      aria-pressed={mode === "windowed"}
-                      title="Fit window (f)"
-                    >
-                      Fit
-                    </button>
-                    <FullscreenButton
-                      active={isNativeFullscreen}
-                      onClick={toggleNativeFullscreen}
-                    />
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+          <ControlBar
+            visible={controlsVisible}
+            isMobile={isMobile}
+            mode={mode}
+            playing={playing}
+            togglePlay={togglePlay}
+            current={current}
+            duration={duration}
+            seekTo={seekTo}
+            onInteractionStart={onControlsInteractionStart}
+            onInteractionEnd={onControlsInteractionEnd}
+            scrubberRef={scrubberRef}
+            videoId={videoId}
+            chapters={chapters}
+            hoveredChapter={hoveredChapter}
+            onHoverChapter={setHoveredChapterSec}
+            volume={volume}
+            muted={muted}
+            applyVolume={applyVolume}
+            onVolumeChange={onVolumeChange}
+            toggleMute={toggleMute}
+            openMenu={openMenu}
+            onToggleMenu={toggleMenu}
+            onCloseMenu={closeMenu}
+            rate={rate}
+            onRateChange={setRate}
+            streamType={effectiveStreamType}
+            qualityChoice={qualityChoice}
+            activeQuality={activeQuality}
+            availableHeights={availableHeights}
+            onPickQuality={pickQuality}
+            ccNotice={ccNotice}
+            showCaptionsButton={tracks.length > 0 || subtitlesPending}
+            subtitlesPending={subtitlesPending}
+            hasTracks={tracks.length > 0}
+            captionsOn={Boolean(captionLang)}
+            onCycleCaptions={cycleCaptions}
+            castAvailable={castAvailable}
+            casting={casting}
+            castDeviceName={castDeviceName}
+            onCastClick={onCastClick}
+            onTogglePiP={requestPiP}
+            onToggleTheater={toggleTheater}
+            onToggleWindowed={toggleWindowed}
+            isNativeFullscreen={isNativeFullscreen}
+            onToggleFullscreen={toggleNativeFullscreen}
+          />
         )}
 
         {skip.notice && (
