@@ -34,6 +34,7 @@ export const queryKeys = {
   },
   videos: {
     all: ["videos"] as const,
+    lists: ["videos", "list"] as const,
     list: (filters: unknown) => ["videos", "list", filters] as const,
     detail: (id: number) => ["videos", "detail", id] as const,
     related: (id: number) => ["videos", "related", id] as const,

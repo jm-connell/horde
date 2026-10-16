@@ -10,6 +10,15 @@ import {
   type ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../queries/keys";
+import {
+  prependVideoToList,
+  replaceVideoInLists,
+  useChannels,
+  useTagStats,
+  useVideoList,
+  type VideoFilters,
+} from "../queries/videos";
 import { useAuth } from "../context/AuthContext";
 import {
   channelCatalogStatusQuery,
@@ -89,8 +98,10 @@ import {
   type HomeTab,
 } from "./libraryStorage";
 
-import { getJson, setJson } from "../storage";
 const TAG_MIN_COUNT = 3;
+const NO_VIDEOS: Video[] = [];
+const NO_CHANNELS: ChannelStat[] = [];
+const NO_TAGS: TagStat[] = [];
 
 const TAG_PAGE_SIZE = 20;
 // Fixed queue overlay width (w-[26rem]) — dock to bottom when grid extends into this zone.
@@ -100,28 +111,6 @@ function videoProgress(video: Video): number | undefined {
   if (!video.duration_sec || video.duration_sec <= 0) return undefined;
   if (video.last_position_sec <= 0) return undefined;
   return Math.min(1, video.last_position_sec / video.duration_sec);
-}
-
-const LIBRARY_CACHE_KEY = "horde:libraryCache:v1";
-
-// Lets a return to Home paint from the last list in one frame while it revalidates.
-function readLibraryCache(key: string): Video[] | null {
-  const cached = getJson<{ key: string; videos: Video[] } | null>(
-    LIBRARY_CACHE_KEY,
-    (v): v is { key: string; videos: Video[] } =>
-      typeof v === "object" &&
-      v !== null &&
-      typeof (v as { key?: unknown }).key === "string" &&
-      Array.isArray((v as { videos?: unknown }).videos),
-    null,
-    "session"
-  );
-  return cached && cached.key === key ? cached.videos : null;
-}
-
-function writeLibraryCache(key: string, videos: Video[]): void {
-  // Quota/private-mode failures are non-fatal: the cache is best-effort.
-  setJson(LIBRARY_CACHE_KEY, { key, videos }, "session");
 }
 
 function SearchResultSection({
@@ -187,8 +176,6 @@ function SearchResultSection({
 
 function OnlineLibrary() {
   const { can } = useAuth();
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [otherVideos, setOtherVideos] = useState<Video[]>([]);
   const [streamResults, setStreamResults] = useState<ChannelFeedEntry[]>([]);
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamDownloading, setStreamDownloading] = useState<Set<string>>(
@@ -200,13 +187,9 @@ function OnlineLibrary() {
   const [youtubeLoadingMore, setYoutubeLoadingMore] = useState(false);
   const youtubeMoreAcRef = useRef<AbortController | null>(null);
   const youtubeFetchOffsetRef = useRef(0);
-  const [continueWatching, setContinueWatching] = useState<Video[]>([]);
-  const [channels, setChannels] = useState<ChannelStat[]>([]);
-  const [tags, setTags] = useState<TagStat[]>([]);
   const [showTags, setShowTags] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
   const [showAllChannels, setShowAllChannels] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   // Multi-select state
   const [selectMode, setSelectMode] = useState(false);
@@ -358,6 +341,18 @@ function OnlineLibrary() {
     }
   }, [narrowViewport]);
 
+  // Re-read everything derived from the library (after downloads, bulk edits).
+  const refreshLibrary = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    for (const queryKey of [
+      queryKeys.videos.all,
+      queryKeys.channels.all,
+      queryKeys.tags.all,
+    ]) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+  }, [queryClient]);
+
   const backgroundRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -368,9 +363,9 @@ function OnlineLibrary() {
     }
     backgroundRefreshTimer.current = setTimeout(() => {
       backgroundRefreshTimer.current = null;
-      setRefreshKey((k) => k + 1);
+      refreshLibrary();
     }, 4000);
-  }, []);
+  }, [refreshLibrary]);
 
   useEffect(() => {
     return onJobCompleted((videoId) => {
@@ -381,36 +376,18 @@ function OnlineLibrary() {
       api
         .getVideo(videoId)
         .then((video) => {
-          setVideos((prev) => {
-            const idx = prev.findIndex((v) => v.id === video.id);
-            if (idx === -1) return [video, ...prev];
-            const next = [...prev];
-            next[idx] = video;
-            return next;
-          });
-          setContinueWatching((prev) => {
-            const idx = prev.findIndex((v) => v.id === video.id);
-            if (idx === -1) return prev;
-            const next = [...prev];
-            next[idx] = video;
-            return next;
-          });
+          // Show it at once; the coalesced refresh below reconciles the lists.
+          replaceVideoInLists(queryClient, video);
+          prependVideoToList(queryClient, mainFiltersRef.current, video);
         })
         .catch(() => undefined);
       scheduleBackgroundRefresh();
     });
-  }, [onJobCompleted, scheduleBackgroundRefresh]);
+  }, [onJobCompleted, scheduleBackgroundRefresh, queryClient]);
 
   const reloadChannels = useCallback(
-    () =>
-      api
-        .listChannels({
-          sort: settings.channelSort,
-          order: settings.channelOrder,
-        })
-        .then(setChannels)
-        .catch(() => undefined),
-    [settings.channelSort, settings.channelOrder]
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.channels.all }),
+    [queryClient]
   );
 
   const submitRename = async (oldName: string) => {
@@ -467,99 +444,53 @@ function OnlineLibrary() {
   const onRecommendedTab = showHomeTabs && homeTab === "recommended";
   const recommendedTabActive = onRecommendedTab && !debouncedSearch;
 
-  useEffect(() => {
-    reloadChannels();
-  }, [videos.length, reloadChannels]);
-
-  useEffect(() => {
-    if (recommendedTabActive) return;
-    api
-      .listVideos({ continue_watching: true })
-      .then(setContinueWatching)
-      .catch(() => undefined);
-  }, [videos.length, refreshKey, recommendedTabActive]);
-
-  useEffect(() => {
-    if (recommendedTabActive) return;
-    api
-      .tagStats(activeChannel || undefined)
-      .then(setTags)
-      .catch(() => undefined);
-    setShowAllTags(false);
-  }, [activeChannel, videos.length, recommendedTabActive]);
-
-  useEffect(() => {
-    if (recommendedTabActive) {
-      setLoading(false);
-      return;
-    }
-    const cacheKey = JSON.stringify({
-      q: debouncedSearch || "",
-      channel: activeChannel || "",
-      tag: activeTag || "",
-      sort,
-      order,
-      seed: sort === "random" ? randomSeed : undefined,
-    });
-    const cached = readLibraryCache(cacheKey);
-    if (cached) {
-      setVideos(cached);
-    } else if (videos.length === 0) {
-      // Nothing to show yet (first visit or a filter with no cached match).
-      setLoading(true);
-    }
-    const ac = new AbortController();
-    const query = {
-      channel: activeChannel || undefined,
-      tag: activeTag || undefined,
-      sort,
-      order,
-      seed: sort === "random" ? randomSeed : undefined,
-      signal: ac.signal,
-    };
-    api
-      .listVideos({ ...query, q: debouncedSearch || undefined }, (soFar) => {
-        // Show the first page while the rest of a big library streams in.
-        if (!ac.signal.aborted) setVideos(soFar);
-      })
-      .then(async (matches) => {
-        if (ac.signal.aborted) return;
-        setVideos(matches);
-        writeLibraryCache(cacheKey, matches);
-        if (!debouncedSearch) {
-          setOtherVideos([]);
-          return;
-        }
-        try {
-          const all = await api.listVideos(query);
-          if (ac.signal.aborted) return;
-          const matchIds = new Set(matches.map((v) => v.id));
-          setOtherVideos(all.filter((v) => !matchIds.has(v.id)));
-        } catch {
-          if (!ac.signal.aborted) setOtherVideos([]);
-        }
-      })
-      .catch(() => {
-        if (!cached && !ac.signal.aborted) {
-          setVideos([]);
-          setOtherVideos([]);
-        }
-      })
-      .finally(() => {
-        if (!ac.signal.aborted) setLoading(false);
-      });
-    return () => ac.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- videos.length is only read to decide whether to show the loading state; re-fetching whenever the list changes would loop
-  }, [
-    debouncedSearch,
-    activeChannel,
-    activeTag,
+  // The lists on this page. Each is a query (see queries/videos): a cached
+  // answer paints at once, then revalidates in the background.
+  const mainFilters: VideoFilters = {
+    q: debouncedSearch || undefined,
+    channel: activeChannel || undefined,
+    tag: activeTag || undefined,
     sort,
     order,
-    randomSeed,
-    refreshKey,
-    recommendedTabActive,
-  ]);
+    seed: sort === "random" ? randomSeed : undefined,
+  };
+  const mainFiltersRef = useRef(mainFilters);
+  mainFiltersRef.current = mainFilters;
+  const matchList = useVideoList(mainFilters, !recommendedTabActive);
+  const videos = matchList.videos;
+  const loading = matchList.loading;
+  // With a search, the rest of the library follows the matches.
+  const restList = useVideoList(
+    { ...mainFilters, q: undefined },
+    !recommendedTabActive && !!debouncedSearch
+  );
+  const otherVideos = useMemo(() => {
+    if (!debouncedSearch) return NO_VIDEOS;
+    const matchIds = new Set(videos.map((v) => v.id));
+    return restList.videos.filter((v) => !matchIds.has(v.id));
+  }, [debouncedSearch, videos, restList.videos]);
+  const continueWatching = useVideoList(
+    { continue_watching: true },
+    !recommendedTabActive
+  ).videos;
+  const channels =
+    useChannels(settings.channelSort, settings.channelOrder).data ??
+    NO_CHANNELS;
+  const tags =
+    useTagStats(activeChannel || undefined, !recommendedTabActive).data ??
+    NO_TAGS;
+  useEffect(() => {
+    setShowAllTags(false);
+  }, [activeChannel]);
+
+  const listIncomplete = matchList.partial || restList.partial;
+  useEffect(() => {
+    if (listIncomplete) {
+      showError(
+        "Some videos could not be loaded. Showing the ones that did; reload to try again."
+      );
+    }
+  }, [listIncomplete, showError]);
 
   // Global catalog search (home search only — channel pages use feed search).
   useEffect(() => {
@@ -1122,7 +1053,7 @@ function OnlineLibrary() {
       throw new Error("Could not delete selected videos");
     }
     exitSelectMode();
-    setRefreshKey((k) => k + 1);
+    refreshLibrary();
   };
 
   const bulkSaveNote = async () => {
@@ -1194,7 +1125,7 @@ function OnlineLibrary() {
       `Synced ${result.refreshed} video${result.refreshed === 1 ? "" : "s"}` +
         (result.failed ? ` (${result.failed} failed)` : "")
     );
-    setRefreshKey((k) => k + 1);
+    refreshLibrary();
     exitSelectMode();
   };
 
