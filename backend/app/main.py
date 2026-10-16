@@ -54,6 +54,7 @@ from .services.ai.worker import recover_ai_jobs
 from .services.auth.accounts import AuthUser
 from .services.backup import create_backup_worker
 from .services.channel_catalog import recover_catalog_jobs
+from .services.duplicate_groups import DuplicateGroupCache
 from .services.health import HealthCache, build_readiness
 from .services.metrics import CONTENT_TYPE as metrics_content_type
 from .services.metrics import render_metrics
@@ -196,6 +197,7 @@ async def lifespan(app: FastAPI):
     registry = WorkerRegistry()
     app.state.shutdown_event = shutdown_event
     app.state.workers = registry
+    app.state.duplicate_groups = DuplicateGroupCache()
     restore_signals = _install_shutdown_signals(shutdown_event)
     try:
         if _e2e_browser():

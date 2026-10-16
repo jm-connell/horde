@@ -1,9 +1,8 @@
 import logging
-import re
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -13,8 +12,10 @@ from ..database import get_session
 from ..models import Video
 from ..response_schemas import VideoPage
 from ..schemas import VideoRead
+from ..services import duplicate_groups as duplicate_groups_svc
 from ..services import library, uploads
 from ..services.auth.accounts import AuthUser
+from ..services.duplicate_groups import DuplicateGroupCache
 from ..services.metadata import probe_is_playable
 from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
 from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
@@ -204,20 +205,13 @@ def skip_review(
     return _to_read(video, session, user_id=user.id)
 
 
-def _yt_id(video: Video) -> str | None:
-    """Extract YouTube video ID from source_url or file_path."""
-    for text in (video.source_url or "", video.file_path):
-        m = re.search(r"\[([A-Za-z0-9_-]{11})\]", text)
-        if m:
-            return m.group(1)
-        m = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", text)
-        if m:
-            return m.group(1)
-    return None
-
-
-def _title_tokens(title: str) -> set[str]:
-    return set(re.sub(r"[^a-z0-9 ]", "", title.lower()).split())
+def _group_cache(request: Request) -> DuplicateGroupCache:
+    """The app's grouping cache (``lifespan`` builds it; created on first use if absent)."""
+    state = request.app.state
+    cache = getattr(state, "duplicate_groups", None)
+    if cache is None:
+        cache = state.duplicate_groups = DuplicateGroupCache()
+    return cache
 
 
 class DuplicateGroupPage(BaseModel):
@@ -227,6 +221,7 @@ class DuplicateGroupPage(BaseModel):
 
 @router.get("/groups", response_model=DuplicateGroupPage)
 def duplicate_groups(
+    request: Request,
     limit: int = Query(25, ge=1, le=100),
     cursor: str | None = None,
     session: Session = Depends(get_session),
@@ -234,7 +229,8 @@ def duplicate_groups(
 ):
     """Clusters of likely duplicate videos, ``limit`` groups per page.
 
-    Finding the clusters reads the whole library, but the AI check (one model call
+    Finding the clusters reads the whole library, so the grouping is cached until
+    the library changes (``services/duplicate_groups.py``); the AI check (one model call
     per heuristic cluster) and the serialization only run for the groups on the
     requested page.
     """
@@ -244,55 +240,24 @@ def duplicate_groups(
         )
     except InvalidCursor as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    all_videos = session.exec(
-        select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-    ).all()
-
-    # Group 1: same YouTube video ID
-    by_yt_id: dict[str, list[Video]] = {}
-    for v in all_videos:
-        yt_id = _yt_id(v)
-        if yt_id:
-            by_yt_id.setdefault(yt_id, []).append(v)
-
-    # Group 2: same channel + high title similarity + duration within 5s
-    used: set[int] = set()
-    raw_groups: list[tuple[str, list[Video]]] = []
-
-    for vids in by_yt_id.values():
-        if len(vids) > 1:
-            raw_groups.append(("youtube_id", vids))
-            for v in vids:
-                used.add(v.id)
-
-    for i, va in enumerate(all_videos):
-        if va.id in used:
-            continue
-        if not va.channel or not va.title or not va.duration_sec:
-            continue
-        tokens_a = _title_tokens(va.title)
-        cluster = [va]
-        for vb in all_videos[i + 1 :]:
-            if vb.id in used or vb.channel != va.channel:
-                continue
-            if not vb.title or not vb.duration_sec:
-                continue
-            if abs(va.duration_sec - vb.duration_sec) > 5:
-                continue
-            tokens_b = _title_tokens(vb.title)
-            # Jaccard similarity
-            if tokens_a and tokens_b:
-                overlap = len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
-                if overlap >= 0.7:
-                    cluster.append(vb)
-        if len(cluster) > 1:
-            for v in cluster:
-                used.add(v.id)
-            raw_groups.append(("heuristic", cluster))
-
-    window = raw_groups[page.offset : page.offset + page.fetch]
+    groups = _group_cache(request).groups(duplicate_groups_svc.load_facts(session))
+    window = groups[page.offset : page.offset + page.fetch]
     more = len(window) > limit
-    raw_groups = window[:limit]
+    window = window[:limit]
+    by_id = {
+        v.id: v
+        for v in session.exec(
+            select(Video).where(
+                Video.id.in_({vid for g in window for vid in g.video_ids})  # type: ignore[attr-defined]
+            )
+        ).all()
+    }
+    # A video deleted since the grouping was cached drops out of its group.
+    raw_groups = [
+        (g.match_type, [by_id[vid] for vid in g.video_ids if vid in by_id])
+        for g in window
+    ]
+    raw_groups = [(t, vids) for t, vids in raw_groups if len(vids) > 1]
 
     annotate = False
     ai_unavailable_reason: str | None = None
