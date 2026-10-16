@@ -13,6 +13,9 @@ import { useSkipSegments } from "./player/useSkipSegments";
 import MiniPlayerFrame from "./player/MiniPlayerFrame";
 import { useMiniPlayer } from "./player/useMiniPlayer";
 import ControlBar from "./player/ControlBar";
+import { useFullscreen } from "./player/useFullscreen";
+import { usePictureInPicture } from "./player/usePictureInPicture";
+import { usePlayerBodyFlags } from "./player/usePlayerBodyFlags";
 import { useCaptions } from "./player/useCaptions";
 import { useCasting } from "./player/useCasting";
 import { usePlayerMenu } from "./player/usePlayerMenu";
@@ -92,7 +95,6 @@ export default function VideoPlayer({
   const shakaPlayerRef = useRef<ShakaPlayer | null>(null);
   const capabilityMaxHeightRef = useRef<number>(2160);
   const playerRootRef = useRef<HTMLDivElement>(null);
-  const userInitiatedFullscreen = useRef(false);
   const hideControlsTimer = useRef<number | null>(null);
   const controlsInteracting = useRef(false);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -142,7 +144,13 @@ export default function VideoPlayer({
       bandwidth?: number;
     }[]
   >([]);
-  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+  const {
+    isNativeFullscreen,
+    toggleNativeFullscreen,
+    userInitiatedFullscreen,
+  } = useFullscreen(playerRootRef, videoRef);
+  const { requestPiP } = usePictureInPicture(videoRef, isMobile);
+  usePlayerBodyFlags(playing, isMini, mode);
   const [videoAspect, setVideoAspect] = useState<number | null>(null);
 
   // Theater mode stretches the player edge-to-edge, but object-contain
@@ -611,107 +619,6 @@ export default function VideoPlayer({
     }
   }, [mode, onModeChange]);
 
-  const exitNativeFullscreen = useCallback(async () => {
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      }
-      screen.orientation?.unlock?.();
-    } catch {
-      // Browser may reject unlock or exit.
-    }
-    userInitiatedFullscreen.current = false;
-  }, []);
-
-  const enterNativeFullscreen = useCallback(async () => {
-    const root = playerRootRef.current;
-    const video = videoRef.current;
-    if (!root || !video) return;
-
-    userInitiatedFullscreen.current = true;
-
-    const req =
-      root.requestFullscreen?.bind(root) ??
-      (
-        root as HTMLElement & {
-          webkitRequestFullscreen?: () => Promise<void>;
-        }
-      ).webkitRequestFullscreen?.bind(root);
-    if (req) {
-      try {
-        await req();
-        try {
-          const lock = (
-            screen.orientation as ScreenOrientation & {
-              lock?: (orientation: string) => Promise<void>;
-            }
-          ).lock;
-          await lock?.("landscape");
-        } catch {
-          // Orientation lock may be unsupported or denied.
-        }
-        return;
-      } catch {
-        userInitiatedFullscreen.current = false;
-      }
-    }
-
-    const el = video as HTMLVideoElement & {
-      webkitEnterFullscreen?: () => void;
-    };
-    if (el.webkitEnterFullscreen) {
-      el.webkitEnterFullscreen();
-      return;
-    }
-
-    userInitiatedFullscreen.current = false;
-  }, []);
-
-  const toggleNativeFullscreen = useCallback(async () => {
-    if (document.fullscreenElement || isNativeFullscreen) {
-      await exitNativeFullscreen();
-    } else {
-      await enterNativeFullscreen();
-    }
-  }, [enterNativeFullscreen, exitNativeFullscreen, isNativeFullscreen]);
-
-  useEffect(() => {
-    const onChange = () => {
-      const active = !!document.fullscreenElement;
-      setIsNativeFullscreen(active);
-      document.body.classList.toggle("player-fullscreen", active);
-      if (!active) {
-        userInitiatedFullscreen.current = false;
-        try {
-          screen.orientation?.unlock?.();
-        } catch {
-          // ignore
-        }
-      }
-    };
-    document.addEventListener("fullscreenchange", onChange);
-    return () => {
-      document.removeEventListener("fullscreenchange", onChange);
-      document.body.classList.remove("player-fullscreen");
-    };
-  }, []);
-
-  // Signal for page chrome (background effects) that a full-size player is
-  // actively playing; the mini player does not count.
-  useEffect(() => {
-    const body = document.body;
-    if (playing && !isMini) body.dataset.playerPlaying = "true";
-    else delete body.dataset.playerPlaying;
-    // Theater / fit-window playback covers most of the page.
-    if (playing && !isMini && (mode === "theater" || mode === "windowed")) {
-      body.dataset.playerCovering = "true";
-    } else delete body.dataset.playerCovering;
-    return () => {
-      delete body.dataset.playerPlaying;
-      delete body.dataset.playerCovering;
-    };
-  }, [playing, isMini, mode]);
-
   const stepRate = useCallback((dir: 1 | -1) => {
     setRate((r) => {
       const idx = SPEED_STEPS.indexOf(r);
@@ -809,46 +716,6 @@ export default function VideoPlayer({
     v.muted = !v.muted;
     setMuted(v.muted);
   };
-
-  const enterPiP = useCallback(async () => {
-    const v = videoRef.current;
-    if (!v?.requestPictureInPicture) return;
-    await v.requestPictureInPicture();
-  }, []);
-
-  const requestPiP = useCallback(async () => {
-    const v = videoRef.current;
-    if (!v) return;
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      } else {
-        await enterPiP();
-      }
-    } catch {
-      // PiP can be blocked by the browser; ignore.
-    }
-  }, [enterPiP]);
-
-  useEffect(() => {
-    if (!isMobile) return;
-    const onVisibility = () => {
-      const v = videoRef.current;
-      if (!v) return;
-      if (
-        document.hidden &&
-        !v.paused &&
-        document.pictureInPictureEnabled &&
-        !document.pictureInPictureElement
-      ) {
-        enterPiP().catch(() => undefined);
-      } else if (!document.hidden && document.pictureInPictureElement) {
-        document.exitPictureInPicture().catch(() => undefined);
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [isMobile, enterPiP]);
 
   const holdWindowCleanup = useRef<(() => void) | null>(null);
 
