@@ -8,6 +8,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { PAGE_SIZE, api, type LibraryQuery, type Page } from "../api";
+import { useToast } from "../context/ToastContext";
 import type { Video } from "../types";
 import { queryKeys } from "./keys";
 
@@ -37,7 +38,7 @@ export const videoListOptions = (filters: VideoFilters) =>
     initialPageParam: null as string | null,
     getNextPageParam: (last: Page<Video>) => last.next_cursor ?? undefined,
     staleTime: 0,
-    gcTime: 30 * 60_000,
+    gcTime: 10 * 60_000,
   });
 
 export interface VideoList {
@@ -46,6 +47,8 @@ export interface VideoList {
   loading: boolean;
   /** Pages after the first failed to load; `videos` holds what did load. */
   partial: boolean;
+  /** Nothing could be loaded at all. */
+  failed: boolean;
 }
 
 /**
@@ -66,15 +69,30 @@ export function useVideoList(filters: VideoFilters, enabled = true): VideoList {
     }
   }, [enabled, hasNextPage, isFetching, isFetchNextPageError, fetchNextPage]);
 
-  const videos = useMemo(
-    () => query.data?.pages.flatMap((p) => p.items) ?? NO_VIDEOS,
-    [query.data]
-  );
-  return {
-    videos,
-    loading: enabled && query.isPending,
-    partial: isFetchNextPageError,
-  };
+  const videos = useMemo(() => {
+    if (!query.data) return NO_VIDEOS;
+    // A video can move across a page boundary while the pages load.
+    const seen = new Set<number>();
+    return query.data.pages
+      .flatMap((p) => p.items)
+      .filter((v) => !seen.has(v.id) && !!seen.add(v.id));
+  }, [query.data]);
+
+  const { showError } = useToast();
+  const failed = enabled && query.isLoadingError;
+  const partial = isFetchNextPageError;
+  useEffect(() => {
+    if (failed) {
+      showError("Could not load videos.", { key: "video-list-error" });
+    } else if (partial) {
+      showError(
+        "Some videos could not be loaded. Showing the ones that did; reload to try again.",
+        { key: "video-list-error" }
+      );
+    }
+  }, [failed, partial, showError]);
+
+  return { videos, loading: enabled && query.isPending, partial, failed };
 }
 
 /** Change a video wherever the cached lists hold it (rows that match a filter stay). */
