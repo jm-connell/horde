@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterable, Mapping
+from collections.abc import Set as AbstractSet
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -50,6 +52,29 @@ def _media_fields(video: Video, *, full: bool) -> dict:
     return fields
 
 
+def _has_sprites(video: Video, sprite_ids: AbstractSet[int] | None) -> bool:
+    if video.id is None:
+        return False
+    if sprite_ids is not None:
+        return video.id in sprite_ids
+    return sprites_exist(SPRITES_DIR, video.id)
+
+
+def sprite_ids_on_disk() -> set[int]:
+    """Ids that have a finished sprite sheet: one directory listing, not a stat per row."""
+    try:
+        names = {entry.name for entry in os.scandir(SPRITES_DIR)}
+    except FileNotFoundError:
+        return set()
+    return {
+        int(name[:-4])
+        for name in names
+        if name.endswith(".jpg")
+        and name[:-4].isdigit()
+        and f"{name[:-4]}.json" in names
+    }
+
+
 def _watch_fields(
     video: Video,
     session: Session | None,
@@ -69,6 +94,18 @@ def _watch_fields(
     }
 
 
+def _load_metas(session: Session, rows: list[Video]) -> dict[int, VideoAiMeta]:
+    ids = [v.id for v in rows if v.id is not None]
+    found: dict[int, VideoAiMeta] = {}
+    for start in range(0, len(ids), 500):
+        chunk = ids[start : start + 500]
+        for meta in session.exec(
+            select(VideoAiMeta).where(VideoAiMeta.video_id.in_(chunk))  # type: ignore[attr-defined]
+        ):
+            found[meta.video_id] = meta
+    return found
+
+
 def to_read_many(
     videos: Iterable[Video],
     session: Session,
@@ -79,6 +116,10 @@ def to_read_many(
 ) -> list[VideoRead]:
     """Serialize a list, reading the user's watch state for all of it in one query."""
     rows = list(videos)
+    if not kwargs.get("compact"):
+        # Everything a full payload reads per video, fetched once for the page.
+        kwargs.setdefault("metas", _load_metas(session, rows))
+        kwargs.setdefault("sprite_ids", sprite_ids_on_disk())
     if states is None:
         states = (
             user_state.get_states(session, user_id, (v.id for v in rows if v.id))
@@ -97,11 +138,14 @@ def to_read(
     include_processing: bool = False,
     match_reason: dict | None = None,
     compact: bool = False,
+    metas: Mapping[int, VideoAiMeta] | None = None,
+    sprite_ids: AbstractSet[int] | None = None,
 ) -> VideoRead:
     """Serialize ``video`` for ``user_id`` (their history; the rest is shared).
 
     ``user_id`` has no default on purpose: forgetting it would silently show
-    nobody's history. Pass ``states`` (see ``to_read_many``) when serializing a list.
+    nobody's history. Pass ``states``, ``metas`` and ``sprite_ids`` (see
+    ``to_read_many``) when serializing a list, so no row costs its own query or stat.
     """
     watch = _watch_fields(video, session, user_id, states)
     if compact:
@@ -156,7 +200,11 @@ def to_read(
     chapters_source = None
     meta = None
     if session is not None and video.id is not None:
-        meta = session.get(VideoAiMeta, video.id)
+        meta = (
+            metas.get(video.id)
+            if metas is not None
+            else session.get(VideoAiMeta, video.id)
+        )
         if meta is not None:
             if meta.ai_tags:
                 ai_tags = library.parse_tags(meta.ai_tags)
@@ -214,10 +262,8 @@ def to_read(
         description=video.description,
         notes=video.notes,
         source_url=video.source_url,
-        has_thumbnail=bool(
-            video.thumbnail_path and Path(video.thumbnail_path).exists()
-        ),
-        has_sprites=bool(video.id is not None and sprites_exist(SPRITES_DIR, video.id)),
+        has_thumbnail=bool(video.thumbnail_path),
+        has_sprites=_has_sprites(video, sprite_ids),
         subtitles=[
             {"lang": t.get("lang"), "auto": t.get("auto", False)}
             for t in library.parse_subtitles(video.subtitles)
