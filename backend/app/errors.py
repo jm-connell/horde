@@ -150,6 +150,7 @@ async def http_exception_handler(_request: Request, exc: Exception) -> JSONRespo
     )
 
 
+_NOT_JSON = "Request body is not valid JSON"
 _LOC_ROOTS = ("body", "query", "path", "header", "cookie")
 
 
@@ -164,6 +165,15 @@ async def validation_exception_handler(
     _request: Request, exc: Exception
 ) -> JSONResponse:
     errors = cast(RequestValidationError, exc).errors()
+    if any(e["type"] == "json_invalid" for e in errors):
+        # Pydantic locates the syntax error by character offset ("body", 1), which
+        # reads as a field name; say what is wrong instead.
+        return error_response(
+            422,
+            _NOT_JSON,
+            "validation_error",
+            fields=[{"loc": ["body"], "msg": _NOT_JSON}],
+        )
     fields = [{"loc": list(e["loc"]), "msg": e["msg"]} for e in errors]
     parts = []
     for e in errors:

@@ -135,3 +135,17 @@ def test_unhandled_error_is_a_generic_500_with_the_request_id(
     logged = [r for r in caplog.records if r.name == "app.errors"]
     assert logged and logged[0].exc_info is not None
 
+
+def test_malformed_json_body_is_one_clear_message(client):
+    resp = client.post(
+        "/api/downloads",
+        content=b'{"url": ',
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["code"] == "validation_error"
+    assert body["detail"] == "Request body is not valid JSON"
+    assert body["fields"] == [
+        {"loc": ["body"], "msg": "Request body is not valid JSON"}
+    ]
