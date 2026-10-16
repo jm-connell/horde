@@ -8,7 +8,7 @@ This is not a substitute for playing a real video on your LAN. The player still 
 
 | Layer | Tool | Runs in CI? | Protects |
 |-------|------|-------------|----------|
-| **Lint & format** | `ruff check`, `ruff format --check` (backend); ESLint, Prettier, `tsc --noEmit` (frontend) | Yes | Unused code, unsafe patterns, hook-dependency and accessibility mistakes, style drift |
+| **Lint, format & types** | `ruff check`, `ruff format --check`, `mypy` (backend); ESLint, Prettier, `tsc --noEmit` (frontend) | Yes | Unused code, unsafe patterns, type errors (optional ids, wrong return types), hook-dependency and accessibility mistakes, style drift |
 | **Backend unit** | pytest against services (paths, URL clean, queue, settings clamps, yt-dlp error kinds, migrations, `update.sh` env/mount helpers) | Yes | Logic that used to regress without an HTTP server |
 | **Backend API** | pytest + FastAPI `TestClient` on a temp SQLite + temp `DOWNLOADS_DIR` | Yes | Library, review, playlists, settings, download enqueue (yt-dlp stubbed), Range streaming |
 | **Frontend unit** | Vitest (node) | Yes | Formatters, presets, catalog progress copy, URL helpers |
@@ -37,6 +37,7 @@ scripts/check.sh --e2e    # also run the Playwright suite
 |---|------|-----------------------------|
 | 1 | Backend lint | `ruff check .` in `backend/` |
 | 2 | Backend format | `ruff format --check .` in `backend/` |
+| 2b | Backend types | `python -m mypy` in `backend/` (configuration in `pyproject.toml`; zero errors) |
 | 3a | API schema | `python -m app.export_openapi --check openapi.json` in `backend/` (regenerate with `... openapi.json` when you change the API) |
 | 3 | Backend tests | `PYTHONPATH=. pytest -q` in `backend/` |
 | 3b | API types | `npm run gen:api:check` in `frontend/` (regenerate `src/api/schema.d.ts` with `npm run gen:api` after regenerating `openapi.json`) |
@@ -52,7 +53,7 @@ Every gate runs even if an earlier one fails, so you see all problems at once; t
 
 Auto-fixers: `ruff check --fix . && ruff format .` in `backend/`, `npm run lint:fix` and `npm run format` in `frontend/`.
 
-Tool configuration lives in `backend/pyproject.toml` (ruff, mypy) and `frontend/eslint.config.js` / `frontend/.prettierrc`. `mypy` is configured (`python -m mypy` from `backend/`) but is **not** a gate yet. Every `# noqa` and `// eslint-disable` must carry a reason.
+Tool configuration lives in `backend/pyproject.toml` (ruff, mypy) and `frontend/eslint.config.js` / `frontend/.prettierrc`. `mypy` is a gate: zero errors, with `check_untyped_defs`, `warn_return_any`, `warn_redundant_casts`, `strict_equality` and `warn_unused_ignores` on. Every `# noqa`, `# type: ignore[code]` and `// eslint-disable` must carry a reason (mypy allows free text only after a second `#`: `# type: ignore[attr-defined]  # why`). Typing notes for SQLModel code: class attributes such as `Video.id` are typed as their Python values, so wrap them in `col()` when building SQL expressions (`col(Video.id).in_(ids)`), and use `require_id(row)` for a primary key that is known to be set.
 
 !!! note "Playwright browser path"
     By default Playwright uses the Chromium that `npx playwright install chromium` fetches (CI does this). On a machine with a preinstalled browser that does not match the pinned Playwright version, set `PW_CHROMIUM_EXECUTABLE=/path/to/chrome`. Set `E2E_APP_PORT` / `E2E_SETUP_PORT` (defaults 8091 / 8092) to run several checkouts side by side.
@@ -65,7 +66,7 @@ Backend (from `backend/`, venv with `requirements.txt` + `requirements-dev.txt`)
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
-ruff check . && ruff format --check .
+ruff check . && ruff format --check . && mypy
 pytest
 ```
 

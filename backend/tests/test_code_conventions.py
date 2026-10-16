@@ -58,3 +58,22 @@ def test_silent_except_rules_are_enforced_without_per_file_exemptions():
     assert not ignored & {"S", "S110", "BLE", "BLE001", "SIM105"}
     for pattern, rules in lint.get("per-file-ignores", {}).items():
         assert not set(rules) & {"S110", "BLE001", "SIM105", "S", "BLE"}, pattern
+
+
+TYPE_IGNORE = re.compile(r"#\s*type:\s*ignore(\[[^\]]*\])?(.*)$")
+
+
+def test_every_type_ignore_has_a_code_and_a_reason():
+    """mypy only allows free text after a second ``#``: ``# type: ignore[code]  # why``."""
+    bad = []
+    for path, lines in _app_sources():
+        for number, line in enumerate(lines, 1):
+            match = TYPE_IGNORE.search(line)
+            if not match:
+                continue
+            if not match.group(1) or not re.match(r"\s*#\s*\S", match.group(2) or ""):
+                bad.append(f"{path.relative_to(BACKEND)}:{number}: {line.strip()}")
+    assert not bad, (
+        "use '# type: ignore[code]  # reason' for these type: ignore markers:\n"
+        + "\n".join(bad)
+    )

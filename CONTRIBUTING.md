@@ -5,7 +5,7 @@ Thanks for helping. The short version:
 ## Quality gates are mandatory
 
 ```bash
-scripts/check.sh          # ruff, pytest, eslint, prettier, tsc, vitest, vite build, mkdocs
+scripts/check.sh          # ruff, mypy, pytest, eslint, prettier, tsc, vitest, vite build, mkdocs
 scripts/check.sh --e2e    # ...plus the Playwright browser suite
 ```
 
