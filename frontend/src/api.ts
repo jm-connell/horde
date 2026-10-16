@@ -386,10 +386,10 @@ export const api = {
   },
 
   /** Falls back to the downloaded copy when offline or unreachable. */
-  async getVideo(id: number): Promise<Video> {
+  async getVideo(id: number, opts?: ReadOptions): Promise<Video> {
     if (id < 0) return offlineVideo(id);
     try {
-      return await request<Video>(`/api/videos/${id}`);
+      return await request<Video>(`/api/videos/${id}`, opts);
     } catch (err) {
       if (!isNetworkFailure(err)) throw err;
       const local = await getOfflineItem(id).catch(() => undefined);
@@ -398,12 +398,20 @@ export const api = {
     }
   },
 
-  getRelatedVideos(id: number, limit = 8, offset = 0): Promise<Video[]> {
+  getRelatedVideos(
+    id: number,
+    limit = 8,
+    offset = 0,
+    opts?: ReadOptions
+  ): Promise<Video[]> {
     const qs = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
     });
-    return request<Video[]>(`/api/videos/${id}/related?${qs.toString()}`);
+    return request<Video[]>(
+      `/api/videos/${id}/related?${qs.toString()}`,
+      opts
+    );
   },
 
   updateVideo(id: number, payload: VideoUpdate): Promise<Video> {
@@ -695,8 +703,8 @@ export const api = {
     return request<StorageStats>("/api/stats/storage");
   },
 
-  getAppSettings(): Promise<AppSettings> {
-    return request<AppSettings>("/api/settings");
+  getAppSettings(opts?: ReadOptions): Promise<AppSettings> {
+    return request<AppSettings>("/api/settings", opts);
   },
 
   updateAppSettings(
@@ -1115,19 +1123,24 @@ export const api = {
     });
   },
 
-  listPresets(): Promise<string[]> {
-    return request<string[]>("/api/downloads/presets");
+  listPresets(opts?: ReadOptions): Promise<string[]> {
+    return request<string[]>("/api/downloads/presets", opts);
   },
 
-  previewDownload(url: string): Promise<DownloadPreview> {
+  previewDownload(url: string, opts?: ReadOptions): Promise<DownloadPreview> {
     return request<DownloadPreview>(
-      `/api/downloads/preview?url=${encodeURIComponent(url)}`
+      `/api/downloads/preview?url=${encodeURIComponent(url)}`,
+      opts
     );
   },
 
-  getPreviewMeta(url: string): Promise<StreamPreviewMeta> {
+  getPreviewMeta(
+    url: string,
+    opts?: ReadOptions
+  ): Promise<StreamPreviewMeta> {
     return request<StreamPreviewMeta>(
-      `/api/preview/meta?url=${encodeURIComponent(url)}`
+      `/api/preview/meta?url=${encodeURIComponent(url)}`,
+      opts
     );
   },
 
@@ -1240,12 +1253,12 @@ export const api = {
     });
   },
 
-  listPlaylists(): Promise<Playlist[]> {
-    return request<Playlist[]>("/api/playlists");
+  listPlaylists(opts?: ReadOptions): Promise<Playlist[]> {
+    return request<Playlist[]>("/api/playlists", opts);
   },
 
-  getPlaylist(id: number): Promise<PlaylistDetail> {
-    return request<PlaylistDetail>(`/api/playlists/${id}`);
+  getPlaylist(id: number, opts?: ReadOptions): Promise<PlaylistDetail> {
+    return request<PlaylistDetail>(`/api/playlists/${id}`, opts);
   },
 
   createPlaylist(name: string, description?: string): Promise<Playlist> {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   infiniteQueryOptions,
   keepPreviousData,
@@ -141,4 +141,60 @@ export function useTagStats(channel: string | undefined, enabled: boolean) {
     staleTime: 0,
     placeholderData: keepPreviousData,
   });
+}
+
+/**
+ * One video. `gcTime: 0` and an infinite `staleTime`: the Watch page reads it
+ * once per visit (resume position, handoff to the player) and a copy kept from
+ * an earlier visit would carry an old position.
+ */
+export const videoDetailQuery = (id: number) => ({
+  queryKey: queryKeys.videos.detail(id),
+  queryFn: ({ signal }: { signal: AbortSignal }) =>
+    api.getVideo(id, { signal }),
+  gcTime: 0,
+  staleTime: Infinity,
+});
+
+export const RELATED_PAGE = 8;
+export const RELATED_MAX = 48;
+
+/** "More like this", eight at a time, up to RELATED_MAX. */
+export function useRelatedVideos(videoId: number | undefined) {
+  const query = useInfiniteQuery({
+    queryKey: queryKeys.videos.related(videoId ?? 0),
+    queryFn: ({ pageParam, signal }) =>
+      api.getRelatedVideos(videoId ?? 0, RELATED_PAGE, pageParam, { signal }),
+    initialPageParam: 0,
+    getNextPageParam: (last, all) => {
+      const total = all.reduce((n, page) => n + page.length, 0);
+      return last.length >= RELATED_PAGE && total < RELATED_MAX
+        ? total
+        : undefined;
+    },
+    enabled: videoId != null,
+  });
+  const videos = useMemo(() => {
+    const seen = new Set<number>();
+    const out: Video[] = [];
+    for (const page of query.data?.pages ?? []) {
+      for (const v of page) {
+        if (!seen.has(v.id)) {
+          seen.add(v.id);
+          out.push(v);
+        }
+      }
+    }
+    return out.slice(0, RELATED_MAX);
+  }, [query.data]);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  const loadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  return {
+    videos,
+    hasMore: !!hasNextPage,
+    loadingMore: isFetchingNextPage,
+    loadMore,
+  };
 }
