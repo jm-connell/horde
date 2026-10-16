@@ -10,7 +10,6 @@ import { useAuth } from "../context/AuthContext";
 import { describeError } from "../apiErrors";
 import {
   Link,
-  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -20,11 +19,8 @@ import { api, thumbnailUrl } from "../api";
 import { appSettingsQuery, usePresets } from "../queries/app";
 import { queryKeys } from "../queries/keys";
 import { useAiStatus } from "../queries/status";
-import {
-  replaceVideoInLists,
-  useRelatedVideos,
-  videoDetailQuery,
-} from "../queries/videos";
+import { useRelatedVideos, videoDetailQuery } from "../queries/videos";
+import { useWatchVideo } from "./watch/useWatchVideo";
 import AddToPlaylist from "../components/AddToPlaylist";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import LoadingIndicator from "../components/LoadingIndicator";
@@ -52,7 +48,7 @@ import {
   presetOptionLabel,
   resolveQualityPreset,
 } from "../presets";
-import type { StreamPreviewMeta, Video, AiChaptersMode } from "../types";
+import type { AiChaptersMode } from "../types";
 import {
   downloadProcessingLabel,
   downloadProgressPercent,
@@ -66,11 +62,7 @@ import {
   stripChapterLines,
   watchProcessingLabel,
 } from "../utils";
-import {
-  clearWatchResume,
-  peekWatchResume,
-  setWatchResume,
-} from "../utils/watchHandoff";
+import { setWatchResume } from "../utils/watchHandoff";
 
 const STAY_DOWNLOAD_TOAST =
   "Downloading - Video will switch to full quality when ready";
@@ -84,10 +76,6 @@ const PRESET_LABELS: Record<string, string> = {
   "480p": "480p",
   audio: "Audio only",
 };
-
-type WatchSource =
-  | { kind: "library"; video: Video }
-  | { kind: "stream"; url: string; meta: StreamPreviewMeta };
 
 function downloadButtonLabel(preset: string): string {
   if (preset === "best") return "Download Best Quality";
@@ -110,14 +98,10 @@ export default function Watch() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const libraryId = id ? Number(id) : NaN;
   const streamUrlParam = (searchParams.get("url") || "").trim();
   const channelParam = (searchParams.get("channel") || "").trim();
 
-  const [source, setSource] = useState<WatchSource | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
   const relatedSentinelRef = useRef<HTMLDivElement>(null);
@@ -161,146 +145,27 @@ export default function Watch() {
   const isMobile = useIsMobile();
   const { mode, queue } = usePlaybackSession();
   const { activeStreamQuality } = usePlaybackLayout();
-  const {
-    playVideo,
-    playStream,
-    registerDock,
-    getCurrentPosition,
-    getStreamPosition,
-    suspendPlaybackMedia,
-    updateCurrentVideo,
-  } = usePlaybackActions();
+  const { playVideo, registerDock, getCurrentPosition, getStreamPosition } =
+    usePlaybackActions();
 
   const dockRef = useRef<HTMLDivElement>(null);
 
-  // --- Load library video ---
   const libraryValid = Number.isFinite(libraryId) && libraryId !== 0;
-  const libraryQuery = useQuery({
-    ...videoDetailQuery(libraryId),
-    // Negative ids are offline-only device downloads (see offline/manager).
-    enabled: libraryValid,
-    // Keep this page's copy current while the server is still working on it
-    // (subtitles, summary, sprites, chapters).
-    refetchInterval: (query) => {
-      const v = query.state.data;
-      return v &&
-        (v.subtitles_pending ||
-          v.processing_summary ||
-          v.processing_sprites ||
-          v.processing_chapters)
-        ? 3000
-        : false;
-    },
-  });
-  const handedOffRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!libraryValid) return;
-    handedOffRef.current = null;
-    suspendPlaybackMedia({ videoId: libraryId });
-    setLoading(true);
-    setError(null);
-  }, [libraryId, libraryValid, suspendPlaybackMedia]);
-
-  useEffect(() => {
-    if (!libraryValid) return;
-    // A failed refresh of a video that is already playing must not replace it.
-    if (libraryQuery.isLoadingError) {
-      setError("Video not found");
-      setLoading(false);
-      return;
-    }
-    const v = libraryQuery.data;
-    if (!v) return;
-    if (handedOffRef.current === libraryId) {
-      // A later refresh of the same video: update, do not restart playback.
-      setSource({ kind: "library", video: v });
-      updateCurrentVideo(v);
-      return;
-    }
-    handedOffRef.current = libraryId;
-    const fromHandoff = peekWatchResume(libraryId);
-    const navResume = (location.state as { resumeAt?: number } | null)
-      ?.resumeAt;
-    const resumeAt =
-      fromHandoff ??
-      (typeof navResume === "number" && navResume > 1 ? navResume : null);
-    const merged =
-      resumeAt != null && resumeAt > 1
-        ? { ...v, last_position_sec: resumeAt }
-        : v;
-    clearWatchResume(libraryId);
-    setSource({ kind: "library", video: merged });
-    playVideo(merged);
-    setLoading(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional handoff once per video; the resume position comes from the navigation state at that moment
-  }, [libraryQuery.data, libraryQuery.isLoadingError, libraryId, libraryValid]);
-
-  // --- Load stream meta ---
-  const streamMode = !libraryValid && !!streamUrlParam;
-  const metaQuery = useQuery({
-    queryKey: queryKeys.preview.meta(streamUrlParam),
-    queryFn: ({ signal }) => api.getPreviewMeta(streamUrlParam, { signal }),
-    enabled: streamMode,
+  const { source, setSource, loading, error, setVideo } = useWatchVideo({
+    libraryId,
+    libraryValid,
+    streamUrlParam,
+    channelParam,
   });
 
   useEffect(() => {
-    if (libraryValid) return;
-    if (!streamUrlParam) {
-      setError("Missing video URL");
-      setLoading(false);
-      return;
-    }
-    suspendPlaybackMedia({ streamUrl: streamUrlParam });
-    setLoading(true);
-    setError(null);
-    setSource(null);
+    if (libraryValid || !streamUrlParam) return;
     setSelectedPreset("best");
     setAvailablePresets([]);
     setPresetSizes({});
     setPresetMenuOpen(false);
     userPickedPresetRef.current = false;
-  }, [streamUrlParam, libraryValid, suspendPlaybackMedia]);
-
-  useEffect(() => {
-    if (!streamMode) return;
-    if (metaQuery.isLoadingError) {
-      const err = metaQuery.error;
-      setError(err instanceof Error ? err.message : "Could not load stream");
-      setLoading(false);
-      return;
-    }
-    const meta = metaQuery.data;
-    if (!meta) return;
-    if (meta.library_video_id != null) {
-      navigate(`/watch/${meta.library_video_id}`, { replace: true });
-      return;
-    }
-    setSource({ kind: "stream", url: streamUrlParam, meta });
-    setLoading(false);
-  }, [
-    streamMode,
-    metaQuery.data,
-    metaQuery.isLoadingError,
-    metaQuery.error,
-    streamUrlParam,
-    navigate,
-  ]);
-
-  // Start stream playback
-  useEffect(() => {
-    if (source?.kind !== "stream") return;
-    playStream({
-      url: source.url,
-      title: source.meta.title || "Untitled",
-      channel: source.meta.channel ?? null,
-      poster: source.meta.thumbnail_url ?? null,
-      chapters: parseChapters(source.meta.description),
-      sourceUrl: source.meta.source_url,
-      channelParam: channelParam || source.meta.channel,
-      subtitles: source.meta.subtitles ?? [],
-    });
-  }, [source, channelParam, playStream]);
+  }, [streamUrlParam, libraryValid]);
 
   // Resolve download presets for stream
   const streamSource = source?.kind === "stream" ? source : null;
@@ -407,6 +272,7 @@ export default function Watch() {
   }, [
     onJobCompleted,
     source,
+    setSource,
     getStreamPosition,
     playVideo,
     navigate,
@@ -540,22 +406,12 @@ export default function Watch() {
   }, [
     onJobCompleted,
     video,
+    setSource,
     showToast,
     getCurrentPosition,
     playVideo,
     queryClient,
   ]);
-
-  const setVideo = useCallback(
-    (v: Video) => {
-      setSource({ kind: "library", video: v });
-      updateCurrentVideo(v);
-      // The library lists and this page's copy show the edit too.
-      queryClient.setQueryData(queryKeys.videos.detail(v.id), v);
-      replaceVideoInLists(queryClient, v);
-    },
-    [updateCurrentVideo, queryClient]
-  );
 
   const chaptersMutation = useMutation({
     mutationFn: ({ id, force }: { id: number; force: boolean }) =>
