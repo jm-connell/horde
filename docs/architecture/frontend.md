@@ -29,12 +29,25 @@ Mounted in `App.tsx` (outer → inner):
 | Provider | Role |
 |----------|------|
 | `ErrorBoundary` (`scope="app"`) | Last-resort render-error page; routes get their own boundary inside `<main>` |
-| `ToastProvider` | Transient toasts |
+| `ToastProvider` | Transient toasts (stable value) |
 | `ConfirmProvider` | Promise-based confirm dialogs |
 | `AuthProvider` + `AuthGate` | Who is signed in and their permissions; shows sign-in or *Create the admin account* instead of the app. `RequirePermission` hides routes and controls the account cannot use (the server enforces) |
-| `DownloadProvider` | Download queue state / actions |
+| `QueryClientProvider` (inside the sign-in gate, keyed by user id) | The TanStack Query cache for the signed-in account (see [Data layer](#data-layer)) |
+| `DownloadProvider` | Download jobs, live progress and queue state, kept in the query cache |
 | `SearchProvider` | Shared search query / library search coordination |
-| `PlaybackProvider` | Current video, queue, mini-player, navigation into `/watch` |
+| `PlaybackProvider` | Current video, queue, mini-player, navigation into `/watch`; three contexts (below) |
+
+`PlaybackProvider` exposes `usePlaybackActions()` (stable, never re-renders a reader), `usePlaybackSession()` (current video, stream, queue, mode) and `usePlaybackLayout()` (mini-player rectangle, picture inset, live quality; these change while dragging). Read the narrowest one a component needs.
+
+## Data layer
+
+Server data is read through **TanStack Query** (`src/queries/`). Types come from the generated OpenAPI schema (`src/api/schema.d.ts`, see [API overview](api-overview.md)); `src/types.ts` aliases them.
+
+- One query key per resource (`queries/keys.ts`), so screens share a request and a returning screen paints the cached value while it revalidates. Status data (AI status, system stats, activity, catalog and metadata sync) polls only on the screens that show it, and not in background tabs.
+- The library list is a `useInfiniteQuery` over the cursor API: the first page paints, the rest streams in, a failed page keeps the pages already loaded, and a refetch replaces the list only when every page has arrived.
+- Download jobs and per-job progress live in the cache: SSE events go in with `setQueryData`, and polling is only a fallback while the stream is down.
+- Writes are `useMutation` calls that invalidate or update the cache; a failure with no inline handling goes through `showError`.
+- The client uses `networkMode: "always"` because offline mode is tracked by `offline/connectivity`, and each signed-in user gets a new client and a remounted subtree, so nothing of the previous account survives a user change.
 
 ## Player DOM reparenting
 
