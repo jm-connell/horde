@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlmodel import Session, func, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import (
     ChannelCatalog,
     ChannelCatalogStatus,
@@ -155,7 +155,7 @@ def sync_feed_head(
     pc = data.get("playlist_count")
     live_name = data.get("channel") or channel_name
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         catalog = get_catalog_by_url(session, url, channel_name=live_name)
         if catalog is None:
             if not _enabled():
@@ -415,7 +415,7 @@ def _enqueue_catalog_embeds(catalog_id: int) -> None:
         ai = app_settings.ai_settings()
         if not ai.get("enabled", True) or ai.get("paused"):
             return
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             rows = session.exec(
                 select(ChannelCatalogVideo)
                 .where(ChannelCatalogVideo.catalog_id == catalog_id)
@@ -440,7 +440,7 @@ def _note_catalog_warning(catalog_id: int, message: str) -> None:
     text = (message or "").strip()[:500]
     if not text:
         return
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         catalog = session.get(ChannelCatalog, catalog_id)
         if catalog is None or catalog.last_error:
             return
@@ -451,7 +451,7 @@ def _note_catalog_warning(catalog_id: int, message: str) -> None:
 
 
 def index_catalog(catalog_id: int) -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         catalog = session.get(ChannelCatalog, catalog_id)
         if catalog is None:
             return
@@ -526,7 +526,7 @@ def index_catalog(catalog_id: int) -> None:
             pc = data.get("playlist_count")
             if isinstance(pc, int) and pc > 0:
                 channel_total = pc
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 catalog = session.get(ChannelCatalog, catalog_id)
                 if catalog is None:
                     act.discard()
@@ -572,7 +572,7 @@ def index_catalog(catalog_id: int) -> None:
             # Brief yield so downloads/previews can use the extract gate.
             time.sleep(0.35)
 
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is None:
                 act.discard()
@@ -634,7 +634,7 @@ def index_catalog(catalog_id: int) -> None:
         )
         _enqueue_catalog_embeds(catalog_id)
 
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is not None:
                 catalog.phase = None
@@ -648,7 +648,7 @@ def index_catalog(catalog_id: int) -> None:
             exc, url=channel_url, channel=channel_name
         )
         logger.warning("Catalog index failed for %s", channel_url, exc_info=True)
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is not None:
                 catalog.status = ChannelCatalogStatus.error

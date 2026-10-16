@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import delete
 from sqlmodel import Session, func, select
 
-from ..database import engine
+from ..context import get_engine, get_paths
 from ..models import (
     AiCategory,
     AiJob,
@@ -103,7 +103,7 @@ def _pause_workers(*, cancel_downloads: bool) -> None:
     if not cancel_downloads:
         return
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             jobs = session.exec(
                 select(DownloadJob).where(
                     DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading])
@@ -141,41 +141,39 @@ def _resume_workers() -> None:
 
 
 def _erase_media() -> None:
-    from ..config import DOWNLOADS_DIR
+    from ..context import get_engine
     from .compat_rendition import cancel_all
 
     cancel_all()
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         videos = session.exec(select(Video)).all()
         for video in videos:
             remove_files(collect_video_files(video, include_media=True))
-    _wipe_dir_contents(DOWNLOADS_DIR)
+    _wipe_dir_contents(get_paths().downloads)
 
 
 def _delete_rows(models: tuple[type, ...]) -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         for model in models:
             session.execute(delete(model))
         session.commit()
 
 
 def _wipe_chrome_assets() -> None:
-    from ..config import BACKGROUNDS_DIR, FONTS_DIR, ensure_dirs
 
-    _wipe_dir_contents(BACKGROUNDS_DIR)
-    _wipe_dir_contents(FONTS_DIR)
-    ensure_dirs()
+    _wipe_dir_contents(get_paths().backgrounds)
+    _wipe_dir_contents(get_paths().fonts)
+    get_paths().ensure()
 
 
 def _wipe_library_caches() -> None:
-    from ..config import DATA_DIR, SPRITES_DIR, THUMBNAILS_DIR, ensure_dirs
 
-    _wipe_dir_contents(THUMBNAILS_DIR)
-    _wipe_dir_contents(SPRITES_DIR)
-    cache = DATA_DIR / "feed_meta_cache.json"
+    _wipe_dir_contents(get_paths().thumbnails)
+    _wipe_dir_contents(get_paths().sprites)
+    cache = get_paths().data / "feed_meta_cache.json"
     cache.unlink(missing_ok=True)
-    ensure_dirs()
+    get_paths().ensure()
 
 
 def _wipe_dir_contents(root: Path) -> None:
@@ -192,5 +190,5 @@ def _wipe_dir_contents(root: Path) -> None:
 
 
 def _video_count() -> int:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         return int(session.scalar(select(func.count(Video.id))) or 0)

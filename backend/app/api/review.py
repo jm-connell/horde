@@ -7,8 +7,8 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..auth import current_user, require_permission
-from ..config import DOWNLOADS_DIR, VIDEO_EXTENSIONS
-from ..database import get_session
+from ..config import VIDEO_EXTENSIONS
+from ..context import get_paths, get_session
 from ..models import Video
 from ..response_schemas import VideoPage
 from ..schemas import VideoRead
@@ -121,7 +121,7 @@ def upload_import(
     stem = safe_filename(Path(name).stem)
     desired = f"imports/{stem}{ext}"
     rel_path = unique_rel_path(desired)
-    root = DOWNLOADS_DIR.resolve()
+    root = get_paths().downloads.resolve()
     dest = (root / rel_path).resolve()
     try:
         dest.relative_to(root)
@@ -139,7 +139,7 @@ def upload_import(
             file,
             part,
             max_bytes=uploads.max_video_upload_bytes(),
-            free_space_dir=DOWNLOADS_DIR,
+            free_space_dir=get_paths().downloads,
             headroom_bytes=uploads.IMPORT_HEADROOM_BYTES,
         )
         if part.stat().st_size == 0:

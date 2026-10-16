@@ -9,13 +9,8 @@ from sqlmodel import Session, select
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from ..config import (
-    DOWNLOADS_DIR,
-    SCAN_INTERVAL_SEC,
-    THUMBNAILS_DIR,
-    VIDEO_EXTENSIONS,
-)
-from ..database import engine
+from ..config import SCAN_INTERVAL_SEC, VIDEO_EXTENSIONS
+from ..context import get_engine, get_paths
 from ..logging_config import FailureLog
 from ..models import Video, VideoStatus, utcnow
 from . import activity, library
@@ -199,7 +194,7 @@ def ingest_media_file(
         session.refresh(video)
 
         handle.update(engine="ffmpeg", detail=video.title)
-        thumb_path = THUMBNAILS_DIR / f"{video.id}.jpg"
+        thumb_path = get_paths().thumbnails / f"{video.id}.jpg"
         if grab_frame(path, thumb_path, cancel_event=cancel_event):
             video.thumbnail_path = str(thumb_path)
             if video.id is not None:
@@ -256,7 +251,7 @@ def _requeue_unimported(session: Session) -> int:
             continue
         if not is_manual_import(video):
             continue
-        if not (DOWNLOADS_DIR / video.file_path).exists():
+        if not (get_paths().downloads / video.file_path).exists():
             continue
         video.needs_review = True
         video.added_at = now
@@ -295,8 +290,8 @@ def scan_once(
             reason=reason,
         )
         try:
-            with Session(engine) as session:
-                for path in DOWNLOADS_DIR.rglob("*"):
+            with Session(get_engine()) as session:
+                for path in get_paths().downloads.rglob("*"):
                     if _suspended.is_set() or (stop_event and stop_event.is_set()):
                         break
                     if _is_media(path) and _ingest_file(session, path, stop_event):
@@ -343,10 +338,10 @@ def cleanup_orphans() -> int:
     """
     removed = 0
     doomed: list[Path] = []
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(select(Video).where(Video.needs_review == True)).all()  # noqa: E712 - SQL column comparison, not a Python truth test
         for video in rows:
-            if (DOWNLOADS_DIR / video.file_path).exists():
+            if (get_paths().downloads / video.file_path).exists():
                 continue
             doomed += delete_video_cascade(session, video, False, commit=False)
             removed += 1
@@ -368,7 +363,7 @@ class _MediaEventHandler(FileSystemEventHandler):
         if _suspended.is_set():
             return
         try:
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 _ingest_file(session, path)
         except Exception:
             # An exception here would end the watchdog thread for good.
@@ -400,7 +395,7 @@ def _scan_pass(
     if not expire_progress:
         return
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             library.expire_stale_progress(session)
         expire_failures.ok()
     except Exception:  # noqa: BLE001 - FailureLog logs the traceback
@@ -420,7 +415,7 @@ def _polling_loop(worker: BackgroundWorker) -> None:
 def create_scanner_workers() -> list[ManagedWorker]:
     """The watchdog observer and the fallback poller (which also runs the first scan)."""
     observer = Observer()
-    observer.schedule(_MediaEventHandler(), str(DOWNLOADS_DIR), recursive=True)
+    observer.schedule(_MediaEventHandler(), str(get_paths().downloads), recursive=True)
     observer.daemon = True
 
     def stop_observer(timeout: float) -> None:

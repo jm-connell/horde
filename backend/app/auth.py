@@ -34,8 +34,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from . import database
-from .e2e_mode import enabled as e2e_enabled
+from .context import get_ctx
 from .errors import CodedHTTPException, error_response
 from .services.auth import accounts, media_token
 from .services.auth.accounts import AuthUser
@@ -55,7 +54,8 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/api/auth/bootstrap"),
     }
 )
-#: Only mounted (and only public) when the Playwright suite runs the app.
+#: Only mounted (and only public) when the Playwright suite runs the app: ``main``
+#: passes it to ``install_security(extra_public_routes=...)`` when ``HORDE_E2E`` is set.
 E2E_PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset({("POST", "/api/e2e/reset")})
 
 _PROTECTED_DOCS = frozenset({"/docs", "/redoc", "/openapi.json"})
@@ -93,12 +93,11 @@ def auth_required_response() -> JSONResponse:
 class AuthMiddleware:
     """401 for anonymous callers on protected paths; sets ``request.state.user``."""
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(
+        self, app: ASGIApp, extra_public: frozenset[tuple[str, str]] = frozenset()
+    ) -> None:
         self.app = app
-        public = set(PUBLIC_ROUTES)
-        if e2e_enabled():
-            public |= E2E_PUBLIC_ROUTES
-        self.public = frozenset(public)
+        self.public = PUBLIC_ROUTES | extra_public
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "websocket" and is_protected_path(scope["path"]):
@@ -128,7 +127,7 @@ class AuthMiddleware:
         runtime: AuthRuntime, request: Request, *, touch: bool = True
     ) -> AuthUser | None:
         """The caller, or ``None``. ``touch=False`` leaves the session expiry alone."""
-        with Session(database.engine) as session:
+        with get_ctx(request).session() as session:
             if runtime.config.disabled:
                 return AuthMiddleware._proxy_user(runtime, request, session)
             token = request.cookies.get(accounts.SESSION_COOKIE)

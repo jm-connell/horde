@@ -29,16 +29,6 @@ configure_logging()
 # GIT_DIR and friends. The update-script tests run ``git init`` / ``git clone``; with
 # those variables set they would act on the surrounding repository instead of their
 # own. Strip every GIT_* variable so each subprocess starts clean.
-_DIR_ATTRS = (
-    "DOWNLOADS_DIR",
-    "THUMBNAILS_DIR",
-    "SPRITES_DIR",
-    "BACKGROUNDS_DIR",
-    "FONTS_DIR",
-    "DATA_DIR",
-    "DB_PATH",
-    "DATABASE_URL",
-)
 for _name in [k for k in os.environ if k.startswith("GIT_")]:
     del os.environ[_name]
 
@@ -48,20 +38,6 @@ def _no_inherited_git_env(monkeypatch):
     """Keep GIT_* out of every test, even if a plugin or hook sets them later."""
     for name in [k for k in os.environ if k.startswith("GIT_")]:
         monkeypatch.delenv(name)
-
-
-def _rebind_imported_app_modules(monkeypatch, *, engine, dirs: dict[str, Any]) -> None:
-    """Modules that `from app.config/database import X` keep a stale binding."""
-    for name, mod in list(sys.modules.items()):
-        if mod is None:
-            continue
-        if name != "app" and not name.startswith("app."):
-            continue
-        if hasattr(mod, "engine"):
-            monkeypatch.setattr(mod, "engine", engine)
-        for attr in _DIR_ATTRS:
-            if hasattr(mod, attr) and attr in dirs:
-                monkeypatch.setattr(mod, attr, dirs[attr])
 
 
 @pytest.fixture(autouse=True)
@@ -99,58 +75,29 @@ def _join_background_workers():
 
 @pytest.fixture
 def tmp_dirs(tmp_path, monkeypatch):
-    """Point config paths at a fresh temp tree and rebind the DB engine."""
+    """A fresh AppContext over a temp tree, active for the length of the test."""
+    from app import context
+
     data = (tmp_path / "data").resolve()
     downloads = (tmp_path / "downloads").resolve()
     data.mkdir()
     downloads.mkdir()
-    db_path = data / "horde.db"
-    database_url = f"sqlite:///{db_path}"
-    thumbnails = data / "thumbnails"
-    sprites = data / "sprites"
-    backgrounds = data / "backgrounds"
-    fonts = data / "fonts"
-
     monkeypatch.setenv("DATA_DIR", str(data))
     monkeypatch.setenv("DOWNLOADS_DIR", str(downloads))
 
-    import app.config as cfg
-
-    monkeypatch.setattr(cfg, "DATA_DIR", data)
-    monkeypatch.setattr(cfg, "DOWNLOADS_DIR", downloads)
-    monkeypatch.setattr(cfg, "THUMBNAILS_DIR", thumbnails)
-    monkeypatch.setattr(cfg, "SPRITES_DIR", sprites)
-    monkeypatch.setattr(cfg, "BACKGROUNDS_DIR", backgrounds)
-    monkeypatch.setattr(cfg, "FONTS_DIR", fonts)
-    monkeypatch.setattr(cfg, "DB_PATH", db_path)
-    monkeypatch.setattr(cfg, "DATABASE_URL", database_url)
-
-    import app.database as database
-
-    new_engine = database.create_sqlite_engine(database_url)
-    monkeypatch.setattr(database, "engine", new_engine)
-
-    _rebind_imported_app_modules(
-        monkeypatch,
-        engine=new_engine,
-        dirs={
-            "DOWNLOADS_DIR": downloads,
-            "THUMBNAILS_DIR": thumbnails,
-            "SPRITES_DIR": sprites,
-            "BACKGROUNDS_DIR": backgrounds,
-            "FONTS_DIR": fonts,
-            "DATA_DIR": data,
-            "DB_PATH": db_path,
-            "DATABASE_URL": database_url,
-        },
+    ctx = context.build_context(
+        context.Paths(downloads=downloads, data=data), e2e=False
     )
-
-    return {
+    previous = context.activate(ctx)
+    yield {
         "data": data,
         "downloads": downloads,
-        "engine": new_engine,
-        "db_path": db_path,
+        "engine": ctx.engine,
+        "db_path": ctx.paths.db_path,
+        "ctx": ctx,
     }
+    context.deactivate(previous)
+    ctx.engine.dispose()
 
 
 @pytest.fixture(scope="session")
@@ -180,9 +127,7 @@ def init_db(tmp_dirs, _migrated_template_db):
 
 @pytest.fixture
 def session(init_db):
-    from app.database import engine
-
-    with Session(engine) as s:
+    with Session(init_db["engine"]) as s:
         yield s
 
 
@@ -263,16 +208,15 @@ def set_watch(session) -> Callable[..., Any]:
 def app(init_db, monkeypatch):
     """FastAPI app with the real routers but no production lifespan/workers."""
     from fastapi import FastAPI
-    from sqlmodel import Session as DBSession
 
-    from app.database import get_session
+    from app.context import install_context
     from app.main import include_api, install_caches
     from app.security import install_security
     from app.services.auth.runtime import AuthConfig
     from app.services.downloads.queue import DownloadQueue, download_queue
 
     monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
-    download_queue._global_paused = False
+    download_queue.reset()
     monkeypatch.setattr(
         "app.services.ai.worker.enqueue_for_video",
         lambda *a, **k: None,
@@ -284,15 +228,11 @@ def app(init_db, monkeypatch):
 
     test_app = FastAPI(title="Horde test")
     include_api(test_app)
-    install_caches(test_app, init_db["engine"])
     # Explicit config so a developer's HORDE_AUTH_DISABLED never leaks into tests.
     install_security(test_app, auth_config=AuthConfig())
 
-    def _override_session():
-        with DBSession(init_db["engine"]) as s:
-            yield s
-
-    test_app.dependency_overrides[get_session] = _override_session
+    install_context(test_app, init_db["ctx"])
+    install_caches(test_app, init_db["ctx"])
     return test_app
 
 

@@ -10,7 +10,7 @@ from typing import Protocol
 
 from sqlmodel import Session
 
-from ...database import engine
+from ...context import get_engine
 from ...models import DownloadDestination, DownloadJob, JobStatus
 from ..ffmpeg_progress import FfmpegCancelled
 from ..ytdlp_common import ERROR_KIND_CANCELLED, classify_ytdlp_error
@@ -65,7 +65,7 @@ def mark_job_cancelled(
     """End a job that was stopped. ``requeue`` puts it back in the queue instead."""
     if destination == DownloadDestination.device.value:
         cleanup_device_job_files(job_id)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         if job is None:
             progress_store[job_id] = {

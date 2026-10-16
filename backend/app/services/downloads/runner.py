@@ -14,7 +14,7 @@ from typing import Any
 
 from sqlmodel import Session
 
-from ...database import engine
+from ...context import get_engine
 from ...models import DownloadJob, JobStatus
 from .. import activity, scanner
 from ..fsutil import safe_rel
@@ -320,7 +320,7 @@ class DownloadRun:
     def _skip_short(self) -> None:
         spec = self.spec
         cleanup_partial_files(self.active_paths)
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             job = session.get(DownloadJob, spec.job_id)
             if job is not None:
                 session.delete(job)

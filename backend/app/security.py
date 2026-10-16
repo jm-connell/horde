@@ -459,7 +459,9 @@ class MiddlewareSpec:
     kwargs: dict = field(default_factory=dict)
 
 
-def build_stack(policy: HostPolicy) -> list[MiddlewareSpec]:
+def build_stack(
+    policy: HostPolicy, extra_public: frozenset[tuple[str, str]] = frozenset()
+) -> list[MiddlewareSpec]:
     """The security middleware, outermost first. This list *is* the order."""
     return [
         MiddlewareSpec(SecurityHeadersMiddleware),
@@ -469,7 +471,7 @@ def build_stack(policy: HostPolicy) -> list[MiddlewareSpec]:
         MiddlewareSpec(MediaCorsMiddleware),
         MiddlewareSpec(CsrfMiddleware),
         # After every check above, before routing: deny by default for /api.
-        MiddlewareSpec(AuthMiddleware),
+        MiddlewareSpec(AuthMiddleware, {"extra_public": extra_public}),
     ]
 
 
@@ -494,17 +496,20 @@ def install_security(
     *,
     allowed_hosts: str | None = None,
     auth_config: AuthConfig | None = None,
+    extra_public_routes: frozenset[tuple[str, str]] = frozenset(),
 ) -> None:
     """Install the middleware stack, the error mappings, the limits and auth state.
 
     ``allowed_hosts`` overrides ``HORDE_ALLOWED_HOSTS`` and ``auth_config`` the
     ``HORDE_AUTH_DISABLED`` / ``HORDE_TRUST_PROXY`` environment (used by tests).
+    ``extra_public_routes`` are (method, path) pairs reachable without signing in,
+    for the e2e reset route only.
     """
     policy = HostPolicy.from_env(
         os.environ.get(ALLOWED_HOSTS_ENV) if allowed_hosts is None else allowed_hosts
     )
     for spec in reversed(
-        build_stack(policy)
+        build_stack(policy, extra_public_routes)
     ):  # add_middleware wraps: last is outermost
         app.add_middleware(spec.cls, **spec.kwargs)
     install_error_handlers(app)

@@ -85,7 +85,8 @@ def test_updates(client, monkeypatch):
         "error": None,
     }
     monkeypatch.setattr(
-        "app.services.updates.check_for_updates", lambda refresh=False: dict(payload)
+        "app.services.updates.check_for_updates",
+        lambda refresh=False, offline=False: dict(payload),
     )
     assert client.get("/api/updates").json() == payload
 

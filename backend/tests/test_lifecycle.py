@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app import database, main
+from app import main
 from app.models import DownloadJob, JobStatus
 from app.security import HostPolicy
 from app.services import ffmpeg_progress, scanner, sprites
@@ -98,7 +98,7 @@ def test_startup_failure_stops_the_workers_already_started(lifespan_env, monkeyp
             super().__init__()
             seen.append(self)
 
-    monkeypatch.setattr(main, "WorkerRegistry", Recording)
+    monkeypatch.setattr("app.services.workers.WorkerRegistry", Recording)
 
     def boom() -> BackgroundWorker:
         raise RuntimeError("cannot start")
@@ -165,7 +165,7 @@ def test_startup_warns_about_a_proxy_without_allowed_hosts(
 def test_event_streams_end_when_shutdown_starts(lifespan_env):
     with TestClient(main.app) as client:
         # The stream is for signed-in users: an anonymous request ends at once.
-        with Session(database.engine) as session:
+        with Session(client.app.state.ctx.engine) as session:
             user = accounts.create_user(session, "reader", "reader-password")
             client.cookies.set(
                 accounts.SESSION_COOKIE, accounts.start_session(session, user)

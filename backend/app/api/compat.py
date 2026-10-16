@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from ..auth import require_admin, require_permission
-from ..database import get_session
+from ..context import get_session
 from ..models import Video
 from ..response_schemas import CompatCancelResult, CompatSummaryRead
 from ..schemas import CompatState

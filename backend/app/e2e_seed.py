@@ -13,9 +13,10 @@ import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel
 
-from .e2e_mode import enabled
+from .context import AppContext
 
 # Short silent clip so the watch page mounts player chrome without a decode error.
 # Long enough (20 s) that autoplay does not finish and start the up-next countdown.
@@ -33,35 +34,34 @@ _MEDIA_BYTES = base64.b64decode(
 )
 
 
-def prepare(mode: str) -> None:
-    if not enabled():
+def prepare(ctx: AppContext, mode: str) -> None:
+    if not ctx.e2e:
         raise RuntimeError("e2e seed refused: HORDE_E2E is not set")
 
     from . import models  # noqa: F401 - register tables
-    from .config import DATA_DIR, DOWNLOADS_DIR
-    from .database import engine, init_db
-    from .services.downloads.progress import progress_store
-    from .services.downloads.queue import download_queue
+    from .database import init_db
 
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    _empty_dir(DOWNLOADS_DIR)
-    for extra in ("thumbnails", "sprites", "backgrounds", "fonts"):
-        _empty_dir(DATA_DIR / extra)
+    engine = ctx.engine
+    paths = ctx.paths
+    paths.data.mkdir(parents=True, exist_ok=True)
+    _empty_dir(paths.downloads)
+    for extra in (paths.thumbnails, paths.sprites, paths.backgrounds, paths.fonts):
+        _empty_dir(extra)
 
-    init_db()
+    init_db(engine)
     app_mode = mode == "app"
     # Browsers keep their session cookie across resets, so in app mode the seeded
     # accounts (and their sessions) survive; setup mode starts with nobody.
     _clear_tables(engine, keep_accounts=app_mode)
 
-    _write_settings(DATA_DIR, setup_completed=app_mode)
-    _reset_queue(download_queue, progress_store)
+    _write_settings(paths.data, setup_completed=app_mode)
+    ctx.download_queue.reset()
 
     if not app_mode:
         return
 
     _seed_accounts(engine)
-    _seed_library(DOWNLOADS_DIR)
+    _seed_library(paths.downloads, engine)
 
 
 #: Accounts every app-mode e2e run starts with: (username, password, admin, grants).
@@ -157,22 +157,9 @@ def _write_settings(data_dir: Path, *, setup_completed: bool) -> None:
     (data_dir / "app_settings.json").write_text(json.dumps(payload, indent=2))
 
 
-def _reset_queue(queue, progress_store) -> None:
-    with queue._lock:
-        queue._global_paused = False
-        queue._running.clear()
-        queue._held.clear()
-        queue._restart_ids.clear()
-        for event in queue._cancel_events.values():
-            event.set()
-        queue._cancel_events.clear()
-    progress_store.clear()
-
-
-def _seed_library(downloads: Path) -> None:
+def _seed_library(downloads: Path, engine: Engine) -> None:
     from sqlmodel import Session
 
-    from .database import engine
     from .models import (
         DownloadJob,
         JobStatus,

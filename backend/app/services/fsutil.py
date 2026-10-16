@@ -12,13 +12,13 @@ import logging
 import time
 from pathlib import Path
 
-from .. import config
+from ..context import get_paths
 
 logger = logging.getLogger(__name__)
 
 
 def _root(root: Path | None) -> Path:
-    return (root if root is not None else config.DOWNLOADS_DIR).resolve()
+    return (root if root is not None else get_paths().downloads).resolve()
 
 
 def is_within(path: Path, root: Path | None = None) -> bool:

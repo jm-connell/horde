@@ -129,10 +129,9 @@ def test_stream_compat_rendition(client, add_video, init_db):
     side.write_bytes(b"h264-bytes")
     from sqlmodel import Session
 
-    from app.database import engine
     from app.models import Video
 
-    with Session(engine) as s:
+    with Session(init_db["engine"]) as s:
         row = s.get(Video, video.id)
         row.compat_path = side.relative_to(init_db["downloads"]).as_posix()
         row.compat_size = 10
@@ -253,7 +252,6 @@ def test_worker_encodes_sidecar_end_to_end(add_video, init_db, monkeypatch):
 
     from sqlmodel import Session
 
-    from app.database import engine
     from app.models import Video
 
     video = add_video(write_file=True, width_px=640, height_px=360, duration_sec=1.0)
@@ -304,7 +302,7 @@ def test_worker_encodes_sidecar_end_to_end(add_video, init_db, monkeypatch):
     compat_rendition._jobs[video.id] = job
     compat_rendition._worker(job)
 
-    with Session(engine) as s:
+    with Session(init_db["engine"]) as s:
         row = s.get(Video, video.id)
         assert row.compat_error is None
         assert row.compat_source == "transcode"

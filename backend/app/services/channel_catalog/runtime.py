@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 from sqlmodel import Session, func, select
 
-from ...database import engine
+from ...context import get_engine
 from ...logging_config import job_context
 from ...models import (
     ChannelCatalog,
@@ -284,7 +284,7 @@ def should_stop() -> bool:
 def get_runtime_status() -> dict[str, Any]:
     with _state_lock:
         runtime = dict(_runtime)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         reconcile_duplicate_catalogs(session)
         queued = session.exec(
             select(func.count(ChannelCatalog.id)).where(
@@ -393,7 +393,7 @@ def set_direct_youtube_search(
     url = _normalize_channel_url(channel_url)
     if not url or not is_youtube_channel_url(url):
         return None
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         reconcile_duplicate_catalogs(session)
         catalog = get_catalog_by_url(session, url, channel_name=channel_name)
         if catalog is None:
@@ -435,7 +435,7 @@ def enqueue_channel(
         return None
 
     max_videos = _max_videos()
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         reconcile_duplicate_catalogs(session)
         catalog = get_catalog_by_url(session, url, channel_name=channel_name)
         if catalog is None:
@@ -503,7 +503,7 @@ def maybe_enqueue_for_feed(
         interval = 24
     cutoff = datetime.now(UTC) - timedelta(hours=max(1, interval))
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         catalog = get_catalog_by_url(session, channel_url, channel_name=channel_name)
         if catalog is None:
             enqueue_channel(channel_url, channel_name=channel_name)
@@ -531,7 +531,7 @@ def maybe_enqueue_for_feed(
 
 def _library_channel_targets() -> list[tuple[str | None, str]]:
     """Library channels that have a YouTube URL: (name, url)."""
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         from .. import library as library_svc
 
         stats = library_svc.channel_stats(session)
@@ -578,7 +578,7 @@ def refresh_all_library_channels() -> dict[str, Any]:
     skipped = 0
     refreshed = 0
     for name, url in _library_channel_targets():
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             reconcile_duplicate_catalogs(session)
             catalog = get_catalog_by_url(session, url, channel_name=name)
             status = catalog.status if catalog else None
@@ -637,7 +637,7 @@ def refresh_stale_catalogs() -> None:
     except (TypeError, ValueError):
         interval = 24
     cutoff = datetime.now(UTC) - timedelta(hours=max(1, interval))
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(ChannelCatalog).where(
                 ChannelCatalog.status == ChannelCatalogStatus.ready
@@ -672,7 +672,7 @@ def _worker_loop(worker: BackgroundWorker) -> None:
                 return
             continue
         catalog_id: int | None = None
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             job = _next_queued(session)
             if job is not None and job.id is not None:
                 catalog_id = job.id
@@ -687,7 +687,7 @@ def _worker_loop(worker: BackgroundWorker) -> None:
 def create_catalog_worker() -> BackgroundWorker:
     """The catalog indexer. Reconciles duplicate catalogs before it starts."""
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             reconcile_duplicate_catalogs(session)
     except Exception:
         logger.debug("catalog duplicate reconcile skipped", exc_info=True)
@@ -699,7 +699,7 @@ def create_catalog_worker() -> BackgroundWorker:
 def recover_catalog_jobs() -> int:
     """Requeue catalogs left indexing after a process crash/restart."""
     reset = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(ChannelCatalog).where(
                 ChannelCatalog.status == ChannelCatalogStatus.indexing

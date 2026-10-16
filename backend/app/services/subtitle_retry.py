@@ -16,8 +16,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from ..config import DOWNLOADS_DIR
-from ..database import engine
+from ..context import get_engine, get_paths
 from ..models import Video, as_utc
 from . import activity, library
 from .workers import BackgroundWorker
@@ -165,7 +164,7 @@ def captions_fetch_allowed(video: Video) -> bool:
 def apply_subtitle_outcome(video_id: int, outcome: SubtitleFetchOutcome) -> None:
     """Persist tracks or keep ``subtitles_pending`` with a retry timestamp."""
     got_tracks = False
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None:
             return
@@ -215,7 +214,7 @@ def apply_subtitle_outcome(video_id: int, outcome: SubtitleFetchOutcome) -> None
 def recover_unsynced_missing_captions() -> int:
     """Re-open forgotten empty-caption downloads (never metadata-synced)."""
     count = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(Video).where(
                 Video.source_url.is_not(None),  # type: ignore[attr-defined]
@@ -278,14 +277,14 @@ def process_due_subtitle() -> bool:
     title: str | None = None
     source_url: str | None = None
     media = None
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = next_due_video(session)
         if video is None or video.id is None:
             return False
         video_id = video.id
         title = video.title
         source_url = video.source_url
-        media = DOWNLOADS_DIR / video.file_path
+        media = get_paths().downloads / video.file_path
     if not source_url or media is None or not media.is_file():
         if video_id is not None:
             apply_subtitle_outcome(

@@ -172,9 +172,9 @@ def system_stats():
         encode = None
     disk = None
     try:
-        from ..config import DOWNLOADS_DIR
+        from ..context import get_paths
 
-        usage = shutil.disk_usage(DOWNLOADS_DIR)
+        usage = shutil.disk_usage(get_paths().downloads)
         disk = {
             "total_bytes": usage.total,
             "used_bytes": usage.used,
@@ -182,7 +182,9 @@ def system_stats():
         }
     except Exception:
         # The Settings page polls this endpoint.
-        logger.debug("could not read disk usage of %s", DOWNLOADS_DIR, exc_info=True)
+        logger.debug(
+            "could not read disk usage of %s", get_paths().downloads, exc_info=True
+        )
     return {
         "cpu_percent": cpu_ram["cpu_percent"],
         "cpu_model": cpu_ram["cpu_model"],

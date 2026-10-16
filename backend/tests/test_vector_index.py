@@ -130,13 +130,13 @@ def test_cascade_delete_of_a_video_drops_its_vectors(session, add_video):
 
 
 def test_a_rollback_does_not_keep_stale_state(session, add_video):
-    from app.database import engine
+    from app.context import get_engine
 
     video = add_video(title="V")
     _store(session, video.id, -1, [1.0, 0.0])
     session.commit()
     assert len(embeddings.similar_video_hits(session, [1.0, 0.0])) == 1
-    with Session(engine) as other:
+    with Session(get_engine()) as other:
         _store(other, video.id, 0, [0.0, 1.0])
         other.flush()
         other.rollback()

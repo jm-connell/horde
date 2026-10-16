@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from ..auth import current_user, require_permission
-from ..database import get_session
+from ..context import get_session
 from ..response_schemas import ChannelRenameResult
 from ..schemas import (
     ChannelAutodownloadRead,

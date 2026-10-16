@@ -13,7 +13,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from ..config import THUMBNAILS_DIR
+from ..context import get_paths
 from .url_safety import UnsafeUrlError, UrlFetchError, fetch_bytes
 
 logger = logging.getLogger(__name__)
@@ -30,11 +30,11 @@ LIST_THUMB_MAX_PX = 320
 
 
 def full_path(video_id: int) -> Path:
-    return THUMBNAILS_DIR / f"{video_id}.jpg"
+    return get_paths().thumbnails / f"{video_id}.jpg"
 
 
 def list_path(video_id: int) -> Path:
-    return THUMBNAILS_DIR / f"{video_id}_sm.jpg"
+    return get_paths().thumbnails / f"{video_id}_sm.jpg"
 
 
 def _open_rgb(data: bytes):
@@ -72,7 +72,7 @@ def resolve_thumbnail_file(raw: str | None) -> Path | None:
     """The stored thumbnail/cover file for a DB path, only if it is inside THUMBNAILS_DIR."""
     if not raw:
         return None
-    root = THUMBNAILS_DIR.resolve()
+    root = get_paths().thumbnails.resolve()
     path = Path(raw).resolve()
     if not path.is_relative_to(root) or not path.is_file():
         return None
@@ -175,7 +175,7 @@ PLAYLIST_COVER_MAX_PX = 1280
 
 
 def playlist_cover_path(playlist_id: int) -> Path:
-    return THUMBNAILS_DIR / f"playlist_{playlist_id}.jpg"
+    return get_paths().thumbnails / f"playlist_{playlist_id}.jpg"
 
 
 def write_playlist_cover(playlist_id: int, data: bytes) -> str:

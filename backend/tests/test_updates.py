@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.auth import current_user
+from app.context import get_ctx
 from app.main import updates as updates_route
 from app.services import updates
 from app.services.auth.accounts import AuthUser
@@ -276,7 +279,7 @@ def test_cache_is_dropped_when_the_deployed_version_changes(
 
 
 def test_browser_e2e_mode_stays_offline(client, github, monkeypatch):
-    monkeypatch.setenv("HORDE_E2E", "1")
+    client.app.dependency_overrides[get_ctx] = lambda: SimpleNamespace(e2e=True)
 
     body = client.get("/api/updates", params={"refresh": "true"}).json()
 

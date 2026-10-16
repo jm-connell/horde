@@ -12,8 +12,7 @@ from typing import Any
 
 from sqlmodel import Session
 
-from ...config import DOWNLOADS_DIR
-from ...database import engine
+from ...context import get_engine, get_paths
 from ...models import DownloadDestination, DownloadJob, JobStatus
 from ..fsutil import (
     DISPLACED_DIR,
@@ -40,7 +39,7 @@ DEVICE_STAGING_DIR = "_device"
 
 
 def device_job_dir(job_id: int) -> Path:
-    return DOWNLOADS_DIR / DEVICE_STAGING_DIR / str(job_id)
+    return get_paths().downloads / DEVICE_STAGING_DIR / str(job_id)
 
 
 def device_outtmpl(job_id: int) -> str:
@@ -81,10 +80,10 @@ def is_device_staging_path(rel_path: str) -> bool:
 
 def cleanup_device_job_files(job_id: int, device_file_path: str | None = None) -> None:
     """Remove ephemeral device-job media (file + staging dir)."""
-    root = DOWNLOADS_DIR.resolve()
-    staging = (DOWNLOADS_DIR / DEVICE_STAGING_DIR).resolve()
+    root = get_paths().downloads.resolve()
+    staging = (get_paths().downloads / DEVICE_STAGING_DIR).resolve()
     if device_file_path and is_device_staging_path(device_file_path):
-        full = (DOWNLOADS_DIR / device_file_path).resolve()
+        full = (get_paths().downloads / device_file_path).resolve()
         try:
             full.relative_to(root)
         except ValueError:
@@ -112,11 +111,11 @@ def cleanup_device_job_files(job_id: int, device_file_path: str | None = None) -
 
 def gc_orphaned_device_dirs() -> int:
     """Remove `_device/{id}` dirs with no matching device DownloadJob row."""
-    root = DOWNLOADS_DIR / DEVICE_STAGING_DIR
+    root = get_paths().downloads / DEVICE_STAGING_DIR
     if not root.is_dir():
         return 0
     removed = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         for child in list(root.iterdir()):
             if not child.is_dir() or not child.name.isdigit():
                 continue
@@ -153,7 +152,7 @@ def discard_staging_unless_requeued(job_id: int) -> None:
     root = staging_dir(job_id)
     if not root.exists() and not root.is_symlink():
         return
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         if job is not None and job.status == JobStatus.queued:
             return
@@ -200,7 +199,7 @@ def promote_from_staging(
     or replace) is kept in ``<staging>/.displaced`` until the DB commit succeeds.
     """
     rel = final_path.resolve().relative_to(staging_dir.resolve())
-    dest = DOWNLOADS_DIR / rel
+    dest = get_paths().downloads / rel
     backup_dir = staging_dir / DISPLACED_DIR
     stem = video_stem(final_path, staging=True)
     for entry in sorted(final_path.parent.iterdir()):

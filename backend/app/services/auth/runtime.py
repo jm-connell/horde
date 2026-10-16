@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 from fastapi import Request
 
-from ... import config
+from ...context import get_paths
 from . import media_token, passwords
 from .limiter import LoginLimiter
 
@@ -98,7 +98,7 @@ class AuthRuntime:
         with self._lock:
             if self._secret is None:
                 self._secret = media_token.load_or_create_secret(
-                    config.DATA_DIR / "secret_key"
+                    get_paths().data / "secret_key"
                 )
             return self._secret
 

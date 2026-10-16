@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session
 
-from ...database import engine
+from ...context import get_engine
 from ...models import DownloadJob
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ def retry_db_locked[T](fn: Callable[[], T], *, what: str) -> T:
 
 def update_job(job_id: int, **fields: Any) -> None:
     def write() -> None:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             job = session.get(DownloadJob, job_id)
             if job is None:
                 return

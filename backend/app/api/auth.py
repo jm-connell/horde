@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from sqlmodel import Session
 
 from ..auth import CodedHTTPException, current_user
-from ..database import get_session
+from ..context import get_session
 from ..schemas import (
     AuthLoginResult,
     AuthState,

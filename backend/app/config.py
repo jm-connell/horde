@@ -6,26 +6,12 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def _env_path(name: str, default: str) -> Path:
-    return Path(os.environ.get(name, default)).resolve()
-
-
 def _optional_env_path(name: str) -> Path | None:
     raw = os.environ.get(name, "").strip()
     if not raw:
         return None
     return Path(raw).expanduser().resolve()
 
-
-DOWNLOADS_DIR: Path = _env_path("DOWNLOADS_DIR", "./downloads")
-DATA_DIR: Path = _env_path("DATA_DIR", "./data")
-
-THUMBNAILS_DIR: Path = DATA_DIR / "thumbnails"
-SPRITES_DIR: Path = DATA_DIR / "sprites"
-BACKGROUNDS_DIR: Path = DATA_DIR / "backgrounds"
-FONTS_DIR: Path = DATA_DIR / "fonts"
-DB_PATH: Path = DATA_DIR / "horde.db"
-DATABASE_URL: str = f"sqlite:///{DB_PATH}"
 
 # How often the fallback poller walks the downloads tree (seconds).
 SCAN_INTERVAL_SEC: int = int(os.environ.get("SCAN_INTERVAL_SEC", "60"))
@@ -118,12 +104,3 @@ def short_git_sha(sha: str | None = None) -> str:
     if not value or value.lower() == "unknown":
         return "unknown"
     return value[:7]
-
-
-def ensure_dirs() -> None:
-    DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
-    SPRITES_DIR.mkdir(parents=True, exist_ok=True)
-    BACKGROUNDS_DIR.mkdir(parents=True, exist_ok=True)
-    FONTS_DIR.mkdir(parents=True, exist_ok=True)

@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import DownloadDestination, DownloadJob, JobStatus, Playlist
 from .. import activity
 from ..url_clean import clean_url, youtube_thumbnail_url, youtube_video_id
@@ -41,7 +41,7 @@ def enqueue_playlist_entry(
     yt_id = youtube_video_id(cleaned)
     thumb = youtube_thumbnail_url(yt_id) if yt_id else None
     created_job_id: int | None = None
-    with jobs.job_mutate_lock, Session(engine) as session:
+    with jobs.job_mutate_lock, Session(get_engine()) as session:
         existing = jobs.library_video_for_url(session, cleaned)
         if existing is not None and existing.id is not None:
             return "library", existing.id
@@ -106,7 +106,7 @@ def run_playlist_entries(
     are not on the remote list stay after the remote entries.
     """
     total = len(entries)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         if session.get(Playlist, playlist_id) is None:
             logger.info("playlist %s no longer exists; import skipped", playlist_id)
             return
@@ -118,7 +118,7 @@ def run_playlist_entries(
             job_ids.append(ref)
         if kind == "library" and ref is not None and ref not in placed:
             placed.add(ref)
-            with playlist_attach_lock, Session(engine) as session:
+            with playlist_attach_lock, Session(get_engine()) as session:
                 upsert_playlist_item(session, playlist_id, ref, index)
         if activity_handle is not None:
             activity_handle.update(
@@ -127,7 +127,7 @@ def run_playlist_entries(
             )
     if job_ids:
         # Jobs that already finished attached themselves in playlist order.
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             placed.update(
                 vid
                 for vid in session.exec(

@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlmodel import Session, col, func, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import (
     ChannelCatalog,
     ChannelCatalogEmbedding,
@@ -72,7 +72,7 @@ def update_catalog_video_fields(
     if not by_id:
         return
     url = _normalize_channel_url(channel_url)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         catalog = get_catalog_by_url(session, url)
         if catalog is None or catalog.id is None:
             return

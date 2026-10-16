@@ -19,7 +19,7 @@ from sqlalchemy import func
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
-from ..config import DOWNLOADS_DIR
+from ..context import get_paths
 from ..models import (
     AiJob,
     AiJobStatus,
@@ -177,7 +177,10 @@ def render_metrics(app: FastAPI, engine: Engine) -> str:
     )
 
     disk_samples: list[tuple[dict[str, str], float | int]] = []
-    for label, path in (("downloads", DOWNLOADS_DIR), ("data", Path(db_file or "."))):
+    for label, path in (
+        ("downloads", get_paths().downloads),
+        ("data", Path(db_file or ".")),
+    ):
         target = path if path.is_dir() else path.parent
         try:
             usage = shutil.disk_usage(target)

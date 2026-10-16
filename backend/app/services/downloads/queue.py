@@ -2,7 +2,7 @@
 
 The queue does not know how a job is run. The code that runs one job (the
 yt-dlp attempt loop) is handed in as ``runner`` so this module sits below it;
-``downloads/__init__`` binds the real one for the process-wide queue.
+``app.context.build_context`` binds the real one.
 """
 
 import logging
@@ -14,7 +14,7 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ...config import MAX_DOWNLOAD_CONCURRENCY
-from ...database import engine
+from ...context import get_engine
 from ...logging_config import FailureLog, job_context
 from ...models import DownloadDestination, DownloadJob, JobStatus
 from ..url_safety import UnsafeUrlError, validate_public_url
@@ -42,6 +42,9 @@ class DownloadQueue:
 
     def __init__(self, runner: JobRunner | None = None) -> None:
         self.runner = runner
+        #: False in the browser-test process: queued jobs are seeded and must never
+        #: start yt-dlp. Set by ``build_context``.
+        self.dispatch_enabled = True
         self._lock = threading.Lock()
         self._global_paused = False
         self._running: set[int] = set()
@@ -114,7 +117,7 @@ class DownloadQueue:
         with self._lock:
             self._global_paused = paused
 
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             for job in session.exec(
                 select(DownloadJob).where(DownloadJob.status == JobStatus.downloading)
             ).all():
@@ -163,7 +166,7 @@ class DownloadQueue:
         settings_svc.save({"download_queue_paused": True})
         for event in events:
             event.set()
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             for job in session.exec(
                 select(DownloadJob).where(
                     DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading])
@@ -184,7 +187,7 @@ class DownloadQueue:
         with self._lock:
             self._global_paused = False
         settings_svc.save({"download_queue_paused": False})
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             for job in session.exec(
                 select(DownloadJob).where(
                     DownloadJob.status == JobStatus.queued,
@@ -201,7 +204,7 @@ class DownloadQueue:
             event = self._cancel_events.get(job_id)
         if event is not None:
             event.set()
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             job = session.get(DownloadJob, job_id)
             if job is None:
                 return False
@@ -280,7 +283,7 @@ class DownloadQueue:
             self._restart_ids.discard(job_id)
 
     def active_count(self) -> int:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             return int(
                 session.exec(
                     select(func.count())
@@ -293,8 +296,20 @@ class DownloadQueue:
                 ).one()
             )
 
+    def reset(self) -> None:
+        """Forget all in-memory job state (the e2e reset route and test isolation)."""
+        with self._lock:
+            self._global_paused = False
+            self._running.clear()
+            self._held.clear()
+            self._restart_ids.clear()
+            for event in self._cancel_events.values():
+                event.set()
+            self._cancel_events.clear()
+        progress_store.clear()
+
     def queued_count(self) -> int:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             return int(
                 session.exec(
                     select(func.count())
@@ -304,10 +319,7 @@ class DownloadQueue:
             )
 
     def _dispatch(self) -> None:
-        from ...e2e_mode import enabled as e2e_browser
-
-        # Browser tests seed a queued job. Never start yt-dlp from that process.
-        if e2e_browser():
+        if not self.dispatch_enabled:
             return
         while True:
             with self._lock:
@@ -346,7 +358,7 @@ class DownloadQueue:
         """Oldest queued, unpaused job that is neither running nor held."""
         with self._lock:
             excluded = list(self._running | self._held)
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             query = select(DownloadJob.id).where(
                 DownloadJob.status == JobStatus.queued,
                 DownloadJob.paused == False,  # noqa: E712 - SQL column comparison, not a Python truth test
@@ -372,7 +384,7 @@ class DownloadQueue:
         clock = time.monotonic() if now is None else now
         with self._lock:
             owned = self._running | self._ffmpeg_running
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             rows = session.exec(
                 select(DownloadJob).where(DownloadJob.status == JobStatus.downloading)
             ).all()
@@ -430,7 +442,7 @@ class DownloadQueue:
 
     def _run_job(self, job_id: int, cancel_event: threading.Event) -> None:
         try:
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 job = session.get(DownloadJob, job_id)
                 if job is None or job.status != JobStatus.queued:
                     return

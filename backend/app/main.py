@@ -12,7 +12,6 @@ from typing import Any
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.engine import Engine
 
 from .api import (
     ai,
@@ -33,9 +32,19 @@ from .api import (
 from .api import (
     auth as auth_api,
 )
-from .auth import current_user, ensure_admin, require_admin
-from .config import DATA_DIR, DOWNLOADS_DIR, ensure_dirs, short_git_sha
-from .database import engine, init_db
+from .auth import E2E_PUBLIC_ROUTES, current_user, ensure_admin, require_admin
+from .config import short_git_sha
+from .context import (
+    AppContext,
+    activate,
+    build_context,
+    ctx_for_app,
+    deactivate,
+    get_ctx,
+    install_context,
+)
+from .database import init_db
+from .e2e_mode import enabled as e2e_enabled
 from .errors import error_response
 from .logging_config import configure_logging
 from .openapi_responses import PROMETHEUS_TEXT
@@ -55,8 +64,6 @@ from .services.ai.worker import recover_ai_jobs
 from .services.auth.accounts import AuthUser
 from .services.backup import create_backup_worker
 from .services.channel_catalog import recover_catalog_jobs
-from .services.downloads.ffmpeg_queue import ffmpeg_queue
-from .services.downloads.queue import download_queue
 from .services.downloads.staging import gc_orphaned_device_dirs
 from .services.duplicate_groups import DuplicateGroupCache
 from .services.health import HealthCache, build_readiness
@@ -65,7 +72,6 @@ from .services.metrics import render_metrics
 from .services.scanner import cleanup_orphans, create_scanner_workers
 from .services.search_cache import SearchCache
 from .services.storage_check import network_storage_warning
-from .services.workers import WorkerRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +93,10 @@ FRONTEND_DIR = _frontend_dir()
 WIKI_DIR = FRONTEND_DIR / "wiki"
 
 
-def _e2e_browser() -> bool:
-    from .e2e_mode import enabled
-
-    return enabled()
+#: The Playwright suite runs this module with ``HORDE_E2E=1`` (see ``e2e/serve.py``).
+#: This is the only place the environment decides: the mounted routes and the
+#: public-route list follow it, everything below reads ``ctx.e2e``.
+E2E = e2e_enabled()
 
 
 def _install_shutdown_signals(event: threading.Event) -> Callable[[], None]:
@@ -136,11 +142,13 @@ def _install_shutdown_signals(event: threading.Event) -> Callable[[], None]:
     return restore
 
 
-def _start_workers(app_: FastAPI, registry: WorkerRegistry) -> None:
+def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     """Recover interrupted work, then start every background worker.
 
     Workers stop in the reverse of this order, so what others depend on comes first.
     """
+    registry = ctx.workers
+    download_queue = ctx.download_queue
     from .services import (
         channel_autodownload,
         channel_catalog,
@@ -157,7 +165,7 @@ def _start_workers(app_: FastAPI, registry: WorkerRegistry) -> None:
     if health.pot_base_url:
         registry.start(health.create_pot_worker())
     registry.start(download_queue)
-    registry.start(ffmpeg_queue)
+    registry.start(ctx.ffmpeg_queue)
     registry.start(download_queue.create_reaper())
     download_queue.recover()
     gc_orphaned_device_dirs()
@@ -179,22 +187,56 @@ def _start_workers(app_: FastAPI, registry: WorkerRegistry) -> None:
     registry.start(job_metadata.create_worker())
     job_metadata.rehydrate_pending()
     registry.start(compat_rendition.create_probe_backfill_worker())
-    backup_worker = create_backup_worker(engine)
+    backup_worker = create_backup_worker(ctx.engine)
     if backup_worker is not None:
         registry.start(backup_worker)
 
 
-def install_caches(app_: FastAPI, bind: Engine) -> None:
-    """Build the request-path caches. ``lifespan`` and the test app both call this."""
-    app_.state.search_cache = SearchCache()
-    app_.state.search_cache.attach(bind)
-    app_.state.duplicate_groups = DuplicateGroupCache()
+def install_caches(app_: FastAPI, ctx: AppContext) -> None:
+    """Build the request-path caches on the context. ``lifespan`` and the test app call this.
+
+    ``app.state.search_cache`` / ``duplicate_groups`` alias the context's objects,
+    which is where the routers read them.
+    """
+    search = SearchCache()
+    search.attach(ctx.engine)
+    ctx.caches["search_cache"] = search
+    ctx.caches["duplicate_groups"] = DuplicateGroupCache()
+    app_.state.search_cache = search
+    app_.state.duplicate_groups = ctx.caches["duplicate_groups"]
+
+
+def _boot_e2e(app_: FastAPI, ctx: AppContext) -> None:
+    """Browser-test boot: seed the library, start no worker, never reach the network."""
+    from .e2e_seed import prepare
+
+    prepare(ctx, os.environ.get("HORDE_E2E_MODE", "app"))
+
+
+async def _boot_production(app_: FastAPI, ctx: AppContext) -> None:
+    warning = network_storage_warning(ctx.paths.data)
+    app_.state.storage_warning = warning
+    if warning:
+        logger.error("Storage problem: %s", warning)
+    cleanup_orphans()
+    from .services.ytdlp_common import ensure_plugins_loaded
+
+    ensure_plugins_loaded()
+    await preview.init_preview_client()
+    _start_workers(app_, ctx)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    ensure_dirs()
-    init_db()
+    # A test may have installed a context of its own; otherwise build one from the
+    # environment and remove it again on the way out.
+    injected = getattr(app.state, "ctx", None)
+    ctx = injected or build_context()
+    install_context(app, ctx)
+    install_caches(app, ctx)
+    previous = activate(ctx)
+    ctx.paths.ensure()
+    init_db(ctx.engine)
     if app.state.auth.config.disabled:
         logger.warning(
             "HORDE_AUTH_DISABLED is set: Horde is NOT asking anyone to sign in. "
@@ -208,39 +250,26 @@ async def lifespan(app: FastAPI):
     host_warning = host_policy_warning(app.state.host_policy, app.state.auth.config)
     if host_warning:
         logger.warning(host_warning)
-    shutdown_event = threading.Event()
-    registry = WorkerRegistry()
-    app.state.shutdown_event = shutdown_event
-    app.state.workers = registry
-    install_caches(app, engine)
-    restore_signals = _install_shutdown_signals(shutdown_event)
+    restore_signals = _install_shutdown_signals(ctx.shutdown_event)
     try:
-        if _e2e_browser():
-            from .e2e_seed import prepare
-
-            prepare(os.environ.get("HORDE_E2E_MODE", "app"))
-            yield
-            return
-        warning = network_storage_warning(DATA_DIR)
-        app.state.storage_warning = warning
-        if warning:
-            logger.error("Storage problem: %s", warning)
-        cleanup_orphans()
-        from .services.ytdlp_common import ensure_plugins_loaded
-
-        ensure_plugins_loaded()
-        await preview.init_preview_client()
-        _start_workers(app, registry)
+        if ctx.e2e:
+            _boot_e2e(app, ctx)
+        else:
+            await _boot_production(app, ctx)
         yield
     finally:
-        shutdown_event.set()
+        ctx.shutdown_event.set()
         # Join in a thread: a worker mid-write must not block the event loop that
         # still has to finish closing the connections.
-        stuck = await asyncio.to_thread(registry.stop_all)
+        stuck = await asyncio.to_thread(ctx.workers.stop_all)
         if stuck:
             logger.error("shutdown left running: %s", ", ".join(stuck))
         await preview.close_preview_client()
         restore_signals()
+        deactivate(previous)
+        if injected is None:
+            del app.state.ctx
+            ctx.engine.dispose()
 
 
 app = FastAPI(
@@ -254,7 +283,7 @@ app = FastAPI(
 )
 
 # Host allowlist, CSRF, media-only CORS, security headers (see app/security.py).
-install_security(app)
+install_security(app, extra_public_routes=E2E_PUBLIC_ROUTES if E2E else frozenset())
 
 
 def _health_cache(app_: FastAPI) -> HealthCache:
@@ -273,7 +302,9 @@ def ping():
 def ready(request: Request):
     """Readiness probe: database reachable, migrations at head, workers alive."""
     report = build_readiness(
-        request.app, engine, _health_cache(request.app).head_revision
+        request.app,
+        ctx_for_app(request.app).engine,
+        _health_cache(request.app).head_revision,
     )
     return JSONResponse(report.model_dump(), status_code=200 if report.ready else 503)
 
@@ -289,7 +320,8 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
     from .models import DownloadJob, JobStatus, Video
 
     cache = _health_cache(app_)
-    with Session(engine) as session:
+    ctx = ctx_for_app(app_)
+    with Session(ctx.engine) as session:
         video_count = session.scalar(select(func.count(Video.id))) or 0
         review_count = (
             session.scalar(
@@ -308,14 +340,16 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
 
     disk = None
     try:
-        usage = shutil.disk_usage(DOWNLOADS_DIR)
+        usage = shutil.disk_usage(ctx.paths.downloads)
         disk = {
             "total_bytes": usage.total,
             "used_bytes": usage.used,
             "free_bytes": usage.free,
         }
     except OSError:
-        logger.debug("disk usage unavailable for %s", DOWNLOADS_DIR, exc_info=True)
+        logger.debug(
+            "disk usage unavailable for %s", ctx.paths.downloads, exc_info=True
+        )
 
     ollama = None
     openrouter = None
@@ -386,7 +420,7 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
         )
 
         downloads_paused = bool(
-            download_queue.is_paused()
+            ctx.download_queue.is_paused()
             or settings_svc.load().get("download_queue_paused", False)
         )
         cookies_ok = cookie_configured()
@@ -438,11 +472,9 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
 
 def _public_health(request: Request) -> dict[str, Any]:
     """All an anonymous caller (a load balancer, the sign-in page) gets to see."""
-    from sqlmodel import Session
-
     from .services.auth import accounts
 
-    with Session(engine) as session:
+    with ctx_for_app(request.app).session() as session:
         users = accounts.count_users(session)
     return {
         "status": "ok",
@@ -485,11 +517,16 @@ def health(request: Request):
 def metrics(request: Request) -> PlainTextResponse:
     """Prometheus text format: queues, workers, database size, disk, request counts."""
     return PlainTextResponse(
-        render_metrics(request.app, engine), media_type=metrics_content_type
+        render_metrics(request.app, ctx_for_app(request.app).engine),
+        media_type=metrics_content_type,
     )
 
 
-def updates(refresh: bool = False, user: AuthUser = Depends(current_user)):
+def updates(
+    refresh: bool = False,
+    user: AuthUser = Depends(current_user),
+    ctx: AppContext = Depends(get_ctx),
+):
     """Compare baked-in git SHA to GitHub main (24h cache). Soft-fails offline.
 
     Forcing a fresh check (``refresh``) is for administrators.
@@ -498,7 +535,8 @@ def updates(refresh: bool = False, user: AuthUser = Depends(current_user)):
         ensure_admin(user)
     from .services.updates import check_for_updates
 
-    return check_for_updates(refresh=refresh)
+    # System settings polls this; the browser suite stays offline.
+    return check_for_updates(refresh=refresh, offline=ctx.e2e)
 
 
 def include_api(target: FastAPI) -> None:
@@ -553,14 +591,12 @@ def include_api(target: FastAPI) -> None:
 include_api(app)
 
 
-if _e2e_browser():
+if E2E:
 
     @app.post("/api/e2e/reset", response_model=OkResponse)
-    def e2e_reset():
+    def e2e_reset(request: Request):
         """Restore browser-test data. Not mounted unless HORDE_E2E=1."""
-        from .e2e_seed import prepare
-
-        prepare(os.environ.get("HORDE_E2E_MODE", "app"))
+        _boot_e2e(request.app, ctx_for_app(request.app))
         return {"ok": True}
 
 

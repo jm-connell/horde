@@ -192,9 +192,9 @@ def direct_youtube_search_effective(override: Any, system: Any = None) -> bool:
 
 
 def _path() -> Path:
-    from ..config import DATA_DIR
+    from ..context import get_paths
 
-    return DATA_DIR / "app_settings.json"
+    return get_paths().data / "app_settings.json"
 
 
 def _merge_ai(raw: Any) -> dict[str, Any]:

@@ -7,7 +7,7 @@ import threading
 
 from sqlmodel import Session, select
 
-from ..database import engine
+from ..context import get_engine
 from ..models import Playlist, utcnow
 from . import activity
 from .ytdlp_extract import extract_playlist_entries
@@ -21,7 +21,7 @@ def sync_subscribed_playlist(playlist_id: int) -> None:
     """Rescan one subscribed playlist: attach existing ids, download missing ones."""
     from .downloads.playlist_import import run_playlist_entries
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         playlist = session.get(Playlist, playlist_id)
         if playlist is None or not playlist.subscribed or not playlist.source_url:
             return
@@ -36,7 +36,7 @@ def sync_subscribed_playlist(playlist_id: int) -> None:
             if isinstance(e, dict) and e.get("url")
         ]
         run_playlist_entries(playlist_id, entries, quality)
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             playlist = session.get(Playlist, playlist_id)
             if playlist is None:
                 return
@@ -46,7 +46,7 @@ def sync_subscribed_playlist(playlist_id: int) -> None:
             session.commit()
     except Exception as exc:
         logger.exception("Playlist %s sync failed", playlist_id)
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             playlist = session.get(Playlist, playlist_id)
             if playlist is None:
                 return
@@ -75,7 +75,7 @@ def sync_subscribed_playlists() -> None:
     if not _sync_lock.acquire(blocking=False):
         return
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             ids = subscribed_playlist_ids(session)
         if not ids:
             return

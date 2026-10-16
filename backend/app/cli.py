@@ -16,7 +16,7 @@ import sys
 
 from sqlmodel import Session
 
-from . import database
+from . import context, database
 from .services.auth import accounts
 
 
@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     database.init_db()
     handler = _reset_password if args.command == "reset-password" else _create_admin
     try:
-        with Session(database.engine) as session:
+        with context.new_session() as session:
             print(handler(session, args.username))
     except accounts.AccountError as exc:
         print(f"error: {exc.message}", file=sys.stderr)

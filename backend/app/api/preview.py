@@ -13,7 +13,7 @@ from sqlmodel import Session
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
-from ..database import get_session
+from ..context import get_session
 from ..errors import extraction_error
 from ..openapi_responses import (
     DASH_MANIFEST,

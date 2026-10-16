@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from ..auth import require_admin
-from ..config import BACKGROUNDS_DIR, ensure_dirs
+from ..context import get_paths
 from ..openapi_responses import BACKGROUND_FILE, RAW
 from ..response_schemas import (
     BackgroundList,
@@ -52,7 +52,7 @@ def _safe_id(raw: str) -> str:
 
 
 def _meta_path(bg_id: str) -> Path:
-    return BACKGROUNDS_DIR / f"{bg_id}.json"
+    return get_paths().backgrounds / f"{bg_id}.json"
 
 
 def _read_meta(bg_id: str) -> dict[str, Any]:
@@ -72,8 +72,8 @@ def _write_meta(bg_id: str, meta: dict[str, Any]) -> None:
 
 
 def _find_file(bg_id: str) -> Path | None:
-    ensure_dirs()
-    for path in BACKGROUNDS_DIR.iterdir():
+    get_paths().ensure()
+    for path in get_paths().backgrounds.iterdir():
         if path.is_file() and path.stem == bg_id and path.suffix.lower() in ALLOWED_EXT:
             return path
     return None
@@ -94,10 +94,10 @@ def _entry_for(path: Path) -> dict[str, Any]:
 
 @router.get("", response_model=BackgroundList)
 def list_backgrounds():
-    ensure_dirs()
+    get_paths().ensure()
     items: list[dict[str, Any]] = []
     for path in sorted(
-        BACKGROUNDS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True
+        get_paths().backgrounds.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True
     ):
         if path.is_file() and path.suffix.lower() in ALLOWED_EXT:
             items.append(_entry_for(path))
@@ -106,7 +106,7 @@ def list_backgrounds():
 
 @router.post("", response_model=BackgroundRead, dependencies=[Depends(require_admin)])
 def upload_background(file: UploadFile = File(...)):
-    ensure_dirs()
+    get_paths().ensure()
     name = file.filename or "upload.bin"
     ext = Path(name).suffix.lower()
     if ext not in ALLOWED_EXT:
@@ -115,7 +115,7 @@ def upload_background(file: UploadFile = File(...)):
             detail="Unsupported type. Use jpg, png, webp, gif, or webm.",
         )
     if (
-        uploads.count_files(BACKGROUNDS_DIR, set(ALLOWED_EXT))
+        uploads.count_files(get_paths().backgrounds, set(ALLOWED_EXT))
         >= uploads.MAX_STORED_BACKGROUNDS
     ):
         raise HTTPException(
@@ -127,7 +127,7 @@ def upload_background(file: UploadFile = File(...)):
         )
 
     bg_id = uuid.uuid4().hex
-    dest = BACKGROUNDS_DIR / f"{bg_id}{ext}"
+    dest = get_paths().backgrounds / f"{bg_id}{ext}"
     size = uploads.save_upload(file, dest, max_bytes=uploads.BACKGROUND_MAX_BYTES)
     if size == 0:
         dest.unlink(missing_ok=True)

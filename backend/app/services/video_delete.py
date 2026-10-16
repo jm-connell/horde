@@ -15,7 +15,7 @@ from pathlib import Path
 from sqlalchemy import delete, update
 from sqlmodel import Session
 
-from .. import config
+from ..context import get_paths
 from ..models import (
     AiJob,
     DownloadJob,
@@ -62,17 +62,17 @@ def collect_video_files(video: Video, *, include_media: bool) -> list[Path]:
     if video.id is not None:
         paths.append(thumbnails.full_path(video.id))
         paths.append(thumbnails.list_path(video.id))
-        paths.append(sprite_image_path(config.SPRITES_DIR, video.id))
-        paths.append(sprite_meta_path(config.SPRITES_DIR, video.id))
+        paths.append(sprite_image_path(get_paths().sprites, video.id))
+        paths.append(sprite_meta_path(get_paths().sprites, video.id))
     compat = resolve_compat_path(video)
     if compat is not None:
         paths.append(compat)
     for track in library.parse_subtitles(video.subtitles):
         sub = track.get("path")
         if sub:
-            paths.append(config.DOWNLOADS_DIR / sub)
+            paths.append(get_paths().downloads / sub)
     if include_media and video.file_path:
-        paths.append(config.DOWNLOADS_DIR / video.file_path)
+        paths.append(get_paths().downloads / video.file_path)
     return paths
 
 
@@ -82,7 +82,7 @@ def remove_files(paths: list[Path]) -> None:
     A path that resolves outside both roots (``..`` segments, a symlink that
     escapes, a corrupt DB value) is skipped and logged, never deleted.
     """
-    roots = [config.DOWNLOADS_DIR.resolve(), config.DATA_DIR.resolve()]
+    roots = [get_paths().downloads.resolve(), get_paths().data.resolve()]
     for path in paths:
         try:
             resolved = path.resolve()

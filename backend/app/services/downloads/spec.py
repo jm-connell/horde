@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from sqlmodel import Session
 
-from ...database import engine
+from ...context import get_engine
 from ...models import DownloadDestination, DownloadJob
 from ..ytdlp_formats import normalize_video_codec
 
@@ -41,7 +41,7 @@ class JobSpec:
 
     @classmethod
     def load(cls, job_id: int) -> "JobSpec | None":
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             job = session.get(DownloadJob, job_id)
             if job is None:
                 return None

@@ -221,17 +221,19 @@ def _payload(
     }
 
 
-def check_for_updates(*, refresh: bool = False) -> dict[str, Any]:
-    """Return update status. Soft-fails so the UI can stay quiet offline."""
-    global _cache, _cache_at, _cache_key
+def check_for_updates(
+    *, refresh: bool = False, offline: bool = False
+) -> dict[str, Any]:
+    """Return update status. Soft-fails so the UI can stay quiet offline.
 
-    from ..e2e_mode import enabled as e2e_browser
+    ``offline`` skips the GitHub lookup (the browser-test process).
+    """
+    global _cache, _cache_at, _cache_key
 
     current = resolve_git_sha()
     version = _baked_version()
     repo = HORDE_GITHUB_REPO
-    if e2e_browser():
-        # System settings polls this. Keep the suite offline.
+    if offline:
         return _payload(repo, current, version, {}, None)
 
     key = (repo, current, version)

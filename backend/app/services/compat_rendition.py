@@ -32,8 +32,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import Session, select
 
 from .. import config
-from ..config import DOWNLOADS_DIR
-from ..database import engine
+from ..context import get_engine, get_paths
 from ..models import Video, VideoStatus
 from . import activity
 from .encode_probe import (
@@ -496,7 +495,7 @@ class _Cancelled(Exception):
 
 
 def _save(video_id: int, **fields: Any) -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None:
             return
@@ -530,11 +529,11 @@ class _Source:
 
 
 def _load_source(video_id: int) -> _Source | None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None or video.status != VideoStatus.ready:
             return None
-        root = DOWNLOADS_DIR.resolve()
+        root = get_paths().downloads.resolve()
         path = (root / video.file_path).resolve()
         try:
             path.relative_to(root)
@@ -573,7 +572,7 @@ def _run_compat(job: _Job) -> None:
     if src is None:
         return
     dest = compat_sidecar_path(src.path)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, job.video_id)
         if video is None:
             return
@@ -869,7 +868,7 @@ def _run_safari(job: _Job) -> None:
         """Point the row at the remuxed file; runs before the original is removed."""
         new_size = new_path.stat().st_size
         new_info = probe_stream_info(new_path)  # ffprobe before the write
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             video = session.get(Video, job.video_id)
             if video is None:
                 return
@@ -930,7 +929,7 @@ def _run_convert(job: _Job) -> None:
             stale_compat: Path | None = None
             new_size = new_path.stat().st_size
             new_info = probe_stream_info(new_path)  # ffprobe before the write
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 video = session.get(Video, job.video_id)
                 if video is None:
                     return
@@ -1059,7 +1058,7 @@ def _probe_backfill_loop(worker: BackgroundWorker) -> None:
     # Unreadable files (NAS offline, mid-move) stay unprobed for a later boot.
     skipped: set[int] = set()
     while not worker.stopping:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             query = select(Video).where(
                 Video.media_probed_at == None,  # noqa: E711 - SQL column comparison, not a Python truth test
                 Video.status == VideoStatus.ready,
@@ -1072,7 +1071,7 @@ def _probe_backfill_loop(worker: BackgroundWorker) -> None:
             for video in batch:
                 if worker.stopping:
                     return
-                path = (DOWNLOADS_DIR / video.file_path).resolve()
+                path = (get_paths().downloads / video.file_path).resolve()
                 info = probe_stream_info(path)
                 if info is None:
                     skipped.add(video.id)

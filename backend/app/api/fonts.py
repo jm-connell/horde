@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from ..auth import require_admin
-from ..config import FONTS_DIR, ensure_dirs
+from ..context import get_paths
 from ..openapi_responses import FONT_FILE, RAW
 from ..response_schemas import FontList, FontRead, OkResponse
 from ..services import uploads
@@ -37,7 +37,7 @@ def _safe_id(raw: str) -> str:
 
 
 def _meta_path(font_id: str) -> Path:
-    return FONTS_DIR / f"{font_id}.json"
+    return get_paths().fonts / f"{font_id}.json"
 
 
 def _read_meta(font_id: str) -> dict[str, Any]:
@@ -57,8 +57,8 @@ def _write_meta(font_id: str, meta: dict[str, Any]) -> None:
 
 
 def _find_file(font_id: str) -> Path | None:
-    ensure_dirs()
-    for path in FONTS_DIR.iterdir():
+    get_paths().ensure()
+    for path in get_paths().fonts.iterdir():
         if (
             path.is_file()
             and path.stem == font_id
@@ -82,10 +82,10 @@ def _entry_for(path: Path) -> dict[str, Any]:
 
 @router.get("", response_model=FontList)
 def list_fonts():
-    ensure_dirs()
+    get_paths().ensure()
     items: list[dict[str, Any]] = []
     for path in sorted(
-        FONTS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True
+        get_paths().fonts.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True
     ):
         if path.is_file() and path.suffix.lower() in ALLOWED_EXT:
             items.append(_entry_for(path))
@@ -94,7 +94,7 @@ def list_fonts():
 
 @router.post("", response_model=FontRead, dependencies=[Depends(require_admin)])
 def upload_font(file: UploadFile = File(...)):
-    ensure_dirs()
+    get_paths().ensure()
     name = file.filename or "font.bin"
     ext = Path(name).suffix.lower()
     if ext not in ALLOWED_EXT:
@@ -102,14 +102,17 @@ def upload_font(file: UploadFile = File(...)):
             status_code=400,
             detail="Unsupported type. Use woff2, woff, ttf, or otf.",
         )
-    if uploads.count_files(FONTS_DIR, set(ALLOWED_EXT)) >= uploads.MAX_STORED_FONTS:
+    if (
+        uploads.count_files(get_paths().fonts, set(ALLOWED_EXT))
+        >= uploads.MAX_STORED_FONTS
+    ):
         raise HTTPException(
             status_code=400,
             detail=f"Too many fonts (max {uploads.MAX_STORED_FONTS}). Delete one first.",
         )
 
     font_id = uuid.uuid4().hex
-    dest = FONTS_DIR / f"{font_id}{ext}"
+    dest = get_paths().fonts / f"{font_id}{ext}"
     size = uploads.save_upload(file, dest, max_bytes=uploads.FONT_MAX_BYTES)
     if size == 0:
         dest.unlink(missing_ok=True)

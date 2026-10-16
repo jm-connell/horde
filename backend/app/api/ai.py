@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from ..auth import current_user, require_admin
-from ..database import get_session
+from ..context import get_session
 from ..response_schemas import (
     AiApplyWorkloadResult,
     AiCategoriesRead,

@@ -73,9 +73,9 @@ def test_chat_survives_the_user_being_deleted_mid_answer(chat_env, session, capl
             yield "hello "
             from sqlmodel import Session
 
-            from app.database import engine
+            from app.context import get_engine
 
-            with Session(engine) as other:
+            with Session(get_engine()) as other:
                 accounts.delete_user(other, user.id)
             yield "world"
             # What OpenRouterProvider does once the usage chunk has arrived.

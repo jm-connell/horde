@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
-from ..config import DOWNLOADS_DIR, SPRITES_DIR
+from ..context import get_paths
 from ..models import (
     AiJob,
     AiJobKind,
@@ -57,13 +57,13 @@ def _has_sprites(video: Video, sprite_ids: AbstractSet[int] | None) -> bool:
         return False
     if sprite_ids is not None:
         return video.id in sprite_ids
-    return sprites_exist(SPRITES_DIR, video.id)
+    return sprites_exist(get_paths().sprites, video.id)
 
 
 def sprite_ids_on_disk() -> set[int]:
     """Ids that have a finished sprite sheet: one directory listing, not a stat per row."""
     try:
-        names = {entry.name for entry in os.scandir(SPRITES_DIR)}
+        names = {entry.name for entry in os.scandir(get_paths().sprites)}
     except FileNotFoundError:
         return set()
     return {
@@ -306,9 +306,9 @@ def to_read(
 
 
 def resolve_media(video: Video) -> Path:
-    path = (DOWNLOADS_DIR / video.file_path).resolve()
+    path = (get_paths().downloads / video.file_path).resolve()
     # Guard against path traversal escaping the downloads root.
-    if DOWNLOADS_DIR not in path.parents and path != DOWNLOADS_DIR:
+    if get_paths().downloads not in path.parents and path != get_paths().downloads:
         raise HTTPException(status_code=400, detail="Invalid file path")
     if not path.exists():
         raise HTTPException(status_code=404, detail="File missing on disk")

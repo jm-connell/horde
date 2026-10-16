@@ -18,7 +18,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from .. import config
-from ..database import engine
+from ..context import get_engine, get_paths
 from ..models import DownloadJob, JobStatus, Video
 from .downloads.staging import remove_staging_dir
 from .fsutil import is_within, restore_displaced, safe_unlink
@@ -44,7 +44,7 @@ def is_temp_artifact(name: str) -> bool:
 
 
 def _active_job_ids() -> set[int]:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(DownloadJob.id).where(
                 DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading])  # type: ignore[attr-defined]
@@ -55,7 +55,7 @@ def _active_job_ids() -> set[int]:
 
 def reap_staging_dirs() -> list[Path]:
     """Remove staging dirs whose job is gone or finished (no worker can own them)."""
-    root = config.DOWNLOADS_DIR / STAGING_DIR_NAME
+    root = get_paths().downloads / STAGING_DIR_NAME
     if not root.is_dir() or root.is_symlink():
         return []
     active = _active_job_ids()
@@ -94,10 +94,10 @@ def sweep_temp_artifacts(
     if hours <= 0:
         return []
     cutoff = (time.time() if now is None else now) - hours * 3600
-    root = config.DOWNLOADS_DIR.resolve()
+    root = get_paths().downloads.resolve()
     active = {str(i) for i in _active_job_ids()}
     removed: list[Path] = []
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
             here = Path(dirpath)
             rel_parts = here.relative_to(root).parts

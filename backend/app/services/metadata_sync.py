@@ -9,8 +9,7 @@ from typing import Any, Literal
 
 from sqlmodel import Session, select
 
-from ..config import DOWNLOADS_DIR
-from ..database import engine
+from ..context import get_engine, get_paths
 from ..models import Video
 from . import activity
 from .thumbnails import save_from_url
@@ -93,7 +92,7 @@ def refresh_video_metadata(
     """
     want = _normalize_fields(fields)
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None:
             raise ValueError(f"Video {video_id} not found")
@@ -104,7 +103,7 @@ def refresh_video_metadata(
     info = _extract_metadata(source_url)
     changed: dict[str, Any] = {}
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None:
             return {}
@@ -177,13 +176,13 @@ def refresh_video_metadata(
             from .downloads.subtitles import download_subtitles
             from .subtitle_retry import apply_subtitle_outcome, captions_fetch_allowed
 
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 video = session.get(Video, video_id)
                 if video is None:
                     return changed
                 if not captions_fetch_allowed(video):
                     return changed
-                media = DOWNLOADS_DIR / video.file_path
+                media = get_paths().downloads / video.file_path
                 tracks_url = source_url
             outcome = download_subtitles(media, tracks_url)
             apply_subtitle_outcome(video_id, outcome)
@@ -232,7 +231,7 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
     )
     try:
         for vid in video_ids:
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 video = session.get(Video, vid)
                 if video is None or not video.source_url:
                     _set_job(skipped=_job_state["skipped"] + 1)
@@ -290,7 +289,7 @@ def start_bulk_sync(
                 **dict(_job_state),
             }
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         if video_ids:
             ids = [vid for vid in video_ids if session.get(Video, vid) is not None]
         else:
@@ -326,7 +325,7 @@ def run_periodic_sync(
     """Worker loop: refresh stale metadata for all syncable videos, hourly."""
     while not worker.stopping:
         with _sync_lock:
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 all_videos = session.exec(
                     select(Video).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
                 ).all()

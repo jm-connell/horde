@@ -13,8 +13,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from ...config import DOWNLOADS_DIR
-from ...database import engine
+from ...context import get_engine, get_paths
 from ...models import DownloadDestination, DownloadJob, JobStatus, Video, VideoStatus
 from .. import activity, compat_rendition, library, scanner
 from ..fsutil import MoveJournal, safe_unlink
@@ -50,7 +49,7 @@ def finalize_in_background(
 
     def run() -> None:
         title: str | None = None
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             video = session.get(Video, video_id)
             if video is not None:
                 title = video.title
@@ -89,7 +88,7 @@ def finalize_in_background(
                 )
                 thumb = None
             if thumb:
-                with Session(engine) as session:
+                with Session(get_engine()) as session:
                     video = session.get(Video, video_id)
                     if video is None:
                         return
@@ -216,7 +215,7 @@ def _complete_device(
     warnings: tuple[str | None, str | None],
 ) -> None:
     """Ephemeral "to this device" download: no library row, sprites or AI."""
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, spec.job_id)
         title = (
             (job.title_override if job else None)
@@ -267,7 +266,7 @@ def _promote_into_library(
     """
     if not artifacts.validate_playable(final_path):
         raise RuntimeError("Processed file is not playable")
-    journal = MoveJournal(DOWNLOADS_DIR)
+    journal = MoveJournal(get_paths().downloads)
     try:
         return promote_from_staging(journal, final_path, staging_dir), journal
     except BaseException:
@@ -451,12 +450,12 @@ def _resolve_target(
 
 def _stale_files_of(video: Video, final_path: Path) -> list[Path]:
     stale: list[Path] = []
-    old_path = DOWNLOADS_DIR / video.file_path
+    old_path = get_paths().downloads / video.file_path
     if old_path.resolve() != final_path.resolve():
         stale.append(old_path)
     for track in library.parse_subtitles(video.subtitles):
         if track.get("path"):
-            stale.append(DOWNLOADS_DIR / track["path"])
+            stale.append(get_paths().downloads / track["path"])
     # New original → any previous H.264 sidecar is stale.
     old_compat = resolve_compat_path(video)
     if old_compat is not None:
@@ -556,7 +555,7 @@ def commit_library_video(request: CommitRequest) -> CommittedVideo:
     once this commit succeeded, so a failed commit never costs the user the
     previous copy.
     """
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, request.spec.job_id)
         video, is_replace, stale = _resolve_target(session, request)
         _apply_display_title(video, request, job, is_replace)
@@ -599,5 +598,5 @@ def remove_review_duplicates(
 
 
 def remove_review_duplicates_for(yt_id: str | None, video_id: int) -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         remove_review_duplicates(session, yt_id, keep_id=video_id)

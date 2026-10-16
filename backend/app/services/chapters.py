@@ -7,7 +7,7 @@ import math
 import re
 from typing import Any, Literal
 
-from ..config import DOWNLOADS_DIR
+from ..context import get_paths
 from ..models import Video, VideoAiMeta
 from . import library
 
@@ -252,7 +252,7 @@ def load_timed_cues(video: Video) -> list[tuple[float, str]]:
         rel = track.get("path")
         if not rel:
             continue
-        path = DOWNLOADS_DIR / str(rel)
+        path = get_paths().downloads / str(rel)
         if not path.is_file():
             continue
         try:

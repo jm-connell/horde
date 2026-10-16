@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import Video, VideoAiChatMessage, utcnow
 from .. import app_settings
 from . import embeddings as ai_embeddings
@@ -143,7 +143,7 @@ def stream_chat_events(
     authorized: Authorized | None = None,
 ) -> Generator[str, None, None]:
     """SSE generator that owns its DB session for the full stream lifetime."""
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         yield from stream_chat(session, video_id, message, user_id, authorized)
 
 

@@ -8,7 +8,7 @@ from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
 from ..auth import current_user, require_permission
-from ..database import get_session
+from ..context import get_session
 from ..models import Playlist, PlaylistItem, PlaylistSource, Video
 from ..openapi_responses import IMAGE_JPEG, RAW
 from ..schemas import (

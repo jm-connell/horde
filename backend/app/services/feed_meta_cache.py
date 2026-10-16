@@ -16,9 +16,9 @@ _lock = threading.Lock()
 
 
 def _path() -> Path:
-    from ..config import DATA_DIR
+    from ..context import get_paths
 
-    return DATA_DIR / "feed_meta_cache.json"
+    return get_paths().data / "feed_meta_cache.json"
 
 
 def load() -> dict[str, dict[str, Any]]:

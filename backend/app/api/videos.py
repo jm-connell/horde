@@ -9,8 +9,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, func, select
 
 from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
-from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
-from ..database import get_session
+from ..context import get_paths, get_session
 from ..models import DownloadJob, JobStatus, User, Video
 from ..openapi_responses import (
     EVENT_STREAM,
@@ -310,9 +309,9 @@ def storage_stats(session: Session = Depends(get_session)):
         )
     ).one()
     thumbnail_bytes = 0
-    if THUMBNAILS_DIR.exists():
+    if get_paths().thumbnails.exists():
         thumbnail_bytes = sum(
-            f.stat().st_size for f in THUMBNAILS_DIR.glob("*") if f.is_file()
+            f.stat().st_size for f in get_paths().thumbnails.glob("*") if f.is_file()
         )
     return StorageStats(
         total_bytes=int(video_bytes) + int(compat_bytes) + thumbnail_bytes,
@@ -883,7 +882,7 @@ def generate_thumbnail_candidates(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     media = _resolve_media(video)
-    THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
+    get_paths().thumbnails.mkdir(parents=True, exist_ok=True)
     with (
         grab_limit.slot(),
         activity.track(
@@ -898,7 +897,7 @@ def generate_thumbnail_candidates(
     ):
         candidates = _gen(
             media,
-            THUMBNAILS_DIR,
+            get_paths().thumbnails,
             video_id,
             count=count,
             duration=video.duration_sec,
@@ -932,7 +931,7 @@ def get_thumbnail_candidate(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    path = candidate_thumb_path(THUMBNAILS_DIR, video_id, index)
+    path = candidate_thumb_path(get_paths().thumbnails, video_id, index)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Candidate not found")
     return FileResponse(path, media_type="image/jpeg")
@@ -955,7 +954,7 @@ def select_thumbnail_candidate(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    src = candidate_thumb_path(THUMBNAILS_DIR, video_id, index)
+    src = candidate_thumb_path(get_paths().thumbnails, video_id, index)
     if not src.exists():
         raise HTTPException(status_code=404, detail="Candidate not found")
     dest = copy_full(src, video_id)
@@ -992,8 +991,8 @@ def get_sprite_meta(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    meta = load_sprite_meta(SPRITES_DIR, video_id)
-    if meta is None or not sprites_exist(SPRITES_DIR, video_id):
+    meta = load_sprite_meta(get_paths().sprites, video_id)
+    if meta is None or not sprites_exist(get_paths().sprites, video_id):
         raise HTTPException(status_code=404, detail="Sprites not ready")
     return meta
 
@@ -1003,7 +1002,7 @@ def get_sprite_sheet(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    path = sprite_image_path(SPRITES_DIR, video_id)
+    path = sprite_image_path(get_paths().sprites, video_id)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Sprites not ready")
     return FileResponse(path, media_type="image/jpeg")
@@ -1034,8 +1033,8 @@ def get_subtitle(video_id: int, lang: str, session: Session = Depends(get_sessio
     )
     if track is None:
         raise HTTPException(status_code=404, detail="Subtitle not found")
-    path = (DOWNLOADS_DIR / track["path"]).resolve()
-    if DOWNLOADS_DIR not in path.parents or not path.exists():
+    path = (get_paths().downloads / track["path"]).resolve()
+    if get_paths().downloads not in path.parents or not path.exists():
         raise HTTPException(status_code=404, detail="Subtitle file missing")
     return FileResponse(path, media_type="text/vtt")
 

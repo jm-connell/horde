@@ -11,8 +11,8 @@ from typing import Literal
 from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import Session
 
-from ..config import DOWNLOADS_DIR, SPRITE_CONCURRENCY, SPRITES_DIR
-from ..database import engine
+from ..config import SPRITE_CONCURRENCY
+from ..context import get_engine, get_paths
 from ..models import Video
 from . import activity
 from .metadata import delete_sprite_files, generate_sprite_sheet, sprites_exist
@@ -24,17 +24,17 @@ SpriteStatus = Literal["ready", "generating"]
 
 def _build_sprites(video_id: int, reason: str, cancel: threading.Event) -> None:
     """Generate the sprite sheet for one video (runs on a pool thread)."""
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None:
             return
         title = video.title
-        path = (DOWNLOADS_DIR / video.file_path).resolve()
-        if DOWNLOADS_DIR not in path.parents and path != DOWNLOADS_DIR:
+        path = (get_paths().downloads / video.file_path).resolve()
+        if get_paths().downloads not in path.parents and path != get_paths().downloads:
             return
         if not path.is_file():
             return
-        if sprites_exist(SPRITES_DIR, video_id):
+        if sprites_exist(get_paths().sprites, video_id):
             return
 
     with activity.track(
@@ -46,19 +46,22 @@ def _build_sprites(video_id: int, reason: str, cancel: threading.Event) -> None:
         video_id=video_id,
     ) as handle:
         duration: float | None = None
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             video = session.get(Video, video_id)
             if video is None:
                 handle.discard()
                 return
-            path = (DOWNLOADS_DIR / video.file_path).resolve()
-            if DOWNLOADS_DIR not in path.parents and path != DOWNLOADS_DIR:
+            path = (get_paths().downloads / video.file_path).resolve()
+            if (
+                get_paths().downloads not in path.parents
+                and path != get_paths().downloads
+            ):
                 handle.discard()
                 return
             if not path.is_file():
                 handle.discard()
                 return
-            if sprites_exist(SPRITES_DIR, video_id):
+            if sprites_exist(get_paths().sprites, video_id):
                 handle.discard()
                 return
             duration = video.duration_sec
@@ -66,7 +69,7 @@ def _build_sprites(video_id: int, reason: str, cancel: threading.Event) -> None:
         # ffmpeg can take minutes — do not hold a SQLite transaction open.
         sprite = generate_sprite_sheet(
             path,
-            SPRITES_DIR,
+            get_paths().sprites,
             video_id,
             duration=duration,
             cancel_event=cancel,
@@ -74,10 +77,10 @@ def _build_sprites(video_id: int, reason: str, cancel: threading.Event) -> None:
         if not sprite:
             return
 
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             video = session.get(Video, video_id)
             if video is None:
-                delete_sprite_files(SPRITES_DIR, video_id)
+                delete_sprite_files(get_paths().sprites, video_id)
                 handle.discard()
                 return
             if video.sprite_path == sprite:
@@ -219,7 +222,7 @@ def enqueue_sprite_generation(
     reason: str = "Seek preview sprites needed",
 ) -> SpriteStatus:
     """Ensure sprites exist; queue a build on the pool if needed. Idempotent."""
-    if sprites_exist(SPRITES_DIR, video_id):
+    if sprites_exist(get_paths().sprites, video_id):
         return "ready"
     sprite_pool.enqueue(video_id, reason)
     return "generating"

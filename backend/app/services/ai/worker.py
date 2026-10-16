@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-import threading
 from datetime import timedelta
 
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from ...database import engine
+from ...context import current, get_engine
 from ...logging_config import FailureLog, job_context
 from ...models import (
     AiJob,
@@ -35,8 +34,6 @@ from .provider import (
 logger = logging.getLogger(__name__)
 
 #: Callers outside this module nudge the worker through ``wake_worker()``.
-_wake = threading.Event()
-_blocked_reason: str | None = None
 _WAITING_NOTE_PREFIX = "waiting: "
 _WAITING_STAMP_AGE_SEC = 120
 
@@ -68,7 +65,7 @@ def enqueue_job(
     catalog_video_id: int | None = None,
     force: bool = False,
 ) -> int | None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         if not force and _active_job_exists(
             session, kind, video_id, catalog_video_id=catalog_video_id
         ):
@@ -86,7 +83,7 @@ def enqueue_job(
         session.commit()
         session.refresh(job)
         job_id = job.id
-    _wake.set()
+    current().ai.wake.set()
     return job_id
 
 
@@ -118,7 +115,7 @@ def enqueue_for_video(
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)
     if ai.get("ai_summaries", True) and (ollama_on or or_on):
         should_summarize = False
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             video = session.get(Video, video_id)
             if video is not None and ai_text.has_subtitle_text(video):
                 meta = session.get(VideoAiMeta, video_id)
@@ -135,7 +132,7 @@ def enqueue_for_video(
         and (ollama_on or or_on)
     ):
         should_chapters = False
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             video = session.get(Video, video_id)
             if video is not None:
                 from ..chapters import skip_reason as chapters_skip_reason
@@ -184,7 +181,7 @@ def enqueue_missing_embeds(
         batch_limit = limit
     # Multiple passes so large libraries don't stop after one batch.
     for _ in range(50):
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             exclude = (
                 _failed_video_ids(session, AiJobKind.embed_video)
                 if skip_failed
@@ -238,7 +235,7 @@ def enqueue_reindex_embeds(*, limit: int | None = None) -> dict:
     if limit is not None:
         batch_limit = limit
     for _ in range(50):
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             need = embeddings.videos_needing_embed(session, limit=batch_limit)
             # Clear stale embed_error so retry/reindex starts clean.
             for video_id in need:
@@ -279,7 +276,7 @@ def enqueue_missing_tags(*, limit: int | None = None) -> dict:
     cutoff = now - timedelta(days=rescan_days)
     # (priority, enriched_at_or_min, video_id) — missing first, then oldest stale.
     candidates: list[tuple[int, object, int]] = []
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         videos = session.exec(
             select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         ).all()
@@ -312,7 +309,7 @@ def enqueue_full_tag_refresh(*, limit: int | None = None) -> dict:
     if limit is not None:
         tag_limit = limit
     ids: list[int] = []
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         videos = session.exec(
             select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         ).all()
@@ -369,7 +366,7 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
 
     need_embed: list[int] = []
     need_tags: list[int] = []
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         recent_ids = list(
             session.exec(
                 select(Video.id).where(
@@ -430,7 +427,7 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
 
 
 def enqueue_video_tag_refresh(video_id: int) -> bool:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None or video.needs_review:
             return False
@@ -459,7 +456,7 @@ def _result(breakdown: dict[str, int], *, empty: str) -> dict:
 
 
 def queue_depth() -> int:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         return int(
             session.exec(
                 select(func.count())
@@ -481,7 +478,7 @@ def queue_breakdown() -> dict[str, int]:
         "chapters": 0,
         "running": 0,
     }
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(
                 AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
@@ -496,7 +493,7 @@ def queue_breakdown() -> dict[str, int]:
 
 
 def error_count() -> int:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         return int(
             session.exec(
                 select(func.count())
@@ -507,12 +504,11 @@ def error_count() -> int:
 
 
 def blocked_reason() -> str | None:
-    return _blocked_reason
+    return current().ai.blocked_reason
 
 
 def _set_blocked_reason(reason: str | None) -> None:
-    global _blocked_reason
-    _blocked_reason = reason
+    current().ai.blocked_reason = reason
 
 
 def _job_titles(session: Session, jobs: list[AiJob]) -> dict[int, str | None]:
@@ -562,7 +558,7 @@ def queue_stats() -> dict:
     deferred = 0
     waiting = 0
     running = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(
                 AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
@@ -593,7 +589,7 @@ def queue_stats() -> dict:
 def recent_failures(*, limit: int = 10) -> list[dict]:
     limit = max(1, min(int(limit), 50))
     out: list[dict] = []
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob)
             .where(AiJob.status == AiJobStatus.error)
@@ -626,7 +622,7 @@ def list_jobs(
     limit: int = 50,
 ) -> list[dict]:
     limit = max(1, min(int(limit), 200))
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         statement = select(AiJob).order_by(AiJob.updated_at.desc()).limit(limit)
         if status:
             try:
@@ -670,7 +666,7 @@ def list_jobs(
 
 
 def retry_job(job_id: int) -> bool:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(AiJob, job_id)
         if job is None:
             return False
@@ -683,13 +679,13 @@ def retry_job(job_id: int) -> bool:
         job.updated_at = utcnow()
         session.add(job)
         session.commit()
-    _wake.set()
+    current().ai.wake.set()
     return True
 
 
 def retry_failed_jobs() -> int:
     reset = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(AiJob.status == AiJobStatus.error)
         ).all()
@@ -704,12 +700,12 @@ def retry_failed_jobs() -> int:
         if reset:
             session.commit()
     if reset:
-        _wake.set()
+        current().ai.wake.set()
     return reset
 
 
 def cancel_job(job_id: int) -> bool:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(AiJob, job_id)
         if job is None:
             return False
@@ -728,7 +724,7 @@ def clear_failed_jobs(*, keep_days: int = 0) -> int:
     keep_days = max(0, int(keep_days))
     cutoff = utcnow() - timedelta(days=keep_days) if keep_days else None
     deleted = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(
                 AiJob.status.in_([AiJobStatus.error, AiJobStatus.cancelled])  # type: ignore[attr-defined]
@@ -749,7 +745,7 @@ def clear_failed_jobs(*, keep_days: int = 0) -> int:
 
 
 def current_job_info() -> dict | None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.exec(
             select(AiJob)
             .where(AiJob.status == AiJobStatus.running)
@@ -842,7 +838,7 @@ def _stamp_waiting_jobs(reason: str) -> None:
     """Annotate old queued jobs that cannot run yet (no attempt burn)."""
     note = f"{_WAITING_NOTE_PREFIX}{reason}"[:500]
     cutoff = utcnow() - timedelta(seconds=_WAITING_STAMP_AGE_SEC)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(AiJob.status == AiJobStatus.queued)
         ).all()
@@ -862,7 +858,7 @@ def _stamp_waiting_jobs(reason: str) -> None:
 
 
 def _clear_waiting_notes() -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(AiJob.status == AiJobStatus.queued)
         ).all()
@@ -900,7 +896,7 @@ def _compute_blocked_reason(
     wait = _waiting_reason(llm_ok=llm_ok, embed_ok=embed_ok)
     if wait and (not llm_ok or not embed_ok):
         # Only report blocked when something in queue actually needs the missing side.
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             rows = session.exec(
                 select(AiJob).where(AiJob.status == AiJobStatus.queued)
             ).all()
@@ -963,7 +959,7 @@ def _process_one() -> bool:
             _stamp_waiting_jobs(reason)
         return False
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = _next_job(session, llm_ok=llm_ok, embed_ok=embed_ok)
         if job is None:
             reason = _compute_blocked_reason(
@@ -1035,11 +1031,11 @@ def _run_claimed_job(
         act = None
 
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             skip_reason = tasks.dispatch(
                 session, kind, video_id, catalog_video_id=catalog_video_id
             )
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             job = session.get(AiJob, job_id)
             if job is not None:
                 if skip_reason:
@@ -1058,7 +1054,7 @@ def _run_claimed_job(
         from .provider import invalidate_resolved_url
 
         invalidate_resolved_url()
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             job = session.get(AiJob, job_id)
             if job is not None:
                 job.error = str(exc)[:500]
@@ -1167,7 +1163,7 @@ def _timer_loop(worker: BackgroundWorker) -> None:
 def create_workers() -> list[BackgroundWorker]:
     """The job runner and the scheduler that feeds it (registered in this order)."""
     return [
-        BackgroundWorker("horde-ai-worker", _worker_loop, wake_event=_wake),
+        BackgroundWorker("horde-ai-worker", _worker_loop, wake_event=current().ai.wake),
         BackgroundWorker("horde-ai-timer", _timer_loop),
     ]
 
@@ -1175,7 +1171,7 @@ def create_workers() -> list[BackgroundWorker]:
 def recover_ai_jobs() -> int:
     """Requeue AI jobs left in running after a process crash/restart."""
     reset = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(AiJob.status == AiJobStatus.running)
         ).all()
@@ -1189,9 +1185,9 @@ def recover_ai_jobs() -> int:
             session.commit()
     if reset:
         logger.info("Recovered %s stuck AI job(s) → queued", reset)
-        _wake.set()
+        current().ai.wake.set()
     return reset
 
 
 def wake_worker() -> None:
-    _wake.set()
+    current().ai.wake.set()

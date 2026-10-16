@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from sqlmodel import Session
 
 from ..auth import require_admin
-from ..database import get_session
+from ..context import get_session
 from ..models import User, as_utc
 from ..schemas import PermissionInfo, UserCreate, UserRead, UserUpdate
 from ..services.auth import accounts, permissions

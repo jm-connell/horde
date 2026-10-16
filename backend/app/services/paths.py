@@ -4,7 +4,7 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
-from ..config import DOWNLOADS_DIR
+from ..context import get_paths
 from ..models import Video
 from .fsutil import MoveJournal
 
@@ -54,7 +54,7 @@ def resolve_compat_path(video: Video) -> Path | None:
     """Absolute sidecar path when the row has one inside DOWNLOADS_DIR."""
     if not video.compat_path:
         return None
-    root = DOWNLOADS_DIR.resolve()
+    root = get_paths().downloads.resolve()
     path = (root / video.compat_path).resolve()
     try:
         path.relative_to(root)
@@ -90,7 +90,7 @@ def belongs_to_stem(name: str, stem: str) -> bool:
 
 def staging_dir(job_id: int) -> Path:
     """Per-job download staging dir (same filesystem as the library)."""
-    return DOWNLOADS_DIR / STAGING_DIR_NAME / str(job_id)
+    return get_paths().downloads / STAGING_DIR_NAME / str(job_id)
 
 
 def is_staging_rel_path(rel_path: str) -> bool:
@@ -100,7 +100,7 @@ def is_staging_rel_path(rel_path: str) -> bool:
 
 def to_rel_path(path: Path) -> str:
     """Store paths with forward slashes so DB keys are stable on Windows."""
-    return path.resolve().relative_to(DOWNLOADS_DIR.resolve()).as_posix()
+    return path.resolve().relative_to(get_paths().downloads.resolve()).as_posix()
 
 
 def find_video_by_path(session: Session, rel_path: str) -> Video | None:
@@ -177,7 +177,7 @@ def manual_import_rel_path(channel: str | None, title: str, ext: str) -> str:
 
 def unique_rel_path(desired: str, *, exclude: str | None = None) -> str:
     """Return desired if free on disk; otherwise append ' (2)', ' (3)', …"""
-    root = DOWNLOADS_DIR.resolve()
+    root = get_paths().downloads.resolve()
     posix = desired.replace("\\", "/")
     path = Path(posix)
     stem = path.stem
@@ -209,7 +209,7 @@ def rename_video_file(session: Session, video: Video, new_rel: str) -> None:
     other uncommitted work it needs to keep on failure: the session is rolled
     back.
     """
-    root = DOWNLOADS_DIR.resolve()
+    root = get_paths().downloads.resolve()
     old_rel = video.file_path.replace("\\", "/")
     new_rel = unique_rel_path(new_rel.replace("\\", "/"), exclude=old_rel)
 

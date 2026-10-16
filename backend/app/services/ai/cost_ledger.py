@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import OpenRouterUsage, as_utc, utcnow
 from ...services import app_settings
 
@@ -57,7 +57,7 @@ def record_cost(
     kind_clean = (kind or "other").strip()[:40] or "other"
     persisted = False
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             session.add(
                 OpenRouterUsage(
                     kind=kind_clean,
@@ -138,7 +138,7 @@ def record_from_response(
 
 def sum_since(cutoff: datetime) -> float:
     """Sum OpenRouter costs with created_at >= cutoff."""
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(OpenRouterUsage).where(col(OpenRouterUsage.created_at) >= cutoff)
         ).all()
@@ -159,7 +159,7 @@ def window_analytics() -> dict[str, dict[str, float | int]]:
     out: dict[str, dict[str, float | int]] = {
         k: {"cost": 0.0, "calls": 0} for k in windows
     }
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(select(OpenRouterUsage)).all()
         for row in rows:
             c = float(row.cost or 0.0)

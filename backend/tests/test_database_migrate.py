@@ -378,7 +378,9 @@ def test_playlist_item_pair_is_unique(init_db):
 
 
 def test_engine_enables_wal(init_db):
-    from app.database import engine
+    from app.context import get_engine as _engine
+
+    engine = _engine()
 
     with engine.connect() as conn:
         mode = conn.execute(text("PRAGMA journal_mode")).scalar()
@@ -386,14 +388,18 @@ def test_engine_enables_wal(init_db):
 
 
 def test_engine_enables_foreign_keys(init_db):
-    from app.database import engine
+    from app.context import get_engine as _engine
+
+    engine = _engine()
 
     with engine.connect() as conn:
         assert conn.execute(text("PRAGMA foreign_keys")).scalar() == 1
 
 
 def test_engine_registers_regexp(init_db):
-    from app.database import engine
+    from app.context import get_engine as _engine
+
+    engine = _engine()
 
     with engine.connect() as conn:
         hit = conn.execute(

@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from ..database import engine
+from ..context import get_engine
 from ..models import (
     ChannelAutodownload,
     ChannelCatalogStatus,
@@ -337,7 +337,7 @@ def after_catalog_update(
     new_ids = [i for i in (new_yt_ids or []) if i]
     finished_ids = [i for i in (live_finished_ids or []) if i]
     enqueued = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         policy = get_policy(session, url)
         if policy is None or not policy.enabled:
             return 0
@@ -398,7 +398,7 @@ def apply_saved_policy(channel_url: str, *, channel_name: str | None = None) -> 
     from .channel_catalog.runtime import _normalize_channel_url, get_catalog_by_url
 
     url = _normalize_channel_url(channel_url)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         policy = get_policy(session, url)
         if policy is None or not policy.enabled:
             return
@@ -433,7 +433,7 @@ def schedule_apply_saved_policy(
 def poll_enabled_channels(should_stop: Callable[[], bool] | None = None) -> None:
     from .channel_catalog import sync_feed_head
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         policies = list_enabled_policies(session)
         targets = [(p.channel_url, p.channel_name) for p in policies]
     for channel_url, channel_name in targets:

@@ -9,7 +9,6 @@ import httpx
 import pytest
 import yt_dlp.version  # noqa: F401 - importing yt-dlp may fork; do it before forking is forbidden
 
-from app import main
 from app.services import health as health_svc
 from app.services import storage_check
 from app.services.workers import BackgroundWorker, WorkerRegistry
@@ -129,12 +128,14 @@ def test_not_ready_when_a_worker_died(app, client):
     assert response.json()["workers"] == {"doomed": False}
 
 
-def test_not_ready_when_the_database_is_unreachable(client, tmp_path, monkeypatch):
+def test_not_ready_when_the_database_is_unreachable(
+    app, anon_client, tmp_path, monkeypatch
+):
     from app.database import create_sqlite_engine
 
     broken = create_sqlite_engine(f"sqlite:///{tmp_path / 'missing-dir' / 'x.db'}")
-    monkeypatch.setattr(main, "engine", broken)
-    response = client.get("/api/ready")
+    monkeypatch.setattr(app.state.ctx, "engine", broken)
+    response = anon_client.get("/api/ready")
     assert response.status_code == 503
     assert "database unreachable" in response.json()["problems"]
 

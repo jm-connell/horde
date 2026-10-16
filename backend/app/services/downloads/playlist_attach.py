@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import DownloadJob, JobStatus, Playlist, PlaylistItem, Video
 from . import dbwrite
 
@@ -80,7 +80,7 @@ def attach_download_to_playlist(job_id: int, video_id: int | None) -> None:
 
 
 def _attach_once(job_id: int, video_id: int) -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         if job is None or job.playlist_id is None:
             return
@@ -164,7 +164,7 @@ def append_unlisted_playlist_items(
     playlist_id: int, placed_video_ids: set[int], start_pos: int
 ) -> None:
     """Keep items that are not on the remote list, after YouTube order."""
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         items = session.exec(
             select(PlaylistItem)
             .where(PlaylistItem.playlist_id == playlist_id)

@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import (
     AiJob,
     ChannelCatalog,
@@ -126,7 +126,7 @@ def purge_members_only_by_yt_id(yt_id: str) -> None:
     yt_id = str(yt_id).strip()
     if not yt_id:
         return
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(ChannelCatalogVideo).where(ChannelCatalogVideo.yt_id == yt_id)
         ).all()

@@ -16,8 +16,7 @@ from ..auth import (
     require_admin,
     require_permission,
 )
-from ..config import DOWNLOADS_DIR
-from ..database import engine, get_session
+from ..context import AppContext, get_ctx, get_engine, get_paths, get_session
 from ..errors import CodedHTTPException, extraction_error
 from ..models import DownloadDestination, DownloadJob, JobStatus, Playlist, Video
 from ..openapi_responses import EVENT_STREAM, FILE_DOWNLOAD, RAW
@@ -168,13 +167,15 @@ def list_presets():
     response_model=DownloadPreview,
     dependencies=[Depends(require_permission("download")), Depends(ytdlp_slot)],
 )
-def preview_download(url: str, gate: ExtractionGate = Depends(extraction_gate)):
+def preview_download(
+    url: str,
+    gate: ExtractionGate = Depends(extraction_gate),
+    ctx: AppContext = Depends(get_ctx),
+):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
     validate_public_url(url)
-    from ..e2e_mode import enabled as e2e_browser
-
-    if e2e_browser():
+    if ctx.e2e:
         # Let the download form render a preview without calling yt-dlp.
         return DownloadPreview(
             is_playlist=False,
@@ -667,9 +668,9 @@ def download_device_file(job_id: int, session: Session = Depends(get_session)):
     if not download_staging.is_device_staging_path(rel):
         raise HTTPException(status_code=404, detail="File not found")
 
-    path = (DOWNLOADS_DIR / rel).resolve()
+    path = (get_paths().downloads / rel).resolve()
     try:
-        path.relative_to(DOWNLOADS_DIR.resolve())
+        path.relative_to(get_paths().downloads.resolve())
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="File not found") from exc
     if not path.is_file():
@@ -688,7 +689,7 @@ _JOB_STATUS_RECHECK_TICKS = 10
 
 
 def _job_status(job_id: int) -> JobStatus | None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         return job.status if job is not None else None
 

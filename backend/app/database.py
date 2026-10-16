@@ -12,14 +12,11 @@ start a second writer while another Session holds an uncommitted write.
 from __future__ import annotations
 
 import re
-from collections.abc import Generator
 from typing import Any
 
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, create_engine
-
-from .config import DATABASE_URL
+from sqlmodel import create_engine
 
 # SQLite busy timeout (seconds) — also set as PRAGMA so pooled reconnects match.
 SQLITE_BUSY_TIMEOUT_MS = 15_000
@@ -61,23 +58,15 @@ def create_sqlite_engine(url: str) -> Engine:
     return eng
 
 
-engine = create_sqlite_engine(DATABASE_URL)
-
-
 def init_db(eng: Engine | None = None) -> None:
     """Create or upgrade the schema to the latest Alembic revision.
 
     See ``app/migrations/runner.py`` for the startup algorithm. ``eng``
-    defaults to the module engine (looked up at call time so tests can
-    rebind it).
+    defaults to the active context's engine.
     """
     # Import models so SQLModel registers tables for Alembic's metadata.
     from . import models  # noqa: F401 - import registers the tables with SQLModel metadata
+    from .context import get_engine
     from .migrations.runner import upgrade_database
 
-    upgrade_database(eng if eng is not None else engine)
-
-
-def get_session() -> Generator[Session, None, None]:
-    with Session(engine) as session:
-        yield session
+    upgrade_database(eng if eng is not None else get_engine())

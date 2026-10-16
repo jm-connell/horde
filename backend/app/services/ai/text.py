@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
-from ...config import DOWNLOADS_DIR
+from ...context import get_paths
 from ...models import Video
 from .. import library
 
@@ -108,7 +108,7 @@ def load_subtitle_text(video: Video, *, max_chars: int = _MAX_SUBTITLE_CHARS) ->
         rel = track.get("path")
         if not rel:
             continue
-        path = DOWNLOADS_DIR / str(rel)
+        path = get_paths().downloads / str(rel)
         if not path.is_file():
             continue
         try:
@@ -694,5 +694,5 @@ def chat_fallback_captions(video: Video) -> list[str]:
 def resolve_subtitle_path(rel: str | None) -> Path | None:
     if not rel:
         return None
-    path = DOWNLOADS_DIR / rel
+    path = get_paths().downloads / rel
     return path if path.is_file() else None

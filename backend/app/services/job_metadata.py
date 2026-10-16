@@ -7,7 +7,7 @@ import queue
 
 from sqlmodel import Session, select
 
-from ..database import engine
+from ..context import get_engine
 from ..models import DownloadJob, JobStatus
 from .url_clean import youtube_thumbnail_url, youtube_video_id
 from .workers import BackgroundWorker
@@ -36,7 +36,7 @@ def create_worker() -> BackgroundWorker:
 
 def rehydrate_pending() -> int:
     """Re-queue metadata fills lost on restart (the queue is in memory only)."""
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         ids = session.exec(
             select(DownloadJob.id).where(
                 DownloadJob.status == JobStatus.queued,
@@ -69,7 +69,7 @@ def _loop(worker: BackgroundWorker) -> None:
 def _fill_job(job_id: int) -> None:
     from .downloads.progress import progress_store
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         if job is None or job.status not in (JobStatus.queued, JobStatus.downloading):
             return
@@ -110,7 +110,7 @@ def _fill_job(job_id: int) -> None:
     if not thumb and yt_id:
         thumb = youtube_thumbnail_url(str(yt_id))
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         if job is None or job.status not in (JobStatus.queued, JobStatus.downloading):
             return
@@ -149,7 +149,7 @@ def _drop_short(job_id: int, url: str) -> None:
     from .downloads.queue import download_queue
 
     download_queue.cancel_job(job_id)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         if job is None:
             progress_store[job_id] = {

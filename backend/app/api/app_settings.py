@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from ..auth import current_user, ensure_admin
-from ..database import get_session
+from ..context import get_session
 from ..services import app_settings, user_settings
 from ..services.ai.provider import (
     invalidate_resolved_url,

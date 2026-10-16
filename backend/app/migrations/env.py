@@ -57,18 +57,18 @@ def _run_migrations(connection: Connection) -> None:
 def run_migrations_online() -> None:
     engine: Engine | None = config.attributes.get("engine")
     if engine is None:
-        from app.database import engine as app_engine
+        from app.context import get_engine
 
-        engine = app_engine
+        engine = get_engine()
     with engine.connect() as connection:
         _run_migrations(connection)
 
 
 def run_migrations_offline() -> None:
-    from app.config import DATABASE_URL
+    from app.context import get_paths
 
     context.configure(
-        url=DATABASE_URL,
+        url=get_paths().database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         **CONTEXT_OPTIONS,

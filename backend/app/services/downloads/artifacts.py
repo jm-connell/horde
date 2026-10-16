@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from ...config import DOWNLOADS_DIR, VIDEO_EXTENSIONS
+from ...config import VIDEO_EXTENSIONS
+from ...context import get_paths
 from ..fsutil import safe_rel, safe_unlink
 from ..metadata import probe_is_playable
 from ..paths import (
@@ -70,7 +71,7 @@ def resolve_merged_video(prepared: Path | None, active_paths: set[str]) -> Path 
         if found is not None:
             return found
     for rel in active_paths:
-        found = find_merged_video(DOWNLOADS_DIR / rel)
+        found = find_merged_video(get_paths().downloads / rel)
         if found is not None:
             return found
     return None
@@ -84,7 +85,7 @@ def validate_playable(path: Path) -> bool:
 def cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) -> None:
     """Remove in-progress fragments and optionally corrupt final files."""
     for rel in paths:
-        full = DOWNLOADS_DIR / rel
+        full = get_paths().downloads / rel
         parent = full.parent
         stem = video_stem(full, staging=True)
         if not parent.is_dir():
@@ -108,7 +109,7 @@ def cleanup_partial_files(paths: set[str]) -> None:
     """Remove in-progress fragments; also drop unplayable merged files left by cancel."""
     cleanup_download_artifacts(paths, remove_final=False)
     for rel in paths:
-        full = DOWNLOADS_DIR / rel
+        full = get_paths().downloads / rel
         if not full.is_file():
             continue
         if STAGING_FRAGMENT_RE.search(full.name) or full.name.endswith(".part"):
