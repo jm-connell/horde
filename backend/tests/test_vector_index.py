@@ -143,3 +143,62 @@ def test_a_rollback_does_not_keep_stale_state(session, add_video):
     assert [
         h[2] for h in embeddings.similar_video_hits(session, [0.0, 1.0], min_score=0.5)
     ] == []
+
+
+def _cache(session):
+    from app.services.ai import vector_index
+
+    return vector_index.cache_for(session)
+
+
+def test_writing_one_video_updates_the_matrix_without_a_full_build(
+    session, library_of_vectors
+):
+    query = [0.3, -0.2, 0.5, 0.1, -0.4, 0.2, 0.0, 0.6]
+    before = embeddings.similar_video_hits(session, query, limit=50, min_score=-1.0)
+    cache = _cache(session)
+    assert cache.full_builds == 1
+
+    target = library_of_vectors[4]
+    other = [h for h in before if h[0] != target.id]
+    embeddings.delete_embeddings(session, target.id)
+    _store(session, target.id, -1, [0.3, -0.2, 0.5, 0.1, -0.4, 0.2, 0.0, 0.6])
+    session.commit()
+
+    after = embeddings.similar_video_hits(session, query, limit=50, min_score=-1.0)
+    assert cache.full_builds == 1
+    assert [h for h in after if h[0] != target.id] == other
+    assert after[0][0] == target.id
+    assert after[0][1] == pytest.approx(1.0, abs=1e-5)
+    assert [h[0] for h in after].count(target.id) == 1
+
+
+def test_many_writes_compact_without_changing_results(session, library_of_vectors):
+    query = [1.0, 0.5, -0.5, 0.2, 0.1, -0.3, 0.4, 0.0]
+    embeddings.similar_video_hits(session, query)
+    cache = _cache(session)
+    rng = random.Random(11)  # noqa: S311 - deterministic test data
+    for video in library_of_vectors[:5]:
+        embeddings.delete_embeddings(session, video.id)
+        for chunk in (-1, 0):
+            _store(session, video.id, chunk, [rng.uniform(-1, 1) for _ in range(8)])
+        session.commit()
+        got = embeddings.similar_video_hits(session, query, limit=50, min_score=-1.0)
+        want = _reference(session, query, limit=50, exclude=set(), min_score=-1.0)
+        assert [(v, c) for v, _s, c in got] == [(v, c) for v, _s, c in want]
+    assert cache.full_builds == 1
+
+
+def test_core_deletes_are_noticed_without_a_full_build(session, library_of_vectors):
+    from sqlalchemy import delete
+
+    query = [1.0] * 8
+    embeddings.similar_video_hits(session, query, limit=50, min_score=-1.0)
+    cache = _cache(session)
+    gone = library_of_vectors[1].id
+    session.execute(delete(VideoEmbedding).where(VideoEmbedding.video_id == gone))
+    session.commit()
+    hits = embeddings.similar_video_hits(session, query, limit=50, min_score=-1.0)
+    assert gone not in {h[0] for h in hits}
+    assert len(hits) == len(library_of_vectors) - 1
+    assert cache.full_builds == 1
