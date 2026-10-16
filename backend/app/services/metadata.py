@@ -413,10 +413,13 @@ def _sprite_via_frame_montage(
         for i, frame_path in enumerate(frames):
             col = i % columns
             row = i // columns
-            with Image.open(frame_path) as im:
-                if im.size != (tile_w, tile_h):
-                    im = im.resize((tile_w, tile_h))
-                sheet.paste(im, (col * tile_w, row * tile_h))
+            with Image.open(frame_path) as frame:
+                tile = (
+                    frame
+                    if frame.size == (tile_w, tile_h)
+                    else frame.resize((tile_w, tile_h))
+                )
+                sheet.paste(tile, (col * tile_w, row * tile_h))
         image_path.parent.mkdir(parents=True, exist_ok=True)
         sheet.save(image_path, format="JPEG", quality=85)
         return image_path.is_file()

@@ -5,7 +5,7 @@ import threading
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...context import get_engine
 from ...models import DownloadDestination, DownloadJob, JobStatus, Playlist
@@ -132,7 +132,7 @@ def run_playlist_entries(
                 vid
                 for vid in session.exec(
                     select(DownloadJob.video_id).where(
-                        DownloadJob.id.in_(job_ids),  # type: ignore[union-attr]
+                        col(DownloadJob.id).in_(job_ids),
                         DownloadJob.video_id != None,  # noqa: E711 - SQL IS NOT NULL
                     )
                 ).all()

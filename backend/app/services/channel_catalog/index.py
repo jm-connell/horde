@@ -7,13 +7,14 @@ import threading
 import time
 from typing import Any
 
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
 from ...context import get_engine
 from ...models import (
     ChannelCatalog,
     ChannelCatalogStatus,
     ChannelCatalogVideo,
+    require_id,
     utcnow,
 )
 from .. import activity, app_settings
@@ -91,7 +92,7 @@ def _upsert_flat_entries(
     """Upsert flat entries starting at start_position. Returns (next position, new yt ids)."""
     pos = start_position
     inserted: list[str] = []
-    skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
+    skipped = skipped_yt_ids(session, require_id(catalog))
     for raw in entries:
         rejected = _reject_members_or_skipped(
             session, catalog, raw, skipped=skipped, allow_gated=allow_gated
@@ -111,7 +112,7 @@ def _upsert_flat_entries(
         ).first()
         if existing is None:
             existing = ChannelCatalogVideo(
-                catalog_id=catalog.id,  # type: ignore[arg-type]
+                catalog_id=require_id(catalog),
                 yt_id=str(yt_id),
                 url=str(entry_url),
             )
@@ -129,7 +130,7 @@ def _trim_beyond_cap(session: Session, catalog: ChannelCatalog) -> None:
     rows = session.exec(
         select(ChannelCatalogVideo)
         .where(ChannelCatalogVideo.catalog_id == catalog.id)
-        .order_by(ChannelCatalogVideo.position.asc())
+        .order_by(col(ChannelCatalogVideo.position).asc())
     ).all()
     keep_ids = {r.id for r in rows[: catalog.max_videos] if r.id is not None}
     for row in rows:
@@ -179,10 +180,10 @@ def sync_feed_head(
         existing = session.exec(
             select(ChannelCatalogVideo)
             .where(ChannelCatalogVideo.catalog_id == catalog.id)
-            .order_by(ChannelCatalogVideo.position.asc())
+            .order_by(col(ChannelCatalogVideo.position).asc())
         ).all()
         by_yt: dict[str, ChannelCatalogVideo] = {v.yt_id: v for v in existing}
-        skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
+        skipped = skipped_yt_ids(session, require_id(catalog))
 
         live_ids: list[str] = []
         inserted: list[str] = []
@@ -205,7 +206,7 @@ def sync_feed_head(
                 published = None
             if row is None:
                 row = ChannelCatalogVideo(
-                    catalog_id=catalog.id,  # type: ignore[arg-type]
+                    catalog_id=require_id(catalog),
                     yt_id=yt_id,
                     url=str(raw["url"]),
                 )
@@ -249,7 +250,7 @@ def sync_feed_head(
         session.commit()
         _trim_beyond_cap(session, catalog)
         count = session.exec(
-            select(func.count(ChannelCatalogVideo.id)).where(
+            select(func.count(col(ChannelCatalogVideo.id))).where(
                 ChannelCatalogVideo.catalog_id == catalog.id
             )
         ).one()
@@ -359,7 +360,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
         select(ChannelCatalogVideo)
         .where(ChannelCatalogVideo.catalog_id == catalog.id)
         .where(ChannelCatalogVideo.position < _DESC_LIMIT)
-        .order_by(ChannelCatalogVideo.position.asc())
+        .order_by(col(ChannelCatalogVideo.position).asc())
     ).all()
     total = len(rows)
     _set_runtime(done=0, total=total)
@@ -420,7 +421,7 @@ def _enqueue_catalog_embeds(catalog_id: int) -> None:
                 select(ChannelCatalogVideo)
                 .where(ChannelCatalogVideo.catalog_id == catalog_id)
                 .where(ChannelCatalogVideo.position < _DESC_LIMIT)
-                .order_by(ChannelCatalogVideo.position.asc())
+                .order_by(col(ChannelCatalogVideo.position).asc())
             ).all()
             for row in rows:
                 if row.id is None:
@@ -579,7 +580,7 @@ def index_catalog(catalog_id: int) -> None:
                 return
             _trim_beyond_cap(session, catalog)
             count = session.exec(
-                select(func.count(ChannelCatalogVideo.id)).where(
+                select(func.count(col(ChannelCatalogVideo.id))).where(
                     ChannelCatalogVideo.catalog_id == catalog_id
                 )
             ).one()
@@ -605,7 +606,7 @@ def index_catalog(catalog_id: int) -> None:
                 act.discard()
                 return
             count = session.exec(
-                select(func.count(ChannelCatalogVideo.id)).where(
+                select(func.count(col(ChannelCatalogVideo.id))).where(
                     ChannelCatalogVideo.catalog_id == catalog_id
                 )
             ).one()

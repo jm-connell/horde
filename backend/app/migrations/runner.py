@@ -30,6 +30,8 @@ from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 
+from ..database import sqlite_connection
+
 logger = logging.getLogger(__name__)
 
 BACKUP_KEEP = 5
@@ -121,7 +123,7 @@ def _backup_database(engine: Engine, label: str) -> Path | None:
     try:
         dest = sqlite3.connect(target)
         try:
-            raw.driver_connection.backup(dest)  # type: ignore[attr-defined]
+            sqlite_connection(raw).backup(dest)
         finally:
             dest.close()
     finally:

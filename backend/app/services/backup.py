@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,6 +22,7 @@ from pathlib import Path
 
 from sqlalchemy.engine import Engine
 
+from ..database import sqlite_connection
 from .workers import BackgroundWorker
 
 logger = logging.getLogger(__name__)
@@ -127,7 +127,7 @@ def run_nightly_backup(
         stale.unlink(missing_ok=True)
     raw = engine.raw_connection()
     try:
-        conn: sqlite3.Connection = raw.driver_connection  # type: ignore[assignment]
+        conn = sqlite_connection(raw)
         # VACUUM INTO refuses to run inside a transaction and needs a path that
         # does not exist yet.
         conn.execute("VACUUM INTO ?", (str(partial),))

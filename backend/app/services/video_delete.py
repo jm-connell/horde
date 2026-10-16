@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import delete, update
-from sqlmodel import Session
+from sqlalchemy.orm import Mapped
+from sqlmodel import Session, SQLModel, col
 
 from ..context import get_paths
 from ..models import (
@@ -35,20 +37,20 @@ from .paths import resolve_compat_path
 logger = logging.getLogger(__name__)
 
 # Child rows that only make sense together with their video.
-_OWNED_ROW_MODELS = (
-    VideoEmbedding,
-    VideoAiChatMessage,
-    VideoAiMeta,
-    PlaylistItem,
-    AiJob,
-    UserVideoState,
+_OWNED_ROW_COLUMNS: tuple[tuple[type[SQLModel], Mapped[Any]], ...] = (
+    (VideoEmbedding, col(VideoEmbedding.video_id)),
+    (VideoAiChatMessage, col(VideoAiChatMessage.video_id)),
+    (VideoAiMeta, col(VideoAiMeta.video_id)),
+    (PlaylistItem, col(PlaylistItem.video_id)),
+    (AiJob, col(AiJob.video_id)),
+    (UserVideoState, col(UserVideoState.video_id)),
 )
 # History / soft pointers that survive the video with the reference cleared.
-_NULLED_REFERENCES = (
-    (DownloadJob, "video_id"),
-    (DownloadJob, "replace_video_id"),
-    (OpenRouterUsage, "video_id"),
-    (Playlist, "cover_video_id"),
+_NULLED_REFERENCES: tuple[tuple[type[SQLModel], Mapped[Any]], ...] = (
+    (DownloadJob, col(DownloadJob.video_id)),
+    (DownloadJob, col(DownloadJob.replace_video_id)),
+    (OpenRouterUsage, col(OpenRouterUsage.video_id)),
+    (Playlist, col(Playlist.cover_video_id)),
 )
 
 
@@ -118,12 +120,11 @@ def delete_video_cascade(
     video_id = video.id
     files = collect_video_files(video, include_media=delete_files)
     if video_id is not None:
-        for model in _OWNED_ROW_MODELS:
-            session.execute(delete(model).where(model.video_id == video_id))  # type: ignore[attr-defined]
-        for model, column in _NULLED_REFERENCES:
-            attr = getattr(model, column)
+        for model, owner_column in _OWNED_ROW_COLUMNS:
+            session.execute(delete(model).where(owner_column == video_id))
+        for model, ref_column in _NULLED_REFERENCES:
             session.execute(
-                update(model).where(attr == video_id).values({column: None})
+                update(model).where(ref_column == video_id).values({ref_column: None})
             )
     session.delete(video)
     if commit:

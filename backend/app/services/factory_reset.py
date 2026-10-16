@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import delete
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
 from ..context import get_engine, get_paths
 from ..models import (
@@ -106,7 +106,9 @@ def _pause_workers(*, cancel_downloads: bool) -> None:
         with Session(get_engine()) as session:
             jobs = session.exec(
                 select(DownloadJob).where(
-                    DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading])
+                    col(DownloadJob.status).in_(
+                        [JobStatus.queued, JobStatus.downloading]
+                    )
                 )
             ).all()
             ids = [job.id for job in jobs if job.id is not None]
@@ -191,4 +193,4 @@ def _wipe_dir_contents(root: Path) -> None:
 
 def _video_count() -> int:
     with Session(get_engine()) as session:
-        return int(session.scalar(select(func.count(Video.id))) or 0)
+        return int(session.scalar(select(func.count(col(Video.id)))) or 0)

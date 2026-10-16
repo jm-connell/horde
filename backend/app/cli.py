@@ -17,6 +17,7 @@ import sys
 from sqlmodel import Session
 
 from . import context, database
+from .models import require_id
 from .services.auth import accounts
 
 
@@ -34,7 +35,10 @@ def _reset_password(session: Session, username: str) -> str:
     if user is None:
         raise accounts.UserNotFound(f"No user named {username!r}")
     accounts.update_user(
-        session, user.id, password=_read_password(user.username), disabled=False
+        session,
+        require_id(user),
+        password=_read_password(user.username),
+        disabled=False,
     )
     return f"Password updated for {user.username}. They are signed out everywhere."
 

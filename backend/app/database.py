@@ -12,10 +12,12 @@ start a second writer while another Session holds an uncommitted write.
 from __future__ import annotations
 
 import re
-from typing import Any
+import sqlite3
+from typing import Any, cast
 
 from sqlalchemy import event
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import CursorResult, Engine, Result
+from sqlalchemy.pool import PoolProxiedConnection
 from sqlmodel import create_engine
 
 # SQLite busy timeout (seconds) — also set as PRAGMA so pooled reconnects match.
@@ -24,6 +26,19 @@ SQLITE_CONNECT_ARGS: dict[str, Any] = {
     "check_same_thread": False,
     "timeout": SQLITE_BUSY_TIMEOUT_MS / 1000.0,
 }
+
+
+def sqlite_connection(raw: PoolProxiedConnection) -> sqlite3.Connection:
+    """The ``sqlite3`` connection under a pooled one (for backup and VACUUM INTO)."""
+    conn = raw.driver_connection
+    if not isinstance(conn, sqlite3.Connection):
+        raise TypeError(f"expected a sqlite3 connection, got {type(conn).__name__}")
+    return conn
+
+
+def rowcount(result: Result[Any]) -> int:
+    """Rows matched by an UPDATE/DELETE/INSERT (``Session.execute`` types it as Result)."""
+    return cast(CursorResult[Any], result).rowcount or 0
 
 
 def _sqlite_regexp(pattern: Any, value: Any) -> int:

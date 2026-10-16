@@ -40,10 +40,8 @@ def list_path(video_id: int) -> Path:
 def _open_rgb(data: bytes):
     from PIL import Image
 
-    img = Image.open(io.BytesIO(data), formats=_IMAGE_FORMATS)
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    return img
+    opened = Image.open(io.BytesIO(data), formats=_IMAGE_FORMATS)
+    return opened.convert("RGB") if opened.mode != "RGB" else opened
 
 
 def normalize_to_jpeg(data: bytes, *, max_px: int = FULL_THUMB_MAX_PX) -> bytes:

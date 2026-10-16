@@ -13,8 +13,9 @@ from collections.abc import Iterable
 
 from sqlalchemy import update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
+from ..database import rowcount
 from ..models import UserVideoState, utcnow
 
 # SQLite allows 32766 bound parameters; stay well under it for IN (...) lists.
@@ -32,7 +33,7 @@ def get_states(
         rows = session.exec(
             select(UserVideoState).where(
                 UserVideoState.user_id == user_id,
-                UserVideoState.video_id.in_(chunk),  # type: ignore[attr-defined]
+                col(UserVideoState.video_id).in_(chunk),
             )
         )
         for row in rows:
@@ -65,11 +66,11 @@ def expire_stale(session: Session, cutoff) -> int:
     result = session.execute(
         update(UserVideoState)
         .where(
-            UserVideoState.last_watched_at.is_not(None),  # type: ignore[union-attr]
+            col(UserVideoState.last_watched_at).is_not(None),
             UserVideoState.last_watched_at < cutoff,
-            UserVideoState.position_sec > 0,
+            col(UserVideoState.position_sec) > 0,
         )
         .values(position_sec=0.0)
     )
     session.commit()
-    return int(result.rowcount or 0)
+    return rowcount(result)

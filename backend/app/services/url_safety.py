@@ -90,7 +90,7 @@ def _resolve(host: str, port: int) -> list[IPAddress]:
     infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     out: list[IPAddress] = []
     for info in infos:
-        addr = ipaddress.ip_address(info[4][0].split("%")[0])
+        addr = ipaddress.ip_address(str(info[4][0]).split("%")[0])
         if addr not in out:
             out.append(addr)
     return out

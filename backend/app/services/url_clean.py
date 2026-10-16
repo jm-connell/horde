@@ -128,8 +128,8 @@ def clean_url(url: str, keep_playlist: bool = False) -> str:
         for k, v in query.items()
         if k not in _TRACKING_PARAMS and not k.startswith("utm_")
     }
-    new_query = urlencode(cleaned, doseq=True)
-    return urlunparse(parsed._replace(query=new_query))
+    encoded_query = urlencode(cleaned, doseq=True)
+    return urlunparse(parsed._replace(query=encoded_query))
 
 
 def is_playlist_url(url: str) -> bool:

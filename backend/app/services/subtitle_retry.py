@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..context import get_engine, get_paths
 from ..models import Video, as_utc
@@ -217,7 +217,7 @@ def recover_unsynced_missing_captions() -> int:
     with Session(get_engine()) as session:
         rows = session.exec(
             select(Video).where(
-                Video.source_url.is_not(None),  # type: ignore[attr-defined]
+                col(Video.source_url).is_not(None),
                 Video.subtitles_pending == False,  # noqa: E712 - SQL column comparison, not a Python truth test
             )
         ).all()
@@ -249,7 +249,7 @@ def next_due_video(session: Session) -> Video | None:
     rows = session.exec(
         select(Video).where(
             Video.subtitles_pending == True,  # noqa: E712 - SQL column comparison, not a Python truth test
-            Video.source_url.is_not(None),  # type: ignore[attr-defined]
+            col(Video.source_url).is_not(None),
         )
     ).all()
     due: list[Video] = []

@@ -29,6 +29,7 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI
@@ -455,8 +456,8 @@ class CsrfMiddleware:
 
 @dataclass(frozen=True)
 class MiddlewareSpec:
-    cls: type
-    kwargs: dict = field(default_factory=dict)
+    cls: Callable[..., ASGIApp]
+    kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 def build_stack(

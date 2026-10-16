@@ -29,11 +29,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from sqlalchemy.orm.exc import StaleDataError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from .. import config
 from ..context import get_engine, get_paths
-from ..models import Video, VideoStatus
+from ..models import Video, VideoStatus, require_id
 from . import activity
 from .encode_probe import (
     EncoderChoice,
@@ -1064,7 +1064,7 @@ def _probe_backfill_loop(worker: BackgroundWorker) -> None:
                 Video.status == VideoStatus.ready,
             )
             if skipped:
-                query = query.where(Video.id.notin_(skipped))  # type: ignore[union-attr]
+                query = query.where(col(Video.id).notin_(skipped))
             batch = session.exec(query.limit(25)).all()
             if not batch:
                 return
@@ -1074,7 +1074,7 @@ def _probe_backfill_loop(worker: BackgroundWorker) -> None:
                 path = (get_paths().downloads / video.file_path).resolve()
                 info = probe_stream_info(path)
                 if info is None:
-                    skipped.add(video.id)
+                    skipped.add(require_id(video))
                     continue
                 apply_stream_info(video, info)
                 session.add(video)

@@ -109,18 +109,18 @@ def _seed_accounts(engine) -> None:
         session.commit()
         for name, password, is_admin, grants in E2E_ACCOUNTS:
             wanted = permissions.DEFAULT_PERMISSIONS if grants is None else set(grants)
-            user = accounts.get_by_username(session, name)
-            if user is None:
+            account = accounts.get_by_username(session, name)
+            if account is None:
                 accounts.create_user(
                     session, name, password, is_admin=is_admin, granted=wanted
                 )
                 continue
-            if not passwords.verify_password(password, user.password_hash):
-                user.password_hash = passwords.hash_password(password)
-            user.is_admin = is_admin
-            user.disabled = False
-            user.permissions = permissions.dump(wanted)
-            session.add(user)
+            if not passwords.verify_password(password, account.password_hash):
+                account.password_hash = passwords.hash_password(password)
+            account.is_admin = is_admin
+            account.disabled = False
+            account.permissions = permissions.dump(wanted)
+            session.add(account)
         session.commit()
 
 
@@ -169,6 +169,7 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
         UserVideoState,
         Video,
         VideoStatus,
+        require_id,
     )
     from .services.auth import accounts
 
@@ -267,18 +268,20 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
 
         # The admin has watched two videos; nobody else has watched anything.
         admin = accounts.get_by_username(session, "admin")
+        if admin is None:
+            raise RuntimeError("the seeded admin account is missing")
         session.add(
             UserVideoState(
-                user_id=admin.id,
-                video_id=aurora.id,
+                user_id=require_id(admin),
+                video_id=require_id(aurora),
                 position_sec=40,
                 last_watched_at=now,
             )
         )
         session.add(
             UserVideoState(
-                user_id=admin.id,
-                video_id=harbor.id,
+                user_id=require_id(admin),
+                video_id=require_id(harbor),
                 position_sec=15,
                 last_watched_at=yesterday,
             )
@@ -294,10 +297,18 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
         session.commit()
         session.refresh(playlist)
         session.add(
-            PlaylistItem(playlist_id=playlist.id, video_id=aurora.id, position=0)
+            PlaylistItem(
+                playlist_id=require_id(playlist),
+                video_id=require_id(aurora),
+                position=0,
+            )
         )
         session.add(
-            PlaylistItem(playlist_id=playlist.id, video_id=harbor.id, position=1)
+            PlaylistItem(
+                playlist_id=require_id(playlist),
+                video_id=require_id(harbor),
+                position=1,
+            )
         )
         session.add(
             DownloadJob(

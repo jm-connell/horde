@@ -475,9 +475,8 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
                 "delete it to start over."
             )
         if "ui" in updates and isinstance(updates["ui"], dict):
-            existing_ui = (
-                current.get("ui") if isinstance(current.get("ui"), dict) else {}
-            )
+            current_ui = current.get("ui")
+            existing_ui = current_ui if isinstance(current_ui, dict) else {}
             current["ui"] = {**existing_ui, **updates["ui"]}
             updates = {k: v for k, v in updates.items() if k != "ui"}
         if "ai" in updates and isinstance(updates["ai"], dict):

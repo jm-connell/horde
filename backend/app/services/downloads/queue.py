@@ -366,7 +366,7 @@ class DownloadQueue:
                 DownloadJob.paused == False,  # noqa: E712 - SQL column comparison, not a Python truth test
             )
             if excluded:
-                query = query.where(DownloadJob.id.notin_(excluded))  # type: ignore[union-attr]
+                query = query.where(col(DownloadJob.id).notin_(excluded))
             return session.exec(
                 query.order_by(
                     col(DownloadJob.created_at).asc(), col(DownloadJob.id).asc()

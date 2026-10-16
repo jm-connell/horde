@@ -13,6 +13,7 @@ from ...models import (
     ChannelCatalogEmbedding,
     ChannelCatalogSkip,
     ChannelCatalogVideo,
+    require_id,
     utcnow,
 )
 from .. import feed_meta_cache
@@ -158,7 +159,7 @@ def _reject_members_or_skipped(
         return None
     yt_id = str(yt_id)
     skip_set = (
-        skipped if skipped is not None else skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
+        skipped if skipped is not None else skipped_yt_ids(session, require_id(catalog))
     )
     reason = _skip_reason_for_entry(raw)
     if reason is not None and allow_gated:

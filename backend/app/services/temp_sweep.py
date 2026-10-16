@@ -15,7 +15,7 @@ import re
 import time
 from pathlib import Path
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from .. import config
 from ..context import get_engine, get_paths
@@ -47,7 +47,7 @@ def _active_job_ids() -> set[int]:
     with Session(get_engine()) as session:
         rows = session.exec(
             select(DownloadJob.id).where(
-                DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading])  # type: ignore[attr-defined]
+                col(DownloadJob.status).in_([JobStatus.queued, JobStatus.downloading])
             )
         ).all()
     return {r for r in rows if r is not None}

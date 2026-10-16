@@ -114,6 +114,10 @@ class ChildProcesses:
 children = ChildProcesses()
 
 
+def _stop_children(_timeout: float) -> None:
+    children.shutdown()
+
+
 def children_worker() -> CallbackWorker:
     """Registry entry that ends any ffmpeg still running at shutdown.
 
@@ -123,7 +127,7 @@ def children_worker() -> CallbackWorker:
     return CallbackWorker(
         "ffmpeg-children",
         start=children.reopen,
-        stop=lambda _timeout: children.shutdown(),
+        stop=_stop_children,
         is_alive=lambda: not children.closed,
     )
 

@@ -247,7 +247,7 @@ def describe_extract_target(
 
     vid = youtube_video_id(parsed_url)
     path_parts = [p for p in (parsed.path or "").split("/") if p]
-    query = parse_qs(parsed.query)
+    url_params = parse_qs(parsed.query)
 
     handle = None
     channel_id = None
@@ -264,7 +264,7 @@ def describe_extract_target(
             userish = path_parts[1]
             tab = path_parts[2] if len(path_parts) > 2 else None
 
-    search_q = query.get("query", [None])[0] if tab == "search" else None
+    search_q = url_params.get("query", [None])[0] if tab == "search" else None
     if search_q:
         loc = (
             handle
@@ -279,7 +279,7 @@ def describe_extract_target(
             return f"{channel_s} · video {vid}"
         return f"youtube.com/watch?v={vid}"
 
-    playlist = query.get("list", [None])[0]
+    playlist = url_params.get("list", [None])[0]
     if playlist and (not vid or (path_parts and path_parts[0] == "playlist")):
         return f"playlist {_clip_label(str(playlist), 40)}"
 

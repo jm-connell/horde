@@ -36,7 +36,7 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session as OrmSession
 from sqlalchemy.orm import object_session
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
 from ..models import Video, VideoAiMeta, VideoEmbedding, VideoTag
 
@@ -227,14 +227,14 @@ class SearchCache:
 def library_fingerprint(session: Session) -> tuple:
     """Cheap stamp of everything a ranking reads: a few aggregate queries."""
     videos = session.exec(
-        select(func.count(), func.max(Video.id), func.sum(Video.needs_review))  # type: ignore[arg-type]
+        select(func.count(), func.max(col(Video.id)), func.sum(col(Video.needs_review)))
     ).one()
-    tags = session.exec(select(func.count(), func.max(VideoTag.video_id))).one()  # type: ignore[arg-type]
+    tags = session.exec(select(func.count(), func.max(col(VideoTag.video_id)))).one()
     embeddings = session.exec(
-        select(func.count(), func.max(VideoEmbedding.id))  # type: ignore[arg-type]
+        select(func.count(), func.max(col(VideoEmbedding.id)))
     ).one()
     meta = session.exec(
-        select(func.count(), func.max(VideoAiMeta.updated_at))  # type: ignore[arg-type]
+        select(func.count(), func.max(col(VideoAiMeta.updated_at)))
     ).one()
     return (tuple(videos), tuple(tags), tuple(embeddings), tuple(meta))
 

@@ -320,24 +320,26 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
     Kept in one function so a caller can trim or wrap it (the unauthenticated view
     shows less than the signed-in one).
     """
-    from sqlmodel import Session, func, select
+    from sqlmodel import Session, col, func, select
 
     from .models import DownloadJob, JobStatus, Video
 
     cache = _health_cache(app_)
     ctx = ctx_for_app(app_)
     with Session(ctx.engine) as session:
-        video_count = session.scalar(select(func.count(Video.id))) or 0
+        video_count = session.scalar(select(func.count(col(Video.id)))) or 0
         review_count = (
             session.scalar(
-                select(func.count(Video.id)).where(Video.needs_review == True)  # noqa: E712 - SQL column comparison, not a Python truth test
+                select(func.count(col(Video.id))).where(col(Video.needs_review) == True)  # noqa: E712 - SQL column comparison, not a Python truth test
             )
             or 0
         )
         active_downloads = (
             session.scalar(
-                select(func.count(DownloadJob.id)).where(
-                    DownloadJob.status.in_([JobStatus.downloading, JobStatus.queued])  # type: ignore[attr-defined]
+                select(func.count(col(DownloadJob.id))).where(
+                    col(DownloadJob.status).in_(
+                        [JobStatus.downloading, JobStatus.queued]
+                    )
                 )
             )
             or 0

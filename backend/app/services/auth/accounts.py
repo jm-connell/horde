@@ -18,13 +18,12 @@ import re
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, cast
 
 from sqlalchemy import delete, func, insert, literal, or_, select, update
-from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col
 
+from ...database import rowcount
 from ...models import (
     User,
     UserSession,
@@ -233,24 +232,21 @@ def create_user(
 
 def _adopt_legacy_data(session: Session, user: User) -> None:
     """Move the pre-accounts history and UI preferences to the first user."""
-    moved = cast(
-        "CursorResult[Any]",
-        session.execute(
-            insert(UserVideoState).from_select(
-                ["user_id", "video_id", "position_sec", "last_watched_at"],
-                select(
-                    literal(_uid(user)),
-                    col(Video.id),
-                    col(Video.last_position_sec),
-                    col(Video.last_watched_at),
-                ).where(
-                    or_(
-                        col(Video.last_watched_at).is_not(None),
-                        col(Video.last_position_sec) > 0,
-                    )
-                ),
-            )
-        ),
+    moved = session.execute(
+        insert(UserVideoState).from_select(
+            ["user_id", "video_id", "position_sec", "last_watched_at"],
+            select(
+                literal(_uid(user)),
+                col(Video.id),
+                col(Video.last_position_sec),
+                col(Video.last_watched_at),
+            ).where(
+                or_(
+                    col(Video.last_watched_at).is_not(None),
+                    col(Video.last_position_sec) > 0,
+                )
+            ),
+        )
     )
     session.execute(
         update(VideoAiChatMessage)
@@ -265,7 +261,7 @@ def _adopt_legacy_data(session: Session, user: User) -> None:
         )
     )
     logger.info(
-        "Moved %s watch history rows to the first administrator", moved.rowcount
+        "Moved %s watch history rows to the first administrator", rowcount(moved)
     )
 
 

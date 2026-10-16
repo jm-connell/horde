@@ -7,10 +7,10 @@ import threading
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..context import get_engine, get_paths
-from ..models import Video
+from ..models import Video, require_id
 from . import activity
 from .thumbnails import save_from_url
 from .workers import BackgroundWorker
@@ -293,11 +293,13 @@ def start_bulk_sync(
         if video_ids:
             ids = [vid for vid in video_ids if session.get(Video, vid) is not None]
         else:
-            ids = list(
-                session.exec(
-                    select(Video.id).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
+            ids = [
+                vid
+                for vid in session.exec(
+                    select(col(Video.id)).where(col(Video.source_url).is_not(None))
                 ).all()
-            )
+                if vid is not None
+            ]
             ids = [vid for vid in ids if vid is not None]
 
     if not ids:
@@ -327,7 +329,7 @@ def run_periodic_sync(
         with _sync_lock:
             with Session(get_engine()) as session:
                 all_videos = session.exec(
-                    select(Video).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
+                    select(Video).where(col(Video.source_url).is_not(None))
                 ).all()
                 stale = [v for v in all_videos if _should_sync(v, interval_hours)]
 
@@ -347,7 +349,7 @@ def run_periodic_sync(
                             break
                         act.update(done=i, detail=video.title)
                         try:
-                            refresh_video_metadata(video.id)
+                            refresh_video_metadata(require_id(video))
                         except Exception:
                             logger.warning(
                                 "periodic metadata refresh failed for video %s",

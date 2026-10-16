@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
 from ...context import get_engine
 from ...logging_config import job_context
@@ -287,14 +287,16 @@ def get_runtime_status() -> dict[str, Any]:
     with Session(get_engine()) as session:
         reconcile_duplicate_catalogs(session)
         queued = session.exec(
-            select(func.count(ChannelCatalog.id)).where(
-                ChannelCatalog.status.in_(  # type: ignore[attr-defined]
+            select(func.count(col(ChannelCatalog.id))).where(
+                col(ChannelCatalog.status).in_(
                     [ChannelCatalogStatus.queued, ChannelCatalogStatus.indexing]
                 )
             )
         ).one()
         catalogs = session.exec(
-            select(ChannelCatalog).order_by(ChannelCatalog.updated_at.desc()).limit(40)
+            select(ChannelCatalog)
+            .order_by(col(ChannelCatalog.updated_at).desc())
+            .limit(40)
         ).all()
         system_yt = app_settings.direct_youtube_search_system()
         items = [
@@ -658,7 +660,7 @@ def _next_queued(session: Session) -> ChannelCatalog | None:
     return session.exec(
         select(ChannelCatalog)
         .where(ChannelCatalog.status == ChannelCatalogStatus.queued)
-        .order_by(ChannelCatalog.updated_at.asc())
+        .order_by(col(ChannelCatalog.updated_at).asc())
         .limit(1)
     ).first()
 

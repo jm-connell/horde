@@ -7,7 +7,7 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..context import get_engine
 from ..models import (
@@ -162,7 +162,7 @@ def upsert_policy(
 def active_youtube_ids(session: Session) -> set[str]:
     jobs = session.exec(
         select(DownloadJob).where(
-            DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading]),
+            col(DownloadJob.status).in_([JobStatus.queued, JobStatus.downloading]),
             DownloadJob.destination == DownloadDestination.library.value,
         )
     ).all()
@@ -280,7 +280,7 @@ def pending_estimate(session: Session, policy: ChannelAutodownload) -> int:
         session.exec(
             select(ChannelCatalogVideo)
             .where(ChannelCatalogVideo.catalog_id == catalog.id)
-            .order_by(ChannelCatalogVideo.position.asc())
+            .order_by(col(ChannelCatalogVideo.position).asc())
         ).all()
     )
     window = backfill_window(rows, policy.previous_mode, policy.previous_count)
@@ -353,7 +353,7 @@ def after_catalog_update(
             session.exec(
                 select(ChannelCatalogVideo)
                 .where(ChannelCatalogVideo.catalog_id == catalog.id)
-                .order_by(ChannelCatalogVideo.position.asc())
+                .order_by(col(ChannelCatalogVideo.position).asc())
             ).all()
         )
         by_id = {r.yt_id: r for r in rows}

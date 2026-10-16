@@ -17,7 +17,8 @@ from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from sqlmodel import Session, select
+from sqlalchemy import select as sa_select
+from sqlmodel import Session, col
 
 from ..models import Video
 
@@ -48,17 +49,17 @@ class DuplicateGroup:
 
 
 def load_facts(session: Session) -> list[VideoFacts]:
-    rows = session.exec(
-        select(
-            Video.id,
-            Video.title,
-            Video.channel,
-            Video.duration_sec,
-            Video.source_url,
-            Video.file_path,
+    rows = session.execute(
+        sa_select(  # sqlmodel's select stops at four columns
+            col(Video.id),
+            col(Video.title),
+            col(Video.channel),
+            col(Video.duration_sec),
+            col(Video.source_url),
+            col(Video.file_path),
         )
-        .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-        .order_by(Video.id)  # type: ignore[arg-type]
+        .where(col(Video.needs_review) == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+        .order_by(col(Video.id))
     ).all()
     return [VideoFacts(*row) for row in rows]
 

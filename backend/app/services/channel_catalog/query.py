@@ -13,6 +13,7 @@ from ...models import (
     ChannelCatalogEmbedding,
     ChannelCatalogStatus,
     ChannelCatalogVideo,
+    require_id,
 )
 from ..feed_meta_cache import parse_upload_date
 from ..search_text import (
@@ -84,11 +85,11 @@ def update_catalog_video_fields(
         ).all()
         any_changed = False
         for row in rows:
-            item = by_id.get(row.yt_id)
-            if not item:
+            incoming = by_id.get(row.yt_id)
+            if not incoming:
                 continue
             row_changed = False
-            views = item.get("view_count")
+            views = incoming.get("view_count")
             if views is not None:
                 try:
                     views_i = int(views)
@@ -97,19 +98,23 @@ def update_catalog_video_fields(
                 if views_i is not None and row.view_count != views_i:
                     row.view_count = views_i
                     row_changed = True
-            published = parse_upload_date(item.get("published_at"))
-            if published and not row.published_at and not item.get("published_label"):
+            published = parse_upload_date(incoming.get("published_at"))
+            if (
+                published
+                and not row.published_at
+                and not incoming.get("published_label")
+            ):
                 row.published_at = published
                 row_changed = True
-            duration = item.get("duration")
+            duration = incoming.get("duration")
             if duration is not None and row.duration is None:
                 row.duration = duration
                 row_changed = True
-            live_status = item.get("live_status")
+            live_status = incoming.get("live_status")
             if live_status and row.live_status != live_status:
                 row.live_status = str(live_status)
                 row_changed = True
-            thumb = item.get("thumbnail_url")
+            thumb = incoming.get("thumbnail_url")
             if thumb and not row.thumbnail_url:
                 row.thumbnail_url = str(thumb)
                 row_changed = True
@@ -147,11 +152,11 @@ def catalog_feed_page(
         ChannelCatalogStatus.error,
     ):
         return None
-    skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
+    skipped = skipped_yt_ids(session, require_id(catalog))
     all_rows = session.exec(
         select(ChannelCatalogVideo)
         .where(ChannelCatalogVideo.catalog_id == catalog.id)
-        .order_by(ChannelCatalogVideo.position.asc())
+        .order_by(col(ChannelCatalogVideo.position).asc())
     ).all()
     visible = [
         r
@@ -262,7 +267,7 @@ def _keyword_catalog_rows(
             select(ChannelCatalogVideo)
             .where(ChannelCatalogVideo.catalog_id == catalog_id)
             .where(clause)
-            .order_by(ChannelCatalogVideo.position.asc())
+            .order_by(col(ChannelCatalogVideo.position).asc())
             .limit(fetch_n)
         ).all()
         ranked = sorted(
@@ -271,18 +276,18 @@ def _keyword_catalog_rows(
         )
         return [(r, None) for r in ranked[:limit]]
 
-    rows = session.exec(
+    pair_rows = session.exec(
         select(ChannelCatalogVideo, ChannelCatalog)
         .join(
             ChannelCatalog,
-            ChannelCatalogVideo.catalog_id == ChannelCatalog.id,  # type: ignore[arg-type]
+            col(ChannelCatalogVideo.catalog_id) == col(ChannelCatalog.id),
         )
         .where(clause)
-        .order_by(ChannelCatalogVideo.position.asc())
+        .order_by(col(ChannelCatalogVideo.position).asc())
         .limit(fetch_n)
     ).all()
     paired: list[tuple[ChannelCatalogVideo, str | None]] = []
-    for row in rows:
+    for row in pair_rows:
         video, catalog = row[0], row[1]
         paired.append((video, getattr(catalog, "channel_name", None)))
     paired.sort(
@@ -308,7 +313,7 @@ def _semantic_catalog_hits(
             return []
         if catalog_id is None:
             emb_count = session.exec(
-                select(func.count()).select_from(ChannelCatalogEmbedding)  # type: ignore[arg-type]
+                select(func.count()).select_from(ChannelCatalogEmbedding)
             ).one()
             if int(emb_count or 0) > _EMBED_SEARCH_ROW_CEILING:
                 return []
@@ -316,11 +321,12 @@ def _semantic_catalog_hits(
             select(ChannelCatalogEmbedding, ChannelCatalogVideo, ChannelCatalog)
             .join(
                 ChannelCatalogVideo,
-                ChannelCatalogEmbedding.catalog_video_id == ChannelCatalogVideo.id,  # type: ignore[arg-type]
+                col(ChannelCatalogEmbedding.catalog_video_id)
+                == col(ChannelCatalogVideo.id),
             )
             .join(
                 ChannelCatalog,
-                ChannelCatalogVideo.catalog_id == ChannelCatalog.id,  # type: ignore[arg-type]
+                col(ChannelCatalogVideo.catalog_id) == col(ChannelCatalog.id),
             )
         )
         if catalog_id is not None:

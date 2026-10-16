@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .request_context import REQUEST_ID_HEADER
-from .response_schemas import ErrorResponse
+from .response_schemas import ErrorField, ErrorResponse
 from .services.auth.accounts import AccountError
 from .services.url_safety import UnsafeUrlError
 
@@ -92,7 +92,7 @@ def error_body(
     return ErrorResponse(
         detail=detail,
         code=code,
-        fields=fields or None,
+        fields=[ErrorField.model_validate(f) for f in fields] if fields else None,
         extra=dict(extra) if extra else None,
         request_id=request_id,
     ).model_dump(exclude_none=True)

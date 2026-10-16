@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import FastAPI
 from sqlalchemy import func
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..context import get_paths
 from ..models import (
@@ -142,7 +142,7 @@ def render_metrics(app: FastAPI, engine: Engine) -> str:
         ),
     )
     with Session(engine) as session:
-        videos = int(session.scalar(select(func.count(Video.id))) or 0)
+        videos = int(session.scalar(select(func.count(col(Video.id)))) or 0)
     out.metric(
         "horde_library_videos", "Videos in the library.", "gauge", [({}, videos)]
     )

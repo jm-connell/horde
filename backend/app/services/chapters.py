@@ -135,6 +135,8 @@ def normalize_ytdlp_chapters(raw: Any) -> list[Chapter]:
             continue
         start = item.get("start_time", item.get("start_sec"))
         title = str(item.get("title") or "").strip()
+        if start is None:
+            continue
         try:
             start_sec = float(start)
         except (TypeError, ValueError):
