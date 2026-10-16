@@ -48,17 +48,20 @@ test("watch page menus open without violations", async ({ page }) => {
   await expectNoSeriousViolations(page, "video actions menu");
 });
 
-for (const [name, path] of [
-  ["download", "/download"],
-  ["playlists", "/playlists"],
-  ["history", "/history"],
-  ["import", "/import"],
-] as const) {
+// `ready` is content that arrives after the heading; auditing before it has
+// faded in measures contrast mid-animation.
+for (const { name, path, ready } of [
+  { name: "download", path: "/download", ready: "Queued night drive" },
+  { name: "playlists", path: "/playlists", ready: "Evening set" },
+  { name: "history", path: "/history", ready: "Aurora Drift" },
+  { name: "import", path: "/import", ready: undefined },
+]) {
   test(`${name} page has no serious accessibility violations`, async ({
     page,
   }) => {
     await page.goto(path);
     await expect(page.locator("main h1")).toBeVisible();
+    if (ready) await expect(page.getByText(ready).first()).toBeVisible();
     await expectNoSeriousViolations(page, name);
   });
 }
