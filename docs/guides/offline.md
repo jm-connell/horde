@@ -83,6 +83,8 @@ In **offline mode**:
   instead of landing in their history.
   If the signed-in account changes while positions are syncing (another tab
   signs in), the sync stops and carries on for the new account.
+  A position the server refuses for good (the video was deleted) is dropped;
+  one that hits a server error stays queued and is retried next time.
 
 If Horde went offline **by itself** (server unreachable), it keeps checking in
 the background with a tiny `/api/ping` request (backing off from 3 s to once a

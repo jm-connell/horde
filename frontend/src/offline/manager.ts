@@ -37,7 +37,7 @@ import {
   type OfflineItem,
   type OfflineSponsorSegment,
 } from "./db";
-import { pendingProgress } from "./pendingProgress";
+import { classifySendFailure, pendingProgress } from "./pendingProgress";
 import { contentRangeTotal } from "./ranges";
 import { isAppleWebkit } from "../utils/playbackRendition";
 import {
@@ -319,7 +319,8 @@ class OfflineManager {
         return state.authenticated && state.user ? state.user.id : null;
       },
       send: (videoId, positionSec) => api.syncProgress(videoId, positionSec),
-      isGone: (err) => err instanceof ApiError && err.status === 404,
+      classify: (err) =>
+        classifySendFailure(err instanceof ApiError ? err.status : null),
     });
   }
 

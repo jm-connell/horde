@@ -50,13 +50,29 @@ export interface PendingProgressStore {
   delete(owner: number, videoId: number): Promise<void>;
 }
 
+/** What a failed send means for the rest of the flush. */
+export type SendFailure = "stop" | "drop" | "skip";
+
+/**
+ * Classify a failed send by its HTTP status (null: no response, a network
+ * failure). Sign-in problems and an unreachable server end the flush and keep
+ * the record. A video that is gone (404) or a save the server will never
+ * accept (422) is dropped. Anything else (5xx) keeps that record and carries
+ * on, so one failing save cannot hold back the ones queued after it.
+ */
+export function classifySendFailure(status: number | null): SendFailure {
+  if (status === null || status === 401 || status === 403) return "stop";
+  if (status === 404 || status === 422) return "drop";
+  return "skip";
+}
+
 export interface FlushDeps {
   /** Ask the server who is signed in (null: nobody). Throws when unreachable. */
   whoAmI(): Promise<number | null>;
   /** Send one position to the server for the signed-in account. */
   send(videoId: number, positionSec: number): Promise<void>;
-  /** The send failed because the video no longer exists (deleted). */
-  isGone(err: unknown): boolean;
+  /** What a failed send means for the rest of the flush. */
+  classify(err: unknown): SendFailure;
 }
 
 const indexedDbStore: PendingProgressStore = {
@@ -98,8 +114,8 @@ export class PendingProgressQueue {
    * carry may belong to someone else by now (signed in from another tab), and
    * it is asked again before every send, so a sign-in change halfway through
    * ends the flush instead of recording the rest under the new account.
-   * Stops at the first failure (other than a deleted video) and tries again
-   * on the next call. A call made while a flush runs makes it run once
+   * Failures are handled as `deps.classify` says; a stopped flush is tried
+   * again on the next call. A call made while a flush runs makes it run once
    * more when it ends (the account may have changed), instead of being lost.
    */
   async flush(deps: FlushDeps): Promise<void> {
@@ -134,9 +150,9 @@ export class PendingProgressQueue {
         try {
           await deps.send(p.videoId, p.positionSec);
         } catch (err) {
-          // A deleted video will never accept it: drop it and carry on,
-          // rather than let it hold back every save queued after it.
-          if (!deps.isGone(err)) throw err;
+          const failure = deps.classify(err);
+          if (failure === "stop") throw err;
+          if (failure === "skip") continue;
         }
         await this.store.delete(p.owner, p.videoId);
       }

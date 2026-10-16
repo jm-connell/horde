@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PendingProgress } from "./db";
 import {
+  classifySendFailure,
   PENDING_PROGRESS_MAX_AGE_MS,
   PendingProgressQueue,
   planPendingFlush,
@@ -78,7 +79,11 @@ describe("PendingProgressQueue", () => {
     const queue = new PendingProgressQueue(store, () => NOW);
     queue.setOwner(1);
     const send = vi.fn(async () => undefined);
-    await queue.flush({ whoAmI: async () => 2, send, isGone: () => false });
+    await queue.flush({
+      whoAmI: async () => 2,
+      send,
+      classify: () => "stop" as const,
+    });
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith(11, 42);
     expect(rows()).toEqual([rec(1, 10)]);
@@ -92,7 +97,7 @@ describe("PendingProgressQueue", () => {
         throw new TypeError("Failed to fetch");
       },
       send: vi.fn(),
-      isGone: () => false,
+      classify: () => "stop" as const,
     });
     expect(rows()).toHaveLength(2);
 
@@ -100,7 +105,11 @@ describe("PendingProgressQueue", () => {
       .fn()
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new TypeError("Failed to fetch"));
-    await queue.flush({ whoAmI: async () => 1, send, isGone: () => false });
+    await queue.flush({
+      whoAmI: async () => 1,
+      send,
+      classify: () => "stop" as const,
+    });
     expect(rows()).toEqual([rec(1, 11)]);
   });
 
@@ -114,7 +123,7 @@ describe("PendingProgressQueue", () => {
     await queue.flush({
       whoAmI: async () => 1,
       send,
-      isGone: (err) => err === gone,
+      classify: (err) => (err === gone ? ("drop" as const) : ("stop" as const)),
     });
     expect(send).toHaveBeenCalledTimes(3);
     expect(rows()).toEqual([]);
@@ -129,7 +138,11 @@ describe("PendingProgressQueue", () => {
       sent.push(videoId);
       if (videoId === 10) who = 2; // another tab signs 1 out and 2 in
     });
-    await queue.flush({ whoAmI: async () => who, send, isGone: () => false });
+    await queue.flush({
+      whoAmI: async () => who,
+      send,
+      classify: () => "stop" as const,
+    });
     // Account 1's second save must not go out under account 2's cookie.
     expect(sent).toEqual([10, 20]);
     expect(rows()).toEqual([rec(1, 11)]);
@@ -148,7 +161,7 @@ describe("PendingProgressQueue", () => {
         sent.push(videoId);
         if (videoId === 10) await gate;
       }),
-      isGone: () => false,
+      classify: () => "stop" as const,
     };
     const first = queue.flush(deps);
     await vi.waitFor(() => expect(sent).toEqual([10]));
@@ -160,5 +173,40 @@ describe("PendingProgressQueue", () => {
     await first;
     expect(sent).toEqual([10, 20]);
     expect(rows()).toEqual([]);
+  });
+
+  it("keeps a record that fails with a server error and carries on with the next", async () => {
+    const { store, rows } = memoryStore([rec(1, 10), rec(1, 11), rec(1, 12)]);
+    const queue = new PendingProgressQueue(store, () => NOW);
+    const send = vi.fn(async (videoId: number) => {
+      if (videoId === 10) throw new Error("boom");
+    });
+    await queue.flush({
+      whoAmI: async () => 1,
+      send,
+      classify: (err) => (err instanceof Error ? "skip" : "stop"),
+    });
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(rows()).toEqual([rec(1, 10)]);
+  });
+});
+
+describe("classifySendFailure", () => {
+  it("stops on sign-in problems and network failures", () => {
+    for (const status of [null, 401, 403]) {
+      expect(classifySendFailure(status), String(status)).toBe("stop");
+    }
+  });
+
+  it("drops saves the server will never accept", () => {
+    for (const status of [404, 422]) {
+      expect(classifySendFailure(status), String(status)).toBe("drop");
+    }
+  });
+
+  it("keeps the record but goes on after other errors", () => {
+    for (const status of [400, 429, 500, 502, 503]) {
+      expect(classifySendFailure(status), String(status)).toBe("skip");
+    }
   });
 });

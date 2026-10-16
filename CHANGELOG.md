@@ -121,6 +121,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
   another tab signs someone else in during the sync: the signed-in account is
   checked before every save is sent, the sync stops when it changes, and the
   new account's saves are then synced without waiting for the next trigger.
+- One offline progress save that the server keeps rejecting no longer blocks the
+  ones queued after it. A deleted video (404) or a save the server refuses
+  (422) is dropped; a server error (5xx) keeps that save and carries on; a
+  sign-in problem (401, 403) or no connection still stops the sync.
 - Metadata sync logs one warning line per video when the source is unreachable
   (no network, proxy down) instead of a full traceback; the traceback is logged
   at DEBUG.
