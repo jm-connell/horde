@@ -1,6 +1,6 @@
 # Video player smoke checklist
 
-After changes to `VideoPlayer.tsx`, `useShakaDash`, or player overlays, verify on your LAN:
+After changes to `VideoPlayer.tsx`, `components/player/` (see [Frontend architecture](../architecture/frontend.md)), `useShakaDash`, or player overlays, verify on your LAN:
 
 1. Local library file play (progressive `/api/videos/.../stream`)
 2. DASH stream preview before download (Watch preview / Download page)
@@ -10,7 +10,7 @@ After changes to `VideoPlayer.tsx`, `useShakaDash`, or player overlays, verify o
 6. Captions on / off with a multi-track video
 7. Cast button still mounts (Chromecast / AirPlay affordances present)
 
-Playwright covers watch-page chrome (metadata, chapters, theater, speed, mute) with a one-frame file. It does not decode DASH, reparent the mini-player, or mount Cast. Manual smoke is still the gate for those paths. See [Automated testing](../getting-started/testing.md) and [Local development](../getting-started/local-dev.md).
+Playwright (`e2e/player.spec.ts`, `e2e/watch.spec.ts`) covers watch-page chrome, keyboard shortcuts, scrubbing, volume, speed, fullscreen, SponsorBlock skipping and the mini player with a short VP9 clip. It does not decode DASH, reparent the mini-player, or mount Cast. Manual smoke is still the gate for those paths. See [Automated testing](../getting-started/testing.md) and [Local development](../getting-started/local-dev.md).
 
 ## Related
 
