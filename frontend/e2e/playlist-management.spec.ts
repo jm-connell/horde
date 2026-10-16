@@ -44,15 +44,17 @@ test("a playlist is built, reordered, trimmed and deleted", async ({
 
   // Drag the second video above the first; the order survives a reload.
   const handles = panel.getByRole("button", { name: "Drag to reorder videos" });
-  const from = (await handles.nth(1).boundingBox())!;
-  const to = (await rows.first().boundingBox())!;
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  // Small steps so the browser starts the drag and fires dragover on the target.
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
-    steps: 20,
+  // Synthetic HTML5 drag events: a real mouse drag depends on frame timing, and
+  // under load the drop was sometimes released before dragover had run.
+  const transfer = await page.evaluateHandle(() => new DataTransfer());
+  await handles.nth(1).dispatchEvent("dragstart", { dataTransfer: transfer });
+  await rows.first().dispatchEvent("dragover", {
+    dataTransfer: transfer,
   });
-  await page.mouse.up();
+  await rows.first().dispatchEvent("drop", {
+    dataTransfer: transfer,
+  });
+  await handles.nth(1).dispatchEvent("dragend", { dataTransfer: transfer });
   await expect(rows).toHaveText([/Cedar Notes/, /Kiln fire/]);
   // The reload keeps this playlist open (?open=<id>).
   await page.reload();
