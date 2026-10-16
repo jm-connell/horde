@@ -2,25 +2,9 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-
-from sqlalchemy import event
+from query_counter import count_queries
 
 from app.models import VideoAiMeta
-
-
-@contextmanager
-def count_queries(engine):
-    statements: list[str] = []
-
-    def before(_conn, _cursor, statement, *_rest):
-        statements.append(statement)
-
-    event.listen(engine, "before_cursor_execute", before)
-    try:
-        yield statements
-    finally:
-        event.remove(engine, "before_cursor_execute", before)
 
 
 def _seed(add_video, session, n: int, first: int = 0, review: bool = True):
