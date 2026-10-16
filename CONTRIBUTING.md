@@ -29,7 +29,7 @@ Auto-fix helpers: `ruff check --fix . && ruff format .` (in `backend/`) and `npm
 
 - No silent `except: pass`. Log the exception (`logger.debug` / `logger.warning` with `exc_info=True`), or catch the narrowest type and handle it. `tests/test_code_conventions.py` enforces this.
 - Every `noqa` / `eslint-disable` needs a reason.
-- New API endpoints declare response models. Schema changes go through the migration system in `backend/app/database.py`.
+- New API endpoints declare response models. Schema changes are Alembic revisions in `backend/app/migrations/versions/` (see [docs/design/sqlite-and-migrations.md](docs/design/sqlite-and-migrations.md)), and API changes regenerate `backend/openapi.json`.
 - Update the docs, README and `.env.example` when behaviour or configuration changes.
 
-More detail for AI coding agents and humans alike is in [CLAUDE.md](CLAUDE.md).
+More detail for AI coding agents and humans alike is in [CLAUDE.md](CLAUDE.md). The system map is [docs/design/architecture.md](docs/design/architecture.md); the reasons behind the big choices are in [docs/adr/](docs/adr/index.md).

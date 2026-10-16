@@ -15,7 +15,7 @@ Compose always starts a [bgutil POT](https://github.com/Brainicism/bgutil-ytdlp-
 sidecar for YouTube; Ollama is an optional profile. Built for TrueNAS / Dockge,
 works on any Docker host.
 
-**Accounts.** The first visit creates the admin, who adds other people (each with their own watch history). Built for a trusted LAN or VPN: do not port-forward it. See [Accounts and sign-in](docs/ops/authentication.md).
+**Accounts.** The first visit asks you to create the admin account (nothing else works until you do), and the admin adds other people, each with their own watch history, AI chats and look; members get only the permissions the admin grants. Lost the admin password: `docker exec -it horde python -m app.cli reset-password <user>`. Behind an authenticating reverse proxy see `HORDE_AUTH_DISABLED`. Built for a trusted LAN or VPN: do not port-forward it. See [Accounts and sign-in](docs/ops/authentication.md).
 
 Full docs ship in the image: **Settings → System → Documentation**, or `/wiki/`
 on the host. Interactive API docs: `/docs`.
@@ -123,8 +123,8 @@ On Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not
 rewrite volume lines in the compose editor. The first build compiles the UI
 and wiki and can take several minutes.
 
-Open `http://<server-ip>:8686` (host **8686** → container **8080**).
-`curl -sf http://127.0.0.1:8686/api/health` should return `status: ok`.
+Open `http://<server-ip>:8686` (host **8686** → container **8080**) and create the
+admin account. `curl -sf http://127.0.0.1:8686/api/health` should return `status: ok`.
 
 Optional local Ollama: `docker compose --profile ai up -d`. Or set
 `OLLAMA_BASE_URL` / `OPENROUTER_API_KEY` in `.env` and enable the provider
@@ -140,7 +140,8 @@ bash update.sh
 ```
 
 That snapshots live volume mounts into `.env`, backs up the SQLite database,
-fast-forwards the checkout, rebuilds with the commit SHA (tagged
+moves the checkout to the newest release tag (`HORDE_UPDATE_CHANNEL=main`
+follows every commit instead), rebuilds with the version baked in (tagged
 `horde:<shortsha>`), recreates containers, and waits on `/api/health`. If the
 new version is not healthy it rolls back automatically; `bash update.sh
 --rollback` goes back on demand. Media and settings on host volumes are
@@ -187,6 +188,10 @@ push — see [`docs/getting-started/testing.md`](docs/getting-started/testing.md
 | `OLLAMA_BASE_URL` | Empty = auto-discover compose service, then host |
 | `OPENROUTER_API_KEY` | Optional; overrides the key in Settings → AI |
 | `HORDE_GITHUB_REPO` | Repo for in-app update checks |
+| `HORDE_UPDATE_CHANNEL` | `update.sh` only: `release` (default), `prerelease` or `main` |
+| `HORDE_ALLOWED_HOSTS` | Extra `Host` names to accept (public names behind a reverse proxy) |
+| `HORDE_TRUST_PROXY` | `1` behind a proxy you control: trust `X-Forwarded-For` / `-Proto` |
+| `HORDE_AUTH_DISABLED` | `1` only when a proxy authenticates users and is the only way in |
 
 Full list: `/wiki/` → Configuration & ops → Environment variables, or
 [`docs/ops/environment.md`](docs/ops/environment.md).
@@ -211,7 +216,7 @@ If extracts still fail with bot / sign-in errors, check Settings → System
 | Library, player, downloads, AI | `/wiki/` → Using Horde |
 | Every setting | `/wiki/` → Settings |
 | Env vars, storage, troubleshooting | `/wiki/` → Configuration & ops |
-| Architecture & design rationale | `/wiki/` → Architecture / Design decisions |
+| Architecture & design rationale | `/wiki/` → Architecture (start with the architecture map) / Design decisions / Decision records |
 | API (Swagger) | `/docs` |
 
 Source Markdown lives in [`docs/`](docs/) and is built into the image with
@@ -222,7 +227,7 @@ MkDocs Material. The same site is deployed to GitHub Pages from `main`.
 - Playback compatibility (Settings → Library): AV1 only (default), H.264 up to 1080p, H.264 full resolution (converts 1440p/4K, replacing originals), or AV1 + a ≤1080p H.264 copy beside the original. The player picks whichever file the device can decode. H.264 encodes use a GPU encoder when passed into the container, otherwise software.
 - Channel catalogs (index remote uploads for feed search and stream preview)
   are YouTube-only. Non-YouTube yt-dlp URLs still download.
-- Health: `GET /api/health` (version, yt-dlp, POT, wiki, library count).
+- Health: `GET /api/health` (version, yt-dlp, POT, wiki, library count when signed in; anonymous callers get only `status`), `GET /api/ready` (database, migrations and workers; `503` when not ready), `GET /api/ping` (liveness).
 
 ## License
 
