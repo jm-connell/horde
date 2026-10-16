@@ -127,6 +127,7 @@ nav:
       - Player architecture: design/player-architecture.md
       - Settings split: design/settings-split.md
       - Single-flight AI: design/single-flight-ai.md
+      - Application context: design/app-context.md
       - Vibecoded: design/vibecoded.md
   - Reference:
       - Keyboard shortcuts: reference/keyboard-shortcuts.md

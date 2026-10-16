@@ -39,8 +39,9 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 
 | Module | Role |
 |--------|------|
-| `config.py` | Env-derived paths and constants |
-| `database.py` | Engine (WAL, busy timeout, foreign keys), `init_db()` |
+| `config.py` | Env-derived constants and tunables |
+| `context.py` | `AppContext`, `Paths`, the active-context accessors and the `get_ctx` / `get_session` dependencies (see [Application context](../design/app-context.md)) |
+| `database.py` | Engine factory (WAL, busy timeout, foreign keys), `init_db()` |
 | `migrations/` | Alembic environment, runner and revisions |
 | `legacy_migrations.py` | Frozen pre-Alembic additive migrator, used once to adopt old installs |
 | `models.py` | SQLModel tables |
@@ -49,9 +50,9 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 
 From `main.py` `lifespan`:
 
-1. `ensure_dirs()` — create downloads + data subdirs  
+1. Build an `AppContext` (paths, engine, queues, worker registry), store it on `app.state.ctx`, make it the active context, and create the downloads + data subdirs  
 2. `init_db()` — Alembic `upgrade head` (adopting pre-Alembic databases first); refuses a database from a newer version  
-3. A `WorkerRegistry` and the app-level shutdown event are created and stored on `app.state`  
+3. The context's `WorkerRegistry` and shutdown event are published on `app.state`  
 4. Network-filesystem check of `DATA_DIR` (logs an `ERROR` and sets `storage_warning` on `/api/health`)  
 5. `cleanup_orphans()` — drop library rows for missing files  
 6. `ensure_plugins_loaded()` — load yt-dlp plugins once before workers  

@@ -135,7 +135,7 @@ Without protection, CI still **runs and reports**; it just will not physically s
 
 ## Adding coverage
 
-Prefer **API tests** for anything the UI calls (`/api/videos`, playlists, settings, downloads). Use the `client` and `add_video` fixtures in `backend/tests/conftest.py` — they spin a FastAPI app with the real routers, a throwaway SQLite file, and **no** scanner/AI/catalog worker threads.
+Prefer **API tests** for anything the UI calls (`/api/videos`, playlists, settings, downloads). Use the `client` and `add_video` fixtures in `backend/tests/conftest.py` — they spin a FastAPI app with the real routers, a throwaway SQLite file, and **no** scanner/AI/catalog worker threads. Each test gets a fresh `AppContext` over a temp directory (the `tmp_dirs` fixture activates it); services read paths and the engine through it, so nothing needs patching per module. See [Application context](../design/app-context.md).
 
 ```python
 def test_example(client, add_video):

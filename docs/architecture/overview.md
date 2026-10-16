@@ -24,7 +24,7 @@ Horde is a **single-container** app: FastAPI serves the JSON API, streams media,
 On process start, `lifespan` in `main.py` runs roughly:
 
 ```text
-ensure_dirs
+build AppContext + ensure dirs
     -> init_db (Alembic upgrade head)
     -> cleanup_orphans
     -> ensure yt-dlp plugins loaded
