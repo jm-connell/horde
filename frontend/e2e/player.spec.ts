@@ -384,17 +384,28 @@ test.describe("SponsorBlock skipping", () => {
   }) => {
     await openPlayer(page, { sponsor });
     await pauseAt(page, 3.5);
+    await page.evaluate(() => {
+      const w = window as unknown as { __times: number[] };
+      w.__times = [];
+      document
+        .querySelector("video")!
+        .addEventListener("timeupdate", (e) =>
+          w.__times.push((e.target as HTMLVideoElement).currentTime)
+        );
+    });
     await page
       .locator("video")
       .first()
       .evaluate((v: HTMLVideoElement) => v.play());
-    await expect
-      .poll(() => videoState(page).then((s) => s.currentTime), {
-        timeout: 10_000,
-      })
-      .toBeGreaterThan(8.9);
     const notice = page.getByRole("status").filter({ hasText: /Skipped/ });
-    await expect(notice).toBeVisible();
+    await expect(notice).toBeVisible({ timeout: 10_000 });
+    // The notice lasts 4 s, so the jump must already have happened. Playback
+    // never sampled the skipped stretch.
+    expect((await videoState(page)).currentTime).toBeGreaterThan(8.9);
+    const seen = await page.evaluate(
+      () => (window as unknown as { __times: number[] }).__times
+    );
+    expect(seen.filter((t) => t > 5.5 && t < 8.5)).toEqual([]);
     await notice.getByRole("button", { name: "Go back" }).click();
     await expect
       .poll(() => videoState(page).then((s) => s.currentTime))
@@ -417,10 +428,13 @@ test.describe("SponsorBlock skipping", () => {
       has: page.getByRole("button", { name: "Skip", exact: true }),
     });
     await expect(prompt).toBeVisible({ timeout: 10_000 });
-    expect((await videoState(page)).currentTime).toBeLessThan(9);
+    // Freeze inside the segment so only Skip can move the playhead past it.
+    await pauseAt(page, 6);
     await prompt.getByRole("button", { name: "Skip", exact: true }).click();
     await expect
-      .poll(() => videoState(page).then((s) => s.currentTime))
+      .poll(() => videoState(page).then((s) => s.currentTime), {
+        timeout: 2000,
+      })
       .toBeGreaterThan(8.9);
     await expect(page.getByRole("button", { name: "Go back" })).toBeVisible();
   });
@@ -494,5 +508,117 @@ test.describe("mini player", () => {
     const resized = await mini.boundingBox();
     if (!resized) throw new Error("mini player vanished");
     expect(resized.width).toBeGreaterThan(moved.width + 40);
+  });
+});
+
+test.describe("player behaviour across state changes", () => {
+  function controlBar(page: Page) {
+    return page
+      .getByRole("slider", { name: "Seek" })
+      .locator("xpath=ancestor::div[contains(@class,'bg-gradient-to-t')][1]");
+  }
+  const play = (page: Page) =>
+    page
+      .locator("video")
+      .first()
+      .evaluate((v: HTMLVideoElement) => v.play());
+
+  test("controls auto-hide while playing and stay up with a menu open", async ({
+    page,
+  }) => {
+    await openPlayer(page);
+    await revealControls(page);
+    await play(page);
+    await expect(controlBar(page)).toHaveClass(/opacity-0/, {
+      timeout: 8000,
+    });
+    await expect
+      .poll(() => page.evaluate(() => document.body.dataset.playerPlaying))
+      .toBe("true");
+    await revealControls(page);
+    await expect(controlBar(page)).toHaveClass(/opacity-100/);
+    await page.getByTitle("Playback speed").click();
+    await page.waitForTimeout(3800);
+    await expect(controlBar(page)).toHaveClass(/opacity-100/);
+    await page.keyboard.press("Escape");
+    await expect(controlBar(page)).toHaveClass(/opacity-0/, {
+      timeout: 8000,
+    });
+    await page.keyboard.press("t");
+    await expect
+      .poll(() => page.evaluate(() => document.body.dataset.playerCovering))
+      .toBe("true");
+  });
+
+  test("holding the picture plays at the hold speed and restores the rate", async ({
+    page,
+  }) => {
+    await openPlayer(page);
+    await play(page);
+    const box = (await page.locator("video").first().boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 3);
+    await page.mouse.down();
+    await expect
+      .poll(() => videoState(page).then((s) => s.rate), { timeout: 3000 })
+      .not.toBe(1);
+    expect((await videoState(page)).rate).toBeGreaterThan(1);
+    await page.mouse.up();
+    await expect.poll(() => videoState(page).then((s) => s.rate)).toBe(1);
+    await page.waitForTimeout(400);
+    // The click that ends a hold must not pause.
+    expect((await videoState(page)).paused).toBe(false);
+  });
+
+  test("picture in picture switches captions to native cues and back", async ({
+    page,
+  }) => {
+    await openPlayer(page);
+    await revealControls(page);
+    await play(page);
+    const modes = () =>
+      page
+        .locator("video")
+        .first()
+        .evaluate((v: HTMLVideoElement) =>
+          Array.from(v.textTracks).map((t) => t.mode)
+        );
+    await page.keyboard.press("c");
+    await expect.poll(modes).toEqual(["hidden"]);
+    const fire = (type: string) =>
+      page
+        .locator("video")
+        .first()
+        .evaluate((v, t) => v.dispatchEvent(new Event(t)), type);
+    await fire("enterpictureinpicture");
+    await expect.poll(modes).toEqual(["showing"]);
+    await fire("leavepictureinpicture");
+    await expect.poll(modes).toEqual(["hidden"]);
+  });
+
+  test("volume survives and a pending skip prompt is dropped on a source change", async ({
+    page,
+  }) => {
+    await openPlayer(page, {
+      sponsor: [{ startSec: 5, endSec: 9, category: "sponsor" }],
+      skipMode: "prompt",
+    });
+    await revealControls(page);
+    await page.getByRole("slider", { name: "Volume" }).fill("0.4");
+    await expect.poll(() => videoState(page).then((s) => s.volume)).toBe(0.4);
+    await pauseAt(page, 4);
+    await play(page);
+    const prompt = page.getByRole("status").filter({
+      has: page.getByRole("button", { name: "Skip", exact: true }),
+    });
+    await expect(prompt).toBeVisible({ timeout: 10_000 });
+    await openNav(page, "Home");
+    await expect(page.locator(".player-mini")).toBeVisible();
+    await videoCard(page, "Kiln fire").click();
+    await expect(page).toHaveURL(/\/watch\//);
+    await expect
+      .poll(() => videoState(page).then((s) => s.duration))
+      .toBeGreaterThan(5);
+    expect((await videoState(page)).volume).toBe(0.4);
+    await expect(prompt).toHaveCount(0);
   });
 });
