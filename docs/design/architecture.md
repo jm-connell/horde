@@ -52,7 +52,7 @@ Details per worker: [Background workers](../architecture/workers.md).
 
 `lifespan` in `app/main.py`:
 
-1. `ensure_dirs()`, then `init_db()`: Alembic upgrade (refuses to start on a database from a newer Horde). Log a loud warning if `HORDE_AUTH_DISABLED` is set.
+1. Build and activate the `AppContext` ([Application context](app-context.md)) and create the directories, then `init_db()`: Alembic upgrade (refuses to start on a database from a newer Horde). Log a loud warning if `HORDE_AUTH_DISABLED` is set.
 2. Create the shutdown event and the registry; wrap SIGINT/SIGTERM so SSE streams end the moment the signal lands.
 3. Under `HORDE_E2E` the app seeds test data and **skips everything below**.
 4. Storage warning (network filesystem under `DATA_DIR`), `cleanup_orphans()`, load yt-dlp plugins, create the preview HTTP client.

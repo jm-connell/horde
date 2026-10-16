@@ -11,7 +11,7 @@ It holds the things that used to be import-time constants and singletons:
 | `workers`, `shutdown_event` | The `WorkerRegistry` and the event that ends long-lived streams |
 | `auth` | The app's `AuthRuntime` (copied from `app.state.auth`) |
 | `ai` | `AiRuntimeState`: the AI worker's wake event and "blocked" reason |
-| `caches` | Request-path caches, filled by whoever builds them |
+| `caches` | Request-path caches (`search_cache`, `duplicate_groups`), built by `install_caches`; `app.state` aliases them for the routers |
 | `e2e` | True only in the Playwright process (`HORDE_E2E`) |
 
 ## How code reaches it
