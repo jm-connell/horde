@@ -117,6 +117,9 @@ level. Detailed per-area entries are added by the maintainer at release time.
   `url()` from an old install is never applied.
 - Unknown API paths spelled with a doubled slash or another case (`//api/x`,
   `/API/x`) now get the JSON 404 instead of the web app's page.
+- Metadata sync logs one warning line per video when the source is unreachable
+  (no network, proxy down) instead of a full traceback; the traceback is logged
+  at DEBUG.
 - Known advisories in FastAPI/Starlette/python-multipart and in the frontend
   build toolchain.
 - Documentation now states that `DATA_PATH` must be a local disk (SQLite WAL is

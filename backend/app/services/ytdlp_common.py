@@ -4,6 +4,7 @@ import heapq
 import logging
 import os
 import re
+import socket
 import threading
 import time
 from datetime import UTC, datetime
@@ -315,6 +316,46 @@ def _with_extract_target(
     if message.endswith(suffix):
         return message
     return f"{message}{suffix}"
+
+
+#: Socket-level failures (a plain ``OSError`` such as a full disk is not one).
+_NETWORK_OS_ERRORS = (ConnectionError, TimeoutError, socket.gaierror, socket.herror)
+
+
+def is_network_error(exc: BaseException) -> bool:
+    """True when ``exc`` comes from the network being down or unreachable.
+
+    yt-dlp wraps the transport failure twice (``ExtractorError`` keeps it in
+    ``cause`` / ``exc_info``, ``DownloadError`` in ``exc_info``), so the chain is
+    followed through those as well as ``__cause__`` / ``__context__``. An HTTP
+    error answer (403, 404, 429) is not a network failure.
+    """
+    import httpx
+    from yt_dlp.networking.exceptions import TransportError
+
+    seen: set[int] = set()
+    pending: list[BaseException | None] = [exc]
+    while pending:
+        current = pending.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(
+            current, (TransportError, httpx.TransportError, *_NETWORK_OS_ERRORS)
+        ):
+            return True
+        info = getattr(current, "exc_info", None)
+        pending.extend(
+            [
+                info[1] if isinstance(info, tuple) and len(info) > 1 else None,
+                getattr(current, "cause", None)
+                if isinstance(getattr(current, "cause", None), BaseException)
+                else None,
+                current.__cause__,
+                current.__context__,
+            ]
+        )
+    return False
 
 
 def classify_ytdlp_error(

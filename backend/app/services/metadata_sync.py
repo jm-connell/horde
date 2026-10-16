@@ -17,6 +17,7 @@ from .workers import BackgroundWorker
 from .ytdlp_common import (
     EXTRACT_PRIORITY_BACKGROUND,
     extract_info_gated,
+    is_network_error,
     youtube_extractor_args,
 )
 from .ytdlp_extract import list_thumbnail_url
@@ -194,6 +195,21 @@ def refresh_video_metadata(
     return changed
 
 
+def _log_refresh_failure(what: str, video_id: int | None, exc: Exception) -> None:
+    """One line when the source is unreachable (offline, proxy down), else a traceback."""
+    if is_network_error(exc):
+        first_line = str(exc).strip().splitlines()[0] if str(exc).strip() else ""
+        logger.warning(
+            "%s skipped for video %s: source unreachable (%s)",
+            what,
+            video_id,
+            first_line[:200] or type(exc).__name__,
+        )
+        logger.debug("%s failed for video %s", what, video_id, exc_info=True)
+        return
+    logger.warning("%s failed for video %s", what, video_id, exc_info=True)
+
+
 def _should_sync(video: Video, min_interval_hours: int = 24) -> bool:
     if not video.source_url:
         return False
@@ -248,10 +264,8 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
                 with _sync_lock:
                     refresh_video_metadata(vid, fields=want)
                 _set_job(done=_job_state["done"] + 1)
-            except Exception as exc:
-                logger.warning(
-                    "metadata refresh failed for video %s", vid, exc_info=True
-                )
+            except Exception as exc:  # noqa: BLE001 - logged by _log_refresh_failure
+                _log_refresh_failure("metadata refresh", vid, exc)
                 _set_job(
                     failed=_job_state["failed"] + 1,
                     last_error=str(exc),
@@ -350,11 +364,9 @@ def run_periodic_sync(
                         act.update(done=i, detail=video.title)
                         try:
                             refresh_video_metadata(require_id(video))
-                        except Exception:
-                            logger.warning(
-                                "periodic metadata refresh failed for video %s",
-                                video.id,
-                                exc_info=True,
+                        except Exception as exc:  # noqa: BLE001 - logged by _log_refresh_failure
+                            _log_refresh_failure(
+                                "periodic metadata refresh", video.id, exc
                             )
                     act.finish(detail=f"{len(batch)} video(s)")
                 except Exception as exc:
