@@ -42,6 +42,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+      - name: API types are up to date
+        working-directory: frontend
+        run: npm run gen:api:check
       - name: ESLint
         working-directory: frontend
         run: npm run lint

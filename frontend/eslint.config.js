@@ -14,6 +14,7 @@ export default tseslint.config(
       "test-results/**",
       "blob-report/**",
       "node_modules/**",
+      "src/api/schema.d.ts",
     ],
   },
   js.configs.recommended,

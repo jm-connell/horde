@@ -39,6 +39,7 @@ scripts/check.sh --e2e    # also run the Playwright suite
 | 2 | Backend format | `ruff format --check .` in `backend/` |
 | 3a | API schema | `python -m app.export_openapi --check openapi.json` in `backend/` (regenerate with `... openapi.json` when you change the API) |
 | 3 | Backend tests | `PYTHONPATH=. pytest -q` in `backend/` |
+| 3b | API types | `npm run gen:api:check` in `frontend/` (regenerate `src/api/schema.d.ts` with `npm run gen:api` after regenerating `openapi.json`) |
 | 4 | Frontend lint | `npm run lint` (ESLint, zero warnings) |
 | 5 | Frontend format | `npm run format:check` (Prettier) |
 | 6 | Types | `npm run typecheck` (`tsc --noEmit`) |
