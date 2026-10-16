@@ -80,8 +80,23 @@ Then review and edit `backend/app/migrations/versions/0003_widgets.py`:
 | `0001_baseline` | The schema as it stood when Alembic was adopted (tables only created if missing) |
 | `0002_integrity` | Foreign keys with `ON DELETE`, `AUTOINCREMENT`, unique playlist items, all declared indexes (`IF NOT EXISTS`), orphan repair |
 | `0003_auth` | `users`, `user_sessions`, `user_video_state`, `user_settings` (accounts and per-user history; no rows, the first admin is created at runtime) |
+| `0004_permissions_chat` | Member permissions; chat messages belong to a user |
+| `0005_tags_search` | `video_tags`, the `videos_fts` full-text index, `videos.youtube_id` (all backfilled from existing rows) |
 
 The legacy `schema_migrations` ledger table is left in place on adopted installs and ignored by Alembic.
+
+## Derived tables and indexes
+
+Three things exist so reads do not scan the whole `videos` table. All are derived from columns the application already writes, so no writer has to remember them.
+
+- **`video_tags(video_id, tag, source)`** with `ON DELETE CASCADE` and an index on `tag` (case-insensitive). `videos.tags` (a JSON list) stays the column the application reads and writes, because it keeps order and exact spelling and is what the API returns. SQLite triggers rebuild a video's rows whenever `videos.tags` or `video_ai_meta.ai_tags` / `user_tags` change. `source` is `user` when the tag is in `user_tags`, `ai` when it is in `ai_tags`, otherwise `source` (collected from the platform). The tag filter, `all_tags`, `tag_stats` and the related-videos tag overlap query this table. A malformed or non-list `tags` value yields no rows instead of failing the write.
+- **`videos_fts`**, an FTS5 table over `title`, `description`, `notes`, `channel` and a flattened `tags` (rowid = `videos.id`), also trigger-maintained. Keyword search sends each query token, with its light inflections, as quoted FTS5 terms joined by `AND`, so user input is never interpreted as FTS5 syntax. A query with no word characters (`%`) and a SQLite build without FTS5 (the revision then skips the index) use the REGEXP scan, which escapes the query, so `%` and `_` are never wildcards.
+- **`videos.youtube_id`** (indexed), derived from `source_url` or the `[id]` token in `file_path` by a mapper listener whenever a `Video` row is inserted or updated. `find_video_by_youtube_id` and `youtube_library_map` use it.
+
+!!! warning "Revisions that rebuild `videos`"
+    The triggers belong to the `videos` and `video_ai_meta` tables. A later revision that rebuilds one of them with `batch_alter_table` (drop and rename) drops its triggers and must recreate them, and `videos_fts` must be refilled. The FTS5 shadow tables (`videos_fts_*`) are ignored by the drift test.
+
+`UtcDateTime` (`app/db_types.py`) is the column type for new timestamp columns: timezone-aware UTC in Python, stored exactly like `DateTime`. The existing `DateTime` columns are not converted yet; readers keep using `as_utc()`.
 
 ## Settings file durability
 

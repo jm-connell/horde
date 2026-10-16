@@ -182,6 +182,25 @@ def keyword_match_clause(query: str, *fields: Any) -> Any:
     return and_(*token_clauses) if len(token_clauses) > 1 else token_clauses[0]
 
 
+def fts_match_expression(query: str) -> str | None:
+    """FTS5 MATCH expression equivalent to ``keyword_match_clause``.
+
+    AND across query tokens; each token is an OR of its whole-word variants.
+    Returns None when the query has no word characters (FTS5 would tokenize it
+    to nothing), so the caller can fall back to a literal scan. Terms are
+    double-quoted, so user input is never parsed as FTS5 syntax.
+    """
+    if not _TOKEN_RE.search(query or ""):
+        return None
+    groups = []
+    for token in tokenize_query(query):
+        if not _TOKEN_RE.fullmatch(token):
+            return None
+        terms = " OR ".join(f'"{variant}"' for variant in token_variants(token))
+        groups.append(f"({terms})")
+    return " AND ".join(groups) or None
+
+
 def _group_in_hay(hay: str, variants: Sequence[str]) -> bool:
     compiled = _variants_re(variants)
     if compiled is None:

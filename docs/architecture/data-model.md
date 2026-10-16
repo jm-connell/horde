@@ -8,7 +8,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 
 | Table | Purpose |
 |-------|---------|
-| `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags, yt-dlp `source_chapters`, caption retry (`subtitles_pending`, `subtitles_retry_after`, `subtitles_fetch_attempts`), probed media info (`vcodec`, `acodec`, `codec_string` RFC 6381, `bit_depth`, `is_hdr`, `media_probed_at`), H.264 sidecar (`compat_path`, `compat_size`, `compat_source` = `youtube`\|`transcode`, `compat_error`) |
+| `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags, yt-dlp `source_chapters`, caption retry (`subtitles_pending`, `subtitles_retry_after`, `subtitles_fetch_attempts`), `youtube_id` (indexed, derived), probed media info (`vcodec`, `acodec`, `codec_string` RFC 6381, `bit_depth`, `is_hdr`, `media_probed_at`), H.264 sidecar (`compat_path`, `compat_size`, `compat_source` = `youtube`\|`transcode`, `compat_error`) |
 | `download_jobs` | Queue rows: URL, quality, `video_codec` (playback mode), probed `height_px`, progress, pause, loudnorm, optional replace target, `error` + typed `error_kind` |
 | `playlists` | User, imported, or subscribed YouTube playlists (`subscribed`, `quality_preset`, `last_synced_at`, `sync_error`, list `position`, optional `cover_video_id` / `cover_path`) |
 | `playlist_items` | Ordered video membership |
@@ -26,6 +26,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 
 | Table | Purpose |
 |-------|---------|
+| `video_tags` | Derived tag index (`video_id`, `tag`, `source` = `user`\|`ai`\|`source`), trigger-maintained from `videos.tags` and `video_ai_meta`; see [SQLite and migrations](../design/sqlite-and-migrations.md) |
 | `video_embeddings` | Per-video vectors; `chunk_index` **-1** = metadata doc, **0+** = caption chunks |
 | `video_ai_meta` | Embed status, summary, AI/user tags, locks, LLM chapters |
 | `video_ai_chat` | One chat thread per video |

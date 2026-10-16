@@ -2,16 +2,15 @@ import bisect
 import json
 import logging
 import random as py_random
-import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, func, nullsfirst, nullslast, or_
+from sqlalchemy import and_, func, nullsfirst, nullslast, or_, text
 from sqlmodel import Session, select
 
-from ..models import UserVideoState, Video
+from ..models import UserVideoState, Video, VideoTag
 from .pagination import PageRequest, random_key
-from .search_text import keyword_match_clause
+from .search_text import fts_match_expression, keyword_match_clause
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +150,41 @@ def _load_in_order(session: Session, ids: list[int]) -> list[Video]:
     return [found[i] for i in ids if i in found]
 
 
+def has_fts(session: Session) -> bool:
+    """True when the ``videos_fts`` index exists (SQLite built with FTS5)."""
+    return (
+        session.connection()
+        .exec_driver_sql("SELECT 1 FROM sqlite_master WHERE name = 'videos_fts'")
+        .first()
+        is not None
+    )
+
+
+def _keyword_clause(session: Session, query: str):
+    """WHERE clause for a keyword search over title, description, notes, channel, tags.
+
+    Uses the FTS5 index when present (each query token is a whole word or one of
+    its light inflections, AND across tokens). A query with no word characters
+    (``"!!"``) and databases without FTS5 fall back to the REGEXP scan, which
+    escapes the query, so ``%`` and ``_`` are never wildcards.
+    """
+    match = fts_match_expression(query) if has_fts(session) else None
+    if match is not None:
+        return Video.id.in_(  # type: ignore[attr-defined]
+            text(
+                "SELECT rowid FROM videos_fts WHERE videos_fts MATCH :fts_q"
+            ).bindparams(fts_q=match)
+        )
+    return keyword_match_clause(
+        query,
+        Video.title,
+        Video.description,
+        Video.channel,
+        Video.notes,
+        Video.tags,
+    )
+
+
 def query_videos(
     session: Session,
     q: str | None = None,
@@ -209,19 +243,13 @@ def query_videos(
     if channel:
         statement = statement.where(Video.channel == channel)
     if q:
-        clause = keyword_match_clause(
-            q,
-            Video.title,
-            Video.description,
-            Video.channel,
-            Video.notes,
-            Video.tags,
-        )
+        clause = _keyword_clause(session, q)
         if clause is not None:
             statement = statement.where(clause)
     if tag:
-        # Tags are stored as a JSON list string; match the quoted token.
-        statement = statement.where(Video.tags.ilike(f'%"{tag}"%'))
+        statement = statement.where(
+            Video.id.in_(select(VideoTag.video_id).where(VideoTag.tag == tag))  # type: ignore[attr-defined]
+        )
 
     if count_only:
         total = session.scalar(select(func.count()).select_from(statement.subquery()))
@@ -321,33 +349,12 @@ def resolve_channel_url(session: Session, channel_name: str) -> str | None:
 
 
 def find_video_by_youtube_id(session: Session, yt_id: str) -> Video | None:
-    """Find a library video by YouTube id in source_url or [id] in file_path."""
+    """Find a library video by YouTube id (indexed ``videos.youtube_id``)."""
     if not yt_id:
         return None
-    token = f"[{yt_id}]"
-    # Prefer path match (works even without source_url).
-    by_path = session.exec(
-        select(Video).where(Video.file_path.contains(token))  # type: ignore[attr-defined]
+    return session.exec(
+        select(Video).where(Video.youtube_id == yt_id).order_by(Video.id).limit(1)  # type: ignore[arg-type]
     ).first()
-    if by_path is not None:
-        return by_path
-    from urllib.parse import urlparse
-
-    from .url_clean import _youtube_video_id
-
-    rows = session.exec(
-        select(Video).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
-    ).all()
-    for video in rows:
-        if not video.source_url:
-            continue
-        try:
-            parsed = urlparse(video.source_url)
-        except ValueError:
-            continue
-        if _youtube_video_id(parsed) == yt_id:
-            return video
-    return None
 
 
 def _iso_published(value: datetime | None) -> str | None:
@@ -361,73 +368,49 @@ def youtube_library_map(
     session: Session, channel: str | None = None
 ) -> dict[str, tuple[int, int | None, int | None, str | None]]:
     """Map YouTube IDs to (library_id, height_px, view_count, published_at ISO)."""
-    from urllib.parse import urlparse
-
-    from .url_clean import _youtube_video_id
-
     statement = select(
+        Video.youtube_id,
         Video.id,
-        Video.source_url,
         Video.height_px,
         Video.view_count,
-        Video.file_path,
         Video.published_at,
-    )
+    ).where(Video.youtube_id.is_not(None))  # type: ignore[union-attr]
     if channel:
         statement = statement.where(Video.channel == channel)
     mapping: dict[str, tuple[int, int | None, int | None, str | None]] = {}
-    for (
-        video_id,
-        source_url,
-        height_px,
-        views,
-        file_path,
-        published_at,
-    ) in session.exec(statement).all():
-        yt_id = None
-        if source_url:
-            try:
-                parsed = urlparse(source_url)
-                yt_id = _youtube_video_id(parsed)
-            except ValueError:
-                yt_id = None
-        if not yt_id and file_path:
-            match = re.search(r"\[([A-Za-z0-9_-]{11})\]", file_path)
-            if match:
-                yt_id = match.group(1)
-        if yt_id:
-            mapping[yt_id] = (
-                int(video_id),
-                int(height_px) if height_px else None,
-                int(views) if views is not None else None,
-                _iso_published(published_at),
-            )
+    for yt_id, video_id, height_px, views, published_at in session.exec(
+        statement.order_by(Video.id)  # type: ignore[arg-type]
+    ).all():
+        mapping[yt_id] = (
+            int(video_id),
+            int(height_px) if height_px else None,
+            int(views) if views is not None else None,
+            _iso_published(published_at),
+        )
     return mapping
 
 
 def all_tags(session: Session) -> list[str]:
-    rows = session.exec(select(Video.tags)).all()
-    seen: set[str] = set()
-    for raw in rows:
-        for tag in parse_tags(raw):
-            seen.add(tag)
-    return sorted(seen)
+    rows = session.exec(select(VideoTag.tag).distinct()).all()
+    return sorted(rows)
 
 
 def tag_stats(session: Session, channel: str | None = None) -> list[tuple[str, int]]:
     """Return (tag, count) pairs ordered by most common first.
 
-    When ``channel`` is given, only tags from that channel's videos are counted.
+    Counts videos (a tag held under two sources counts once). When ``channel``
+    is given, only tags from that channel's videos are counted.
     """
-    statement = select(Video.tags).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+    count = func.count(func.distinct(VideoTag.video_id))
+    statement = (
+        select(VideoTag.tag, count)
+        .join(Video, Video.id == VideoTag.video_id)  # type: ignore[arg-type]
+        .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+    )
     if channel:
         statement = statement.where(Video.channel == channel)
-    rows = session.exec(statement).all()
-    counts: dict[str, int] = {}
-    for raw in rows:
-        for tag in parse_tags(raw):
-            counts[tag] = counts.get(tag, 0) + 1
-    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    rows = session.exec(statement.group_by(VideoTag.tag)).all()
+    return sorted(((tag, int(n)) for tag, n in rows), key=lambda kv: (-kv[1], kv[0]))
 
 
 def related_videos(
@@ -512,26 +495,24 @@ def related_videos(
         add_candidates(channel_rows)
 
     if len(picked) < pool_limit:
-        source_tags = {t.lower() for t in parse_tags(source.tags)}
+        source_tags = list(
+            session.exec(
+                select(VideoTag.tag).where(VideoTag.video_id == video_id).distinct()
+            ).all()
+        )
         if source_tags:
-            scored_tags: list[tuple[int, Video]] = []
-            for row in query_videos(
-                session, needs_review=False, sort="added_at", order="desc"
-            ):
-                if row.id in seen or row.needs_review:
-                    continue
-                row_tags = {t.lower() for t in parse_tags(row.tags)}
-                overlap = len(source_tags & row_tags)
-                if overlap > 0:
-                    scored_tags.append((overlap, row))
-            scored_tags.sort(
-                key=lambda item: (
-                    item[0],
-                    item[1].added_at or datetime.min.replace(tzinfo=UTC),
-                ),
-                reverse=True,
-            )
-            add_candidates([v for _, v in scored_tags])
+            overlap = func.count(func.distinct(VideoTag.tag))
+            tagged = session.exec(
+                select(Video)
+                .join(VideoTag, VideoTag.video_id == Video.id)  # type: ignore[arg-type]
+                .where(VideoTag.tag.in_(source_tags))  # type: ignore[attr-defined]
+                .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+                .where(Video.id.not_in(seen))  # type: ignore[union-attr]
+                .group_by(Video.id)
+                .order_by(overlap.desc(), Video.added_at.desc())
+                .limit(pool_limit)
+            ).all()
+            add_candidates(list(tagged))
 
     if len(picked) < pool_limit:
         pool = query_videos(

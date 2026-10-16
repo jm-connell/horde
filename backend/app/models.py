@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from enum import Enum
 
-from sqlalchemy import Index, UniqueConstraint
+from sqlalchemy import Column, Index, String, UniqueConstraint, event
 from sqlmodel import Field, SQLModel
 
 
@@ -57,12 +57,18 @@ class Video(SQLModel, table=True):
     title: str = Field(index=True)
     channel: str | None = Field(default=None, index=True)
     channel_url: str | None = None
-    # Comma-free tags stored as a JSON-encoded list string for simple filtering.
+    # Tags as a JSON-encoded list string. This column is what the application
+    # writes (it keeps order and exact spelling); ``video_tags`` is a derived
+    # index kept in step by SQLite triggers, and is what tag queries read.
     tags: str = Field(default="[]")
     description: str | None = None
     # Free-form user note, e.g. context about when/why the video was saved.
     notes: str | None = None
     source_url: str | None = Field(default=None, index=True)
+    # YouTube video id derived from source_url / the ``[id]`` file name token.
+    # Maintained by the before_insert/before_update listener below; lookups use
+    # the index instead of scanning every row.
+    youtube_id: str | None = Field(default=None, index=True)
     thumbnail_path: str | None = None
     # Seek-preview sprite sheet path (absolute), sibling JSON sidecar beside it.
     sprite_path: str | None = None
@@ -119,6 +125,36 @@ class Video(SQLModel, table=True):
     compat_size: int | None = None
     compat_source: str | None = None
     compat_error: str | None = None
+
+
+@event.listens_for(Video, "before_insert")
+@event.listens_for(Video, "before_update")
+def _set_youtube_id(_mapper, _connection, target: Video) -> None:
+    from .services.youtube_id import derive_youtube_id
+
+    derived = derive_youtube_id(target.source_url, target.file_path)
+    if target.youtube_id != derived:
+        target.youtube_id = derived
+
+
+class VideoTag(SQLModel, table=True):
+    """One tag on one video, with where it came from.
+
+    Derived data: the triggers created by revision ``0005_tags_search`` rebuild a
+    video's rows whenever ``videos.tags`` or its ``video_ai_meta`` tag lists change,
+    so nothing in the application writes this table. ``source`` is ``user`` (added
+    by hand), ``ai`` (added by tag enrichment) or ``source`` (collected from the
+    platform). ``tag`` compares case-insensitively.
+    """
+
+    __tablename__ = "video_tags"
+    __table_args__ = (Index("ix_video_tags_tag", "tag"),)
+
+    video_id: int = Field(foreign_key="videos.id", primary_key=True, ondelete="CASCADE")
+    tag: str = Field(
+        sa_column=Column(String(collation="NOCASE"), primary_key=True, nullable=False)
+    )
+    source: str = Field(primary_key=True)
 
 
 class DownloadJob(SQLModel, table=True):

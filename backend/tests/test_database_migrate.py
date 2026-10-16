@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0004_permissions_chat"
+HEAD = "0005_tags_search"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -422,3 +422,162 @@ def test_adopting_a_table_with_missing_columns_fails_clearly(tmp_dirs):
             )
     with pytest.raises(RuntimeError, match=r"'videos'.*file_path"):
         init_db()
+
+
+def _insert_video(conn, vid, title, tags, file_path, source_url=None, **extra):
+    cols = {
+        "id": vid,
+        "title": title,
+        "tags": tags,
+        "file_path": file_path,
+        "source_url": source_url,
+        "subtitles": "[]",
+        "added_at": "2024-01-01 00:00:00",
+        "last_position_sec": 0,
+        "needs_review": 0,
+        "status": "ready",
+        "subtitles_pending": 0,
+        "subtitles_fetch_attempts": 0,
+        "source_chapters": "[]",
+        "is_hdr": 0,
+        "title_is_custom": 0,
+        "description_is_custom": 0,
+        **extra,
+    }
+    conn.execute(
+        text(
+            f"INSERT INTO videos ({', '.join(cols)}) "  # noqa: S608 - column names are the fixed dict keys above
+            f"VALUES ({', '.join(':' + c for c in cols)})"
+        ),
+        cols,
+    )
+
+
+def test_tags_search_revision_backfills_a_populated_database(tmp_dirs):
+    """0004 -> 0005 on a database that already holds videos, tags and AI metadata."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0004_permissions_chat")
+    assert _revision(engine) == "0004_permissions_chat"
+    with engine.begin() as conn:
+        _insert_video(
+            conn,
+            1,
+            "Cats at the harbour",
+            '["Cats", "harbour", "funny"]',
+            "Pets/Cats [dQw4w9WgXcQ].mp4",
+            "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+            description="Quiet morning",
+            notes="Saved for Sam",
+            channel="Pets",
+        )
+        _insert_video(conn, 2, "Broken tags", "not json", "x/two.mp4")
+        _insert_video(conn, 3, "Object tags", '{"a": 1}', "x/three.mp4")
+        _insert_video(
+            conn,
+            4,
+            "Short link",
+            '["Cats"]',
+            "x/four.mp4",
+            "https://youtu.be/bbbbbbbbbbb",
+        )
+        _insert_video(
+            conn,
+            5,
+            "Other site",
+            "[]",
+            "x/five.mp4",
+            "https://example.com/watch?v=ccccccccccc",
+        )
+        conn.execute(
+            text(
+                "INSERT INTO video_ai_meta (video_id, embed_status, content_hash, "
+                "ai_tags, user_tags, tags_locked, updated_at) VALUES "
+                "(1, 'ready', 'h', '[\"funny\"]', '[\"CATS\"]', 0, '2024-01-01 00:00:00')"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        tags = conn.execute(
+            text("SELECT video_id, tag, source FROM video_tags ORDER BY video_id, tag")
+        ).fetchall()
+        # Source is decided per tag; malformed or non-list JSON yields no rows.
+        assert tags == [
+            (1, "Cats", "user"),
+            (1, "funny", "ai"),
+            (1, "harbour", "source"),
+            (4, "Cats", "source"),
+        ]
+        assert dict(
+            conn.execute(text("SELECT id, youtube_id FROM videos")).fetchall()
+        ) == {
+            1: "aaaaaaaaaaa",
+            2: None,
+            3: None,
+            4: "bbbbbbbbbbb",
+            5: None,
+        }
+        fts = conn.execute(
+            text(
+                "SELECT rowid FROM videos_fts WHERE videos_fts MATCH 'harbour' "
+                "ORDER BY rowid"
+            )
+        ).fetchall()
+        assert fts == [(1,)]
+        # Notes, channel and tags are indexed too.
+        for word, expected in (("sam", 1), ("pets", 1), ("funny", 1), ("broken", 2)):
+            assert conn.execute(
+                text("SELECT rowid FROM videos_fts WHERE videos_fts MATCH :w"),
+                {"w": word},
+            ).fetchall() == [(expected,)]
+        assert conn.execute(text("PRAGMA foreign_key_check")).fetchall() == []
+
+
+def test_tag_and_search_triggers_follow_every_writer(session, add_video):
+    """Plain UPDATE/DELETE statements keep video_tags and videos_fts in step."""
+    video = add_video(title="Original title", tags=["alpha"])
+
+    def rows(sql, **params):
+        return session.connection().execute(text(sql), params).fetchall()
+
+    assert rows("SELECT tag, source FROM video_tags") == [("alpha", "source")]
+
+    session.connection().execute(
+        text("UPDATE videos SET tags = :t, title = 'Renamed clip' WHERE id = :i"),
+        {"t": '["beta", "Gamma"]', "i": video.id},
+    )
+    assert rows("SELECT tag FROM video_tags ORDER BY tag") == [("beta",), ("Gamma",)]
+    assert rows("SELECT rowid FROM videos_fts WHERE videos_fts MATCH 'renamed'") == [
+        (video.id,)
+    ]
+    assert rows("SELECT rowid FROM videos_fts WHERE videos_fts MATCH 'original'") == []
+    assert rows("SELECT rowid FROM videos_fts WHERE videos_fts MATCH 'gamma'") == [
+        (video.id,)
+    ]
+
+    # AI metadata arriving later reclassifies the tag's source.
+    session.connection().execute(
+        text(
+            "INSERT INTO video_ai_meta (video_id, embed_status, content_hash, ai_tags,"
+            " user_tags, tags_locked, updated_at) VALUES (:i, 'p', '', '[\"beta\"]',"
+            " '[\"gamma\"]', 0, '2024-01-01')"
+        ),
+        {"i": video.id},
+    )
+    assert rows("SELECT tag, source FROM video_tags ORDER BY tag") == [
+        ("beta", "ai"),
+        ("Gamma", "user"),
+    ]
+
+    session.connection().execute(
+        text("DELETE FROM videos WHERE id = :i"), {"i": video.id}
+    )
+    assert rows("SELECT count(*) FROM video_tags") == [(0,)]
+    assert rows("SELECT count(*) FROM videos_fts") == [(0,)]

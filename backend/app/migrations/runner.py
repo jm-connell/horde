@@ -39,10 +39,17 @@ _UNMANAGED_TABLES = frozenset({"schema_migrations"})
 _INTERNAL_TABLES = frozenset({"alembic_version", "sqlite_sequence"})
 
 
+# The FTS5 index is created with raw SQL (a virtual table plus its shadow
+# tables ``videos_fts_data`` / ``_idx`` / ``_content`` / ``_docsize`` / ``_config``).
+_FTS_TABLE_PREFIX = "videos_fts"
+
+
 def _include_object(
     obj: Any, name: str | None, type_: str, reflected: bool, compare_to: Any
 ) -> bool:
-    return not (type_ == "table" and name in _UNMANAGED_TABLES)
+    if type_ != "table" or name is None:
+        return True
+    return name not in _UNMANAGED_TABLES and not name.startswith(_FTS_TABLE_PREFIX)
 
 
 # Shared by env.py and the schema drift test so both compare the same way.
