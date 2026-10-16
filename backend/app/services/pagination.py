@@ -158,7 +158,8 @@ def _check_sort_value(sort: str, value: Any) -> Any:
         return value
     # Everything else sorts on a timestamp (unknown sort keys fall back to added_at).
     decoded = _decode_value(value)
-    if not isinstance(decoded, datetime):
+    # The columns store aware timestamps; a naive one fails at bind time.
+    if not isinstance(decoded, datetime) or decoded.tzinfo is None:
         raise InvalidCursor("Invalid cursor")
     return decoded
 

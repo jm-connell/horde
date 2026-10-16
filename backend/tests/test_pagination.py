@@ -186,6 +186,10 @@ FORGED_KEYSET = [
     ("added_at", {"v": {"dt": "not a date"}}),
     ("added_at", {"v": {"dt": 5}}),
     ("published_at", {"v": "2024-01-01"}),
+    # a timestamp without a timezone
+    ("added_at", {"v": {"dt": "2024-01-01T00:00:00"}}),
+    ("published_at", {"v": {"dt": "2024-01-01T00:00:00"}}),
+    ("last_watched_at", {"v": {"dt": "2024-01-01T00:00:00"}}),
     ("duration", {"v": "long"}),
     ("duration", {"v": True}),
     ("duration", {"v": [1]}),
