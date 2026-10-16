@@ -130,6 +130,7 @@ test("a library the server hands over in pages still shows every video", async (
 }) => {
   // Re-cut the real answer into one-video pages: the grid has to follow the cursors.
   const cursors: (string | null)[] = [];
+  let lastPageServed = false;
   await page.route(/\/api\/videos\?/, async (route) => {
     const url = new URL(route.request().url());
     if (url.searchParams.get("continue_watching")) return route.fallback();
@@ -140,17 +141,18 @@ test("a library the server hands over in pages still shows every video", async (
     const real = await route.fetch({ url: url.toString() });
     const all: unknown[] = (await real.json()).items;
     const at = cursor ? Number(cursor) : 0;
+    const next = at + 1 < all.length ? String(at + 1) : null;
     await route.fulfill({
       response: real,
-      json: {
-        items: all.slice(at, at + 1),
-        next_cursor: at + 1 < all.length ? String(at + 1) : null,
-      },
+      json: { items: all.slice(at, at + 1), next_cursor: next },
     });
+    if (next === null) lastPageServed = true;
   });
   await page.goto("/");
   await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
   await expect(videoCard(page, "Kiln fire")).toBeVisible();
   await expect(videoCard(page, "Harbor Lights")).toBeVisible();
+  // Let the walk reach the last page so no request is in flight at teardown.
+  await expect.poll(() => lastPageServed).toBe(true);
   expect(cursors.length).toBeGreaterThan(2);
 });
