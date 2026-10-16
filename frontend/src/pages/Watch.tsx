@@ -17,7 +17,7 @@ import {
 } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, thumbnailUrl } from "../api";
-import { usePresets } from "../queries/app";
+import { appSettingsQuery, usePresets } from "../queries/app";
 import { queryKeys } from "../queries/keys";
 import { useAiStatus } from "../queries/status";
 import {
@@ -204,7 +204,8 @@ export default function Watch() {
 
   useEffect(() => {
     if (!libraryValid) return;
-    if (libraryQuery.isError) {
+    // A failed refresh of a video that is already playing must not replace it.
+    if (libraryQuery.isLoadingError) {
       setError("Video not found");
       setLoading(false);
       return;
@@ -233,7 +234,7 @@ export default function Watch() {
     playVideo(merged);
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional handoff once per video; the resume position comes from the navigation state at that moment
-  }, [libraryQuery.data, libraryQuery.isError, libraryId, libraryValid]);
+  }, [libraryQuery.data, libraryQuery.isLoadingError, libraryId, libraryValid]);
 
   // --- Load stream meta ---
   const streamMode = !libraryValid && !!streamUrlParam;
@@ -263,7 +264,7 @@ export default function Watch() {
 
   useEffect(() => {
     if (!streamMode) return;
-    if (metaQuery.isError) {
+    if (metaQuery.isLoadingError) {
       const err = metaQuery.error;
       setError(err instanceof Error ? err.message : "Could not load stream");
       setLoading(false);
@@ -280,7 +281,7 @@ export default function Watch() {
   }, [
     streamMode,
     metaQuery.data,
-    metaQuery.isError,
+    metaQuery.isLoadingError,
     metaQuery.error,
     streamUrlParam,
     navigate,
@@ -431,8 +432,7 @@ export default function Watch() {
   // --- Library-only: which AI features this install offers ---
   const isLibrarySource = source?.kind === "library";
   const appSettings = useQuery({
-    queryKey: queryKeys.app.settings,
-    queryFn: ({ signal }) => api.getAppSettings({ signal }),
+    ...appSettingsQuery(),
     enabled: isLibrarySource,
   }).data;
   const aiStatus = useAiStatus({ enabled: isLibrarySource }).data;
