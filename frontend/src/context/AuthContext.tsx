@@ -138,6 +138,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       showError(detail || "Your account is not allowed to do that", {
         key: "permission-denied",
       });
+      // The refusal may mean an administrator changed this account's role or
+      // permissions: pick that up now, so the screens hide what it lost.
+      void refresh();
     };
     window.addEventListener(AUTH_REQUIRED_EVENT, onAuthRequired);
     window.addEventListener(PERMISSION_DENIED_EVENT, onDenied);

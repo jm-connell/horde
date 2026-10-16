@@ -146,6 +146,12 @@ level. Detailed per-area entries are added by the maintainer at release time.
   rewinds a video you have since watched further on another device: the save
   carries the time it was made (`watched_at` on `PATCH /api/videos/{id}/progress`)
   and the server keeps whichever position is newer.
+- A member promoted to administrator (or an admin demoted) in another browser
+  now gets the new view in place: the page re-reads its data for the new role
+  instead of showing the trimmed member copy of the settings (a promoted admin
+  could see an empty Ollama address and save over the real one), an
+  admin-only tab that is no longer allowed closes, and a refused request
+  re-checks the account at once.
 - `docker-compose.yml` now passes every runtime setting `.env.example` documents
   into the container (the proxy and sign-in switches, `OPENROUTER_API_KEY`, the
   yt-dlp queue limits and `HORDE_TEMP_SWEEP_HOURS` were silently ignored); a test

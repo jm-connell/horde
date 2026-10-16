@@ -57,7 +57,9 @@ Every administrator sees and can change everything below. A member sees only the
 
 Members still get the read-only values their screens need: the YouTube search switches, the progress expiry and the server's download codec (their downloads use it). `GET /api/settings` gives a member the defaults of the other server-only fields, and the library-wide compatibility totals (`GET /api/compat/summary`) and the metadata resync progress (`GET /api/videos/refresh-metadata/status`) are for administrators.
 
-Changes apply on the person's next request; they do not need to sign in again. The API answers a refused request with `403` and `code: "permission_denied"` (or `admin_required`); the app shows it as a message and hides the controls the account cannot use.
+Every administrator is a full administrator: a second admin sees and may change everything the first one can. The only first-admin step is the one-time adoption of the data from before accounts existed (watch history, look and layout, AI chats), which goes to the account created first.
+
+Changes apply on the person's next request; they do not need to sign in again. An open page picks up a new account type or permissions when it comes back to the front or when the server refuses one of its requests (a reload always does), and then reloads what it shows, so a newly promoted admin never edits the trimmed member copy of the settings. The API answers a refused request with `403` and `code: "permission_denied"` (or `admin_required`); the app shows it as a message and hides the controls the account cannot use.
 
 !!! note "Offline saves"
     The server can only enforce `offline_download` for the "download file" routes. Saving a video for offline playback in the installed app reads the same stream the player uses, so for that the permission only hides the buttons.

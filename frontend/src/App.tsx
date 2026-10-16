@@ -6,7 +6,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { applyPageId } from "./customCss";
 import Library from "./pages/Library";
@@ -195,10 +195,24 @@ function AppShell() {
  * user's data; the old client is cleared when it is dropped.
  */
 function UserScope({ children }: { children: React.ReactNode }) {
-  const userId = useAuth().user?.id ?? null;
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- a new user must get a new client even though the factory does not read the id
   const queryClient = useMemo(() => createQueryClient(), [userId]);
   useEffect(() => () => queryClient.clear(), [queryClient]);
+  // Promoted or demoted in place: what the server answers depends on the role
+  // (members get trimmed settings and status), so nothing cached under the
+  // old one may be shown. A layout effect, so it runs before the screens'
+  // own effects read the cache in the same commit.
+  const role = user
+    ? `${user.is_admin}:${[...user.permissions].sort().join(",")}`
+    : "";
+  const lastRole = useRef(role);
+  useLayoutEffect(() => {
+    if (lastRole.current === role) return;
+    lastRole.current = role;
+    void queryClient.invalidateQueries();
+  }, [role, queryClient]);
   return (
     <QueryClientProvider key={userId ?? "anon"} client={queryClient}>
       {children}

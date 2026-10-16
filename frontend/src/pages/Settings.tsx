@@ -49,13 +49,15 @@ export default function Settings() {
     () => TABS.filter((t) => tabAllowed(t.id)),
     [tabAllowed]
   );
-  const [tab, setTab] = useState<SettingsTab>(() => {
+  const [chosenTab, setTab] = useState<SettingsTab>(() => {
     const fromUrl = resolveTabParam(
       new URLSearchParams(window.location.search).get("tab")
     );
     const first = fromUrl ?? loadTab();
     return tabAllowed(first) ? first : "appearance";
   });
+  // Demoted while an admin-only tab was open: that tab is gone.
+  const tab = tabAllowed(chosenTab) ? chosenTab : "appearance";
   const paneState = useAiPaneState();
   const { setAiPane } = paneState;
   const [searchQuery, setSearchQuery] = useState("");
@@ -168,6 +170,9 @@ export default function Settings() {
 
       <SettingsPageProvider value={ctxValue}>
         <div
+          // A role change remounts the tab, so its drafts reload from the
+          // server's answer for the new role.
+          key={isAdmin ? "admin" : "member"}
           role="tabpanel"
           id="settings-panel"
           aria-labelledby={`settings-tab-${tab}`}
