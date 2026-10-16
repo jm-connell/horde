@@ -464,13 +464,13 @@ def add_item(
         raise HTTPException(status_code=404, detail="Playlist not found")
 
     video_id = payload.video_id
-    raw_url = (payload.url or "").strip()
-    if video_id is None and not raw_url:
-        raise HTTPException(status_code=400, detail="video_id or url is required")
-
-    if video_id is None and raw_url:
-        video_id = _library_video_id_for_url(session, raw_url)
-        if video_id is None:
+    if video_id is None:
+        raw_url = (payload.url or "").strip()
+        if not raw_url:
+            raise HTTPException(status_code=400, detail="video_id or url is required")
+        found = _library_video_id_for_url(session, raw_url)
+        if found is None:
+            # Not in the library yet: download it into this playlist.
             from .downloads import create_download
 
             quality = (playlist.quality_preset or "").strip() or "best"
@@ -484,9 +484,8 @@ def add_item(
                 user,
             )
             return get_playlist(playlist_id, session, user)
+        video_id = found
 
-    if video_id is None:
-        raise HTTPException(status_code=400, detail="video_id or url is required")
     if session.get(Video, video_id) is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
