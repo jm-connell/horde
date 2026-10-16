@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { api } from "../api";
+import { useMemo } from "react";
 import LoadingIndicator from "../components/LoadingIndicator";
 import VideoCard from "../components/VideoCard";
+import { useVideoList } from "../queries/videos";
 import type { Video } from "../types";
 
 /** Parse API datetimes as UTC when no timezone is present (legacy naive strings). */
@@ -54,22 +54,14 @@ function formatTime(iso: string | null | undefined): string {
   });
 }
 
-export default function History() {
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [loading, setLoading] = useState(true);
+const HISTORY_FILTERS = {
+  watched_only: true,
+  sort: "last_watched_at",
+  order: "desc",
+} as const;
 
-  useEffect(() => {
-    setLoading(true);
-    api
-      .listVideos({
-        watched_only: true,
-        sort: "last_watched_at",
-        order: "desc",
-      })
-      .then(setVideos)
-      .catch(() => setVideos([]))
-      .finally(() => setLoading(false));
-  }, []);
+export default function History() {
+  const { videos, loading } = useVideoList(HISTORY_FILTERS);
 
   const groups = useMemo(() => {
     const map = new Map<string, Video[]>();

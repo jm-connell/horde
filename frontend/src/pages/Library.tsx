@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../queries/keys";
+import { usePlaylists } from "../queries/playlists";
 import {
   prependVideoToList,
   replaceVideoInLists,
@@ -65,7 +66,6 @@ import type {
   ChannelAutodownload,
   ChannelFeedEntry,
   ChannelStat,
-  Playlist,
   TagStat,
   Video,
 } from "../types";
@@ -201,8 +201,10 @@ function OnlineLibrary() {
   // Bulk action popover state
   const [bulkNote, setBulkNote] = useState("");
   const [bulkNoteOpen, setBulkNoteOpen] = useState(false);
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const playlistsQuery = usePlaylists(playlistOpen);
+  const playlists = playlistsQuery.playlists;
+  const playlistsFailed = playlistsQuery.isError;
   const [metadataSyncing, setMetadataSyncing] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -482,6 +484,10 @@ function OnlineLibrary() {
   useEffect(() => {
     setShowAllTags(false);
   }, [activeChannel]);
+
+  useEffect(() => {
+    if (playlistsFailed) showError("Could not load playlists");
+  }, [playlistsFailed, showError]);
 
   const listIncomplete = matchList.partial || restList.partial;
   useEffect(() => {
@@ -1129,15 +1135,7 @@ function OnlineLibrary() {
     exitSelectMode();
   };
 
-  const openPlaylistPicker = () => {
-    api
-      .listPlaylists()
-      .then(setPlaylists)
-      .catch((err) =>
-        showError(`Could not load playlists: ${describeError(err)}`)
-      );
-    setPlaylistOpen(true);
-  };
+  const openPlaylistPicker = () => setPlaylistOpen(true);
 
   const showQueuePanel = queue.length > 0 && !selectMode;
 

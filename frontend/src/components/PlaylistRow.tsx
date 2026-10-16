@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { describeError } from "../apiErrors";
@@ -16,7 +17,13 @@ import {
 } from "./playlistChrome";
 import { useConfirm } from "../context/ConfirmContext";
 import { usePlayback } from "../context/PlaybackContext";
-import type { Playlist, PlaylistDetail, Video } from "../types";
+import { queryKeys } from "../queries/keys";
+import {
+  mergePlaylist,
+  setPlaylistDetail,
+  usePlaylistDetail,
+} from "../queries/playlists";
+import type { Playlist, Video } from "../types";
 import { formatDuration, formatRelative, moveItem, safeHref } from "../utils";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 
@@ -27,7 +34,6 @@ export default function PlaylistRow({
   dragOver,
   onToggle,
   onDeleted,
-  onUpdated,
   onPlaylistDragStart,
   onPlaylistDragOver,
   onPlaylistDrop,
@@ -39,7 +45,6 @@ export default function PlaylistRow({
   dragOver?: boolean;
   onToggle: () => void;
   onDeleted: () => void;
-  onUpdated: (next: Playlist) => void;
   onPlaylistDragStart: (id: number) => void;
   onPlaylistDragOver: (id: number) => void;
   onPlaylistDrop: (id: number) => void;
@@ -54,11 +59,10 @@ export default function PlaylistRow({
   const coverInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const skipNameSaveRef = useRef(false);
-  const [detail, setDetail] = useState<PlaylistDetail | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionBusy, setActionBusy] = useState(false);
+  const queryClient = useQueryClient();
+  const detailQuery = usePlaylistDetail(playlist.id, open);
+  const loadError = detailQuery.isError ? "Could not load playlist" : null;
+  const loading = detailQuery.isFetching;
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [coverDraft, setCoverDraft] = useState<File | null>(null);
@@ -67,59 +71,23 @@ export default function PlaylistRow({
   const videoDragIndex = useRef<number | null>(null);
   const [videoDragOver, setVideoDragOver] = useState<number | null>(null);
 
-  const current = detail && detail.id === playlist.id ? detail : null;
+  const current = detailQuery.data ?? null;
   const coverSrc = playlistCoverUrl(playlist);
   const coverSrcBusted =
     coverSrc && playlist.has_custom_cover && coverRev
       ? `${coverSrc}&r=${coverRev}`
       : coverSrc;
 
-  const applyPlaylist = (next: Playlist, videos?: Video[]) => {
-    if (videos && current) {
-      setDetail({ ...current, ...next, videos });
-    } else if (current) {
-      setDetail({ ...current, ...next, videos: current.videos });
-    }
-    onUpdated(next);
-  };
+  const reload = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.playlists.detail(playlist.id),
+    });
 
-  const reload = () => {
-    setLoading(true);
-    api
-      .getPlaylist(playlist.id)
-      .then((d) => {
-        setDetail(d);
-        setLoadError(null);
-        onUpdated(d);
-      })
-      .catch(() => setLoadError("Could not load playlist"))
-      .finally(() => setLoading(false));
-  };
-
+  // A freshly read playlist also refreshes its row in the list (video count, cover).
+  const loaded = detailQuery.data;
   useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
-    api
-      .getPlaylist(playlist.id)
-      .then((d) => {
-        if (cancelled) return;
-        setDetail(d);
-        onUpdated(d);
-      })
-      .catch(() => {
-        if (!cancelled) setLoadError("Could not load playlist");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // onUpdated is unstable; fetch when this row opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onUpdated is an unstable parent callback; refetching on its identity would loop
-  }, [open, playlist.id]);
+    if (loaded) mergePlaylist(queryClient, loaded, { detail: false });
+  }, [loaded, queryClient]);
 
   useEffect(() => {
     if (!open) setEditing(false);
@@ -145,15 +113,21 @@ export default function PlaylistRow({
     navigate(`/watch/${first.id}`);
   };
 
-  const remove = async (videoId: number) => {
-    try {
-      await api.removeFromPlaylist(playlist.id, videoId);
-    } catch (err) {
-      showError(`Could not remove video: ${describeError(err)}`);
-    }
-    reload();
-  };
+  const removeMutation = useMutation({
+    mutationFn: (videoId: number) =>
+      api.removeFromPlaylist(playlist.id, videoId),
+    onError: (err) =>
+      showError(`Could not remove video: ${describeError(err)}`),
+    onSettled: () => reload(),
+  });
+  const remove = (videoId: number) => removeMutation.mutate(videoId);
 
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deletePlaylist(playlist.id),
+    onSuccess: () => onDeleted(),
+    onError: (err) =>
+      showError(`Could not delete playlist: ${describeError(err)}`),
+  });
   const onDelete = async () => {
     const ok = await confirm({
       title: "Delete this playlist?",
@@ -161,64 +135,45 @@ export default function PlaylistRow({
       confirmLabel: "Delete",
       danger: true,
     });
-    if (!ok) return;
-    await api.deletePlaylist(playlist.id);
-    onDeleted();
+    if (ok) deleteMutation.mutate();
   };
 
-  const onSync = async () => {
-    setActionBusy(true);
-    setActionError(null);
-    setSyncMessage(null);
-    try {
-      await api.syncPlaylist(playlist.id);
+  const syncMutation = useMutation({
+    mutationFn: () => api.syncPlaylist(playlist.id),
+    onMutate: () => setSyncMessage(null),
+    onSuccess: () => {
       setSyncMessage("Sync started — new videos will appear as they download.");
-      window.setTimeout(reload, 1500);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Sync failed");
-    } finally {
-      setActionBusy(false);
-    }
-  };
+      window.setTimeout(() => void reload(), 1500);
+    },
+    onError: (err) => showError(`Sync failed: ${describeError(err)}`),
+  });
+  const onSync = () => syncMutation.mutate();
 
-  const onStopSubscribing = async () => {
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      const updated = await api.updatePlaylist(playlist.id, {
-        subscribed: false,
-      });
-      applyPlaylist(updated);
-      setSyncMessage(null);
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not stop subscribing"
-      );
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const onSubscribeUpdates = async () => {
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      const updated = await api.updatePlaylist(playlist.id, {
-        subscribed: true,
-      });
-      applyPlaylist(updated);
-      setSyncMessage(
-        "Subscribed — Horde will check for new videos on a schedule."
-      );
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not subscribe"
-      );
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
+  // Every edit of the playlist itself: the server returns the new row.
+  const updateMutation = useMutation({
+    mutationFn: (v: {
+      patch: Parameters<typeof api.updatePlaylist>[1];
+      success?: string | null;
+      failure: string;
+    }) => api.updatePlaylist(playlist.id, v.patch),
+    onSuccess: (updated, v) => {
+      mergePlaylist(queryClient, updated);
+      if (v.success !== undefined) setSyncMessage(v.success);
+    },
+    onError: (err, v) => showError(`${v.failure}: ${describeError(err)}`),
+  });
+  const onStopSubscribing = () =>
+    updateMutation.mutate({
+      patch: { subscribed: false },
+      success: null,
+      failure: "Could not stop subscribing",
+    });
+  const onSubscribeUpdates = () =>
+    updateMutation.mutate({
+      patch: { subscribed: true },
+      success: "Subscribed — Horde will check for new videos on a schedule.",
+      failure: "Could not subscribe",
+    });
   const saveName = async () => {
     const next = draftName.trim();
     if (!next) {
@@ -226,75 +181,65 @@ export default function PlaylistRow({
       return;
     }
     if (next === playlist.name) return;
-    setActionBusy(true);
-    setActionError(null);
     try {
-      const updated = await api.updatePlaylist(playlist.id, { name: next });
-      applyPlaylist(updated);
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not rename playlist"
-      );
-      setDraftName(playlist.name);
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const setCoverVideo = async (videoId: number | null) => {
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      const updated = await api.updatePlaylist(playlist.id, {
-        cover_video_id: videoId,
+      await updateMutation.mutateAsync({
+        patch: { name: next },
+        failure: "Could not rename playlist",
       });
-      applyPlaylist(updated);
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not update cover"
-      );
-    } finally {
-      setActionBusy(false);
+    } catch {
+      setDraftName(playlist.name);
     }
   };
+  const setCoverVideo = (videoId: number | null) =>
+    updateMutation.mutate({
+      patch: { cover_video_id: videoId },
+      failure: "Could not update cover",
+    });
 
   const clearCoverDraft = () => {
     setCoverDraft(null);
     if (coverInputRef.current) coverInputRef.current.value = "";
   };
 
-  const onUploadCover = async (file: File) => {
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      const updated = await api.uploadPlaylistCover(playlist.id, file);
-      applyPlaylist(updated);
+  const coverMutation = useMutation({
+    mutationFn: (file: File) => api.uploadPlaylistCover(playlist.id, file),
+    onSuccess: (updated) => {
+      mergePlaylist(queryClient, updated);
       setCoverRev(Date.now());
       clearCoverDraft();
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not upload cover"
-      );
-      throw err;
-    } finally {
-      setActionBusy(false);
-    }
+    },
+    onError: (err) =>
+      showError(`Could not upload cover: ${describeError(err)}`),
+  });
+  const onUploadCover = async (file: File) => {
+    await coverMutation.mutateAsync(file);
   };
 
-  const commitVideoOrder = async (videos: Video[]) => {
-    if (!current) return;
-    setDetail({ ...current, videos });
-    try {
-      const next = await api.reorderPlaylist(
+  const orderMutation = useMutation({
+    mutationFn: (videos: Video[]) =>
+      api.reorderPlaylist(
         playlist.id,
         videos.map((v) => v.id)
-      );
-      setDetail(next);
-      onUpdated(next);
-    } catch {
-      reload();
-    }
+      ),
+    onMutate: (videos) => {
+      if (current) {
+        queryClient.setQueryData(queryKeys.playlists.detail(playlist.id), {
+          ...current,
+          videos,
+        });
+      }
+    },
+    onSuccess: (next) => setPlaylistDetail(queryClient, next),
+    onError: () => void reload(),
+  });
+  const commitVideoOrder = (videos: Video[]) => {
+    if (current) orderMutation.mutate(videos);
   };
+
+  const actionBusy =
+    updateMutation.isPending ||
+    syncMutation.isPending ||
+    coverMutation.isPending;
 
   const youtubeImported = playlist.source_type === "youtube";
   const sourceHint = playlist.subscribed
@@ -463,10 +408,7 @@ export default function PlaylistRow({
                       new Set((current?.videos ?? []).map((v) => v.id))
                     }
                     active={open}
-                    onAdded={(next) => {
-                      setDetail(next);
-                      onUpdated(next);
-                    }}
+                    onAdded={(next) => setPlaylistDetail(queryClient, next)}
                   />
                 </div>
                 <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
@@ -516,9 +458,6 @@ export default function PlaylistRow({
                   {playlist.sync_error}
                 </p>
               )}
-              {actionError && (
-                <p className="mt-2 text-sm text-red-400">{actionError}</p>
-              )}
               {syncMessage && (
                 <p className="mt-2 text-sm text-accent">{syncMessage}</p>
               )}
@@ -533,7 +472,7 @@ export default function PlaylistRow({
                       <button
                         type="button"
                         disabled={actionBusy}
-                        onClick={() => void setCoverVideo(null)}
+                        onClick={() => setCoverVideo(null)}
                         className="text-xs text-gray-400 hover:text-accent disabled:opacity-50"
                       >
                         Use first video
@@ -567,7 +506,7 @@ export default function PlaylistRow({
                             ) {
                               return;
                             }
-                            void setCoverVideo(index === 0 ? null : video.id);
+                            setCoverVideo(index === 0 ? null : video.id);
                           }}
                           className={`relative w-20 shrink-0 overflow-hidden rounded-md ring-1 ${
                             selected
@@ -646,7 +585,7 @@ export default function PlaylistRow({
                           setVideoDragOver(null);
                           if (!current) return;
                           const next = moveItem(current.videos, from, i);
-                          void commitVideoOrder(next);
+                          commitVideoOrder(next);
                         }}
                         className={`flex items-center gap-1 rounded-lg bg-ink-950/70 p-2 ring-1 ${
                           videoDragOver === i

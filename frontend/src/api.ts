@@ -408,10 +408,7 @@ export const api = {
       limit: String(limit),
       offset: String(offset),
     });
-    return request<Video[]>(
-      `/api/videos/${id}/related?${qs.toString()}`,
-      opts
-    );
+    return request<Video[]>(`/api/videos/${id}/related?${qs.toString()}`, opts);
   },
 
   updateVideo(id: number, payload: VideoUpdate): Promise<Video> {
@@ -1134,10 +1131,7 @@ export const api = {
     );
   },
 
-  getPreviewMeta(
-    url: string,
-    opts?: ReadOptions
-  ): Promise<StreamPreviewMeta> {
+  getPreviewMeta(url: string, opts?: ReadOptions): Promise<StreamPreviewMeta> {
     return request<StreamPreviewMeta>(
       `/api/preview/meta?url=${encodeURIComponent(url)}`,
       opts
