@@ -139,6 +139,15 @@ class VideoUpdate(BaseModel):
 class WatchProgressUpdate(BaseModel):
     # 1e7 s is about 115 days: beyond any video, and finite so it can be stored.
     position_sec: float = Field(ge=0, le=1e7, allow_inf_nan=False)
+    watched_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When the position was reached, for a save sent late (queued on a "
+            "device while the server was unreachable). It is applied only if "
+            "the account has saved nothing newer since, from any device. "
+            "Omitted: the position is current."
+        ),
+    )
 
 
 class DownloadCreate(BaseModel):

@@ -40,6 +40,7 @@ Clicking a card opens `/watch/:id` and seeks to the saved position.
 | Save cadence | About every **5 seconds** while playing |
 | Finished | At **≥ 90%** of duration, progress is **cleared** (next open starts at 0) |
 | History stamp | `last_watched_at` updates as you watch |
+| Late saves | A position queued on a device while the server was unreachable is sent with the time it was reached, and only applies if you have saved nothing newer since on any device |
 
 Full watch-page behavior (related, autoplay, stream handoff) is in [Watching](watching.md).
 

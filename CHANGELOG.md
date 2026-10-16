@@ -105,6 +105,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Fixed
 
+- Watch progress queued on a device while the server was unreachable no longer
+  rewinds a video you have since watched further on another device: the save
+  carries the time it was made (`watched_at` on `PATCH /api/videos/{id}/progress`)
+  and the server keeps whichever position is newer.
 - `docker-compose.yml` now passes every runtime setting `.env.example` documents
   into the container (the proxy and sign-in switches, `OPENROUTER_API_KEY`, the
   yt-dlp queue limits and `HORDE_TEMP_SWEEP_HOURS` were silently ignored); a test

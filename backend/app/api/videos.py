@@ -549,7 +549,9 @@ def update_progress(
     if duration and duration > 0 and position > 0 and position >= duration * 0.9:
         position = 0.0
     if position >= 5 or position == 0:
-        user_state.record_progress(session, user.id, video_id, position)
+        user_state.record_progress(
+            session, user.id, video_id, position, payload.watched_at
+        )
     return Response(status_code=204)
 
 

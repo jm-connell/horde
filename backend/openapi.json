@@ -7733,6 +7733,19 @@
             "minimum": 0.0,
             "title": "Position Sec",
             "type": "number"
+          },
+          "watched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the position was reached, for a save sent late (queued on a device while the server was unreachable). It is applied only if the account has saved nothing newer since, from any device. Omitted: the position is current.",
+            "title": "Watched At"
           }
         },
         "required": [

@@ -10,13 +10,14 @@ accounts were introduced (``services/auth/accounts.py``).
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime
 
-from sqlalchemy import update
+from sqlalchemy import or_, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel import Session, col, select
 
 from ..database import rowcount
-from ..models import UserVideoState, utcnow
+from ..models import UserVideoState, as_utc, utcnow
 
 # SQLite allows 32766 bound parameters; stay well under it for IN (...) lists.
 _CHUNK = 500
@@ -42,20 +43,41 @@ def get_states(
 
 
 def record_progress(
-    session: Session, user_id: int, video_id: int, position_sec: float
+    session: Session,
+    user_id: int,
+    video_id: int,
+    position_sec: float,
+    watched_at: datetime | None = None,
 ) -> None:
-    """Upsert the user's position and stamp it as watched now."""
+    """Upsert the user's position, stamped with when it was reached.
+
+    A live save (no ``watched_at``) is stamped now and always applies. A late
+    one, queued on a device while the server was unreachable, carries the time
+    it was made and applies only when the user has saved nothing newer since:
+    a phone coming back online must not rewind the place the user reached on
+    another device meanwhile. A time in the future counts as now.
+    """
     now = utcnow()
+    stamp = now if watched_at is None else min(as_utc(watched_at), now)
     statement = sqlite_insert(UserVideoState).values(
         user_id=user_id,
         video_id=video_id,
         position_sec=position_sec,
-        last_watched_at=now,
+        last_watched_at=stamp,
+    )
+    newer_only = (
+        None
+        if watched_at is None
+        else or_(
+            col(UserVideoState.last_watched_at).is_(None),
+            col(UserVideoState.last_watched_at) < stamp,
+        )
     )
     session.execute(
         statement.on_conflict_do_update(
             index_elements=["user_id", "video_id"],
-            set_={"position_sec": position_sec, "last_watched_at": now},
+            set_={"position_sec": position_sec, "last_watched_at": stamp},
+            where=newer_only,
         )
     )
     session.commit()

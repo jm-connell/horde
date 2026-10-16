@@ -4956,6 +4956,11 @@ export interface components {
         WatchProgressUpdate: {
             /** Position Sec */
             position_sec: number;
+            /**
+             * Watched At
+             * @description When the position was reached, for a save sent late (queued on a device while the server was unreachable). It is applied only if the account has saved nothing newer since, from any device. Omitted: the position is current.
+             */
+            watched_at?: string | null;
         };
     };
     responses: never;
