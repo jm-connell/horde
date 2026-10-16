@@ -116,7 +116,7 @@ export function withCsrf(init?: RequestInit): RequestInit | undefined {
 
 /** Fired when the server says the session is gone (401). AuthProvider listens. */
 export const AUTH_REQUIRED_EVENT = "horde:auth-required";
-/** Fired on 403 `permission_denied`; the detail is a user-facing sentence. */
+/** Fired on any 403; the detail is a user-facing sentence. */
 export const PERMISSION_DENIED_EVENT = "horde:permission-denied";
 
 function notifyAuthFailure(
@@ -126,7 +126,9 @@ function notifyAuthFailure(
 ): void {
   if (status === 401 && code === "auth_required") {
     window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
-  } else if (status === 403 && code === "permission_denied") {
+  } else if (status === 403) {
+    // Every 403 envelope (permission_denied, admin_required, csrf_rejected, ...)
+    // carries a user-facing `detail`; show it instead of failing silently.
     window.dispatchEvent(
       new CustomEvent(PERMISSION_DENIED_EVENT, {
         detail: message || "Not allowed",
