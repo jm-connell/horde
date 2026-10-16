@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0005_tags_search"
+HEAD = "0006_video_tags_delete"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -592,6 +592,7 @@ def test_tag_and_search_triggers_follow_every_writer(session, add_video):
 EXPECTED_TRIGGERS = {
     "trg_videos_tags_insert",
     "trg_videos_tags_update",
+    "trg_videos_tags_delete",
     "trg_ai_meta_tags_insert",
     "trg_ai_meta_tags_update",
     "trg_ai_meta_tags_delete",
@@ -616,3 +617,114 @@ def test_derived_data_triggers_exist_at_head(init_db):
         "recreate the video_tags and videos_fts triggers and refill videos_fts, "
         "or tags and search silently go stale. See docs/design/sqlite-and-migrations.md."
     )
+
+
+def test_rollback_writes_are_repaired_on_the_next_start(init_db):
+    """The pre-overhaul code ran on a migrated database, then Horde was upgraded again.
+
+    That code never turns on ``PRAGMA foreign_keys``, so deleting a video leaves its
+    children behind, and its ``create_all`` recreates the dropped ``video_ai_chat``
+    table. The next start (already at head) must clean both up.
+    """
+    from app.database import init_db as run_init_db
+    from app.models import DownloadJob, Playlist, PlaylistItem, Video, VideoAiMeta
+    from app.services import library
+
+    engine = init_db["engine"]
+    with Session(engine) as session:
+        doomed = Video(title="doomed", file_path="d.mp4", tags='["phantom"]')
+        keep = Video(title="keep", file_path="k.mp4", tags='["kept"]')
+        session.add_all([doomed, keep])
+        session.commit()
+        playlist = Playlist(name="p", cover_video_id=doomed.id)
+        session.add(playlist)
+        session.commit()
+        session.add_all(
+            [
+                PlaylistItem(playlist_id=playlist.id, video_id=doomed.id, position=0),
+                PlaylistItem(playlist_id=playlist.id, video_id=keep.id, position=1),
+                VideoAiMeta(video_id=doomed.id, embed_status="done"),
+                DownloadJob(url="u", video_id=doomed.id),
+            ]
+        )
+        session.commit()
+        doomed_id, keep_id, playlist_id = doomed.id, keep.id, playlist.id
+
+    # What the old code does, on a plain connection (foreign keys off).
+    con = sqlite3.connect(init_db["db_path"])
+    try:
+        con.execute(
+            "CREATE TABLE video_ai_chat (id INTEGER PRIMARY KEY, video_id INTEGER "
+            "NOT NULL REFERENCES videos (id), updated_at DATETIME)"
+        )
+        con.execute("INSERT INTO video_ai_chat (video_id) VALUES (?)", (doomed_id,))
+        con.execute("DELETE FROM videos WHERE id = ?", (doomed_id,))
+        con.commit()
+        # The trigger keeps the derived tag table right even without the pragma.
+        assert con.execute(
+            "SELECT count(*) FROM video_tags WHERE video_id = ?", (doomed_id,)
+        ).fetchone() == (0,)
+        assert con.execute("PRAGMA foreign_key_check").fetchall() != []
+    finally:
+        con.close()
+
+    run_init_db()
+
+    with engine.connect() as conn:
+        assert conn.execute(text("PRAGMA foreign_key_check")).fetchall() == []
+        assert "video_ai_chat" not in inspect(conn).get_table_names()
+    with Session(engine) as session:
+        assert library.all_tags(session) == ["kept"]
+        assert session.get(Playlist, playlist_id).cover_video_id is None
+        assert [i.video_id for i in session.exec(select(PlaylistItem)).all()] == [
+            keep_id
+        ]
+        assert session.get(VideoAiMeta, doomed_id) is None
+        assert session.exec(select(DownloadJob)).one().video_id is None
+
+
+def test_all_tags_ignores_tags_of_missing_videos(session, add_video):
+    """A stray video_tags row (written with foreign keys off) is not a library tag."""
+    add_video(tags=["real"])
+    raw = session.connection().connection.driver_connection
+    raw.execute("PRAGMA foreign_keys=OFF")
+    try:
+        raw.execute(
+            "INSERT INTO video_tags (video_id, tag, source) VALUES (999, 'ghost', 'source')"
+        )
+    finally:
+        raw.execute("PRAGMA foreign_keys=ON")
+    from app.services import library
+
+    assert library.all_tags(session) == ["real"]
+
+
+def test_orphans_do_not_block_a_pending_migration(init_db):
+    """A database behind head with orphans (foreign keys were off) still upgrades."""
+    from app.database import init_db as run_init_db
+
+    engine = init_db["engine"]
+    con = sqlite3.connect(init_db["db_path"])
+    try:
+        con.executescript(
+            """
+            DROP TRIGGER trg_videos_tags_delete;
+            UPDATE alembic_version SET version_num = '0005_tags_search';
+            INSERT INTO playlists (name, source_type, subscribed, position,
+                created_at, cover_video_id)
+            VALUES ('p', 'user', 0, 0, '2024-01-01 00:00:00', 42);
+            INSERT INTO video_tags (video_id, tag, source) VALUES (42, 'ghost', 'source');
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    run_init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        assert conn.execute(text("PRAGMA foreign_key_check")).fetchall() == []
+        assert conn.execute(text("SELECT cover_video_id FROM playlists")).all() == [
+            (None,)
+        ]

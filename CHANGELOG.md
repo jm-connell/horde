@@ -105,6 +105,12 @@ level. Detailed per-area entries are added by the maintainer at release time.
   into the container (the proxy and sign-in switches, `OPENROUTER_API_KEY`, the
   yt-dlp queue limits and `HORDE_TEMP_SWEEP_HOURS` were silently ignored); a test
   keeps the two in step.
+- Rolling back to the pre-accounts release and upgrading again no longer leaves
+  stray rows: every start checks foreign keys and repairs rows an older version
+  orphaned (it deleted with foreign key enforcement off), drops the legacy
+  `video_ai_chat` table it recreates, and the tag list only shows tags of
+  existing videos. Migration `0006_video_tags_delete` adds a trigger that
+  clears a deleted video's tags on any connection.
 - Known advisories in FastAPI/Starlette/python-multipart and in the frontend
   build toolchain.
 - Documentation now states that `DATA_PATH` must be a local disk (SQLite WAL is

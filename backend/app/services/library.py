@@ -440,7 +440,13 @@ def youtube_library_map(
 
 
 def all_tags(session: Session) -> list[str]:
-    rows = session.exec(select(VideoTag.tag).distinct()).all()
+    # Join videos: a tag row whose video is gone (written by code that ran with
+    # foreign keys off) must not show up as a library tag.
+    rows = session.exec(
+        select(VideoTag.tag)
+        .join(Video, col(Video.id) == col(VideoTag.video_id))
+        .distinct()
+    ).all()
     return sorted(rows)
 
 

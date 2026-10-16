@@ -11,6 +11,15 @@ Startup algorithm (``upgrade_database``):
 3. ``alembic_version`` names a revision this code does not know (a newer app
    ran on this database and the code was then rolled back): refuse to start.
 4. Otherwise ``upgrade head``.
+
+After every branch, including "already at head", ``repair_integrity`` checks
+``PRAGMA foreign_key_check``. Code that never turns ``PRAGMA foreign_keys`` on
+(the pre-Alembic Horde after a rollback, the ``sqlite3`` shell) can delete a
+parent row and leave its children behind; those rows are repaired the way
+``ON DELETE`` would have (CASCADE children deleted, SET NULL pointers cleared).
+The legacy ``video_ai_chat`` table such code recreates is dropped again. A
+database that is behind gets the same row repair before its revisions run,
+because the migration refuses to commit over foreign key violations.
 """
 
 from __future__ import annotations
@@ -27,7 +36,7 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
 from sqlalchemy import inspect
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import OperationalError
 
 from ..database import sqlite_connection
@@ -136,6 +145,11 @@ def _backup_database(engine: Engine, label: str) -> Path | None:
 
 def upgrade_database(engine: Engine) -> None:
     """Bring ``engine``'s database to the latest revision (see module docstring)."""
+    _migrate(engine)
+    repair_integrity(engine)
+
+
+def _migrate(engine: Engine) -> None:
     cfg = alembic_config(engine)
     script = ScriptDirectory.from_config(cfg)
     head = script.get_current_head()
@@ -150,6 +164,9 @@ def upgrade_database(engine: Engine) -> None:
         if current == head:
             return
         _backup_database(engine, f"{current}-to-{head}")
+        # The revisions refuse to commit over violations: repair first.
+        with engine.begin() as conn:
+            _repair_foreign_keys(conn)
         logger.info(
             "Migrating database (%s -> %s); this can take several minutes on "
             "large libraries",
@@ -178,6 +195,91 @@ def upgrade_database(engine: Engine) -> None:
     # adopts the existing schema as the baseline; later revisions then apply
     # in the same transaction.
     command.upgrade(cfg, "head")
+
+
+# Dropped by 0004_permissions_chat; the pre-Alembic code's create_all recreates it.
+_LEGACY_TABLES = ("video_ai_chat",)
+# Deleting an orphan can orphan its own children when foreign keys were off.
+_REPAIR_ROUNDS = 5
+
+
+def _quote(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _repair_foreign_key(conn: Connection, table: str, fk_id: int) -> int:
+    """Apply the ``ON DELETE`` action of ``table``'s FK ``fk_id`` to its orphans."""
+    rows = [
+        row
+        for row in conn.exec_driver_sql(
+            f"PRAGMA foreign_key_list({_quote(table)})"
+        ).fetchall()
+        if row[0] == fk_id
+    ]
+    if not rows:
+        return 0
+    parent, on_delete = rows[0][2], str(rows[0][6]).upper()
+    pairs = [(row[3], row[4] or "rowid") for row in rows]
+    present = " AND ".join(f"t.{_quote(src)} IS NOT NULL" for src, _ in pairs)
+    match = " AND ".join(f"p.{_quote(dst)} = t.{_quote(src)}" for src, dst in pairs)
+    orphan = (
+        f"{present} AND NOT EXISTS "  # noqa: S608 - identifiers come from sqlite_master and are quoted
+        f"(SELECT 1 FROM {_quote(parent)} p WHERE {match})"
+    )
+    what = f"{table}({', '.join(src for src, _ in pairs)}) -> {parent}"
+    if on_delete == "CASCADE":
+        sql = f"DELETE FROM {_quote(table)} AS t WHERE {orphan}"  # noqa: S608 - identifiers come from sqlite_master and are quoted
+        verb = "deleted orphaned"
+    elif on_delete == "SET NULL":
+        cleared = ", ".join(f"{_quote(src)} = NULL" for src, _ in pairs)
+        sql = f"UPDATE {_quote(table)} AS t SET {cleared} WHERE {orphan}"  # noqa: S608 - identifiers come from sqlite_master and are quoted
+        verb = "cleared dangling"
+    else:
+        logger.warning(
+            "Integrity check: %s has rows pointing at missing %s rows and declares "
+            "ON DELETE %s; left unchanged",
+            table,
+            parent,
+            on_delete,
+        )
+        return 0
+    count = conn.exec_driver_sql(sql).rowcount
+    if count:
+        logger.warning("Integrity check: %s %d row(s) of %s", verb, count, what)
+    return count
+
+
+def repair_integrity(engine: Engine) -> None:
+    """Repair what code running with foreign keys off left behind (database at head)."""
+    with engine.begin() as conn:
+        existing = set(inspect(conn).get_table_names())
+        for table in _LEGACY_TABLES:
+            if table in existing:
+                logger.warning(
+                    "Integrity check: dropping the legacy %s table (recreated by an "
+                    "older Horde)",
+                    table,
+                )
+                conn.exec_driver_sql(f"DROP TABLE {_quote(table)}")
+        _repair_foreign_keys(conn)
+
+
+def _repair_foreign_keys(conn: Connection) -> None:
+    for _ in range(_REPAIR_ROUNDS):
+        violations = conn.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+        if not violations:
+            return
+        fixed = sum(
+            _repair_foreign_key(conn, table, fk_id)
+            for table, fk_id in sorted({(row[0], row[3]) for row in violations})
+        )
+        if not fixed:
+            break
+    left = conn.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+    if left:
+        logger.error(
+            "Integrity check: %d row(s) still reference missing rows", len(left)
+        )
 
 
 def _too_new_message(found: str, head: str | None) -> str:

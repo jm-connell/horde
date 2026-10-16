@@ -158,8 +158,9 @@ def _set_youtube_id(_mapper, _connection, target: Video) -> None:
 class VideoTag(SQLModel, table=True):
     """One tag on one video, with where it came from.
 
-    Derived data: the triggers created by revision ``0005_tags_search`` rebuild a
-    video's rows whenever ``videos.tags`` or its ``video_ai_meta`` tag lists change,
+    Derived data: the triggers created by revisions ``0005_tags_search`` and
+    ``0006_video_tags_delete`` rebuild a video's rows whenever ``videos.tags`` or its
+    ``video_ai_meta`` tag lists change (and clear them when the video is deleted),
     so nothing in the application writes this table. ``source`` is ``user`` (added
     by hand), ``ai`` (added by tag enrichment) or ``source`` (collected from the
     platform). ``tag`` compares case-insensitively.
