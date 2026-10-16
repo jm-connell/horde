@@ -8,39 +8,28 @@ import {
 } from "react";
 import { useAuth } from "../context/AuthContext";
 import { describeError } from "../apiErrors";
-import {
-  Link,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, thumbnailUrl } from "../api";
-import { appSettingsQuery, usePresets } from "../queries/app";
-import { queryKeys } from "../queries/keys";
+import { appSettingsQuery } from "../queries/app";
 import { useAiStatus } from "../queries/status";
-import { useRelatedVideos, videoDetailQuery } from "../queries/videos";
+import { useRelatedVideos } from "../queries/videos";
 import StreamDownloadControl from "./watch/StreamDownloadControl";
+import RedownloadDialog from "./watch/RedownloadDialog";
+import WatchActions from "./watch/WatchActions";
+import { useWatchActions } from "./watch/useWatchActions";
 import { useStreamDownload } from "./watch/useStreamDownload";
 import { useWatchVideo } from "./watch/useWatchVideo";
-import AddToPlaylist from "../components/AddToPlaylist";
-import { useFocusTrap } from "../hooks/useFocusTrap";
 import LoadingIndicator from "../components/LoadingIndicator";
 import PlaybackQueue from "../components/PlaybackQueue";
-import ThemedSelect from "../components/ThemedSelect";
-import OfflineDownloadButton from "../components/OfflineDownloadButton";
-import VideoActionsMenu from "../components/VideoActionsMenu";
 import { VideoAiPanel } from "../components/lazy";
 import VideoCard from "../components/VideoCard";
-import VideoEditForm from "../components/VideoEditForm";
 import WatchMeta from "../components/WatchMeta";
-import { useDownloads } from "../context/DownloadContext";
 import {
   usePlaybackActions,
   usePlaybackLayout,
   usePlaybackSession,
 } from "../context/PlaybackContext";
-import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
@@ -57,48 +46,23 @@ import {
   watchProcessingLabel,
 } from "../utils";
 
-const PRESET_LABELS: Record<string, string> = {
-  best: "Best available",
-  "2160p": "4K",
-  "1440p": "1440p",
-  "1080p": "1080p",
-  "720p": "720p",
-  "480p": "480p",
-  audio: "Audio only",
-};
-
 export default function Watch() {
   const { can } = useAuth();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const libraryId = id ? Number(id) : NaN;
   const streamUrlParam = (searchParams.get("url") || "").trim();
   const channelParam = (searchParams.get("channel") || "").trim();
 
-  const [editing, setEditing] = useState(false);
-  const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
   const relatedSentinelRef = useRef<HTMLDivElement>(null);
-  const [redownloadOpen, setRedownloadOpen] = useState(false);
-  const redownloadDialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(redownloadDialogRef, {
-    active: redownloadOpen,
-    onEscape: () => setRedownloadOpen(false),
-  });
-  const [redownloadPreset, setRedownloadPreset] = useState("1080p");
-  const presets = usePresets();
   const [settings] = useSettings();
   const [chapterError, setChapterError] = useState<string | null>(null);
 
   const { showToast, showError } = useToast();
-  const confirm = useConfirm();
-  const queryClient = useQueryClient();
-  const { onJobCompleted, refreshJobs } = useDownloads();
-  const redownloadPending = useRef(false);
   const isMobile = useIsMobile();
   const { mode, queue } = usePlaybackSession();
   const { activeStreamQuality } = usePlaybackLayout();
-  const { playVideo, registerDock, getCurrentPosition } = usePlaybackActions();
+  const { registerDock } = usePlaybackActions();
 
   const dockRef = useRef<HTMLDivElement>(null);
 
@@ -116,6 +80,11 @@ export default function Watch() {
     streamUrlParam,
     libraryValid,
     channelParam,
+  });
+
+  const actions = useWatchActions({
+    video: source?.kind === "library" ? source.video : null,
+    setSource,
   });
 
   // --- Library-only: which AI features this install offers ---
@@ -192,50 +161,6 @@ export default function Watch() {
     // the dock and can collapse the player into mini layout.
   }, [registerDock, source]);
 
-  useEffect(() => {
-    return onJobCompleted((completedId, event) => {
-      if (!redownloadPending.current || !video || completedId !== video.id)
-        return;
-      redownloadPending.current = false;
-
-      void (async () => {
-        try {
-          const sec = getCurrentPosition();
-          if (sec >= 5) {
-            await api.saveProgress(video.id, sec).catch(() => undefined);
-          }
-          const updated = await queryClient.fetchQuery({
-            ...videoDetailQuery(video.id),
-            staleTime: 0,
-          });
-          const resumeAt = sec > 1 ? sec : updated.last_position_sec;
-          const merged = { ...updated, last_position_sec: resumeAt };
-          setSource({ kind: "library", video: merged });
-          playVideo(merged);
-          if (event?.quality_warning) {
-            showToast(event.quality_warning);
-          } else {
-            showToast("Redownload complete — switching to new quality");
-          }
-        } catch {
-          queryClient
-            .fetchQuery({ ...videoDetailQuery(video.id), staleTime: 0 })
-            .then((v) => setSource({ kind: "library", video: v }))
-            .catch(() => undefined);
-          showToast(event?.quality_warning || "Redownload complete.");
-        }
-      })();
-    });
-  }, [
-    onJobCompleted,
-    video,
-    setSource,
-    showToast,
-    getCurrentPosition,
-    playVideo,
-    queryClient,
-  ]);
-
   const chaptersMutation = useMutation({
     mutationFn: ({ id, force }: { id: number; force: boolean }) =>
       api.generateVideoChapters(id, { force }),
@@ -259,97 +184,6 @@ export default function Watch() {
     },
     [video, chaptersMutation]
   );
-
-  const redownloadMutation = useMutation({
-    mutationFn: (v: {
-      id: number;
-      preset: string;
-      normalize: boolean;
-      message: string;
-      closeDialog: boolean;
-    }) =>
-      api.redownloadVideo(
-        v.id,
-        v.preset,
-        v.normalize,
-        settings.downloadVideoCodec
-      ),
-    onMutate: () => {
-      redownloadPending.current = true;
-    },
-    onSuccess: (_video, v) => {
-      showToast(v.message);
-      refreshJobs();
-      if (v.closeDialog) setRedownloadOpen(false);
-    },
-    onError: (err) => {
-      redownloadPending.current = false;
-      showError(describeError(err) || "Could not start download");
-    },
-  });
-  const redownloading = redownloadMutation.isPending;
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteVideo(id, true),
-    onSuccess: () => {
-      for (const queryKey of [
-        queryKeys.videos.all,
-        queryKeys.channels.all,
-        queryKeys.tags.all,
-      ]) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
-      navigate("/");
-    },
-    onError: (err) => showError(describeError(err) || "Could not delete video"),
-  });
-
-  const onRedownload = () => {
-    if (!video) return;
-    redownloadMutation.mutate({
-      id: video.id,
-      preset: redownloadPreset,
-      normalize: settings.normalizeVolumeOnDownload,
-      message: "Download started — check the Download page for progress.",
-      closeDialog: true,
-    });
-  };
-
-  const onNormalizeVolume = () => {
-    if (!video) return;
-    const h = video.height_px;
-    let preset = "best";
-    if (h && h > 0) {
-      if (h >= 2160) preset = "2160p";
-      else if (h >= 1440) preset = "1440p";
-      else if (h >= 1080) preset = "1080p";
-      else if (h >= 720) preset = "720p";
-      else if (h >= 480) preset = "480p";
-    }
-    if (!presets.includes(preset)) {
-      preset = presets.includes("1080p") ? "1080p" : (presets[0] ?? "best");
-    }
-    redownloadMutation.mutate({
-      id: video.id,
-      preset,
-      normalize: true,
-      message:
-        "Normalizing via redownload — check the Download page for progress.",
-      closeDialog: false,
-    });
-  };
-
-  const onDelete = async () => {
-    if (!video) return;
-    const ok = await confirm({
-      title: "Delete this video?",
-      body: `"${video.title}" will be removed from your library and the file will be permanently deleted.`,
-      confirmLabel: "Delete",
-      danger: true,
-    });
-    if (!ok) return;
-    deleteMutation.mutate(video.id);
-  };
 
   if (loading) {
     return (
@@ -768,60 +602,13 @@ export default function Watch() {
               )}
             </div>
 
-            {isLibrary && editing && (
-              <div className="mt-4">
-                <VideoEditForm
-                  video={source.video}
-                  saveLabel="Save changes"
-                  focusField={editFocus}
-                  onCancel={() => {
-                    setEditing(false);
-                    setEditFocus(undefined);
-                  }}
-                  onSaved={(updated) => {
-                    setVideo(updated);
-                    setEditing(false);
-                    setEditFocus(undefined);
-                  }}
-                />
-              </div>
-            )}
-
             {isLibrary && (
-              <div className="mt-5 flex flex-wrap gap-2 whitespace-nowrap">
-                <Link
-                  to="/"
-                  aria-label={isMobile ? "Back to library" : undefined}
-                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
-                >
-                  {/* Phones: icon only, so the Download button fits the row. */}
-                  {isMobile ? "←" : "← Back to library"}
-                </Link>
-                {source.video.id > 0 && can("manage_playlists") && (
-                  <AddToPlaylist videoId={source.video.id} />
-                )}
-                {/* Phones get a dedicated button; desktop uses the ••• menu. */}
-                {isMobile && can("offline_download") && (
-                  <OfflineDownloadButton video={source.video} />
-                )}
-                {source.video.id > 0 && (
-                  <VideoActionsMenu
-                    video={source.video}
-                    onEdit={() => {
-                      setEditFocus(undefined);
-                      setEditing((v) => !v);
-                    }}
-                    onAddNote={() => {
-                      setEditFocus("notes");
-                      setEditing(true);
-                    }}
-                    onChangeResolution={() => setRedownloadOpen(true)}
-                    onNormalizeVolume={onNormalizeVolume}
-                    onDelete={onDelete}
-                    onVideoUpdated={setVideo}
-                  />
-                )}
-              </div>
+              <WatchActions
+                video={source.video}
+                actions={actions}
+                isMobile={isMobile}
+                onVideoUpdated={setVideo}
+              />
             )}
 
             {isLibrary && !showRelatedRight && moreLikeThis.length > 0 && (
@@ -851,76 +638,7 @@ export default function Watch() {
         )}
       </div>
 
-      {isLibrary && redownloadOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div
-            ref={redownloadDialogRef}
-            tabIndex={-1}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="redownload-title"
-            className="w-full max-w-md rounded-xl bg-ink-900 p-6 outline-none ring-1 ring-ink-700"
-          >
-            <h2
-              id="redownload-title"
-              className="mb-1 text-lg font-semibold text-gray-100"
-            >
-              Change resolution
-            </h2>
-            <p className="mb-4 text-sm text-gray-400">
-              This replaces the video file on disk with a newly downloaded copy
-              at the selected resolution. Your title, notes, and other metadata
-              are kept. Playback may be unavailable until the download finishes.
-            </p>
-            {source.kind === "library" && source.video.height_px != null && (
-              <p className="mb-3 text-xs text-muted">
-                Current file:{" "}
-                <span className="text-gray-300">
-                  {formatResolution(source.video.height_px) ||
-                    `${source.video.height_px}p`}
-                </span>
-                {source.video.width_px != null
-                  ? ` (${source.video.width_px}×${source.video.height_px})`
-                  : ""}
-              </p>
-            )}
-            <span className="mb-1 block text-xs font-medium text-gray-400">
-              Quality
-            </span>
-            <ThemedSelect
-              aria-label="Quality"
-              value={redownloadPreset}
-              options={presets.map((p) => ({
-                value: p,
-                label: PRESET_LABELS[p] ?? p,
-              }))}
-              onChange={setRedownloadPreset}
-              className="mb-2 w-full"
-              buttonClassName="w-full px-3 py-2.5"
-            />
-            <p className="mb-6 text-xs text-muted">
-              YouTube (and other sites) may not offer the selected tier. If the
-              downloaded file is lower, Horde shows a toast when the job
-              finishes.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setRedownloadOpen(false)}
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onRedownload}
-                disabled={redownloading}
-                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
-              >
-                {redownloading ? "Starting…" : "Replace file"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {isLibrary && <RedownloadDialog video={source.video} actions={actions} />}
     </div>
   );
 }
