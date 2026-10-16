@@ -7,6 +7,7 @@ import logging
 from collections.abc import Callable, Generator
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ...database import engine
@@ -289,9 +290,22 @@ def stream_chat(
         model=(chat_model or "").strip() or None,
         created_at=utcnow(),
     )
-    session.add(assistant_row)
-    session.commit()
-    session.refresh(assistant_row)
+    try:
+        session.add(assistant_row)
+        session.commit()
+        session.refresh(assistant_row)
+    except IntegrityError:
+        # The account was deleted while the model answered. The provider already
+        # booked the spend in the cost ledger; only the reply has nowhere to go.
+        session.rollback()
+        logger.warning(
+            "chat reply not stored: user %s no longer exists (video_id=%s)",
+            user_id,
+            video_id,
+            exc_info=True,
+        )
+        yield _sse(_revoked_event())
+        return
 
     yield _sse(
         {
