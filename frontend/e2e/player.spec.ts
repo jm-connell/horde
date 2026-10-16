@@ -479,6 +479,48 @@ test.describe("mini player", () => {
     await expect(page.locator("video")).toHaveCount(0);
   });
 
+  test("closing the mini player mid-drag leaves no window listeners behind", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const live = new Set<unknown>();
+      const w = window as unknown as { __live: Set<unknown> };
+      w.__live = live;
+      const add = window.addEventListener.bind(window);
+      const remove = window.removeEventListener.bind(window);
+      window.addEventListener = ((type: string, fn: unknown, o?: unknown) => {
+        if (type === "pointermove") live.add(fn);
+        return add(type, fn as EventListener, o as boolean);
+      }) as typeof window.addEventListener;
+      window.removeEventListener = ((
+        type: string,
+        fn: unknown,
+        o?: unknown
+      ) => {
+        if (type === "pointermove") live.delete(fn);
+        return remove(type, fn as EventListener, o as boolean);
+      }) as typeof window.removeEventListener;
+    });
+    const mini = await toMiniPlayer(page);
+    const live = () =>
+      page.evaluate(
+        () => (window as unknown as { __live: Set<unknown> }).__live.size
+      );
+    const before = await live();
+    // Press on the picture (starts a drag) and close without releasing.
+    await mini.locator("video").dispatchEvent("pointerdown", {
+      button: 0,
+      pointerId: 7,
+      pointerType: "mouse",
+      bubbles: true,
+    });
+    expect(await live()).toBe(before + 1);
+    await mini.hover();
+    await mini.getByRole("button", { name: "Close" }).dispatchEvent("click");
+    await expect(page.locator("video")).toHaveCount(0);
+    expect(await live()).toBe(before);
+  });
+
   test("can be dragged and resized", async ({ page }) => {
     const mini = await toMiniPlayer(page);
     const start = await mini.boundingBox();

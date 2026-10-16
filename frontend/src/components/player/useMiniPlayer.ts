@@ -62,6 +62,16 @@ export function useMiniPlayer({
     moved: boolean;
   } | null>(null);
 
+  // Window listeners of the drag in flight, so unmounting mid-drag removes them.
+  const dragCleanups = useRef(new Set<() => void>());
+  useEffect(() => {
+    const cleanups = dragCleanups.current;
+    return () => {
+      cleanups.forEach((fn) => fn());
+      cleanups.clear();
+    };
+  }, []);
+
   const clearMiniHideTimer = useCallback(() => {
     if (miniHideTimer.current !== null) {
       clearTimeout(miniHideTimer.current);
@@ -140,15 +150,20 @@ export function useMiniPlayer({
           height: frame.height,
         });
       };
-      const onEnd = () => {
-        miniResizeDrag.current = null;
+      const detach = () => {
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onEnd);
         window.removeEventListener("pointercancel", onEnd);
+        dragCleanups.current.delete(detach);
+      };
+      const onEnd = () => {
+        miniResizeDrag.current = null;
+        detach();
       };
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onEnd);
       window.addEventListener("pointercancel", onEnd);
+      dragCleanups.current.add(detach);
     },
     [playerRootRef, miniWidth, isMobile, clampMiniWidth, onMiniResize]
   );
@@ -190,6 +205,12 @@ export function useMiniPlayer({
         ev.preventDefault();
         onMiniMove(origLeft + dx, origTop + dy);
       };
+      const detach = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onEnd);
+        window.removeEventListener("pointercancel", onEnd);
+        dragCleanups.current.delete(detach);
+      };
       const onEnd = (ev: PointerEvent) => {
         if (
           miniMoveDrag.current &&
@@ -199,9 +220,7 @@ export function useMiniPlayer({
         }
         const didMove = miniMoveDrag.current?.moved ?? false;
         miniMoveDrag.current = null;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onEnd);
-        window.removeEventListener("pointercancel", onEnd);
+        detach();
         if (didMove) onMiniMoveEnd?.();
         if (didMove) {
           window.setTimeout(() => {
@@ -212,6 +231,7 @@ export function useMiniPlayer({
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onEnd);
       window.addEventListener("pointercancel", onEnd);
+      dragCleanups.current.add(detach);
     },
     [isMini, onMiniMove, onMiniMoveEnd, playerRootRef, suppressClick]
   );
