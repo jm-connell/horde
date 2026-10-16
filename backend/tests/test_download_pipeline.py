@@ -18,10 +18,17 @@ import pytest
 from sqlmodel import Session, select
 from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
-from app.models import DownloadDestination, DownloadJob, JobStatus, Video
-from app.services import ytdlp_common
-from app.services.downloads import errors, progress
+from app.models import (
+    DownloadDestination,
+    DownloadJob,
+    JobStatus,
+    Video,
+    VideoAiMeta,
+)
+from app.services import activity, library, ytdlp_common
+from app.services.downloads import errors, jobs, postprocess, progress, runner
 from app.services.downloads.queue import download_queue
+from app.services.ffmpeg_progress import FfmpegCancelled
 from app.services.paths import STAGING_DIR_NAME
 from app.services.ytdlp_common import (
     ERROR_KIND_CANCELLED,
@@ -95,6 +102,7 @@ def test_queue_runs_a_new_download_to_a_library_video(init_db, fake):
     assert not _staging(init_db, job_id).exists()
     snap = progress.progress_store[job_id]
     assert (snap["status"], snap["video_id"]) == ("completed", video.id)
+    assert snap["title"] == "Clip"
 
 
 def test_cookie_gate_retries_once_with_cookies(init_db, fake, monkeypatch, tmp_path):
@@ -290,3 +298,257 @@ def test_shorts_are_skipped_and_their_job_row_removed(init_db, fake):
     }
     assert fake.downloads == []
     assert _videos(init_db) == []
+
+
+# -- characterization of the steps cut out of the runner and finalize -----------
+
+
+def _seed_curated_video(init_db, add_video, **fields) -> tuple[Video, Path, Path]:
+    """A library video the user has edited, with media and a subtitle on disk."""
+    downloads = init_db["downloads"]
+    sub_rel = "Alpha/2024/Curated.en.vtt"
+    video = add_video(
+        write_file=True,
+        yt_id=YT,
+        title="Curated title",
+        title_is_custom=True,
+        description="My own description",
+        description_is_custom=True,
+        tags=["mine"],
+        subtitles=library.dump_subtitles([{"lang": "en", "path": sub_rel}]),
+        **fields,
+    )
+    old_media = downloads / video.file_path
+    old_sub = downloads / sub_rel
+    old_sub.write_text("WEBVTT\n")
+    with Session(init_db["engine"]) as s:
+        s.add(VideoAiMeta(video_id=video.id, tags_locked=True))
+        s.commit()
+    return video, old_media, old_sub
+
+
+@pytest.mark.parametrize("explicit_id", [True, False], ids=["replace_id", "same_yt_id"])
+def test_replacing_a_video_keeps_curated_fields_and_drops_the_old_files(
+    init_db, fake, add_video, explicit_id
+):
+    fake.infos[URL].update(
+        description="Remote description", tags=["remote"], title="Remote title"
+    )
+    video, old_media, old_sub = _seed_curated_video(init_db, add_video)
+    assert old_media.is_file() and old_sub.is_file()
+    job_id = _add_job(
+        init_db,
+        replace_video_id=video.id if explicit_id else None,
+        notes_pending="remember this",
+    )
+    run_job_inline(job_id)
+
+    assert _job(init_db, job_id).status == JobStatus.completed
+    (row,) = _videos(init_db)
+    assert row.id == video.id
+    assert row.title == "Curated title"
+    assert row.description == "My own description"
+    assert row.source_title == "Remote title"
+    assert row.source_description == "Remote description"
+    assert library.parse_tags(row.tags) == ["mine"]
+    assert row.notes == "remember this"
+    assert row.file_path != video.file_path
+    assert (init_db["downloads"] / row.file_path).is_file()
+    assert not old_media.exists()
+    assert not old_sub.exists()
+    assert library.parse_subtitles(row.subtitles) == []
+
+
+def test_replacing_without_curation_takes_the_remote_copy(init_db, fake, add_video):
+    fake.infos[URL].update(description="Remote description", tags=["remote"])
+    video = add_video(
+        yt_id=YT, title="Old", description="Old text", tags=["old"], write_file=True
+    )
+    job_id = _add_job(init_db, replace_video_id=video.id)
+    run_job_inline(job_id)
+
+    (row,) = _videos(init_db)
+    assert (row.id, row.title, row.description) == (
+        video.id,
+        "Clip",
+        "Remote description",
+    )
+    assert library.parse_tags(row.tags) == ["remote"]
+
+
+def test_completed_snapshot_carries_quality_and_volume_warnings(
+    init_db, fake, monkeypatch
+):
+    # The fake file probes as 720p, so a 1080p request is short of its tier.
+    monkeypatch.setattr(
+        postprocess, "apply_loudnorm", lambda *_a, **_k: "Volume normalization failed"
+    )
+    job_id = _add_job(init_db, normalize_volume=True)
+    with Session(init_db["engine"]) as s:
+        job = s.get(DownloadJob, job_id)
+        job.quality_preset = "1080p"
+        s.add(job)
+        s.commit()
+    run_job_inline(job_id)
+
+    assert _job(init_db, job_id).status == JobStatus.completed
+    snap = progress.progress_store[job_id]
+    assert snap["status"] == "completed"
+    assert "1080p" in snap["quality_warning"] and "720p" in snap["quality_warning"]
+    assert snap["volume_warning"] == "Volume normalization failed"
+
+
+def test_unrecognised_error_inside_the_attempt_keeps_the_finished_file(init_db, fake):
+    # Not a "recoverable" yt-dlp error, so the attempt loop re-raises it; the
+    # finished file is still picked up and postprocessed.
+    fake.fail_after_merge = ValueError("progress hook blew up")
+    job_id = _add_job(init_db)
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert (job.status, job.error) == (JobStatus.completed, None)
+    (video,) = _videos(init_db)
+    assert (init_db["downloads"] / video.file_path).stat().st_size == fake.merged_bytes
+    assert job.video_id == video.id
+    assert len(fake.downloads) == 1
+
+
+def test_failure_after_the_attempt_loop_hands_the_finished_file_off_once(
+    init_db, fake, monkeypatch
+):
+    # The file is fully written and the attempt loop is over when the hand-off
+    # itself fails once (here: queueing the postprocess stage). The run's
+    # error path must find the finished file and hand it off again.
+    real = runner.handoff_postprocess
+    attempts: list[int] = []
+
+    def flaky_handoff(task):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("queueing failed")
+        real(task)
+
+    monkeypatch.setattr(runner, "handoff_postprocess", flaky_handoff)
+    job_id = _add_job(init_db)
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert (job.status, job.error) == (JobStatus.completed, None)
+    assert len(attempts) == 2
+    assert len(fake.downloads) == 1
+    (video,) = _videos(init_db)
+    assert (init_db["downloads"] / video.file_path).stat().st_size == fake.merged_bytes
+
+
+def test_cancel_during_ffmpeg_ends_cancelled_not_error(init_db, fake, monkeypatch):
+    def cancelled(*_a, **_k):
+        raise FfmpegCancelled()
+
+    monkeypatch.setattr(postprocess, "ensure_safari_mp4", cancelled)
+    job_id = _add_job(init_db)
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert (job.status, job.error_kind) == (JobStatus.cancelled, ERROR_KIND_CANCELLED)
+    assert _videos(init_db) == []
+    assert not _staging(init_db, job_id).exists()
+
+
+def test_cookie_retry_is_not_turned_into_a_members_only_skip(
+    init_db, fake, monkeypatch, tmp_path
+):
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n")
+    monkeypatch.setattr(ytdlp_common, "YTDLP_COOKIE_FILE", cookies)
+    monkeypatch.setattr(ytdlp_common, "_cookie_required_until", {})
+    calls: list[int] = []
+
+    def members_gate_first_attempt(_path, _info):
+        calls.append(1)
+        if len(calls) == 1:
+            # yt-dlp reports the gate through its logger, then fails.
+            fake.downloads[-1]["opts"]["logger"].error(
+                "ERROR: Join this channel to get access to members-only content"
+            )
+            raise RuntimeError("Sign in to confirm your age")
+
+    # The retry itself must succeed; the error path's file recovery would
+    # otherwise hide a retry that was wrongly turned into a members-only skip.
+    monkeypatch.setattr(
+        runner.DownloadRun, "_hand_off_recovered_file", lambda _s: False
+    )
+    fake.before_merge = members_gate_first_attempt
+    job_id = _add_job(init_db)
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert (job.status, job.error_kind) == (JobStatus.completed, None)
+    assert len(fake.downloads) == 2
+    assert len(_videos(init_db)) == 1
+
+
+def test_failed_device_download_leaves_nothing_in_the_device_dir(init_db, fake):
+    def leave_a_stray_file_then_fail(path, _info):
+        (path.parent / "stray.tmp").write_bytes(b"x")
+        raise RuntimeError("HTTP Error 500")
+
+    fake.before_merge = leave_a_stray_file_then_fail
+    job_id = _add_job(init_db, destination=DownloadDestination.device.value)
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert (job.status, job.device_file_path) == (JobStatus.error, None)
+    device_dir = init_db["downloads"] / "_device" / str(job_id)
+    assert not device_dir.exists() or not any(device_dir.iterdir())
+
+
+def test_pausing_leaves_no_activity_entry_behind(init_db, fake):
+    job_id = _add_job(init_db)
+    in_merge = threading.Event()
+
+    def wait_for_pause(_path, _info):
+        in_merge.set()
+        download_queue.cancel_event(job_id).wait(10)
+        raise errors.DownloadCancelled()
+
+    def download_entries() -> list[dict]:
+        snap = activity.snapshot()
+        return [t for t in snap["running"] + snap["recent"] if t["kind"] == "download"]
+
+    before = len(download_entries())
+    fake.before_merge = wait_for_pause
+    download_queue.enqueue(job_id)
+    assert in_merge.wait(10)
+    try:
+        download_queue.pause_all()
+        _wait_idle(job_id)
+        # A pause is not a finished download: it must not show as cancelled or
+        # stay "running" in the activity list.
+        assert len(download_entries()) == before
+    finally:
+        fake.before_merge = None
+        download_queue.resume_all()
+    _wait(
+        lambda: _job(init_db, job_id).status == JobStatus.completed,
+        "resumed download to complete",
+    )
+    _wait_idle(job_id)
+
+
+def test_finishing_a_restart_of_an_already_completed_job_keeps_its_quality(
+    init_db, monkeypatch
+):
+    requeued: list[int] = []
+    monkeypatch.setattr(jobs, "enqueue_download", requeued.append)
+    job_id = _add_job(init_db)
+    with Session(init_db["engine"]) as s:
+        job = s.get(DownloadJob, job_id)
+        job.status = JobStatus.completed
+        job.quality_preset = "720p"
+        s.add(job)
+        s.commit()
+        # The old attempt finished before the restart took hold.
+        jobs._finish_restart(s, job_id, "1080p", "720p")
+    assert _job(init_db, job_id).quality_preset == "720p"
+    assert _job(init_db, job_id).status == JobStatus.completed
+    assert requeued == []
