@@ -105,9 +105,9 @@ export type SettingsPageContextValue = {
   openRouterKeyDraft: string;
   setOpenRouterKeyDraft: Dispatch<SetStateAction<string>>;
   openRouterModels: OpenRouterModel[];
-  setOpenRouterModels: Dispatch<SetStateAction<OpenRouterModel[]>>;
   openRouterEmbedModels: OpenRouterModel[];
-  setOpenRouterEmbedModels: Dispatch<SetStateAction<OpenRouterModel[]>>;
+  /** Re-read the OpenRouter catalog (after a key was saved or tested). */
+  refreshOpenRouterModels: () => Promise<void>;
   openRouterCosts: OpenRouterCosts | null;
   embedCustom: boolean;
   setEmbedCustom: Dispatch<SetStateAction<boolean>>;

@@ -183,6 +183,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return resp.json() as Promise<T>;
 }
 
+/** Options every read accepts so React Query can cancel it. */
+export interface ReadOptions {
+  signal?: AbortSignal;
+}
+
 /** Event the offline manager listens for to keep resume positions current. */
 export const OFFLINE_PROGRESS_EVENT = "horde:offline-progress";
 
@@ -448,10 +453,10 @@ export const api = {
     });
   },
 
-  getMetadataSyncStatus(): Promise<
-    ApiResponse<"/api/videos/refresh-metadata/status", "get">
-  > {
-    return request("/api/videos/refresh-metadata/status");
+  getMetadataSyncStatus(
+    opts?: ReadOptions
+  ): Promise<ApiResponse<"/api/videos/refresh-metadata/status", "get">> {
+    return request("/api/videos/refresh-metadata/status", opts);
   },
 
   uploadThumbnail(id: number, file: File): Promise<Video> {
@@ -541,8 +546,8 @@ export const api = {
     );
   },
 
-  getChannelCatalogStatus(): Promise<ChannelCatalogStatus> {
-    return request<ChannelCatalogStatus>("/api/channels/catalog/status");
+  getChannelCatalogStatus(opts?: ReadOptions): Promise<ChannelCatalogStatus> {
+    return request<ChannelCatalogStatus>("/api/channels/catalog/status", opts);
   },
 
   searchChannelYoutube(params: {
@@ -708,8 +713,8 @@ export const api = {
     });
   },
 
-  getAiStatus(): Promise<AiStatus> {
-    return request<AiStatus>("/api/ai/status");
+  getAiStatus(opts?: ReadOptions): Promise<AiStatus> {
+    return request<AiStatus>("/api/ai/status", opts);
   },
 
   listAiJobs(status?: string, limit = 50): Promise<AiJobRow[]> {
@@ -765,14 +770,14 @@ export const api = {
     });
   },
 
-  getOpenRouterModels(): Promise<
-    ApiResponse<"/api/ai/openrouter/models", "get">
-  > {
-    return request("/api/ai/openrouter/models");
+  getOpenRouterModels(
+    opts?: ReadOptions
+  ): Promise<ApiResponse<"/api/ai/openrouter/models", "get">> {
+    return request("/api/ai/openrouter/models", opts);
   },
 
-  getOpenRouterCosts(): Promise<OpenRouterCosts> {
-    return request<OpenRouterCosts>("/api/ai/openrouter/costs");
+  getOpenRouterCosts(opts?: ReadOptions): Promise<OpenRouterCosts> {
+    return request<OpenRouterCosts>("/api/ai/openrouter/costs", opts);
   },
 
   applyAiWorkload(
@@ -827,8 +832,8 @@ export const api = {
     });
   },
 
-  getCompatSummary(): Promise<CompatSummary> {
-    return request<CompatSummary>("/api/compat/summary");
+  getCompatSummary(opts?: ReadOptions): Promise<CompatSummary> {
+    return request<CompatSummary>("/api/compat/summary", opts);
   },
 
   startCompatBackfill(): Promise<ApiResponse<"/api/compat/backfill", "post">> {
@@ -855,12 +860,12 @@ export const api = {
     });
   },
 
-  getSystemStats(): Promise<SystemStats> {
-    return request<SystemStats>("/api/system/stats");
+  getSystemStats(opts?: ReadOptions): Promise<SystemStats> {
+    return request<SystemStats>("/api/system/stats", opts);
   },
 
-  getSystemActivity(): Promise<SystemActivity> {
-    return request<SystemActivity>("/api/system/activity");
+  getSystemActivity(opts?: ReadOptions): Promise<SystemActivity> {
+    return request<SystemActivity>("/api/system/activity", opts);
   },
 
   checkUpdates(refresh = false): Promise<UpdateCheck> {
@@ -1041,9 +1046,10 @@ export const api = {
   },
 
   /** How many videos wait for review: one row and the server's count, not the list. */
-  async reviewCount(): Promise<number> {
+  async reviewCount(opts?: ReadOptions): Promise<number> {
     const page = await request<Page<Video>>(
-      "/api/review?limit=1&include_total=true"
+      "/api/review?limit=1&include_total=true",
+      opts
     );
     return page.total ?? page.items.length;
   },

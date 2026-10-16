@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { dataOrNull, useSystemStats } from "../queries/status";
 import Collapse from "../components/Collapse";
 import {
   flushSettingsSync,
@@ -49,7 +50,7 @@ export default function Setup() {
   const [settings, update] = useSettings();
   const [step, setStep] = useState<Step>("welcome");
   const [health, setHealth] = useState<HealthStats | null>(null);
-  const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
+  const systemStats = dataOrNull(useSystemStats());
   const [finishing, setFinishing] = useState(false);
   const [aiChoice, setAiChoice] = useState<AiChoice>("skip");
   const [openRouterKey, setOpenRouterKey] = useState("");
@@ -68,10 +69,6 @@ export default function Setup() {
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
-      .catch(() => undefined);
-    api
-      .getSystemStats()
-      .then(setSystemStats)
       .catch(() => undefined);
   }, []);
 

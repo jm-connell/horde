@@ -6,7 +6,8 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { applyPageId } from "./customCss";
 import Library from "./pages/Library";
 import {
@@ -36,6 +37,7 @@ import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
 import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
 import RequirePermission from "./components/auth/RequirePermission";
 import { AuthGate, AuthProvider, useAuth } from "./context/AuthContext";
+import { createQueryClient } from "./queries/client";
 
 /** Back-compat: `/playlists/:id` → `/playlists?open=:id` */
 function PlaylistOpenRedirect() {
@@ -185,25 +187,45 @@ function AppShell() {
   );
 }
 
+/**
+ * Cached answers belong to the signed-in account (watch history, permissions),
+ * so a different user, or none, starts from an empty cache.
+ */
+function ClearCacheOnUserChange() {
+  const queryClient = useQueryClient();
+  const userId = useAuth().user?.id ?? null;
+  const previous = useRef(userId);
+  useEffect(() => {
+    if (previous.current === userId) return;
+    previous.current = userId;
+    queryClient.clear();
+  }, [userId, queryClient]);
+  return null;
+}
+
 export default function App() {
+  const [queryClient] = useState(createQueryClient);
   return (
     <ErrorBoundary scope="app" fullPage>
-      <ToastProvider>
-        <ConfirmProvider>
-          <AuthProvider>
-            <AuthGate>
-              <DownloadProvider>
-                <SearchProvider>
-                  <PlaybackProvider>
-                    <AppShell />
-                    <OverlayScrollThumb viewport />
-                  </PlaybackProvider>
-                </SearchProvider>
-              </DownloadProvider>
-            </AuthGate>
-          </AuthProvider>
-        </ConfirmProvider>
-      </ToastProvider>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <ConfirmProvider>
+            <AuthProvider>
+              <ClearCacheOnUserChange />
+              <AuthGate>
+                <DownloadProvider>
+                  <SearchProvider>
+                    <PlaybackProvider>
+                      <AppShell />
+                      <OverlayScrollThumb viewport />
+                    </PlaybackProvider>
+                  </SearchProvider>
+                </DownloadProvider>
+              </AuthGate>
+            </AuthProvider>
+          </ConfirmProvider>
+        </ToastProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }

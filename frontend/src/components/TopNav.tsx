@@ -1,7 +1,7 @@
 import type { Permission } from "../types";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDownloads } from "../context/DownloadContext";
 import { usePlayback } from "../context/PlaybackContext";
 import { useSearch } from "../context/SearchContext";
@@ -9,10 +9,8 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../context/AuthContext";
 import AccountMenu from "./auth/AccountMenu";
-import {
-  IMPORT_QUEUE_EVENT,
-  notifyImportQueueChanged,
-} from "../utils/importQueue";
+import { queryKeys } from "../queries/keys";
+import { useReviewCount } from "../queries/status";
 import Collapse from "./Collapse";
 import ConnectionTag from "./ConnectionTag";
 import { DownloadIcon, ProgressRing } from "./OfflineDownloadButton";
@@ -70,7 +68,8 @@ function isLinkActive(pathname: string, to: string, end: boolean): boolean {
 }
 
 export default function TopNav() {
-  const [importCount, setImportCount] = useState(0);
+  const queryClient = useQueryClient();
+  const importCount = useReviewCount({ interval: 30_000 }).data ?? 0;
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuRendered, setMenuRendered] = useState(false);
   const [menuShown, setMenuShown] = useState(false);
@@ -122,46 +121,14 @@ export default function TopNav() {
 
   const showDownloadBadge = settings.showDownloadNavBadge && activeCount > 0;
 
+  // Refresh the badge when navigating to the import page (e.g. after the
+  // scanner ingested files).
+  const onImportPage =
+    location.pathname === "/import" || location.pathname === "/review";
   useEffect(() => {
-    let active = true;
-    const poll = () =>
-      api
-        .reviewCount()
-        .then((count) => {
-          if (!active) return;
-          setImportCount(count);
-        })
-        .catch(() => undefined);
-    poll();
-    const id = setInterval(poll, 30000);
-    const onQueue = (e: Event) => {
-      const count = (e as CustomEvent<{ count?: number }>).detail?.count;
-      if (typeof count === "number") {
-        setImportCount(count);
-        return;
-      }
-      poll();
-    };
-    window.addEventListener(IMPORT_QUEUE_EVENT, onQueue);
-    return () => {
-      active = false;
-      clearInterval(id);
-      window.removeEventListener(IMPORT_QUEUE_EVENT, onQueue);
-    };
-  }, []);
-
-  // Refresh badge when navigating (e.g. after scanner ingested files).
-  useEffect(() => {
-    if (location.pathname === "/import" || location.pathname === "/review") {
-      api
-        .reviewCount()
-        .then((count) => {
-          setImportCount(count);
-          notifyImportQueueChanged(count);
-        })
-        .catch(() => undefined);
-    }
-  }, [location.pathname]);
+    if (onImportPage)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.review.count });
+  }, [onImportPage, queryClient]);
 
   useEffect(() => {
     setMenuOpen(false);

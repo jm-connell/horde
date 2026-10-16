@@ -54,9 +54,8 @@ export default function ProvidersPane() {
     openRouterKeyDraft,
     setOpenRouterKeyDraft,
     openRouterModels,
-    setOpenRouterModels,
     openRouterEmbedModels,
-    setOpenRouterEmbedModels,
+    refreshOpenRouterModels,
     openRouterCosts,
     embedCustom,
     setEmbedCustom,
@@ -757,17 +756,7 @@ export default function ProvidersPane() {
                             });
                             setOpenRouterKeyDraft("");
                           }
-                          if (result.ok) {
-                            const models = await api
-                              .getOpenRouterModels()
-                              .catch(() => null);
-                            if (models) {
-                              setOpenRouterModels(models.models || []);
-                              setOpenRouterEmbedModels(
-                                models.embedding_models || []
-                              );
-                            }
-                          }
+                          if (result.ok) await refreshOpenRouterModels();
                           refreshAiStatus();
                         }}
                         className={PANEL_BTN}

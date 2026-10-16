@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
+import { queryKeys } from "../../queries/keys";
+import { useCompatSummary } from "../../queries/status";
 import type {
   CompatCopyResolution,
   DownloadVideoCodec,
 } from "../../hooks/useSettings";
-import type { CompatSummary, SystemStats } from "../../types";
+import type { SystemStats } from "../../types";
 import { formatSize } from "../../utils";
 import { probeDecodeSupport } from "../../utils/decodeCapability";
 import { CHIP, CHIP_ACTIVE, PANEL_BTN } from "./constants";
@@ -492,19 +495,17 @@ function LibraryActions({
   hasGpuEncode: boolean;
   copyResolution: CompatCopyResolution;
 }) {
-  const [summary, setSummary] = useState<CompatSummary | null>(null);
+  const queryClient = useQueryClient();
+  // Polls every 3 s while the server still has H.264 jobs queued or running.
+  const summary = useCompatSummary().data ?? null;
   const [busy, setBusy] = useState(false);
   const [confirmConvert, setConfirmConvert] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
-    api
-      .getCompatSummary()
-      .then(setSummary)
-      .catch(() => undefined);
-  }, []);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.compat.summary });
+  }, [queryClient]);
 
-  useEffect(refresh, [refresh]);
   // The server sizes estimates with the saved copy resolution; refetch once
   // the debounced settings sync (300 ms) has landed.
   const firstRender = useRef(true);
@@ -516,20 +517,6 @@ function LibraryActions({
     const t = window.setTimeout(refresh, 800);
     return () => window.clearTimeout(t);
   }, [copyResolution, refresh]);
-
-  const active =
-    summary != null &&
-    summary.queued +
-      summary.running +
-      summary.convert_queued +
-      summary.convert_running >
-      0;
-
-  useEffect(() => {
-    if (!active) return;
-    const t = window.setInterval(refresh, 3000);
-    return () => window.clearInterval(t);
-  }, [active, refresh]);
 
   if (!summary || summary.videos === 0) return null;
 

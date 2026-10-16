@@ -8,7 +8,8 @@ import VideoEditForm from "../components/VideoEditForm";
 import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import type { DuplicateGroup, Video } from "../types";
-import { notifyImportQueueChanged } from "../utils/importQueue";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../queries/keys";
 import { formatSize } from "../utils";
 
 import { getJson, setJson } from "../storage";
@@ -72,6 +73,7 @@ interface UploadItem {
 export default function Import() {
   const { can } = useAuth();
   const { showToast, showError } = useToast();
+  const queryClient = useQueryClient();
   const confirm = useConfirm();
   const [items, setItems] = useState<Video[]>([]);
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
@@ -155,21 +157,25 @@ export default function Import() {
     }
   };
 
-  const load = useCallback((opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    Promise.all([
-      api.listReview().catch(() => [] as Video[]),
-      api.listDuplicateGroups().catch(() => [] as DuplicateGroup[]),
-    ])
-      .then(([review, dupes]) => {
-        setItems(review);
-        setGroups(dupes);
-        notifyImportQueueChanged(review.length);
-      })
-      .finally(() => {
-        if (!opts?.silent) setLoading(false);
-      });
-  }, []);
+  const load = useCallback(
+    (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      Promise.all([
+        api.listReview().catch(() => [] as Video[]),
+        api.listDuplicateGroups().catch(() => [] as DuplicateGroup[]),
+      ])
+        .then(([review, dupes]) => {
+          setItems(review);
+          setGroups(dupes);
+          // The nav badge reads the same count; no need for it to ask again.
+          queryClient.setQueryData(queryKeys.review.count, review.length);
+        })
+        .finally(() => {
+          if (!opts?.silent) setLoading(false);
+        });
+    },
+    [queryClient]
+  );
 
   const scanForNewFiles = async () => {
     if (scanningRef.current) return;

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { aiStatusQuery } from "../queries/status";
 import { useToast } from "../context/ToastContext";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
@@ -13,6 +15,7 @@ export default function RecommendedHome({
   sidebarCollapsed: boolean;
 }) {
   const { showToast, showError } = useToast();
+  const queryClient = useQueryClient();
   const [categories, setCategories] = useState<string[]>([]);
   const [feedVideos, setFeedVideos] = useState<Video[]>([]);
   const [feedOffset, setFeedOffset] = useState(0);
@@ -156,7 +159,10 @@ export default function RecommendedHome({
         while (Date.now() - started < 90_000) {
           await new Promise((r) => setTimeout(r, 2000));
           try {
-            const status = await api.getAiStatus();
+            const status = await queryClient.fetchQuery({
+              ...aiStatusQuery(),
+              staleTime: 0,
+            });
             const busy =
               status.queue_depth > 0 ||
               Boolean(status.current_job) ||
