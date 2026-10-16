@@ -76,6 +76,9 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 | the SPA files, `/wiki/*` | No data |
 | stream, subtitle and thumbnail URLs with a valid `?mt=` token | Cast and AirPlay receivers send no cookie |
 
+!!! note "Device downloads are shared"
+    A download whose destination is *this device* (not the library) is a shared download job like any other: jobs have no owner. Anyone with `offline_download` can fetch another person's finished device job through `GET /api/downloads/{id}/file` if they know its id, and the queue list shows every job. Device files are ephemeral (deleted when dismissed), but do not treat them as private.
+
 ### Signed media URLs
 
 `GET /api/videos/{id}/media-token` (signed in) returns `{token, expires_at}`: an HMAC over `video id | expiry | user id` with the key in `DATA_DIR/secret_key` (created on first start, mode 600, never stored in the database or returned by the API). It is valid for 12 hours, for that one video, on the stream, subtitle and thumbnail routes only, and stops working when that user's password is changed or reset. A malformed token is a plain `401`. The app only uses these URLs when handing media to a Chromecast or AirPlay receiver; the page's own player keeps using the cookie. Access logs redact the `mt=` value. Back up `secret_key` with the rest of `DATA_DIR`; if it is lost a new one is made and outstanding tokens stop working. A key file shorter than 32 bytes is never used or silently replaced: Horde reports it and the cast links fail until you delete the file.

@@ -1,6 +1,6 @@
 # 0006. The downloader package split and the facade policy
 
-Status: Accepted (lands with the download split change)
+Status: Accepted
 
 ## Context
 

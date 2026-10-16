@@ -2,9 +2,6 @@
 
 One page that connects the pieces. Each section ends with a pointer to the page that has the detail; the reasoning behind the big choices is in the [decision records](../adr/index.md).
 
-!!! note "Two changes still on their way"
-    This page describes the code as it will be once two in-flight changes land: the download pipeline moved out of `services/downloader.py` into the `services/downloads/` package ([ADR 0006](../adr/0006-downloader-package-split.md)), and the SQL-side search indexes plus the incremental vector index ([ADR 0007](../adr/0007-fts5-triggers-and-vector-index.md)). Where a statement depends on one of them it says so.
-
 ## Process model
 
 Horde is **one OS process**: a uvicorn server running one FastAPI app. There is no Celery, Redis or second service ([ADR 0002](../adr/0002-single-process-worker-threads.md)). The container runs `uvicorn app.main:app` with a single worker and `--timeout-graceful-shutdown 10`.

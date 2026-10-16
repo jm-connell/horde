@@ -69,7 +69,7 @@ Embeds are only enqueued when Ollama is **enabled** or OpenRouter owns embedding
 
 ## Vector search
 
-Similarity search (hybrid search, related videos, recommendations) scores every stored chunk with one matrix product. The vectors are loaded into an L2-normalised `float32` matrix per dimension, built on first use and rebuilt after any change to `video_embeddings` (an ORM write, or a row count / max id change such as a cascading video delete). Memory is about `chunks x dim x 4` bytes, for example 60 000 chunks of 768 dimensions is roughly 184 MB. The matrix lives on the database engine object, not in module state. Vectors of another dimension (a previous embed model) are ignored until re-indexed.
+Similarity search (hybrid search, related videos, recommendations) scores every stored chunk with one matrix product. The vectors are loaded into an L2-normalised `float32` matrix per dimension, built on first use and then updated incrementally: each search compares a cheap per-video fingerprint (chunk count and max id) and the videos the ORM reported as written, and re-reads only the videos that changed (a full rebuild only when more than 20 percent of the videos, and more than 50, changed at once). The code is `services/ai/vector_index.py`; see [ADR 0007](../adr/0007-fts5-triggers-and-vector-index.md). Memory is about `chunks x dim x 4` bytes, for example 60 000 chunks of 768 dimensions is roughly 184 MB. The matrix lives on the database engine object, not in module state. Vectors of another dimension (a previous embed model) are ignored until re-indexed.
 
 ## Embeddings layout
 

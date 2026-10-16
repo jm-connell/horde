@@ -1,6 +1,6 @@
 # 0007. FTS5 maintained by triggers, and the vector index cache
 
-Status: Accepted (lands with the data-model change)
+Status: Accepted
 
 ## Context
 
