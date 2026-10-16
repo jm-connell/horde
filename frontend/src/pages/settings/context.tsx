@@ -14,8 +14,10 @@ import type {
   AiStatus,
   AiWorkloadProfile,
   AppSettings,
+  BackgroundItem,
   ChannelCatalogStatus,
   HealthStats,
+  MetadataSyncStatus,
   OpenRouterCosts,
   OpenRouterModel,
   StorageStats,
@@ -48,13 +50,7 @@ export type SettingsPageContextValue = {
   bgUploading: boolean;
   uploadCustomBackground: (file: File | null) => Promise<void>;
   lastUploadedName: string | null;
-  bgLibrary: {
-    id: string;
-    url: string;
-    mime: string;
-    animated: boolean;
-    filename?: string;
-  }[];
+  bgLibrary: BackgroundItem[];
   deleteLibraryBackground: (id: string) => Promise<void>;
   paletteColors: string[];
   paletteLoading: boolean;
@@ -86,15 +82,7 @@ export type SettingsPageContextValue = {
   toggleSyncField: (field: string) => void;
   resyncAllMetadata: () => Promise<void>;
   metadataSyncing: boolean;
-  metadataSyncStatus: {
-    running: boolean;
-    total: number;
-    done: number;
-    failed: number;
-    skipped: number;
-    current_title: string | null;
-    last_error: string | null;
-  } | null;
+  metadataSyncStatus: MetadataSyncStatus | null;
   expiryInput: string;
   setExpiryInput: Dispatch<SetStateAction<string>>;
   saveExpiry: () => Promise<void>;

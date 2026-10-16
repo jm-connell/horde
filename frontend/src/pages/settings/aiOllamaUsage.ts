@@ -44,7 +44,7 @@ export function formatOpenRouterModelLine(s: ProviderHints): string {
 
 /** Spend snapshot: 24h, 7d (or weekly budget), and recent call count. */
 export function formatOpenRouterSpendLine(
-  costs: OpenRouterCosts | null
+  costs: (Pick<OpenRouterCosts, "h24" | "d7"> & Partial<OpenRouterCosts>) | null
 ): string {
   if (!costs) return "";
   const h24 = formatUsdCost(costs.h24) || "$0";

@@ -16,8 +16,10 @@ import type {
   AiStatus,
   AiWorkloadProfile,
   AppSettings,
+  BackgroundItem,
   ChannelCatalogStatus,
   HealthStats,
+  MetadataSyncStatus,
   OpenRouterCosts,
   OpenRouterModel,
   StorageStats,
@@ -140,15 +142,8 @@ export default function Settings() {
   const [metadataSyncFields, setMetadataSyncFields] = useState<string[]>([
     "all",
   ]);
-  const [metadataSyncStatus, setMetadataSyncStatus] = useState<{
-    running: boolean;
-    total: number;
-    done: number;
-    failed: number;
-    skipped: number;
-    current_title: string | null;
-    last_error: string | null;
-  } | null>(null);
+  const [metadataSyncStatus, setMetadataSyncStatus] =
+    useState<MetadataSyncStatus | null>(null);
   const [aiProcessingAction, setAiProcessingAction] = useState<string | null>(
     null
   );
@@ -161,15 +156,7 @@ export default function Settings() {
   const [paletteLoading, setPaletteLoading] = useState(false);
   const [customFontDraft, setCustomFontDraft] = useState("");
   const [themeNameDraft, setThemeNameDraft] = useState("");
-  const [bgLibrary, setBgLibrary] = useState<
-    {
-      id: string;
-      url: string;
-      mime: string;
-      animated: boolean;
-      filename?: string;
-    }[]
-  >([]);
+  const [bgLibrary, setBgLibrary] = useState<BackgroundItem[]>([]);
   const [lastUploadedName, setLastUploadedName] = useState<string | null>(null);
 
   const q = searchQuery.trim().toLowerCase();

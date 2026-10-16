@@ -30,7 +30,7 @@ function formatElapsed(startedAt: number, finishedAt?: number | null): string {
   return `${h}h ${m % 60}m`;
 }
 
-function EngineChip({ engine }: { engine: string | null }) {
+function EngineChip({ engine }: { engine: string | null | undefined }) {
   if (!engine) return null;
   return (
     <span className="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-amber-300/90">
@@ -51,8 +51,8 @@ function ProgressBar({
   done,
   total,
 }: {
-  done: number | null;
-  total: number | null;
+  done: number | null | undefined;
+  total: number | null | undefined;
 }) {
   if (total == null || total <= 0 || done == null) return null;
   const pct = Math.max(0, Math.min(100, Math.round((done / total) * 100)));

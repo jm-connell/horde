@@ -260,8 +260,8 @@ export default function Watch() {
     playStream({
       url: source.url,
       title: source.meta.title || "Untitled",
-      channel: source.meta.channel,
-      poster: source.meta.thumbnail_url,
+      channel: source.meta.channel ?? null,
+      poster: source.meta.thumbnail_url ?? null,
       chapters: parseChapters(source.meta.description),
       sourceUrl: source.meta.source_url,
       channelParam: channelParam || source.meta.channel,

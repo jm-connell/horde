@@ -43,6 +43,11 @@ function job(patch: Partial<DownloadJob> & { url: string }): DownloadJob {
     video_id: null,
     file_size: null,
     created_at: "",
+    available_presets: [],
+    destination: "library",
+    video_codec: "av1",
+    video_missing: false,
+    superseded: false,
     ...patch,
   };
 }
