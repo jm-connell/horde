@@ -263,3 +263,33 @@ test("shift-click selects a range of cards and delete removes them", async ({
   await expect(page.getByText("2 selected")).toHaveCount(0);
   await expect(cards).toHaveCount(titles.length - 2);
 });
+
+test("an in-app change of the ?tag= link replaces the open tag", async ({
+  page,
+}) => {
+  await page.goto("/?tag=ambient");
+  await expect(
+    page.getByRole("heading", { name: "#ambient", level: 1 })
+  ).toBeVisible();
+
+  // A client-side navigation to another tag link (no page load).
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/?tag=craft");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect(
+    page.getByRole("heading", { name: "#craft", level: 1 })
+  ).toBeVisible();
+  await expect(videoCard(page, "Kiln fire")).toBeVisible();
+  await expect(videoCard(page, "Aurora Drift")).toHaveCount(0);
+
+  // And back to the home page, which clears the tag.
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible();
+  await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
+});
