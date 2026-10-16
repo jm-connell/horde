@@ -5,21 +5,19 @@ import Collapse from "../../../components/Collapse";
 import type { AiSchedule } from "../../../types";
 import AiQueueStatus from "../AiQueueStatus";
 import { useSettingsPage } from "../context";
+import { useAiPage } from "./aiPageContext";
 import { ProcessActionRow, Section } from "../ui";
 import { AI_SCHEDULE_OPTIONS, INPUT_COMPACT, PANEL_BTN } from "../constants";
 
 export default function JobsPane() {
+  const { q, match, showToast, showError } = useSettingsPage();
   const {
-    q,
-    match,
     aiDraft,
     setAiDraft,
     saveAi,
     aiStatus,
     systemStats,
     openRouterCosts,
-    showToast,
-    showError,
     aiProcessingAction,
     runAiProcess,
     catchUpScope,
@@ -29,7 +27,7 @@ export default function JobsPane() {
     reindexPrompt,
     setReindexPrompt,
     refreshAiStatus,
-  } = useSettingsPage();
+  } = useAiPage();
   const stepsOpen = individualStepsOpen || Boolean(q);
 
   return (

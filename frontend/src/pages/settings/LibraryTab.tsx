@@ -1,4 +1,5 @@
 import { useSettingsPage } from "./context";
+import { useLibraryState } from "./useLibraryState";
 import { Section, SettingRow, Toggle, Chip } from "./ui";
 import {
   CATALOG_INDEX_TIP,
@@ -18,11 +19,8 @@ import HelpTip from "../../components/HelpTip";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
 
 export default function LibraryTab() {
+  const { q, match, settings, update } = useSettingsPage();
   const {
-    q,
-    match,
-    settings,
-    update,
     appSettings,
     catalogMaxInput,
     setCatalogMaxInput,
@@ -38,7 +36,7 @@ export default function LibraryTab() {
     setExpiryInput,
     saveExpiry,
     systemStats,
-  } = useSettingsPage();
+  } = useLibraryState();
 
   return (
     <>

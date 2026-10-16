@@ -1,8 +1,11 @@
-import { useSettingsPage } from "../context";
+import type { Dispatch, SetStateAction } from "react";
 import type { AiPane } from "../types";
 import ProvidersPane from "./ProvidersPane";
 import FeaturesPane from "./FeaturesPane";
 import JobsPane from "./JobsPane";
+import { AiPageContext } from "./aiPageContext";
+import { useAiCore } from "./useAiCore";
+import { useAiPanes } from "./useAiPanes";
 
 import { setItem } from "../../../storage";
 const PANES: { id: AiPane; label: string }[] = [
@@ -11,10 +14,18 @@ const PANES: { id: AiPane; label: string }[] = [
   { id: "jobs", label: "Jobs" },
 ];
 
-export default function AiTab() {
-  const { aiPane, setAiPane } = useSettingsPage();
+/** The pane is routing (`?pane=`), so the settings page owns it and passes it in. */
+export default function AiTab({
+  aiPane,
+  setAiPane,
+}: {
+  aiPane: AiPane;
+  setAiPane: Dispatch<SetStateAction<AiPane>>;
+}) {
+  const core = useAiCore();
+  const panes = useAiPanes(core, aiPane, setAiPane);
   return (
-    <>
+    <AiPageContext.Provider value={{ ...core, ...panes }}>
       <div className="mb-4 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
         {PANES.map((pane) => {
           const active = aiPane === pane.id;
@@ -40,6 +51,6 @@ export default function AiTab() {
       {aiPane === "providers" && <ProvidersPane />}
       {aiPane === "features" && <FeaturesPane />}
       {aiPane === "jobs" && <JobsPane />}
-    </>
+    </AiPageContext.Provider>
   );
 }

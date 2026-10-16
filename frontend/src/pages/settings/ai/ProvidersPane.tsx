@@ -9,6 +9,7 @@ import { formatUsdCost } from "../../../utils";
 import type { AiSettings } from "../../../types";
 import { ollamaIsUsed } from "../aiOllamaUsage";
 import { useSettingsPage } from "../context";
+import { useAiPage } from "./aiPageContext";
 import {
   openRouterPriceHint,
   openRouterSelectOptions,
@@ -34,11 +35,8 @@ import { setItem } from "../../../storage";
 const OPTIONS_MUTED = "pointer-events-none select-none opacity-50";
 
 export default function ProvidersPane() {
+  const { q, match, showToast, showError } = useSettingsPage();
   const {
-    q,
-    match,
-    showToast,
-    showError,
     appSettings,
     aiDraft,
     setAiDraft,
@@ -68,7 +66,7 @@ export default function ProvidersPane() {
     runAiProcess,
     applyWorkload,
     saveModels,
-  } = useSettingsPage();
+  } = useAiPage();
   const confirm = useConfirm();
 
   const [openRouterTestStatus, setOpenRouterTestStatus] = useState<
