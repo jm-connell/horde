@@ -180,6 +180,16 @@ def content_security_policy(path: str) -> str:
     return APP_CSP
 
 
+def security_headers(path: str) -> dict[str, str]:
+    """The response headers every reply carries (the one source of truth)."""
+    return {
+        "Content-Security-Policy": content_security_policy(path),
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "same-origin",
+        "X-Frame-Options": "SAMEORIGIN",
+    }
+
+
 # --- ASGI helpers ------------------------------------------------------------
 
 
@@ -211,15 +221,13 @@ class SecurityHeadersMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        csp = content_security_policy(scope["path"])
+        extra = security_headers(scope["path"])
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
-                headers.setdefault("Content-Security-Policy", csp)
-                headers.setdefault("X-Content-Type-Options", "nosniff")
-                headers.setdefault("Referrer-Policy", "same-origin")
-                headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+                for name, value in extra.items():
+                    headers.setdefault(name, value)
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
