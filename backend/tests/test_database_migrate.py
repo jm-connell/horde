@@ -581,3 +581,32 @@ def test_tag_and_search_triggers_follow_every_writer(session, add_video):
     )
     assert rows("SELECT count(*) FROM video_tags") == [(0,)]
     assert rows("SELECT count(*) FROM videos_fts") == [(0,)]
+
+
+EXPECTED_TRIGGERS = {
+    "trg_videos_tags_insert",
+    "trg_videos_tags_update",
+    "trg_ai_meta_tags_insert",
+    "trg_ai_meta_tags_update",
+    "trg_ai_meta_tags_delete",
+    "trg_videos_fts_insert",
+    "trg_videos_fts_update",
+    "trg_videos_fts_delete",
+}
+
+
+def test_derived_data_triggers_exist_at_head(init_db):
+    """SQLite drops a table's triggers when batch_alter_table rebuilds the table."""
+    with init_db["engine"].connect() as conn:
+        found = {
+            row[0]
+            for row in conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+            )
+        }
+    assert found == EXPECTED_TRIGGERS, (
+        "The set of triggers changed. Any migration that rebuilds `videos` or "
+        "`video_ai_meta` (batch_alter_table drops and renames the table) must "
+        "recreate the video_tags and videos_fts triggers and refill videos_fts, "
+        "or tags and search silently go stale. See docs/design/sqlite-and-migrations.md."
+    )

@@ -207,3 +207,37 @@ def test_accented_and_non_latin_titles_are_searchable(session, add_video):
     # Whole words only: a prefix of an accented word is not a match.
     assert ids("caf") == []
     assert ids("stra") == []
+
+
+def test_ai_meta_updates_and_deletes_reclassify_the_tag_source(session, add_video):
+    video = add_video(title="Provenance", tags=["alpha", "beta"])
+    session.add(VideoAiMeta(video_id=video.id, ai_tags='["alpha"]', user_tags="[]"))
+    session.commit()
+
+    def sources():
+        return dict(
+            session.connection()
+            .execute(text("SELECT tag, source FROM video_tags"))
+            .fetchall()
+        )
+
+    assert sources() == {"alpha": "ai", "beta": "source"}
+    session.connection().execute(
+        text("UPDATE video_ai_meta SET user_tags = '[\"beta\"]', ai_tags = '[]'")
+    )
+    assert sources() == {"alpha": "source", "beta": "user"}
+    session.connection().execute(text("DELETE FROM video_ai_meta"))
+    assert sources() == {"alpha": "source", "beta": "source"}
+
+
+def test_malformed_tags_json_at_runtime_yields_no_rows_and_does_not_raise(
+    session, add_video
+):
+    video = add_video(title="Fragile", tags=["fine"])
+    conn = session.connection()
+    for bad in ("not json", '{"a": 1}', "[1, null, {}]", ""):
+        conn.execute(
+            text("UPDATE videos SET tags = :t WHERE id = :i"), {"t": bad, "i": video.id}
+        )
+        assert conn.execute(text("SELECT count(*) FROM video_tags")).scalar() == 0
+    assert [v.id for v in library.query_videos(session, q="fragile")] == [video.id]

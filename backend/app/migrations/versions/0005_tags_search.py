@@ -4,7 +4,8 @@
   the JSON ``videos.tags`` column. ``videos.tags`` stays the column the
   application writes (it keeps order and spelling and is what the API returns);
   triggers rebuild a video's ``video_tags`` rows whenever ``videos.tags`` or the
-  ``ai_tags`` / ``user_tags`` lists in ``video_ai_meta`` change, so no writer can
+  ``ai_tags`` / ``user_tags`` lists in ``video_ai_meta`` change (or the metadata
+  row is deleted, which turns its tags back into ``source``), so no writer can
   forget to keep the two in step. ``source`` is ``user`` when the tag is in
   ``user_tags``, ``ai`` when it is in ``ai_tags``, otherwise ``source``.
 * ``videos_fts`` (FTS5: title, description, notes, channel, tags) with triggers,
@@ -100,6 +101,10 @@ def _create_tag_triggers() -> None:
         "CREATE TRIGGER trg_ai_meta_tags_update "
         "AFTER UPDATE OF ai_tags, user_tags ON video_ai_meta BEGIN\n"
         f"{_retag('NEW.video_id')}\nEND"
+    )
+    op.execute(
+        "CREATE TRIGGER trg_ai_meta_tags_delete AFTER DELETE ON video_ai_meta BEGIN\n"
+        f"{_retag('OLD.video_id')}\nEND"
     )
 
 
