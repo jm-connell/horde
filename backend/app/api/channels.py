@@ -503,7 +503,7 @@ def channel_catalog_search(
         channel_url = library.resolve_channel_url(session, channel_name)
 
     global_search = not channel_url
-    if global_search:
+    if global_search or channel_url is None:
         raw_entries = channel_catalog.search_all_catalogs(
             session, q, limit=limit, semantic=semantic
         )
@@ -574,6 +574,7 @@ def channel_feed(
     indexing = False
 
     if live:
+        live_error: Exception | None
         # Blocking YouTube fetch — used as a soft refresh after catalog paint.
         try:
             data = channel_catalog.sync_feed_head(
@@ -844,6 +845,9 @@ def channel_feed(
     else:
         indexing = bool(progress.get("indexing"))
 
+    catalog_indexed = data.get("catalog_indexed")
+    if catalog_indexed is None:
+        catalog_indexed = progress.get("catalog_indexed") or 0
     return ChannelFeedPage(
         channel=channel_name or data.get("channel"),
         channel_url=data.get("channel_url") or channel_url,
@@ -851,11 +855,7 @@ def channel_feed(
         has_more=bool(data.get("has_more")),
         indexing=indexing,
         from_catalog=from_catalog,
-        catalog_indexed=int(
-            data.get("catalog_indexed")
-            if data.get("catalog_indexed") is not None
-            else progress.get("catalog_indexed") or 0
-        ),
+        catalog_indexed=int(catalog_indexed),
         catalog_total=(
             data.get("catalog_total")
             if data.get("catalog_total") is not None

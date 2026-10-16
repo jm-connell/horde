@@ -8,7 +8,7 @@ from collections.abc import Callable, Mapping
 from fastapi import HTTPException
 from sqlmodel import Session
 
-from ..models import UserVideoState, Video
+from ..models import UserVideoState, Video, require_id
 from ..response_schemas import VideoPage
 from ..schemas import VideoRead
 from ..services import library, user_state
@@ -84,12 +84,13 @@ def build_page(
     next_cursor = None
     if more and rows:
         last = rows[-1]
+        last_id = require_id(last)
         if keyset:
             next_cursor = keyset_cursor(
                 sort=sort,
                 order=order,
-                value=library.sort_value(last, sort, states.get(last.id), seed or 0),
-                last_id=last.id,
+                value=library.sort_value(last, sort, states.get(last_id), seed or 0),
+                last_id=last_id,
                 seed=seed if sort == "random" else None,
             )
         else:

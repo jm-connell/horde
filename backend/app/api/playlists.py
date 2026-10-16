@@ -5,11 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import delete, func
 from sqlalchemy import update as sa_update
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..auth import current_user, require_permission
 from ..context import get_session
-from ..models import Playlist, PlaylistItem, PlaylistSource, Video
+from ..models import Playlist, PlaylistItem, PlaylistSource, Video, require_id
 from ..openapi_responses import IMAGE_JPEG, RAW
 from ..schemas import (
     BulkPlaylistAdd,
@@ -59,7 +59,7 @@ def _is_public_url(url: str) -> bool:
 def _item_count(session: Session, playlist_id: int) -> int:
     return (
         session.scalar(
-            select(func.count(PlaylistItem.id)).where(
+            select(func.count(col(PlaylistItem.id))).where(
                 PlaylistItem.playlist_id == playlist_id
             )
         )
@@ -77,7 +77,9 @@ def _library_video_id_for_url(session: Session, raw_url: str) -> int | None:
     candidates = [value for value in (cleaned, raw_url.strip()) if value]
     if not candidates:
         return None
-    row = session.exec(select(Video).where(Video.source_url.in_(candidates))).first()
+    row = session.exec(
+        select(Video).where(col(Video.source_url).in_(candidates))
+    ).first()
     if row is not None and row.id is not None:
         return row.id
     return None
@@ -88,7 +90,7 @@ def _playlist_items(session: Session, playlist_id: int) -> list[PlaylistItem]:
         session.exec(
             select(PlaylistItem)
             .where(PlaylistItem.playlist_id == playlist_id)
-            .order_by(PlaylistItem.position)
+            .order_by(col(PlaylistItem.position))
         ).all()
     )
 
@@ -97,7 +99,7 @@ def _thumb_ok(session: Session, video_ids: list[int]) -> dict[int, bool]:
     unique = list(dict.fromkeys(vid for vid in video_ids if vid is not None))
     if not unique:
         return {}
-    videos = session.exec(select(Video).where(Video.id.in_(unique))).all()
+    videos = session.exec(select(Video).where(col(Video.id).in_(unique))).all()
     found = {video.id: video for video in videos}
     out: dict[int, bool] = {}
     for vid in unique:
@@ -116,7 +118,7 @@ def _member_video_ids(session: Session, items: list[PlaylistItem]) -> list[int]:
         return []
     existing = {
         video.id
-        for video in session.exec(select(Video).where(Video.id.in_(ordered))).all()
+        for video in session.exec(select(Video).where(col(Video.id).in_(ordered))).all()
     }
     return [vid for vid in ordered if vid in existing]
 
@@ -130,7 +132,7 @@ def _to_playlist_read(
     thumbs: dict[int, bool] | None = None,
 ) -> PlaylistRead:
     if items is None:
-        items = _playlist_items(session, playlist.id)
+        items = _playlist_items(session, require_id(playlist))
     if members is None:
         members = _member_video_ids(session, items)
     if thumbs is None:
@@ -147,7 +149,7 @@ def _to_playlist_read(
         thumb_video is not None and thumbs.get(thumb_video, False)
     )
     return PlaylistRead(
-        id=playlist.id,
+        id=require_id(playlist),
         name=playlist.name,
         description=playlist.description,
         source_type=playlist.source_type,
@@ -179,7 +181,7 @@ def _resolved_cover_file(session: Session, playlist: Playlist) -> Path | None:
     custom = resolve_thumbnail_file(playlist.cover_path)
     if custom is not None:
         return custom
-    items = _playlist_items(session, playlist.id)
+    items = _playlist_items(session, require_id(playlist))
     members = _member_video_ids(session, items)
     pinned = (
         playlist.cover_video_id if playlist.cover_video_id in set(members) else None
@@ -197,7 +199,7 @@ def _ordered_videos(session: Session, playlist_id: int) -> list[Video]:
     items = session.exec(
         select(PlaylistItem)
         .where(PlaylistItem.playlist_id == playlist_id)
-        .order_by(PlaylistItem.position)
+        .order_by(col(PlaylistItem.position))
     ).all()
     videos: list[Video] = []
     for item in items:
@@ -258,7 +260,7 @@ def _playlist_reads(
 ) -> list[PlaylistRead]:
     playlists = session.exec(
         select(Playlist)
-        .order_by(Playlist.position, Playlist.created_at.desc())
+        .order_by(col(Playlist.position), col(Playlist.created_at).desc())
         .offset(offset)
         .limit(limit)
     ).all()
@@ -268,8 +270,8 @@ def _playlist_reads(
     grouped: dict[int, list[PlaylistItem]] = {pid: [] for pid in ids}
     items = session.exec(
         select(PlaylistItem)
-        .where(PlaylistItem.playlist_id.in_(ids))
-        .order_by(PlaylistItem.playlist_id, PlaylistItem.position)
+        .where(col(PlaylistItem.playlist_id).in_(ids))
+        .order_by(col(PlaylistItem.playlist_id), col(PlaylistItem.position))
     ).all()
     for item in items:
         grouped.setdefault(item.playlist_id, []).append(item)
@@ -282,7 +284,7 @@ def _playlist_reads(
         {
             video.id
             for video in session.exec(
-                select(Video).where(Video.id.in_(list(dict.fromkeys(video_ids))))
+                select(Video).where(col(Video.id).in_(list(dict.fromkeys(video_ids))))
             ).all()
         }
         if video_ids
@@ -290,7 +292,7 @@ def _playlist_reads(
     )
     out: list[PlaylistRead] = []
     for playlist in playlists:
-        plist = grouped.get(playlist.id, [])
+        plist = grouped.get(require_id(playlist), [])
         members = [item.video_id for item in plist if item.video_id in existing]
         out.append(
             _to_playlist_read(
@@ -410,7 +412,9 @@ def update_playlist(
         cover_id = data["cover_video_id"]
         if cover_id is not None:
             members = set(
-                _member_video_ids(session, _playlist_items(session, playlist.id))
+                _member_video_ids(
+                    session, _playlist_items(session, require_id(playlist))
+                )
             )
             if cover_id not in members:
                 raise HTTPException(
@@ -422,7 +426,7 @@ def update_playlist(
     session.commit()
     session.refresh(playlist)
     if enable_sub is True:
-        start_playlist_sync(playlist.id)
+        start_playlist_sync(require_id(playlist))
     return _to_playlist_read(session, playlist)
 
 
@@ -435,7 +439,9 @@ def delete_playlist(playlist_id: int, session: Session = Depends(get_session)):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    session.execute(delete(PlaylistItem).where(PlaylistItem.playlist_id == playlist_id))
+    session.execute(
+        delete(PlaylistItem).where(col(PlaylistItem.playlist_id) == playlist_id)
+    )
     unlink_playlist_cover(playlist.id, playlist.cover_path)
     session.delete(playlist)
     session.commit()
@@ -479,6 +485,8 @@ def add_item(
             )
             return get_playlist(playlist_id, session, user)
 
+    if video_id is None:
+        raise HTTPException(status_code=400, detail="video_id or url is required")
     if session.get(Video, video_id) is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -702,5 +710,5 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
     session.commit()
     session.refresh(playlist)
 
-    playlist_import.start_playlist_import(playlist.id, entries, quality)
+    playlist_import.start_playlist_import(require_id(playlist), entries, quality)
     return _to_playlist_read(session, playlist)

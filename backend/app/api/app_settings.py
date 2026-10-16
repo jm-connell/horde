@@ -175,7 +175,8 @@ MEMBER_VISIBLE_AI_FIELDS = frozenset(
 
 
 def _ai_read(data: dict[str, Any], *, admin: bool = True) -> AiSettingsRead:
-    raw = data.get("ai") if isinstance(data.get("ai"), dict) else {}
+    ai_value = data.get("ai")
+    raw = ai_value if isinstance(ai_value, dict) else {}
     merged = {**app_settings.AI_DEFAULTS, **raw}
     # Drop internal-only keys (e.g. last_daily_run) before validating.
     allowed = set(AiSettingsRead.model_fields)
@@ -235,7 +236,8 @@ def _settings_read(
     ``admin=False`` trims the AI block to ``MEMBER_VISIBLE_AI_FIELDS``.
     """
     if ui is None:
-        ui = data.get("ui") if isinstance(data.get("ui"), dict) else {}
+        server_ui = data.get("ui")
+        ui = server_ui if isinstance(server_ui, dict) else {}
     try:
         interval = int(data.get("metadata_sync_interval_hours") or 24)
     except (TypeError, ValueError):

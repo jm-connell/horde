@@ -10,7 +10,7 @@ from sqlmodel import Session
 
 from ..auth import require_admin, require_permission
 from ..context import get_session
-from ..models import Video
+from ..models import Video, require_id
 from ..response_schemas import CompatCancelResult, CompatSummaryRead
 from ..schemas import CompatState
 from ..services import compat_rendition
@@ -85,7 +85,7 @@ def request_compat(
 
 def _safari_state(video: Video) -> dict:
     # While a job runs the file is being swapped; do not look for it on disk.
-    busy = compat_rendition.job_state(video.id)
+    busy = compat_rendition.job_state(require_id(video))
     if busy is not None:
         return {**busy, "error": None}
     return compat_rendition.safari_status(video, resolve_media(video))

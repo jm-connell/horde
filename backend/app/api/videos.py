@@ -2,15 +2,16 @@ import bisect
 import logging
 import re
 from pathlib import Path
+from typing import TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
 from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
 from ..context import get_paths, get_session
-from ..models import DownloadJob, JobStatus, User, Video
+from ..models import DownloadJob, JobStatus, User, Video, require_id
 from ..openapi_responses import (
     EVENT_STREAM,
     FILE_DOWNLOAD,
@@ -56,6 +57,7 @@ from ..services.metadata import (
 )
 from ..services.pagination import (
     InvalidCursor,
+    PageRequest,
     keyset_cursor,
     offset_cursor,
     parse_cursor,
@@ -96,6 +98,33 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["videos"])
 
+
+class _Paging(TypedDict):
+    """The keyword arguments ``build_page`` takes from the list endpoint."""
+
+    page: PageRequest
+    sort: str
+    order: str
+    seed: int | None
+    session: Session
+    user_id: int
+
+
+class _Filters(TypedDict):
+    """The keyword arguments ``library.query_videos`` takes from the list endpoint."""
+
+    q: str | None
+    channel: str | None
+    tag: str | None
+    sort: str
+    order: str
+    needs_review: bool
+    continue_watching: bool
+    watched_only: bool
+    seed: int | None
+    user_id: int
+
+
 CHUNK_SIZE = 1024 * 1024
 
 CONTENT_TYPES = {
@@ -135,7 +164,7 @@ def list_videos(
         seed=seed,
         searching=bool(q and not continue_watching and not watched_only),
     )
-    paging = dict(
+    paging = _Paging(
         page=page, sort=sort, order=order, seed=seed, session=session, user_id=user.id
     )
     if q and not continue_watching and not watched_only:
@@ -185,7 +214,7 @@ def list_videos(
         by_id = {
             v.id: v
             for v in session.exec(
-                select(Video).where(Video.id.in_(window_ids))  # type: ignore[attr-defined]
+                select(Video).where(col(Video.id).in_(window_ids))
             ).all()
         }
         # A video deleted since the ranking was cached drops out of the page.
@@ -214,7 +243,7 @@ def list_videos(
             keyset=False,
             **paging,
         )
-    filters = dict(
+    filters = _Filters(
         q=q,
         channel=channel,
         tag=tag,
@@ -295,12 +324,12 @@ def _tag_page_request(cursor: str | None, limit: int, *, sort: str, kind):
 @router.get("/stats/storage", response_model=StorageStats)
 def storage_stats(session: Session = Depends(get_session)):
     video_bytes = session.exec(
-        select(func.coalesce(func.sum(Video.file_size), 0)).where(
+        select(func.coalesce(func.sum(col(Video.file_size)), 0)).where(
             Video.needs_review == False  # noqa: E712 - SQL column comparison, not a Python truth test
         )
     ).one()
     video_count = session.exec(
-        select(func.count(Video.id)).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+        select(func.count(col(Video.id))).where(col(Video.needs_review) == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).one()
     compat_bytes = session.exec(
         select(func.coalesce(func.sum(Video.compat_size), 0)).where(
@@ -314,11 +343,11 @@ def storage_stats(session: Session = Depends(get_session)):
             f.stat().st_size for f in get_paths().thumbnails.glob("*") if f.is_file()
         )
     return StorageStats(
-        total_bytes=int(video_bytes) + int(compat_bytes) + thumbnail_bytes,
-        video_bytes=int(video_bytes),
-        compat_bytes=int(compat_bytes),
+        total_bytes=int(video_bytes or 0) + int(compat_bytes or 0) + thumbnail_bytes,
+        video_bytes=int(video_bytes or 0),
+        compat_bytes=int(compat_bytes or 0),
         thumbnail_bytes=thumbnail_bytes,
-        video_count=int(video_count),
+        video_count=int(video_count or 0),
     )
 
 
@@ -480,7 +509,7 @@ def update_video(
 
             sync_tag_provenance(
                 session,
-                video.id,
+                require_id(video),
                 user_tag=user_tag if isinstance(user_tag, str) else None,
             )
             session.commit()
@@ -593,7 +622,7 @@ def redownload_video(
     session.commit()
     session.refresh(job)
 
-    download_jobs.enqueue_download(job.id)
+    download_jobs.enqueue_download(require_id(job))
     return _to_read(video, session, user_id=user.id)
 
 
@@ -667,6 +696,8 @@ def refresh_metadata(
         raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}") from exc
     session.expire_all()
     video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
     return _to_read(video, session, user_id=user.id)
 
 

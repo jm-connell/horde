@@ -193,10 +193,9 @@ def extract_palette(bg_id: str):
     if path.suffix.lower() == ".webm":
         return {"colors": []}
     try:
-        from PIL import Image  # type: ignore
+        from PIL import Image
 
-        img = Image.open(path)
-        img = img.convert("RGB")
+        img = Image.open(path).convert("RGB")
         img.thumbnail((160, 160))
         quantized = img.quantize(colors=8, method=Image.Quantize.MEDIANCUT)
         palette = quantized.getpalette() or []

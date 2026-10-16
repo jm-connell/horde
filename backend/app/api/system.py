@@ -31,7 +31,7 @@ def _cpu_model() -> str | None:
         import sys
 
         if sys.platform == "win32":
-            import winreg  # type: ignore
+            import winreg
 
             key = winreg.OpenKey(
                 winreg.HKEY_LOCAL_MACHINE,
@@ -96,7 +96,7 @@ def _cpu_model() -> str | None:
 
 def _cpu_temp() -> float | None:
     try:
-        import psutil  # type: ignore
+        import psutil
 
         temps = psutil.sensors_temperatures(fahrenheit=False)
         if not temps:
@@ -131,7 +131,7 @@ def _cpu_ram() -> dict[str, Any]:
         "ram_percent": None,
     }
     try:
-        import psutil  # type: ignore
+        import psutil
 
         out["cpu_percent"] = float(psutil.cpu_percent(interval=None))
         mem = psutil.virtual_memory()

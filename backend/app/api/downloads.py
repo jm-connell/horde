@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..auth import (
     STREAM_KEEPALIVE,
@@ -18,7 +18,14 @@ from ..auth import (
 )
 from ..context import AppContext, get_ctx, get_engine, get_paths, get_session
 from ..errors import CodedHTTPException, extraction_error
-from ..models import DownloadDestination, DownloadJob, JobStatus, Playlist, Video
+from ..models import (
+    DownloadDestination,
+    DownloadJob,
+    JobStatus,
+    Playlist,
+    Video,
+    require_id,
+)
 from ..openapi_responses import EVENT_STREAM, FILE_DOWNLOAD, RAW
 from ..schemas import (
     DownloadBulkCreate,
@@ -96,7 +103,7 @@ def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobR
     height_by_video: dict[int, int | None] = {}
     if video_ids:
         videos = session.exec(
-            select(Video).where(Video.id.in_(list(video_ids)))  # type: ignore[attr-defined]
+            select(Video).where(col(Video.id).in_(list(video_ids)))
         ).all()
         for video in videos:
             if video.id is None:
@@ -110,15 +117,16 @@ def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobR
     for j in jobs:
         if j.status != JobStatus.completed:
             continue
+        job_id = require_id(j)
         if j.video_id is not None:
             prev = latest_by_video.get(j.video_id)
-            if prev is None or j.id > prev:
-                latest_by_video[j.video_id] = j.id
+            if prev is None or job_id > prev:
+                latest_by_video[j.video_id] = job_id
         url_key = (j.url or "").strip()
         if url_key:
             prev = latest_by_url.get(url_key)
-            if prev is None or j.id > prev:
-                latest_by_url[url_key] = j.id
+            if prev is None or job_id > prev:
+                latest_by_url[url_key] = job_id
 
     out: list[DownloadJobRead] = []
     for j in jobs:
@@ -359,7 +367,7 @@ def create_download(
         session.refresh(job)
 
     request_job_metadata(job.id)
-    download_jobs.enqueue_download(job.id)
+    download_jobs.enqueue_download(require_id(job))
     return _enrich_jobs(session, [job])[0]
 
 
@@ -432,7 +440,7 @@ def create_downloads_bulk(
             session.commit()
             session.refresh(job)
         request_job_metadata(job.id)
-        download_jobs.enqueue_download(job.id)
+        download_jobs.enqueue_download(require_id(job))
         jobs.append(job)
 
     return DownloadBulkResult(
@@ -515,7 +523,7 @@ def retry_job(
         session.commit()
         session.refresh(job)
 
-    download_jobs.enqueue_download(job.id)
+    download_jobs.enqueue_download(require_id(job))
     return _enrich_jobs(session, [job])[0]
 
 
@@ -567,6 +575,8 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
             job = session.get(DownloadJob, job_id)
             if job and job.status != JobStatus.downloading:
                 break
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
     session.refresh(job)
     return _enrich_jobs(session, [job])[0]
 
@@ -579,16 +589,18 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
 def dismiss_finished_jobs(session: Session = Depends(get_session)):
     """Remove completed, failed, and cancelled jobs from the list."""
     statement = select(DownloadJob).where(
-        DownloadJob.status.in_(
+        col(DownloadJob.status).in_(
             [JobStatus.completed, JobStatus.error, JobStatus.cancelled]
-        )  # type: ignore[attr-defined]
+        )
     )
     jobs = list(session.exec(statement).all())
     jobs = list(session.exec(statement).all())
     for job in jobs:
         if job.destination == DownloadDestination.device.value:
-            download_staging.cleanup_device_job_files(job.id, job.device_file_path)
-        download_progress.progress_store.pop(job.id, None)
+            download_staging.cleanup_device_job_files(
+                require_id(job), job.device_file_path
+            )
+        download_progress.progress_store.pop(require_id(job), None)
         session.delete(job)
     session.commit()
     return Response(status_code=204)
@@ -607,7 +619,7 @@ def dismiss_job(job_id: int, session: Session = Depends(get_session)):
             detail="Only finished jobs can be removed from the list",
         )
     if job.destination == DownloadDestination.device.value:
-        download_staging.cleanup_device_job_files(job.id, job.device_file_path)
+        download_staging.cleanup_device_job_files(require_id(job), job.device_file_path)
     session.delete(job)
     session.commit()
     download_progress.progress_store.pop(job_id, None)
@@ -619,19 +631,21 @@ def list_jobs(session: Session = Depends(get_session)):
     active = list(
         session.exec(
             select(DownloadJob)
-            .where(DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading]))
-            .order_by(DownloadJob.created_at.asc())
+            .where(
+                col(DownloadJob.status).in_([JobStatus.queued, JobStatus.downloading])
+            )
+            .order_by(col(DownloadJob.created_at).asc())
         ).all()
     )
     recent = list(
         session.exec(
             select(DownloadJob)
             .where(
-                DownloadJob.status.in_(
+                col(DownloadJob.status).in_(
                     [JobStatus.completed, JobStatus.error, JobStatus.cancelled]
                 )
             )
-            .order_by(DownloadJob.created_at.desc())
+            .order_by(col(DownloadJob.created_at).desc())
             .limit(40)
         ).all()
     )

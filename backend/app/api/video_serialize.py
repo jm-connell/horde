@@ -7,9 +7,10 @@ import re
 from collections.abc import Iterable, Mapping
 from collections.abc import Set as AbstractSet
 from pathlib import Path
+from typing import Any
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..context import get_paths
 from ..models import (
@@ -20,8 +21,15 @@ from ..models import (
     Video,
     VideoAiMeta,
     as_utc,
+    require_id,
 )
-from ..schemas import ChapterRead, CompatState, VideoRead
+from ..schemas import (
+    ChapterRead,
+    CompatState,
+    SearchMatchReason,
+    SubtitleTrack,
+    VideoRead,
+)
 from ..services import chapters as chapters_svc
 from ..services import library, user_state
 from ..services.metadata import sprites_exist
@@ -33,8 +41,8 @@ def safe_filename(name: str) -> str:
     return cleaned or "video"
 
 
-def _media_fields(video: Video, *, full: bool) -> dict:
-    fields = {
+def _media_fields(video: Video, *, full: bool) -> dict[str, Any]:
+    fields: dict[str, Any] = {
         "vcodec": video.vcodec,
         "acodec": video.acodec,
         "codec_string": video.codec_string,
@@ -100,7 +108,7 @@ def _load_metas(session: Session, rows: list[Video]) -> dict[int, VideoAiMeta]:
     for start in range(0, len(ids), 500):
         chunk = ids[start : start + 500]
         for meta in session.exec(
-            select(VideoAiMeta).where(VideoAiMeta.video_id.in_(chunk))  # type: ignore[attr-defined]
+            select(VideoAiMeta).where(col(VideoAiMeta.video_id).in_(chunk))
         ):
             found[meta.video_id] = meta
     return found
@@ -147,10 +155,15 @@ def to_read(
     nobody's history. Pass ``states``, ``metas`` and ``sprite_ids`` (see
     ``to_read_many``) when serializing a list, so no row costs its own query or stat.
     """
+    reason = (
+        SearchMatchReason.model_validate(match_reason)
+        if match_reason is not None
+        else None
+    )
     watch = _watch_fields(video, session, user_id, states)
     if compact:
         return VideoRead(
-            id=video.id,
+            id=require_id(video),
             title=video.title,
             channel=video.channel,
             channel_url=video.channel_url,
@@ -182,7 +195,7 @@ def to_read(
             title_is_custom=video.title_is_custom,
             description_is_custom=video.description_is_custom,
             subtitles_pending=video.subtitles_pending,
-            match_reason=match_reason,
+            match_reason=reason,
         )
     ai_tags: list[str] = []
     user_tags: list[str] = []
@@ -234,7 +247,7 @@ def to_read(
                 select(AiJob).where(
                     AiJob.video_id == video.id,
                     AiJob.kind == AiJobKind.summarize,
-                    AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running]),  # type: ignore[attr-defined]
+                    col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running]),
                 )
             ).first()
             processing_summary = summary_job is not None
@@ -242,7 +255,7 @@ def to_read(
                 select(AiJob).where(
                     AiJob.video_id == video.id,
                     AiJob.kind == AiJobKind.chapters,
-                    AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running]),  # type: ignore[attr-defined]
+                    col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running]),
                 )
             ).first()
             processing_chapters = chapter_job is not None
@@ -252,7 +265,7 @@ def to_read(
     ]
     chapters_source = source
     return VideoRead(
-        id=video.id,
+        id=require_id(video),
         title=video.title,
         channel=video.channel,
         channel_url=video.channel_url,
@@ -265,7 +278,9 @@ def to_read(
         has_thumbnail=bool(video.thumbnail_path),
         has_sprites=_has_sprites(video, sprite_ids),
         subtitles=[
-            {"lang": t.get("lang"), "auto": t.get("auto", False)}
+            SubtitleTrack.model_validate(
+                {"lang": t.get("lang"), "auto": t.get("auto", False)}
+            )
             for t in library.parse_subtitles(video.subtitles)
         ],
         file_path=video.file_path,
@@ -301,7 +316,7 @@ def to_read(
         processing_chapters=processing_chapters,
         chapters=resolved_chapters,
         chapters_source=chapters_source,
-        match_reason=match_reason,
+        match_reason=reason,
     )
 
 

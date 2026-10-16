@@ -7,7 +7,7 @@ from sqlmodel import Session
 
 from ..auth import require_admin
 from ..context import get_session
-from ..models import User, as_utc
+from ..models import User, as_utc, require_id
 from ..schemas import PermissionInfo, UserCreate, UserRead, UserUpdate
 from ..services.auth import accounts, permissions
 from ..services.auth.accounts import AuthUser
@@ -19,12 +19,12 @@ router = APIRouter(
 
 def _read(user: User) -> UserRead:
     return UserRead(
-        id=user.id,  # type: ignore[arg-type]
+        id=require_id(user),
         username=user.username,
         is_admin=user.is_admin,
         disabled=user.disabled,
         permissions=sorted(accounts.effective_permissions(user)),
-        created_at=as_utc(user.created_at) or user.created_at,
+        created_at=as_utc(user.created_at),
         last_login_at=as_utc(user.last_login_at),
     )
 

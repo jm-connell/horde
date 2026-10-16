@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..auth import current_user, require_permission
 from ..config import VIDEO_EXTENSIONS
@@ -240,7 +240,7 @@ def duplicate_groups(
         v.id: v
         for v in session.exec(
             select(Video).where(
-                Video.id.in_({vid for g in window for vid in g.video_ids})  # type: ignore[attr-defined]
+                col(Video.id).in_({vid for g in window for vid in g.video_ids})
             )
         ).all()
     }
@@ -301,4 +301,7 @@ def duplicate_groups(
         if more
         else None
     )
-    return DuplicateGroupPage(items=out, next_cursor=next_cursor)
+    return DuplicateGroupPage(
+        items=[DuplicateGroupRead.model_validate(entry) for entry in out],
+        next_cursor=next_cursor,
+    )
