@@ -38,6 +38,8 @@ class RequestIdMiddleware:
                 break
         request_id = incoming or uuid.uuid4().hex[:16]
         token = request_id_var.set(request_id)
+        # For handlers that run after this middleware has unwound (the 500 handler).
+        scope.setdefault("state", {})["request_id"] = request_id
         stats = (
             getattr(scope["app"].state, "request_stats", None)
             if "app" in scope

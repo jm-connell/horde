@@ -31,25 +31,19 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi import FastAPI
+from fastapi.responses import Response
 from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .auth import (
-    AuthMiddleware,
-    CodedHTTPException,
-    account_error_handler,
-    coded_http_exception_handler,
-)
+from .auth import AuthMiddleware
+from .errors import error_response, install_error_handlers
 from .request_context import RequestIdMiddleware
 from .services import limits, uploads
-from .services.auth.accounts import AccountError
 from .services.auth.runtime import AuthConfig, AuthRuntime
 from .services.log_redaction import install_log_redaction
 from .services.metrics import RequestStats
-from .services.url_safety import UnsafeUrlError
 
 logger = logging.getLogger(__name__)
 
@@ -198,9 +192,9 @@ def _header(scope: Scope, name: str) -> str | None:
 
 
 async def _reject(
-    scope: Scope, receive: Receive, send: Send, status: int, detail: str
+    scope: Scope, receive: Receive, send: Send, status: int, detail: str, code: str
 ) -> None:
-    response = JSONResponse({"detail": detail}, status_code=status)
+    response = error_response(status, detail, code)
     await response(scope, receive, send)
 
 
@@ -258,6 +252,7 @@ class HostAllowlistMiddleware:
             f"Host {host!r} is not allowed. If you reach Horde under this name "
             f"(for example through a reverse proxy), add it to the "
             f"{ALLOWED_HOSTS_ENV} environment variable.",
+            "host_not_allowed",
         )
 
 
@@ -302,7 +297,14 @@ class BodyLimitMiddleware:
             return
         declared = _header(scope, "content-length")
         if declared and declared.isdigit() and int(declared) > limit:
-            await _reject(scope, receive, send, 413, "Request body is too large")
+            await _reject(
+                scope,
+                receive,
+                send,
+                413,
+                "Request body is too large",
+                "payload_too_large",
+            )
             return
 
         received = 0
@@ -396,7 +398,7 @@ class CsrfMiddleware:
         if problem is None:
             await self.app(scope, receive, send)
             return
-        await _reject(scope, receive, send, 403, problem)
+        await _reject(scope, receive, send, 403, problem, "csrf_rejected")
 
     @staticmethod
     def _problem(scope: Scope) -> str | None:
@@ -444,10 +446,6 @@ def build_stack(policy: HostPolicy) -> list[MiddlewareSpec]:
     ]
 
 
-async def _unsafe_url_handler(_request: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse({"detail": str(exc)}, status_code=400)
-
-
 def install_security(
     app: FastAPI,
     *,
@@ -466,9 +464,7 @@ def install_security(
         build_stack(policy)
     ):  # add_middleware wraps: last is outermost
         app.add_middleware(spec.cls, **spec.kwargs)
-    app.add_exception_handler(UnsafeUrlError, _unsafe_url_handler)
-    app.add_exception_handler(CodedHTTPException, coded_http_exception_handler)
-    app.add_exception_handler(AccountError, account_error_handler)
+    install_error_handlers(app)
     install_log_redaction()
     app.state.auth = AuthRuntime(config=auth_config or AuthConfig.from_env())
     app.state.extraction_gate = limits.new_extraction_gate()

@@ -16,6 +16,7 @@ from ..auth import (
 )
 from ..config import DOWNLOADS_DIR
 from ..database import engine, get_session
+from ..errors import CodedHTTPException, extraction_error
 from ..models import DownloadDestination, DownloadJob, JobStatus, Playlist, Video
 from ..schemas import (
     DownloadBulkCreate,
@@ -70,11 +71,11 @@ _CONTENT_TYPES = {
 }
 
 
-def _duplicate_detail(code: str) -> dict[str, str]:
-    return {
-        "code": code,
-        "message": downloader.DUPLICATE_MESSAGES.get(code, "Already added"),
-    }
+def _duplicate_error(code: str) -> CodedHTTPException:
+    """409 whose ``code`` says why the link was refused (already_queued, ...)."""
+    return CodedHTTPException(
+        409, downloader.DUPLICATE_MESSAGES.get(code, "Already added"), code
+    )
 
 
 def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobRead]:
@@ -186,11 +187,8 @@ def preview_download(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     except HTTPException:
         raise  # 429 / 504 from the gate
     except MembersOnlyError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=http_detail_for_error(
-                exc, prefix="Could not read link", url=cleaned
-            ),
+        raise extraction_error(
+            400, http_detail_for_error(exc, prefix="Could not read link", url=cleaned)
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -199,8 +197,8 @@ def preview_download(url: str, gate: ExtractionGate = Depends(extraction_gate)):
         detail = http_detail_for_error(exc, prefix="Could not read link", url=cleaned)
         if kind == ERROR_KIND_UNKNOWN:
             logger.exception("download preview extract failed for %r", url)
-            raise HTTPException(status_code=500, detail=detail) from exc
-        raise HTTPException(status_code=400, detail=detail) from exc
+            raise extraction_error(500, detail) from exc
+        raise extraction_error(400, detail) from exc
 
 
 @router.get("/queue/status", response_model=DownloadQueueStatus)
@@ -323,7 +321,7 @@ def create_download(
                         session.commit()
                         session.refresh(active)
                     return _enrich_jobs(session, [active])[0]
-            raise HTTPException(status_code=409, detail=_duplicate_detail(code))
+            raise _duplicate_error(code)
 
         job = DownloadJob(
             url=url,

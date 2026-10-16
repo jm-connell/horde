@@ -35,6 +35,7 @@ from .api import (
 from .auth import current_user, ensure_admin, require_admin
 from .config import DATA_DIR, DOWNLOADS_DIR, ensure_dirs, short_git_sha
 from .database import engine, init_db
+from .errors import error_response
 from .logging_config import configure_logging
 from .schemas import ReadyResponse
 from .security import install_security
@@ -531,7 +532,7 @@ def mount_frontend(target: FastAPI, frontend_dir: Path, wiki_dir: Path) -> None:
         if full_path.startswith("api/") or full_path == "sw.js":
             # Unknown API routes / missing worker must not look like a page:
             # the service worker would cache index.html as JSON or a script.
-            return JSONResponse({"detail": "Not Found"}, status_code=404)
+            return error_response(404, "Not Found", "not_found")
         return _spa_file_response(frontend_dir / "index.html")
 
 

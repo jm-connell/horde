@@ -25,17 +25,17 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import cast
 from urllib.parse import parse_qs
 
 import anyio.to_thread
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 from fastapi.responses import JSONResponse
 from sqlmodel import Session
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import database
 from .e2e_mode import enabled as e2e_enabled
+from .errors import CodedHTTPException, error_response
 from .services.auth import accounts, media_token
 from .services.auth.accounts import AuthUser
 from .services.auth.permissions import ALL_PERMISSIONS, PERMISSION_TABLE
@@ -86,9 +86,7 @@ def signed_media_video_id(path: str) -> int | None:
 
 
 def auth_required_response() -> JSONResponse:
-    return JSONResponse(
-        {"detail": "Sign in to continue", "code": "auth_required"}, status_code=401
-    )
+    return error_response(401, "Sign in to continue", "auth_required")
 
 
 class AuthMiddleware:
@@ -192,32 +190,6 @@ def ensure_default_admin(runtime: AuthRuntime, session: Session) -> AuthUser | N
 
 
 # --- Dependencies ------------------------------------------------------------
-
-
-class CodedHTTPException(HTTPException):
-    """An HTTP error whose body also carries a machine-readable ``code``."""
-
-    def __init__(self, status_code: int, detail: str, code: str, **kwargs) -> None:
-        super().__init__(status_code=status_code, detail=detail, **kwargs)
-        self.code = code
-
-
-async def coded_http_exception_handler(
-    _request: Request, exc: Exception
-) -> JSONResponse:
-    coded = cast(CodedHTTPException, exc)
-    return JSONResponse(
-        {"detail": coded.detail, "code": coded.code},
-        status_code=coded.status_code,
-        headers=coded.headers,
-    )
-
-
-async def account_error_handler(_request: Request, exc: Exception) -> JSONResponse:
-    error = cast(accounts.AccountError, exc)
-    return JSONResponse(
-        {"detail": error.message, "code": error.code}, status_code=error.status_code
-    )
 
 
 def current_user(request: Request) -> AuthUser:

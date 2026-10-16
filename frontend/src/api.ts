@@ -1,4 +1,3 @@
-import { formatValidationDetail } from "./apiErrors";
 import type {
   AiJobRow,
   AiProcessResult,
@@ -45,20 +44,43 @@ import type {
 import { connectivity } from "./offline/connectivity";
 import { getItem as getOfflineItem, putPendingProgress } from "./offline/db";
 
+/** One entry of a 422 response's `fields`: where the problem is and what it is. */
+export interface ApiErrorField {
+  loc: (string | number)[];
+  msg: string;
+}
+
+/**
+ * Every error response has the same body (see backend/app/errors.py):
+ * `{detail, code, fields?, extra?}`. `message` is `detail`; branch on `code`.
+ */
 export class ApiError extends Error {
-  errorKind?: string;
   code?: string;
   status: number;
+  fields?: ApiErrorField[];
+  extra?: Record<string, unknown>;
 
   constructor(
     message: string,
-    extra?: { errorKind?: string; code?: string; status?: number }
+    extra?: {
+      code?: string;
+      status?: number;
+      fields?: ApiErrorField[];
+      extra?: Record<string, unknown>;
+    }
   ) {
     super(message);
     this.name = "ApiError";
-    this.errorKind = extra?.errorKind;
     this.code = extra?.code;
     this.status = extra?.status ?? 0;
+    this.fields = extra?.fields;
+    this.extra = extra?.extra;
+  }
+
+  /** Stable failure kind of a link-reading error (`extra.error_kind`). */
+  get errorKind(): string | undefined {
+    const kind = this.extra?.error_kind;
+    return typeof kind === "string" ? kind : undefined;
   }
 }
 
@@ -101,14 +123,14 @@ export const PERMISSION_DENIED_EVENT = "horde:permission-denied";
 function notifyAuthFailure(
   status: number,
   code: string | undefined,
-  detail: unknown
+  message: string
 ): void {
   if (status === 401 && code === "auth_required") {
     window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
   } else if (status === 403 && code === "permission_denied") {
     window.dispatchEvent(
       new CustomEvent(PERMISSION_DENIED_EVENT, {
-        detail: typeof detail === "string" ? detail : "Not allowed",
+        detail: message || "Not allowed",
       })
     );
   }
@@ -120,6 +142,26 @@ function jsonInit(method: string, body: unknown): RequestInit {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   };
+}
+
+/** Build the ApiError for a non-2xx response, notifying auth listeners. */
+async function apiErrorFrom(resp: Response): Promise<ApiError> {
+  let message = resp.statusText;
+  let code: string | undefined;
+  let fields: ApiErrorField[] | undefined;
+  let extra: Record<string, unknown> | undefined;
+  try {
+    const body = await resp.json();
+    if (typeof body.detail === "string") message = body.detail;
+    if (typeof body.code === "string") code = body.code;
+    if (Array.isArray(body.fields)) fields = body.fields;
+    if (typeof body.extra === "object" && body.extra !== null)
+      extra = body.extra;
+  } catch {
+    // non-JSON error body; keep status text
+  }
+  notifyAuthFailure(resp.status, code, message);
+  return new ApiError(message, { status: resp.status, code, fields, extra });
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -137,37 +179,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     throw err;
   }
   connectivity.reportRequest(performance.now() - t0, false);
-  if (!resp.ok) {
-    let detail: unknown = resp.statusText;
-    let topCode: string | undefined;
-    try {
-      const body = await resp.json();
-      detail = body.detail ?? detail;
-      if (typeof body.code === "string") topCode = body.code;
-    } catch {
-      // non-JSON error body; keep status text
-    }
-    notifyAuthFailure(resp.status, topCode, detail);
-    const validation = formatValidationDetail(detail);
-    if (validation) throw new ApiError(validation, { status: resp.status });
-    if (typeof detail === "object" && detail !== null) {
-      const d = detail as {
-        message?: string;
-        error_kind?: string;
-        detail?: string;
-        code?: string;
-      };
-      throw new ApiError(d.message || d.detail || JSON.stringify(detail), {
-        errorKind: d.error_kind,
-        code: d.code,
-        status: resp.status,
-      });
-    }
-    throw new ApiError(typeof detail === "string" ? detail : String(detail), {
-      status: resp.status,
-      code: topCode,
-    });
-  }
+  if (!resp.ok) throw await apiErrorFrom(resp);
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
 }
@@ -974,20 +986,7 @@ export const api = {
         signal: opts.signal,
       })
     );
-    if (!resp.ok) {
-      let detail = resp.statusText;
-      try {
-        const body = await resp.json();
-        detail = body.detail ?? detail;
-      } catch {
-        // non-JSON
-      }
-      throw new Error(
-        typeof detail === "string"
-          ? detail
-          : (formatValidationDetail(detail) ?? JSON.stringify(detail))
-      );
-    }
+    if (!resp.ok) throw await apiErrorFrom(resp);
     if (!resp.body) {
       throw new Error("No response body");
     }

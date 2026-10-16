@@ -7,14 +7,31 @@ Signed-in clients can mutate the library; server settings need an administrator 
 
 ## Conventions
 
-| Topic            | Detail                            |
-| ---------------- | --------------------------------- |
-| Prefix           | `/api/...` for application routes |
-| Auth             | None                              |
-| Interactive docs | **`/docs`** (Swagger UI)          |
-| OpenAPI schema   | **`/openapi.json`**               |
+| Topic            | Detail                                                            |
+| ---------------- | ----------------------------------------------------------------- |
+| Prefix           | `/api/...` for application routes                                 |
+| Auth             | Session cookie; see [Accounts and sign-in](../ops/authentication.md) |
+| Errors           | One envelope for every error, see below                           |
+| Interactive docs | **`/docs`** (Swagger UI)                                          |
+| OpenAPI schema   | **`/openapi.json`**                                               |
 
 Use `/docs` as the live catalog of request/response shapes. This wiki does **not** enumerate every endpoint.
+
+### Errors
+
+Every error response, whichever layer raised it (host check, CSRF, sign-in, validation, a route, or an unexpected crash), has the same JSON body:
+
+```json
+{ "detail": "Already in library", "code": "already_in_library" }
+```
+
+| Field        | Meaning                                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `detail`     | Human readable message. Always a string.                                                                             |
+| `code`       | Stable `snake_case` identifier to branch on (`auth_required`, `permission_denied`, `already_queued`, `not_found`, `validation_error`, `internal_error`, ...). When a route does not name one, it is derived from the status (`404` is `not_found`). |
+| `fields`     | Validation errors (`422`, `code: validation_error`) only: a list of `{loc, msg}`. `detail` already joins them into a sentence. |
+| `extra`      | Optional machine readable context. Link-reading failures carry `extra.error_kind` (`pot`, `members_only`, ...).      |
+| `request_id` | Unexpected errors only (`500`, `code: internal_error`): the same value as the `X-Request-ID` header, to find the traceback in the [log](../ops/logging.md). The message never contains internals. |
 
 ## Notable patterns
 

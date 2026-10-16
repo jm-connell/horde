@@ -79,9 +79,9 @@ def test_enqueue_existing_youtube_is_already_in_library(client, add_video):
         json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
     )
     assert created.status_code == 409
-    detail = created.json()["detail"]
-    assert detail["code"] == "already_in_library"
-    assert detail["message"] == "Already in library"
+    body = created.json()
+    assert body["code"] == "already_in_library"
+    assert body["detail"] == "Already in library"
     listed = client.get("/api/downloads").json()
     assert existing.id not in [row.get("replace_video_id") for row in listed]
     assert [row for row in listed if row.get("status") == "queued"] == []
@@ -265,7 +265,7 @@ def test_create_download_reuses_active_job(client):
     second = client.post("/api/downloads", json=payload)
     assert first.status_code == 200
     assert second.status_code == 409
-    assert second.json()["detail"]["code"] == "already_queued"
+    assert second.json()["code"] == "already_queued"
     listed = client.get("/api/downloads").json()
     assert len([row for row in listed if row["status"] == "queued"]) == 1
 

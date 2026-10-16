@@ -14,6 +14,7 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 from ..database import get_session
+from ..errors import extraction_error
 from ..schemas import StreamPreviewMeta
 from ..services import library, stream_preview
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
@@ -363,11 +364,9 @@ def preview_meta(
     except HTTPException:
         raise  # 429 / 504 from the gate
     except MembersOnlyError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=http_detail_for_error(
-                exc, prefix="Could not load preview", url=cleaned
-            ),
+        raise extraction_error(
+            400,
+            http_detail_for_error(exc, prefix="Could not load preview", url=cleaned),
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -378,8 +377,8 @@ def preview_meta(
         )
         if kind == ERROR_KIND_UNKNOWN:
             logger.exception("stream preview meta failed for %r", cleaned)
-            raise HTTPException(status_code=500, detail=detail) from exc
-        raise HTTPException(status_code=400, detail=detail) from exc
+            raise extraction_error(500, detail) from exc
+        raise extraction_error(400, detail) from exc
 
     library_video_id = None
     yt_id = meta.get("id")
@@ -514,9 +513,9 @@ def preview_manifest(request: Request, url: str = Query(...)):
         xml = stream_preview.build_dash_manifest(session)
     except Exception as exc:
         logger.exception("preview manifest failed for %r", cleaned)
-        raise HTTPException(
-            status_code=400,
-            detail=http_detail_for_error(
+        raise extraction_error(
+            400,
+            http_detail_for_error(
                 exc, prefix="Could not build preview manifest", url=cleaned
             ),
         ) from exc
