@@ -456,7 +456,12 @@ def _member_health(payload: dict[str, Any]) -> dict[str, Any]:
     """Drop provider internals (address, models, error texts) for non-administrators."""
     trimmed = dict(payload)
     if trimmed.get("ollama"):
-        trimmed["ollama"] = {**trimmed["ollama"], "base_url": None, "last_error": None}
+        trimmed["ollama"] = {
+            **trimmed["ollama"],
+            "base_url": None,
+            "last_error": None,
+            "pulling": None,
+        }
     if trimmed.get("openrouter"):
         trimmed["openrouter"] = {
             **trimmed["openrouter"],

@@ -256,6 +256,8 @@ def test_ai_status_hides_provider_internals_from_a_member(client, member_client)
     assert member["openrouter_model"] == ""
     assert member["base_url"] is None and member["last_error"] is None
     assert member["recent_failures"] == []
+    assert member["pulling"] == [] and member["blocked_reason"] is None
+    assert member["llm_backend"] is None and member["embed_backend"] is None
     assert admin["openrouter_model"] == "vendor/private-model"
 
 
@@ -269,6 +271,7 @@ def test_health_hides_provider_internals_from_a_member(client, member_client):
     assert seen["openrouter"]["model"] is None
     assert seen["ollama"]["base_url"] is None
     assert seen["ollama"]["last_error"] is None
+    assert not seen["ollama"]["pulling"]
     assert full["openrouter"]["model"] == "vendor/private-model"
 
 
