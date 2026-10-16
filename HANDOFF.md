@@ -85,3 +85,8 @@ Fix every review finding plus week-1, weeks 2–4 and months 2–3 items. Add au
 ## Test-run hygiene (learned the hard way)
 - NEVER `pkill -f pytest` / `pkill -f <script>`: it kills your own shell (exit 144) and other agents' runs. Kill by PID.
 - Concurrent pytest sessions MUST use distinct `--basetemp` (they share /tmp/pytest-of-root and delete each other's dirs → spurious "unable to open database file").
+
+
+## Progress log
+- 01:05 UTC Oct 16: WP-G auth MERGED (integration tip b6c9a5b, pushed). Remote branch deletion is blocked by the proxy (403) -> owner must delete backup/* branches manually at the end.
+- Launched fresh agents: J1-finish (/home/user/wt/dlsplit, rebase onto b6c9a5b + gate + per-commit), WP-M (/home/user/wt/model, ports 8991), WP-H1 (/home/user/wt/api, ports 9091). Merged worktrees removed.
