@@ -4,7 +4,7 @@ import { serverUiToSettingsPatch } from "./serverUi";
 import type { Settings } from "./types";
 
 /**
- * Preferences saved here but not yet acknowledged by the server.
+ * Preferences changed here but not yet acknowledged by the server.
  *
  * A change is sent a moment after it is made, or as the page goes away. The
  * request of a page that is closing can reach the server after the next page's
@@ -16,7 +16,7 @@ export interface PendingSync {
   owner: number | null;
   /** Identifies this change, so an older acknowledgement does not clear a newer one. */
   at: number;
-  /** The `ui` blob that was (or is about to be) sent. */
+  /** Only the `ui` keys changed since the server last acknowledged; sent as a patch. */
   ui: Record<string, unknown>;
 }
 
@@ -39,11 +39,41 @@ function currentOwner(): number | null {
   );
 }
 
-/** Note an unsent change. Returns the stamp to pass to `clearPending` on ack. */
-export function markPending(ui: Record<string, unknown>): number {
-  const at = Date.now();
-  setJson(PENDING_KEY, { owner: currentOwner(), at, ui } satisfies PendingSync);
-  return at;
+/** A marker older than this is dropped: it must not revert newer settings made elsewhere. */
+export const PENDING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** The marker this account left behind, or null (none, someone else's, or too old). */
+function readOwn(
+  now: number,
+  legacyPrefsMayMigrate: boolean
+): PendingSync | null {
+  const stored = getJson<PendingSync | null>(PENDING_KEY, isPendingSync, null);
+  if (!stored) return null;
+  if (now - stored.at > PENDING_MAX_AGE_MS) {
+    console.debug("Dropped an old unsynced settings change", stored.at);
+    removeItem(PENDING_KEY);
+    return null;
+  }
+  const owner = currentOwner();
+  if (stored.owner !== owner) return null;
+  // Unowned changes are only the administrator's to upload.
+  return owner === null && !legacyPrefsMayMigrate ? null : stored;
+}
+
+/**
+ * Note keys changed here and not yet sent. They merge with the keys still
+ * pending, so the marker is everything the server has not acknowledged.
+ * Returns the stamp to pass to `clearPending` and the patch to send.
+ */
+export function markPending(
+  changed: Record<string, unknown>,
+  now = Date.now()
+): { at: number; ui: Record<string, unknown> } {
+  const owner = currentOwner();
+  const previous = readOwn(now, owner === null);
+  const ui = { ...previous?.ui, ...changed };
+  setJson(PENDING_KEY, { owner, at: now, ui } satisfies PendingSync);
+  return { at: now, ui };
 }
 
 /** The server acknowledged the change stamped `at`; a newer one stays pending. */
@@ -55,19 +85,13 @@ export function clearPending(at: number): void {
 /**
  * The unsent change that belongs to the signed-in account, if any. One that
  * belongs to someone else is never applied (and `clearLocalSettings` drops it
- * with the rest of that account's cache).
+ * with the rest of that account's cache); one that is too old is dropped.
  */
 export function loadPending(
-  legacyPrefsMayMigrate: boolean
+  legacyPrefsMayMigrate: boolean,
+  now = Date.now()
 ): PendingSync | null {
-  const stored = getJson<PendingSync | null>(PENDING_KEY, isPendingSync, null);
-  if (!stored) return null;
-  const owner = currentOwner();
-  if (stored.owner === owner) {
-    // Unowned changes are only the administrator's to upload.
-    return owner === null && !legacyPrefsMayMigrate ? null : stored;
-  }
-  return null;
+  return readOwn(now, legacyPrefsMayMigrate);
 }
 
 /** The server's preferences with the unsent local change laid over them. */
