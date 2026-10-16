@@ -18,7 +18,7 @@ Start with `docs/design/architecture.md` (one-page map) and the decision records
 
 ## Mandatory gate
 
-Run `scripts/check.sh` before every commit (add `--e2e` when you touch UI or API behaviour the UI uses). It runs, in order: `ruff check`, `ruff format --check`, `mypy`, the committed `backend/openapi.json` check, `pytest`, `eslint --max-warnings 0`, `prettier --check`, `tsc`, `vitest`, `vite build`, `mkdocs build --strict`. CI runs the same gates; a red gate is never acceptable to merge. Details: `docs/getting-started/testing.md`.
+Run `scripts/check.sh` before every commit (add `--e2e` when you touch UI or API behaviour the UI uses). It runs, in order: `ruff check`, `ruff format --check`, `mypy`, the `requirements.lock` check (`scripts/check_requirements_lock.py`), the committed `backend/openapi.json` check, `pytest`, the generated `api/schema.d.ts` check, `eslint --max-warnings 0`, `prettier --check`, `tsc`, `vitest`, `vite build`, `mkdocs build --strict`. CI runs the same gates; a red gate is never acceptable to merge. Details: `docs/getting-started/testing.md`.
 
 Backend commands (from `backend/`): `PYTHONPATH=. pytest -q`, `ruff check .`, `ruff format .`. Frontend (from `frontend/`): `npm run lint`, `npm run format`, `npm run typecheck`, `npm test`, `npm run build`. `mypy` (from `backend/`, config in `pyproject.toml`) is a gate and must report zero errors.
 
