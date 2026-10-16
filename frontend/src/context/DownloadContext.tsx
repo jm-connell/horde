@@ -134,7 +134,12 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const jobsQuery = useQuery({
     queryKey: queryKeys.downloads.jobs,
     queryFn: ({ signal }) => api.listJobs({ signal }),
-    refetchInterval: streamConnected ? false : JOBS_FALLBACK_POLL_MS,
+    // Poll while the stream is down, and also when the last read failed: the
+    // stream only pushes changes, so a list that never loaded would stay empty.
+    refetchInterval: (query) =>
+      streamConnected && query.state.status !== "error"
+        ? false
+        : JOBS_FALLBACK_POLL_MS,
   });
   const jobs = jobsQuery.data ?? NO_JOBS;
 
