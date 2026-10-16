@@ -228,7 +228,7 @@ export interface Page<T> {
 }
 
 /** Rows asked for per request; the server caps it at 500. */
-const PAGE_SIZE = 500;
+export const PAGE_SIZE = 500;
 
 /**
  * Walk a cursor-paginated list to its end. `onPage` sees everything fetched so
@@ -253,6 +253,7 @@ async function collectPages<T>(
 export interface ChannelQuery {
   sort?: string;
   order?: string;
+  signal?: AbortSignal;
 }
 
 export interface ChannelFeedQuery {
@@ -498,12 +499,16 @@ export const api = {
   },
 
   listChannels(params: ChannelQuery = {}): Promise<ChannelStat[]> {
+    const { signal, ...query } = params;
     const qs = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
+    Object.entries(query).forEach(([k, v]) => {
       if (v) qs.set(k, String(v));
     });
-    const query = qs.toString();
-    return request<ChannelStat[]>(`/api/channels${query ? `?${query}` : ""}`);
+    const text = qs.toString();
+    return request<ChannelStat[]>(
+      `/api/channels${text ? `?${text}` : ""}`,
+      signal ? { signal } : undefined
+    );
   },
 
   searchChannels(
@@ -677,12 +682,12 @@ export const api = {
     });
   },
 
-  tagStats(channel?: string): Promise<TagStat[]> {
+  tagStats(channel?: string, opts?: ReadOptions): Promise<TagStat[]> {
     return collectPages((cursor) => {
       const qs = new URLSearchParams({ limit: "2000" });
       if (channel) qs.set("channel", channel);
       if (cursor) qs.set("cursor", cursor);
-      return request<Page<TagStat>>(`/api/tags/stats?${qs}`);
+      return request<Page<TagStat>>(`/api/tags/stats?${qs}`, opts);
     });
   },
 
