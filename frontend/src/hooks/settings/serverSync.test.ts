@@ -167,3 +167,45 @@ describe("pending changes", () => {
     );
   });
 });
+
+describe("server-owned ui keys", () => {
+  const owned = {
+    download_video_codec: "sidecar",
+    compat_copy_resolution: "source",
+  };
+
+  it("are sent for an administrator", async () => {
+    const { sync } = await load();
+    sync.adoptSettingsOwner(1, true);
+    sync.scheduleServerSync({ ...owned, theme: "nord" });
+    await vi.runAllTimersAsync();
+    expect(updateAppSettings.mock.calls[0][0].ui).toEqual({
+      ...owned,
+      theme: "nord",
+    });
+  });
+
+  it("are never sent for a member, whose change the server would refuse", async () => {
+    const { sync } = await load();
+    sync.adoptSettingsOwner(2, false);
+    sync.scheduleServerSync({ ...owned, theme: "nord" });
+    await vi.runAllTimersAsync();
+    expect(updateAppSettings.mock.calls[0][0].ui).toEqual({ theme: "nord" });
+    await sync.flushSettingsSync();
+    const whole = updateAppSettings.mock.calls[1][0].ui as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(whole)).not.toContain("download_video_codec");
+    expect(Object.keys(whole)).not.toContain("compat_copy_resolution");
+  });
+
+  it("follow a promotion of the same user", async () => {
+    const { sync } = await load();
+    sync.adoptSettingsOwner(2, false);
+    sync.adoptSettingsOwner(2, true);
+    sync.scheduleServerSync(owned);
+    await vi.runAllTimersAsync();
+    expect(updateAppSettings.mock.calls[0][0].ui).toEqual(owned);
+  });
+});

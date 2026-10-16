@@ -18,7 +18,11 @@ import {
   overlayPending,
   pendingStamp,
 } from "./pending";
-import { serverUiToSettingsPatch, settingsToServerUi } from "./serverUi";
+import {
+  serverUiToSettingsPatch,
+  settingsToServerUi,
+  withoutServerOwnedUi,
+} from "./serverUi";
 
 export const SETUP_EVENT = "horde:setup-changed";
 
@@ -33,6 +37,8 @@ let serverHydrated = false;
 let hydrationGeneration = 0;
 /** Only an administrator can own the preferences cached before accounts existed. */
 let legacyPrefsMayMigrate = false;
+/** Whether the signed-in user may change the server-owned `ui` keys. */
+let serverOwnedUiWritable = false;
 let setupCompletedFlag: boolean | null = null;
 
 /**
@@ -47,6 +53,8 @@ let setupCompletedFlag: boolean | null = null;
  * accounts existed) may still be uploaded for an administrator.
  */
 export function adoptSettingsOwner(userId: number, isAdmin: boolean): void {
+  // Also on a role change for the same user (promoted or demoted).
+  serverOwnedUiWritable = isAdmin;
   const stored = getJson<number | null>(
     OWNER_KEY,
     (v): v is number => typeof v === "number",
@@ -98,7 +106,7 @@ export async function flushSettingsSync(): Promise<void> {
     syncTimer = null;
   }
   pendingSend = null;
-  const ui = settingsToServerUi(loadSettings());
+  const ui = writableUi(settingsToServerUi(loadSettings()));
   // This request carries every change made so far, and no later one.
   const stamp = pendingStamp();
   try {
@@ -196,11 +204,21 @@ export function ensureServerHydration(): Promise<void> {
   return serverHydratePromise;
 }
 
+/**
+ * What this user's client may send of `ui`. The server refuses a member's
+ * change to a server-owned key; members cannot reach those controls, but a
+ * whole-blob save would still carry a value that went stale since loading.
+ */
+function writableUi(ui: Record<string, unknown>): Record<string, unknown> {
+  return serverOwnedUiWritable ? ui : withoutServerOwnedUi(ui);
+}
+
 /** What the pending debounced sync will send, and the stamp of its pending marker. */
 let pendingSend: { ui: Record<string, unknown>; stamp: number } | null = null;
 
 /** Send `changed` (keys that differ from the server's copy) after a short pause. */
-export function scheduleServerSync(changed: Record<string, unknown>): void {
+export function scheduleServerSync(requested: Record<string, unknown>): void {
+  const changed = writableUi(requested);
   if (Object.keys(changed).length === 0) return;
   if (syncTimer) clearTimeout(syncTimer);
   const marked = markPending(changed);

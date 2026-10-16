@@ -156,8 +156,13 @@ def delete_compat(video_id: int, session: Session = Depends(get_session)):
     session.commit()
 
 
-@router.get("/compat/summary", response_model=CompatSummaryRead)
+@router.get(
+    "/compat/summary",
+    response_model=CompatSummaryRead,
+    dependencies=[Depends(require_admin)],
+)
 def compat_summary(session: Session = Depends(get_session)):
+    """Library-wide codec and H.264 copy totals for the compatibility settings."""
     return compat_rendition.library_summary(session)
 
 

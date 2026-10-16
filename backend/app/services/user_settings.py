@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from sqlmodel import Session
 
 from ..models import UserSettings, utcnow
 from . import app_settings
+from .ytdlp_formats import normalize_compat_resolution, normalize_video_codec
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,12 @@ logger = logging.getLogger(__name__)
 #: the size of H.264 sidecar copies; see ``ytdlp_formats``). They are shared by
 #: everyone, live in the server-wide blob and only an administrator can change
 #: them. Everything else in ``ui`` is a personal preference.
-SERVER_UI_KEYS = frozenset({"download_video_codec", "compat_copy_resolution"})
+#: (Mapped to how each is read, so an unset key compares equal to its default.)
+_SERVER_UI_NORMALIZERS: dict[str, Callable[[Any], str]] = {
+    "download_video_codec": normalize_video_codec,
+    "compat_copy_resolution": normalize_compat_resolution,
+}
+SERVER_UI_KEYS = frozenset(_SERVER_UI_NORMALIZERS)
 
 
 def split_ui(ui: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -33,6 +40,16 @@ def split_ui(ui: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     server = {k: v for k, v in ui.items() if k in SERVER_UI_KEYS}
     personal = {k: v for k, v in ui.items() if k not in SERVER_UI_KEYS}
     return server, personal
+
+
+def changes_shared_ui(shared: dict[str, Any]) -> bool:
+    """Whether ``shared`` (server-owned ``ui`` keys) would change what the server does."""
+    raw = app_settings.load().get("ui")
+    current = raw if isinstance(raw, dict) else {}
+    return any(
+        _SERVER_UI_NORMALIZERS[k](current.get(k)) != _SERVER_UI_NORMALIZERS[k](v)
+        for k, v in shared.items()
+    )
 
 
 def stored_ui(session: Session, user_id: int) -> dict[str, Any]:

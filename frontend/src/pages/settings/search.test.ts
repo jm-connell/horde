@@ -4,7 +4,9 @@ import {
   firstMatchingTab,
   matchesQuery,
   resolveAiPaneParam,
+  tabMatchesQuery,
 } from "./search";
+import { ADMIN_ONLY_TABS, TABS } from "./constants";
 
 describe("matchesQuery", () => {
   it("matches substring and token AND", () => {
@@ -46,6 +48,17 @@ describe("settings search routing", () => {
     expect(firstMatchingTab("none detected")).toBe("system");
     expect(firstMatchingTab("factory reset")).toBe("system");
     expect(firstMatchingTab("erase")).toBe("system");
+  });
+  it("skips settings the user does not see", () => {
+    const member = (access: string) => access !== "admin";
+    const memberTabs = TABS.filter((t) => !ADMIN_ONLY_TABS.has(t.id));
+    expect(firstMatchingTab("av1", member, memberTabs)).toBeNull();
+    expect(firstMatchingTab("ollama", member, memberTabs)).toBeNull();
+    expect(firstMatchingTab("normalize volume", member, memberTabs)).toBe(
+      "library"
+    );
+    expect(tabMatchesQuery("library", "sidecar", member)).toBe(false);
+    expect(tabMatchesQuery("library", "sidecar")).toBe(true);
   });
   it("resolves AI pane params", () => {
     expect(resolveAiPaneParam("jobs")).toBe("jobs");

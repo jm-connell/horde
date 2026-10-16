@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import { useSettings } from "../hooks/useSettings";
@@ -19,6 +19,7 @@ import {
 } from "./settings/context";
 import { loadTab, resolveTabParam } from "./settings/helpers";
 import {
+  type AccessCheck,
   firstMatchingTab,
   matchesQuery,
   resolveAiPaneParam,
@@ -34,13 +35,20 @@ export default function Settings() {
   const [settings, update] = useSettings();
   const { showToast, showError } = useToast();
   const [searchParams] = useSearchParams();
-  const { isAdmin } = useAuth();
+  const { isAdmin, can } = useAuth();
   // Server-wide areas are for administrators; members keep their own preferences.
   const tabAllowed = useCallback(
     (id: SettingsTab) => isAdmin || !ADMIN_ONLY_TABS.has(id),
     [isAdmin]
   );
-  const tabs = TABS.filter((t) => tabAllowed(t.id));
+  const allowed = useCallback<AccessCheck>(
+    (access) => (access === "admin" ? isAdmin : can(access)),
+    [isAdmin, can]
+  );
+  const tabs = useMemo(
+    () => TABS.filter((t) => tabAllowed(t.id)),
+    [tabAllowed]
+  );
   const [tab, setTab] = useState<SettingsTab>(() => {
     const fromUrl = resolveTabParam(
       new URLSearchParams(window.location.search).get("tab")
@@ -79,10 +87,10 @@ export default function Settings() {
   // Cross-tab search: jump to the first tab that matches when the current one doesn't.
   useEffect(() => {
     if (!q) return;
-    if (tabMatchesQuery(tab, q)) return;
-    const next = firstMatchingTab(q);
+    if (tabMatchesQuery(tab, q, allowed)) return;
+    const next = firstMatchingTab(q, allowed, tabs);
     if (next && next !== tab) selectTab(next);
-  }, [q, tab, selectTab]);
+  }, [q, tab, selectTab, allowed, tabs]);
 
   const ctxValue: SettingsPageContextValue = {
     q,

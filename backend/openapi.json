@@ -9965,6 +9965,7 @@
     },
     "/api/compat/summary": {
       "get": {
+        "description": "Library-wide codec and H.264 copy totals for the compatibility settings.",
         "operationId": "compat_summary_api_compat_summary_get",
         "responses": {
           "200": {

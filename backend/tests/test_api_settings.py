@@ -171,10 +171,26 @@ def test_server_owned_ui_keys_are_shared_and_admin_only(client, member_client):
         json={"ui": {"download_video_codec": "sidecar", "theme": "oled"}},
     )
     assert resp.status_code == 200
-    # The SPA saves its whole blob, so a member's attempt is ignored, not refused.
+    # A member cannot change them, and nothing in the refused request is applied.
+    for key, value in (
+        ("download_video_codec", "av1"),
+        ("compat_copy_resolution", "source"),
+    ):
+        resp = member_client.patch(
+            "/api/settings", json={"ui": {key: value, "theme": "mocha"}}
+        )
+        assert resp.status_code == 403, key
+        assert resp.json()["code"] == "admin_required"
+    # Echoing the current values (an older client saving its whole blob) is fine.
     resp = member_client.patch(
         "/api/settings",
-        json={"ui": {"download_video_codec": "av1", "theme": "nord"}},
+        json={
+            "ui": {
+                "download_video_codec": "sidecar",
+                "compat_copy_resolution": "1080p",
+                "theme": "nord",
+            }
+        },
     )
     assert resp.status_code == 200
     for c, theme in ((client, "oled"), (member_client, "nord")):

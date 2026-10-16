@@ -44,6 +44,8 @@ GATES: dict[tuple[str, str], str] = {
             ("POST", "/api/ai/jobs/clear-failed"),
             ("POST", "/api/ai/jobs/{job_id}/retry"),
             ("POST", "/api/ai/jobs/{job_id}/cancel"),
+            # Library-wide codec totals: only the compatibility settings read them.
+            ("GET", "/api/compat/summary"),
             ("POST", "/api/compat/backfill"),
             ("POST", "/api/compat/convert-library"),
             ("POST", "/api/compat/cancel"),

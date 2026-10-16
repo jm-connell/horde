@@ -92,6 +92,12 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Changed
 
+- The playback compatibility panel (Settings → Library) is for administrators
+  only. Members could see and click it, but the server kept the server-wide
+  codec anyway; now the panel is hidden from them, the API answers a member's
+  change to `download_video_codec` or `compat_copy_resolution` with 403
+  `admin_required` (echoing the current value is still accepted), and
+  `GET /api/compat/summary` requires an administrator.
 - Reproducible builds: pinned base images (version and digest), `npm ci`, Node 22
   everywhere, a hash-checked `backend/requirements.lock`, pinned docs toolchain.
 - The ffmpeg flavor is an explicit build argument (`FFMPEG_FLAVOR=jellyfin|debian`);

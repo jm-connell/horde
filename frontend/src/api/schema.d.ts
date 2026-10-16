@@ -651,7 +651,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Compat Summary */
+        /**
+         * Compat Summary
+         * @description Library-wide codec and H.264 copy totals for the compatibility settings.
+         */
         get: operations["compat_summary_api_compat_summary_get"];
         put?: never;
         post?: never;

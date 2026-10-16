@@ -291,10 +291,13 @@ def update_settings(
         updates["setup_completed"] = True
     if payload.ui is not None:
         shared_ui, personal_ui = user_settings.split_ui(payload.ui)
-        # The SPA saves its whole ui blob at once, server-owned keys included.
-        # For anyone but an administrator those keys are simply not applied.
         if shared_ui and user.is_admin:
             updates["ui"] = shared_ui
+        elif user_settings.changes_shared_ui(shared_ui):
+            # Server-owned keys (the download codec, the H.264 copy size) change
+            # what the server does for everyone. A member's client may still echo
+            # their current values, which is harmless; changing them is refused.
+            ensure_admin(user)
         ui_patch = _prepare_ui_update(
             personal_ui, user_settings.stored_ui(session, user.id)
         )

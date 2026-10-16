@@ -1,12 +1,23 @@
 import { LOADING_STYLE_SEARCH_KEYWORDS } from "../../loadingStyles";
+import type { Permission } from "../../types";
 import { TABS } from "./constants";
 import type { AiPane, SettingsTab } from "./types";
+
+/** Who sees a setting beyond its tab: administrators, or holders of a permission. */
+export type SettingAccess = "admin" | Permission;
+
+/** Whether the signed-in user sees settings marked with `access`. */
+export type AccessCheck = (access: SettingAccess) => boolean;
+
+const EVERYONE: AccessCheck = () => true;
 
 export interface SearchRegistryEntry {
   tab: SettingsTab;
   keywords: string;
   /** Which AI pane this entry belongs to, when tab is "ai". */
   pane?: AiPane;
+  /** Unset: whoever can open the tab sees it. */
+  access?: SettingAccess;
 }
 
 /** Search keywords / synonyms → tab. Used for cross-tab search + auto-switch. */
@@ -98,7 +109,13 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "library",
     keywords:
-      "download count navigation badge normalize volume loudness downloads compatibility av1 h264 h265 hevc codec transcode format sidecar gpu nvenc playback compatibility convert",
+      "download count navigation badge normalize volume loudness downloads",
+  },
+  {
+    tab: "library",
+    access: "admin",
+    keywords:
+      "compatibility av1 h264 h265 hevc codec transcode format sidecar gpu nvenc playback compatibility convert",
   },
   // AI
   {
@@ -173,17 +190,29 @@ export function matchesQuery(
   return tokens.length > 1 && tokens.every((t) => hay.includes(t));
 }
 
-export function tabMatchesQuery(tabId: SettingsTab, query: string): boolean {
+export function tabMatchesQuery(
+  tabId: SettingsTab,
+  query: string,
+  allowed: AccessCheck = EVERYONE
+): boolean {
   if (!query) return true;
   return SEARCH_REGISTRY.some(
-    (entry) => entry.tab === tabId && matchesQuery(query, entry.keywords)
+    (entry) =>
+      entry.tab === tabId &&
+      (!entry.access || allowed(entry.access)) &&
+      matchesQuery(query, entry.keywords)
   );
 }
 
-export function firstMatchingTab(query: string): SettingsTab | null {
+/** The first of `tabs` (default: all) with a setting the user sees that matches. */
+export function firstMatchingTab(
+  query: string,
+  allowed: AccessCheck = EVERYONE,
+  tabs: readonly { id: SettingsTab }[] = TABS
+): SettingsTab | null {
   if (!query) return null;
-  for (const t of TABS) {
-    if (tabMatchesQuery(t.id, query)) return t.id;
+  for (const t of tabs) {
+    if (tabMatchesQuery(t.id, query, allowed)) return t.id;
   }
   return null;
 }

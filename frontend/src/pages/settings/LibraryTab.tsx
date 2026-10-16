@@ -1,3 +1,4 @@
+import { useAuth } from "../../context/AuthContext";
 import { useSettingsPage } from "./context";
 import { useLibraryState } from "./useLibraryState";
 import { Section, SettingRow, Toggle, Chip } from "./ui";
@@ -18,8 +19,24 @@ import {
 import HelpTip from "../../components/HelpTip";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
 
+const COMPAT_TERMS = [
+  "compatibility",
+  "av1",
+  "h264",
+  "h265",
+  "hevc",
+  "codec",
+  "transcode",
+  "sidecar",
+  "gpu",
+  "nvenc",
+  "playback compatibility",
+  "convert",
+];
+
 export default function LibraryTab() {
   const { q, match, settings, update } = useSettingsPage();
+  const { isAdmin } = useAuth();
   const {
     appSettings,
     catalogMaxInput,
@@ -223,18 +240,7 @@ export default function LibraryTab() {
             "normalize volume",
             "loudness",
             "downloads",
-            "compatibility",
-            "av1",
-            "h264",
-            "h265",
-            "hevc",
-            "codec",
-            "transcode",
-            "sidecar",
-            "gpu",
-            "nvenc",
-            "playback compatibility",
-            "convert"
+            ...(isAdmin ? COMPAT_TERMS : [])
           )
         }
       >
@@ -270,36 +276,21 @@ export default function LibraryTab() {
               />
             }
           />
-          <div
-            hidden={
-              !!q &&
-              !match(
-                "compatibility",
-                "av1",
-                "h264",
-                "h265",
-                "hevc",
-                "codec",
-                "transcode",
-                "sidecar",
-                "gpu",
-                "nvenc",
-                "playback compatibility",
-                "convert"
-              )
-            }
-          >
-            <PlaybackCompatPicker
-              mode={settings.downloadVideoCodec}
-              onChange={(id) => update({ downloadVideoCodec: id })}
-              copyResolution={settings.compatCopyResolution}
-              onCopyResolutionChange={(v) =>
-                update({ compatCopyResolution: v })
-              }
-              stats={systemStats}
-              showLibraryActions
-            />
-          </div>
+          {/* Server-wide: the codec every download uses and the library's H.264 copies. */}
+          {isAdmin && (
+            <div hidden={!!q && !match(...COMPAT_TERMS)}>
+              <PlaybackCompatPicker
+                mode={settings.downloadVideoCodec}
+                onChange={(id) => update({ downloadVideoCodec: id })}
+                copyResolution={settings.compatCopyResolution}
+                onCopyResolutionChange={(v) =>
+                  update({ compatCopyResolution: v })
+                }
+                stats={systemStats}
+                showLibraryActions
+              />
+            </div>
+          )}
         </div>
       </Section>
 

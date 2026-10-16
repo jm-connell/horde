@@ -72,7 +72,7 @@ Library (and preview) media endpoints support HTTP **Range** requests so the bro
 | `GET /api/videos/{id}/compat` | Copy state: `status` (`none` \| `queued` \| `running` \| `ready` \| `error`), `stage` (`downloading` \| `encoding` \| `finishing`), `progress`, `error` |
 | `POST /api/videos/{id}/compat` | Create the copy for one video (body `prefer_download`, default `true`; `false` always encodes locally). Jumps the queue. `409` if the video is already ≤1080p 8-bit H.264 |
 | `DELETE /api/videos/{id}/compat` | Cancel any job, delete the sidecar file, clear the row fields |
-| `GET /api/compat/summary` | Library totals: size, codec counts, copies ready/missing (with estimated bytes), convertible originals, queue counts |
+| `GET /api/compat/summary` | (admin) Library totals: size, codec counts, copies ready/missing (with estimated bytes), convertible originals, queue counts |
 | `POST /api/compat/backfill` | Queue copies for every ready, non-review video that would benefit |
 | `POST /api/compat/convert-library` | Re-encode all non-H.264 originals in place. Body must carry `confirm: true` (else `400`) |
 | `POST /api/compat/cancel` | Drop queued jobs and signal running ones (body `kind`: `compat` \| `convert`, optional) |

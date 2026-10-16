@@ -57,6 +57,8 @@ Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Librar
 | Playback compatibility | `downloadVideoCodec` | `"av1"` | `av1` \| `h264_native` \| `h264_convert` \| `sidecar` (server key `download_video_codec`). Stamped onto every new download as `video_codec`. Legacy `h264` / `h265` migrate to `h264_convert`. |
 | H.264 copy resolution | `compatCopyResolution` | `"1080p"` | `1080p` \| `source` (server key `compat_copy_resolution`). Short-side cap for H.264 copies: 1080 or full size up to 4K. See [copy resolution](../guides/downloads.md#how-the-sidecar-works). |
 
+The **Playback compatibility** panel (both rows above and the library actions below) is server-wide and shown to administrators only. New downloads use this server-wide choice, so members never see the panel; the API refuses a member's change to `download_video_codec` or `compat_copy_resolution` with 403 `admin_required`, and `GET /api/compat/summary` is for administrators.
+
 The four modes, in the order the picker shows them:
 
 - **AV1 only** (default): YouTube's AV1/VP9, copied. Smallest files, no encode, newest devices only. A device that cannot play a video can still get a one-off H.264 copy from the player.

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
 import { describeError } from "../../apiErrors";
+import { useAuth } from "../../context/AuthContext";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useSearch } from "../../context/SearchContext";
 import { useUpdateAppSettings } from "../../queries/app";
@@ -38,7 +39,11 @@ export function useLibraryState() {
 
   const metadataSyncStatus =
     useMetadataSyncStatus({ interval: 5000 }).data ?? null;
-  const systemStats = dataOrNull(useSystemStats({ interval: false }));
+  const { isAdmin } = useAuth();
+  // Only the compatibility picker (administrators) reads the encoder stats.
+  const systemStats = dataOrNull(
+    useSystemStats({ interval: false, enabled: isAdmin })
+  );
   // Not shown here, but a catalog setting change refreshes the status the
   // System tab reads.
   const catalogStatusQuery = useChannelCatalogStatus({ enabled: false });
