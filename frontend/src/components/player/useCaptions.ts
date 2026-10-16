@@ -223,7 +223,9 @@ export function useCaptions({
       v.removeEventListener("enterpictureinpicture", onEnterPiP);
       v.removeEventListener("leavepictureinpicture", onLeavePiP);
     };
-  }, [videoRef]);
+    // The <video> is re-keyed when the stream type changes (DASH to compat),
+    // so re-bind to the element that exists now.
+  }, [videoRef, effectiveStreamType]);
 
   // Block iOS native fullscreen hijack unless the user tapped Fullscreen.
   // When it does enter, fall back to native cue painting.
@@ -247,7 +249,7 @@ export function useCaptions({
       v.removeEventListener("webkitbeginfullscreen", onBeginFullscreen);
       v.removeEventListener("webkitendfullscreen", onEndFullscreen);
     };
-  }, [mode, videoRef, userInitiatedFullscreen]);
+  }, [mode, videoRef, userInitiatedFullscreen, effectiveStreamType]);
 
   const clearCcNotice = useCallback(() => setCcNotice(null), []);
 
