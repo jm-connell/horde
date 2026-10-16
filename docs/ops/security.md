@@ -34,7 +34,7 @@ Anything else, for example `horde.example.com` behind a reverse proxy, must be l
 HORDE_ALLOWED_HOSTS=horde.example.com,*.corp.example
 ```
 
-A rejected request gets HTTP 400 with a message naming `HORDE_ALLOWED_HOSTS`. If you reach Horde by a public IP address, add that IP to the list too.
+A rejected request gets HTTP 400 with a message naming `HORDE_ALLOWED_HOSTS`, and the first rejection of each name is logged as a WARNING (so a proxy that sends its public name is visible in `docker compose logs` even without `HORDE_TRUST_PROXY`). If you reach Horde by a public IP address, add that IP to the list too.
 
 !!! warning "Upgrading behind a proxy or tunnel"
     Installs that were reached under a public name before this check existed will see `400 host_not_allowed` after updating until the name is listed. With `HORDE_TRUST_PROXY=1` and `HORDE_ALLOWED_HOSTS` empty, Horde logs a warning at startup as a reminder.

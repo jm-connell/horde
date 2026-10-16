@@ -452,3 +452,47 @@ def test_origin_may_match_the_first_of_a_comma_joined_forwarded_host(raw_client)
         },
     )
     assert resp.status_code == 200
+
+
+# --- Host rejection warning ---------------------------------------------------------
+
+
+def test_a_rejected_host_is_warned_about_once_per_name(app, caplog):
+    import logging
+
+    from fastapi.testclient import TestClient
+
+    def hit(host: str) -> None:
+        assert (
+            TestClient(app, headers={"Host": host}).get("/api/ping").status_code == 400
+        )
+
+    with caplog.at_level(logging.WARNING, logger="app.security"):
+        hit("horde.example.com")
+        hit("horde.example.com")
+        hit("other.example.com")
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 2
+    assert "horde.example.com" in warnings[0]
+    assert "HORDE_ALLOWED_HOSTS" in warnings[0]
+
+
+def test_the_remembered_hosts_are_bounded(caplog):
+    import logging
+
+    from app.security import HostAllowlistMiddleware, HostPolicy
+
+    async def inner(scope, receive, send):  # pragma: no cover - never reached
+        raise AssertionError
+
+    middleware = HostAllowlistMiddleware(inner, policy=HostPolicy())
+    with caplog.at_level(logging.WARNING, logger="app.security"):
+        for i in range(HostAllowlistMiddleware.MAX_REMEMBERED_HOSTS + 20):
+            middleware._log_rejection(f"scan{i}.example")
+
+    assert len(middleware._warned) == HostAllowlistMiddleware.MAX_REMEMBERED_HOSTS
+    assert (
+        len([r for r in caplog.records if r.levelno == logging.WARNING])
+        == HostAllowlistMiddleware.MAX_REMEMBERED_HOSTS
+    )

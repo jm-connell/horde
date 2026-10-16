@@ -24,8 +24,9 @@ level. Detailed per-area entries are added by the maintainer at release time.
   call now requires a signed-in session (the `horde_session` cookie from
   `POST /api/auth/login`), and every `POST`, `PUT`, `PATCH` and `DELETE` must send
   `X-Horde-Request: 1`. Anonymous calls get 401 `auth_required`; a missing header
-  gets 403. Monitoring may use `GET /api/ping` and `GET /api/ready`, which stay
-  open. See [docs/ops/authentication.md](docs/ops/authentication.md).
+  gets 403. Only `GET /api/ping`, `GET /api/ready`, `GET /api/auth/state` and
+  `GET /api/health` (a bare status for anonymous callers, the full payload when
+  signed in) stay open, plus the sign-in and first-run setup calls. See [docs/ops/authentication.md](docs/ops/authentication.md).
 
 - **Horde now has accounts.** The first visit after upgrading asks you to create
   the administrator account; until you do, nothing else can be used. Your

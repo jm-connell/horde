@@ -236,9 +236,13 @@ class SecurityHeadersMiddleware:
 class HostAllowlistMiddleware:
     """400 for a Host header that is not allowed (DNS rebinding defence)."""
 
+    #: Distinct rejected names remembered for the once-per-host warning.
+    MAX_REMEMBERED_HOSTS = 64
+
     def __init__(self, app: ASGIApp, *, policy: HostPolicy) -> None:
         self.app = app
         self.policy = policy
+        self._warned: set[str] = set()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
@@ -248,7 +252,7 @@ class HostAllowlistMiddleware:
         if self.policy.allows(host):
             await self.app(scope, receive, send)
             return
-        logger.warning("Rejected request for unexpected Host %r", host)
+        self._log_rejection(host)
         if scope["type"] == "websocket":
             await send({"type": "websocket.close", "code": 1008})
             return
@@ -261,6 +265,21 @@ class HostAllowlistMiddleware:
             f"(for example through a reverse proxy), add it to the "
             f"{ALLOWED_HOSTS_ENV} environment variable.",
             "host_not_allowed",
+        )
+
+    def _log_rejection(self, host: str) -> None:
+        """A WARNING the first time a name is refused, then debug (it repeats per request)."""
+        if host in self._warned or len(self._warned) >= self.MAX_REMEMBERED_HOSTS:
+            # Seen already, or too many distinct names (a scanner sending random
+            # Host headers) to keep warning about each of them.
+            logger.debug("Rejected request for unexpected Host %r", host)
+            return
+        self._warned.add(host)
+        logger.warning(
+            "Rejected a request for Host %r. If you reach Horde under this name "
+            "(a reverse proxy or tunnel), add it to %s; see docs/ops/security.md.",
+            host,
+            ALLOWED_HOSTS_ENV,
         )
 
 
