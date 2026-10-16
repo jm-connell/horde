@@ -1,12 +1,31 @@
 import { expect, test, videoCard } from "./fixtures";
 
-async function waitForSettingsPatch(page: import("@playwright/test").Page) {
-  return page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/settings") &&
-      response.request().method() === "PATCH" &&
-      response.ok()
-  );
+/**
+ * The response to the PATCH /api/settings that carries `field` set to `value`.
+ *
+ * Preference changes are sent debounced and the whole `ui` blob goes in every
+ * request, so an earlier change (the progress-expiry save re-syncs its own
+ * value 300 ms later) produces a PATCH of its own. Matching "any PATCH" can
+ * resolve on that one, with the new preference still unsent; reloading then
+ * loses it, exactly as a user who reloads within the debounce would.
+ */
+async function waitForSettingsPatch(
+  page: import("@playwright/test").Page,
+  field: string,
+  value: string | boolean
+) {
+  return page.waitForResponse((response) => {
+    const request = response.request();
+    if (
+      !response.url().includes("/api/settings") ||
+      request.method() !== "PATCH" ||
+      !response.ok()
+    ) {
+      return false;
+    }
+    const ui = (request.postDataJSON() as { ui?: Record<string, unknown> }).ui;
+    return ui?.[field] === value;
+  });
 }
 
 test("appearance changes theme and loading animation", async ({ page }) => {
@@ -55,7 +74,7 @@ test("library settings persist sort default, dates, and progress expiry", async 
   await expect(page.getByText("Direct YouTube search")).toBeVisible();
 
   const dates = page.getByRole("switch", { name: /Show dates on video cards/ });
-  const saved = waitForSettingsPatch(page);
+  const saved = waitForSettingsPatch(page, "show_card_dates", false);
   await dates.click();
   await saved;
 
@@ -75,7 +94,7 @@ test("library settings persist sort default, dates, and progress expiry", async 
   const sort = page
     .getByRole("heading", { name: "Default video sort" })
     .locator("xpath=..");
-  const sortSaved = waitForSettingsPatch(page);
+  const sortSaved = waitForSettingsPatch(page, "default_library_sort", "title");
   await sort.getByRole("button", { name: "Title", exact: true }).click();
   await sortSaved;
 
@@ -110,7 +129,7 @@ test("playback settings hide the watch description", async ({ page }) => {
   ).toContainText("720p");
 
   const toggle = page.getByRole("switch", { name: /Show description/ });
-  const saved = waitForSettingsPatch(page);
+  const saved = waitForSettingsPatch(page, "show_description", false);
   await toggle.click();
   await saved;
 
