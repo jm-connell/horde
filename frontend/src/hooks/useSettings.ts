@@ -1141,6 +1141,8 @@ const SETUP_EVENT = "horde:setup-changed";
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 
+// The `ui` PATCHes below stay raw api calls: nothing reads `ui` from the query
+// cache (app.settings), so they cannot leave it stale.
 /** Module-level: one GET /api/settings for the whole app, not per useSettings mount. */
 let serverHydratePromise: Promise<void> | null = null;
 let serverHydrated = false;

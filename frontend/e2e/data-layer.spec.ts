@@ -142,34 +142,78 @@ test("a failing refresh does not replace the video being watched", async ({
   ).toBeVisible();
 });
 
-test("saved app settings reach the Watch page without another read", async ({
+test("an AI setting saved in Settings shows on the Watch page without another read", async ({
   page,
 }) => {
-  await page.goto("/");
-  await openNav(page, "Settings");
-  await page.getByRole("tab", { name: "Library" }).click();
-  const expiry = page
-    .getByRole("heading", { name: "Progress expiry" })
-    .locator("xpath=..");
-  await expiry.getByRole("spinbutton").fill("22");
+  // A connected AI backend, with chat switched off to start from.
+  await page.route(/\/api\/ai\/status$/, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({
+      response,
+      json: { ...body, enabled: true, reachable: true },
+    });
+  });
+  const off = await page.request.patch("/api/settings", {
+    headers: CSRF_HEADERS,
+    data: { ai: { ai_chat: false } },
+  });
+  expect(off.ok()).toBe(true);
+
+  await page.goto("/settings?tab=ai&pane=features");
+  const chat = page
+    .getByText("AI video chat", { exact: true })
+    .locator("xpath=ancestor::*[.//button[@role='switch']][1]")
+    .getByRole("switch");
+  await expect(chat).toHaveAttribute("aria-checked", "false");
   const saved = page.waitForResponse(
     (r) =>
       r.url().includes("/api/settings") &&
       r.request().method() === "PATCH" &&
       r.ok()
   );
-  await expiry.getByRole("button", { name: "Save" }).click();
+  await chat.click();
   await saved;
 
-  // The answer is in the cache: opening a video must not fetch it again.
+  // The answer is in the cache: opening a video must show chat, with no read.
   let reads = 0;
   page.on("request", (r) => {
     if (r.method() === "GET" && /\/api\/settings$/.test(r.url())) reads += 1;
   });
   await openNav(page, "Home");
   await videoCard(page, "Aurora Drift").first().click();
-  await expect(
-    page.getByRole("heading", { name: "Aurora Drift" }).first()
-  ).toBeVisible();
+  await expect(page.getByPlaceholder("Ask this video…")).toBeVisible();
   expect(reads).toBe(0);
+});
+
+test("the progress expiry saved in Settings is still there when Settings reopens", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await openNav(page, "Settings");
+  await page.getByRole("tab", { name: "Library" }).click();
+  const field = () =>
+    page
+      .getByRole("heading", { name: "Progress expiry" })
+      .locator("xpath=..")
+      .getByRole("spinbutton");
+  await field().fill("22");
+  const saved = page.waitForResponse(
+    (r) =>
+      r.url().includes("/api/settings") &&
+      r.request().method() === "PATCH" &&
+      r.ok()
+  );
+  await page
+    .getByRole("heading", { name: "Progress expiry" })
+    .locator("xpath=..")
+    .getByRole("button", { name: "Save" })
+    .click();
+  await saved;
+
+  // Leave and come back inside the cache's fresh window.
+  await openNav(page, "Home");
+  await openNav(page, "Settings");
+  await page.getByRole("tab", { name: "Library" }).click();
+  await expect(field()).toHaveValue("22");
 });

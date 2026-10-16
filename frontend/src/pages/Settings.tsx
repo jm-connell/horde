@@ -383,12 +383,12 @@ export default function Settings() {
   const saveExpiry = async () => {
     const days = parseInt(expiryInput, 10);
     if (isNaN(days) || days < 1 || days > 365) return;
-    const updated = await api
-      .updateAppSettings({ progress_expiry_days: days })
-      .catch((err) => {
+    const updated = await saveAppSettings({ progress_expiry_days: days }).catch(
+      (err) => {
         showError(`Could not save setting: ${describeError(err)}`);
         return null;
-      });
+      }
+    );
     if (updated) {
       setAppSettings(updated);
       update({ progressExpiryDays: updated.progress_expiry_days });
