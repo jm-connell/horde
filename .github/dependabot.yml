@@ -5,6 +5,10 @@
 version: 2
 
 updates:
+  # Dependabot edits backend/requirements.txt but cannot regenerate the
+  # hash-pinned backend/requirements.lock the image installs. CI's lock check
+  # (scripts/check_requirements_lock.py) fails such a PR until someone runs the
+  # uv command from the lock's header on its branch and pushes the new lock.
   - package-ecosystem: pip
     directory: /backend
     schedule:

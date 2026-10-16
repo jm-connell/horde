@@ -26,6 +26,13 @@ uv pip compile --generate-hashes --python-version 3.12 \
 Commit both files together. To upgrade everything the constraints allow, add
 `--upgrade`; to upgrade one package, add `--upgrade-package fastapi`.
 
+`scripts/check_requirements_lock.py` (a gate in `scripts/check.sh` and CI) fails
+when the two drift apart: every direct requirement must be in the lock at a
+version its specifier allows. It needs no network. A Dependabot pull request that
+bumps `requirements.txt` therefore stays red until the lock is regenerated on its
+branch with the command above. The check cannot notice a dependency removed from
+`requirements.txt` whose pins linger in the lock; regenerate after removals too.
+
 `uv` is the only extra tool needed (`pipx install uv` or `pip install uv`). The
 Python version must match the Docker image (3.12) so markers resolve the same way.
 

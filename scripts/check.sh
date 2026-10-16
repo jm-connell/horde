@@ -64,6 +64,7 @@ in_dir() {
 gate "ruff check" in_dir "$ROOT/backend" "$PYTHON" -m ruff check .
 gate "ruff format --check" in_dir "$ROOT/backend" "$PYTHON" -m ruff format --check .
 gate "mypy" in_dir "$ROOT/backend" "$PYTHON" -m mypy
+gate "requirements.lock up to date" "$PYTHON" "$ROOT/scripts/check_requirements_lock.py"
 gate "openapi.json up to date" in_dir "$ROOT/backend" env PYTHONPATH=. "$PYTHON" -m app.export_openapi --check openapi.json
 gate "pytest" in_dir "$ROOT/backend" env PYTHONPATH=. "$PYTHON" -m pytest -q
 

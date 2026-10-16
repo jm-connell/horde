@@ -38,6 +38,7 @@ scripts/check.sh --e2e    # also run the Playwright suite
 | 1 | Backend lint | `ruff check .` in `backend/` |
 | 2 | Backend format | `ruff format --check .` in `backend/` |
 | 2b | Backend types | `python -m mypy` in `backend/` (configuration in `pyproject.toml`; zero errors) |
+| 2c | Python lock file | `python scripts/check_requirements_lock.py` (`backend/requirements.lock` satisfies `requirements.txt`; see [Dependencies](../development/dependencies.md)) |
 | 3a | API schema | `python -m app.export_openapi --check openapi.json` in `backend/` (regenerate with `... openapi.json` when you change the API) |
 | 3 | Backend tests | `PYTHONPATH=. pytest -q` in `backend/` |
 | 3b | API types | `npm run gen:api:check` in `frontend/` (regenerate `src/api/schema.d.ts` with `npm run gen:api` after regenerating `openapi.json`) |

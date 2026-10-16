@@ -125,6 +125,9 @@ level. Detailed per-area entries are added by the maintainer at release time.
   the `openrouter` block of `GET /api/health`.
 - A search sorted by last watched now reflects what you just watched; that sort
   is no longer served from the two-minute ranking cache.
+- `scripts/check.sh` and CI fail when `backend/requirements.lock` (what the
+  image installs) no longer satisfies `backend/requirements.txt`, so a
+  dependency bump cannot pass review without a regenerated lock.
 - Known advisories in FastAPI/Starlette/python-multipart and in the frontend
   build toolchain.
 - Documentation now states that `DATA_PATH` must be a local disk (SQLite WAL is
