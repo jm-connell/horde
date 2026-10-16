@@ -239,7 +239,9 @@ def duplicate_groups(
     requested page.
     """
     try:
-        page = parse_cursor(cursor, limit=limit, sort="groups", order="asc")
+        page = parse_cursor(
+            cursor, limit=limit, sort="groups", order="asc", kind="offset"
+        )
     except InvalidCursor as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     all_videos = session.exec(

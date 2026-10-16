@@ -1,3 +1,4 @@
+import bisect
 import json
 import logging
 import random as py_random
@@ -9,7 +10,7 @@ from sqlalchemy import and_, func, nullsfirst, nullslast, or_
 from sqlmodel import Session, select
 
 from ..models import UserVideoState, Video
-from .pagination import PageRequest
+from .pagination import PageRequest, random_key
 from .search_text import keyword_match_clause
 
 logger = logging.getLogger(__name__)
@@ -98,8 +99,12 @@ _SORT_ATTRS = {
 }
 
 
-def sort_value(video: Video, sort: str, state: UserVideoState | None = None):
+def sort_value(
+    video: Video, sort: str, state: UserVideoState | None = None, seed: int = 0
+):
     """The value ``video`` sorts by under ``sort``: what a keyset cursor remembers."""
+    if sort == "random":
+        return random_key(seed, video.id)
     if sort == "last_watched_at":
         return state.last_watched_at if state is not None else None
     return getattr(video, _SORT_ATTRS.get(sort, "added_at"))
@@ -224,15 +229,18 @@ def query_videos(
 
     statement, is_random = _apply_sort(statement, sort, order)
     if is_random:
-        # Shuffle ids only: a page needs one position in the shuffle, not every row.
-        ids = list(
-            session.exec(statement.with_only_columns(Video.id).order_by(Video.id))
+        # Order ids by a keyed hash: a page needs a position in the shuffle, not
+        # every row, and one video's position does not depend on the others.
+        ids = list(session.exec(statement.with_only_columns(Video.id)))
+        shuffle_seed = (
+            seed if seed is not None else py_random.SystemRandom().randrange(2**31)
         )
-        rng = py_random.Random(seed)  # noqa: S311 - seeded shuffle for stable UI ordering, not security
-        rng.shuffle(ids)
+        keyed = sorted((random_key(shuffle_seed, i), i) for i in ids)
         if page is not None:
-            ids = ids[page.offset : page.offset + page.fetch]
-        return _load_in_order(session, ids)
+            if page.has_position:
+                keyed = keyed[bisect.bisect_right(keyed, (page.value, page.after_id)) :]
+            keyed = keyed[: page.fetch]
+        return _load_in_order(session, [i for _, i in keyed])
     if page is not None:
         statement = _keyset_after(statement, sort, order, page).limit(page.fetch)
     return list(session.exec(statement).all())

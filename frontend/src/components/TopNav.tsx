@@ -126,10 +126,10 @@ export default function TopNav() {
     let active = true;
     const poll = () =>
       api
-        .listReview()
-        .then((items) => {
+        .reviewCount()
+        .then((count) => {
           if (!active) return;
-          setImportCount(items.length);
+          setImportCount(count);
         })
         .catch(() => undefined);
     poll();
@@ -154,10 +154,10 @@ export default function TopNav() {
   useEffect(() => {
     if (location.pathname === "/import" || location.pathname === "/review") {
       api
-        .listReview()
-        .then((items) => {
-          setImportCount(items.length);
-          notifyImportQueueChanged(items.length);
+        .reviewCount()
+        .then((count) => {
+          setImportCount(count);
+          notifyImportQueueChanged(count);
         })
         .catch(() => undefined);
     }

@@ -18,13 +18,29 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 500
+
+
+def random_key(seed: int, video_id: int) -> int:
+    """Where ``video_id`` falls in the shuffle for ``seed``.
+
+    A keyed hash of the id alone: adding or deleting other videos never moves this
+    one relative to the rest, which is what lets a shuffle be paged by keyset.
+    (Shuffling the id list would reorder everything whenever the set changed.)
+    """
+    key = (seed % 2**64).to_bytes(8, "big")
+    digest = hashlib.blake2b(
+        video_id.to_bytes(8, "big", signed=True), digest_size=7, key=key
+    )
+    return int.from_bytes(digest.digest(), "big")
 
 
 class InvalidCursor(ValueError):
@@ -84,10 +100,19 @@ def _unpack(token: str) -> dict[str, Any]:
     return payload
 
 
-def keyset_cursor(*, sort: str, order: str, value: Any, last_id: int) -> str:
-    return _pack(
-        {"t": "k", "s": sort, "o": order, "v": _encode_value(value), "i": last_id}
-    )
+def keyset_cursor(
+    *, sort: str, order: str, value: Any, last_id: int, seed: int | None = None
+) -> str:
+    payload: dict[str, Any] = {
+        "t": "k",
+        "s": sort,
+        "o": order,
+        "v": _encode_value(value),
+        "i": last_id,
+    }
+    if seed is not None:
+        payload["r"] = seed
+    return _pack(payload)
 
 
 def offset_cursor(
@@ -99,31 +124,87 @@ def offset_cursor(
     return _pack(payload)
 
 
+_INT64 = 2**63
+#: Far beyond any library; stops a forged offset from asking for absurd slices.
+MAX_OFFSET = 10_000_000
+#: Seeds are folded into this range before they reach a cursor.
+SEED_RANGE = 2**31
+
+_DATETIME_SORTS = frozenset({"added_at", "published_at", "last_watched_at"})
+_NUMBER_SORTS = frozenset({"duration", "file_size", "view_count", "random"})
+_TEXT_SORTS = frozenset({"title", "tags"})
+
+
+def _is_int(value: Any, low: int = -_INT64, high: int = _INT64) -> bool:
+    return (
+        isinstance(value, int) and not isinstance(value, bool) and low <= value < high
+    )
+
+
+def _check_sort_value(sort: str, value: Any) -> Any:
+    """``value`` as the type the sort column holds, or ``InvalidCursor``."""
+    if value is None and sort != "random":
+        return None
+    if sort in _NUMBER_SORTS:
+        ok = _is_int(value) or (
+            isinstance(value, float) and math.isfinite(value) and abs(value) < _INT64
+        )
+        if not ok:
+            raise InvalidCursor("Invalid cursor")
+        return value
+    if sort in _TEXT_SORTS:
+        if not isinstance(value, str):
+            raise InvalidCursor("Invalid cursor")
+        return value
+    # Everything else sorts on a timestamp (unknown sort keys fall back to added_at).
+    decoded = _decode_value(value)
+    if not isinstance(decoded, datetime):
+        raise InvalidCursor("Invalid cursor")
+    return decoded
+
+
 def parse_cursor(
-    token: str | None, *, limit: int, sort: str, order: str
+    token: str | None,
+    *,
+    limit: int,
+    sort: str,
+    order: str,
+    kind: Literal["keyset", "offset"] = "keyset",
 ) -> PageRequest:
-    """The page a cursor points at (the first page when ``token`` is empty)."""
+    """The page a cursor points at (the first page when ``token`` is empty).
+
+    ``kind`` is what this request can use: a cursor of the other kind, or one whose
+    contents do not fit the sort column, is refused with ``InvalidCursor``.
+    """
     if not token:
-        return PageRequest(limit=limit)
+        return PageRequest(limit=limit, kind=kind)
     payload = _unpack(token)
     if payload.get("s") != sort or payload.get("o") != order:
         raise InvalidCursor("Cursor does not match the requested sort order")
+    marker = payload.get("t")
+    if marker != ("k" if kind == "keyset" else "o"):
+        raise InvalidCursor("Cursor does not match this kind of listing")
     try:
-        if payload.get("t") == "k":
+        if kind == "keyset":
+            after_id = payload["i"]
+            seed = payload.get("r")
+            if not _is_int(after_id) or (
+                seed is not None and not _is_int(seed, 0, SEED_RANGE)
+            ):
+                raise InvalidCursor("Invalid cursor")
             return PageRequest(
                 limit=limit,
                 kind="keyset",
-                value=_decode_value(payload.get("v")),
-                after_id=int(payload["i"]),
+                value=_check_sort_value(sort, payload.get("v")),
+                after_id=after_id,
+                seed=seed,
             )
-        if payload.get("t") == "o":
-            seed = payload.get("r")
-            return PageRequest(
-                limit=limit,
-                kind="offset",
-                offset=max(0, int(payload["n"])),
-                seed=int(seed) if seed is not None else None,
-            )
-    except (KeyError, TypeError, ValueError) as exc:
+        offset = payload["n"]
+        seed = payload.get("r")
+        if not _is_int(offset, 0, MAX_OFFSET + 1):
+            raise InvalidCursor("Invalid cursor")
+        if seed is not None and not _is_int(seed, 0, SEED_RANGE):
+            raise InvalidCursor("Invalid cursor")
+        return PageRequest(limit=limit, kind="offset", offset=offset, seed=seed)
+    except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise InvalidCursor("Invalid cursor") from exc
-    raise InvalidCursor("Invalid cursor")

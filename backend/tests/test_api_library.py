@@ -89,9 +89,9 @@ def test_watch_progress_and_continue_watching(client, add_video):
 def test_tags_and_storage_stats(client, add_video):
     add_video(title="A", tags=["alpha", "shared"], file_size=100)
     add_video(title="B", tags=["shared"], file_size=50)
-    tags = client.get("/api/tags").json()
+    tags = client.get("/api/tags").json()["items"]
     assert tags == ["alpha", "shared"]
-    stats = client.get("/api/tags/stats").json()
+    stats = client.get("/api/tags/stats").json()["items"]
     by_tag = {row["tag"]: row["count"] for row in stats}
     assert by_tag["shared"] == 2
     assert by_tag["alpha"] == 1
@@ -513,3 +513,33 @@ def test_duplicate_groups_page(client, add_video):
         tuple(sorted(v["id"] for v in g["videos"])) for g in rest["items"]
     }
     assert client.get("/api/review/groups", params={"cursor": "x"}).status_code == 400
+
+
+def test_tags_and_tag_stats_page_without_losing_any(client, add_video):
+    names = [f"tag{n:03d}" for n in range(25)]
+    for n, name in enumerate(names):
+        # tag000 is on 25 videos, tag001 on 24, ... so the counts rank them.
+        for _ in range(25 - n):
+            add_video(tags=[name])
+    seen: list[str] = []
+    cursor = None
+    while True:
+        params = {"limit": 10, **({"cursor": cursor} if cursor else {})}
+        body = client.get("/api/tags", params=params).json()
+        seen += body["items"]
+        cursor = body["next_cursor"]
+        if cursor is None:
+            break
+    assert seen == names
+
+    ranked: list[str] = []
+    cursor = None
+    while True:
+        params = {"limit": 10, **({"cursor": cursor} if cursor else {})}
+        body = client.get("/api/tags/stats", params=params).json()
+        ranked += [row["tag"] for row in body["items"]]
+        cursor = body["next_cursor"]
+        if cursor is None:
+            break
+    assert ranked == names
+    assert client.get("/api/tags", params={"cursor": "zz"}).status_code == 400

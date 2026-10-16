@@ -1,3 +1,4 @@
+import bisect
 import logging
 import re
 from pathlib import Path
@@ -23,6 +24,8 @@ from ..response_schemas import (
     OkResponse,
     SpriteGenerateResult,
     SpriteMetaRead,
+    TagPage,
+    TagStatPage,
     ThumbnailCandidates,
     VideoAiChatHistory,
     VideoPage,
@@ -49,6 +52,12 @@ from ..services.metadata import (
     load_sprite_meta,
     sprite_image_path,
     sprites_exist,
+)
+from ..services.pagination import (
+    InvalidCursor,
+    keyset_cursor,
+    offset_cursor,
+    parse_cursor,
 )
 from ..services.paths import (
     is_manual_import,
@@ -121,6 +130,7 @@ def list_videos(
         sort=sort,
         order=order,
         seed=seed,
+        searching=bool(q and not continue_watching and not watched_only),
     )
     paging = dict(
         page=page, sort=sort, order=order, seed=seed, session=session, user_id=user.id
@@ -186,31 +196,60 @@ def list_videos(
             rows, session, user_id=user.id, states=states, compact=True
         ),
         total=total,
-        keyset=sort != "random" and not continue_watching,
         **paging,
     )
 
 
-@router.get("/tags", response_model=list[str])
+@router.get("/tags", response_model=TagPage)
 def list_tags(
     limit: int = Query(1000, ge=1, le=5000),
+    cursor: str | None = None,
     session: Session = Depends(get_session),
 ):
-    """Alphabetical tags, at most ``limit`` (the library rarely has that many)."""
-    return library.all_tags(session)[:limit]
+    """Every tag, alphabetically, ``limit`` at a time (keyset on the tag itself)."""
+    page = _tag_page_request(cursor, limit, sort="tags", kind="keyset")
+    tags = library.all_tags(session)
+    if page.has_position:
+        if not isinstance(page.value, str):
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        tags = tags[bisect.bisect_right(tags, page.value) :]
+    window = tags[: page.limit]
+    more = len(tags) > page.limit
+    return TagPage(
+        items=window,
+        next_cursor=keyset_cursor(sort="tags", order="asc", value=window[-1], last_id=0)
+        if more
+        else None,
+    )
 
 
-@router.get("/tags/stats", response_model=list[TagStat])
+@router.get("/tags/stats", response_model=TagStatPage)
 def tag_stats(
     channel: str | None = None,
     limit: int = Query(500, ge=1, le=2000),
+    cursor: str | None = None,
     session: Session = Depends(get_session),
 ):
-    """The ``limit`` most used tags, most common first."""
-    return [
-        TagStat(tag=t, count=n)
-        for t, n in library.tag_stats(session, channel=channel)[:limit]
-    ]
+    """Tags with their video counts, most common first, ``limit`` at a time."""
+    page = _tag_page_request(cursor, limit, sort="tagstats", kind="offset")
+    ranked = library.tag_stats(session, channel=channel)
+    window = ranked[page.offset : page.offset + page.limit]
+    more = len(ranked) > page.offset + page.limit
+    return TagStatPage(
+        items=[TagStat(tag=t, count=n) for t, n in window],
+        next_cursor=offset_cursor(
+            sort="tagstats", order="asc", offset=page.offset + page.limit
+        )
+        if more
+        else None,
+    )
+
+
+def _tag_page_request(cursor: str | None, limit: int, *, sort: str, kind):
+    try:
+        return parse_cursor(cursor, limit=limit, sort=sort, order="asc", kind=kind)
+    except InvalidCursor as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/stats/storage", response_model=StorageStats)

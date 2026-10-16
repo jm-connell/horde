@@ -15,6 +15,7 @@ from ..services import library, user_state
 from ..services.pagination import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
+    SEED_RANGE,
     InvalidCursor,
     PageRequest,
     keyset_cursor,
@@ -26,7 +27,13 @@ __all__ = ["DEFAULT_LIMIT", "MAX_LIMIT", "page_request", "build_page"]
 
 
 def page_request(
-    cursor: str | None, *, limit: int, sort: str, order: str, seed: int | None
+    cursor: str | None,
+    *,
+    limit: int,
+    sort: str,
+    order: str,
+    seed: int | None,
+    searching: bool = False,
 ) -> tuple[PageRequest, int | None]:
     """The requested page and the shuffle seed to use for it.
 
@@ -34,15 +41,23 @@ def page_request(
     (when the client sent none) and every cursor carries it.
     """
     try:
-        page = parse_cursor(cursor, limit=limit, sort=sort, order=order)
+        page = parse_cursor(
+            cursor,
+            limit=limit,
+            sort=sort,
+            order=order,
+            kind="offset" if searching else "keyset",
+        )
     except InvalidCursor as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if sort != "random":
         return page, seed
-    effective = seed if seed is not None else page.seed
+    # The cursor's seed wins over a different one in the query string: the walk
+    # must keep the shuffle its first page was made with.
+    effective = page.seed if page.seed is not None else seed
     if effective is None:
-        effective = secrets.randbelow(2**31)
-    return page, effective
+        effective = secrets.randbelow(SEED_RANGE)
+    return page, effective % SEED_RANGE
 
 
 def build_page(
@@ -60,8 +75,8 @@ def build_page(
 ) -> VideoPage:
     """Trim the ``limit + 1`` rows to a page, serialize them and make the next cursor.
 
-    ``keyset`` is false when ``rows`` came from an ordering the database cannot
-    express (random shuffle, ranked search); the cursor is then an offset into it.
+    ``keyset`` is false when ``rows`` came from a ranking the database cannot
+    express (text search); the cursor is then an offset into it.
     """
     more = len(rows) > page.limit
     rows = rows[: page.limit]
@@ -73,12 +88,16 @@ def build_page(
             next_cursor = keyset_cursor(
                 sort=sort,
                 order=order,
-                value=library.sort_value(last, sort, states.get(last.id)),
+                value=library.sort_value(last, sort, states.get(last.id), seed or 0),
                 last_id=last.id,
+                seed=seed if sort == "random" else None,
             )
         else:
             next_cursor = offset_cursor(
-                sort=sort, order=order, offset=page.offset + page.limit, seed=seed
+                sort=sort,
+                order=order,
+                offset=page.offset + page.limit,
+                seed=seed if sort == "random" else None,
             )
     return VideoPage(
         items=serialize(rows, states), next_cursor=next_cursor, total=total

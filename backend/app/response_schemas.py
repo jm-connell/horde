@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .schemas import VideoRead
+from .schemas import TagStat, VideoRead
 
 
 class ErrorField(BaseModel):
@@ -42,6 +42,20 @@ class VideoPage(BaseModel):
     total: int | None = Field(
         default=None, description="Matching rows; only present with include_total=true."
     )
+
+
+class TagPage(BaseModel):
+    """Alphabetical tags; follow ``next_cursor`` for the rest."""
+
+    items: list[str]
+    next_cursor: str | None = None
+
+
+class TagStatPage(BaseModel):
+    """Tags with video counts, most used first."""
+
+    items: list[TagStat]
+    next_cursor: str | None = None
 
 
 class OkResponse(BaseModel):

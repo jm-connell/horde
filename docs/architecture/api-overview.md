@@ -19,9 +19,13 @@ Use `/docs` as the live catalog of request/response shapes. This wiki does **not
 
 ### OpenAPI export and versioning
 
-`python -m app.export_openapi [FILE]` writes the schema without starting the server (sorted, stable output; `--check FILE` exits 1 when the file is stale, for CI). It is the input for generating the TypeScript client.
+`python -m app.export_openapi [FILE]` writes the schema without starting the server (sorted, stable output). `backend/openapi.json` is the committed copy: `scripts/check.sh` and CI run `python -m app.export_openapi --check openapi.json` and fail when it is stale, so regenerate it (`python -m app.export_openapi openapi.json`) in any change that touches the API. It is the input for generating the TypeScript client.
 
 The API is **not** versioned in the URL: the only client is the web UI shipped in the same image, so the two always change together. A change that would break a script calling the API directly is listed under *Upgrade notes* in the [changelog](https://github.com/jm-connell/horde/blob/main/CHANGELOG.md). A `/api/v1` prefix was considered and left out for now: the sign-in check, the media-route CORS, signed media links, upload limits and the offline cache keys all match on the literal `/api/...` paths, so a second prefix would have to be threaded through each of them (and existing offline downloads are keyed by the old URLs).
+
+### Thumbnails
+
+`has_thumbnail` in a video payload means a thumbnail path is stored for it, not that the file was checked: a list page would otherwise stat one file per card. If someone deletes a file under `data/thumbnails` by hand, `GET /api/thumbnails/{id}` answers `404` and the UI shows its placeholder until the thumbnail is grabbed again. Horde itself only removes thumbnail files together with the video row.
 
 ### Response models
 
@@ -89,9 +93,9 @@ Video payloads carry the probed codec fields, `has_compat` on lists, and `compat
 | `cursor`        | The previous page's `next_cursor`. Opaque: do not build or edit one. Missing means the first page         |
 | `include_total` | `true` adds `total` (the number of matches). Off by default because counting is an extra query            |
 
-Follow `next_cursor` until it is `null`. Library cursors are keyset cursors (the sort value and id of the last row), so a video added or removed between two requests never repeats or skips a row. `sort=random` and text search (`q`) have no database ordering, so their cursor is a position in a seeded shuffle or in the ranked hits; a random walk keeps one seed for all its pages. A cursor only works with the `sort` and `order` it was issued for (otherwise `400`). The *Continue watching* shelf (`continue_watching=true`) is at most 12 rows and is never paged.
+Follow `next_cursor` until it is `null`. Library cursors are keyset cursors (the sort value and id of the last row), so a video added or removed between two requests never repeats or skips a row. `sort=random` is a keyset walk too: each video's place in the shuffle is a keyed hash of its id and the seed (the cursor carries the seed), so it does not move when other videos come or go. Text search (`q`) ranks hits in Python, so its cursor is a position in that ranking. A cursor only works with the `sort` and `order` it was issued for and with the kind of listing that issued it; anything else, and any cursor whose contents do not fit (wrong type, out of range), is a `400`. The *Continue watching* shelf (`continue_watching=true`) is at most 12 rows and is never paged.
 
-`GET /api/review/groups` pages the same way (`limit` 1 to 100 groups, default 25; only the groups on the page are checked by AI). Lists that are small by nature are capped instead of paged: `/api/tags` (`limit` up to 5000), `/api/tags/stats` (the `limit` most used, up to 2000) and `/api/playlists` (`limit` up to 1000 with `offset`).
+`GET /api/review/groups` pages the same way (`limit` 1 to 100 groups, default 25; only the groups on the page are checked by AI). `GET /api/tags` (alphabetical, `limit` up to 5000, default 1000) and `GET /api/tags/stats` (most used first, `limit` up to 2000, default 500) page with `next_cursor` too and return `{items, next_cursor}`; the web UI follows the cursors, so every tag is listed. `GET /api/playlists` is capped (`limit` up to 1000 with `offset`), since a library has dozens.
 
 The web UI asks for 500 rows at a time and keeps following the cursor, painting the first page as soon as it arrives. A library under 500 videos therefore takes one request, exactly as before.
 

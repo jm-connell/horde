@@ -695,12 +695,20 @@ export const api = {
   },
 
   listTags(): Promise<string[]> {
-    return request<string[]>("/api/tags");
+    return collectPages((cursor) => {
+      const qs = new URLSearchParams({ limit: "5000" });
+      if (cursor) qs.set("cursor", cursor);
+      return request<Page<string>>(`/api/tags?${qs}`);
+    });
   },
 
   tagStats(channel?: string): Promise<TagStat[]> {
-    const qs = channel ? `?channel=${encodeURIComponent(channel)}` : "";
-    return request<TagStat[]>(`/api/tags/stats${qs}`);
+    return collectPages((cursor) => {
+      const qs = new URLSearchParams({ limit: "2000" });
+      if (channel) qs.set("channel", channel);
+      if (cursor) qs.set("cursor", cursor);
+      return request<Page<TagStat>>(`/api/tags/stats?${qs}`);
+    });
   },
 
   storageStats(): Promise<StorageStats> {
@@ -1074,6 +1082,14 @@ export const api = {
       if (cursor) qs.set("cursor", cursor);
       return request<Page<DuplicateGroup>>(`/api/review/groups?${qs}`);
     });
+  },
+
+  /** How many videos wait for review: one row and the server's count, not the list. */
+  async reviewCount(): Promise<number> {
+    const page = await request<Page<Video>>(
+      "/api/review?limit=1&include_total=true"
+    );
+    return page.total ?? page.items.length;
   },
 
   listReview(): Promise<Video[]> {

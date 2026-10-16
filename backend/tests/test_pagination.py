@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -166,3 +168,137 @@ def test_bad_cursors_and_limits_are_rejected(client, add_video):
     assert other_sort.status_code == 400
     assert client.get("/api/videos", params={"limit": 0}).status_code == 422
     assert client.get("/api/videos", params={"limit": 501}).status_code == 422
+
+
+def _forged(**payload) -> str:
+    from app.services.pagination import _pack
+
+    return _pack(payload)
+
+
+FORGED_KEYSET = [
+    # value of the wrong type for the sort column
+    ("added_at", {"v": [1, 2]}),
+    ("added_at", {"v": {"x": 1}}),
+    ("added_at", {"v": "yesterday"}),
+    ("added_at", {"v": True}),
+    ("added_at", {"v": 1.5}),
+    ("added_at", {"v": {"dt": "not a date"}}),
+    ("added_at", {"v": {"dt": 5}}),
+    ("published_at", {"v": "2024-01-01"}),
+    ("duration", {"v": "long"}),
+    ("duration", {"v": True}),
+    ("duration", {"v": [1]}),
+    ("duration", {"v": 1e30}),
+    ("duration", {"v": 10**30}),
+    ("file_size", {"v": float("nan")}),
+    ("view_count", {"v": {"dt": "2024-01-01T00:00:00"}}),
+    ("title", {"v": 5}),
+    ("title", {"v": ["a"]}),
+    ("random", {"v": None}),
+    ("random", {"v": "x"}),
+    # bad id or seed
+    ("added_at", {"v": None, "i": "7"}),
+    ("added_at", {"v": None, "i": True}),
+    ("added_at", {"v": None, "i": 2**70}),
+    ("added_at", {"v": None, "i": None}),
+    ("random", {"v": 5, "r": -1}),
+    ("random", {"v": 5, "r": 2**40}),
+    ("random", {"v": 5, "r": "x"}),
+]
+
+
+# The review queue only sorts by added_at, so only those forgeries reach it.
+FORGED_FOR_ENDPOINT = [("/api/videos", sort, p) for sort, p in FORGED_KEYSET] + [
+    ("/api/review", sort, p) for sort, p in FORGED_KEYSET if sort == "added_at"
+]
+
+
+@pytest.mark.parametrize(("url", "sort", "payload"), FORGED_FOR_ENDPOINT)
+def test_forged_keyset_cursors_are_a_400(client, add_video, url, sort, payload):
+    add_video()
+    body = {"t": "k", "s": sort, "o": "desc", "i": 1, **payload}
+    token = (
+        base64.urlsafe_b64encode(json.dumps(body, allow_nan=True).encode())
+        .decode()
+        .rstrip("=")
+    )
+    params = {"cursor": token}
+    if url == "/api/videos":
+        params["sort"] = sort
+    resp = client.get(url, params=params)
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["code"] == "bad_request"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"n": -1},
+        {"n": "3"},
+        {"n": True},
+        {"n": 10**12},
+        {"n": 1e30},
+        {"n": 2, "r": -5},
+        {"n": 2, "r": 2**50},
+    ],
+)
+def test_forged_offset_cursors_are_a_400(client, add_video, payload):
+    add_video()
+    token = _forged(t="o", s="added_at", o="desc", **payload)
+    # Offset cursors belong to search; the plain listing refuses them anyway.
+    assert client.get("/api/videos", params={"cursor": token}).status_code == 400
+    assert (
+        client.get("/api/videos", params={"cursor": token, "q": "Video"}).status_code
+        == 400
+    )
+
+
+def test_a_cursor_of_the_wrong_kind_is_a_400(client, add_video):
+    for n in range(3):
+        add_video(title=f"needle {n}")
+    plain = client.get("/api/videos", params={"limit": 1}).json()["next_cursor"]
+    searched = client.get("/api/videos", params={"limit": 1, "q": "needle"}).json()[
+        "next_cursor"
+    ]
+    # keyset cursor into search
+    assert (
+        client.get("/api/videos", params={"cursor": plain, "q": "needle"}).status_code
+        == 400
+    )
+    # offset cursor into a keyset listing
+    assert client.get("/api/videos", params={"cursor": searched}).status_code == 400
+    # and into the review queue
+    assert client.get("/api/review", params={"cursor": searched}).status_code == 400
+    assert client.get("/api/review/groups", params={"cursor": plain}).status_code == 400
+
+
+def test_random_order_survives_inserts_and_deletes_between_pages(
+    client, add_video, session
+):
+    from app.models import Video
+
+    originals = [add_video().id for _ in range(30)]
+    first = client.get(
+        "/api/videos", params={"sort": "random", "seed": 11, "limit": 10}
+    ).json()
+    seen = ids(first["items"])
+    # Change the library mid-walk: new videos and a deleted one.
+    added = [add_video().id for _ in range(5)]
+    doomed = next(i for i in originals if i not in seen)
+    session.delete(session.get(Video, doomed))
+    session.commit()
+    cursor = first["next_cursor"]
+    while cursor:
+        page = client.get(
+            "/api/videos",
+            params={"sort": "random", "limit": 10, "cursor": cursor},
+        ).json()
+        seen += ids(page["items"])
+        cursor = page["next_cursor"]
+    assert len(seen) == len(set(seen)), "a video was served twice"
+    survivors = {i for i in originals if i != doomed}
+    assert survivors <= set(seen), "an untouched video was skipped"
+    assert doomed not in seen[10:]
+    # Videos added mid-walk may or may not land after the cursor, never twice.
+    assert set(seen) <= survivors | set(added)
