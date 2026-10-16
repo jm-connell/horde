@@ -67,6 +67,10 @@ When Ollama HTTP calls fail, the resolved URL cache is invalidated so a dead cac
 
 Embeds are only enqueued when Ollama is **enabled** or OpenRouter owns embeddings (`scope=all`) — not when neither backend can ever serve them.
 
+## Vector search
+
+Similarity search (hybrid search, related videos, recommendations) scores every stored chunk with one matrix product. The vectors are loaded into an L2-normalised `float32` matrix per dimension, built on first use and rebuilt after any change to `video_embeddings` (an ORM write, or a row count / max id change such as a cascading video delete). Memory is about `chunks x dim x 4` bytes, for example 60 000 chunks of 768 dimensions is roughly 184 MB. The matrix lives on the database engine object, not in module state. Vectors of another dimension (a previous embed model) are ignored until re-indexed.
+
 ## Embeddings layout
 
 `video_embeddings.chunk_index`:

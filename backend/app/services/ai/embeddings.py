@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from ...models import Video, VideoAiMeta, VideoEmbedding, utcnow
 from .. import app_settings
 from . import text as ai_text
+from . import vector_index
 from .provider import get_embed_provider, resolve_embed_model
 
 logger = logging.getLogger(__name__)
@@ -255,22 +256,13 @@ def similar_video_hits(
     min_score: float = 0.15,
 ) -> list[tuple[int, float, int]]:
     """Return (video_id, score, chunk_index) by best-matching chunk."""
-    exclude_ids = exclude_ids or set()
-    rows = session.exec(select(VideoEmbedding)).all()
-    best: dict[int, tuple[float, int]] = {}
-    for row in rows:
-        if row.video_id in exclude_ids:
-            continue
-        vec = unpack_vector(row.vector, row.dim)
-        score = cosine(query_vec, vec)
-        if score < min_score:
-            continue
-        prev = best.get(row.video_id)
-        if prev is None or score > prev[0]:
-            best[row.video_id] = (score, int(row.chunk_index))
-
-    ranked = sorted(best.items(), key=lambda kv: kv[1][0], reverse=True)
-    return [(vid, sc, chunk) for vid, (sc, chunk) in ranked[:limit]]
+    return vector_index.top_chunks(
+        session,
+        query_vec,
+        limit=limit,
+        exclude_ids=exclude_ids or set(),
+        min_score=min_score,
+    )
 
 
 def similar_video_ids(
