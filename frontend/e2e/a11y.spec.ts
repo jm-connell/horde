@@ -53,7 +53,7 @@ test("watch page menus open without violations", async ({ page }) => {
 for (const { name, path, ready } of [
   { name: "download", path: "/download", ready: "Queued night drive" },
   { name: "playlists", path: "/playlists", ready: "Evening set" },
-  { name: "history", path: "/history", ready: "Aurora Drift" },
+  { name: "history", path: "/history", ready: "Today" },
   { name: "import", path: "/import", ready: undefined },
 ]) {
   test(`${name} page has no serious accessibility violations`, async ({
@@ -61,7 +61,10 @@ for (const { name, path, ready } of [
   }) => {
     await page.goto(path);
     await expect(page.locator("main h1")).toBeVisible();
-    if (ready) await expect(page.getByText(ready).first()).toBeVisible();
+    if (ready)
+      await expect(
+        page.getByText(ready, { exact: true }).first()
+      ).toBeVisible();
     await expectNoSeriousViolations(page, name);
   });
 }
