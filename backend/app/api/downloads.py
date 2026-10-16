@@ -9,6 +9,8 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlmodel import Session, select
 
 from ..auth import (
+    STREAM_KEEPALIVE,
+    StreamAuthGuard,
     current_user,
     ensure_permission,
     require_admin,
@@ -247,9 +249,16 @@ def resume_queue():
 async def queue_events(request: Request) -> StreamingResponse:
     """One EventSource for the whole download queue (avoids HTTP/1.1 socket cap)."""
 
+    guard = StreamAuthGuard.of(request)
+
     async def event_stream() -> AsyncGenerator[str, None]:
         last_payloads: dict[int, Any] = {}
         while not shutdown_requested(request):
+            alive = await guard.tick()
+            if alive is False:
+                break
+            if alive:
+                yield STREAM_KEEPALIVE
             items = list(download_progress.progress_store.items())
             for job_id, snapshot in items:
                 if not isinstance(snapshot, dict):
@@ -690,10 +699,17 @@ async def job_events(job_id: int, request: Request) -> StreamingResponse:
     if await asyncio.to_thread(_job_status, job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    guard = StreamAuthGuard.of(request)
+
     async def event_stream() -> AsyncGenerator[str, None]:
         last_payload = None
         ticks = 0
         while not shutdown_requested(request):
+            alive = await guard.tick()
+            if alive is False:
+                break
+            if alive:
+                yield STREAM_KEEPALIVE
             snapshot = download_progress.progress_store.get(job_id)
             if snapshot is not None and snapshot != last_payload:
                 last_payload = snapshot

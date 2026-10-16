@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from urllib.parse import parse_qs
 
 import anyio.to_thread
@@ -110,7 +111,7 @@ class AuthMiddleware:
 
         runtime: AuthRuntime = scope["app"].state.auth
         request = Request(scope)
-        user = await anyio.to_thread.run_sync(self._identify, runtime, request)
+        user = await anyio.to_thread.run_sync(self.identify, runtime, request)
         if user is not None:
             scope.setdefault("state", {})["user"] = user
         elif (scope["method"], scope["path"]) not in self.public and not (
@@ -122,16 +123,20 @@ class AuthMiddleware:
 
     # --- Identification (runs in a worker thread: it touches SQLite) -------
 
-    def _identify(self, runtime: AuthRuntime, request: Request) -> AuthUser | None:
+    @staticmethod
+    def identify(
+        runtime: AuthRuntime, request: Request, *, touch: bool = True
+    ) -> AuthUser | None:
+        """The caller, or ``None``. ``touch=False`` leaves the session expiry alone."""
         with Session(database.engine) as session:
             if runtime.config.disabled:
-                return self._proxy_user(runtime, request, session)
+                return AuthMiddleware._proxy_user(runtime, request, session)
             token = request.cookies.get(accounts.SESSION_COOKIE)
             if token:
-                user = accounts.resolve_session(session, token)
+                user = accounts.resolve_session(session, token, touch=touch)
                 if user is not None:
                     return user
-            return self._media_token_user(runtime, request, session)
+            return AuthMiddleware._media_token_user(runtime, request, session)
 
     @staticmethod
     def _media_token_user(
@@ -170,6 +175,54 @@ class AuthMiddleware:
                 return None
             return AuthUser.of(user)
         return ensure_default_admin(runtime, session)
+
+
+#: SSE comment line: ignored by EventSource, keeps proxies from idling the stream out.
+STREAM_KEEPALIVE = ": keepalive\n\n"
+
+
+class StreamAuthGuard:
+    """Keeps a long-lived stream (SSE) honest about who is on the other end.
+
+    The middleware authenticates a request once, but an event stream can run for
+    hours. The guard re-runs the same identification (cookie session, signed media
+    URL or proxy user) every ``AuthRuntime.stream_recheck_seconds``; the stream
+    ends once the session is gone, the account is disabled or deleted, or its
+    password was reset. It never slides the session expiry: an open tab is not
+    activity. Build one per stream with ``StreamAuthGuard.of(request)``.
+    """
+
+    def __init__(self, request: Request, user_id: int, interval: float) -> None:
+        self._request = request
+        self._user_id = user_id
+        self.interval = interval
+        self._next_check = time.monotonic() + interval
+
+    @classmethod
+    def of(cls, request: Request) -> StreamAuthGuard:
+        user: AuthUser = current_user(request)
+        runtime: AuthRuntime = request.app.state.auth
+        return cls(request, user.id, runtime.stream_recheck_seconds)
+
+    def due(self) -> bool:
+        return time.monotonic() >= self._next_check
+
+    def valid_now(self) -> bool:
+        """Re-identify the caller now (blocking: call off the event loop)."""
+        self._next_check = time.monotonic() + self.interval
+        runtime: AuthRuntime = self._request.app.state.auth
+        user = AuthMiddleware.identify(runtime, self._request, touch=False)
+        return user is not None and user.id == self._user_id
+
+    def still_valid(self, *, force: bool = False) -> bool:
+        """Blocking and throttled: cheap ``True`` until the next check is due."""
+        return self.valid_now() if force or self.due() else True
+
+    async def tick(self) -> bool | None:
+        """``None`` when no check is due; else whether the caller is still valid."""
+        if not self.due():
+            return None
+        return await anyio.to_thread.run_sync(self.valid_now)
 
 
 def ensure_default_admin(runtime: AuthRuntime, session: Session) -> AuthUser | None:

@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session, func, select
 
-from ..auth import current_user, require_admin, require_permission
+from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
 from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
 from ..database import get_session
 from ..models import DownloadJob, JobStatus, User, Video
@@ -807,6 +807,7 @@ def delete_video_ai_chat(
     dependencies=[Depends(require_permission("use_ai"))],
 )
 def post_video_ai_chat(
+    request: Request,
     video_id: int,
     payload: VideoAiChatRequest,
     session: Session = Depends(get_session),
@@ -819,7 +820,12 @@ def post_video_ai_chat(
 
     # Own session: request-scoped session closes before SSE finishes.
     return StreamingResponse(
-        ai_chat.stream_chat_events(video_id, payload.message, user.id),
+        ai_chat.stream_chat_events(
+            video_id,
+            payload.message,
+            user.id,
+            StreamAuthGuard.of(request).still_valid,
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

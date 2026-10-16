@@ -425,9 +425,13 @@ def start_session(
 
 
 def resolve_session(
-    session: Session, token: str, *, now: datetime | None = None
+    session: Session, token: str, *, now: datetime | None = None, touch: bool = True
 ) -> AuthUser | None:
-    """The user a cookie token belongs to, sliding the expiry. ``None`` if not valid."""
+    """The user a cookie token belongs to, sliding the expiry. ``None`` if not valid.
+
+    ``touch=False`` only checks (long-lived streams re-validate without counting
+    as activity).
+    """
     now = now or utcnow()
     row = session.execute(
         select(UserSession, User)
@@ -439,7 +443,7 @@ def resolve_session(
     user_session, user = row
     if user.disabled or as_utc(user_session.expires_at) < now:
         return None
-    if now - as_utc(user_session.last_seen_at) >= TOUCH_INTERVAL:
+    if touch and now - as_utc(user_session.last_seen_at) >= TOUCH_INTERVAL:
         session.execute(
             update(UserSession)
             .where(UserSession.id == user_session.id)

@@ -84,6 +84,9 @@ class AuthConfig:
 class AuthRuntime:
     config: AuthConfig = field(default_factory=AuthConfig)
     limiter: LoginLimiter = field(default_factory=LoginLimiter)
+    #: How often an open event stream re-checks that its caller may still be
+    #: there (also its keepalive cadence). Tests shorten it.
+    stream_recheck_seconds: float = 15.0
     #: Serialises "is the user table empty?" with the insert that fills it.
     bootstrap_lock: threading.Lock = field(default_factory=threading.Lock)
     _secret: bytes | None = field(default=None, repr=False)

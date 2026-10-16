@@ -39,7 +39,7 @@ Changes apply on the person's next request; they do not need to sign in again. T
 
 ## Managing users (admins)
 
-*Settings → Users* lists accounts. You can add a user (username, password, type and permissions), change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere. Deleting removes their history, chats and preferences; videos and playlists stay.
+*Settings → Users* lists accounts. You can add a user (username, password, type and permissions), change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere: open pages lose access at once, and live event streams (download progress, AI chat replies) end within about 15 seconds. Deleting removes their history, chats and preferences; videos and playlists stay.
 
 The server refuses any change that would leave **no enabled administrator**.
 

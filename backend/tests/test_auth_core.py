@@ -213,6 +213,18 @@ def test_session_slides_and_expires(session):
     assert accounts.resolve_session(session, "not-a-token") is None
 
 
+def test_checking_a_session_without_touch_does_not_slide_it(session):
+    user = accounts.create_user(session, "root", "password-one")
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    token = accounts.start_session(session, user, now=start)
+    row = session.exec(select(UserSession)).one()
+
+    later = start + timedelta(days=20)
+    assert accounts.resolve_session(session, token, now=later, touch=False) is not None
+    session.refresh(row)
+    assert accounts.as_utc(row.expires_at) == start + accounts.SESSION_TTL
+
+
 def test_set_password_keeps_only_the_current_session(session):
     user = accounts.create_user(session, "root", "password-one")
     keep = accounts.start_session(session, user)

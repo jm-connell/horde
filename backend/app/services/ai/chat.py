@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing import Any
 
 from sqlmodel import Session, select
@@ -129,16 +129,28 @@ def _validate_chat_request(session: Session, video_id: int, message: str) -> Vid
     return video
 
 
+#: ``authorized(force=...)``: whether the caller may still receive this stream
+#: (throttled unless forced). See ``StreamAuthGuard.still_valid``.
+Authorized = Callable[..., bool]
+
+
 def stream_chat_events(
-    video_id: int, message: str, user_id: int
+    video_id: int,
+    message: str,
+    user_id: int,
+    authorized: Authorized | None = None,
 ) -> Generator[str, None, None]:
     """SSE generator that owns its DB session for the full stream lifetime."""
     with Session(engine) as session:
-        yield from stream_chat(session, video_id, message, user_id)
+        yield from stream_chat(session, video_id, message, user_id, authorized)
 
 
 def stream_chat(
-    session: Session, video_id: int, message: str, user_id: int
+    session: Session,
+    video_id: int,
+    message: str,
+    user_id: int,
+    authorized: Authorized | None = None,
 ) -> Generator[str, None, None]:
     """Yield SSE event strings for a chat turn.
 
@@ -209,6 +221,7 @@ def stream_chat(
     session.commit()
 
     assistant_parts: list[str] = []
+    revoked = False
     try:
         for delta in provider.chat_stream(
             user_text,
@@ -223,11 +236,34 @@ def stream_chat(
         ):
             if not delta:
                 continue
+            if revoked:
+                # Keep draining so the provider records what the turn cost.
+                continue
+            if authorized is not None and not authorized():
+                revoked = True
+                yield _sse(_revoked_event())
+                continue
             assistant_parts.append(delta)
             yield _sse({"type": "token", "text": delta})
     except Exception as exc:
         logger.warning("chat stream failed video_id=%s", video_id, exc_info=True)
         yield _sse({"type": "error", "detail": str(exc), "status": 502})
+        return
+
+    if revoked:
+        logger.warning(
+            "chat stream ended: caller lost access user_id=%s video_id=%s",
+            user_id,
+            video_id,
+        )
+        return
+    if authorized is not None and not authorized(force=True):
+        logger.warning(
+            "chat reply dropped: caller lost access user_id=%s video_id=%s",
+            user_id,
+            video_id,
+        )
+        yield _sse(_revoked_event())
         return
 
     reply = "".join(assistant_parts).strip()
@@ -276,6 +312,10 @@ def stream_chat(
             "cost": assistant_row.cost,
         }
     )
+
+
+def _revoked_event() -> dict[str, Any]:
+    return {"type": "error", "detail": "Your session has ended", "status": 401}
 
 
 def _sse(payload: dict[str, Any]) -> str:
