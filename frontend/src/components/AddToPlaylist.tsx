@@ -1,8 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../queries/keys";
+import { usePlaylists } from "../queries/playlists";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { MenuScroll } from "./MenuFlyout";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
-import type { Playlist } from "../types";
 
 const defaultButtonClass =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700";
@@ -19,7 +21,8 @@ export default function AddToPlaylist({
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const queryClient = useQueryClient();
+  const { playlists } = usePlaylists(open);
   const [status, setStatus] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const { flip, anchorRef } = useFlipMenu(open, 320);
@@ -28,14 +31,6 @@ export default function AddToPlaylist({
   useEffect(() => {
     onOpenChange?.(open);
   }, [open, onOpenChange]);
-
-  useEffect(() => {
-    if (!open) return;
-    api
-      .listPlaylists()
-      .then(setPlaylists)
-      .catch(() => undefined);
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -52,6 +47,9 @@ export default function AddToPlaylist({
   const add = async (playlistId: number, name: string) => {
     try {
       await api.addToPlaylist(playlistId, videoId);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.playlists.all,
+      });
       setStatus(`Added to ${name}`);
       setTimeout(() => setStatus(null), 2000);
       setOpen(false);

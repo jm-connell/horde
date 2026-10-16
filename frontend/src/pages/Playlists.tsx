@@ -1,26 +1,30 @@
 import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import { describeError } from "../apiErrors";
+import { useToast } from "../context/ToastContext";
+import { usePresets } from "../queries/app";
+import { queryKeys } from "../queries/keys";
+import { setPlaylistList, usePlaylists } from "../queries/playlists";
 import LoadingIndicator from "../components/LoadingIndicator";
 import PlaylistRow from "../components/PlaylistRow";
 import ThemedSelect from "../components/ThemedSelect";
-import { PRESET_ORDER, presetOptionLabel } from "../presets";
 import type { Playlist } from "../types";
+import { PRESET_ORDER, presetOptionLabel } from "../presets";
 import { moveItem } from "../utils";
 
 export default function Playlists() {
   const { can } = useAuth();
   const [params, setParams] = useSearchParams();
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { showError } = useToast();
+  const { playlists, isPending: loading } = usePlaylists();
   const [name, setName] = useState("");
   const [subscribeUrl, setSubscribeUrl] = useState("");
   const [subscribePreset, setSubscribePreset] = useState("best");
-  const [allPresets, setAllPresets] = useState<string[]>([...PRESET_ORDER]);
-  const [busy, setBusy] = useState(false);
-  const [subscribing, setSubscribing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const allPresets = usePresets([...PRESET_ORDER]);
 
   const expandedId = Number(params.get("open")) || null;
 
@@ -31,25 +35,8 @@ export default function Playlists() {
     setParams(next, { replace: true });
   };
 
-  const load = (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    api
-      .listPlaylists()
-      .then(setPlaylists)
-      .catch(() => setPlaylists([]))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  useEffect(() => {
-    api
-      .listPresets()
-      .then(setAllPresets)
-      .catch(() => undefined);
-  }, []);
+  const load = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.playlists.list });
 
   const scrolledOpen = useRef<number | null>(null);
   const playlistDragFrom = useRef<number | null>(null);
@@ -63,53 +50,52 @@ export default function Playlists() {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [expandedId, loading, playlists.length]);
 
-  const create = async () => {
-    if (!name.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const created = await api.createPlaylist(name.trim());
+  const addToList = (created: Playlist) => {
+    setPlaylistList(queryClient, (prev) =>
+      prev.some((row) => row.id === created.id) ? prev : [...prev, created]
+    );
+    setExpandedId(created.id);
+    void load();
+  };
+
+  const createMutation = useMutation({
+    mutationFn: (newName: string) => api.createPlaylist(newName),
+    onSuccess: (created) => {
       setName("");
-      setPlaylists((prev) =>
-        prev.some((row) => row.id === created.id) ? prev : [...prev, created]
-      );
-      setExpandedId(created.id);
-      load({ silent: true });
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not create playlist"
-      );
-    } finally {
-      setBusy(false);
+      addToList(created);
+    },
+    onError: (err) =>
+      showError(`Could not create playlist: ${describeError(err)}`),
+  });
+  const busy = createMutation.isPending;
+  const create = () => {
+    if (name.trim()) createMutation.mutate(name.trim());
+  };
+
+  const subscribeMutation = useMutation({
+    mutationFn: (v: { url: string; preset: string }) =>
+      api.importPlaylist(v.url, v.preset, { subscribe: true }),
+    onSuccess: (created) => {
+      setSubscribeUrl("");
+      addToList(created);
+    },
+    onError: (err) =>
+      showError(`Could not subscribe to playlist: ${describeError(err)}`),
+  });
+  const subscribing = subscribeMutation.isPending;
+  const subscribe = () => {
+    if (subscribeUrl.trim()) {
+      subscribeMutation.mutate({
+        url: subscribeUrl.trim(),
+        preset: subscribePreset,
+      });
     }
   };
 
-  const subscribe = async () => {
-    if (!subscribeUrl.trim()) return;
-    setSubscribing(true);
-    setError(null);
-    try {
-      const created = await api.importPlaylist(
-        subscribeUrl.trim(),
-        subscribePreset,
-        {
-          subscribe: true,
-        }
-      );
-      setSubscribeUrl("");
-      setPlaylists((prev) =>
-        prev.some((row) => row.id === created.id) ? prev : [...prev, created]
-      );
-      setExpandedId(created.id);
-      load({ silent: true });
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not subscribe to playlist"
-      );
-    } finally {
-      setSubscribing(false);
-    }
-  };
+  const reorderMutation = useMutation({
+    mutationFn: (ids: number[]) => api.reorderPlaylists(ids),
+    onError: () => void load(),
+  });
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -190,8 +176,6 @@ export default function Playlists() {
         </div>
       )}
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
-
       {loading ? (
         <LoadingIndicator />
       ) : playlists.length === 0 ? (
@@ -223,10 +207,8 @@ export default function Playlists() {
                 const to = playlists.findIndex((row) => row.id === id);
                 const next = moveItem(playlists, from, to);
                 if (next === playlists) return;
-                setPlaylists(next);
-                void api
-                  .reorderPlaylists(next.map((row) => row.id))
-                  .catch(() => load({ silent: true }));
+                setPlaylistList(queryClient, () => next);
+                reorderMutation.mutate(next.map((row) => row.id));
               }}
               onPlaylistDragEnd={() => {
                 playlistDragFrom.current = null;
@@ -235,34 +217,11 @@ export default function Playlists() {
               }}
               onDeleted={() => {
                 setExpandedId(null);
-                setPlaylists((prev) => prev.filter((row) => row.id !== p.id));
-                load({ silent: true });
+                setPlaylistList(queryClient, (prev) =>
+                  prev.filter((row) => row.id !== p.id)
+                );
+                void load();
               }}
-              onUpdated={(next) =>
-                setPlaylists((prev) =>
-                  prev.map((row) =>
-                    row.id === next.id
-                      ? {
-                          ...row,
-                          name: next.name,
-                          description: next.description,
-                          source_type: next.source_type,
-                          source_url: next.source_url,
-                          subscribed: next.subscribed,
-                          quality_preset: next.quality_preset,
-                          last_synced_at: next.last_synced_at,
-                          sync_error: next.sync_error,
-                          item_count: next.item_count,
-                          position: next.position,
-                          cover_video_id: next.cover_video_id,
-                          has_custom_cover: next.has_custom_cover,
-                          thumbnail_video_id: next.thumbnail_video_id,
-                          has_thumbnail: next.has_thumbnail,
-                        }
-                      : row
-                  )
-                )
-              }
             />
           ))}
         </div>
