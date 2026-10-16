@@ -192,3 +192,74 @@ test("a default sort that arrives after the library mounted is applied", async (
   });
   await expect(sortButton).toContainText("Duration");
 });
+
+test("a tag link opens the filtered library and its chip clears it", async ({
+  page,
+}) => {
+  await page.goto("/?tag=ambient");
+  await expect(
+    page.getByRole("heading", { name: "#ambient", level: 1 })
+  ).toBeVisible();
+  await expect(videoCard(page, "Aurora Drift")).toBeVisible();
+  await expect(videoCard(page, "Kiln fire")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "#ambient ✕" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible();
+  await expect(videoCard(page, "Kiln fire")).toBeVisible();
+});
+
+test("a channel link opens that channel and drops the legacy tab parameter", async ({
+  page,
+}) => {
+  await page.goto("/?channel=Kiln&tab=feed");
+  await expect(
+    page.getByRole("heading", { name: "Kiln", level: 1 })
+  ).toBeVisible();
+  await expect(feedCard(page, "Kiln fire")).toBeVisible();
+  await expect(feedCard(page, "Aurora Drift")).toHaveCount(0);
+  await expect(page).not.toHaveURL(/tab=feed/);
+  await expect(page).toHaveURL(/channel=Kiln/);
+});
+
+test("a channel is renamed from its heading", async ({ page }) => {
+  await page.goto("/?channel=Kiln");
+  const heading = page.getByRole("heading", { name: /^Kiln/, level: 1 });
+  await heading.hover();
+  await page.getByTitle("Rename channel").click();
+  const input = page.locator("input.text-2xl");
+  await input.fill("Kiln Works");
+  await input.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Kiln Works", level: 1 })
+  ).toBeVisible();
+  await expect(feedCard(page, "Kiln fire")).toBeVisible();
+});
+
+test("shift-click selects a range of cards and delete removes them", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Select", exact: true }).click();
+  // The grid's cards; the continue-watching row above it has its own.
+  const cards = page.locator("[data-horde='video-card'].video-card--feed");
+  await expect(cards.first()).toBeVisible();
+  const titles = await cards.allTextContents();
+  expect(titles.length).toBeGreaterThan(3);
+
+  await cards.nth(0).click();
+  await cards.nth(2).click({ modifiers: ["Shift"] });
+  await expect(page.getByText("3 selected")).toBeVisible();
+  // A plain click on a selected card unselects just that card.
+  await cards.nth(1).click();
+  await expect(page.getByText("2 selected")).toBeVisible();
+
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  await expect(page.getByText("2 selected")).toHaveCount(0);
+  await expect(cards).toHaveCount(titles.length - 2);
+});
