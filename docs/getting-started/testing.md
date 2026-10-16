@@ -24,7 +24,7 @@ CI **must not** call YouTube, OpenRouter, or a real Ollama. Download tests stub 
 !!! tip "Write a test when you fix a bug"
     If something broke in production (queue pause, device downloads, progress expiry, settings merge, update wiping host paths), add a pytest or Vitest case next to the fix. The existing files under `backend/tests/` and `frontend/src/**/*.test.ts` are the pattern.
 
-## Quality gates (`scripts/check.sh`)
+## Quality gates (`scripts/check.sh`) { #quality-gates-scriptscheck-sh }
 
 One script runs every gate in the order CI does and prints a summary. Run it before each commit:
 

@@ -14,7 +14,7 @@ Run **one uvicorn process** and start every background loop as a **daemon thread
 
 - Each loop is a `BackgroundWorker` or implements the `ManagedWorker` protocol (`start`, `signal_stop`, `stop`, `is_alive`, `healthy`).
 - The registry starts workers in dependency order and stops them in reverse, signalling all of them before joining any, with a per-worker timeout and an overall budget of 20 seconds. A worker that will not stop is logged by name.
-- **Durable queues live in the database, not in memory.** A job is a row; the in-memory state is only progress and wake-ups. Startup runs recovery before any loop can claim work: `downloading` becomes `queued`, `running` AI jobs become `queued`, `indexing` catalogs become `queued`. A shutdown signal requeues in-flight work instead of cancelling it.
+- **Durable queues live in the database, not in memory.** A job is a row; the in-memory state is only progress and wake-ups. Startup runs recovery before any job is dispatched: `downloading` becomes `queued`, `running` AI jobs become `queued`, `indexing` catalogs become `queued`. A shutdown signal requeues in-flight work instead of cancelling it.
 - Concurrency is bounded per resource, not per thread count: download slots, an ffmpeg slot pool, a single-flight AI runner, one catalog at a time, a global yt-dlp extract gate.
 - Health is observable: `GET /api/ready` fails when a registered worker is unhealthy, and `/api/metrics` exposes `horde_worker_up` and queue depths.
 - Workers are skipped under `HORDE_E2E` so browser tests are deterministic.

@@ -45,7 +45,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `user_video_state` | **Per-user** watch position and last-watched time, keyed `(user_id, video_id)`. Read and written only through `services/user_state.py` |
 | `user_settings` | **Per-user** UI preferences (`ui_json`); server-wide settings stay in `app_settings.json` |
 
-All four reference `users` with `ON DELETE CASCADE`, so deleting a person removes their history, chats and preferences and leaves the videos. The legacy `videos.last_position_sec` / `last_watched_at` columns are unused; the first admin adopts them. Which data is shared and which is per user is summarised in the [architecture map](../design/architecture.md#data-model-and-ownership).
+`user_sessions`, `user_video_state`, `user_settings` and `video_ai_chat_messages.user_id` reference `users` with `ON DELETE CASCADE`, so deleting a person removes their sessions, history, preferences and chats and leaves the videos. The legacy `videos.last_position_sec` / `last_watched_at` columns are unused; the first admin adopts them. Which data is shared and which is per user is summarised in the [architecture map](../design/architecture.md#data-model-and-ownership).
 
 ## Schema lifecycle
 

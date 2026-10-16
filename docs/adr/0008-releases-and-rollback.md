@@ -8,7 +8,7 @@ Horde is built from source on the user's host (`build: .` in Compose) and update
 
 ## Decision
 
-**Releases.** Versions follow SemVer and a release is a git tag `vX.Y.Z` on `main`. Pushing the tag runs the Release workflow, which refuses unless the tag is on `main` and the `CI` and `Image` workflows succeeded for that commit, builds `linux/amd64` and `linux/arm64`, pushes `ghcr.io/jm-connell/horde` with `X.Y.Z`, `X.Y`, `sha-<commit>` and `latest`, bakes `HORDE_VERSION` into the image, and creates the GitHub Release. Tags are immutable; a bad release is fixed forward. Pre-release tags (`-rc.1`) never become `latest`.
+**Releases.** Versions follow SemVer and a release is a git tag `vX.Y.Z` on `main`. Pushing the tag runs the Release workflow, which refuses unless the tag is on `main` and the `CI` and `Image` workflows succeeded for that commit, builds `linux/amd64` and `linux/arm64`, pushes `ghcr.io/jm-connell/horde` with `X.Y.Z`, `X.Y`, `sha-<7-character short sha>` and `latest`, bakes `HORDE_VERSION` into the image, and creates the GitHub Release. Tags are immutable; a bad release is fixed forward. Pre-release tags (`-rc.1`) never become `latest`.
 
 **Update channels** (`HORDE_UPDATE_CHANNEL`, read by `update.sh`):
 
@@ -33,7 +33,7 @@ Until a first release tag exists the script follows `main`. It never goes backwa
 
 - Merging to `main` reaches nobody on the default channel; **tagging is what ships**. Release discipline (changelog, green `main`) now matters.
 - A failed update self-heals in the common case, and data loss is only ever an explicit choice (`--restore-db`) or limited to the minutes of an automatic rollback.
-- The rollback logic is a shell script with real Docker and git side effects, so its tests build throwaway repositories; they must never run under `git rebase --exec` or a hook, where `GIT_DIR` leaks into them.
+- The rollback logic is a shell script with real Docker and git side effects, so its tests build throwaway git repositories; they are slow and touch real git.
 - Rolling back does not change GitHub: running `update.sh` again pulls the same upstream version. Wait for a fix or stay put.
 - The state file means one rollback point; two updates in a row lose the first.
 
