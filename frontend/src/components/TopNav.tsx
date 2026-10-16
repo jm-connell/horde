@@ -126,7 +126,7 @@ export default function TopNav() {
     let active = true;
     const poll = () =>
       api
-        .listImport()
+        .listReview()
         .then((items) => {
           if (!active) return;
           setImportCount(items.length);
@@ -154,7 +154,7 @@ export default function TopNav() {
   useEffect(() => {
     if (location.pathname === "/import" || location.pathname === "/review") {
       api
-        .listImport()
+        .listReview()
         .then((items) => {
           setImportCount(items.length);
           notifyImportQueueChanged(items.length);

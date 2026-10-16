@@ -158,7 +158,7 @@ export default function Import() {
   const load = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     Promise.all([
-      api.listImport().catch(() => [] as Video[]),
+      api.listReview().catch(() => [] as Video[]),
       api.listDuplicateGroups().catch(() => [] as DuplicateGroup[]),
     ])
       .then(([review, dupes]) => {

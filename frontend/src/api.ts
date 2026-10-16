@@ -1084,10 +1084,6 @@ export const api = {
     });
   },
 
-  listImport(): Promise<Video[]> {
-    return api.listReview();
-  },
-
   scanImport(): Promise<ImportScanResult> {
     return request<ImportScanResult>("/api/review/scan", { method: "POST" });
   },
