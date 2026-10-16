@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -602,6 +602,14 @@ if E2E:
     def e2e_reset(request: Request):
         """Restore browser-test data. Not mounted unless HORDE_E2E=1."""
         _boot_e2e(request.app, ctx_for_app(request.app))
+        return {"ok": True}
+
+    @app.post("/api/e2e/bulk-videos", response_model=OkResponse)
+    def e2e_bulk_videos(count: int = Query(600, ge=1, le=5000)):
+        """Add ``count`` filler videos so paging specs cross a page boundary."""
+        from .e2e_seed import add_bulk_videos
+
+        add_bulk_videos(count)
         return {"ok": True}
 
 
