@@ -137,3 +137,13 @@ Owner Qs so far: /api/v1; pause bg effects default; React Compiler lint; downloa
 - Owner decision (18:20): remaining refactor reviews stay on Sonnet; complex/risky reviews go to Opus/Fable. Final whole-branch review on Fable (auth, isolation, concurrency, upgrade path). mypy review: Sonnet unless it finds real bugs.
 - 18:20 UTC: fdec-lib MERGED (97109aa). mypy done (wp/mypy c406c1c, 354->0) rebasing onto tip + per-commit. Player rebasing. fdec-set in review (a44311a211d38aea2).
 - 19:00 UTC: PLAYER MERGED (112b826) and FDEC-SET MERGED (d6e20f0), pushed. Only mypy left (rebasing onto d6e20f0). Then FINAL REVIEW on Fable, then PR.
+- 19:15 UTC: FINAL REVIEW launched on Fable (a42d312299196495d) against d6e20f0, workdir $SP/final, ports 9893-9895+. mypy (a84d833573f3fd13d) doing final rebase onto d6e20f0 + gate; merge then delta-review mypy changes. Then fix findings, open PR, subscribe, owner questions.
+- 19:50 UTC: MYPY MERGED (7f465ee, pushed). All packages merged. Final Fable review running on d6e20f0 (mypy delta reviewed separately: APPROVE).
+- 20:00 UTC: FINAL REVIEW (Fable) = SHIP WITH FIXES. Report saved in task a42d312299196495d. Fix round on Opus: backend/ops agent a9f0b75c4b963286f (wp/final-be: compose env vars HIGH, rollback FK orphans + 0006 trigger MEDIUM, legacy ui CSS sanitize MEDIUM, /api 404 normalise, metadata-sync log, member AI fields, search cache last_watched, playlists dup check, requirements.lock staleness check); frontend agent a53e879679dd0f845 (wp/final-fe: offline pendingProgress per-user MEDIUM, security.md/architecture.md doc fixes). After both merge: open PR, subscribe, owner question list.
+- Owner Qs from final review: (1) legacy admin ui blob stays as member default? (2) /api/v1 skip; (3) bootstrap reachable in trusted-header mode? (4) members see whole download queue/device files/system stats - keep shared? (5) search TTL 120s + 15s SSE revocation ok? plus earlier list.
+
+## PAUSED ~20:15 UTC Oct 16 (usage). Resume ~22:00 UTC.
+Integration tip 7f465ee (ALL packages merged). In flight: final fix round
+ - wp/final-be (Opus a9f0b75c4b963286f, wt/final-be, ports 9591): status in $SP/final-be/STATUS.md
+ - wp/final-fe (Opus a53e879679dd0f845, wt/final-fe, ports 9691): status in $SP/final-fe/STATUS.md
+On resume: check docker/core.bare/disk; read both STATUS.md; resume both agents via SendMessage; when done, merge (rebase second onto first), short Opus verification of fixes (data repair + isolation), then open PR to main (PR template check; body w/ summary, upgrade notes, owner question list), subscribe_pr_activity, give owner the question list + manual steps (required checks, GHCR public, delete backup/* branches, v* tag ruleset).
