@@ -49,7 +49,7 @@ Chromecast receivers fetch media from a different origin, so these routes (and o
 - `/api/videos/{id}/subtitles/{lang}`
 - `/api/thumbnails/{id}`
 
-Any website can therefore read those files if it knows the video id. That is the price of casting without a login.
+These routes still need the viewer to be signed in: a request is served only with the session cookie or a `?mt=` signed media token. A browser never sends the cookie with a cross-origin read that `Access-Control-Allow-Origin: *` answers, so another website can read these files only if it holds a signed media URL. The app asks for one (`GET /api/videos/{id}/media-token`) only when it hands a video to a Chromecast or AirPlay receiver. The token is an HMAC tied to one video and the user who asked for it, valid for 12 hours on these three routes only, and void once that user's password changes ([Signed media URLs](authentication.md#signed-media-urls)). Anyone given such a URL can fetch that one video until it expires. That is the price of casting without a login on the receiver.
 
 ## Private URLs { #private-urls }
 
