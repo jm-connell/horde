@@ -199,3 +199,35 @@ test("a change made just before a reload is still saved", async ({ page }) => {
   const ui = (await (await page.request.get("/api/settings")).json()).ui;
   expect(ui.default_library_sort).toBe("title");
 });
+
+test("a change still in flight when the page reloads is not overwritten by the server's older copy", async ({
+  page,
+}) => {
+  // Hold the save back so the next page's read of the settings reaches the
+  // server first, the order the reload race produces on a slow connection.
+  const sent: string[] = [];
+  await page.route("**/api/settings", async (route) => {
+    const method = route.request().method();
+    sent.push(`${method} ${Date.now()}`);
+    if (method === "PATCH") await new Promise((r) => setTimeout(r, 1500));
+    await route.continue().catch(() => undefined);
+  });
+  await page.goto("/settings?tab=library");
+  const sort = page
+    .getByRole("heading", { name: "Default video sort" })
+    .locator("xpath=..");
+  await expect(sort).toBeVisible();
+  await sort.getByRole("button", { name: "Title", exact: true }).click();
+  await page.reload();
+  await page.evaluate(() => localStorage.removeItem("horde.library-sort"));
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Sort library" })
+  ).toContainText("Title");
+  await expect
+    .poll(async () => {
+      const res = await page.request.get("/api/settings");
+      return (await res.json()).ui.default_library_sort;
+    })
+    .toBe("title");
+});
