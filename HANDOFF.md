@@ -125,3 +125,4 @@ Ready / approved, merge in this order (each: rebase onto tip, regen openapi.json
 Then: J2 AppContext (after J1), J3 rest (Library/Settings/Watch/useSettings; after H2, 2 agents), mypy-to-zero gate, final whole-branch review on Fable, PR + subscribe, owner question list.
 BLOCKER needing owner OK: /dev/null was clobbered into a regular file by an agent (mv ... /dev/null). Fix: `rm -f /dev/null && mknod -m 666 /dev/null c 1 3` - asked owner, no answer yet. Container restart also fixes it.
 Owner Qs so far: /api/v1; pause bg effects default; React Compiler lint; downloader.py facade removal timing; UtcDateTime conversion; mermaid in docs; search ranking TTL 120s; hide playlist rename/delete for members w/o manage_playlists; delete backup/* branches; add required checks to ruleset; GHCR public; v* tag ruleset.
+- 07:30 UTC: /dev/null restored (owner approved). Blocker cleared.
