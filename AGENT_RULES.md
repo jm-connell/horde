@@ -35,3 +35,6 @@ The owner is asleep; work autonomously. Other agents work in parallel in OTHER g
 2. Per finding/item: done / partially done / deferred, with one line of how.
 3. Gate results (exact commands + pass counts).
 4. Open questions for the owner, and any risks the integrator should know (likely merge conflicts, files touched broadly).
+
+## Shared machine (added 05:00 UTC Oct 16)
+- The box has 4 cores shared by ~8 agents. Wrap EVERY heavy run (full pytest, scripts/check.sh, full Playwright suite, per-commit loops: wrap each iteration) in `$SP/heavy.sh <command>`; it allows at most 2 heavy runs at once and waits for a free slot. Targeted test files, ruff, tsc, eslint and vitest don't need it.
