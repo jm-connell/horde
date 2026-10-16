@@ -45,6 +45,7 @@ from ..schemas import (
     WatchProgressUpdate,
 )
 from ..services import library, uploads, user_state
+from ..services.ai.provider import format_provider_error
 from ..services.auth import media_token as media_token_svc
 from ..services.auth.accounts import AuthUser
 from ..services.downloads import jobs as download_jobs
@@ -692,7 +693,8 @@ def refresh_video_tags(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.warning("tag refresh failed video_id=%s", video_id, exc_info=True)
+        raise HTTPException(status_code=400, detail=format_provider_error(exc)) from exc
     return _to_read(video, session, user_id=user.id)
 
 
@@ -719,7 +721,9 @@ def summarize_video(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        # Not str(exc): an httpx error quotes the provider URL.
+        logger.warning("AI request failed video_id=%s", video_id, exc_info=True)
+        raise HTTPException(status_code=502, detail=format_provider_error(exc)) from exc
     session.expire_all()
     video = session.get(Video, video_id)
     if video is None:
@@ -750,7 +754,9 @@ def generate_video_chapters(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        # Not str(exc): an httpx error quotes the provider URL.
+        logger.warning("AI request failed video_id=%s", video_id, exc_info=True)
+        raise HTTPException(status_code=502, detail=format_provider_error(exc)) from exc
     session.expire_all()
     video = session.get(Video, video_id)
     if video is None:

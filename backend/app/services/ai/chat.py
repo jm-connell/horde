@@ -17,6 +17,7 @@ from . import embeddings as ai_embeddings
 from . import text as ai_text
 from .provider import (
     OpenRouterProvider,
+    format_provider_error,
     get_llm_provider,
     llm_features_allowed,
     require_llm_chat_model,
@@ -248,7 +249,10 @@ def stream_chat(
             yield _sse({"type": "token", "text": delta})
     except Exception as exc:
         logger.warning("chat stream failed video_id=%s", video_id, exc_info=True)
-        yield _sse({"type": "error", "detail": str(exc), "status": 502})
+        # Not str(exc): an httpx error quotes the provider URL.
+        yield _sse(
+            {"type": "error", "detail": format_provider_error(exc), "status": 502}
+        )
         return
 
     if revoked:

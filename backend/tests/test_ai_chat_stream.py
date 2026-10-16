@@ -95,3 +95,54 @@ def test_chat_survives_the_user_being_deleted_mid_answer(chat_env, session, capl
     session.expire_all()
     rows = list(session.exec(select(OpenRouterUsage)))
     assert [r.cost for r in rows] == [0.002]
+
+
+URL = "http://gpu-box.internal:11434/api/chat"
+
+
+def _status_error() -> Exception:
+    import httpx
+
+    request = httpx.Request("POST", URL)
+    response = httpx.Response(500, request=request)
+    return httpx.HTTPStatusError(
+        f"Server error '500' for url '{URL}'", request=request, response=response
+    )
+
+
+def test_chat_error_event_does_not_quote_the_provider_url(chat_env):
+    user, video, use = chat_env
+
+    class Provider:
+        last_cost = None
+
+        def chat_stream(self, *_a, **_k):
+            raise _status_error()
+            yield ""  # pragma: no cover - makes this a generator
+
+    use(Provider())
+    events = list(chat.stream_chat_events(video.id, "hi", user.id))
+
+    body = "".join(events)
+    assert '"type": "error"' in events[-1]
+    assert "gpu-box" not in body and "11434" not in body
+    assert "AI provider HTTP 500" in events[-1]
+
+
+@pytest.mark.parametrize("route", ["summarize", "chapters"])
+def test_ai_routes_do_not_quote_the_provider_url(client, add_video, monkeypatch, route):
+    from app.services.ai import tasks
+
+    video = add_video(title="A video", description="About things")
+
+    def boom(*_a, **_k):
+        raise _status_error()
+
+    monkeypatch.setattr(
+        tasks, "run_summarize" if route == "summarize" else "run_chapters", boom
+    )
+
+    resp = client.post(f"/api/videos/{video.id}/ai/{route}")
+
+    assert resp.status_code == 502
+    assert "gpu-box" not in resp.text and "11434" not in resp.text
