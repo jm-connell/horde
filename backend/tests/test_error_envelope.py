@@ -123,5 +123,14 @@ def test_unhandled_error_is_a_generic_500_with_the_request_id(
     assert body["request_id"] == "req-abc123"
     assert resp.headers["X-Request-ID"] == "req-abc123"
     assert "secret internal detail" not in resp.text
+    # Sent outside the security-headers middleware, so the handler adds them.
+    normal = caller.get("/api/ping")
+    for name in (
+        "Content-Security-Policy",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "X-Frame-Options",
+    ):
+        assert resp.headers[name] == normal.headers[name]
     logged = [r for r in caplog.records if r.name == "app.errors"]
     assert logged and logged[0].exc_info is not None

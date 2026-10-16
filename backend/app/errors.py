@@ -196,13 +196,21 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         request.url.path,
         exc_info=(type(exc), exc, exc.__traceback__),
     )
+    # Imported here: security.py imports this module for its own error responses.
+    from .security import security_headers
+
+    # This response is sent by Starlette's ServerErrorMiddleware, outside the
+    # security-headers middleware, so it has to carry the headers itself.
+    headers = security_headers(request.url.path)
+    if request_id:
+        headers[REQUEST_ID_HEADER] = request_id
     return error_response(
         500,
         "Something went wrong on the server"
         + (f" (request {request_id})." if request_id else "."),
         "internal_error",
         request_id=request_id,
-        headers={REQUEST_ID_HEADER: request_id} if request_id else None,
+        headers=headers,
     )
 
 
