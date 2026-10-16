@@ -4,11 +4,14 @@ import logging
 import random as py_random
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any, Literal, overload
 
 from sqlalchemy import and_, func, nullsfirst, nullslast, or_, text
-from sqlmodel import Session, select
+from sqlalchemy import select as sa_select
+from sqlalchemy.orm import Mapped
+from sqlmodel import Session, col, select
 
-from ..models import UserVideoState, Video, VideoTag
+from ..models import UserVideoState, Video, VideoTag, require_id
 from .pagination import PageRequest, random_key
 from .search_text import fts_match_expression, keyword_match_clause
 
@@ -17,15 +20,15 @@ logger = logging.getLogger(__name__)
 PROGRESS_EXPIRY_DAYS = 14
 CONTINUE_WATCHING_DAYS = 7
 
-SORT_COLUMNS = {
-    "added_at": Video.added_at,
-    "title": Video.title,
-    "duration": Video.duration_sec,
-    "published_at": Video.published_at,
-    "file_size": Video.file_size,
-    "view_count": Video.view_count,
+SORT_COLUMNS: dict[str, Mapped[Any]] = {
+    "added_at": col(Video.added_at),
+    "title": col(Video.title),
+    "duration": col(Video.duration_sec),
+    "published_at": col(Video.published_at),
+    "file_size": col(Video.file_size),
+    "view_count": col(Video.view_count),
     # Watch state is per user; query_videos joins the caller's rows.
-    "last_watched_at": UserVideoState.last_watched_at,
+    "last_watched_at": col(UserVideoState.last_watched_at),
 }
 
 
@@ -78,7 +81,7 @@ def _apply_sort(statement, sort: str, order: str):
     if sort == "random":
         return statement, True
 
-    column = SORT_COLUMNS.get(sort, Video.added_at)
+    column = SORT_COLUMNS.get(sort, col(Video.added_at))
     nullable = sort in ("file_size", "view_count", "last_watched_at")
     if order == "desc":
         ordering = nullslast(column.desc()) if nullable else column.desc()
@@ -103,7 +106,7 @@ def sort_value(
 ):
     """The value ``video`` sorts by under ``sort``: what a keyset cursor remembers."""
     if sort == "random":
-        return random_key(seed, video.id)
+        return random_key(seed, require_id(video))
     if sort == "last_watched_at":
         return state.last_watched_at if state is not None else None
     return getattr(video, _SORT_ATTRS.get(sort, "added_at"))
@@ -116,13 +119,15 @@ def _keyset_after(statement, sort: str, order: str, page: PageRequest):
     descending, which is what ``_apply_sort`` asks for on the nullable columns and
     what the other columns do by default, so NULL is handled the same way for all.
     """
-    column = SORT_COLUMNS.get(sort, Video.added_at)
+    column = SORT_COLUMNS.get(sort, col(Video.added_at))
     desc = order == "desc"
-    statement = statement.order_by(Video.id.desc() if desc else Video.id.asc())
+    statement = statement.order_by(
+        col(Video.id).desc() if desc else col(Video.id).asc()
+    )
     if not page.has_position:
         return statement
     after_id = page.after_id
-    id_after = Video.id < after_id if desc else Video.id > after_id
+    id_after = col(Video.id) < after_id if desc else col(Video.id) > after_id
     value = page.value
     if value is None:
         if desc:
@@ -145,8 +150,8 @@ def _load_in_order(session: Session, ids: list[int]) -> list[Video]:
     found: dict[int, Video] = {}
     for start in range(0, len(ids), _ID_CHUNK):
         chunk = ids[start : start + _ID_CHUNK]
-        for video in session.exec(select(Video).where(Video.id.in_(chunk))):  # type: ignore[attr-defined]
-            found[video.id] = video
+        for video in session.exec(select(Video).where(col(Video.id).in_(chunk))):
+            found[require_id(video)] = video
     return [found[i] for i in ids if i in found]
 
 
@@ -170,7 +175,7 @@ def _keyword_clause(session: Session, query: str):
     """
     match = fts_match_expression(query) if has_fts(session) else None
     if match is not None:
-        return Video.id.in_(  # type: ignore[attr-defined]
+        return col(Video.id).in_(
             text(
                 "SELECT rowid FROM videos_fts WHERE videos_fts MATCH :fts_q"
             ).bindparams(fts_q=match)
@@ -183,6 +188,43 @@ def _keyword_clause(session: Session, query: str):
         Video.notes,
         Video.tags,
     )
+
+
+@overload
+def query_videos(
+    session: Session,
+    q: str | None = None,
+    channel: str | None = None,
+    tag: str | None = None,
+    sort: str = "added_at",
+    order: str = "desc",
+    needs_review: bool | None = None,
+    continue_watching: bool = False,
+    watched_only: bool = False,
+    seed: int | None = None,
+    user_id: int | None = None,
+    page: PageRequest | None = None,
+    *,
+    count_only: Literal[True],
+) -> int: ...
+
+
+@overload
+def query_videos(
+    session: Session,
+    q: str | None = None,
+    channel: str | None = None,
+    tag: str | None = None,
+    sort: str = "added_at",
+    order: str = "desc",
+    needs_review: bool | None = None,
+    continue_watching: bool = False,
+    watched_only: bool = False,
+    seed: int | None = None,
+    user_id: int | None = None,
+    page: PageRequest | None = None,
+    count_only: Literal[False] = False,
+) -> list[Video]: ...
 
 
 def query_videos(
@@ -216,8 +258,8 @@ def query_videos(
         statement = statement.outerjoin(
             UserVideoState,
             and_(
-                UserVideoState.video_id == Video.id,
-                UserVideoState.user_id == user_id,
+                col(UserVideoState.video_id) == col(Video.id),
+                col(UserVideoState.user_id) == user_id,
             ),
         )
 
@@ -231,15 +273,17 @@ def query_videos(
         cw_cutoff = datetime.now(UTC) - timedelta(days=cw_days)
         # Started but not effectively finished (within the last 10% of runtime).
         statement = statement.where(UserVideoState.position_sec >= 30).where(
-            (Video.duration_sec.is_(None))
-            | (UserVideoState.position_sec < Video.duration_sec * 0.9)
+            (col(Video.duration_sec).is_(None))
+            | (col(UserVideoState.position_sec) < col(Video.duration_sec) * 0.9)
         )
-        statement = statement.where(UserVideoState.last_watched_at.is_not(None))
-        statement = statement.where(UserVideoState.last_watched_at >= cw_cutoff)
-        statement = statement.order_by(UserVideoState.last_watched_at.desc()).limit(12)
+        statement = statement.where(col(UserVideoState.last_watched_at).is_not(None))
+        statement = statement.where(col(UserVideoState.last_watched_at) >= cw_cutoff)
+        statement = statement.order_by(
+            col(UserVideoState.last_watched_at).desc()
+        ).limit(12)
         return list(session.exec(statement).all())
     if watched_only:
-        statement = statement.where(UserVideoState.last_watched_at.is_not(None))
+        statement = statement.where(col(UserVideoState.last_watched_at).is_not(None))
     if channel:
         statement = statement.where(Video.channel == channel)
     if q:
@@ -248,7 +292,9 @@ def query_videos(
             statement = statement.where(clause)
     if tag:
         statement = statement.where(
-            Video.id.in_(select(VideoTag.video_id).where(VideoTag.tag == tag))  # type: ignore[attr-defined]
+            col(Video.id).in_(
+                select(col(VideoTag.video_id)).where(col(VideoTag.tag) == tag)
+            )
         )
 
     if count_only:
@@ -291,16 +337,16 @@ def channel_stats(
     order: str = "desc",
 ) -> list[ChannelStatRow]:
     statement = (
-        select(
-            Video.channel,
-            func.count(Video.id),
-            func.max(Video.added_at),
-            func.max(Video.channel_subscriber_count),
-            func.max(Video.channel_url),
+        sa_select(  # sqlmodel's select stops at four columns
+            col(Video.channel),
+            func.count(col(Video.id)),
+            func.max(col(Video.added_at)),
+            func.max(col(Video.channel_subscriber_count)),
+            func.max(col(Video.channel_url)),
         )
-        .where(Video.channel.is_not(None))
-        .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-        .group_by(Video.channel)
+        .where(col(Video.channel).is_not(None))
+        .where(col(Video.needs_review) == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+        .group_by(col(Video.channel))
     )
     rows = [
         ChannelStatRow(
@@ -310,7 +356,7 @@ def channel_stats(
             subscriber_count=int(sub) if sub is not None else None,
             channel_url=url,
         )
-        for c, n, last_dl, sub, url in session.exec(statement).all()
+        for c, n, last_dl, sub, url in session.execute(statement).all()
         if c
     ]
 
@@ -353,7 +399,10 @@ def find_video_by_youtube_id(session: Session, yt_id: str) -> Video | None:
     if not yt_id:
         return None
     return session.exec(
-        select(Video).where(Video.youtube_id == yt_id).order_by(Video.id).limit(1)  # type: ignore[arg-type]
+        select(Video)
+        .where(col(Video.youtube_id) == yt_id)
+        .order_by(col(Video.id))
+        .limit(1)
     ).first()
 
 
@@ -368,18 +417,18 @@ def youtube_library_map(
     session: Session, channel: str | None = None
 ) -> dict[str, tuple[int, int | None, int | None, str | None]]:
     """Map YouTube IDs to (library_id, height_px, view_count, published_at ISO)."""
-    statement = select(
-        Video.youtube_id,
-        Video.id,
-        Video.height_px,
-        Video.view_count,
-        Video.published_at,
-    ).where(Video.youtube_id.is_not(None))  # type: ignore[union-attr]
+    statement = sa_select(  # sqlmodel's select stops at four columns
+        col(Video.youtube_id),
+        col(Video.id),
+        col(Video.height_px),
+        col(Video.view_count),
+        col(Video.published_at),
+    ).where(col(Video.youtube_id).is_not(None))
     if channel:
-        statement = statement.where(Video.channel == channel)
+        statement = statement.where(col(Video.channel) == channel)
     mapping: dict[str, tuple[int, int | None, int | None, str | None]] = {}
-    for yt_id, video_id, height_px, views, published_at in session.exec(
-        statement.order_by(Video.id)  # type: ignore[arg-type]
+    for yt_id, video_id, height_px, views, published_at in session.execute(
+        statement.order_by(col(Video.id))
     ).all():
         mapping[yt_id] = (
             int(video_id),
@@ -404,7 +453,7 @@ def tag_stats(session: Session, channel: str | None = None) -> list[tuple[str, i
     count = func.count(func.distinct(VideoTag.video_id))
     statement = (
         select(VideoTag.tag, count)
-        .join(Video, Video.id == VideoTag.video_id)  # type: ignore[arg-type]
+        .join(Video, col(Video.id) == col(VideoTag.video_id))
         .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     )
     if channel:
@@ -439,7 +488,7 @@ def related_videos(
 
     def add_candidates(candidates: list[Video]) -> None:
         for video in candidates:
-            if video.id in seen or video.needs_review:
+            if video.id is None or video.id in seen or video.needs_review:
                 continue
             seen.add(video.id)
             picked.append(video)
@@ -495,21 +544,21 @@ def related_videos(
         add_candidates(channel_rows)
 
     if len(picked) < pool_limit:
-        source_tags = list(
+        source_tag_names = list(
             session.exec(
                 select(VideoTag.tag).where(VideoTag.video_id == video_id).distinct()
             ).all()
         )
-        if source_tags:
+        if source_tag_names:
             overlap = func.count(func.distinct(VideoTag.tag))
             tagged = session.exec(
                 select(Video)
-                .join(VideoTag, VideoTag.video_id == Video.id)  # type: ignore[arg-type]
-                .where(VideoTag.tag.in_(source_tags))  # type: ignore[attr-defined]
+                .join(VideoTag, col(VideoTag.video_id) == col(Video.id))
+                .where(col(VideoTag.tag).in_(source_tag_names))
                 .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-                .where(Video.id.not_in(seen))  # type: ignore[union-attr]
-                .group_by(Video.id)
-                .order_by(overlap.desc(), Video.added_at.desc())
+                .where(col(Video.id).not_in(seen))
+                .group_by(col(Video.id))
+                .order_by(overlap.desc(), col(Video.added_at).desc())
                 .limit(pool_limit)
             ).all()
             add_candidates(list(tagged))
