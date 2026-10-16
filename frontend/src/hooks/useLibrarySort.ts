@@ -35,16 +35,13 @@ function isSavedSort(v: unknown): v is SavedSort {
   );
 }
 
-export function loadLibrarySort(defaultSort: LibrarySort): LibrarySortState {
+/** The sort the user picked recently (within the TTL), or null if there is none. */
+export function loadSavedLibrarySort(): LibrarySortState | null {
   const saved = getJson<SavedSort | null>(STORAGE_KEY, isSavedSort, null);
-  if (!saved) return { sort: defaultSort, order: "desc" };
+  if (!saved) return null;
   if (Date.now() - saved.savedAt > TTL_MS) {
     removeItem(STORAGE_KEY);
-    return {
-      sort: defaultSort,
-      order: "desc",
-      randomSeed: defaultSort === "random" ? Date.now() : undefined,
-    };
+    return null;
   }
   return {
     sort: saved.sort,
