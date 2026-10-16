@@ -21,6 +21,20 @@ describe("isServerOnlyPath", () => {
     }
   });
 
+  it("treats the bare /api like the rest of the API", () => {
+    for (const path of ["/api", "/API", "//api", "///Api"]) {
+      expect(isServerOnlyPath(path), path).toBe(true);
+    }
+  });
+
+  it("decodes percent-escapes and survives malformed ones", () => {
+    for (const path of ["/%61pi/x", "/%61pi", "/%41PI/x", "//%61pi/x"]) {
+      expect(isServerOnlyPath(path), path).toBe(true);
+    }
+    expect(isServerOnlyPath("/%E0%A4%A")).toBe(false);
+    expect(isServerOnlyPath("/%zz")).toBe(false);
+  });
+
   it("leaves app routes to the shell", () => {
     for (const path of [
       "/",

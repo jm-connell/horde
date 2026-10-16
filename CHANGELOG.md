@@ -117,6 +117,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
   `url()` from an old install is never applied.
 - Unknown API paths spelled with a doubled slash or another case (`//api/x`,
   `/API/x`) now get the JSON 404 instead of the web app's page.
+- The bare `/api` path, also when percent-encoded (`/%61pi`), now reaches the
+  server's JSON 404 instead of the offline app shell.
 - Progress saved offline is no longer recorded under the wrong account when
   another tab signs someone else in during the sync: the signed-in account is
   checked before every save is sent, the sync stops when it changes, and the
