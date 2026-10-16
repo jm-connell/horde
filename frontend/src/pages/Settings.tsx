@@ -5,11 +5,12 @@ import { useSettings } from "../hooks/useSettings";
 import LiquidNav from "../components/LiquidNav";
 import LoadingIndicator from "../components/LoadingIndicator";
 import { useAuth } from "../context/AuthContext";
-import { getItem, setItem } from "../storage";
+import { setItem } from "../storage";
 import AppearanceTab from "./settings/AppearanceTab";
 import LibraryTab from "./settings/LibraryTab";
 import PlaybackTab from "./settings/PlaybackTab";
 import UsersTab from "./settings/UsersTab";
+import { useAiPaneState } from "./settings/ai/useAiPaneState";
 import { AiTab, SystemTab } from "./settings/lazy";
 import { ADMIN_ONLY_TABS, TAB_STORAGE_KEY, TABS } from "./settings/constants";
 import {
@@ -23,7 +24,7 @@ import {
   resolveAiPaneParam,
   tabMatchesQuery,
 } from "./settings/search";
-import type { AiPane, SettingsTab } from "./settings/types";
+import type { SettingsTab } from "./settings/types";
 
 /**
  * The settings page shell: the tab bar, the search box and which tab is open
@@ -47,15 +48,8 @@ export default function Settings() {
     const first = fromUrl ?? loadTab();
     return tabAllowed(first) ? first : "appearance";
   });
-  const [aiPane, setAiPane] = useState<AiPane>(() => {
-    const fromUrl = resolveAiPaneParam(
-      new URLSearchParams(window.location.search).get("pane")
-    );
-    if (fromUrl) return fromUrl;
-    const v = getItem("horde.aiPane");
-    if (v === "providers" || v === "features" || v === "jobs") return v;
-    return "providers";
-  });
+  const paneState = useAiPaneState();
+  const { setAiPane } = paneState;
   const [searchQuery, setSearchQuery] = useState("");
 
   const q = searchQuery.trim().toLowerCase();
@@ -80,7 +74,7 @@ export default function Settings() {
       setAiPane(pane);
       setItem("horde.aiPane", pane);
     }
-  }, [searchParams, selectTab]);
+  }, [searchParams, selectTab, setAiPane]);
 
   // Cross-tab search: jump to the first tab that matches when the current one doesn't.
   useEffect(() => {
@@ -175,7 +169,7 @@ export default function Settings() {
           {tab === "library" && <LibraryTab />}
           {tab === "playback" && <PlaybackTab />}
           <Suspense fallback={<LoadingIndicator label="Loading" />}>
-            {tab === "ai" && <AiTab aiPane={aiPane} setAiPane={setAiPane} />}
+            {tab === "ai" && <AiTab paneState={paneState} />}
             {tab === "system" && <SystemTab />}
             {tab === "users" && isAdmin && <UsersTab />}
           </Suspense>

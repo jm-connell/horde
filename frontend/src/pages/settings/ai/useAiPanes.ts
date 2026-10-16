@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../api";
 import { appSettingsQuery } from "../../../queries/app";
@@ -9,15 +9,18 @@ import type { AiWorkloadProfile } from "../../../types";
 import { DEFAULT_AI } from "../constants";
 import { useSettingsPage } from "../context";
 import { firstMatchingAiPane } from "../search";
-import type { AiPane, AiProviderPane } from "../types";
+import type { AiPaneState } from "./useAiPaneState";
 import type { AiCore } from "./useAiCore";
 
 /** State of the AI tab's panes (Providers, Features, Jobs) on top of the shared AI core. */
-export function useAiPanes(
-  core: AiCore,
-  aiPane: AiPane,
-  setAiPane: (pane: AiPane) => void
-) {
+export function useAiPanes(core: AiCore, paneState: AiPaneState) {
+  const {
+    aiPane,
+    setAiPane,
+    aiProviderPane,
+    setAiProviderPane,
+    providerPaneFromBackendRef: aiProviderPaneFromBackendRef,
+  } = paneState;
   const { q, showToast } = useSettingsPage();
   const queryClient = useQueryClient();
   const {
@@ -28,8 +31,6 @@ export function useAiPanes(
     saveAi,
     refreshAiStatus,
   } = core;
-  const [aiProviderPane, setAiProviderPane] = useState<AiProviderPane>("local");
-  const aiProviderPaneFromBackendRef = useRef(false);
   const [aiTesting, setAiTesting] = useState(false);
   const [openRouterTesting, setOpenRouterTesting] = useState(false);
   const [openRouterKeyDraft, setOpenRouterKeyDraft] = useState("");
@@ -60,7 +61,7 @@ export function useAiPanes(
       !!appSettings.ai.openrouter_enabled &&
       !!appSettings.ai.openrouter_api_key_set;
     setAiProviderPane(orInUse ? "openrouter" : "local");
-  }, [appSettings, q]);
+  }, [appSettings, q, aiProviderPaneFromBackendRef, setAiProviderPane]);
 
   // Search auto-switch: AI pane + Local/OpenRouter within Providers.
   useEffect(() => {
@@ -87,7 +88,7 @@ export function useAiPanes(
     ) {
       setAiProviderPane("local");
     }
-  }, [q, aiPane, setAiPane]);
+  }, [q, aiPane, setAiPane, setAiProviderPane]);
 
   const applyWorkload = async (profile: AiWorkloadProfile) => {
     try {
