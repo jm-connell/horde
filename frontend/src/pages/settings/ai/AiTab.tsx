@@ -1,5 +1,5 @@
-import type { Dispatch, SetStateAction } from "react";
 import type { AiPane } from "../types";
+import type { AiPaneState } from "./useAiPaneState";
 import ProvidersPane from "./ProvidersPane";
 import FeaturesPane from "./FeaturesPane";
 import JobsPane from "./JobsPane";
@@ -15,15 +15,10 @@ const PANES: { id: AiPane; label: string }[] = [
 ];
 
 /** The pane is routing (`?pane=`), so the settings page owns it and passes it in. */
-export default function AiTab({
-  aiPane,
-  setAiPane,
-}: {
-  aiPane: AiPane;
-  setAiPane: Dispatch<SetStateAction<AiPane>>;
-}) {
+export default function AiTab({ paneState }: { paneState: AiPaneState }) {
+  const { aiPane, setAiPane } = paneState;
   const core = useAiCore();
-  const panes = useAiPanes(core, aiPane, setAiPane);
+  const panes = useAiPanes(core, paneState);
   return (
     <AiPageContext.Provider value={{ ...core, ...panes }}>
       <div className="mb-4 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
