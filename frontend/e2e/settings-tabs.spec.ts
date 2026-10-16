@@ -74,3 +74,18 @@ test("the AI provider sub-pane is still selected after visiting another tab", as
   await page.getByRole("tab", { name: "AI" }).click();
   await expect(costs).toBeVisible();
 });
+
+test("a closed settings tab stops polling its status", async ({ page }) => {
+  let polls = 0;
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname === "/api/ai/status") polls += 1;
+  });
+  await page.goto("/settings?tab=ai");
+  // The AI tab polls every 5 s while it is open.
+  await expect.poll(() => polls, { timeout: 15_000 }).toBeGreaterThan(1);
+  await page.getByRole("tab", { name: "Library" }).click();
+  await expect(page.getByText("Progress expiry")).toBeVisible();
+  const after = polls;
+  await page.waitForTimeout(7_000);
+  expect(polls).toBe(after);
+});

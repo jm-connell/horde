@@ -147,7 +147,9 @@ test("changing resolution sends the chosen quality and reports the job", async (
   });
   await page.goto(`/watch/${id}`);
   await page.getByTitle("More actions").click();
-  await page.getByRole("menuitem", { name: "Change resolution" }).click();
+  const change = page.getByRole("menuitem", { name: "Change resolution" });
+  await change.scrollIntoViewIfNeeded();
+  await change.click();
   const dialog = page.getByRole("dialog", { name: "Change resolution" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Quality" }).click();
