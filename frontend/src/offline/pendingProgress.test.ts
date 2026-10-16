@@ -78,7 +78,7 @@ describe("PendingProgressQueue", () => {
     const queue = new PendingProgressQueue(store, () => NOW);
     queue.setOwner(1);
     const send = vi.fn(async () => undefined);
-    await queue.flush({ whoAmI: async () => 2, send });
+    await queue.flush({ whoAmI: async () => 2, send, isGone: () => false });
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith(11, 42);
     expect(rows()).toEqual([rec(1, 10)]);
@@ -92,6 +92,7 @@ describe("PendingProgressQueue", () => {
         throw new TypeError("Failed to fetch");
       },
       send: vi.fn(),
+      isGone: () => false,
     });
     expect(rows()).toHaveLength(2);
 
@@ -99,7 +100,23 @@ describe("PendingProgressQueue", () => {
       .fn()
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new TypeError("Failed to fetch"));
-    await queue.flush({ whoAmI: async () => 1, send });
+    await queue.flush({ whoAmI: async () => 1, send, isGone: () => false });
     expect(rows()).toEqual([rec(1, 11)]);
+  });
+
+  it("drops a save for a video the server no longer has and sends the rest", async () => {
+    const { store, rows } = memoryStore([rec(1, 10), rec(1, 11), rec(1, 12)]);
+    const queue = new PendingProgressQueue(store, () => NOW);
+    const gone = new Error("Video not found");
+    const send = vi.fn(async (videoId: number) => {
+      if (videoId === 10) throw gone;
+    });
+    await queue.flush({
+      whoAmI: async () => 1,
+      send,
+      isGone: (err) => err === gone,
+    });
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(rows()).toEqual([]);
   });
 });

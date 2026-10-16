@@ -55,6 +55,8 @@ export interface FlushDeps {
   whoAmI(): Promise<number | null>;
   /** Send one position to the server for the signed-in account. */
   send(videoId: number, positionSec: number): Promise<void>;
+  /** The send failed because the video no longer exists (deleted). */
+  isGone(err: unknown): boolean;
 }
 
 const indexedDbStore: PendingProgressStore = {
@@ -93,7 +95,8 @@ export class PendingProgressQueue {
    * Send the queued saves of whoever the server says is signed in. The server
    * is asked rather than trusting `owner`: the session cookie these requests
    * carry may belong to someone else by now (signed in from another tab).
-   * Stops at the first failure and tries again on the next call.
+   * Stops at the first failure (other than a deleted video) and tries again
+   * on the next call.
    */
   async flush(deps: FlushDeps): Promise<void> {
     if (this.flushing) return;
@@ -105,7 +108,13 @@ export class PendingProgressQueue {
       const plan = planPendingFlush(records, owner, this.now());
       for (const p of plan.expire) await this.store.delete(p.owner, p.videoId);
       for (const p of plan.send) {
-        await deps.send(p.videoId, p.positionSec);
+        try {
+          await deps.send(p.videoId, p.positionSec);
+        } catch (err) {
+          // A deleted video will never accept it: drop it and carry on,
+          // rather than let it hold back every save queued after it.
+          if (!deps.isGone(err)) throw err;
+        }
         await this.store.delete(p.owner, p.videoId);
       }
     } catch {

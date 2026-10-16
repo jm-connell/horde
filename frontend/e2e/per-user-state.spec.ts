@@ -265,6 +265,32 @@ test("progress saved offline on a shared device is only synced to the account th
     ])
   );
 
+  // A save for a video deleted since (id 0 sorts first) must not hold the
+  // admin's other saves back.
+  await device.evaluate(
+    (owner) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open("horde-offline");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction("pendingProgress", "readwrite");
+          tx.objectStore("pendingProgress").put({
+            owner,
+            videoId: 0,
+            positionSec: 8,
+            at: Date.now(),
+          });
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    admin
+  );
+
   // Back online with the admin signed in: only the admin's save is sent.
   await ctx.unroute("**/api/videos/*/progress");
   await device.reload();

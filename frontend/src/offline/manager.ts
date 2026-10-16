@@ -13,6 +13,7 @@ import {
   codecLabel,
 } from "../utils/playbackRendition";
 import {
+  ApiError,
   OFFLINE_PROGRESS_EVENT,
   api,
   listThumbnailUrl,
@@ -318,6 +319,7 @@ class OfflineManager {
         return state.authenticated && state.user ? state.user.id : null;
       },
       send: (videoId, positionSec) => api.syncProgress(videoId, positionSec),
+      isGone: (err) => err instanceof ApiError && err.status === 404,
     });
   }
 
