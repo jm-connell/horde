@@ -12,14 +12,14 @@ import {
   BUFFERING_INDICATOR_DELAY_MS,
   CONTROLS_HIDE_DELAY_MS,
   HOLD_DELAY_MS,
-  MAX_MINI_WIDTH,
-  MIN_MINI_WIDTH,
   SPEED_STEPS,
   snapRateToStep,
 } from "./player/constants";
 import { useChapters } from "./player/useChapters";
 import SkipNoticeChip from "./player/SkipNotice";
 import { useSkipSegments } from "./player/useSkipSegments";
+import MiniPlayerFrame from "./player/MiniPlayerFrame";
+import { useMiniPlayer } from "./player/useMiniPlayer";
 import ControlBar from "./player/ControlBar";
 import { usePlayerMenu } from "./player/usePlayerMenu";
 import { usePlayerKeyboard } from "./player/usePlayerKeyboard";
@@ -34,10 +34,6 @@ import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import type { SponsorBlockSkipMode } from "../sponsorBlock";
 import type { Chapter } from "../utils";
 import { clearDowngrade, trackQuality } from "../utils/decodeCapability";
-import {
-  miniFrameFromNorthWestResize,
-  type MiniPlayerBox,
-} from "../utils/miniPlayerLayout";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
 import type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
@@ -220,7 +216,6 @@ export default function VideoPlayer({
     }[]
   >([]);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
-  const [miniControlsVisible, setMiniControlsVisible] = useState(true);
   const [videoAspect, setVideoAspect] = useState<number | null>(null);
 
   // Theater mode stretches the player edge-to-edge, but object-contain
@@ -256,18 +251,28 @@ export default function VideoPlayer({
       window.removeEventListener("resize", compute);
     };
   }, [onFrameInsetChange, isMini, isNativeFullscreen, mode, videoAspect]);
-  const miniHideTimer = useRef<number | null>(null);
-  const miniResizeDrag = useRef<{
-    startX: number;
-    startWidth: number;
-    startBox: MiniPlayerBox;
-  } | null>(null);
   const heldRate = useRef<number | null>(null);
   const holdTimer = useRef<number | null>(null);
   const holdActive = useRef(false);
   const wasPlayingBeforeHold = useRef(false);
   const suppressClick = useRef(false);
   const pointerDownOnVideo = useRef(false);
+  const {
+    miniControlsVisible,
+    revealMiniControls,
+    onMiniResizePointerDown,
+    onMiniMovePointerDown,
+  } = useMiniPlayer({
+    isMini,
+    playing,
+    isMobile,
+    playerRootRef,
+    suppressClick,
+    miniWidth,
+    onMiniResize,
+    onMiniMove,
+    onMiniMoveEnd,
+  });
 
   const prevTimeRef = useRef(0);
   const isSeekingRef = useRef(false);
@@ -1015,27 +1020,6 @@ export default function VideoPlayer({
     scheduleHideControls();
   }, [scheduleHideControls]);
 
-  const clearMiniHideTimer = useCallback(() => {
-    if (miniHideTimer.current !== null) {
-      clearTimeout(miniHideTimer.current);
-      miniHideTimer.current = null;
-    }
-  }, []);
-
-  const scheduleHideMiniControls = useCallback(() => {
-    clearMiniHideTimer();
-    if (!playing) return;
-    miniHideTimer.current = window.setTimeout(() => {
-      setMiniControlsVisible(false);
-      miniHideTimer.current = null;
-    }, CONTROLS_HIDE_DELAY_MS);
-  }, [playing, clearMiniHideTimer]);
-
-  const revealMiniControls = useCallback(() => {
-    setMiniControlsVisible(true);
-    scheduleHideMiniControls();
-  }, [scheduleHideMiniControls]);
-
   const onPlayerMouseMove = useCallback(() => {
     if (isMini) {
       revealMiniControls();
@@ -1322,148 +1306,6 @@ export default function VideoPlayer({
   );
 
   useEffect(() => {
-    if (!isMini) return;
-    if (!playing) {
-      clearMiniHideTimer();
-      setMiniControlsVisible(true);
-    } else {
-      scheduleHideMiniControls();
-    }
-  }, [isMini, playing, clearMiniHideTimer, scheduleHideMiniControls]);
-
-  useEffect(() => () => clearMiniHideTimer(), [clearMiniHideTimer]);
-
-  const clampMiniWidth = useCallback((width: number) => {
-    const max = Math.min(window.innerWidth * 0.9, MAX_MINI_WIDTH);
-    return Math.min(max, Math.max(MIN_MINI_WIDTH, width));
-  }, []);
-
-  const onMiniResizePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const rect = playerRootRef.current?.getBoundingClientRect();
-      const startWidth = rect?.width ?? miniWidth ?? (isMobile ? 224 : 704);
-      const startBox: MiniPlayerBox = rect
-        ? {
-            left: rect.left,
-            top: rect.top,
-            width: rect.width,
-            height: rect.height,
-          }
-        : {
-            left: 0,
-            top: 0,
-            width: startWidth,
-            height: startWidth * (9 / 16),
-          };
-      miniResizeDrag.current = {
-        startX: e.clientX,
-        startWidth,
-        startBox,
-      };
-
-      const onMove = (ev: PointerEvent) => {
-        if (!miniResizeDrag.current || !onMiniResize) return;
-        const {
-          startX,
-          startWidth: sw,
-          startBox: box,
-        } = miniResizeDrag.current;
-        const nextWidth = clampMiniWidth(sw + (startX - ev.clientX));
-        const frame = miniFrameFromNorthWestResize(box, nextWidth);
-        onMiniResize(frame.width, {
-          left: frame.left,
-          top: frame.top,
-          height: frame.height,
-        });
-      };
-      const onEnd = () => {
-        miniResizeDrag.current = null;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onEnd);
-        window.removeEventListener("pointercancel", onEnd);
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onEnd);
-      window.addEventListener("pointercancel", onEnd);
-    },
-    [miniWidth, isMobile, clampMiniWidth, onMiniResize]
-  );
-
-  const miniMoveDrag = useRef<{
-    startX: number;
-    startY: number;
-    origLeft: number;
-    origTop: number;
-    pointerId: number;
-    moved: boolean;
-  } | null>(null);
-
-  const onMiniMovePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLElement>) => {
-      if (!onMiniMove || !isMini) return;
-      if (e.button !== 0 && e.pointerType === "mouse") return;
-      const hit = e.target as HTMLElement | null;
-      if (
-        hit?.closest("button, input, select, textarea, a, [data-mini-no-drag]")
-      ) {
-        return;
-      }
-      // Don't preventDefault here — that would swallow video click-to-play.
-      const root = playerRootRef.current;
-      if (!root) return;
-      const rect = root.getBoundingClientRect();
-      miniMoveDrag.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        origLeft: rect.left,
-        origTop: rect.top,
-        pointerId: e.pointerId,
-        moved: false,
-      };
-      // Window listeners keep tracking when the pointer outruns the mini.
-      const onMove = (ev: PointerEvent) => {
-        if (!miniMoveDrag.current || !onMiniMove) return;
-        if (ev.pointerId !== miniMoveDrag.current.pointerId) return;
-        const { startX, startY, origLeft, origTop } = miniMoveDrag.current;
-        const dx = ev.clientX - startX;
-        const dy = ev.clientY - startY;
-        if (!miniMoveDrag.current.moved && dx * dx + dy * dy < 16) return;
-        if (!miniMoveDrag.current.moved) {
-          miniMoveDrag.current.moved = true;
-          suppressClick.current = true;
-        }
-        ev.preventDefault();
-        onMiniMove(origLeft + dx, origTop + dy);
-      };
-      const onEnd = (ev: PointerEvent) => {
-        if (
-          miniMoveDrag.current &&
-          ev.pointerId !== miniMoveDrag.current.pointerId
-        ) {
-          return;
-        }
-        const didMove = miniMoveDrag.current?.moved ?? false;
-        miniMoveDrag.current = null;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onEnd);
-        window.removeEventListener("pointercancel", onEnd);
-        if (didMove) onMiniMoveEnd?.();
-        if (didMove) {
-          window.setTimeout(() => {
-            suppressClick.current = false;
-          }, 0);
-        }
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onEnd);
-      window.addEventListener("pointercancel", onEnd);
-    },
-    [isMini, onMiniMove, onMiniMoveEnd]
-  );
-
-  useEffect(() => {
     if (isMini) return;
     if (!playing) {
       clearHideControlsTimer();
@@ -1666,69 +1508,19 @@ export default function VideoPlayer({
         />
 
         {isMini ? (
-          <>
-            {onMiniResize && (
-              <div
-                data-mini-no-drag
-                className="absolute left-0 top-0 z-30 h-4 w-4 cursor-nwse-resize touch-none"
-                style={{ touchAction: "none" }}
-                title="Drag to resize"
-                aria-label="Drag to resize mini player"
-                onPointerDown={onMiniResizePointerDown}
-              />
-            )}
-            <div
-              className={`absolute inset-x-0 top-0 z-10 flex items-center gap-1 bg-gradient-to-b from-black/90 to-transparent px-2 pb-3 pt-1.5 text-gray-100 transition-opacity duration-300 ${
-                miniControlsVisible
-                  ? "pointer-events-auto opacity-100"
-                  : "pointer-events-none opacity-0"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={togglePlay}
-                className="flex min-h-[44px] min-w-[44px] touch-manipulation items-center justify-center text-2xl leading-none hover:text-accent"
-                aria-label={playing ? "Pause" : "Play"}
-              >
-                {playing ? "❚❚" : "►"}
-              </button>
-              <span className="min-w-0 flex-1 truncate text-sm text-gray-200">
-                {title}
-              </span>
-              {!isMobile &&
-                typeof document !== "undefined" &&
-                document.pictureInPictureEnabled && (
-                  <button
-                    type="button"
-                    data-mini-no-drag
-                    onClick={requestPiP}
-                    className="flex min-h-[44px] shrink-0 touch-manipulation items-center justify-center rounded px-2 text-xs font-medium hover:text-accent"
-                    title="Picture in picture"
-                    aria-label="Picture in picture"
-                  >
-                    PiP
-                  </button>
-                )}
-              <button
-                type="button"
-                onClick={onExpand}
-                className="flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center text-lg hover:text-accent"
-                title="Expand"
-                aria-label="Expand"
-              >
-                ⤢
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center text-lg hover:text-accent"
-                title="Close"
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-          </>
+          <MiniPlayerFrame
+            title={title}
+            playing={playing}
+            isMobile={isMobile}
+            controlsVisible={miniControlsVisible}
+            togglePlay={togglePlay}
+            onTogglePiP={requestPiP}
+            onExpand={onExpand}
+            onClose={onClose}
+            onResizePointerDown={
+              onMiniResize ? onMiniResizePointerDown : undefined
+            }
+          />
         ) : (
           <ControlBar
             visible={controlsVisible}
