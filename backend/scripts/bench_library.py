@@ -145,7 +145,7 @@ def main() -> int:
             .tolist()
         )
         with Session(get_engine()) as s:
-            first = s.get(Video, 500)
+            first = s.get(Video, min(500, args.videos))
             w1, w2 = first.title.split()[0], first.title.split()[1]
             cases = {
                 "search 1 word": lambda: library.query_videos(s, q=w1),
