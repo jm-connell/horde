@@ -1,7 +1,8 @@
-import type { Page } from "@playwright/test";
-import { ACCOUNTS } from "./accounts";
+import type { BrowserContext, Page } from "@playwright/test";
+import { ACCOUNTS, type AccountName } from "./accounts";
 import {
   anonymousContext,
+  contextAs,
   CSRF_HEADERS,
   expect,
   signInWithForm,
@@ -80,11 +81,82 @@ async function startPosition(page: Page): Promise<number> {
   return video.evaluate((v: HTMLVideoElement) => v.currentTime);
 }
 
+async function signedInDevice(
+  browser: import("@playwright/test").Browser,
+  baseURL: string | undefined,
+  name: AccountName
+): Promise<{ ctx: BrowserContext; page: Page }> {
+  // Its own sign-in, so its own session: a second device, not a second tab.
+  const ctx = await anonymousContext(browser, baseURL);
+  const page = await ctx.newPage();
+  await page.goto("/");
+  await signInWithForm(page, name, ACCOUNTS[name].password);
+  await expect(videoCard(page, "Kiln fire").first()).toBeVisible();
+  return { ctx, page };
+}
+
 async function signOut(page: Page, username: string) {
   await page.getByRole("button", { name: new RegExp(`^${username}$`) }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
 }
+
+test("a position saved on one device is where the account's other devices start", async ({
+  page: phone,
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(120_000);
+  const idOf = await seededIds(phone);
+  const kiln = idOf("Kiln fire");
+  const { ctx: pcCtx, page: pc } = await signedInDevice(
+    browser,
+    baseURL,
+    "admin"
+  );
+
+  // The PC opened the video earlier and left it paused in the mini-player.
+  await videoCard(pc, "Kiln fire").first().click();
+  await waitForMedia(pc);
+  await parkAt(pc, 2);
+  await pc.getByRole("link", { name: "Home", exact: true }).first().click();
+  await expect(videoCard(pc, "Kiln fire").first()).toBeVisible();
+
+  // The phone watches to 12 s.
+  await phone.goto(`/watch/${kiln}`);
+  await watchTo(phone, kiln, 12);
+
+  // The PC opens it again, without a reload, and picks up there.
+  await videoCard(pc, "Kiln fire").first().click();
+  await expect(pc).toHaveURL(new RegExp(`/watch/${kiln}$`));
+  const pcStart = await startPosition(pc);
+  expect(pcStart).toBeGreaterThanOrEqual(11.5);
+  expect(pcStart).toBeLessThan(16);
+
+  // Another account has its own place in the same video.
+  const memberCtx = await contextAs(browser, baseURL, "member");
+  const member = await memberCtx.newPage();
+  expect(
+    (
+      await member.request.patch(`/api/videos/${kiln}/progress`, {
+        headers: CSRF_HEADERS,
+        data: { position_sec: 6 },
+      })
+    ).ok()
+  ).toBeTruthy();
+  await member.goto(`/watch/${kiln}`);
+  const memberStart = await startPosition(member);
+  expect(memberStart).toBeGreaterThanOrEqual(5.5);
+  expect(memberStart).toBeLessThan(10);
+
+  // And one that never watched it starts at the beginning.
+  const viewerCtx = await contextAs(browser, baseURL, "viewer");
+  const viewer = await viewerCtx.newPage();
+  await viewer.goto(`/watch/${kiln}`);
+  expect(await startPosition(viewer)).toBeLessThan(3);
+
+  await Promise.all([pcCtx, memberCtx, viewerCtx].map((c) => c.close()));
+});
 
 /** Positions queued in this browser while progress saves could not get through. */
 function pendingProgress(
