@@ -493,15 +493,6 @@ function OnlineLibrary() {
     if (playlistsFailed) showError("Could not load playlists");
   }, [playlistsFailed, showError]);
 
-  const listIncomplete = matchList.partial || restList.partial;
-  useEffect(() => {
-    if (listIncomplete) {
-      showError(
-        "Some videos could not be loaded. Showing the ones that did; reload to try again."
-      );
-    }
-  }, [listIncomplete, showError]);
-
   // Global catalog search (home search only — channel pages use feed search).
   useEffect(() => {
     if (!debouncedSearch || activeChannel) {

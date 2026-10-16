@@ -24,6 +24,7 @@ export default defineConfig({
           ) {
             return "vendor-react";
           }
+          if (/node_modules\/@tanstack\//.test(id)) return "vendor-query";
         },
       },
     },
