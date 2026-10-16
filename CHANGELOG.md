@@ -120,6 +120,9 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - Metadata sync logs one warning line per video when the source is unreachable
   (no network, proxy down) instead of a full traceback; the traceback is logged
   at DEBUG.
+- Members no longer see the AI setup in `GET /api/ai/status` (provider type,
+  schedule, workload profile, GPU tier and source, OpenRouter reachability) or
+  the `openrouter` block of `GET /api/health`.
 - Known advisories in FastAPI/Starlette/python-multipart and in the frontend
   build toolchain.
 - Documentation now states that `DATA_PATH` must be a local disk (SQLite WAL is

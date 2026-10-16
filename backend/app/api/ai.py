@@ -174,12 +174,35 @@ class AiProcessResult(BaseModel):
     detail: str = ""
 
 
+#: Setup details a member's screens never read, reset to their declared defaults.
+#: Members keep ``enabled`` / ``ready`` / ``reachable`` / ``paused`` and the queue
+#: counts (the library's AI shelf) and ``openrouter_enabled`` /
+#: ``openrouter_api_key_set`` (the player decides which AI features to offer).
+_MEMBER_HIDDEN_DEFAULTS = (
+    "schedule",
+    "workload_profile",
+    "recommended_profile",
+    "profile_locked",
+    "vram_tier",
+    "gpu_source",
+    "invent_sample_size",
+    "invent_budget_chars",
+    "models_match_profile",
+    "openrouter_reachable",
+    "ollama_prefer_embeddings",
+)
+
+
 def _member_view(status: AiStatusRead) -> AiStatusRead:
     """What a non-administrator sees: readiness and queue progress, not the setup.
 
-    Provider address, model names, GPU details and error texts (which can quote a
-    URL or a key fragment) stay with the administrator.
+    Provider type and address, schedule, model names, GPU details and error texts
+    (which can quote a URL or a key fragment) stay with the administrator.
     """
+    defaults = {
+        name: AiStatusRead.model_fields[name].get_default(call_default_factory=True)
+        for name in _MEMBER_HIDDEN_DEFAULTS
+    }
     current = status.current_job
     if current is not None:
         current = current.model_copy(update={"error": None, "model": None})
@@ -202,6 +225,8 @@ def _member_view(status: AiStatusRead) -> AiStatusRead:
             "lock_reason": None,
             "gpu_name": None,
             "vram_total_bytes": None,
+            "provider": "",
+            **defaults,
         }
     )
 

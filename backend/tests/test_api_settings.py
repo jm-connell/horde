@@ -203,6 +203,8 @@ def _configure_ai_provider() -> None:
                 "ai_chat": False,
                 "ai_chapters_mode": "on_watch",
                 "openrouter_show_costs": True,
+                "schedule": "timer",
+                "workload_profile": "light",
             }
         }
     )
@@ -258,7 +260,17 @@ def test_ai_status_hides_provider_internals_from_a_member(client, member_client)
     assert member["recent_failures"] == []
     assert member["pulling"] == [] and member["blocked_reason"] is None
     assert member["llm_backend"] is None and member["embed_backend"] is None
+    # How the provider is set up, and the GPU, are the administrator's business.
+    assert member["provider"] == ""
+    assert member["schedule"] == "on_download"
+    assert member["workload_profile"] == member["recommended_profile"] == "normal"
+    assert member["profile_locked"] is False
+    assert member["vram_tier"] == member["gpu_source"] == "unknown"
+    assert member["openrouter_reachable"] is False
     assert admin["openrouter_model"] == "vendor/private-model"
+    assert admin["provider"] != ""
+    assert admin["schedule"] == "timer"
+    assert admin["workload_profile"] == "light"
 
 
 def test_health_hides_provider_internals_from_a_member(client, member_client):
@@ -267,12 +279,14 @@ def test_health_hides_provider_internals_from_a_member(client, member_client):
     seen = member_client.get("/api/health").json()
     full = client.get("/api/health").json()
 
-    assert seen["openrouter"]["enabled"] is True
-    assert seen["openrouter"]["model"] is None
+    # No member screen shows the OpenRouter status; it is set up by the admin.
+    assert seen["openrouter"] is None
     assert seen["ollama"]["base_url"] is None
     assert seen["ollama"]["last_error"] is None
     assert not seen["ollama"]["pulling"]
     assert full["openrouter"]["model"] == "vendor/private-model"
+    assert full["openrouter"]["enabled"] is True
+    assert full["openrouter"]["configured"] is True
 
 
 def test_the_ai_job_list_is_for_administrators(client, member_client):

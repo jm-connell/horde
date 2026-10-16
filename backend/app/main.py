@@ -493,7 +493,7 @@ def _public_health(request: Request) -> dict[str, Any]:
 
 
 def _member_health(payload: dict[str, Any]) -> dict[str, Any]:
-    """Drop provider internals (address, models, error texts) for non-administrators."""
+    """Drop provider internals (address, models, OpenRouter setup, error texts) for members."""
     trimmed = dict(payload)
     if trimmed.get("ollama"):
         trimmed["ollama"] = {
@@ -502,12 +502,8 @@ def _member_health(payload: dict[str, Any]) -> dict[str, Any]:
             "last_error": None,
             "pulling": None,
         }
-    if trimmed.get("openrouter"):
-        trimmed["openrouter"] = {
-            **trimmed["openrouter"],
-            "model": None,
-            "scope": None,
-        }
+    # Only the administrator's Settings > System shows the OpenRouter setup.
+    trimmed["openrouter"] = None
     if trimmed.get("workers"):
         trimmed["workers"] = {**trimmed["workers"], "ai_blocked_reason": None}
     return trimmed
