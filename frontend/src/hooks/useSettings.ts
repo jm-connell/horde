@@ -136,7 +136,8 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
     const before = loadSettings();
     const next = normalizeSettings({ ...before, ...patch });
     persistLocal(next);
-    scheduleServerSync(next, changedServerUi(before, next));
+    // Nothing to send when no synced key changed (a local-only setting).
+    scheduleServerSync(changedServerUi(before, next));
   }, []);
 
   return [settings, update];

@@ -39,6 +39,15 @@ function currentOwner(): number | null {
   );
 }
 
+function stored(): PendingSync | null {
+  return getJson<PendingSync | null>(PENDING_KEY, isPendingSync, null);
+}
+
+/** The stamp of the change pending now (before a request that will carry it), if any. */
+export function pendingStamp(): number | null {
+  return stored()?.at ?? null;
+}
+
 /** A marker older than this is dropped: it must not revert newer settings made elsewhere. */
 export const PENDING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -47,17 +56,17 @@ function readOwn(
   now: number,
   legacyPrefsMayMigrate: boolean
 ): PendingSync | null {
-  const stored = getJson<PendingSync | null>(PENDING_KEY, isPendingSync, null);
-  if (!stored) return null;
-  if (now - stored.at > PENDING_MAX_AGE_MS) {
-    console.debug("Dropped an old unsynced settings change", stored.at);
+  const marker = stored();
+  if (!marker) return null;
+  if (now - marker.at > PENDING_MAX_AGE_MS) {
+    console.debug("Dropped an old unsynced settings change", marker.at);
     removeItem(PENDING_KEY);
     return null;
   }
   const owner = currentOwner();
-  if (stored.owner !== owner) return null;
+  if (marker.owner !== owner) return null;
   // Unowned changes are only the administrator's to upload.
-  return owner === null && !legacyPrefsMayMigrate ? null : stored;
+  return owner === null && !legacyPrefsMayMigrate ? null : marker;
 }
 
 /**
@@ -72,14 +81,17 @@ export function markPending(
   const owner = currentOwner();
   const previous = readOwn(now, owner === null);
   const ui = { ...previous?.ui, ...changed };
-  setJson(PENDING_KEY, { owner, at: now, ui } satisfies PendingSync);
-  return { at: now, ui };
+  // Strictly increasing, even within one millisecond or if the clock steps
+  // back, so an acknowledgement of an older change never clears a newer one.
+  const at = Math.max(now, (stored()?.at ?? 0) + 1);
+  setJson(PENDING_KEY, { owner, at, ui } satisfies PendingSync);
+  return { at, ui };
 }
 
 /** The server acknowledged the change stamped `at`; a newer one stays pending. */
 export function clearPending(at: number): void {
-  const stored = getJson<PendingSync | null>(PENDING_KEY, isPendingSync, null);
-  if (stored && stored.at <= at) removeItem(PENDING_KEY);
+  const marker = stored();
+  if (marker && marker.at <= at) removeItem(PENDING_KEY);
 }
 
 /**
@@ -105,7 +117,7 @@ export function overlayPending(
 
 /** The administrator took over the preferences kept from before accounts: so did their unsent change. */
 export function adoptPendingOwner(userId: number): void {
-  const stored = getJson<PendingSync | null>(PENDING_KEY, isPendingSync, null);
-  if (stored && stored.owner === null)
-    setJson(PENDING_KEY, { ...stored, owner: userId });
+  const marker = stored();
+  if (marker && marker.owner === null)
+    setJson(PENDING_KEY, { ...marker, owner: userId });
 }

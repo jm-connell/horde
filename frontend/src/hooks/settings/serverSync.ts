@@ -16,9 +16,9 @@ import {
   loadPending,
   markPending,
   overlayPending,
+  pendingStamp,
 } from "./pending";
 import { serverUiToSettingsPatch, settingsToServerUi } from "./serverUi";
-import type { Settings } from "./types";
 
 export const SETUP_EVENT = "horde:setup-changed";
 
@@ -99,9 +99,11 @@ export async function flushSettingsSync(): Promise<void> {
   }
   pendingSend = null;
   const ui = settingsToServerUi(loadSettings());
+  // This request carries every change made so far, and no later one.
+  const stamp = pendingStamp();
   try {
     await api.updateAppSettings({ ui });
-    clearPending(Date.now());
+    if (stamp !== null) clearPending(stamp);
   } catch {
     // ignore
   }
@@ -145,15 +147,17 @@ export function ensureServerHydration(): Promise<void> {
           progressExpiryDays: remote.progress_expiry_days,
         });
         persistLocal(next);
-        if (
-          pending ||
-          !Object.prototype.hasOwnProperty.call(ui, "preview_muted")
-        ) {
-          scheduleServerSync(next, pending?.ui);
-        }
+        // Send back only what the server needs: the unacknowledged change and
+        // the `preview_muted` key older blobs lack; never the whole blob.
+        scheduleServerSync({
+          ...pending?.ui,
+          ...(Object.prototype.hasOwnProperty.call(ui, "preview_muted")
+            ? {}
+            : { preview_muted: next.previewMuted }),
+        });
       } else if (remote.setup_completed) {
         // Migrate local → server, only the preferences kept from before accounts
-        if (pending) scheduleServerSync(local, pending.ui);
+        if (pending) scheduleServerSync(pending.ui);
         const uiPayload = settingsToServerUi(local);
         if (legacyPrefsMayMigrate && Object.keys(uiPayload).length > 0) {
           api.updateAppSettings({ ui: uiPayload }).catch(() => undefined);
@@ -195,22 +199,12 @@ export function ensureServerHydration(): Promise<void> {
 /** What the pending debounced sync will send, and the stamp of its pending marker. */
 let pendingSend: { ui: Record<string, unknown>; stamp: number } | null = null;
 
-/**
- * Send `changed` (the keys that differ from the server's copy) after a short
- * pause. Without it, send every key: a full resync that is not a user change.
- */
-export function scheduleServerSync(
-  settings: Settings,
-  changed?: Record<string, unknown>
-): void {
+/** Send `changed` (keys that differ from the server's copy) after a short pause. */
+export function scheduleServerSync(changed: Record<string, unknown>): void {
+  if (Object.keys(changed).length === 0) return;
   if (syncTimer) clearTimeout(syncTimer);
-  let send: { ui: Record<string, unknown>; stamp: number };
-  if (changed && Object.keys(changed).length > 0) {
-    const marked = markPending(changed);
-    send = { ui: marked.ui, stamp: marked.at };
-  } else {
-    send = { ui: settingsToServerUi(settings), stamp: 0 };
-  }
+  const marked = markPending(changed);
+  const send = { ui: marked.ui, stamp: marked.at };
   pendingSend = send;
   syncTimer = setTimeout(() => {
     syncTimer = null;

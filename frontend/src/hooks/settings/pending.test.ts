@@ -163,3 +163,24 @@ describe("expiry", () => {
     expect(later.ui).toEqual({ default_library_sort: "title" });
   });
 });
+
+describe("stamps", () => {
+  it("increase even within one millisecond", () => {
+    setJson(OWNER_KEY, 7);
+    const a = markPending({ theme: "nord" }, 1000);
+    const b = markPending({ default_library_sort: "title" }, 1000);
+    expect(b.at).toBeGreaterThan(a.at);
+    // The older acknowledgement leaves the newer change pending.
+    clearPending(a.at);
+    expect(loadPending(false, 1000)?.ui).toMatchObject({
+      default_library_sort: "title",
+    });
+  });
+
+  it("increase when the clock steps back", () => {
+    setJson(OWNER_KEY, 7);
+    const a = markPending({ theme: "nord" }, 5000);
+    const b = markPending({ default_library_sort: "title" }, 1000);
+    expect(b.at).toBeGreaterThan(a.at);
+  });
+});
