@@ -20,11 +20,12 @@ import { appSettingsQuery, usePresets } from "../queries/app";
 import { queryKeys } from "../queries/keys";
 import { useAiStatus } from "../queries/status";
 import { useRelatedVideos, videoDetailQuery } from "../queries/videos";
+import StreamDownloadControl from "./watch/StreamDownloadControl";
+import { useStreamDownload } from "./watch/useStreamDownload";
 import { useWatchVideo } from "./watch/useWatchVideo";
 import AddToPlaylist from "../components/AddToPlaylist";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import LoadingIndicator from "../components/LoadingIndicator";
-import { MenuFlyout, MenuScroll } from "../components/MenuFlyout";
 import PlaybackQueue from "../components/PlaybackQueue";
 import ThemedSelect from "../components/ThemedSelect";
 import OfflineDownloadButton from "../components/OfflineDownloadButton";
@@ -33,7 +34,7 @@ import { VideoAiPanel } from "../components/lazy";
 import VideoCard from "../components/VideoCard";
 import VideoEditForm from "../components/VideoEditForm";
 import WatchMeta from "../components/WatchMeta";
-import { isActiveJob, useDownloads } from "../context/DownloadContext";
+import { useDownloads } from "../context/DownloadContext";
 import {
   usePlaybackActions,
   usePlaybackLayout,
@@ -43,15 +44,8 @@ import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
-import {
-  PRESET_ORDER,
-  presetOptionLabel,
-  resolveQualityPreset,
-} from "../presets";
 import type { AiChaptersMode } from "../types";
 import {
-  downloadProcessingLabel,
-  downloadProgressPercent,
   formatDate,
   formatDuration,
   formatResolution,
@@ -62,10 +56,6 @@ import {
   stripChapterLines,
   watchProcessingLabel,
 } from "../utils";
-import { setWatchResume } from "../utils/watchHandoff";
-
-const STAY_DOWNLOAD_TOAST =
-  "Downloading - Video will switch to full quality when ready";
 
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
@@ -76,22 +66,6 @@ const PRESET_LABELS: Record<string, string> = {
   "480p": "480p",
   audio: "Audio only",
 };
-
-function downloadButtonLabel(preset: string): string {
-  if (preset === "best") return "Download Best Quality";
-  if (preset === "audio") return "Download Audio Only";
-  if (preset === "2160p") return "Download 4K";
-  return `Download ${preset}`;
-}
-
-function bestAvailablePreset(presets: string[]): string {
-  return resolveQualityPreset("best", presets);
-}
-
-function orderPresets(presets: string[]): string[] {
-  const set = new Set(presets);
-  return PRESET_ORDER.filter((p) => p !== "best" && set.has(p));
-}
 
 export default function Watch() {
   const { can } = useAuth();
@@ -107,7 +81,6 @@ export default function Watch() {
   const relatedSentinelRef = useRef<HTMLDivElement>(null);
   const [redownloadOpen, setRedownloadOpen] = useState(false);
   const redownloadDialogRef = useRef<HTMLDivElement>(null);
-  const presetTriggerRef = useRef<HTMLButtonElement>(null);
   useFocusTrap(redownloadDialogRef, {
     active: redownloadOpen,
     onEscape: () => setRedownloadOpen(false),
@@ -117,36 +90,15 @@ export default function Watch() {
   const [settings] = useSettings();
   const [chapterError, setChapterError] = useState<string | null>(null);
 
-  // Stream download controls
-  const [queuing, setQueuing] = useState(false);
-  const [activeJobId, setActiveJobId] = useState<number | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState("best");
-  const [availablePresets, setAvailablePresets] = useState<string[]>([]);
-  const [presetSizes, setPresetSizes] = useState<Record<string, number>>({});
-  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
-  const downloadMenuRef = useRef<HTMLDivElement>(null);
-  const swapPendingRef = useRef(false);
-  const userPickedPresetRef = useRef(false);
-  const activeJobIdRef = useRef<number | null>(null);
-  activeJobIdRef.current = activeJobId;
-
   const { showToast, showError } = useToast();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
-  const {
-    onJobCompleted,
-    refreshJobs,
-    submitDownload,
-    changeJobQuality,
-    progress,
-    jobs,
-  } = useDownloads();
+  const { onJobCompleted, refreshJobs } = useDownloads();
   const redownloadPending = useRef(false);
   const isMobile = useIsMobile();
   const { mode, queue } = usePlaybackSession();
   const { activeStreamQuality } = usePlaybackLayout();
-  const { playVideo, registerDock, getCurrentPosition, getStreamPosition } =
-    usePlaybackActions();
+  const { playVideo, registerDock, getCurrentPosition } = usePlaybackActions();
 
   const dockRef = useRef<HTMLDivElement>(null);
 
@@ -158,142 +110,13 @@ export default function Watch() {
     channelParam,
   });
 
-  useEffect(() => {
-    if (libraryValid || !streamUrlParam) return;
-    setSelectedPreset("best");
-    setAvailablePresets([]);
-    setPresetSizes({});
-    setPresetMenuOpen(false);
-    userPickedPresetRef.current = false;
-  }, [streamUrlParam, libraryValid]);
-
-  // Resolve download presets for stream
-  const streamSource = source?.kind === "stream" ? source : null;
-  const streamPreview = useQuery({
-    queryKey: queryKeys.preview.download(streamSource?.url ?? ""),
-    queryFn: ({ signal }) =>
-      api.previewDownload(streamSource?.url ?? "", { signal }),
-    enabled: !!streamSource,
-  });
-  const streamMetaPresets = streamSource?.meta.available_presets;
-  const streamPreviewData = streamPreview.data;
-  useEffect(() => {
-    const applyPresets = (presetsList: string[]) => {
-      if (presetsList.length === 0) return;
-      const ordered = orderPresets(presetsList);
-      if (ordered.length === 0) return;
-      setAvailablePresets(ordered);
-      if (!userPickedPresetRef.current) {
-        setSelectedPreset(bestAvailablePreset(ordered));
-      }
-    };
-    if (streamMetaPresets?.length) applyPresets(streamMetaPresets);
-    const p = streamPreviewData;
-    if (!p || p.is_playlist) return;
-    if (p.available_presets?.length) applyPresets(p.available_presets);
-    if (p.preset_sizes && Object.keys(p.preset_sizes).length > 0) {
-      setPresetSizes(p.preset_sizes);
-    }
-  }, [streamMetaPresets, streamPreviewData]);
-
-  useEffect(() => {
-    if (!presetMenuOpen) return;
-    const onPointer = (e: MouseEvent) => {
-      if (
-        downloadMenuRef.current &&
-        !downloadMenuRef.current.contains(e.target as Node)
-      ) {
-        setPresetMenuOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPresetMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [presetMenuOpen]);
-
-  // Resume in-flight download for this stream URL
-  useEffect(() => {
-    if (source?.kind !== "stream" || activeJobId != null) return;
-    const existing = jobs.find(
-      (j) => j.url === source.url && isActiveJob(j, progress[j.id])
-    );
-    if (existing) setActiveJobId(existing.id);
-  }, [source, jobs, progress, activeJobId]);
-
-  // Download complete → handoff to library watch
-  useEffect(() => {
-    return onJobCompleted((completedId) => {
-      if (source?.kind !== "stream") return;
-      const jobId = activeJobIdRef.current;
-      if (jobId == null || completedId == null) return;
-      if (swapPendingRef.current) return;
-
-      void (async () => {
-        try {
-          const job = await api.getJob(jobId);
-          if (job.status !== "completed" || job.video_id !== completedId) {
-            return;
-          }
-          swapPendingRef.current = true;
-          setActiveJobId(null);
-
-          const sec = getStreamPosition();
-          if (sec >= 5) {
-            await api.saveProgress(completedId, sec).catch(() => undefined);
-          }
-          const video = await queryClient.fetchQuery({
-            ...videoDetailQuery(completedId),
-            staleTime: 0,
-          });
-          const resumeAt = sec > 1 ? sec : video.last_position_sec;
-          setWatchResume(completedId, resumeAt);
-          const handedOff = {
-            ...video,
-            last_position_sec: resumeAt,
-          };
-          setSource({ kind: "library", video: handedOff });
-          playVideo(handedOff);
-          showToast("Download complete — switching to full quality");
-          navigate(`/watch/${completedId}`, {
-            state: { resumeAt },
-          });
-        } catch {
-          showError("Download finished, but could not open the video");
-          swapPendingRef.current = false;
-        }
-      })();
-    });
-  }, [
-    onJobCompleted,
+  const streamDownload = useStreamDownload({
     source,
     setSource,
-    getStreamPosition,
-    playVideo,
-    navigate,
-    showToast,
-    showError,
-    queryClient,
-  ]);
-
-  useEffect(() => {
-    if (activeJobId == null) return;
-    const live = progress[activeJobId];
-    if (!live) return;
-    if (live.status === "error") {
-      showError(live.error || "Download failed");
-      setActiveJobId(null);
-      swapPendingRef.current = false;
-    } else if (live.status === "cancelled") {
-      setActiveJobId(null);
-      swapPendingRef.current = false;
-    }
-  }, [activeJobId, progress, showToast, showError]);
+    streamUrlParam,
+    libraryValid,
+    channelParam,
+  });
 
   // --- Library-only: which AI features this install offers ---
   const isLibrarySource = source?.kind === "library";
@@ -528,57 +351,6 @@ export default function Watch() {
     deleteMutation.mutate(video.id);
   };
 
-  async function handleStreamDownload() {
-    if (source?.kind !== "stream" || queuing) return;
-    setPresetMenuOpen(false);
-    setQueuing(true);
-    try {
-      const job = await submitDownload(source.url, selectedPreset, {
-        title: source.meta.title ?? undefined,
-        channel: source.meta.channel ?? (channelParam || undefined),
-      });
-      setActiveJobId(job.id);
-      swapPendingRef.current = false;
-      showToast(STAY_DOWNLOAD_TOAST);
-    } catch (err: unknown) {
-      showToast(
-        err instanceof Error ? err.message : "Could not start download"
-      );
-    } finally {
-      setQueuing(false);
-    }
-  }
-
-  async function handleChangeDownloadQuality(preset: string) {
-    if (activeJobId == null || preset === selectedPreset) return;
-    userPickedPresetRef.current = true;
-    setSelectedPreset(preset);
-    try {
-      await changeJobQuality(activeJobId, preset);
-    } catch (err: unknown) {
-      if (activeJob?.quality_preset) {
-        setSelectedPreset(
-          resolveQualityPreset(
-            activeJob.quality_preset,
-            activeJob.available_presets ?? availablePresets
-          )
-        );
-      }
-      showToast(
-        err instanceof Error ? err.message : "Could not change resolution"
-      );
-    }
-  }
-
-  const presetOptions = useMemo(() => {
-    if (availablePresets.length > 0) return availablePresets;
-    const job =
-      activeJobId != null ? jobs.find((j) => j.id === activeJobId) : undefined;
-    const fromJob = job?.available_presets ?? [];
-    if (fromJob.length > 0) return orderPresets(fromJob);
-    return ["best"];
-  }, [availablePresets, activeJobId, jobs]);
-
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -624,18 +396,6 @@ export default function Watch() {
     : parseChapters(description);
   const descriptionBody = stripChapterLines(description);
   const queueVisible = isLibrary && queue.length > 0;
-
-  const live = activeJobId != null ? progress[activeJobId] : undefined;
-  const activeJob =
-    activeJobId != null
-      ? (jobs.find((j) => j.id === activeJobId) ?? null)
-      : null;
-  const downloadPercent = downloadProgressPercent(
-    live?.progress ?? activeJob?.progress,
-    live?.downloaded_bytes,
-    live?.total_bytes
-  );
-  const downloadActive = activeJob != null && isActiveJob(activeJob, live);
 
   // Live track quality for streams; file height for library.
   const resolution = isLibrary
@@ -915,128 +675,8 @@ export default function Watch() {
                         {Math.round(source.video.frame_rate)}fps
                       </span>
                     )}
-                  {!isLibrary && !downloadActive && can("download") && (
-                    <div className="relative" ref={downloadMenuRef}>
-                      <div className="inline-flex overflow-hidden rounded-lg bg-accent text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60">
-                        <button
-                          type="button"
-                          onClick={() => void handleStreamDownload()}
-                          disabled={queuing}
-                          className="px-3 py-1 disabled:opacity-60"
-                        >
-                          {queuing
-                            ? "Queuing…"
-                            : downloadButtonLabel(selectedPreset)}
-                        </button>
-                        <button
-                          ref={presetTriggerRef}
-                          type="button"
-                          onClick={() => setPresetMenuOpen((v) => !v)}
-                          disabled={queuing}
-                          aria-label="Choose download quality"
-                          aria-expanded={presetMenuOpen}
-                          aria-haspopup="menu"
-                          className="border-l border-ink-950/25 px-2 py-1 disabled:opacity-60"
-                        >
-                          <span
-                            className={`inline-block text-[10px] leading-none transition-transform ${
-                              presetMenuOpen ? "rotate-180" : ""
-                            }`}
-                          >
-                            ▼
-                          </span>
-                        </button>
-                      </div>
-                      <MenuFlyout
-                        open={presetMenuOpen}
-                        className="absolute left-0 z-30 mt-1 min-w-[12rem]"
-                        menu={{
-                          label: "Download quality",
-                          onClose: () => setPresetMenuOpen(false),
-                          triggerRef: presetTriggerRef,
-                        }}
-                      >
-                        <MenuScroll
-                          className="max-h-60"
-                          revision={presetOptions.length}
-                        >
-                          <ul role="none">
-                            {presetOptions.map((p) => (
-                              <li key={p} role="none">
-                                <button
-                                  type="button"
-                                  role="menuitemradio"
-                                  aria-checked={p === selectedPreset}
-                                  onClick={() => {
-                                    userPickedPresetRef.current = true;
-                                    setSelectedPreset(p);
-                                    setPresetMenuOpen(false);
-                                  }}
-                                  className={`flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-xs hover:bg-ink-800 ${
-                                    p === selectedPreset
-                                      ? "font-semibold text-accent"
-                                      : "text-gray-200"
-                                  }`}
-                                >
-                                  <span>
-                                    {presetOptionLabel(p, presetSizes)}
-                                  </span>
-                                  {p === selectedPreset && (
-                                    <span className="text-accent">✓</span>
-                                  )}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </MenuScroll>
-                      </MenuFlyout>
-                    </div>
-                  )}
-                  {!isLibrary && downloadActive && (
-                    <span className="inline-flex items-center gap-2 text-xs font-medium text-gray-300">
-                      <span>
-                        {live?.status === "processing"
-                          ? downloadProcessingLabel(live?.stage)
-                          : live?.status === "queued"
-                            ? "Queued…"
-                            : `Downloading ${downloadPercent}%`}
-                      </span>
-                      <span className="inline-block h-1 w-20 overflow-hidden rounded-full bg-ink-800">
-                        <span
-                          className="block h-full rounded-full bg-accent/70 transition-all duration-300"
-                          style={{ width: `${downloadPercent}%` }}
-                        />
-                      </span>
-                      {(live?.downloaded_bytes != null ||
-                        live?.total_bytes != null) && (
-                        <span className="text-[10px] text-muted">
-                          {live.downloaded_bytes != null
-                            ? formatSize(live.downloaded_bytes)
-                            : "…"}
-                          {live.total_bytes != null
-                            ? ` / ${formatSize(live.total_bytes)}`
-                            : ""}
-                        </span>
-                      )}
-                      {presetOptions.length > 0 && (
-                        <ThemedSelect
-                          aria-label="Download resolution"
-                          size="compact"
-                          value={resolveQualityPreset(
-                            activeJob?.quality_preset || selectedPreset,
-                            activeJob?.available_presets ?? availablePresets
-                          )}
-                          options={presetOptions.map((p) => ({
-                            value: p,
-                            label: presetOptionLabel(p, presetSizes),
-                          }))}
-                          onChange={(preset) =>
-                            void handleChangeDownloadQuality(preset)
-                          }
-                          buttonClassName="cursor-pointer bg-ink-800 text-[11px] font-medium text-gray-300"
-                        />
-                      )}
-                    </span>
+                  {!isLibrary && (
+                    <StreamDownloadControl download={streamDownload} />
                   )}
                 </div>
               </div>
