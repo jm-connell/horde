@@ -1,0 +1,325 @@
+import type { Page } from "@playwright/test";
+import { ACCOUNTS } from "./accounts";
+import {
+  anonymousContext,
+  CSRF_HEADERS,
+  expect,
+  signInWithForm,
+  test,
+  videoCard,
+} from "./fixtures";
+
+/**
+ * Resume points belong to the account, not the device: a position saved on
+ * one device is where every other device of the same account picks up, and
+ * other accounts keep their own.
+ */
+
+type IdOf = (title: string) => number;
+
+async function seededIds(page: Page): Promise<IdOf> {
+  const { items } = await (await page.request.get("/api/videos")).json();
+  return (title: string) =>
+    items.find((v: { title: string }) => v.title === title).id as number;
+}
+
+/** The signed-in account's saved position for `videoId`, as the server has it. */
+async function serverPosition(page: Page, videoId: number): Promise<number> {
+  const res = await page.request.get(`/api/videos/${videoId}`);
+  expect(res.ok()).toBeTruthy();
+  return (await res.json()).last_position_sec as number;
+}
+
+function player(page: Page) {
+  return page.locator("video").first();
+}
+
+async function waitForMedia(page: Page) {
+  await expect
+    .poll(() => player(page).evaluate((v: HTMLVideoElement) => v.duration))
+    .toBeGreaterThan(16);
+}
+
+/** Pause at `sec` and seek there (the player saves as it goes). */
+async function parkAt(page: Page, sec: number) {
+  await player(page).evaluate((v: HTMLVideoElement, at) => {
+    v.pause();
+    v.currentTime = at;
+  }, sec);
+}
+
+/**
+ * Watch `videoId` on this device up to `sec` and leave it paused there, until
+ * the server has that position. Saves are throttled, so keep parking the
+ * playhead until the latest save is this one.
+ */
+async function watchTo(page: Page, videoId: number, sec: number) {
+  await waitForMedia(page);
+  await expect
+    .poll(
+      async () => {
+        await parkAt(page, sec);
+        return serverPosition(page, videoId);
+      },
+      { timeout: 20_000 }
+    )
+    .toBe(sec);
+}
+
+/**
+ * Where the player started: the first playhead past 1 s. A player that
+ * resumed is already there; one that started from 0 is read as it passes 1 s.
+ */
+async function startPosition(page: Page): Promise<number> {
+  const video = player(page);
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime), {
+      timeout: 20_000,
+    })
+    .toBeGreaterThan(1);
+  return video.evaluate((v: HTMLVideoElement) => v.currentTime);
+}
+
+async function signOut(page: Page, username: string) {
+  await page.getByRole("button", { name: new RegExp(`^${username}$`) }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+}
+
+/** Positions queued in this browser while progress saves could not get through. */
+function pendingProgress(
+  page: Page
+): Promise<{ videoId: number; positionSec: number; owner: number }[]> {
+  return page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open("horde-offline");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const req = db
+            .transaction("pendingProgress", "readonly")
+            .objectStore("pendingProgress")
+            .getAll();
+          req.onsuccess = () => {
+            db.close();
+            resolve(req.result);
+          };
+          req.onerror = () => reject(req.error);
+        };
+      })
+  );
+}
+
+test("a newer position this device could not send wins, an older one does not", async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(90_000);
+  const idOf = await seededIds(page);
+  const kiln = idOf("Kiln fire");
+  const save = async (sec: number) =>
+    expect(
+      (
+        await page.request.patch(`/api/videos/${kiln}/progress`, {
+          headers: CSRF_HEADERS,
+          data: { position_sec: sec },
+        })
+      ).ok()
+    ).toBeTruthy();
+
+  // Another device saved 6 s a while ago.
+  await save(6);
+
+  // This device watches to 9 s while its saves can't reach the server.
+  await context.route("**/api/videos/*/progress", (route) =>
+    route.abort("internetdisconnected")
+  );
+  await page.goto(`/watch/${kiln}`);
+  await waitForMedia(page);
+  await expect
+    .poll(
+      async () => {
+        await parkAt(page, 9);
+        const queued = await pendingProgress(page);
+        return queued.find((p) => p.videoId === kiln)?.positionSec;
+      },
+      { timeout: 20_000 }
+    )
+    .toBe(9);
+  await page.getByRole("link", { name: "Home", exact: true }).first().click();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+
+  // Opened again (still online): the unsent 9 s is newer than the server's 6 s.
+  await videoCard(page, "Kiln fire").first().click();
+  const start = await startPosition(page);
+  expect(start).toBeGreaterThanOrEqual(8.5);
+  expect(start).toBeLessThan(13);
+  await parkAt(page, 9);
+  await page.goto("/");
+
+  // Later another device moves on to 15 s; then this one gets through again.
+  await new Promise((r) => setTimeout(r, 1100));
+  await save(15);
+  await context.unroute("**/api/videos/*/progress");
+  await page.reload();
+  await expect.poll(() => pendingProgress(page)).toEqual([]);
+  // The older queued 9 s did not overwrite the newer 15 s.
+  expect(await serverPosition(page, kiln)).toBe(15);
+});
+
+/** Status of this browser's offline copy of `videoId`, if it has one. */
+function offlineStatus(page: Page, videoId: number): Promise<string | null> {
+  return page.evaluate(
+    (id) =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open("horde-offline");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const req = db
+            .transaction("items", "readonly")
+            .objectStore("items")
+            .get(id);
+          req.onsuccess = () => {
+            db.close();
+            resolve(req.result?.status ?? null);
+          };
+          req.onerror = () => reject(req.error);
+        };
+      }),
+    videoId
+  );
+}
+
+test.describe("offline copies", () => {
+  test("each account on a shared device resumes a downloaded video from its own place", async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    test.setTimeout(150_000);
+    const idOf = await seededIds(page);
+    const kiln = idOf("Kiln fire");
+    const ctx = await anonymousContext(browser, baseURL);
+    const device = await ctx.newPage();
+    await device.goto("/");
+    await device.evaluate(() => navigator.serviceWorker.ready);
+    await signInWithForm(device, "admin", ACCOUNTS.admin.password);
+    await expect(videoCard(device, "Kiln fire").first()).toBeVisible();
+
+    // The admin saves the video on this device and watches to 12 s.
+    await videoCard(device, "Kiln fire").first().click();
+    await device.getByTitle("More actions").click();
+    await device
+      .getByRole("menuitem", { name: "Download for offline" })
+      .click();
+    await expect
+      .poll(() => offlineStatus(device, kiln), { timeout: 45_000 })
+      .toBe("complete");
+    await watchTo(device, kiln, 12);
+
+    // The member, on the same device, watches the saved copy to 6 s.
+    await signOut(device, "admin");
+    await signInWithForm(device, "member", ACCOUNTS.member.password);
+    await videoCard(device, "Kiln fire").first().click();
+    await watchTo(device, kiln, 6);
+    await signOut(device, "member");
+
+    // The admin signs back in, and later opens the saved copy offline.
+    await signInWithForm(device, "admin", ACCOUNTS.admin.password);
+    await expect(videoCard(device, "Kiln fire").first()).toBeVisible();
+    await ctx.setOffline(true);
+    await device.goto(`/watch/${kiln}`);
+    await expect(
+      device.locator("[data-horde='connection-tag']")
+    ).toHaveAttribute("data-status", "offline", { timeout: 25_000 });
+    const start = await startPosition(device);
+    expect(start).toBeGreaterThanOrEqual(11.5);
+    expect(start).toBeLessThan(16);
+    await ctx.close();
+  });
+});
+
+test("the position an older release kept on a saved video is not given to anyone", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const idOf = await seededIds(page);
+  const kiln = idOf("Kiln fire");
+  const ctx = await anonymousContext(browser, baseURL);
+  const device = await ctx.newPage();
+  // A saved video as release 2 of the offline database stored it: one
+  // position for the whole device, whoever played it last.
+  await device.goto("/api/ping");
+  await device.evaluate(
+    (videoId) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open("horde-offline", 2);
+        open.onupgradeneeded = () => {
+          open.result.createObjectStore("items", { keyPath: "videoId" });
+          open.result.createObjectStore("pendingProgress", {
+            keyPath: ["owner", "videoId"],
+          });
+        };
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction("items", "readwrite");
+          tx.objectStore("items").put({
+            videoId,
+            video: {
+              id: videoId,
+              title: "Kiln fire",
+              duration_sec: 300,
+              last_position_sec: 50,
+              last_watched_at: new Date().toISOString(),
+            },
+            status: "paused",
+            sourceUrl: `/api/videos/${videoId}/stream`,
+            contentType: "video/mp4",
+            totalBytes: 0,
+            chunkSize: 4 * 1024 * 1024,
+            chunksDone: 0,
+            extras: [],
+            createdAt: Date.now(),
+          });
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    kiln
+  );
+
+  await device.goto("/");
+  await signInWithForm(device, "member", ACCOUNTS.member.password);
+  await expect(videoCard(device, "Kiln fire").first()).toBeVisible();
+  const stored = await device.evaluate(
+    (videoId) =>
+      new Promise<{ position: number; owned: unknown[] }>((resolve, reject) => {
+        const open = indexedDB.open("horde-offline");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction(["items", "resumePositions"], "readonly");
+          const item = tx.objectStore("items").get(videoId);
+          const owned = tx.objectStore("resumePositions").getAll();
+          tx.oncomplete = () => {
+            db.close();
+            resolve({
+              position: item.result.video.last_position_sec,
+              owned: owned.result,
+            });
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    kiln
+  );
+  expect(stored).toEqual({ position: 0, owned: [] });
+  await ctx.close();
+});

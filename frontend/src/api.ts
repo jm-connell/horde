@@ -42,6 +42,7 @@ import type {
 import type { ApiResponse } from "./api/typed";
 import { connectivity } from "./offline/connectivity";
 import { getItem as getOfflineItem } from "./offline/db";
+import { deviceResume } from "./offline/resume";
 import { pendingProgress } from "./offline/pendingProgress";
 
 /** One entry of a 422 response's `fields`: where the problem is and what it is. */
@@ -202,10 +203,11 @@ function notifyOfflineProgress(videoId: number, positionSec: number): void {
   );
 }
 
+/** A video saved on this device, with this account's place in it. */
 async function offlineVideo(id: number): Promise<Video> {
   const item = await getOfflineItem(id).catch(() => undefined);
   if (!item) throw new ApiError("Video not found", { status: 404 });
-  return item.video;
+  return deviceResume.offline(item.video);
 }
 
 export interface LibraryQuery {
@@ -374,26 +376,39 @@ export const api = {
     }
   },
 
-  /** Raw progress PATCH, used when flushing progress saved while offline. */
-  syncProgress(id: number, positionSec: number): Promise<void> {
+  /**
+   * Progress PATCH for a save made earlier (queued while offline). `at` is
+   * when it was made: the server keeps it only if nothing newer was saved
+   * since, on any device.
+   */
+  syncProgress(id: number, positionSec: number, at: number): Promise<void> {
     return request<void>(`/api/videos/${id}/progress`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ position_sec: positionSec }),
+      body: JSON.stringify({
+        position_sec: positionSec,
+        watched_at: new Date(at).toISOString(),
+      }),
     });
   },
 
-  /** Falls back to the downloaded copy when offline or unreachable. */
+  /**
+   * The video with the signed-in account's resume position (see
+   * offline/resume). Falls back to the downloaded copy when offline or
+   * unreachable.
+   */
   async getVideo(id: number, opts?: ReadOptions): Promise<Video> {
     if (id < 0) return offlineVideo(id);
+    let video: Video;
     try {
-      return await request<Video>(`/api/videos/${id}`, opts);
+      video = await request<Video>(`/api/videos/${id}`, opts);
     } catch (err) {
       if (!isNetworkFailure(err)) throw err;
       const local = await getOfflineItem(id).catch(() => undefined);
-      if (local) return local.video;
+      if (local) return deviceResume.offline(local.video);
       throw err;
     }
+    return deviceResume.online(video);
   },
 
   getRelatedVideos(

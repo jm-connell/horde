@@ -85,7 +85,7 @@ describe("PendingProgressQueue", () => {
       classify: () => "stop" as const,
     });
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith(11, 42);
+    expect(send).toHaveBeenCalledWith(11, 42, NOW);
     expect(rows()).toEqual([rec(1, 10)]);
   });
 

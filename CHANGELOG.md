@@ -105,6 +105,12 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Fixed
 
+- Videos saved for offline viewing resume per account. A shared device used to
+  keep one position per saved video, so it resumed wherever whoever played it
+  last had stopped, and could ignore newer progress made on another device.
+  Each account now has its own place in a saved video on the device; online the
+  server's position (or a newer one this device could not send yet) wins. The
+  old device-wide position has no owner and is dropped on upgrade.
 - Watch progress queued on a device while the server was unreachable no longer
   rewinds a video you have since watched further on another device: the save
   carries the time it was made (`watched_at` on `PATCH /api/videos/{id}/progress`)

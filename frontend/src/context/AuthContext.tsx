@@ -20,6 +20,7 @@ import LoginPage from "../pages/Login";
 import { adoptSettingsOwner, clearLocalSettings } from "../hooks/useSettings";
 import { offlineManager } from "../offline/manager";
 import { pendingProgress } from "../offline/pendingProgress";
+import { deviceResume } from "../offline/resume";
 import { safeNextPath } from "../utils/authPaths";
 import type { AuthState, AuthUser, Permission } from "../types";
 import { getJson, removeItem, setJson } from "../storage";
@@ -48,15 +49,16 @@ function writeCachedState(state: AuthState | null): void {
 
 /**
  * Before anything reads this user's preferences, make sure they are theirs,
- * and queue progress saved offline under their account.
+ * and keep progress saved on this device (queued while offline, or the place
+ * in a video saved for offline) under their account.
  */
 function bindDeviceStateToUser(state: AuthState): void {
+  const owner = state.authenticated && state.user ? state.user.id : null;
   if (state.authenticated && state.user) {
     adoptSettingsOwner(state.user.id, state.user.is_admin);
-    pendingProgress.setOwner(state.user.id);
-  } else {
-    pendingProgress.setOwner(null);
   }
+  pendingProgress.setOwner(owner);
+  deviceResume.setOwner(owner);
 }
 
 interface AuthContextValue {
@@ -154,6 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     writeCachedState(null);
     clearLocalSettings();
     pendingProgress.setOwner(null);
+    deviceResume.setOwner(null);
     window.location.assign("/login");
   }, []);
 

@@ -8,10 +8,14 @@ export const DB_NAME = "horde-offline";
 /**
  * 2: pending progress is keyed by [owner, videoId]. The un-owned records of
  * version 1 are dropped on upgrade (see `openDb`).
+ * 3: resume positions of saved videos are kept per account in their own store,
+ * keyed by [owner, videoId]; the one un-owned position each item carried is
+ * dropped on upgrade.
  */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const ITEMS_STORE = "items";
 export const PENDING_PROGRESS_STORE = "pendingProgress";
+export const RESUME_POSITIONS_STORE = "resumePositions";
 
 /** Video bytes, stored as fixed-size chunks so downloads can resume. */
 export const MEDIA_CACHE = "horde-offline-media-v1";
@@ -35,6 +39,11 @@ export interface OfflineItem {
    * use `-jobId` so they share the same Watch / player / stream URL paths.
    */
   videoId: number;
+  /**
+   * The video's metadata, shared by everyone using this device. Its watch
+   * fields (`last_position_sec`, `last_watched_at`) are always empty: resume
+   * positions belong to an account and live in RESUME_POSITIONS_STORE.
+   */
   video: Video;
   status: OfflineStatus;
   /** Server URL the bytes are fetched from (supports HTTP Range). */
@@ -55,13 +64,30 @@ export interface OfflineItem {
   error?: string | null;
 }
 
-/** A progress save that could not reach the server, waiting to be sent. */
-export interface PendingProgress {
+/** One account's place in one video, as recorded on this device. */
+export interface OwnedPosition {
   /** Id of the account that was signed in when it was saved. */
   owner: number;
   videoId: number;
   positionSec: number;
+  /** When it was reached (ms since the epoch, this device's clock). */
   at: number;
+}
+
+/** A progress save that could not reach the server, waiting to be sent. */
+export type PendingProgress = OwnedPosition;
+
+/** Where an account is in a video saved on this device (used offline). */
+export type ResumePosition = OwnedPosition;
+
+/** The item with the device-wide watch fields cleared (see `OfflineItem.video`). */
+export function withoutWatchState(item: OfflineItem): OfflineItem {
+  if (item.video.last_position_sec === 0 && item.video.last_watched_at === null)
+    return item;
+  return {
+    ...item,
+    video: { ...item.video, last_position_sec: 0, last_watched_at: null },
+  };
 }
 
 export function chunkUrl(videoId: number, index: number): string {
@@ -104,6 +130,25 @@ export function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(PENDING_PROGRESS_STORE, {
           keyPath: ["owner", "videoId"],
         });
+      }
+      if (!db.objectStoreNames.contains(RESUME_POSITIONS_STORE)) {
+        db.createObjectStore(RESUME_POSITIONS_STORE, {
+          keyPath: ["owner", "videoId"],
+        });
+      }
+      // Before version 3 each saved video carried one position for the whole
+      // device: whoever played it last. Whose it was is unknown, so it is
+      // dropped (as version 2 did with un-owned queued saves) rather than
+      // handed to whichever account opens the video next.
+      if (event.oldVersion >= 1 && event.oldVersion < 3 && req.transaction) {
+        const items = req.transaction.objectStore(ITEMS_STORE).openCursor();
+        items.onsuccess = () => {
+          const cursor = items.result;
+          if (!cursor) return;
+          const item = cursor.value as OfflineItem;
+          if (item.video) cursor.update(withoutWatchState(item));
+          cursor.continue();
+        };
       }
     };
     req.onsuccess = () => {
@@ -168,6 +213,51 @@ export async function deletePendingProgress(
   await wrap(
     (await store(PENDING_PROGRESS_STORE, "readwrite")).delete([owner, videoId])
   );
+}
+
+export async function getPendingProgress(
+  owner: number,
+  videoId: number
+): Promise<PendingProgress | undefined> {
+  return wrap(
+    (await store(PENDING_PROGRESS_STORE, "readonly")).get([owner, videoId])
+  );
+}
+
+export async function putResumePosition(p: ResumePosition): Promise<void> {
+  await wrap((await store(RESUME_POSITIONS_STORE, "readwrite")).put(p));
+}
+
+export async function getResumePosition(
+  owner: number,
+  videoId: number
+): Promise<ResumePosition | undefined> {
+  return wrap(
+    (await store(RESUME_POSITIONS_STORE, "readonly")).get([owner, videoId])
+  );
+}
+
+/** Every saved position of one account. */
+export async function getResumePositions(
+  owner: number
+): Promise<ResumePosition[]> {
+  const range = IDBKeyRange.bound([owner, -Infinity], [owner, Infinity]);
+  return wrap((await store(RESUME_POSITIONS_STORE, "readonly")).getAll(range));
+}
+
+/** Forget every account's position in a video (its offline copy is gone). */
+export async function deleteResumePositions(videoId: number): Promise<void> {
+  const positions = await store(RESUME_POSITIONS_STORE, "readwrite");
+  await new Promise<void>((resolve, reject) => {
+    const req = positions.openCursor();
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) return resolve();
+      if ((cursor.value as ResumePosition).videoId === videoId) cursor.delete();
+      cursor.continue();
+    };
+    req.onerror = () => reject(req.error);
+  });
 }
 
 /** `/api/videos/12/stream` → 12, `/api/videos/-3/stream` → -3. */

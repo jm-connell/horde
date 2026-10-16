@@ -34,11 +34,13 @@ import {
   deleteItem,
   getAllItems,
   putItem,
+  withoutWatchState,
   type OfflineItem,
   type OfflineSponsorSegment,
 } from "./db";
 import { classifySendFailure, pendingProgress } from "./pendingProgress";
 import { contentRangeTotal } from "./ranges";
+import { deviceResume } from "./resume";
 import { isAppleWebkit } from "../utils/playbackRendition";
 import {
   isQuotaError,
@@ -247,6 +249,9 @@ class OfflineManager {
     this.live.delete(videoId);
     this.emit(true);
     await deleteItem(videoId).catch(() => undefined);
+    await deviceResume.forget(videoId).catch((err) => {
+      console.warn("Could not forget the offline resume positions", err);
+    });
     await this.deleteStoredData(item);
   }
 
@@ -294,18 +299,12 @@ class OfflineManager {
     this.pump();
   }
 
-  /** Keep the downloaded copy's resume point current (used offline). */
+  /** Keep the signed-in account's place in a downloaded video (used offline). */
   private recordProgress(videoId: number, positionSec: number): void {
-    const item = this.items.get(videoId);
-    if (!item) return;
-    const video = {
-      ...item.video,
-      last_position_sec: positionSec,
-      last_watched_at: new Date().toISOString(),
-    };
-    this.items.set(videoId, { ...item, video });
-    // Persist without re-rendering every list on each periodic save.
-    void putItem({ ...item, video }).catch(() => undefined);
+    if (!this.items.has(videoId)) return;
+    deviceResume.record(videoId, positionSec).catch((err) => {
+      console.warn("Could not save the offline resume position", err);
+    });
   }
 
   /**
@@ -318,7 +317,8 @@ class OfflineManager {
         const state = await api.getAuthState();
         return state.authenticated && state.user ? state.user.id : null;
       },
-      send: (videoId, positionSec) => api.syncProgress(videoId, positionSec),
+      send: (videoId, positionSec, at) =>
+        api.syncProgress(videoId, positionSec, at),
       classify: (err) =>
         classifySendFailure(err instanceof ApiError ? err.status : null),
     });
@@ -641,10 +641,13 @@ class OfflineManager {
     return this.save({ ...current, ...patch });
   }
 
-  private async save(item: OfflineItem): Promise<OfflineItem> {
+  private async save(next: OfflineItem): Promise<OfflineItem> {
     // A removed item must not be resurrected by an in-flight download.
-    const current = this.items.get(item.videoId);
-    if (!current && item.status !== "queued") return item;
+    const current = this.items.get(next.videoId);
+    if (!current && next.status !== "queued") return next;
+    // Metadata from the server carries the signed-in account's position;
+    // the copy is the device's, positions are kept per account (resume.ts).
+    const item = withoutWatchState(next);
     this.items.set(item.videoId, item);
     this.emit(true);
     await putItem(item);

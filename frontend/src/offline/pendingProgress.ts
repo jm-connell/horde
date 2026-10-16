@@ -69,8 +69,8 @@ export function classifySendFailure(status: number | null): SendFailure {
 export interface FlushDeps {
   /** Ask the server who is signed in (null: nobody). Throws when unreachable. */
   whoAmI(): Promise<number | null>;
-  /** Send one position to the server for the signed-in account. */
-  send(videoId: number, positionSec: number): Promise<void>;
+  /** Send one position, saved at `at`, to the server for the signed-in account. */
+  send(videoId: number, positionSec: number, at: number): Promise<void>;
   /** What a failed send means for the rest of the flush. */
   classify(err: unknown): SendFailure;
 }
@@ -148,7 +148,7 @@ export class PendingProgressQueue {
           return;
         }
         try {
-          await deps.send(p.videoId, p.positionSec);
+          await deps.send(p.videoId, p.positionSec, p.at);
         } catch (err) {
           const failure = deps.classify(err);
           if (failure === "stop") throw err;

@@ -77,8 +77,14 @@ In **offline mode**:
 
 - Home shows only downloaded videos, and they play from local storage.
 - Playlists, History, Download and Import are greyed out.
+- Downloaded videos resume where **you** left off, not where someone else
+  using the device did: each account has its own place in a saved video.
+  Opened while online, a saved video resumes from your latest position on any
+  device (or from a newer one this device has not sent yet).
 - Watch progress is saved locally and synced to the server when you're back,
-  to the account that was signed in while you watched. If someone else signs
+  to the account that was signed in while you watched. It is sent with the
+  time you watched, so it never rewinds a video you have since watched further
+  on another device. If someone else signs
   in on the device first, your positions wait for you (for up to 30 days)
   instead of landing in their history.
   If the signed-in account changes while positions are syncing (another tab

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { connectivity, type ConnectivityState } from "./connectivity";
 import { bytesDone, type OfflineItem } from "./db";
 import { offlineManager, type OfflineSnapshot } from "./manager";
+import { deviceResume } from "./resume";
 
 export function useConnectivity(): ConnectivityState {
   return useSyncExternalStore(connectivity.subscribe, connectivity.getState);
@@ -47,4 +48,9 @@ export function useOfflineItem(
   const snap = useOfflineDownloads();
   const item = videoId == null ? undefined : snap.byId.get(videoId);
   return itemProgress(item, snap.liveBytes);
+}
+
+/** The signed-in account's place (seconds) in each video saved on this device. */
+export function useOfflineResumePositions(): ReadonlyMap<number, number> {
+  return useSyncExternalStore(deviceResume.subscribe, deviceResume.getSnapshot);
 }

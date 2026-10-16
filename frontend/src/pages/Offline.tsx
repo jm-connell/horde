@@ -7,6 +7,7 @@ import {
   itemProgress,
   useConnectivity,
   useOfflineDownloads,
+  useOfflineResumePositions,
 } from "../offline/hooks";
 import { offlineManager } from "../offline/manager";
 import HttpsHelp from "../components/HttpsHelp";
@@ -134,17 +135,18 @@ function DownloadingRow({
 
 function DownloadedCard({
   item,
+  positionSec,
   onRemove,
 }: {
   item: OfflineItem;
+  /** The signed-in account's place in it, on this device. */
+  positionSec: number;
   onRemove: (item: OfflineItem) => void;
 }) {
   const v = item.video;
   const dur = v.duration_sec;
   const resume =
-    v.last_position_sec > 0 && dur
-      ? Math.min(100, (v.last_position_sec / dur) * 100)
-      : 0;
+    positionSec > 0 && dur ? Math.min(100, (positionSec / dur) * 100) : 0;
   return (
     <li className="group relative">
       <Link to={`/watch/${item.videoId}`} className="block">
@@ -201,6 +203,7 @@ export default function OfflinePage({
   embedded?: boolean;
 }) {
   const snap = useOfflineDownloads();
+  const positions = useOfflineResumePositions();
   const conn = useConnectivity();
   const remove = useRemove();
   const [quota, setQuota] = useState<{ usage?: number; quota?: number } | null>(
@@ -314,6 +317,7 @@ export default function OfflinePage({
               <DownloadedCard
                 key={item.videoId}
                 item={item}
+                positionSec={positions.get(item.videoId) ?? 0}
                 onRemove={remove}
               />
             ))}
