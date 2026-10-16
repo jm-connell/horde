@@ -333,3 +333,33 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
             )
         )
         session.commit()
+
+
+#: Channel of the filler videos ``add_bulk_videos`` creates.
+BULK_CHANNEL = "Bulkland"
+
+
+def add_bulk_videos(engine: Engine, count: int) -> None:
+    """Insert ``count`` ready videos in ``BULK_CHANNEL`` (rows only, no media files).
+
+    Every ten videos share one ``added_at`` and one duration, so paging has to
+    break ties in the sort key to avoid dropping or repeating a video.
+    """
+    from sqlmodel import Session
+
+    from .models import Video, VideoStatus
+
+    base = datetime(2023, 1, 1, tzinfo=UTC)
+    with Session(engine) as session:
+        session.add_all(
+            Video(
+                title=f"Bulk video {i:04d}",
+                channel=BULK_CHANNEL,
+                file_path=f"{BULK_CHANNEL}/bulk-{i:04d}.mp4",
+                status=VideoStatus.ready,
+                duration_sec=float(30 + (i // 10)),
+                added_at=base + timedelta(minutes=i // 10),
+            )
+            for i in range(count)
+        )
+        session.commit()
