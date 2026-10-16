@@ -44,7 +44,15 @@ test("a playlist is built, reordered, trimmed and deleted", async ({
 
   // Drag the second video above the first; the order survives a reload.
   const handles = panel.getByRole("button", { name: "Drag to reorder videos" });
-  await handles.nth(1).dragTo(rows.first());
+  const from = (await handles.nth(1).boundingBox())!;
+  const to = (await rows.first().boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  // Small steps so the browser starts the drag and fires dragover on the target.
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 20,
+  });
+  await page.mouse.up();
   await expect(rows).toHaveText([/Cedar Notes/, /Kiln fire/]);
   // The reload keeps this playlist open (?open=<id>).
   await page.reload();
