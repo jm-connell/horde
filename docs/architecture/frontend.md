@@ -27,10 +27,23 @@ Mounted in `App.tsx` (outer → inner):
 
 | Provider | Role |
 |----------|------|
-| `ToastProvider` | Transient toasts |
-| `DownloadProvider` | Download queue state / actions |
+| `QueryClientProvider` | The TanStack Query cache (see [Data layer](#data-layer)) |
+| `ToastProvider` | Transient toasts (stable value) |
+| `DownloadProvider` | Download jobs, live progress and queue state, kept in the query cache |
 | `SearchProvider` | Shared search query / library search coordination |
-| `PlaybackProvider` | Current video, queue, mini-player, navigation into `/watch` |
+| `PlaybackProvider` | Current video, queue, mini-player, navigation into `/watch`; three contexts (below) |
+
+`PlaybackProvider` exposes `usePlaybackActions()` (stable, never re-renders a reader), `usePlaybackSession()` (current video, stream, queue, mode) and `usePlaybackLayout()` (mini-player rectangle, picture inset, live quality; these change while dragging). Read the narrowest one a component needs.
+
+## Data layer
+
+Server data is read through **TanStack Query** (`src/queries/`). Types come from the generated OpenAPI schema (`src/api/schema.d.ts`, see [API overview](api-overview.md)); `src/types.ts` aliases them.
+
+- One query key per resource (`queries/keys.ts`), so screens share a request and a returning screen paints the cached value while it revalidates. Status data (AI status, system stats, activity, catalog and metadata sync) polls only on the screens that show it, and not in background tabs.
+- The library list is a `useInfiniteQuery` over the cursor API: the first page paints, the rest streams in, a failed page keeps the pages already loaded, and a refetch replaces the list only when every page has arrived.
+- Download jobs and per-job progress live in the cache: SSE events go in with `setQueryData`, and polling is only a fallback while the stream is down.
+- Writes are `useMutation` calls that invalidate or update the cache; a failure with no inline handling goes through `showError`.
+- The client uses `networkMode: "always"` because offline mode is tracked by `offline/connectivity`, and the cache is cleared when the signed-in user changes.
 
 ## Player DOM reparenting
 
