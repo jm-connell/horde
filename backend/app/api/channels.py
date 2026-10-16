@@ -10,6 +10,7 @@ from sqlmodel import Session
 
 from ..auth import current_user, require_permission
 from ..context import get_session
+from ..errors import CodedHTTPException
 from ..response_schemas import ChannelRenameResult
 from ..schemas import (
     ChannelAutodownloadRead,
@@ -42,6 +43,7 @@ from ..services.ytdlp_extract import (
     search_youtube_channel_videos,
     search_youtube_videos,
 )
+from . import member_view
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +104,11 @@ def search_channels(
 
 
 @router.get("/channels/catalog/status", response_model=ChannelCatalogStatusResponse)
-def channel_catalog_status():
-    return ChannelCatalogStatusResponse(**channel_catalog.get_runtime_status())
+def channel_catalog_status(user: AuthUser = Depends(current_user)):
+    payload = channel_catalog.get_runtime_status()
+    if not user.is_admin:
+        payload = member_view.catalog_status(payload)
+    return ChannelCatalogStatusResponse(**payload)
 
 
 @router.post(
@@ -535,6 +540,13 @@ def channel_catalog_search(
     )
 
 
+def _feed_unavailable() -> CodedHTTPException:
+    """The fixed answer for a feed that could not load (the cause can quote a proxy)."""
+    return CodedHTTPException(
+        400, "Could not load the channel feed", "channel_feed_unavailable"
+    )
+
+
 @router.get(
     "/channels/feed", response_model=ChannelFeedPage, dependencies=[Depends(ytdlp_slot)]
 )
@@ -610,9 +622,7 @@ def channel_feed(
                 logger.warning(
                     "could not load channel feed %s", channel_url, exc_info=True
                 )
-                raise HTTPException(
-                    status_code=400, detail=f"Could not load channel feed: {err}"
-                ) from err
+                raise _feed_unavailable() from err
     else:
         data = channel_catalog.catalog_feed_page(
             session, channel_url, offset=offset, limit=limit
@@ -626,9 +636,10 @@ def channel_feed(
                     channel_url, offset=offset, limit=limit
                 )
             except Exception as exc:
-                raise HTTPException(
-                    status_code=400, detail=f"Could not load channel feed: {exc}"
-                ) from exc
+                logger.warning(
+                    "could not load channel feed %s", channel_url, exc_info=True
+                )
+                raise _feed_unavailable() from exc
             from_catalog = False
             indexing = False
         elif offset == 0:

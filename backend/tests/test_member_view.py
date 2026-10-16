@@ -196,3 +196,74 @@ def test_health_hides_the_pot_url_and_extract_failure_text_from_a_member(
     assert failure["message"] == member_view.EXTRACT_ERROR
     assert failure["url"] is None and failure["target"] is None
     assert "bgutil.lan" not in str(member)
+
+
+def test_health_hides_the_data_path_in_the_storage_warning_from_a_member(
+    app, client, member_client
+):
+    app.state.storage_warning = (
+        "The data directory /srv/horde/data is on a network filesystem (nfs4 "
+        "mounted at /srv). SQLite's write-ahead log (WAL) is not safe there."
+    )
+
+    admin = client.get("/api/health").json()
+    member = member_client.get("/api/health").json()
+
+    assert "/srv/horde/data" in admin["storage_warning"]
+    # The member still learns that the storage is unsafe, not where it is.
+    assert member["storage_warning"] == member_view.STORAGE_WARNING
+    assert "/srv" not in str(member)
+
+
+def test_health_without_a_storage_warning_stays_empty_for_a_member(app, member_client):
+    app.state.storage_warning = None
+
+    assert member_client.get("/api/health").json()["storage_warning"] is None
+
+
+def test_the_catalog_status_hides_the_extractor_error_from_a_member(
+    client, member_client, session
+):
+    from app.models import ChannelCatalog, ChannelCatalogStatus
+
+    raw = "ERROR: [youtube:tab] UC1: Unable to download webpage: http://proxy.lan:3128"
+    session.add(
+        ChannelCatalog(
+            channel_url="https://www.youtube.com/@alpha",
+            channel_name="Alpha",
+            status=ChannelCatalogStatus.error,
+            last_error=raw,
+        )
+    )
+    session.commit()
+    path = "/api/channels/catalog/status"
+
+    admin = client.get(path).json()["catalogs"]
+    member = member_client.get(path).json()["catalogs"]
+
+    assert [c["last_error"] for c in admin] == [raw]
+    assert [c["status"] for c in member] == ["error"]
+    assert [c["last_error"] for c in member] == [member_view.CATALOG_ERROR]
+
+
+@pytest.mark.parametrize("live", [False, True])
+def test_a_failed_channel_feed_logs_the_error_and_answers_with_a_stable_code(
+    client, member_client, monkeypatch, caplog, live
+):
+    from app.services import ytdlp_extract
+
+    raw = "ERROR: Unable to download webpage: http://proxy.lan:3128 (key=sk-abc123)"
+
+    def boom(*args, **kwargs):
+        raise RuntimeError(raw)
+
+    monkeypatch.setattr(ytdlp_extract, "fetch_channel_feed", boom)
+    params = {"url": "https://www.youtube.com/@alpha", "live": live}
+
+    for who in (client, member_client):
+        response = who.get("/api/channels/feed", params=params)
+        body = response.json()
+        assert response.status_code == 400
+        assert body["code"] == "channel_feed_unavailable"
+        assert "proxy.lan" not in str(body) and "sk-abc123" not in str(body)
+    assert "proxy.lan" in caplog.text

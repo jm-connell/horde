@@ -35,7 +35,9 @@ Members do not see how the server is set up: the server settings, AI status and 
 - video reads give `embed_error` as "AI indexing failed" and `compat.error` as a generic sentence, and leave out `ai_summary_model` and `ai_summary_cost`;
 - `GET /api/system/activity` lists tasks without `engine`, `detail` or `error`;
 - `GET /api/system/stats` leaves out the GPU name and memory and the ffmpeg path;
-- `GET /api/health` leaves out the PO token provider address and error, and the message, target and URL of the last failed YouTube extract.
+- `GET /api/health` leaves out the PO token provider address and error, and the message, target and URL of the last failed YouTube extract; its `storage_warning` says that storage is on a network filesystem without the data directory or mount point;
+- `GET /api/channels/catalog/status` gives a failed catalog's `last_error` as "Indexing failed";
+- a channel feed that cannot load answers with the generic message and code `channel_feed_unavailable` (for everyone; the server log has the cause).
 
 Download job errors are not trimmed: they explain why a download the member can see failed (for example a private or members-only video).
 

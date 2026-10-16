@@ -158,6 +158,13 @@ level. Detailed per-area entries are added by the maintainer at release time.
   `GET /api/system/stats` drops the GPU name, VRAM and ffmpeg path; and
   `GET /api/health` drops the PO token provider address and the text, target and
   URL of the last failed YouTube extract. Administrators still get everything.
+- Members no longer see more server internals: `GET /api/health` replaces the
+  `storage_warning` (which named the data directory and its mount point) with a
+  generic warning, `GET /api/channels/catalog/status` replaces a catalog's raw
+  yt-dlp `last_error` with "Indexing failed", and a channel feed that cannot
+  load answers every caller with a fixed message and the code
+  `channel_feed_unavailable` instead of quoting the exception (the full error is
+  logged). Administrators still see the catalog and storage text.
 - The start-up integrity repair only backs up the database when it can repair
   something (an orphan under `ON DELETE CASCADE` or `SET NULL`, or the legacy
   table). A violation it leaves alone no longer writes a backup on every start

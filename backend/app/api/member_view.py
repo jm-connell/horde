@@ -23,6 +23,13 @@ EMBED_ERROR = "AI indexing failed"
 COMPAT_ERROR = "the server could not convert this video"
 #: Shown instead of the yt-dlp message of the last failed extract.
 EXTRACT_ERROR = "Extraction failed"
+#: Shown instead of the last error of a channel catalog (raw yt-dlp text).
+CATALOG_ERROR = "Indexing failed"
+#: Shown instead of the storage warning, which names the data directory and mount.
+STORAGE_WARNING = (
+    "Storage is on a network filesystem, where the library database can be "
+    "corrupted. Ask the administrator to keep the data directory on local disk."
+)
 
 
 def compat(state: CompatState) -> CompatState:
@@ -104,6 +111,19 @@ def health(payload: dict[str, Any]) -> dict[str, Any]:
                 "url": None,
             },
         }
+    if trimmed.get("storage_warning"):
+        trimmed["storage_warning"] = STORAGE_WARNING
     if trimmed.get("workers"):
         trimmed["workers"] = {**trimmed["workers"], "ai_blocked_reason": None}
     return trimmed
+
+
+def catalog_status(payload: dict[str, Any]) -> dict[str, Any]:
+    """Channel catalog progress without the extractor's text for a failed index."""
+    return {
+        **payload,
+        "catalogs": [
+            {**row, "last_error": CATALOG_ERROR if row.get("last_error") else None}
+            for row in payload.get("catalogs") or []
+        ],
+    }
