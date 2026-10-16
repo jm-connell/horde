@@ -9,7 +9,14 @@ import {
   Suspense,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import {
+  channelCatalogStatusQuery,
+  dataOrNull,
+  useAiStatus,
+  useChannelCatalogStatus,
+} from "../queries/status";
 import { describeError } from "../apiErrors";
 import { useSearchParams } from "react-router-dom";
 import { api, downloadFileUrl } from "../api";
@@ -244,7 +251,10 @@ function OnlineLibrary() {
   const [channelUrlOverrides, setChannelUrlOverrides] =
     useState<Record<string, string>>(loadChannelUrlMap);
   const [homeTab, setHomeTabState] = useState<HomeTab>(loadHomeTab);
-  const [aiReady, setAiReady] = useState(false);
+  const aiStatus = dataOrNull(useAiStatus({ interval: 15_000 }));
+  const aiReady = Boolean(
+    aiStatus?.ready && aiStatus.enabled && !aiStatus.paused
+  );
   const [feedSearch, setFeedSearch] = useState("");
   const [feedSort, setFeedSort] = useState<"recent" | "popular">("recent");
   const [feedOrder, setFeedOrder] = useState<"asc" | "desc">("desc");
@@ -271,6 +281,7 @@ function OnlineLibrary() {
 
   const [settings, update] = useSettings();
   const { showToast, showError } = useToast();
+  const queryClient = useQueryClient();
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
   const { onJobCompleted, submitDownload } = useDownloads();
   const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
@@ -389,25 +400,6 @@ function OnlineLibrary() {
       scheduleBackgroundRefresh();
     });
   }, [onJobCompleted, scheduleBackgroundRefresh]);
-
-  useEffect(() => {
-    let active = true;
-    const poll = () =>
-      api
-        .getAiStatus()
-        .then((s) => {
-          if (active) setAiReady(Boolean(s.ready && s.enabled && !s.paused));
-        })
-        .catch(() => {
-          if (active) setAiReady(false);
-        });
-    poll();
-    const id = setInterval(poll, 15000);
-    return () => {
-      active = false;
-      clearInterval(id);
-    };
-  }, []);
 
   const reloadChannels = useCallback(
     () =>
@@ -793,6 +785,12 @@ function OnlineLibrary() {
     };
   }, [onChannelPage, activeChannel, activeChannelUrl]);
 
+  const catalogStatusQuery = useChannelCatalogStatus({
+    enabled: onChannelPage && !!activeChannelUrl,
+    interval: 5000,
+  });
+  const catalogStatus = catalogStatusQuery.data;
+
   useEffect(() => {
     if (!onChannelPage || !activeChannelUrl) {
       setCatalogProgress(null);
@@ -800,91 +798,74 @@ function OnlineLibrary() {
       catalogErrorSeededRef.current = false;
       return;
     }
-    let cancelled = false;
-    const load = () => {
-      api
-        .getChannelCatalogStatus()
-        .then((status) => {
-          if (cancelled) return;
-          const norm = (u: string) =>
-            u
-              .replace(/\/+$/, "")
-              .replace(
-                /\/(videos|shorts|streams|playlists|featured|about|search)$/i,
-                ""
-              )
-              .toLowerCase();
-          const target = norm(activeChannelUrl);
-          const hit =
-            status.catalogs.find((c) => norm(c.channel_url) === target) ?? null;
-          const isCurrentJob =
-            status.running &&
-            status.current_channel_url != null &&
-            norm(status.current_channel_url) === target;
-          const maxVideos = hit?.max_videos || 1000;
-          const lastError = hit?.last_error ?? null;
-          if (!catalogErrorSeededRef.current) {
-            catalogErrorSeededRef.current = true;
-            toastedCatalogErrorRef.current = lastError;
-          } else if (
-            lastError &&
-            lastError !== toastedCatalogErrorRef.current
-          ) {
-            toastedCatalogErrorRef.current = lastError;
-            showToast(lastError);
-          } else if (!lastError) {
-            toastedCatalogErrorRef.current = null;
-          }
-          if (!hit) {
-            const system = status.direct_youtube_search ?? true;
-            setCatalogProgress({
-              indexed: isCurrentJob ? status.done : 0,
-              total: null,
-              maxVideos,
-              complete: false,
-              status: null,
-              indexing: isCurrentJob,
-              lastError,
-              youtubeSearchOverride: null,
-              youtubeSearchEffective: system,
-              youtubeSearchSystem: system,
-            });
-            return;
-          }
-          const indexing =
-            hit.status === "queued" ||
-            hit.status === "indexing" ||
-            isCurrentJob;
-          // While the flat list is still growing, prefer live done count.
-          const indexed =
-            isCurrentJob && status.current_phase === "flat" && status.done > 0
-              ? status.done
-              : hit.indexed_count;
-          setCatalogProgress({
-            indexed,
-            total: hit.channel_total,
-            maxVideos,
-            complete: hit.complete && !indexing,
-            status: hit.status,
-            indexing,
-            lastError,
-            youtubeSearchOverride: hit.direct_youtube_search ?? null,
-            youtubeSearchEffective:
-              hit.direct_youtube_search_effective ??
-              status.direct_youtube_search ??
-              true,
-            youtubeSearchSystem: status.direct_youtube_search ?? true,
-          });
-        })
-        .catch(() => undefined);
-    };
-    load();
-    const id = setInterval(load, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [onChannelPage, activeChannelUrl, showToast]);
+    if (!catalogStatus) return;
+    const status = catalogStatus;
+
+    const norm = (u: string) =>
+      u
+        .replace(/\/+$/, "")
+        .replace(
+          /\/(videos|shorts|streams|playlists|featured|about|search)$/i,
+          ""
+        )
+        .toLowerCase();
+    const target = norm(activeChannelUrl);
+    const hit =
+      status.catalogs.find((c) => norm(c.channel_url) === target) ?? null;
+    const isCurrentJob =
+      status.running &&
+      status.current_channel_url != null &&
+      norm(status.current_channel_url) === target;
+    const maxVideos = hit?.max_videos || 1000;
+    const lastError = hit?.last_error ?? null;
+    if (!catalogErrorSeededRef.current) {
+      catalogErrorSeededRef.current = true;
+      toastedCatalogErrorRef.current = lastError;
+    } else if (lastError && lastError !== toastedCatalogErrorRef.current) {
+      toastedCatalogErrorRef.current = lastError;
+      showToast(lastError);
+    } else if (!lastError) {
+      toastedCatalogErrorRef.current = null;
+    }
+    if (!hit) {
+      const system = status.direct_youtube_search ?? true;
+      setCatalogProgress({
+        indexed: isCurrentJob ? status.done : 0,
+        total: null,
+        maxVideos,
+        complete: false,
+        status: null,
+        indexing: isCurrentJob,
+        lastError,
+        youtubeSearchOverride: null,
+        youtubeSearchEffective: system,
+        youtubeSearchSystem: system,
+      });
+      return;
+    }
+    const indexing =
+      hit.status === "queued" || hit.status === "indexing" || isCurrentJob;
+    // While the flat list is still growing, prefer live done count.
+    const indexed =
+      isCurrentJob && status.current_phase === "flat" && status.done > 0
+        ? status.done
+        : hit.indexed_count;
+    setCatalogProgress({
+      indexed,
+      total: hit.channel_total,
+      maxVideos,
+      complete: hit.complete && !indexing,
+      status: hit.status,
+      indexing,
+      lastError,
+      youtubeSearchOverride: hit.direct_youtube_search ?? null,
+      youtubeSearchEffective:
+        hit.direct_youtube_search_effective ??
+        status.direct_youtube_search ??
+        true,
+      youtubeSearchSystem: status.direct_youtube_search ?? true,
+    });
+  }, [onChannelPage, activeChannelUrl, catalogStatus, showToast]);
 
   const triggerChannelIndex = async () => {
     if (!activeChannel || indexingChannel) return;
@@ -901,8 +882,8 @@ function OnlineLibrary() {
       });
       showToast(result.detail || "Channel indexing queued");
       // Refresh progress immediately so the status line updates.
-      api
-        .getChannelCatalogStatus()
+      queryClient
+        .fetchQuery({ ...channelCatalogStatusQuery(), staleTime: 0 })
         .then((status) => {
           if (!activeChannelUrl) return;
           const norm = (u: string) =>

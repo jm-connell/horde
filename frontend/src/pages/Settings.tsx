@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { describeError } from "../apiErrors";
 import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useSearch } from "../context/SearchContext";
 import { useConfirm } from "../context/ConfirmContext";
@@ -13,20 +14,25 @@ import {
 import { newCustomFontId, parseCustomFontInput } from "../fonts";
 import type {
   AiSettings,
-  AiStatus,
   AiWorkloadProfile,
   AppSettings,
   BackgroundItem,
-  ChannelCatalogStatus,
   HealthStats,
-  MetadataSyncStatus,
-  OpenRouterCosts,
-  OpenRouterModel,
   StorageStats,
-  SystemActivity,
-  SystemStats,
   UpdateCheck,
 } from "../types";
+import { queryKeys } from "../queries/keys";
+import {
+  dataOrNull,
+  metadataSyncStatusQuery,
+  useAiStatus,
+  useChannelCatalogStatus,
+  useMetadataSyncStatus,
+  useOpenRouterCosts,
+  useOpenRouterModels,
+  useSystemActivity,
+  useSystemStats,
+} from "../queries/status";
 import { formatUsdCost } from "../utils";
 import LiquidNav from "../components/LiquidNav";
 import AppearanceTab from "./settings/AppearanceTab";
@@ -71,6 +77,7 @@ import { getItem, setItem } from "../storage";
 export default function Settings() {
   const [settings, update] = useSettings();
   const { showToast, showError } = useToast();
+  const queryClient = useQueryClient();
   const confirm = useConfirm();
   const { setYoutubeVideoSearch } = useSearch();
   const [searchParams] = useSearchParams();
@@ -96,20 +103,10 @@ export default function Settings() {
   const [dismissedUpdateSha, setDismissedUpdateSha] = useState<string | null>(
     loadDismissedUpdateSha
   );
-  const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
-  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [aiDraft, setAiDraft] = useState<AiSettings>(DEFAULT_AI);
   const [aiTesting, setAiTesting] = useState(false);
   const [openRouterTesting, setOpenRouterTesting] = useState(false);
   const [openRouterKeyDraft, setOpenRouterKeyDraft] = useState("");
-  const [openRouterModels, setOpenRouterModels] = useState<OpenRouterModel[]>(
-    []
-  );
-  const [openRouterEmbedModels, setOpenRouterEmbedModels] = useState<
-    OpenRouterModel[]
-  >([]);
-  const [openRouterCosts, setOpenRouterCosts] =
-    useState<OpenRouterCosts | null>(null);
   const [aiProviderPane, setAiProviderPane] = useState<AiProviderPane>("local");
   const aiProviderPaneFromBackendRef = useRef(false);
   const [aiPane, setAiPane] = useState<AiPane>(() => {
@@ -132,18 +129,11 @@ export default function Settings() {
   const [expiryInput, setExpiryInput] = useState<string>("");
   const [catalogMaxInput, setCatalogMaxInput] = useState<string>("1000");
   const [syncIntervalInput, setSyncIntervalInput] = useState<string>("24");
-  const [catalogStatus, setCatalogStatus] =
-    useState<ChannelCatalogStatus | null>(null);
   const [catalogIndexing, setCatalogIndexing] = useState(false);
-  const [systemActivity, setSystemActivity] = useState<SystemActivity | null>(
-    null
-  );
   const [metadataSyncing, setMetadataSyncing] = useState(false);
   const [metadataSyncFields, setMetadataSyncFields] = useState<string[]>([
     "all",
   ]);
-  const [metadataSyncStatus, setMetadataSyncStatus] =
-    useState<MetadataSyncStatus | null>(null);
   const [aiProcessingAction, setAiProcessingAction] = useState<string | null>(
     null
   );
@@ -171,11 +161,57 @@ export default function Settings() {
       match("update", "version", "github", "git pull", "docker", "rebuild"))
   );
 
-  const refreshAiStatus = () =>
-    api
-      .getAiStatus()
-      .then(setAiStatus)
-      .catch(() => setAiStatus(null));
+  // Live status panels. Each resource is one shared query (see queries/status),
+  // so the AI status the Library polls is the same request as this one.
+  const onAiOrSystem = tab === "ai" || tab === "system";
+  const aiStatusQuery = useAiStatus({ interval: onAiOrSystem ? 5000 : false });
+  const aiStatus = dataOrNull(aiStatusQuery);
+  const refreshAiStatus = () => {
+    void aiStatusQuery.refetch();
+  };
+  const catalogStatusQuery = useChannelCatalogStatus({
+    enabled: tab === "system",
+    interval: 5000,
+  });
+  const catalogStatus = dataOrNull(catalogStatusQuery);
+  const refreshCatalogStatus = () => {
+    void catalogStatusQuery.refetch();
+  };
+  const metadataSyncQuery = useMetadataSyncStatus({
+    enabled: tab === "system" || tab === "library",
+    interval: 5000,
+  });
+  const metadataSyncStatus = metadataSyncQuery.data ?? null;
+  const systemStatsQuery = useSystemStats({
+    enabled: tab === "library" || onAiOrSystem,
+    interval: tab === "library" ? false : 3000,
+  });
+  const systemStats = dataOrNull(systemStatsQuery);
+  const systemActivityQuery = useSystemActivity({
+    enabled: tab === "system",
+    interval: 2000,
+  });
+  const systemActivity = dataOrNull(systemActivityQuery);
+  const openRouterCostsQuery = useOpenRouterCosts({
+    enabled: onAiOrSystem,
+    interval: 15000,
+  });
+  const openRouterCosts = onAiOrSystem
+    ? dataOrNull(openRouterCostsQuery)
+    : null;
+  const openRouterModelsEnabled =
+    tab === "ai" &&
+    !!aiDraft.openrouter_enabled &&
+    !!aiDraft.openrouter_api_key_set;
+  const openRouterModelsQuery = useOpenRouterModels(openRouterModelsEnabled);
+  const refreshOpenRouterModels = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.ai.models });
+  const openRouterModels = openRouterModelsEnabled
+    ? (openRouterModelsQuery.data?.models ?? [])
+    : [];
+  const openRouterEmbedModels = openRouterModelsEnabled
+    ? (openRouterModelsQuery.data?.embedding_models ?? [])
+    : [];
 
   useEffect(() => {
     api
@@ -209,7 +245,6 @@ export default function Settings() {
       .then((r) => r.json())
       .then(setHealth)
       .catch(() => undefined);
-    refreshAiStatus();
   }, []);
 
   useEffect(() => {
@@ -221,59 +256,6 @@ export default function Settings() {
       !!appSettings.ai.openrouter_api_key_set;
     setAiProviderPane(orInUse ? "openrouter" : "local");
   }, [appSettings, q]);
-
-  useEffect(() => {
-    if (tab !== "ai" && tab !== "system") return;
-    const id = setInterval(refreshAiStatus, 5000);
-    return () => clearInterval(id);
-  }, [tab]);
-
-  useEffect(() => {
-    if (tab !== "ai") return;
-    if (!aiDraft.openrouter_enabled || !aiDraft.openrouter_api_key_set) {
-      setOpenRouterModels([]);
-      return;
-    }
-    let cancelled = false;
-    api
-      .getOpenRouterModels()
-      .then((res) => {
-        if (!cancelled) {
-          setOpenRouterModels(res.models || []);
-          setOpenRouterEmbedModels(res.embedding_models || []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setOpenRouterModels([]);
-          setOpenRouterEmbedModels([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, aiDraft.openrouter_enabled, aiDraft.openrouter_api_key_set]);
-
-  useEffect(() => {
-    if (tab !== "ai" && tab !== "system") return;
-    let cancelled = false;
-    const load = () => {
-      api
-        .getOpenRouterCosts()
-        .then((res) => {
-          if (!cancelled) setOpenRouterCosts(res);
-        })
-        .catch(() => {
-          if (!cancelled) setOpenRouterCosts(null);
-        });
-    };
-    load();
-    const id = setInterval(load, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [tab]);
 
   useEffect(() => {
     if (!openRouterCosts?.over_budget) return;
@@ -321,19 +303,6 @@ export default function Settings() {
     }
   }, [q, tab, aiPane]);
 
-  const refreshCatalogStatus = () =>
-    api
-      .getChannelCatalogStatus()
-      .then(setCatalogStatus)
-      .catch(() => setCatalogStatus(null));
-
-  useEffect(() => {
-    if (tab !== "system") return;
-    refreshCatalogStatus();
-    const id = setInterval(refreshCatalogStatus, 5000);
-    return () => clearInterval(id);
-  }, [tab]);
-
   const refreshUpdates = (refresh = false) => {
     setUpdateChecking(true);
     return api
@@ -346,52 +315,6 @@ export default function Settings() {
   useEffect(() => {
     if (tab !== "system") return;
     void refreshUpdates(false);
-  }, [tab]);
-
-  useEffect(() => {
-    if (tab !== "system" && tab !== "library") return;
-    const pollMeta = () => {
-      api
-        .getMetadataSyncStatus()
-        .then((status) => {
-          setMetadataSyncStatus(status);
-          if (status.running) setMetadataSyncing(true);
-        })
-        .catch(() => undefined);
-    };
-    pollMeta();
-    const id = setInterval(pollMeta, 5000);
-    return () => clearInterval(id);
-  }, [tab]);
-
-  const refreshSystemStats = () =>
-    api
-      .getSystemStats()
-      .then(setSystemStats)
-      .catch(() => setSystemStats(null));
-
-  useEffect(() => {
-    if (tab === "library") {
-      refreshSystemStats();
-      return;
-    }
-    if (tab !== "system" && tab !== "ai") return;
-    refreshSystemStats();
-    const id = setInterval(refreshSystemStats, 3000);
-    return () => clearInterval(id);
-  }, [tab]);
-
-  useEffect(() => {
-    if (tab !== "system") return;
-    const poll = () => {
-      api
-        .getSystemActivity()
-        .then(setSystemActivity)
-        .catch(() => setSystemActivity(null));
-    };
-    poll();
-    const id = setInterval(poll, 2000);
-    return () => clearInterval(id);
   }, [tab]);
 
   useEffect(() => {
@@ -525,8 +448,10 @@ export default function Settings() {
         for (;;) {
           await new Promise((r) => setTimeout(r, 1500));
           try {
-            const status = await api.getMetadataSyncStatus();
-            setMetadataSyncStatus(status);
+            const status = await queryClient.fetchQuery({
+              ...metadataSyncStatusQuery(),
+              staleTime: 0,
+            });
             if (!status.running) {
               showToast(
                 `Synced ${status.done} video${status.done === 1 ? "" : "s"}` +
@@ -886,7 +811,7 @@ export default function Settings() {
     metadataSyncFields,
     toggleSyncField,
     resyncAllMetadata,
-    metadataSyncing,
+    metadataSyncing: metadataSyncing || !!metadataSyncStatus?.running,
     metadataSyncStatus,
     expiryInput,
     setExpiryInput,
@@ -908,9 +833,8 @@ export default function Settings() {
     openRouterKeyDraft,
     setOpenRouterKeyDraft,
     openRouterModels,
-    setOpenRouterModels,
     openRouterEmbedModels,
-    setOpenRouterEmbedModels,
+    refreshOpenRouterModels,
     openRouterCosts,
     embedCustom,
     setEmbedCustom,
