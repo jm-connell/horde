@@ -31,13 +31,12 @@ import {
   chunkCount,
   chunkUrl,
   deleteItem,
-  deletePendingProgress,
   getAllItems,
-  getAllPendingProgress,
   putItem,
   type OfflineItem,
   type OfflineSponsorSegment,
 } from "./db";
+import { pendingProgress } from "./pendingProgress";
 import { contentRangeTotal } from "./ranges";
 import { isAppleWebkit } from "../utils/playbackRendition";
 import {
@@ -308,25 +307,18 @@ class OfflineManager {
     void putItem({ ...item, video }).catch(() => undefined);
   }
 
-  private flushing = false;
-
-  private async flushPendingProgress(): Promise<void> {
-    if (this.flushing) return;
-    this.flushing = true;
-    try {
-      for (const p of await getAllPendingProgress()) {
-        try {
-          await api.syncProgress(p.videoId, p.positionSec);
-          await deletePendingProgress(p.videoId);
-        } catch {
-          return; // still unreachable; try again on the next online event
-        }
-      }
-    } catch {
-      // IndexedDB unavailable
-    } finally {
-      this.flushing = false;
-    }
+  /**
+   * Send progress saved while offline, for the account the server says is
+   * signed in (other accounts' saves wait for them; see pendingProgress).
+   */
+  flushPendingProgress(): Promise<void> {
+    return pendingProgress.flush({
+      whoAmI: async () => {
+        const state = await api.getAuthState();
+        return state.authenticated && state.user ? state.user.id : null;
+      },
+      send: (videoId, positionSec) => api.syncProgress(videoId, positionSec),
+    });
   }
 
   private pump(): void {

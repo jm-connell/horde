@@ -5,7 +5,11 @@
 import type { Video } from "../types";
 
 export const DB_NAME = "horde-offline";
-export const DB_VERSION = 1;
+/**
+ * 2: pending progress is keyed by [owner, videoId]. The un-owned records of
+ * version 1 are dropped on upgrade (see `openDb`).
+ */
+export const DB_VERSION = 2;
 export const ITEMS_STORE = "items";
 export const PENDING_PROGRESS_STORE = "pendingProgress";
 
@@ -51,7 +55,10 @@ export interface OfflineItem {
   error?: string | null;
 }
 
+/** A progress save that could not reach the server, waiting to be sent. */
 export interface PendingProgress {
+  /** Id of the account that was signed in when it was saved. */
+  owner: number;
   videoId: number;
   positionSec: number;
   at: number;
@@ -79,13 +86,24 @@ export function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result;
       if (!db.objectStoreNames.contains(ITEMS_STORE)) {
         db.createObjectStore(ITEMS_STORE, { keyPath: "videoId" });
       }
+      // Version 1 queued progress without saying whose it was. Nobody can tell
+      // any more, and sending it as whoever signs in next would write one
+      // account's position into another's history: drop it.
+      if (
+        event.oldVersion < 2 &&
+        db.objectStoreNames.contains(PENDING_PROGRESS_STORE)
+      ) {
+        db.deleteObjectStore(PENDING_PROGRESS_STORE);
+      }
       if (!db.objectStoreNames.contains(PENDING_PROGRESS_STORE)) {
-        db.createObjectStore(PENDING_PROGRESS_STORE, { keyPath: "videoId" });
+        db.createObjectStore(PENDING_PROGRESS_STORE, {
+          keyPath: ["owner", "videoId"],
+        });
       }
     };
     req.onsuccess = () => {
@@ -143,9 +161,12 @@ export async function getAllPendingProgress(): Promise<PendingProgress[]> {
   return wrap((await store(PENDING_PROGRESS_STORE, "readonly")).getAll());
 }
 
-export async function deletePendingProgress(videoId: number): Promise<void> {
+export async function deletePendingProgress(
+  owner: number,
+  videoId: number
+): Promise<void> {
   await wrap(
-    (await store(PENDING_PROGRESS_STORE, "readwrite")).delete(videoId)
+    (await store(PENDING_PROGRESS_STORE, "readwrite")).delete([owner, videoId])
   );
 }
 

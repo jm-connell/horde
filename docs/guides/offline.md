@@ -77,7 +77,10 @@ In **offline mode**:
 
 - Home shows only downloaded videos, and they play from local storage.
 - Playlists, History, Download and Import are greyed out.
-- Watch progress is saved locally and synced to the server when you're back.
+- Watch progress is saved locally and synced to the server when you're back,
+  to the account that was signed in while you watched. If someone else signs
+  in on the device first, your positions wait for you (for up to 30 days)
+  instead of landing in their history.
 
 If Horde went offline **by itself** (server unreachable), it keeps checking in
 the background with a tiny `/api/ping` request (backing off from 3 s to once a

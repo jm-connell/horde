@@ -41,7 +41,8 @@ import type {
 } from "./types";
 import type { ApiResponse } from "./api/typed";
 import { connectivity } from "./offline/connectivity";
-import { getItem as getOfflineItem, putPendingProgress } from "./offline/db";
+import { getItem as getOfflineItem } from "./offline/db";
+import { pendingProgress } from "./offline/pendingProgress";
 
 /** One entry of a 422 response's `fields`: where the problem is and what it is. */
 export interface ApiErrorField {
@@ -367,12 +368,9 @@ export const api = {
       });
     } catch (err) {
       if (!isNetworkFailure(err)) throw err;
-      // Sync when the connection is back (offline/manager flushes these).
-      await putPendingProgress({
-        videoId: id,
-        positionSec,
-        at: Date.now(),
-      }).catch(() => undefined);
+      // Sync when the connection is back (offline/manager flushes these),
+      // for the account that is signed in now.
+      await pendingProgress.add(id, positionSec).catch(() => undefined);
     }
   },
 

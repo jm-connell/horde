@@ -18,6 +18,8 @@ import LoadingIndicator from "../components/LoadingIndicator";
 import CreateAdminPage from "../pages/CreateAdmin";
 import LoginPage from "../pages/Login";
 import { adoptSettingsOwner, clearLocalSettings } from "../hooks/useSettings";
+import { offlineManager } from "../offline/manager";
+import { pendingProgress } from "../offline/pendingProgress";
 import { safeNextPath } from "../utils/authPaths";
 import type { AuthState, AuthUser, Permission } from "../types";
 import { getJson, removeItem, setJson } from "../storage";
@@ -44,10 +46,16 @@ function writeCachedState(state: AuthState | null): void {
   else removeItem(CACHE_KEY);
 }
 
-/** Before anything reads this user's preferences, make sure they are theirs. */
-function bindSettingsToUser(state: AuthState): void {
+/**
+ * Before anything reads this user's preferences, make sure they are theirs,
+ * and queue progress saved offline under their account.
+ */
+function bindDeviceStateToUser(state: AuthState): void {
   if (state.authenticated && state.user) {
     adoptSettingsOwner(state.user.id, state.user.is_admin);
+    pendingProgress.setOwner(state.user.id);
+  } else {
+    pendingProgress.setOwner(null);
   }
 }
 
@@ -80,13 +88,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const next = await api.getAuthState();
       writeCachedState(next);
-      bindSettingsToUser(next);
+      bindDeviceStateToUser(next);
       setState(next);
       setFailed(false);
+      // Signed in (again) without the connection changing, e.g. on this
+      // device's sign-in form: send what this account saved while offline.
+      if (next.authenticated) void offlineManager.flushPendingProgress();
     } catch (err) {
       const cached = readCachedState();
       if (cached && (isOfflineError(err) || err instanceof TypeError)) {
-        bindSettingsToUser(cached);
+        bindDeviceStateToUser(cached);
         setState(cached);
         setFailed(false);
       } else {
@@ -142,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     writeCachedState(null);
     clearLocalSettings();
+    pendingProgress.setOwner(null);
     window.location.assign("/login");
   }, []);
 
