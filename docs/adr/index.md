@@ -17,4 +17,4 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 
 ## Writing a new record
 
-Copy the shape of an existing one: a number one higher than the last, a short title, `Status` and `Date`, then Context, Decision, Consequences. Link the code or the page that carries the detail instead of repeating it, and add the record to the table above and to the nav in `mkdocs.yml`.
+Copy the shape of an existing one: a number one higher than the last, a short title, `Status`, then Context, Decision, Consequences. Link the code or the page that carries the detail instead of repeating it, and add the record to the table above and to the nav in `mkdocs.yml`.

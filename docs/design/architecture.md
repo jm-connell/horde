@@ -61,7 +61,7 @@ Details per worker: [Background workers](../architecture/workers.md).
 4. Storage warning (network filesystem under `DATA_DIR`), `cleanup_orphans()`, load yt-dlp plugins, create the preview HTTP client.
 5. `_start_workers`: ffmpeg-children, POT probe, download queue, ffmpeg queue, reaper, then **recovery** (`download_queue.recover()` turns `downloading` into `queued`, orphaned device dirs and temp files are swept, `recover_ai_jobs()` turns `running` into `queued`, `recover_catalog_jobs()` turns `indexing` into `queued`), then sprites, scanner, metadata sync, AI, catalog, autodownload, subtitle retry, job metadata, codec probe backfill, nightly backup.
 
-Recovery runs before the loops that would claim jobs, so a crash cannot strand work.
+Recovery runs before any job is dispatched, so a crash cannot strand work.
 
 ### Shutdown order
 
@@ -106,11 +106,11 @@ SQLite at `DATA_DIR/horde.db` ([ADR 0001](../adr/0001-sqlite-wal-alembic.md)). S
 
 | Area | Tables | Owner |
 |---|---|---|
-| Library | `videos` (`youtube_id` after WP-M), `playlists`, `playlist_items` | **Shared** by everyone |
+| Library | `videos` (`youtube_id`), `playlists`, `playlist_items` | **Shared** by everyone |
 | Downloads | `download_jobs` | **Shared** (no user column) |
 | Channels | `channel_catalogs`, `channel_catalog_videos`, `channel_catalog_skips`, `channel_catalog_embeddings`, `channel_autodownloads` | **Shared** |
 | AI (derived from the library) | `video_embeddings`, `video_ai_meta`, `ai_categories`, `ai_jobs`, `openrouter_usage` | **Shared** |
-| Search (after WP-M) | `video_tags` and the `videos_fts` index | **Shared**, derived by SQLite triggers |
+| Search | `video_tags` and the `videos_fts` index | **Shared**, derived by SQLite triggers |
 | Accounts | `users`, `user_sessions` | The person |
 | History | `user_video_state` (position and last watched, per user per video) | **Per user** |
 | Preferences | `user_settings` (UI JSON) | **Per user** |
@@ -152,7 +152,7 @@ URL --> url_clean --> enqueue DownloadJob (cheap; no yt-dlp call)
 - **Staging**: a job writes under `DOWNLOADS_DIR/.horde-staging/<job id>/` (device downloads under `_device/<job id>`, never reaching the library) and is promoted only after postprocessing, so the scanner never sees half-built files.
 - **Crash safety**: the runner body is total (any failure ends the job in `error` with a typed `error_kind`), database writes retry "database is locked", the reaper requeues stuck `downloading` jobs, and boot recovery requeues the rest.
 - **Progress** is an in-memory store (`progress_store`) read by one multiplexed SSE stream (`GET /api/downloads/events`) plus per-job streams for Watch.
-- **Code layout** after WP-J1: the `services/downloads/` package (`queue`, `runner`, `ffmpeg_queue`, `postprocess`, `finalize`, `jobs`, `playlist_import`, `playlist_attach`, `progress`, `staging`, `artifacts`, `lifecycle`, `errors`, `dbwrite`, `spec`, `infodict`, `subtitles`). `services/downloader.py` stays as a re-exporting facade for one release. New code imports the package modules ([ADR 0006](../adr/0006-downloader-package-split.md)). yt-dlp helpers live in `ytdlp_extract.py`, `ytdlp_formats.py` and `ytdlp_common.py`.
+- **Code layout** (see ADR 0006): the `services/downloads/` package (`queue`, `runner`, `ffmpeg_queue`, `postprocess`, `finalize`, `jobs`, `playlist_import`, `playlist_attach`, `progress`, `staging`, `artifacts`, `lifecycle`, `errors`, `dbwrite`, `spec`, `infodict`, `subtitles`). `services/downloader.py` stays as a re-exporting facade for one release. New code imports the package modules ([ADR 0006](../adr/0006-downloader-package-split.md)). yt-dlp helpers live in `ytdlp_extract.py`, `ytdlp_formats.py` and `ytdlp_common.py`.
 
 Detail: [Download pipeline](../architecture/downloads-pipeline.md).
 
@@ -175,7 +175,7 @@ reads:  hybrid search = keyword hits + embedding neighbours, merged
 
 - **Providers**: Ollama (local) and/or OpenRouter (cloud), chosen from settings and environment; embeddings, chat and tagging can route differently. Provider calls that cost money are recorded in `openrouter_usage` on a separate session, so jobs commit before the HTTP call; a hard budget pauses the worker.
 - **Single-flight** because homelab GPUs thrash under parallel model calls ([design note](single-flight-ai.md)). Queue state is in SQLite, so a restart recovers it (`running` becomes `queued`).
-- **Vector search** scores every stored chunk with one matrix product. After WP-M the normalised `float32` matrix lives in `services/ai/vector_index.py`, on the engine object, and is updated incrementally from a cheap per-video fingerprint instead of being rebuilt on every change ([ADR 0007](../adr/0007-fts5-triggers-and-vector-index.md)). It needs `numpy` and about `chunks x dim x 4` bytes.
+- **Vector search** scores every stored chunk with one matrix product. The normalised `float32` matrix lives in `services/ai/vector_index.py`, on the engine object, and is updated incrementally from a cheap per-video fingerprint instead of being rebuilt on every change ([ADR 0007](../adr/0007-fts5-triggers-and-vector-index.md)). It needs `numpy` and about `chunks x dim x 4` bytes.
 - **Per-user vs shared**: summaries, tags, chapters and embeddings are shared library data; chat is per user; "For you" is seeded from the signed-in user's history. Members need `use_ai`.
 
 Detail: [AI pipeline](../architecture/ai-pipeline.md).
@@ -202,7 +202,7 @@ React 18 + TypeScript + Vite + Tailwind under `frontend/src/`, built into `backe
 | `context/` | Cross-cutting state providers: Toast, Confirm, Auth, Download, Search, Playback |
 | `hooks/` | Data and behaviour hooks (settings hydrate, casting, card preview, ...) |
 | `api.ts`, `apiErrors.ts` | The only HTTP client. Adds `X-Horde-Request` to every request (`withCsrf`), parses the error envelope into `ApiError`, follows cursors |
-| `types.ts`, `types/` | Wire types mirroring `backend/openapi.json` |
+| `types.ts` | Wire types, hand-maintained to mirror `backend/openapi.json` (generated types are planned); `types/` holds only `cast.d.ts` |
 | `utils/`, `utils.ts` | Pure helpers (`safeHref` for any link rendered from stored data) |
 | `offline/` | Service worker, IndexedDB, offline downloads |
 | `effects/` | Canvas background effects |

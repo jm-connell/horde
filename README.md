@@ -227,7 +227,7 @@ MkDocs Material. The same site is deployed to GitHub Pages from `main`.
 - Playback compatibility (Settings → Library): AV1 only (default), H.264 up to 1080p, H.264 full resolution (converts 1440p/4K, replacing originals), or AV1 + a ≤1080p H.264 copy beside the original. The player picks whichever file the device can decode. H.264 encodes use a GPU encoder when passed into the container, otherwise software.
 - Channel catalogs (index remote uploads for feed search and stream preview)
   are YouTube-only. Non-YouTube yt-dlp URLs still download.
-- Health: `GET /api/health` (version, yt-dlp, POT, wiki, library count when signed in; anonymous callers get only `status`), `GET /api/ready` (database, migrations and workers; `503` when not ready), `GET /api/ping` (liveness).
+- Health: `GET /api/health` (version, yt-dlp, POT, wiki, library count when signed in; anonymous callers get only `status`, `setup_required` and `auth_required`), `GET /api/ready` (database, migrations and workers; `503` when not ready), `GET /api/ping` (liveness).
 
 ## License
 
