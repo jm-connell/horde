@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import threading
@@ -13,8 +14,10 @@ from sqlmodel import Session
 
 from app import database, main
 from app.models import DownloadJob, JobStatus
+from app.security import HostPolicy
 from app.services import ffmpeg_progress, scanner, sprites
 from app.services.auth import accounts
+from app.services.auth.runtime import AuthConfig, AuthRuntime
 from app.services.downloads import errors, postprocess
 from app.services.downloads.ffmpeg_queue import ffmpeg_queue
 from app.services.downloads.queue import download_queue
@@ -128,6 +131,35 @@ def test_initial_library_scan_does_not_delay_startup(lifespan_env, monkeypatch):
             release.set()
     finally:
         release.set()
+
+
+@pytest.mark.parametrize(
+    ("trust_proxy", "hosts", "warns"),
+    [
+        (True, "", True),
+        (True, "horde.example.com", False),
+        (True, "*", False),
+        (False, "", False),
+    ],
+)
+def test_startup_warns_about_a_proxy_without_allowed_hosts(
+    lifespan_env, monkeypatch, caplog, trust_proxy, hosts, warns
+):
+    monkeypatch.setattr(
+        main.app.state, "host_policy", HostPolicy.from_env(hosts), raising=False
+    )
+    monkeypatch.setattr(
+        main.app.state,
+        "auth",
+        AuthRuntime(config=AuthConfig(trust_proxy=trust_proxy)),
+        raising=False,
+    )
+
+    with caplog.at_level(logging.WARNING, logger="app.main"), TestClient(main.app):
+        pass
+
+    mentioned = "HORDE_ALLOWED_HOSTS is empty" in caplog.text
+    assert mentioned is warns
 
 
 def test_event_streams_end_when_shutdown_starts(lifespan_env):

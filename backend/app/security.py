@@ -41,7 +41,7 @@ from .auth import AuthMiddleware
 from .errors import error_response, install_error_handlers
 from .request_context import RequestIdMiddleware
 from .services import limits, uploads
-from .services.auth.runtime import AuthConfig, AuthRuntime
+from .services.auth.runtime import TRUST_PROXY_ENV, AuthConfig, AuthRuntime
 from .services.log_redaction import install_log_redaction
 from .services.metrics import RequestStats
 
@@ -454,6 +454,22 @@ def build_stack(policy: HostPolicy) -> list[MiddlewareSpec]:
     ]
 
 
+def host_policy_warning(policy: HostPolicy, auth_config: AuthConfig) -> str | None:
+    """A startup warning for the setup that most often ends in "400 host_not_allowed".
+
+    Behind a reverse proxy or tunnel (``HORDE_TRUST_PROXY=1``) browsers arrive with
+    the public hostname, which the LAN-only defaults reject until it is listed.
+    """
+    if not auth_config.trust_proxy or policy.extra or policy.allow_any:
+        return None
+    return (
+        f"{TRUST_PROXY_ENV} is set but {ALLOWED_HOSTS_ENV} is empty. Browsers that "
+        "reach Horde through the proxy under a public hostname get HTTP 400 "
+        f"(host_not_allowed) until it is listed. Set {ALLOWED_HOSTS_ENV}="
+        "horde.example.com (comma separated; see docs/ops/security.md)."
+    )
+
+
 def install_security(
     app: FastAPI,
     *,
@@ -474,6 +490,7 @@ def install_security(
         app.add_middleware(spec.cls, **spec.kwargs)
     install_error_handlers(app)
     install_log_redaction()
+    app.state.host_policy = policy
     app.state.auth = AuthRuntime(config=auth_config or AuthConfig.from_env())
     app.state.extraction_gate = limits.new_extraction_gate()
     app.state.ytdlp_slots = limits.new_ytdlp_slots()

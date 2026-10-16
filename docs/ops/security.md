@@ -36,6 +36,9 @@ HORDE_ALLOWED_HOSTS=horde.example.com,*.corp.example
 
 A rejected request gets HTTP 400 with a message naming `HORDE_ALLOWED_HOSTS`. If you reach Horde by a public IP address, add that IP to the list too.
 
+!!! warning "Upgrading behind a proxy or tunnel"
+    Installs that were reached under a public name before this check existed will see `400 host_not_allowed` after updating until the name is listed. With `HORDE_TRUST_PROXY=1` and `HORDE_ALLOWED_HOSTS` empty, Horde logs a warning at startup as a reminder.
+
 Reverse proxies should pass the original `Host` (Caddy and nginx `proxy_set_header Host $host` do) or set `X-Forwarded-Host`.
 
 ## CORS and casting

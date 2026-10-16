@@ -12,6 +12,21 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Upgrade notes
 
+- **Behind a reverse proxy or tunnel, list the public hostname in
+  `HORDE_ALLOWED_HOSTS`.** Horde now only answers LAN-style `Host` names
+  (`localhost`, private and Tailscale addresses, single-word names, `*.local`,
+  `*.lan`, `*.home.arpa`, `*.internal`, `*.ts.net`). A name such as
+  `horde.example.com` gets HTTP 400 `host_not_allowed` in the browser until you
+  add it, for example `HORDE_ALLOWED_HOSTS=horde.example.com` in `.env`. With
+  `HORDE_TRUST_PROXY=1` and no allowed hosts, Horde logs a warning at startup.
+  See [docs/ops/security.md](docs/ops/security.md).
+- **Scripts and direct API callers need a session and a header.** Every `/api`
+  call now requires a signed-in session (the `horde_session` cookie from
+  `POST /api/auth/login`), and every `POST`, `PUT`, `PATCH` and `DELETE` must send
+  `X-Horde-Request: 1`. Anonymous calls get 401 `auth_required`; a missing header
+  gets 403. Monitoring may use `GET /api/ping` and `GET /api/ready`, which stay
+  open. See [docs/ops/authentication.md](docs/ops/authentication.md).
+
 - **Horde now has accounts.** The first visit after upgrading asks you to create
   the administrator account; until you do, nothing else can be used. Your
   existing watch history, continue-watching positions, saved look and layout and

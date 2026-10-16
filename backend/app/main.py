@@ -48,7 +48,7 @@ from .response_schemas import (
     UpdateCheckRead,
 )
 from .schemas import ReadyResponse
-from .security import install_security
+from .security import host_policy_warning, install_security
 from .services import app_settings as app_settings_svc
 from .services import ffmpeg_progress
 from .services.ai.worker import recover_ai_jobs
@@ -205,6 +205,9 @@ async def lifespan(app: FastAPI):
             if app.state.auth.config.trusted_user_header
             else "",
         )
+    host_warning = host_policy_warning(app.state.host_policy, app.state.auth.config)
+    if host_warning:
+        logger.warning(host_warning)
     shutdown_event = threading.Event()
     registry = WorkerRegistry()
     app.state.shutdown_event = shutdown_event
