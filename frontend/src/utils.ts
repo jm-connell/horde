@@ -1,6 +1,6 @@
 import type { MouseEvent } from "react";
 
-export function formatDuration(seconds: number | null): string {
+export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || seconds < 0) return "";
   return formatTimestamp(seconds);
 }
@@ -43,7 +43,9 @@ export interface Chapter {
 const CHAPTER_LINE_RE =
   /^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\s*[-–—|·•:→]?\s*)(.+)/;
 
-export function parseChapters(description: string | null): Chapter[] {
+export function parseChapters(
+  description: string | null | undefined
+): Chapter[] {
   if (!description) return [];
   const chapters: Chapter[] = [];
   for (const rawLine of description.split("\n")) {
@@ -92,7 +94,9 @@ export function resolveLibraryChapters(video: {
 }
 
 /** Remove chapter timestamp lines from description when chapters are shown separately. */
-export function stripChapterLines(description: string | null): string {
+export function stripChapterLines(
+  description: string | null | undefined
+): string {
   if (!description) return "";
   if (parseChapters(description).length === 0) return description;
   const lines = description.split("\n");
@@ -351,7 +355,7 @@ export function youtubeVideoIdFromUrl(url?: string | null): string | null {
 }
 
 export function youtubeThumbnailUrl(
-  videoId: string | null,
+  videoId: string | null | undefined,
   thumbnailUrl?: string | null
 ): string | null {
   const raw = thumbnailUrl?.trim();
@@ -366,7 +370,7 @@ export function youtubeThumbnailUrl(
 
 /** Medium CDN thumb (~320×180) for small list tiles — avoids downscaling maxres. */
 export function youtubeListThumbnailUrl(
-  videoId: string | null,
+  videoId: string | null | undefined,
   thumbnailUrl?: string | null
 ): string | null {
   const id =

@@ -1,7 +1,7 @@
 export type CatalogProgress = {
   indexed: number;
   /** Full YouTube library size when known. */
-  total: number | null;
+  total: number | null | undefined;
   /** Per-channel index cap from settings. */
   maxVideos: number;
   complete: boolean;

@@ -23,7 +23,6 @@ import type {
   DuplicateGroup,
   ImportScanResult,
   OpenRouterCosts,
-  OpenRouterModel,
   Playlist,
   PlaylistDetail,
   PlaylistPreviewData,
@@ -39,8 +38,8 @@ import type {
   Video,
   VideoUpdate,
   SpriteMeta,
-  VideoAiChatMessage,
 } from "./types";
+import type { ApiResponse } from "./api/typed";
 import { connectivity } from "./offline/connectivity";
 import { getItem as getOfflineItem, putPendingProgress } from "./offline/db";
 
@@ -438,14 +437,7 @@ export const api = {
   refreshMetadataBulk(
     videoIds?: number[],
     fields?: string[]
-  ): Promise<{
-    refreshed: number;
-    failed: number;
-    skipped: number;
-    started?: boolean;
-    detail?: string;
-    total?: number;
-  }> {
+  ): Promise<ApiResponse<"/api/videos/refresh-metadata", "post">> {
     return request("/api/videos/refresh-metadata", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -456,18 +448,9 @@ export const api = {
     });
   },
 
-  getMetadataSyncStatus(): Promise<{
-    running: boolean;
-    total: number;
-    done: number;
-    failed: number;
-    skipped: number;
-    current_title: string | null;
-    current_video_id: number | null;
-    fields: string[];
-    last_error: string | null;
-    finished_at: string | null;
-  }> {
+  getMetadataSyncStatus(): Promise<
+    ApiResponse<"/api/videos/refresh-metadata/status", "get">
+  > {
     return request("/api/videos/refresh-metadata/status");
   },
 
@@ -483,9 +466,9 @@ export const api = {
   generateThumbnailCandidates(
     id: number,
     count = 8
-  ): Promise<{
-    candidates: { index: number; at_seconds: number; url: string }[];
-  }> {
+  ): Promise<
+    ApiResponse<"/api/videos/{video_id}/thumbnail/candidates", "post">
+  > {
     return request(`/api/videos/${id}/thumbnail/candidates?count=${count}`, {
       method: "POST",
     });
@@ -501,7 +484,9 @@ export const api = {
     return request<SpriteMeta>(`/api/videos/${id}/sprites/meta`);
   },
 
-  ensureSprites(id: number): Promise<{ status: "ready" | "generating" }> {
+  ensureSprites(
+    id: number
+  ): Promise<ApiResponse<"/api/videos/{video_id}/sprites/generate", "post">> {
     return request(`/api/videos/${id}/sprites/generate`, { method: "POST" });
   },
 
@@ -517,14 +502,7 @@ export const api = {
   searchChannels(
     q: string,
     limit = 8
-  ): Promise<{
-    results: {
-      name: string;
-      url: string;
-      thumbnail_url: string | null;
-      subscriber_count: number | null;
-    }[];
-  }> {
+  ): Promise<ApiResponse<"/api/channels/search", "get">> {
     const qs = new URLSearchParams({
       q,
       limit: String(limit),
@@ -605,11 +583,7 @@ export const api = {
     channel?: string;
     url?: string;
     direct_youtube_search: boolean | null;
-  }): Promise<{
-    channel_url: string;
-    direct_youtube_search: boolean | null;
-    direct_youtube_search_effective: boolean;
-  }> {
+  }): Promise<ApiResponse<"/api/channels/catalog/youtube-search", "patch">> {
     return request("/api/channels/catalog/youtube-search", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -628,13 +602,7 @@ export const api = {
       force?: boolean;
       mode?: "incremental" | "full";
     } = {}
-  ): Promise<{
-    queued: number;
-    skipped: number;
-    refreshed: number;
-    catalog_id: number | null;
-    detail: string;
-  }> {
+  ): Promise<ApiResponse<"/api/channels/catalog/index", "post">> {
     return request("/api/channels/catalog/index", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -732,11 +700,7 @@ export const api = {
   resetApp(
     eraseMedia: boolean,
     confirm: string
-  ): Promise<{
-    setup_completed: boolean;
-    erased_media: boolean;
-    library_video_count: number;
-  }> {
+  ): Promise<ApiResponse<"/api/setup/reset", "post">> {
     return request("/api/setup/reset", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -755,30 +719,35 @@ export const api = {
     return request(`/api/ai/jobs?${params}`);
   },
 
-  retryAiJob(jobId: number): Promise<{ ok: boolean; id: number }> {
+  retryAiJob(
+    jobId: number
+  ): Promise<ApiResponse<"/api/ai/jobs/{job_id}/retry", "post">> {
     return request(`/api/ai/jobs/${jobId}/retry`, { method: "POST" });
   },
 
-  retryFailedAiJobs(): Promise<{ ok: boolean; retried: number }> {
+  retryFailedAiJobs(): Promise<
+    ApiResponse<"/api/ai/jobs/retry-failed", "post">
+  > {
     return request("/api/ai/jobs/retry-failed", { method: "POST" });
   },
 
-  cancelAiJob(jobId: number): Promise<{ ok: boolean; id: number }> {
+  cancelAiJob(
+    jobId: number
+  ): Promise<ApiResponse<"/api/ai/jobs/{job_id}/cancel", "post">> {
     return request(`/api/ai/jobs/${jobId}/cancel`, { method: "POST" });
   },
 
-  clearFailedAiJobs(keepDays = 0): Promise<{ ok: boolean; deleted: number }> {
+  clearFailedAiJobs(
+    keepDays = 0
+  ): Promise<ApiResponse<"/api/ai/jobs/clear-failed", "post">> {
     return request(`/api/ai/jobs/clear-failed?keep_days=${keepDays}`, {
       method: "POST",
     });
   },
 
-  testAiConnection(base_url?: string): Promise<{
-    ok: boolean;
-    base_url?: string | null;
-    detail?: string;
-    models?: string[];
-  }> {
+  testAiConnection(
+    base_url?: string
+  ): Promise<ApiResponse<"/api/ai/test", "post">> {
     return request("/api/ai/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -786,11 +755,9 @@ export const api = {
     });
   },
 
-  testOpenRouterConnection(api_key?: string): Promise<{
-    ok: boolean;
-    detail?: string;
-    model_count?: number;
-  }> {
+  testOpenRouterConnection(
+    api_key?: string
+  ): Promise<ApiResponse<"/api/ai/openrouter/test", "post">> {
     return request("/api/ai/openrouter/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -798,11 +765,9 @@ export const api = {
     });
   },
 
-  getOpenRouterModels(): Promise<{
-    presets: { id: string; label: string; model: string }[];
-    models: OpenRouterModel[];
-    embedding_models?: OpenRouterModel[];
-  }> {
+  getOpenRouterModels(): Promise<
+    ApiResponse<"/api/ai/openrouter/models", "get">
+  > {
     return request("/api/ai/openrouter/models");
   },
 
@@ -810,12 +775,9 @@ export const api = {
     return request<OpenRouterCosts>("/api/ai/openrouter/costs");
   },
 
-  applyAiWorkload(profile?: "light" | "normal" | "heavy"): Promise<{
-    ok: boolean;
-    embed_model_changed?: boolean;
-    detail?: string;
-    runtime?: Record<string, unknown>;
-  }> {
+  applyAiWorkload(
+    profile?: "light" | "normal" | "heavy"
+  ): Promise<ApiResponse<"/api/ai/apply-workload", "post">> {
     return request("/api/ai/apply-workload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -869,11 +831,13 @@ export const api = {
     return request<CompatSummary>("/api/compat/summary");
   },
 
-  startCompatBackfill(): Promise<{ queued: number; already_queued: number }> {
+  startCompatBackfill(): Promise<ApiResponse<"/api/compat/backfill", "post">> {
     return request("/api/compat/backfill", { method: "POST" });
   },
 
-  convertLibraryToH264(): Promise<{ queued: number; already_queued: number }> {
+  convertLibraryToH264(): Promise<
+    ApiResponse<"/api/compat/convert-library", "post">
+  > {
     return request("/api/compat/convert-library", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -883,7 +847,7 @@ export const api = {
 
   cancelCompatJobs(
     kind?: "compat" | "convert"
-  ): Promise<{ cancelled: number }> {
+  ): Promise<ApiResponse<"/api/compat/cancel", "post">> {
     return request("/api/compat/cancel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -904,13 +868,9 @@ export const api = {
     return request<UpdateCheck>(`/api/updates${qs}`);
   },
 
-  uploadBackground(file: File): Promise<{
-    id: string;
-    url: string;
-    mime: string;
-    animated: boolean;
-    filename?: string;
-  }> {
+  uploadBackground(
+    file: File
+  ): Promise<ApiResponse<"/api/backgrounds", "post">> {
     const form = new FormData();
     form.append("file", file);
     return request("/api/backgrounds", {
@@ -919,35 +879,27 @@ export const api = {
     });
   },
 
-  listBackgrounds(): Promise<{
-    items: {
-      id: string;
-      url: string;
-      mime: string;
-      animated: boolean;
-      filename?: string;
-    }[];
-  }> {
+  listBackgrounds(): Promise<ApiResponse<"/api/backgrounds", "get">> {
     return request("/api/backgrounds");
   },
 
-  deleteBackground(id: string): Promise<{ ok: boolean }> {
-    return request<{ ok: boolean }>(
-      `/api/backgrounds/${encodeURIComponent(id)}`,
-      { method: "DELETE" }
-    );
+  deleteBackground(
+    id: string
+  ): Promise<ApiResponse<"/api/backgrounds/{bg_id}", "delete">> {
+    return request(`/api/backgrounds/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   },
 
-  extractBackgroundPalette(id: string): Promise<{ colors: string[] }> {
-    return request<{ colors: string[] }>(
-      `/api/backgrounds/${encodeURIComponent(id)}/palette`,
-      { method: "POST" }
-    );
+  extractBackgroundPalette(
+    id: string
+  ): Promise<ApiResponse<"/api/backgrounds/{bg_id}/palette", "post">> {
+    return request(`/api/backgrounds/${encodeURIComponent(id)}/palette`, {
+      method: "POST",
+    });
   },
 
-  uploadFont(
-    file: File
-  ): Promise<{ id: string; url: string; mime: string; filename?: string }> {
+  uploadFont(file: File): Promise<ApiResponse<"/api/fonts", "post">> {
     const form = new FormData();
     form.append("file", file);
     return request("/api/fonts", {
@@ -956,18 +908,20 @@ export const api = {
     });
   },
 
-  deleteFont(id: string): Promise<{ ok: boolean }> {
-    return request<{ ok: boolean }>(`/api/fonts/${encodeURIComponent(id)}`, {
+  deleteFont(
+    id: string
+  ): Promise<ApiResponse<"/api/fonts/{font_id}", "delete">> {
+    return request(`/api/fonts/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
   },
 
-  pauseAi(): Promise<{ paused: boolean }> {
-    return request<{ paused: boolean }>("/api/ai/pause", { method: "POST" });
+  pauseAi(): Promise<ApiResponse<"/api/ai/pause", "post">> {
+    return request("/api/ai/pause", { method: "POST" });
   },
 
-  resumeAi(): Promise<{ paused: boolean }> {
-    return request<{ paused: boolean }>("/api/ai/resume", { method: "POST" });
+  resumeAi(): Promise<ApiResponse<"/api/ai/resume", "post">> {
+    return request("/api/ai/resume", { method: "POST" });
   },
 
   getRecommendations(
@@ -1010,14 +964,16 @@ export const api = {
     });
   },
 
-  getVideoAiChat(id: number): Promise<{ messages: VideoAiChatMessage[] }> {
-    return request<{ messages: VideoAiChatMessage[] }>(
-      `/api/videos/${id}/ai/chat`
-    );
+  getVideoAiChat(
+    id: number
+  ): Promise<ApiResponse<"/api/videos/{video_id}/ai/chat", "get">> {
+    return request(`/api/videos/${id}/ai/chat`);
   },
 
-  clearVideoAiChat(id: number): Promise<{ ok: boolean }> {
-    return request<{ ok: boolean }>(`/api/videos/${id}/ai/chat`, {
+  clearVideoAiChat(
+    id: number
+  ): Promise<ApiResponse<"/api/videos/{video_id}/ai/chat", "delete">> {
+    return request(`/api/videos/${id}/ai/chat`, {
       method: "DELETE",
     });
   },
@@ -1396,7 +1352,7 @@ export const api = {
 
   estimatePlaylistSizes(
     urls: string[]
-  ): Promise<{ sizes: Record<string, Record<string, number>> }> {
+  ): Promise<ApiResponse<"/api/playlists/estimate", "post">> {
     return request("/api/playlists/estimate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

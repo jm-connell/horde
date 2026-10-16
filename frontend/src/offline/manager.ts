@@ -116,6 +116,11 @@ export function videoFromJob(job: DownloadJob): Video {
     description_is_custom: false,
     subtitles_pending: false,
     chapters: [],
+    has_compat: false,
+    is_hdr: false,
+    processing_summary: false,
+    processing_sprites: false,
+    processing_chapters: false,
   };
 }
 

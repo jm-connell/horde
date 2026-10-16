@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { ChannelStat } from "../types";
+import type { ChannelSearchHit, ChannelStat } from "../types";
 import { formatCompactCount } from "../utils";
 import Collapse from "./Collapse";
 
 const CHANNEL_SIDEBAR_LIMIT = 30;
 
-function formatSubscriberCount(count: number | null) {
-  if (count === null) return null;
+function formatSubscriberCount(count: number | null | undefined) {
+  if (count == null) return null;
   return formatCompactCount(count);
 }
 
@@ -33,14 +33,7 @@ export default function ChannelSidebar({
   onToggleShowAll: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [remoteHits, setRemoteHits] = useState<
-    {
-      name: string;
-      url: string;
-      thumbnail_url: string | null;
-      subscriber_count: number | null;
-    }[]
-  >([]);
+  const [remoteHits, setRemoteHits] = useState<ChannelSearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   const debounced = useMemo(() => query.trim().toLowerCase(), [query]);
 
@@ -123,7 +116,7 @@ export default function ChannelSidebar({
               <span className="truncate">{c.channel}</span>
               <span className="ml-2 shrink-0 text-xs text-muted">
                 {channelSort === "subscriber_count" &&
-                c.subscriber_count !== null
+                c.subscriber_count != null
                   ? formatSubscriberCount(c.subscriber_count)
                   : c.count}
               </span>
@@ -147,7 +140,7 @@ export default function ChannelSidebar({
                       <span className="truncate">{c.channel}</span>
                       <span className="ml-2 shrink-0 text-xs text-muted">
                         {channelSort === "subscriber_count" &&
-                        c.subscriber_count !== null
+                        c.subscriber_count != null
                           ? formatSubscriberCount(c.subscriber_count)
                           : c.count}
                       </span>
@@ -187,7 +180,7 @@ export default function ChannelSidebar({
                     onSelectRemoteChannel({
                       name: hit.name,
                       url: hit.url,
-                      subscriber_count: hit.subscriber_count,
+                      subscriber_count: hit.subscriber_count ?? null,
                     })
                   }
                   className="flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-ink-800"
