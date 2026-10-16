@@ -26,6 +26,16 @@ It holds the things that used to be import-time constants and singletons:
 - **Scripts** (`python -m app.cli`, Alembic) never run `lifespan`; the first call builds a
   context from `DOWNLOADS_DIR` / `DATA_DIR`.
 
+Exactly one context is active per process: activation is a single global slot, not
+per app or per thread. Two apps or lifespans in one process share it, so they must
+exit in the reverse order they started (each restores what it replaced). Tests rely on
+this: the fixture activates, the test runs, the fixture restores. Outside tests a
+call with nothing active builds a context from the environment (CLI, scripts); under
+pytest that fallback raises instead.
+
+`ctx.download_queue` and `ctx.ffmpeg_queue` are the module-level singletons, not
+per-context instances (see the table at the end).
+
 Do not import a directory or the engine at module level (`from ..config import DOWNLOADS_DIR`
 no longer exists). Call the accessor where the path is used, so a test or a second
 instance sees its own.

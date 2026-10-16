@@ -455,3 +455,29 @@ def test_shutdown_logs_how_many_workers_stop_and_each_result(caplog):
     messages = [r.getMessage() for r in caplog.records]
     assert messages[0] == "stopping 2 background workers"
     assert messages[1:] == ["worker two stopped", "worker one stopped"]
+
+
+def test_lifespan_restores_the_previous_context_on_shutdown(lifespan_env):
+    from app import context
+
+    before = context.current()
+    with TestClient(main.app):
+        assert context.current() is not before
+        assert main.app.state.ctx is context.current()
+    assert context.current() is before
+    assert not hasattr(main.app.state, "ctx")
+
+
+def test_failed_init_db_leaves_no_context_behind(lifespan_env, monkeypatch):
+    from app import context
+
+    before = context.current()
+
+    def boom(_engine=None):
+        raise RuntimeError("migration failed")
+
+    monkeypatch.setattr(main, "init_db", boom)
+    with pytest.raises(RuntimeError, match="migration failed"), TestClient(main.app):
+        pass
+    assert context.current() is before
+    assert not hasattr(main.app.state, "ctx")

@@ -192,11 +192,19 @@ def deactivate(previous: AppContext | None) -> None:
         _active = previous
 
 
+#: Scripts and the CLI may call ``current()`` without ``lifespan``. The test suite
+#: switches the fallback off, so a stray thread after teardown fails loudly instead
+#: of creating ``./data`` in the working directory.
+env_fallback_allowed = True
+
+
 def current() -> AppContext:
     """The active context. Scripts that never ran ``lifespan`` get one from the env."""
     global _active
     ctx = _active
     if ctx is None:
+        if not env_fallback_allowed:
+            raise RuntimeError("no active AppContext (activate one before use)")
         with _active_lock:
             if _active is None:
                 logger.debug("no active context; building one from the environment")

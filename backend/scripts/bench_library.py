@@ -119,7 +119,8 @@ def main() -> int:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from sqlmodel import Session
 
-        from app.database import engine, init_db
+        from app.context import get_engine
+        from app.database import init_db
         from app.models import Video
         from app.services import library
         from app.services.ai import embeddings
@@ -143,7 +144,7 @@ def main() -> int:
             .astype("float32")
             .tolist()
         )
-        with Session(engine) as s:
+        with Session(get_engine()) as s:
             first = s.get(Video, 500)
             w1, w2 = first.title.split()[0], first.title.split()[1]
             cases = {

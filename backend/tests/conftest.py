@@ -41,6 +41,14 @@ def _no_inherited_git_env(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_env_context(monkeypatch):
+    """Tests build their context explicitly; none may fall back to ``./data``."""
+    from app import context
+
+    monkeypatch.setattr(context, "env_fallback_allowed", False)
+
+
+@pytest.fixture(autouse=True)
 def _cheap_password_hashing(monkeypatch):
     """scrypt at production cost takes ~100 ms; tests only need the same code path."""
     from app.services.auth import passwords

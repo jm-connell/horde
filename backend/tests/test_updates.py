@@ -58,6 +58,7 @@ def client():
     app.add_api_route("/api/updates", updates_route, methods=["GET"])
     # The route alone has no middleware; stand in for a signed-in administrator
     # (forcing a check is admin-only, tests/test_permissions.py covers refusal).
+    app.dependency_overrides[get_ctx] = lambda: SimpleNamespace(e2e=False)
     app.dependency_overrides[current_user] = lambda: AuthUser(
         id=1, username="admin", is_admin=True, permissions=ALL_PERMISSIONS
     )

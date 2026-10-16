@@ -231,27 +231,28 @@ async def lifespan(app: FastAPI):
     # A test may have installed a context of its own; otherwise build one from the
     # environment and remove it again on the way out.
     injected = getattr(app.state, "ctx", None)
-    ctx = injected or build_context()
-    install_context(app, ctx)
-    install_caches(app, ctx)
+    ctx = injected or build_context(e2e=E2E)
     previous = activate(ctx)
-    ctx.paths.ensure()
-    init_db(ctx.engine)
-    if app.state.auth.config.disabled:
-        logger.warning(
-            "HORDE_AUTH_DISABLED is set: Horde is NOT asking anyone to sign in. "
-            "Every request that reaches it acts as an administrator%s. Only use "
-            "this behind a reverse proxy that authenticates users and is the only "
-            "way to reach this port.",
-            " (or the user named in the trusted header)"
-            if app.state.auth.config.trusted_user_header
-            else "",
-        )
-    host_warning = host_policy_warning(app.state.host_policy, app.state.auth.config)
-    if host_warning:
-        logger.warning(host_warning)
-    restore_signals = _install_shutdown_signals(ctx.shutdown_event)
+    restore_signals = None
     try:
+        install_context(app, ctx)
+        install_caches(app, ctx)
+        ctx.paths.ensure()
+        init_db(ctx.engine)
+        if app.state.auth.config.disabled:
+            logger.warning(
+                "HORDE_AUTH_DISABLED is set: Horde is NOT asking anyone to sign in. "
+                "Every request that reaches it acts as an administrator%s. Only use "
+                "this behind a reverse proxy that authenticates users and is the only "
+                "way to reach this port.",
+                " (or the user named in the trusted header)"
+                if app.state.auth.config.trusted_user_header
+                else "",
+            )
+        host_warning = host_policy_warning(app.state.host_policy, app.state.auth.config)
+        if host_warning:
+            logger.warning(host_warning)
+        restore_signals = _install_shutdown_signals(ctx.shutdown_event)
         if ctx.e2e:
             _boot_e2e(app, ctx)
         else:
@@ -259,17 +260,21 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         ctx.shutdown_event.set()
-        # Join in a thread: a worker mid-write must not block the event loop that
-        # still has to finish closing the connections.
-        stuck = await asyncio.to_thread(ctx.workers.stop_all)
-        if stuck:
-            logger.error("shutdown left running: %s", ", ".join(stuck))
-        await preview.close_preview_client()
-        restore_signals()
-        deactivate(previous)
-        if injected is None:
-            del app.state.ctx
-            ctx.engine.dispose()
+        try:
+            # Join in a thread: a worker mid-write must not block the event loop
+            # that still has to finish closing the connections.
+            stuck = await asyncio.to_thread(ctx.workers.stop_all)
+            if stuck:
+                logger.error("shutdown left running: %s", ", ".join(stuck))
+            await preview.close_preview_client()
+        finally:
+            if restore_signals is not None:
+                restore_signals()
+            deactivate(previous)
+            if injected is None:
+                if getattr(app.state, "ctx", None) is ctx:
+                    del app.state.ctx
+                ctx.engine.dispose()
 
 
 app = FastAPI(
