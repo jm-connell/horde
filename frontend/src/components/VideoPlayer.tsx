@@ -10,6 +10,8 @@ import ControlBar from "./player/ControlBar";
 import { useFrameInset } from "./player/useFrameInset";
 import { playerLayout } from "./player/playerLayout";
 import { usePlayerViewMode } from "./player/usePlayerViewMode";
+import { useVideoEvents } from "./player/useVideoEvents";
+import { usePlayerVolume } from "./player/usePlayerVolume";
 import { usePlayerSource } from "./player/usePlayerSource";
 import { useStreamQuality } from "./player/useStreamQuality";
 import { useControlsVisibility } from "./player/useControlsVisibility";
@@ -87,8 +89,12 @@ export default function VideoPlayer({
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(volumeProp ?? 1);
-  const [muted, setMuted] = useState(false);
+  const { volume, muted, applyVolume, toggleMute } = usePlayerVolume(
+    videoRef,
+    src,
+    volumeProp ?? 1,
+    onVolumeChange
+  );
   const [captionLang, setCaptionLang] = useState<string | null>(null);
   const {
     available: castAvailable,
@@ -315,11 +321,6 @@ export default function VideoPlayer({
   }, [rate, src]);
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.volume = volume;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-apply the stored volume to each new source only; live volume changes are applied by the slider handlers
-  }, [src]);
-
-  useEffect(() => {
     if (chromecastCasting || mediaSuspended) return;
     videoRef.current?.play().catch(() => undefined);
   }, [src, chromecastCasting, mediaSuspended]);
@@ -364,19 +365,6 @@ export default function VideoPlayer({
     revealMiniControls,
   });
 
-  const applyVolume = useCallback(
-    (value: number, persist: boolean) => {
-      setVolume(value);
-      setMuted(value === 0);
-      if (videoRef.current) {
-        videoRef.current.volume = value;
-        videoRef.current.muted = value === 0;
-      }
-      if (persist) onVolumeChange?.(value);
-    },
-    [onVolumeChange]
-  );
-
   usePlayerKeyboard({
     videoRef,
     mode,
@@ -396,13 +384,6 @@ export default function VideoPlayer({
     revealControls,
   });
 
-  const toggleMute = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    setMuted(v.muted);
-  };
-
   const {
     endHold,
     onVideoPointerDown,
@@ -418,6 +399,30 @@ export default function VideoPlayer({
     holdPlaybackRate: settings.holdPlaybackRate,
     suppressClick,
     togglePlay,
+  });
+
+  const videoEvents = useVideoEvents({
+    prevTimeRef,
+    isSeekingRef,
+    pendingSeekRef,
+    handleSkipTimeUpdate: skip.handleTimeUpdate,
+    streamType: effectiveStreamType,
+    compatMode,
+    effectiveSrc,
+    mediaSuspended,
+    chromecastCasting,
+    setPlaying,
+    setCurrent,
+    setDuration,
+    setVideoAspect,
+    setMediaError,
+    setCaptionMode,
+    hideBuffering,
+    scheduleBuffering,
+    enterCompatMode,
+    onProgress,
+    onEnded,
+    onSourceError,
   });
 
   const { wrapperClass, innerClass, miniStyle, videoClass, subtitleClass } =
@@ -464,68 +469,7 @@ export default function VideoPlayer({
           {...{ "x-webkit-airplay": "allow" }}
           controls={false}
           onClick={onVideoClick}
-          onPlay={() => {
-            setPlaying(true);
-            setCaptionMode();
-          }}
-          onPause={() => setPlaying(false)}
-          onTimeUpdate={(e) => {
-            const t = e.currentTarget.currentTime;
-            const prev = prevTimeRef.current;
-            prevTimeRef.current = t;
-            setCurrent(t);
-            onProgress?.(t);
-            if (t > prev + 0.02 && !e.currentTarget.paused) {
-              hideBuffering();
-            }
-            skip.handleTimeUpdate(e.currentTarget, t, prev);
-          }}
-          onSeeked={() => {
-            isSeekingRef.current = false;
-            hideBuffering();
-          }}
-          onSeeking={() => {
-            isSeekingRef.current = true;
-          }}
-          onWaiting={scheduleBuffering}
-          onPlaying={hideBuffering}
-          onCanPlay={hideBuffering}
-          onLoadedMetadata={(e) => {
-            const el = e.currentTarget;
-            setDuration(el.duration);
-            if (el.videoWidth > 0 && el.videoHeight > 0) {
-              setVideoAspect(el.videoWidth / el.videoHeight);
-            }
-            const seekTarget = pendingSeekRef.current;
-            if (seekTarget > 1 && seekTarget < el.duration) {
-              el.currentTime = seekTarget;
-            }
-            pendingSeekRef.current = 0;
-            if (!chromecastCasting && !mediaSuspended) {
-              el.play().catch(() => undefined);
-            }
-          }}
-          onEnded={onEnded}
-          onError={() => {
-            hideBuffering();
-            if (effectiveStreamType === "dash") {
-              if (enterCompatMode()) return;
-              setMediaError(
-                "The preview stream failed. Check your connection and try again."
-              );
-              return;
-            }
-            if (compatMode) {
-              setMediaError(
-                "Compatibility-mode preview failed. Try again or download the video."
-              );
-              return;
-            }
-            if (!effectiveSrc || onSourceError?.()) return;
-            setMediaError(
-              "This video could not be played. Check your connection and try again."
-            );
-          }}
+          {...videoEvents}
           onPointerDown={isMini ? undefined : onVideoPointerDown}
           onPointerUp={isMini ? undefined : onVideoPointerUp}
           onPointerCancel={isMini ? undefined : onVideoPointerCancel}
