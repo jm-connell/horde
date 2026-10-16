@@ -38,7 +38,11 @@ import VideoCard from "../components/VideoCard";
 import VideoEditForm from "../components/VideoEditForm";
 import WatchMeta from "../components/WatchMeta";
 import { isActiveJob, useDownloads } from "../context/DownloadContext";
-import { usePlayback } from "../context/PlaybackContext";
+import {
+  usePlaybackActions,
+  usePlaybackLayout,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -155,18 +159,17 @@ export default function Watch() {
   } = useDownloads();
   const redownloadPending = useRef(false);
   const isMobile = useIsMobile();
+  const { mode, queue } = usePlaybackSession();
+  const { activeStreamQuality } = usePlaybackLayout();
   const {
-    mode,
     playVideo,
     playStream,
     registerDock,
-    queue,
     getCurrentPosition,
     getStreamPosition,
-    activeStreamQuality,
     suspendPlaybackMedia,
     updateCurrentVideo,
-  } = usePlayback();
+  } = usePlaybackActions();
 
   const dockRef = useRef<HTMLDivElement>(null);
 

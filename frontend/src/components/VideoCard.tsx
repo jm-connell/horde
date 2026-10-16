@@ -1,6 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
 import { streamUrl, thumbnailUrl } from "../api";
-import { usePlayback } from "../context/PlaybackContext";
+import {
+  usePlaybackActions,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 import { useCardPreview } from "../hooks/useCardPreview";
 import { useSettings } from "../hooks/useSettings";
 import { useCardCopyLayout } from "../hooks/useCardCopyLayout";
@@ -69,7 +72,8 @@ export default function VideoCard({
   /** `feed` drops the card chrome on small screens (YouTube-style home). */
   layout?: "card" | "feed";
 }) {
-  const { addToQueue, current } = usePlayback();
+  const { addToQueue } = usePlaybackActions();
+  const { current } = usePlaybackSession();
   const [settings] = useSettings();
   const thumb = thumbnailUrl(video);
   const duration = formatDuration(video.duration_sec);

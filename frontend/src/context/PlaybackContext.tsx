@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -61,11 +62,33 @@ export type MiniPlayerRect = {
   bottom: number;
 };
 
-interface PlaybackValue {
+/**
+ * What is playing and how the page is laid out around it. Three contexts so a
+ * component only re-renders for what it reads: the actions never change, the
+ * session changes when playback does, and the layout changes while the
+ * mini-player is dragged or the picture resizes.
+ */
+export interface PlaybackSession {
   current: Video | null;
   stream: StreamSession | null;
   queue: Video[];
   mode: ViewMode;
+  /** True when the floating mini-player is showing (browsing away from Watch). */
+  miniPlayerActive: boolean;
+}
+
+export interface PlaybackLayout {
+  /** Live bounds of the floating mini-player (null when not mini). */
+  miniPlayerRect: MiniPlayerRect | null;
+  /** True until the user drags the mini player; then it keeps that pixel position. */
+  miniPlayerCornerAnchor: boolean;
+  /** Live DASH/file track quality (YouTube ladder), null until known. */
+  activeStreamQuality: number | null;
+  /** Pillarbox inset (px) of the visible picture inside the player box. */
+  videoFrameInset: number;
+}
+
+export interface PlaybackActions {
   setMode: (mode: ViewMode) => void;
   playVideo: (video: Video, opts?: { queue?: Video[] }) => void;
   playStream: (session: StreamSession) => void;
@@ -90,19 +113,11 @@ interface PlaybackValue {
   registerDock: (el: HTMLElement | null) => void;
   /** Patch the playing library video when metadata refreshes (same id). */
   updateCurrentVideo: (video: Video) => void;
-  /** True when the floating mini-player is showing (browsing away from Watch). */
-  miniPlayerActive: boolean;
-  /** Live bounds of the floating mini-player (null when not mini). */
-  miniPlayerRect: MiniPlayerRect | null;
-  /** True until the user drags the mini player; then it keeps that pixel position. */
-  miniPlayerCornerAnchor: boolean;
-  /** Live DASH/file track quality (YouTube ladder), null until known. */
-  activeStreamQuality: number | null;
-  /** Pillarbox inset (px) of the visible picture inside the player box. */
-  videoFrameInset: number;
 }
 
-const Ctx = createContext<PlaybackValue | null>(null);
+const SessionCtx = createContext<PlaybackSession | null>(null);
+const LayoutCtx = createContext<PlaybackLayout | null>(null);
+const ActionsCtx = createContext<PlaybackActions | null>(null);
 
 const QUEUE_KEY = "horde.queue";
 const MINI_WIDTH_KEY = "horde.mini-width";
@@ -727,31 +742,53 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearInterval(timer);
   }, [pollCurrentVideo, refreshCurrentVideo]);
 
-  const value: PlaybackValue = {
-    current,
-    stream,
-    queue,
-    mode,
-    setMode,
-    playVideo,
-    playStream,
-    getStreamPosition,
-    getCurrentPosition,
-    addToQueue,
-    playNext,
-    removeFromQueue,
-    reorderQueue,
-    clearQueue,
-    close,
-    suspendPlaybackMedia,
-    registerDock,
-    updateCurrentVideo,
-    miniPlayerActive,
-    miniPlayerRect,
-    miniPlayerCornerAnchor: miniCornerAnchor,
-    activeStreamQuality,
-    videoFrameInset,
-  };
+  const session = useMemo<PlaybackSession>(
+    () => ({ current, stream, queue, mode, miniPlayerActive }),
+    [current, stream, queue, mode, miniPlayerActive]
+  );
+  const layout = useMemo<PlaybackLayout>(
+    () => ({
+      miniPlayerRect,
+      miniPlayerCornerAnchor: miniCornerAnchor,
+      activeStreamQuality,
+      videoFrameInset,
+    }),
+    [miniPlayerRect, miniCornerAnchor, activeStreamQuality, videoFrameInset]
+  );
+  const actions = useMemo<PlaybackActions>(
+    () => ({
+      setMode,
+      playVideo,
+      playStream,
+      getStreamPosition,
+      getCurrentPosition,
+      addToQueue,
+      playNext,
+      removeFromQueue,
+      reorderQueue,
+      clearQueue,
+      close,
+      suspendPlaybackMedia,
+      registerDock,
+      updateCurrentVideo,
+    }),
+    [
+      setMode,
+      playVideo,
+      playStream,
+      getStreamPosition,
+      getCurrentPosition,
+      addToQueue,
+      playNext,
+      removeFromQueue,
+      reorderQueue,
+      clearQueue,
+      close,
+      suspendPlaybackMedia,
+      registerDock,
+      updateCurrentVideo,
+    ]
+  );
 
   const handleMiniResize = useCallback(
     (width: number, origin: { left: number; top: number; height: number }) => {
@@ -974,15 +1011,31 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     ) : null;
 
   return (
-    <Ctx.Provider value={value}>
-      {children}
-      {playerPortal && createPortal(playerPortal, hostRef.current)}
-    </Ctx.Provider>
+    <ActionsCtx.Provider value={actions}>
+      <SessionCtx.Provider value={session}>
+        <LayoutCtx.Provider value={layout}>
+          {children}
+          {playerPortal && createPortal(playerPortal, hostRef.current)}
+        </LayoutCtx.Provider>
+      </SessionCtx.Provider>
+    </ActionsCtx.Provider>
   );
 }
 
-export function usePlayback(): PlaybackValue {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("usePlayback must be used within PlaybackProvider");
-  return ctx;
+function useRequired<T>(value: T | null, hook: string): T {
+  if (!value) throw new Error(`${hook} must be used within PlaybackProvider`);
+  return value;
+}
+
+/** Stable: never changes, so reading it never causes a re-render. */
+export function usePlaybackActions(): PlaybackActions {
+  return useRequired(useContext(ActionsCtx), "usePlaybackActions");
+}
+
+export function usePlaybackSession(): PlaybackSession {
+  return useRequired(useContext(SessionCtx), "usePlaybackSession");
+}
+
+export function usePlaybackLayout(): PlaybackLayout {
+  return useRequired(useContext(LayoutCtx), "usePlaybackLayout");
 }

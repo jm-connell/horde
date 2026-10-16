@@ -3,7 +3,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDownloads } from "../context/DownloadContext";
-import { usePlayback } from "../context/PlaybackContext";
+import {
+  usePlaybackLayout,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 import { useSearch } from "../context/SearchContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
@@ -83,7 +86,8 @@ export default function TopNav() {
   const { can } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { mode, videoFrameInset } = usePlayback();
+  const { mode } = usePlaybackSession();
+  const { videoFrameInset } = usePlaybackLayout();
   const isMobile = useIsMobile();
   const net = useConnectivity();
   const offlineMode = net.status === "offline";
