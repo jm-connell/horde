@@ -61,7 +61,8 @@ PERMISSION_TABLE: tuple[Permission, ...] = (
         "use_ai",
         "Use AI",
         "AI chat, on-demand summaries, tags and chapters, and the embedding half of "
-        "library search (these can cost money with a paid provider).",
+        "library and channel-catalog search (these can cost money with a paid "
+        "provider).",
         True,
     ),
 )

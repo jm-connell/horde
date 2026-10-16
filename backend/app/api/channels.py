@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
-from ..auth import require_permission
+from ..auth import current_user, require_permission
 from ..database import get_session
 from ..response_schemas import ChannelRenameResult
 from ..schemas import (
@@ -34,6 +34,7 @@ from ..services import (
     library,
     ytdlp_extract,
 )
+from ..services.auth.accounts import AuthUser
 from ..services.limits import ytdlp_slot
 from ..services.url_safety import validate_public_url
 from ..services.ytdlp_common import cookie_configured, is_members_only_entry
@@ -492,7 +493,10 @@ def channel_catalog_search(
     limit: int = Query(60, ge=1, le=200),
     semantic: bool = Query(True),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
+    # The embedding half spends the AI provider's quota: only accounts with use_ai.
+    semantic = semantic and user.can("use_ai")
     channel_url = (url or "").strip() or None
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:

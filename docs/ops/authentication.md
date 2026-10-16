@@ -28,7 +28,7 @@ When an administrator adds or edits an account they pick its **type** in *Settin
 | `offline_download` | Save videos to the device for offline viewing, and fetch files from the server | on |
 | `edit_metadata` | Edit titles, descriptions, notes, tags and thumbnails; rename channels | on |
 | `manage_playlists` | Create, edit and delete the shared playlists | on |
-| `use_ai` | AI chat, on-demand summaries, tags and chapters, and the embedding half of library search (these can cost money with a paid provider) | on |
+| `use_ai` | AI chat, on-demand summaries, tags and chapters, and the embedding half of library and channel-catalog search (these can cost money with a paid provider) | on |
 
 These are **admin only** and cannot be granted: managing users, server-wide settings, AI provider configuration and worker control, factory reset, library-wide compatibility conversion, background and font management, pausing the download queue, a forced update check and the bulk metadata refresh. (Channel auto-download is *not* in this list: it needs only `download`.)
 
