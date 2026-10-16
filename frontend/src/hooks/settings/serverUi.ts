@@ -52,3 +52,17 @@ export function serverUiToSettingsPatch(
 
   return patch as Partial<Settings>;
 }
+
+/** The server `ui` keys whose value differs between two settings objects. */
+export function changedServerUi(
+  before: Settings,
+  after: Settings
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of SERVER_UI_KEYS) {
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      out[camelToSnake(key)] = after[key];
+    }
+  }
+  return out;
+}

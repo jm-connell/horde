@@ -15,6 +15,7 @@ import {
   SETUP_EVENT,
   setupCompleted,
 } from "./settings/serverSync";
+import { changedServerUi } from "./settings/serverUi";
 import type { Settings } from "./settings/types";
 
 export type * from "./settings/types";
@@ -132,9 +133,10 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
   }, []);
 
   const update = useCallback((patch: Partial<Settings>) => {
-    const next = normalizeSettings({ ...loadSettings(), ...patch });
+    const before = loadSettings();
+    const next = normalizeSettings({ ...before, ...patch });
     persistLocal(next);
-    scheduleServerSync(next);
+    scheduleServerSync(next, changedServerUi(before, next));
   }, []);
 
   return [settings, update];

@@ -64,7 +64,7 @@ export function adoptSettingsOwner(userId: number, isAdmin: boolean): void {
       clearTimeout(syncTimer);
       syncTimer = null;
     }
-    pendingSync = null;
+    pendingSend = null;
     clearLocalSettings();
     hydrationGeneration += 1;
     serverHydrated = false;
@@ -97,7 +97,7 @@ export async function flushSettingsSync(): Promise<void> {
     clearTimeout(syncTimer);
     syncTimer = null;
   }
-  pendingSync = null;
+  pendingSend = null;
   const ui = settingsToServerUi(loadSettings());
   try {
     await api.updateAppSettings({ ui });
@@ -149,11 +149,11 @@ export function ensureServerHydration(): Promise<void> {
           pending ||
           !Object.prototype.hasOwnProperty.call(ui, "preview_muted")
         ) {
-          scheduleServerSync(next);
+          scheduleServerSync(next, pending?.ui);
         }
       } else if (remote.setup_completed) {
         // Migrate local → server, only the preferences kept from before accounts
-        if (pending) scheduleServerSync(local);
+        if (pending) scheduleServerSync(local, pending.ui);
         const uiPayload = settingsToServerUi(local);
         if (legacyPrefsMayMigrate && Object.keys(uiPayload).length > 0) {
           api.updateAppSettings({ ui: uiPayload }).catch(() => undefined);
@@ -192,23 +192,32 @@ export function ensureServerHydration(): Promise<void> {
   return serverHydratePromise;
 }
 
-/** The settings the pending debounced sync will send. */
-let pendingSync: Settings | null = null;
-/** Identifies the change in `pendingSync` in the stored pending marker. */
-let pendingStamp = 0;
+/** What the pending debounced sync will send, and the stamp of its pending marker. */
+let pendingSend: { ui: Record<string, unknown>; stamp: number } | null = null;
 
-export function scheduleServerSync(settings: Settings): void {
+/**
+ * Send `changed` (the keys that differ from the server's copy) after a short
+ * pause. Without it, send every key: a full resync that is not a user change.
+ */
+export function scheduleServerSync(
+  settings: Settings,
+  changed?: Record<string, unknown>
+): void {
   if (syncTimer) clearTimeout(syncTimer);
-  pendingSync = settings;
-  const ui = settingsToServerUi(settings);
-  const stamp = markPending(ui);
-  pendingStamp = stamp;
+  let send: { ui: Record<string, unknown>; stamp: number };
+  if (changed && Object.keys(changed).length > 0) {
+    const marked = markPending(changed);
+    send = { ui: marked.ui, stamp: marked.at };
+  } else {
+    send = { ui: settingsToServerUi(settings), stamp: 0 };
+  }
+  pendingSend = send;
   syncTimer = setTimeout(() => {
     syncTimer = null;
-    pendingSync = null;
+    pendingSend = null;
     api
-      .updateAppSettings({ ui })
-      .then(() => clearPending(stamp))
+      .updateAppSettings({ ui: send.ui })
+      .then(() => clearPending(send.stamp))
       .catch(() => undefined);
   }, 300);
 }
@@ -220,10 +229,9 @@ export function scheduleServerSync(settings: Settings): void {
  * outlive the page.
  */
 function flushPendingSync(): void {
-  if (!pendingSync) return;
-  const ui = settingsToServerUi(pendingSync);
-  const stamp = pendingStamp;
-  pendingSync = null;
+  if (!pendingSend) return;
+  const { ui, stamp } = pendingSend;
+  pendingSend = null;
   if (syncTimer) {
     clearTimeout(syncTimer);
     syncTimer = null;
