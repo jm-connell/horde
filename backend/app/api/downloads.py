@@ -594,7 +594,6 @@ def dismiss_finished_jobs(session: Session = Depends(get_session)):
         )
     )
     jobs = list(session.exec(statement).all())
-    jobs = list(session.exec(statement).all())
     for job in jobs:
         if job.destination == DownloadDestination.device.value:
             download_staging.cleanup_device_job_files(
