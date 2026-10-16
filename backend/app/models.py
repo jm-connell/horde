@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from enum import Enum
+from typing import overload
 
 from sqlalchemy import Column, Index, String, UniqueConstraint, event
 from sqlmodel import Field, SQLModel
@@ -9,6 +10,12 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+@overload
+def as_utc(dt: datetime) -> datetime: ...
+@overload
+def as_utc(dt: None) -> None: ...
+@overload
+def as_utc(dt: datetime | None) -> datetime | None: ...
 def as_utc(dt: datetime | None) -> datetime | None:
     """Treat naive datetimes as UTC. SQLite often strips tzinfo on read."""
     if dt is None:
