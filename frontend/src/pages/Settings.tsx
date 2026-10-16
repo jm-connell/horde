@@ -21,6 +21,7 @@ import type {
   StorageStats,
   UpdateCheck,
 } from "../types";
+import { appSettingsQuery, useUpdateAppSettings } from "../queries/app";
 import { queryKeys } from "../queries/keys";
 import {
   dataOrNull,
@@ -78,6 +79,7 @@ export default function Settings() {
   const [settings, update] = useSettings();
   const { showToast, showError } = useToast();
   const queryClient = useQueryClient();
+  const saveAppSettings = useUpdateAppSettings();
   const confirm = useConfirm();
   const { setYoutubeVideoSearch } = useSearch();
   const [searchParams] = useSearchParams();
@@ -218,8 +220,8 @@ export default function Settings() {
       .storageStats()
       .then(setStorage)
       .catch(() => undefined);
-    api
-      .getAppSettings()
+    queryClient
+      .fetchQuery(appSettingsQuery())
       .then((s) => {
         setAppSettings(s);
         setExpiryInput(String(s.progress_expiry_days));
@@ -245,7 +247,7 @@ export default function Settings() {
       .then((r) => r.json())
       .then(setHealth)
       .catch(() => undefined);
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     if (!appSettings?.ai || aiProviderPaneFromBackendRef.current) return;
@@ -367,7 +369,7 @@ export default function Settings() {
   const saveAi = async (patch: Partial<AiSettings>) => {
     const next = { ...aiDraft, ...patch };
     setAiDraft(next);
-    const updated = await api.updateAppSettings({ ai: patch }).catch((err) => {
+    const updated = await saveAppSettings({ ai: patch }).catch((err) => {
       showError(`Could not save AI settings: ${describeError(err)}`);
       return null;
     });
@@ -405,7 +407,7 @@ export default function Settings() {
       >
     >
   ) => {
-    const updated = await api.updateAppSettings(patch).catch((err) => {
+    const updated = await saveAppSettings(patch).catch((err) => {
       showError(`Could not save setting: ${describeError(err)}`);
       return null;
     });
@@ -510,7 +512,9 @@ export default function Settings() {
   const applyWorkload = async (profile: AiWorkloadProfile) => {
     try {
       const result = await api.applyAiWorkload(profile);
-      const updated = await api.getAppSettings().catch(() => null);
+      const updated = await queryClient
+        .fetchQuery({ ...appSettingsQuery(), staleTime: 0 })
+        .catch(() => null);
       if (updated?.ai) {
         setAppSettings(updated);
         setAiDraft({ ...DEFAULT_AI, ...updated.ai });
