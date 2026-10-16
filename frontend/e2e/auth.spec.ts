@@ -1,6 +1,7 @@
 import { ACCOUNTS } from "./accounts";
 import {
   anonymousContext,
+  CSRF_HEADERS,
   contextAs,
   expect,
   signInWithForm,
@@ -210,4 +211,60 @@ test("backslash and control-character next targets stay on the site", async ({
     await expect(p).toHaveURL(new RegExp(`^${baseURL}/$`));
     await ctx.close();
   }
+});
+
+test("a different user signing in on a browser that still holds the previous user's preferences does not inherit them", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  void page;
+  // The admin picks the OLED theme: stored in this browser and on the server.
+  const adminCtx = await contextAs(browser, baseURL, "admin");
+  const p = await adminCtx.newPage();
+  await p.goto("/settings?tab=appearance");
+  const saved = p.waitForResponse((response) => {
+    const request = response.request();
+    if (
+      request.method() !== "PATCH" ||
+      !response.url().includes("/api/settings")
+    ) {
+      return false;
+    }
+    const body = request.postDataJSON() as { ui?: Record<string, unknown> };
+    return body.ui?.theme === "oled";
+  });
+  await p.getByRole("button", { name: "Theme" }).click();
+  await p.getByRole("option", { name: "OLED (true black)" }).click();
+  await saved;
+  await expect(p.locator("html")).toHaveAttribute("data-theme", "oled");
+
+  // The session ends without a sign-out (cleared cookies, or another tab signed
+  // in as someone else), so this browser's cached preferences stay behind.
+  await adminCtx.clearCookies();
+  const login = await adminCtx.request.post("/api/auth/login", {
+    headers: CSRF_HEADERS,
+    data: {
+      username: ACCOUNTS.member.username,
+      password: ACCOUNTS.member.password,
+    },
+  });
+  expect(login.ok()).toBe(true);
+
+  // The member gets their own (default) theme, not the admin's.
+  await p.goto("/");
+  await expect(videoCard(p, "Aurora Drift").first()).toBeVisible();
+  await expect(p.locator("html")).not.toHaveAttribute("data-theme", "oled");
+  // Let any sync the page would have started reach the server.
+  await p.waitForTimeout(1000);
+  const memberUi = (await (await adminCtx.request.get("/api/settings")).json())
+    .ui;
+  expect(memberUi.theme).not.toBe("oled");
+  await adminCtx.close();
+
+  // And the admin's saved preferences on the server are untouched.
+  const again = await contextAs(browser, baseURL, "admin");
+  const adminUi = (await (await again.request.get("/api/settings")).json()).ui;
+  expect(adminUi.theme).toBe("oled");
+  await again.close();
 });

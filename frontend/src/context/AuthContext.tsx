@@ -17,7 +17,7 @@ import {
 import LoadingIndicator from "../components/LoadingIndicator";
 import CreateAdminPage from "../pages/CreateAdmin";
 import LoginPage from "../pages/Login";
-import { clearLocalSettings } from "../hooks/useSettings";
+import { adoptSettingsOwner, clearLocalSettings } from "../hooks/useSettings";
 import { safeNextPath } from "../utils/authPaths";
 import type { AuthState, AuthUser, Permission } from "../types";
 import { getJson, removeItem, setJson } from "../storage";
@@ -40,6 +40,13 @@ function readCachedState(): AuthState | null {
 function writeCachedState(state: AuthState | null): void {
   if (state?.authenticated) setJson(CACHE_KEY, state);
   else removeItem(CACHE_KEY);
+}
+
+/** Before anything reads this user's preferences, make sure they are theirs. */
+function bindSettingsToUser(state: AuthState): void {
+  if (state.authenticated && state.user) {
+    adoptSettingsOwner(state.user.id, state.user.is_admin);
+  }
 }
 
 interface AuthContextValue {
@@ -71,11 +78,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const next = await api.getAuthState();
       writeCachedState(next);
+      bindSettingsToUser(next);
       setState(next);
       setFailed(false);
     } catch (err) {
       const cached = readCachedState();
       if (cached && (isOfflineError(err) || err instanceof TypeError)) {
+        bindSettingsToUser(cached);
         setState(cached);
         setFailed(false);
       } else {

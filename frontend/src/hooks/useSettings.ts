@@ -1108,9 +1108,13 @@ export function loadSettings(): Settings {
   }
 }
 
+/** The user the cached preferences in this browser belong to. */
+const OWNER_KEY = "horde.settings-owner";
+
 /** Forget this browser's cached preferences (on sign-in/out, so users never see each other's). */
 export function clearLocalSettings(): void {
   removeItem(STORAGE_KEY);
+  removeItem(OWNER_KEY);
 }
 
 function persistLocal(settings: Settings): void {
@@ -1144,7 +1148,52 @@ let syncTimer: ReturnType<typeof setTimeout> | null = null;
 /** Module-level: one GET /api/settings for the whole app, not per useSettings mount. */
 let serverHydratePromise: Promise<void> | null = null;
 let serverHydrated = false;
+/** Bumped when the signed-in user changes, so a GET still in flight is ignored. */
+let hydrationGeneration = 0;
+/** Only an administrator can own the preferences cached before accounts existed. */
+let legacyPrefsMayMigrate = false;
 let setupCompletedFlag: boolean | null = null;
+
+/**
+ * Tie this browser's cached preferences to the user who is signed in.
+ *
+ * The cache is cleared on sign-in and sign-out, but a session can also end or
+ * change without either (it expired, the cookies were cleared, another tab
+ * signed in as someone else). The next user must not inherit the previous
+ * user's cache, and it must not be uploaded as theirs. When the owner differs,
+ * or an unowned cache turns up under a member, the cache is dropped and the
+ * server's preferences are fetched again. Unowned preferences (kept from before
+ * accounts existed) may still be uploaded for an administrator.
+ */
+export function adoptSettingsOwner(userId: number, isAdmin: boolean): void {
+  const stored = getJson<number | null>(
+    OWNER_KEY,
+    (v): v is number => typeof v === "number",
+    null
+  );
+  if (stored === userId) return;
+  const legacy = stored === null;
+  if (legacy && isAdmin) {
+    legacyPrefsMayMigrate = true;
+  } else {
+    legacyPrefsMayMigrate = false;
+    const hadHydrated = serverHydrated || serverHydratePromise !== null;
+    if (syncTimer) {
+      clearTimeout(syncTimer);
+      syncTimer = null;
+    }
+    clearLocalSettings();
+    hydrationGeneration += 1;
+    serverHydrated = false;
+    serverHydratePromise = null;
+    if (hadHydrated) {
+      void ensureServerHydration().then(() =>
+        window.dispatchEvent(new Event(EVENT))
+      );
+    }
+  }
+  setJson(OWNER_KEY, userId);
+}
 
 export function useSetupGate(): { ready: boolean; completed: boolean } {
   const [ready, setReady] = useState(serverHydrated);
@@ -1197,9 +1246,12 @@ function ensureServerHydration(): Promise<void> {
   });
 
   let signedOut = false;
+  const generation = hydrationGeneration;
   const hydrate = api
     .getAppSettings()
     .then((remote) => {
+      // The signed-in user changed while this was in flight: not their answer.
+      if (generation !== hydrationGeneration) return;
       setupCompletedFlag = remote.setup_completed === true;
       const local = loadSettings();
       const ui = remote.ui && typeof remote.ui === "object" ? remote.ui : {};
@@ -1217,9 +1269,9 @@ function ensureServerHydration(): Promise<void> {
           scheduleServerSync(next);
         }
       } else if (remote.setup_completed) {
-        // Migrate local → server
+        // Migrate local → server, only the preferences kept from before accounts
         const uiPayload = settingsToServerUi(local);
-        if (Object.keys(uiPayload).length > 0) {
+        if (legacyPrefsMayMigrate && Object.keys(uiPayload).length > 0) {
           api.updateAppSettings({ ui: uiPayload }).catch(() => undefined);
         }
         if (remote.progress_expiry_days !== local.progressExpiryDays) {
@@ -1245,6 +1297,7 @@ function ensureServerHydration(): Promise<void> {
     });
 
   serverHydratePromise = Promise.race([hydrate, offlineGate]).finally(() => {
+    if (generation !== hydrationGeneration) return;
     if (signedOut) {
       serverHydratePromise = null;
     } else {
