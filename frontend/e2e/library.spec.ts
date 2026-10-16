@@ -156,3 +156,39 @@ test("a library the server hands over in pages still shows every video", async (
   await expect.poll(() => lastPageServed).toBe(true);
   expect(cursors.length).toBeGreaterThan(2);
 });
+
+test("a default sort that arrives after the library mounted is applied", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const sortButton = page.getByRole("button", { name: "Sort library" });
+  await expect(sortButton).toContainText("Recently added");
+
+  // The saved default lands after mount (settings hydrate on a fresh device,
+  // or another tab saves one): same path as a storage event.
+  await page.evaluate(() => {
+    const key = "horde.settings";
+    const current = JSON.parse(localStorage.getItem(key) ?? "{}");
+    localStorage.setItem(
+      key,
+      JSON.stringify({ ...current, defaultLibrarySort: "title" })
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key }));
+  });
+  await expect(sortButton).toContainText("Title");
+
+  // A sort picked in this session is not overridden by the default.
+  await sortButton.click();
+  await page.getByRole("option", { name: "Duration" }).click();
+  await expect(sortButton).toContainText("Duration");
+  await page.evaluate(() => {
+    const key = "horde.settings";
+    const current = JSON.parse(localStorage.getItem(key) ?? "{}");
+    localStorage.setItem(
+      key,
+      JSON.stringify({ ...current, defaultLibrarySort: "file_size" })
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key }));
+  });
+  await expect(sortButton).toContainText("Duration");
+});

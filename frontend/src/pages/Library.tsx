@@ -54,12 +54,12 @@ import { useSearch } from "../context/SearchContext";
 import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss";
 import {
   LIBRARY_SORT_OPTIONS,
-  loadLibrarySort,
+  loadSavedLibrarySort,
   saveLibrarySort,
   type LibrarySort,
   type LibrarySortState,
 } from "../hooks/useLibrarySort";
-import { loadSettings, useSettings } from "../hooks/useSettings";
+import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
 import { useOfflineMode } from "../offline/hooks";
 import { offlineManager } from "../offline/manager";
@@ -225,13 +225,23 @@ function OnlineLibrary() {
   const [activeTag, setActiveTag] = useState<string | null>(
     searchParams.get("tag")
   );
-  const [sortState, setSortState] = useState<LibrarySortState>(() => {
-    const saved = loadLibrarySort(loadSettings().defaultLibrarySort);
-    if (saved.sort === "random" && !saved.randomSeed) {
-      saved.randomSeed = Date.now();
-    }
-    return saved;
-  });
+  // A sort the user picked (recently) wins; otherwise the saved default, which
+  // may only arrive after mount (fresh device, or another user just signed in).
+  const [settings, update] = useSettings();
+  const [chosenSort, setSortState] = useState<LibrarySortState | null>(
+    loadSavedLibrarySort
+  );
+  const [defaultSeed] = useState(() => Date.now());
+  const defaultSort = settings.defaultLibrarySort;
+  const sortState = useMemo<LibrarySortState>(
+    () =>
+      chosenSort ?? {
+        sort: defaultSort,
+        order: "desc",
+        randomSeed: defaultSort === "random" ? defaultSeed : undefined,
+      },
+    [chosenSort, defaultSort, defaultSeed]
+  );
   const { sort, order, randomSeed } = sortState;
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -267,7 +277,6 @@ function OnlineLibrary() {
     saveFeedLayout(layout);
   }, []);
 
-  const [settings, update] = useSettings();
   const { showToast, showError } = useToast();
   const queryClient = useQueryClient();
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
