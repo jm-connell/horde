@@ -61,3 +61,16 @@ test("a theme saved on the appearance tab can be applied and deleted", async ({
   await row.getByRole("button", { name: "Delete" }).click();
   await expect(row).toHaveCount(0);
 });
+
+test("the AI provider sub-pane is still selected after visiting another tab", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=ai");
+  await page.getByRole("button", { name: "OpenRouter", exact: true }).click();
+  const costs = page.getByRole("heading", { name: "OpenRouter costs" });
+  await expect(costs).toBeVisible();
+  await page.getByRole("tab", { name: "Library" }).click();
+  await expect(page.getByText("Progress expiry")).toBeVisible();
+  await page.getByRole("tab", { name: "AI" }).click();
+  await expect(costs).toBeVisible();
+});
