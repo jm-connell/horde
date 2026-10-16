@@ -3553,9 +3553,8 @@
             "type": "string"
           },
           "destination": {
-            "default": "library",
-            "title": "Destination",
-            "type": "string"
+            "$ref": "#/components/schemas/DownloadDestination",
+            "default": "library"
           },
           "device_file_path": {
             "anyOf": [
@@ -3853,6 +3852,17 @@
               }
             ],
             "title": "Published At"
+          },
+          "published_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Label"
           },
           "thumbnail_url": {
             "anyOf": [
