@@ -15,6 +15,17 @@ import {
   withMediaToken,
 } from "../api";
 import PlayerOverlays from "./PlayerOverlays";
+import FullscreenButton from "./player/FullscreenButton";
+import {
+  BUFFERING_INDICATOR_DELAY_MS,
+  CONTROLS_HIDE_DELAY_MS,
+  HOLD_DELAY_MS,
+  MAX_MINI_WIDTH,
+  MIN_MINI_WIDTH,
+  SPEED_STEPS,
+  snapRateToStep,
+} from "./player/constants";
+import { playerChromeBtn, playerMenuItem } from "./player/playerChrome";
 import SubtitleOverlay from "./SubtitleOverlay";
 import { MenuFlyout } from "./MenuFlyout";
 import {
@@ -56,83 +67,6 @@ import {
 } from "./videoPlayerSponsor";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
-
-const SPEED_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
-const PLAYER_CHROME_BTN =
-  "ui-player-chrome rounded px-1.5 py-1 text-xs font-medium text-gray-200 hover:text-accent";
-const PLAYER_CHROME_BTN_ACTIVE =
-  "ui-player-chrome rounded px-1.5 py-1 text-xs font-medium text-accent";
-const PLAYER_MENU_ITEM =
-  "rounded px-2 py-1.5 text-[11px] font-medium text-gray-200 hover:bg-ink-700/50 hover:text-accent";
-const PLAYER_MENU_ITEM_ACTIVE =
-  "rounded px-2 py-1.5 text-[11px] font-medium text-accent";
-
-function playerChromeBtn(active: boolean): string {
-  return active ? PLAYER_CHROME_BTN_ACTIVE : PLAYER_CHROME_BTN;
-}
-
-function playerMenuItem(active: boolean): string {
-  return active ? PLAYER_MENU_ITEM_ACTIVE : PLAYER_MENU_ITEM;
-}
-
-function FullscreenGlyph({ exit }: { exit: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="square"
-      strokeLinejoin="miter"
-      aria-hidden
-    >
-      {exit ? (
-        <path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6" />
-      ) : (
-        <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" />
-      )}
-    </svg>
-  );
-}
-
-function FullscreenButton({
-  active,
-  onClick,
-}: {
-  active: boolean;
-  onClick: () => void;
-}) {
-  const label = active ? "Exit fullscreen" : "Fullscreen";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`ui-nav-icon ui-player-chrome flex h-7 w-7 items-center justify-center bg-transparent p-0 ${
-        active ? "text-accent" : "text-gray-200 hover:text-accent"
-      }`}
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-    >
-      <FullscreenGlyph exit={active} />
-    </button>
-  );
-}
-
-const CONTROLS_HIDE_DELAY_MS = 2500;
-const HOLD_DELAY_MS = 250;
-const MIN_MINI_WIDTH = 160;
-const MAX_MINI_WIDTH = 960;
-/** Mobile fires waiting/stalled during normal play; don't flash the overlay. */
-const BUFFERING_INDICATOR_DELAY_MS = 400;
-
-function snapRateToStep(r: number): number {
-  if (SPEED_STEPS.includes(r)) return r;
-  return SPEED_STEPS.reduce((best, s) =>
-    Math.abs(s - r) < Math.abs(best - r) ? s : best
-  );
-}
 
 function activeChapterAt(chapters: Chapter[], time: number): Chapter | null {
   if (chapters.length === 0) return null;
