@@ -12571,7 +12571,7 @@
     },
     "/api/review/groups": {
       "get": {
-        "description": "Clusters of likely duplicate videos, ``limit`` groups per page.\n\nFinding the clusters reads the whole library, but the AI check (one model call\nper heuristic cluster) and the serialization only run for the groups on the\nrequested page.",
+        "description": "Clusters of likely duplicate videos, ``limit`` groups per page.\n\nFinding the clusters reads the whole library, so the grouping is cached until\nthe library changes (``services/duplicate_groups.py``); the AI check (one model call\nper heuristic cluster) and the serialization only run for the groups on the\nrequested page.",
         "operationId": "duplicate_groups_api_review_groups_get",
         "parameters": [
           {

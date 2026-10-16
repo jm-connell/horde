@@ -57,6 +57,7 @@ from .services.channel_catalog import recover_catalog_jobs
 from .services.downloads.ffmpeg_queue import ffmpeg_queue
 from .services.downloads.queue import download_queue
 from .services.downloads.staging import gc_orphaned_device_dirs
+from .services.duplicate_groups import DuplicateGroupCache
 from .services.health import HealthCache, build_readiness
 from .services.metrics import CONTENT_TYPE as metrics_content_type
 from .services.metrics import render_metrics
@@ -199,6 +200,7 @@ async def lifespan(app: FastAPI):
     registry = WorkerRegistry()
     app.state.shutdown_event = shutdown_event
     app.state.workers = registry
+    app.state.duplicate_groups = DuplicateGroupCache()
     restore_signals = _install_shutdown_signals(shutdown_event)
     try:
         if _e2e_browser():
