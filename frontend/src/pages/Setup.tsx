@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { useUpdateAppSettings } from "../queries/app";
 import { dataOrNull, useSystemStats } from "../queries/status";
 import Collapse from "../components/Collapse";
 import {
@@ -47,6 +48,7 @@ const HEIGHT_EASE =
 
 export default function Setup() {
   const navigate = useNavigate();
+  const saveAppSettings = useUpdateAppSettings();
   const [settings, update] = useSettings();
   const [step, setStep] = useState<Step>("welcome");
   const [health, setHealth] = useState<HealthStats | null>(null);
@@ -111,7 +113,7 @@ export default function Setup() {
     setFinishing(true);
     try {
       await flushSettingsSync();
-      await api.updateAppSettings({ setup_completed: true });
+      await saveAppSettings({ setup_completed: true });
       markSetupCompleted();
       navigate((health?.library_video_count ?? 0) > 0 ? "/" : "/download", {
         replace: true,
@@ -146,7 +148,7 @@ export default function Setup() {
         setAiStatus(result.detail || "Could not reach OpenRouter.");
         return;
       }
-      await api.updateAppSettings({
+      await saveAppSettings({
         ai: {
           enabled: true,
           openrouter_enabled: true,
@@ -174,7 +176,7 @@ export default function Setup() {
         setAiStatus(result.detail || "Could not reach Ollama.");
         return;
       }
-      await api.updateAppSettings({
+      await saveAppSettings({
         ai: { enabled: true, base_url: url },
       });
       setAiStatus("Ollama connected. You can continue.");

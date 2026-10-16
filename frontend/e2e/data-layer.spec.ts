@@ -1,4 +1,5 @@
-import { expect, openNav, test, videoCard } from "./fixtures";
+import { ACCOUNTS } from "./accounts";
+import { CSRF_HEADERS, expect, openNav, test, videoCard } from "./fixtures";
 
 const LIST = /\/api\/videos\?/;
 
@@ -57,4 +58,118 @@ test("coming back to the library paints the cached list while it refetches", asy
   await expect(videoCard(page, "Kiln fire")).toBeVisible();
   release();
   await expect(videoCard(page, "Kiln fire")).toBeVisible();
+});
+
+test("a session swapped in another tab leaves none of the old user's rows", async ({
+  page,
+}) => {
+  await page.goto("/history");
+  await expect(videoCard(page, "Aurora Drift")).toBeVisible();
+
+  // Another tab signs in as someone else (the cookie jar is shared)...
+  const login = await page.request.post("/api/auth/login", {
+    headers: CSRF_HEADERS,
+    data: ACCOUNTS.member,
+  });
+  expect(login.ok()).toBe(true);
+  // ...and this tab notices when it is brought back to the front.
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+
+  await expect(page.getByText("No watch history yet.")).toBeVisible();
+  await expect(videoCard(page, "Aurora Drift")).toHaveCount(0);
+  await openNav(page, "Home");
+  await expect(
+    page.getByRole("heading", { name: "Continue watching" })
+  ).toHaveCount(0);
+});
+
+test("the download list retries when its first read fails", async ({
+  page,
+}) => {
+  let reads = 0;
+  await page.route(/\/api\/downloads$/, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    reads += 1;
+    if (reads === 1) return route.abort();
+    return route.fallback();
+  });
+  await page.goto("/download");
+  await expect(page.getByText("Queued night drive")).toBeVisible({
+    timeout: 30_000,
+  });
+  expect(reads).toBeGreaterThan(1);
+});
+
+test("a failing refresh does not replace the video being watched", async ({
+  page,
+}) => {
+  const list = await page.request.get("/api/videos?limit=500");
+  const item = (await list.json()).items.find(
+    (v: { title: string }) => v.title === "Aurora Drift"
+  );
+  let reads = 0;
+  await page.route(new RegExp(`/api/videos/${item.id}$`), async (route) => {
+    reads += 1;
+    if (reads === 1) {
+      // The server says it is still working, so the page keeps asking.
+      const response = await route.fetch();
+      const body = await response.json();
+      return route.fulfill({
+        response,
+        json: { ...body, processing_summary: true },
+      });
+    }
+    return route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "boom", code: "internal_error" }),
+    });
+  });
+  await page.goto(`/watch/${item.id}`);
+  await expect(
+    page.getByRole("heading", { name: "Aurora Drift" }).first()
+  ).toBeVisible();
+  await expect.poll(() => reads, { timeout: 20_000 }).toBeGreaterThan(1);
+  await expect(page.getByText("Video not found")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Aurora Drift" }).first()
+  ).toBeVisible();
+});
+
+test("saved app settings reach the Watch page without another read", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await openNav(page, "Settings");
+  await page.getByRole("tab", { name: "Library" }).click();
+  const expiry = page
+    .getByRole("heading", { name: "Progress expiry" })
+    .locator("xpath=..");
+  await expiry.getByRole("spinbutton").fill("22");
+  const saved = page.waitForResponse(
+    (r) =>
+      r.url().includes("/api/settings") &&
+      r.request().method() === "PATCH" &&
+      r.ok()
+  );
+  await expiry.getByRole("button", { name: "Save" }).click();
+  await saved;
+
+  // The answer is in the cache: opening a video must not fetch it again.
+  let reads = 0;
+  page.on("request", (r) => {
+    if (r.method() === "GET" && /\/api\/settings$/.test(r.url())) reads += 1;
+  });
+  await openNav(page, "Home");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(
+    page.getByRole("heading", { name: "Aurora Drift" }).first()
+  ).toBeVisible();
+  expect(reads).toBe(0);
 });
