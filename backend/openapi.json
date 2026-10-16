@@ -7719,6 +7719,8 @@
       "WatchProgressUpdate": {
         "properties": {
           "position_sec": {
+            "maximum": 10000000.0,
+            "minimum": 0.0,
             "title": "Position Sec",
             "type": "number"
           }

@@ -2,6 +2,8 @@
 
 from datetime import UTC
 
+import pytest
+
 
 def test_list_videos_hides_review_queue(client, add_video):
     ready = add_video(title="In library", channel="Alpha")
@@ -57,6 +59,24 @@ def test_get_patch_delete_video(client, add_video):
     deleted = client.delete(f"/api/videos/{video.id}")
     assert deleted.status_code == 204
     assert client.get(f"/api/videos/{video.id}").status_code == 404
+
+
+@pytest.mark.parametrize("raw", ["1e999", "-1", "-1e999", "10000001", '"NaN"', "null"])
+def test_progress_rejects_positions_that_are_not_a_plausible_time(
+    client, add_video, raw
+):
+    video = add_video(title="Long watch", duration_sec=200.0)
+
+    resp = client.patch(
+        f"/api/videos/{video.id}/progress",
+        content=f'{{"position_sec": {raw}}}',
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["code"] == "validation_error"
+    assert client.get(f"/api/videos/{video.id}").json()["last_position_sec"] == 0.0
 
 
 def test_watch_progress_and_continue_watching(client, add_video):

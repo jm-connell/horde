@@ -137,7 +137,8 @@ class VideoUpdate(BaseModel):
 
 
 class WatchProgressUpdate(BaseModel):
-    position_sec: float
+    # 1e7 s is about 115 days: beyond any video, and finite so it can be stored.
+    position_sec: float = Field(ge=0, le=1e7, allow_inf_nan=False)
 
 
 class DownloadCreate(BaseModel):
