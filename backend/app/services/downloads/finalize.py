@@ -157,7 +157,7 @@ class CommitRequest:
     facts: MediaFacts
 
 
-def probe_facts(path: Path, info: dict[str, Any], *, library: bool) -> MediaFacts:
+def probe_facts(path: Path, info: dict[str, Any], *, is_library: bool) -> MediaFacts:
     """Everything slow (ffprobe, stat) happens here, so the write transaction that
     follows is only a handful of statements."""
     file_size = path.stat().st_size if path.exists() else None
@@ -170,7 +170,7 @@ def probe_facts(path: Path, info: dict[str, Any], *, library: bool) -> MediaFact
         raw_h = info.get("height")
         width = int(raw_w) if raw_w else None
         height = int(raw_h) if raw_h else None
-    stream_info = probe_stream_info(path) if library else None
+    stream_info = probe_stream_info(path) if is_library else None
     return MediaFacts(file_size, duration, width, height, stream_info)
 
 
@@ -197,7 +197,7 @@ def complete_download(task: PostprocessTask) -> int | None:
     if task.cancel_event.is_set():
         raise DownloadCancelled()
 
-    facts = probe_facts(media.final_path, info, library=not spec.is_device)
+    facts = probe_facts(media.final_path, info, is_library=not spec.is_device)
     quality_warning = postprocess.check_quality(
         spec.quality_preset, int(facts.height) if facts.height else None, spec.codec
     )
