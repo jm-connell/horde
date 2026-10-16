@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PlayerOverlays from "./PlayerOverlays";
 import {
   BUFFERING_INDICATOR_DELAY_MS,
@@ -19,6 +13,7 @@ import { useSkipSegments } from "./player/useSkipSegments";
 import MiniPlayerFrame from "./player/MiniPlayerFrame";
 import { useMiniPlayer } from "./player/useMiniPlayer";
 import ControlBar from "./player/ControlBar";
+import { useCaptions } from "./player/useCaptions";
 import { useCasting } from "./player/useCasting";
 import { usePlayerMenu } from "./player/usePlayerMenu";
 import { usePlayerKeyboard } from "./player/usePlayerKeyboard";
@@ -129,8 +124,6 @@ export default function VideoPlayer({
     setDuration,
     setPlaying,
   });
-  /** PiP / iOS native fullscreen — overlay can't paint; use native cues. */
-  const [nativeTextActive, setNativeTextActive] = useState(false);
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
   const { openMenu, menuOpen, toggleMenu, closeMenu } = usePlayerMenu();
   const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
@@ -247,7 +240,6 @@ export default function VideoPlayer({
       setBuffering(true);
     }, BUFFERING_INDICATOR_DELAY_MS);
   }, []);
-  const [ccNotice, setCcNotice] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [qualityNotice, setQualityNotice] = useState<string | null>(null);
   const qualityNoticeTimer = useRef<number | null>(null);
@@ -325,7 +317,7 @@ export default function VideoPlayer({
   useEffect(() => {
     skip.reset();
     prevTimeRef.current = 0;
-    setCcNotice(null);
+    clearCcNotice();
     setMediaError(null);
     if (bufferingShowTimer.current != null) {
       window.clearTimeout(bufferingShowTimer.current);
@@ -524,130 +516,28 @@ export default function VideoPlayer({
     }
   }, [effectiveStreamType]);
 
-  const setCaptionMode = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const selected = captionLang?.toLowerCase() ?? null;
-    const player = shakaPlayerRef.current;
-    // Overlay paints captions in the normal player; native/Shaka text only
-    // when PiP or iOS native fullscreen owns the pixels.
-    const showNative = Boolean(selected) && nativeTextActive;
-
-    if (effectiveStreamType === "dash" && player) {
-      try {
-        const shakaTracks = player.getTextTracks() ?? [];
-        if (!selected) {
-          player.setTextTrackVisibility(false);
-        } else {
-          const match =
-            shakaTracks.find(
-              (t) => (t.language || "").toLowerCase() === selected
-            ) ??
-            shakaTracks.find(
-              (t) =>
-                (t.language || "").toLowerCase().split("-")[0] ===
-                selected.split("-")[0]
-            );
-          if (match) player.selectTextTrack(match);
-          player.setTextTrackVisibility(showNative);
-        }
-      } catch {
-        // Caption APIs can throw if the player is mid-destroy.
-      }
-      return;
-    }
-
-    const trackEls = Array.from(
-      v.querySelectorAll("track")
-    ) as HTMLTrackElement[];
-    trackEls.forEach((el, i) => {
-      const tt = el.track;
-      if (!tt) return;
-      if (!selected) {
-        tt.mode = "hidden";
-        return;
-      }
-      const metaLang = (tracks[i]?.lang ?? "").toLowerCase();
-      const trackLang = (
-        tt.language ||
-        tt.label ||
-        tracks[i]?.lang ||
-        ""
-      ).toLowerCase();
-      const matches =
-        metaLang === selected ||
-        metaLang.split("-")[0] === selected.split("-")[0] ||
-        trackLang === selected ||
-        trackLang.split("-")[0] === selected.split("-")[0];
-      // Keep matched tracks loaded (hidden) for PiP fallback; show only when needed.
-      tt.mode = matches ? (showNative ? "showing" : "hidden") : "hidden";
-    });
-  }, [captionLang, tracks, effectiveStreamType, nativeTextActive]);
-
-  // Load external VTTs into Shaka after DASH is ready (PiP / iOS fallback).
-  useEffect(() => {
-    if (effectiveStreamType !== "dash" || !shakaReady) return;
-    const player = shakaPlayerRef.current;
-    if (!player || tracks.length === 0) return;
-    let cancelled = false;
-    const loadText = async () => {
-      try {
-        const existing = new Set(
-          (player.getTextTracks() ?? []).map((t) =>
-            (t.language || "").toLowerCase()
-          )
-        );
-        for (const t of tracks) {
-          const lang = t.lang.toLowerCase();
-          if (existing.has(lang) || existing.has(lang.split("-")[0])) continue;
-          await player.addTextTrackAsync(
-            t.src,
-            t.lang,
-            "subtitles",
-            "text/vtt"
-          );
-          existing.add(lang);
-        }
-        if (cancelled) return;
-        setCaptionMode();
-      } catch {
-        // Best-effort; overlay fetch is the primary path.
-      }
-    };
-    void loadText();
-    return () => {
-      cancelled = true;
-    };
-  }, [effectiveStreamType, shakaReady, tracks, src, setCaptionMode]);
-
-  useLayoutEffect(() => {
-    setCaptionMode();
-  }, [setCaptionMode, tracks, src, shakaReady]);
-
-  useEffect(() => {
-    if (playing) setCaptionMode();
-  }, [playing, setCaptionMode]);
-
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onTrackLoad = () => setCaptionMode();
-    v.addEventListener("loadedmetadata", onTrackLoad);
-    const trackEls = Array.from(
-      v.querySelectorAll("track")
-    ) as HTMLTrackElement[];
-    for (const el of trackEls) {
-      el.addEventListener("load", onTrackLoad);
-      el.addEventListener("error", onTrackLoad);
-    }
-    return () => {
-      v.removeEventListener("loadedmetadata", onTrackLoad);
-      for (const el of trackEls) {
-        el.removeEventListener("load", onTrackLoad);
-        el.removeEventListener("error", onTrackLoad);
-      }
-    };
-  }, [tracks, src, setCaptionMode, effectiveStreamType, shakaReady]);
+  const {
+    nativeTextActive,
+    ccNotice,
+    clearCcNotice,
+    cycleCaptions,
+    setCaptionMode,
+    activeSubtitleSrc,
+  } = useCaptions({
+    videoRef,
+    shakaPlayerRef,
+    src,
+    tracks,
+    streamType: effectiveStreamType,
+    shakaReady,
+    playing,
+    mode,
+    userInitiatedFullscreen,
+    captionLang,
+    setCaptionLang,
+    subtitlesPending,
+    onSubtitlesRefresh,
+  });
 
   const seekTo = useCallback(
     (sec: number) => {
@@ -692,21 +582,6 @@ export default function VideoPlayer({
     if (chromecastCasting || mediaSuspended) return;
     videoRef.current?.play().catch(() => undefined);
   }, [src, chromecastCasting, mediaSuspended]);
-
-  const cycleCaptions = useCallback(() => {
-    if (tracks.length === 0) {
-      if (subtitlesPending) {
-        setCcNotice("Subtitles still loading…");
-        onSubtitlesRefresh?.();
-        window.setTimeout(() => setCcNotice(null), 3000);
-      }
-      return;
-    }
-    const order = [null, ...tracks.map((t) => t.lang)];
-    const idx = order.indexOf(captionLang);
-    setCaptionLang(order[(idx + 1) % order.length]);
-    setCcNotice(null);
-  }, [tracks, captionLang, subtitlesPending, onSubtitlesRefresh]);
 
   const togglePlay = useCallback(() => {
     if (suppressClick.current) return;
@@ -975,44 +850,6 @@ export default function VideoPlayer({
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [isMobile, enterPiP]);
 
-  // PiP and iOS native fullscreen paint via the video element — switch to native cues.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onEnterPiP = () => setNativeTextActive(true);
-    const onLeavePiP = () => setNativeTextActive(false);
-    v.addEventListener("enterpictureinpicture", onEnterPiP);
-    v.addEventListener("leavepictureinpicture", onLeavePiP);
-    return () => {
-      v.removeEventListener("enterpictureinpicture", onEnterPiP);
-      v.removeEventListener("leavepictureinpicture", onLeavePiP);
-    };
-  }, []);
-
-  // Block iOS native fullscreen hijack unless the user tapped Fullscreen.
-  // When it does enter, fall back to native cue painting.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onBeginFullscreen = () => {
-      if (mode !== "windowed" && !userInitiatedFullscreen.current) {
-        const el = v as HTMLVideoElement & {
-          webkitExitFullscreen?: () => void;
-        };
-        el.webkitExitFullscreen?.();
-        return;
-      }
-      setNativeTextActive(true);
-    };
-    const onEndFullscreen = () => setNativeTextActive(false);
-    v.addEventListener("webkitbeginfullscreen", onBeginFullscreen);
-    v.addEventListener("webkitendfullscreen", onEndFullscreen);
-    return () => {
-      v.removeEventListener("webkitbeginfullscreen", onBeginFullscreen);
-      v.removeEventListener("webkitendfullscreen", onEndFullscreen);
-    };
-  }, [mode]);
-
   const holdWindowCleanup = useRef<(() => void) | null>(null);
 
   const endHold = useCallback(() => {
@@ -1202,15 +1039,6 @@ export default function VideoPlayer({
         ? "mx-auto block max-h-[70vh] w-full bg-black object-contain"
         : "mx-auto block max-h-[85vh] w-full bg-black object-contain";
   const subtitleClass = `sub-${subtitleSize}`;
-  const activeSubtitleSrc =
-    captionLang == null
-      ? null
-      : (tracks.find(
-          (t) =>
-            t.lang === captionLang ||
-            t.lang.toLowerCase().split("-")[0] ===
-              captionLang.toLowerCase().split("-")[0]
-        )?.src ?? null);
 
   // Ultrawide (e.g. 2:1) letterboxes inside a 16:9 dock — compact the up-next
   // card so it stays within the visible video picture.
