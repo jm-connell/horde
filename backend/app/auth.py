@@ -246,7 +246,7 @@ def ensure_default_admin(runtime: AuthRuntime, session: Session) -> AuthUser | N
 
 def current_user(request: Request) -> AuthUser:
     """The signed-in user. The middleware already refused anonymous callers."""
-    user = getattr(request.state, "user", None)
+    user: AuthUser | None = getattr(request.state, "user", None)
     if user is None:
         raise CodedHTTPException(401, "Sign in to continue", "auth_required")
     return user

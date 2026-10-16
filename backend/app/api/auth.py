@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from typing import cast
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlmodel import Session
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 def _runtime(request: Request) -> AuthRuntime:
-    return request.app.state.auth
+    return cast(AuthRuntime, request.app.state.auth)
 
 
 def user_read(user: AuthUser) -> AuthUserRead:

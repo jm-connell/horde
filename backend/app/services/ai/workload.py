@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 WorkloadProfile = Literal["light", "normal", "heavy"]
+_WORKLOAD_PROFILES: tuple[WorkloadProfile, ...] = get_args(WorkloadProfile)
 VramTier = Literal["critical", "small", "medium", "large", "unknown"]
 GpuSource = Literal["override", "ollama", "local", "unknown"]
 GpuVendor = Literal["nvidia", "amd", "intel", "unknown"]
@@ -679,7 +680,7 @@ def _scale_intensity(
 
 def normalize_profile(raw: Any) -> WorkloadProfile:
     value = str(raw or "normal").strip().lower()
-    for profile in get_args(WorkloadProfile):
+    for profile in _WORKLOAD_PROFILES:
         if value == profile:
             return profile
     return "normal"

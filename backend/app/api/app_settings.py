@@ -42,7 +42,7 @@ def _sanitize_ui_css(value: Any) -> Any:
 
 def _prepare_ui_update(ui: dict[str, Any], stored: dict[str, Any]) -> dict[str, Any]:
     """Sanitize a ``ui`` patch and refuse it if the merged blob would be too large."""
-    cleaned = _sanitize_ui_css(ui)
+    cleaned: dict[str, Any] = _sanitize_ui_css(ui)
     merged = {**stored, **cleaned}
     if len(json.dumps(merged, ensure_ascii=False).encode("utf-8")) > UI_MAX_BYTES:
         raise HTTPException(

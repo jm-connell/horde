@@ -30,7 +30,7 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
@@ -133,7 +133,7 @@ class SearchCache:
                 recheck = entry is not None and now - entry.checked >= self._fp_interval
                 if entry is not None and not recheck:
                     self._rankings.move_to_end(key)
-                    return entry.value
+                    return cast("tuple[list[int], dict[int, int]]", entry.value)
             if entry is not None:
                 # Outside the lock: three aggregate queries.
                 current = fingerprint()
@@ -142,7 +142,7 @@ class SearchCache:
                         if entry.fingerprint == current:
                             entry.checked = now
                             self._rankings.move_to_end(key)
-                            return entry.value
+                            return cast("tuple[list[int], dict[int, int]]", entry.value)
                         self._drop(key)
                 continue
             flight, owner = self._join(("ranking", key))
@@ -180,7 +180,7 @@ class SearchCache:
                 hit = self._vectors.get(key)
                 if hit is not None and hit.expires > now:
                     self._vectors.move_to_end(key)
-                    return hit.value
+                    return cast("list[float] | None", hit.value)
             flight, owner = self._join(("vector", key))
             if not owner:
                 flight.done.wait()

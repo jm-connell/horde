@@ -190,6 +190,7 @@ def has_subtitle_text(video: Video) -> bool:
 
 _SUMMARY_DESC_CHARS = 1500
 SummaryLength = Literal["short", "medium", "long"]
+_SUMMARY_LENGTHS: tuple[SummaryLength, ...] = get_args(SummaryLength)
 
 # Constrained decoding so json_object mode cannot legally emit `{  }`.
 SUMMARY_JSON_SCHEMA: dict[str, Any] = {
@@ -269,7 +270,7 @@ SUMMARY_MAX_CHARS = int(_SUMMARY_LENGTH_SPEC["long"]["max_chars"])
 
 def normalize_summary_length(raw: Any) -> SummaryLength:
     value = str(raw or "").strip().lower()
-    for length in get_args(SummaryLength):
+    for length in _SUMMARY_LENGTHS:
         if value == length:
             return length
     return "short"

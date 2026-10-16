@@ -135,7 +135,7 @@ def _message(detail: Any) -> str:
     if isinstance(detail, str):
         return detail
     if isinstance(detail, Mapping) and isinstance(detail.get("message"), str):
-        return detail["message"]
+        return str(detail["message"])
     return str(detail)
 
 

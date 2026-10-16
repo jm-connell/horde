@@ -300,7 +300,8 @@ def load_sprite_meta(sprites_dir: Path, video_id: int) -> dict | None:
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        meta: dict | None = json.loads(path.read_text(encoding="utf-8"))
+        return meta
     except (OSError, json.JSONDecodeError, ValueError):
         logger.debug("sprite metadata unreadable", exc_info=True)
         return None

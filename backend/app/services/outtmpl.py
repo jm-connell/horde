@@ -86,7 +86,7 @@ def windows_filenames_ok(root: Path) -> bool:
     from yt_dlp.utils import sanitize_path
 
     text = str(root)
-    return sanitize_path(text, force=True) == text
+    return bool(sanitize_path(text, force=True) == text)
 
 
 def fit_outtmpl(

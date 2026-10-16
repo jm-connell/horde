@@ -27,7 +27,7 @@ import concurrent.futures
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import anyio
 from fastapi import HTTPException, Request
@@ -151,17 +151,17 @@ def new_thumbnail_grab_limit() -> ConcurrencyLimit:
 
 def extraction_gate(request: Request) -> ExtractionGate:
     """FastAPI dependency: the app's yt-dlp read gate."""
-    return request.app.state.extraction_gate
+    return cast(ExtractionGate, request.app.state.extraction_gate)
 
 
 def thumbnail_grab_limit(request: Request) -> ConcurrencyLimit:
     """FastAPI dependency: the app's cap on concurrent ffmpeg frame grabs."""
-    return request.app.state.thumbnail_grab_limit
+    return cast(ConcurrencyLimit, request.app.state.thumbnail_grab_limit)
 
 
 def ytdlp_slots(request: Request) -> YtdlpSlots:
     """The app's cap on request threads inside yt-dlp work."""
-    return request.app.state.ytdlp_slots
+    return cast(YtdlpSlots, request.app.state.ytdlp_slots)
 
 
 async def ytdlp_slot(request: Request) -> AsyncIterator[None]:

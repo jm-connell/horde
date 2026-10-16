@@ -198,7 +198,8 @@ def _header(scope: Scope, name: str) -> str | None:
     key = name.encode("latin-1")
     for k, v in scope["headers"]:
         if k == key:
-            return v.decode("latin-1")
+            value: str = v.decode("latin-1")
+            return value
     return None
 
 

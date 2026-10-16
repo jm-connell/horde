@@ -60,7 +60,8 @@ def _parse_json_object(raw: str) -> dict[str, Any]:
 
 def _unescape_json_string(fragment: str) -> str:
     try:
-        return json.loads(f'"{fragment}"')
+        text: str = json.loads(f'"{fragment}"')
+        return text
     except json.JSONDecodeError:
         return (
             fragment.replace("\\n", "\n")
