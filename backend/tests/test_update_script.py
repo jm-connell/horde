@@ -401,6 +401,7 @@ def test_manual_rollback_to_a_pre_alembic_version_needs_no_database_restore(harn
     assert result.returncode == 0, result.stdout + result.stderr
     assert "WITHOUT restoring the database" in result.stderr
     assert "not visible to the previous version" in result.stderr
+    assert "stay unowned" in result.stderr
     assert "--restore-db" in result.stderr  # offered as the alternative
     state = harness.read_state()
     assert "restored" not in state

@@ -543,7 +543,8 @@ perform_rollback() {
         echo "The previous version predates the migration system and runs on the migrated database."
         echo "Going back WITHOUT restoring the database. Note:"
         echo "  - watch history recorded per account since the update is not visible to the previous version;"
-        echo "  - history the previous version records is not picked up again when you update."
+        echo "  - history the previous version records is not picked up again when you update;"
+        echo "  - AI chat messages the previous version writes stay unowned (no account sees them)."
         echo "To discard everything written since the update instead:"
         echo "  bash update.sh --rollback --restore-db"
       } >&2
