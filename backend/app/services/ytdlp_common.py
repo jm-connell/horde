@@ -690,11 +690,11 @@ EXTRACT_QUEUE_TIMEOUT_SEC = float(
 )
 #: Background work (catalog indexing, metadata fills) always queues behind
 #: interactive requests, so it may wait longer before giving up.
+#: Empty counts as unset: docker-compose passes the key through even when the
+#: operator's .env leaves it out.
 EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC = float(
-    os.environ.get(
-        "HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC",
-        str(3 * EXTRACT_QUEUE_TIMEOUT_SEC),
-    )
+    os.environ.get("HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC", "").strip()
+    or 3 * EXTRACT_QUEUE_TIMEOUT_SEC
 )
 
 

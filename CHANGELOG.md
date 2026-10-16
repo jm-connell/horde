@@ -101,6 +101,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Fixed
 
+- `docker-compose.yml` now passes every runtime setting `.env.example` documents
+  into the container (the proxy and sign-in switches, `OPENROUTER_API_KEY`, the
+  yt-dlp queue limits and `HORDE_TEMP_SWEEP_HOURS` were silently ignored); a test
+  keeps the two in step.
 - Known advisories in FastAPI/Starlette/python-multipart and in the frontend
   build toolchain.
 - Documentation now states that `DATA_PATH` must be a local disk (SQLite WAL is

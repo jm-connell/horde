@@ -86,6 +86,20 @@ services:
       - HORDE_ALLOWED_HOSTS=${HORDE_ALLOWED_HOSTS:-}
       - HORDE_ALLOW_PRIVATE_URLS=${HORDE_ALLOW_PRIVATE_URLS:-}
       - HORDE_MAX_UPLOAD_GB=${HORDE_MAX_UPLOAD_GB:-}
+      # Accounts behind a reverse proxy (see docs/ops/authentication.md). All optional.
+      - HORDE_TRUST_PROXY=${HORDE_TRUST_PROXY:-}
+      - HORDE_TRUSTED_PROXY_HOPS=${HORDE_TRUSTED_PROXY_HOPS:-1}
+      - HORDE_AUTH_DISABLED=${HORDE_AUTH_DISABLED:-}
+      - HORDE_TRUSTED_USER_HEADER=${HORDE_TRUSTED_USER_HEADER:-}
+      # Optional OpenRouter key; overrides the one in Settings → AI when set.
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # yt-dlp request threads and extract-queue waits. Empty background
+      # timeout = 3x the interactive one.
+      - HORDE_YTDLP_REQUEST_THREADS=${HORDE_YTDLP_REQUEST_THREADS:-8}
+      - HORDE_EXTRACT_QUEUE_TIMEOUT_SEC=${HORDE_EXTRACT_QUEUE_TIMEOUT_SEC:-180}
+      - HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC=${HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC:-}
+      # Boot sweep of stale partial downloads older than N hours (0 = off).
+      - HORDE_TEMP_SWEEP_HOURS=${HORDE_TEMP_SWEEP_HOURS:-6}
       # Opt-in: on every start, install the newest yt-dlp into the data volume.
       - YTDLP_AUTO_UPDATE=${YTDLP_AUTO_UPDATE:-0}
       - HORDE_ALLOW_ROOT=${HORDE_ALLOW_ROOT:-0}
