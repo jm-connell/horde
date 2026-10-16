@@ -807,3 +807,34 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
         assert conn.execute(text("SELECT cover_video_id FROM playlists")).all() == [
             (None,)
         ]
+
+
+def test_a_violation_the_repair_cannot_fix_does_not_rotate_the_backups(init_db):
+    """A NO ACTION orphan survives every repair; it must not back up on each start."""
+    from app.database import init_db as run_init_db
+    from app.migrations.runner import BACKUP_KEEP
+
+    folder = init_db["data"] / "backups"
+    folder.mkdir()
+    real = [
+        folder / f"horde-pre-0005-to-0006-2020020{i}T000000Z.db"
+        for i in range(1, BACKUP_KEEP + 1)
+    ]
+    for path in real:
+        path.write_bytes(b"rev")
+    con = sqlite3.connect(init_db["db_path"])
+    try:
+        con.execute(
+            "CREATE TABLE no_action_child (id INTEGER PRIMARY KEY, video_id INTEGER "
+            "REFERENCES videos (id))"
+        )
+        con.execute("INSERT INTO no_action_child (video_id) VALUES (999)")
+        con.commit()
+    finally:
+        con.close()
+
+    for _ in range(6):
+        run_init_db()
+
+    assert all(path.exists() for path in real)
+    assert _repair_backups(init_db["data"]) == []

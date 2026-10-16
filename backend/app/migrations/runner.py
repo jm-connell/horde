@@ -212,6 +212,8 @@ def _migrate(engine: Engine) -> None:
 _LEGACY_TABLES = ("video_ai_chat",)
 # Deleting an orphan can orphan its own children when foreign keys were off.
 _REPAIR_ROUNDS = 5
+# The ON DELETE actions the repair applies to an orphan; others are left as found.
+_REPAIRED_ACTIONS = ("CASCADE", "SET NULL")
 
 
 def _quote(name: str) -> str:
@@ -261,18 +263,31 @@ def _repair_foreign_key(conn: Connection, table: str, fk_id: int) -> int:
 
 
 def _needs_repair(engine: Engine) -> tuple[list[str], bool]:
-    """The legacy tables present, and whether any row violates a foreign key."""
+    """The legacy tables present, and whether a foreign-key violation is repairable.
+
+    Only a violation whose key declares ``ON DELETE CASCADE`` or ``SET NULL`` counts:
+    the repair leaves the others alone, so a backup for them would repeat on every
+    start and push the real pre-migration backups out of the rotation.
+    """
     with engine.connect() as conn:
         existing = set(inspect(conn).get_table_names())
-        violations = conn.exec_driver_sql("PRAGMA foreign_key_check").first()
-    return [t for t in _LEGACY_TABLES if t in existing], violations is not None
+        violations = conn.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+        actions: dict[tuple[str, int], str] = {}
+        for table, fk_id in {(row[0], row[3]) for row in violations}:
+            for fk in conn.exec_driver_sql(
+                f"PRAGMA foreign_key_list({_quote(table)})"
+            ).fetchall():
+                if fk[0] == fk_id:
+                    actions[(table, fk_id)] = str(fk[6]).upper()
+    repairable = any(action in _REPAIRED_ACTIONS for action in actions.values())
+    return [t for t in _LEGACY_TABLES if t in existing], repairable
 
 
 def repair_integrity(engine: Engine) -> None:
     """Repair what code running with foreign keys off left behind (database at head).
 
-    A clean database is only read. Anything else is backed up first, like a
-    migration: the repair deletes rows and drops a table.
+    A database with nothing to repair is only read. Otherwise it is backed up first,
+    like a migration: the repair deletes rows and drops a table.
     """
     legacy, violations = _needs_repair(engine)
     if not legacy and not violations:

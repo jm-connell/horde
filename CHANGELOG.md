@@ -158,6 +158,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
   `GET /api/system/stats` drops the GPU name, VRAM and ffmpeg path; and
   `GET /api/health` drops the PO token provider address and the text, target and
   URL of the last failed YouTube extract. Administrators still get everything.
+- The start-up integrity repair only backs up the database when it can repair
+  something (an orphan under `ON DELETE CASCADE` or `SET NULL`, or the legacy
+  table). A violation it leaves alone no longer writes a backup on every start
+  and rotates the real pre-migration backups out.
 - A search sorted by last watched now reflects what you just watched; that sort
   is no longer served from the two-minute ranking cache.
 - `scripts/check.sh` and CI fail when `backend/requirements.lock` (what the
