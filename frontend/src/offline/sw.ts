@@ -19,6 +19,7 @@ import {
 } from "./db";
 import { chunkSlices, parseRange, type ByteRange } from "./ranges";
 import { matchPreferCurrent } from "./cacheLookup";
+import { isServerOnlyPath } from "./serverPaths";
 
 declare const __PRECACHE__: string[];
 declare const __SW_VERSION__: string;
@@ -58,16 +59,6 @@ const VERSIONS_URL = "/__horde-shell-versions";
 const SHELL_GENERATIONS_KEPT = 2;
 const RUNTIME_MAX_ENTRIES = 60;
 const INDEX_URL = "/index.html";
-
-/** Server-only paths that must never get the SPA shell. */
-const NON_SPA_PREFIXES = [
-  "/api/",
-  "/wiki",
-  "/docs",
-  "/redoc",
-  "/openapi.json",
-  "/assets/",
-];
 
 /*
  * Update lifecycle
@@ -164,10 +155,7 @@ sw.addEventListener("fetch", (event) => {
   if (url.origin !== sw.location.origin) return;
   const path = url.pathname;
 
-  if (
-    req.mode === "navigate" &&
-    !NON_SPA_PREFIXES.some((p) => path.startsWith(p))
-  ) {
+  if (req.mode === "navigate" && !isServerOnlyPath(path)) {
     event.respondWith(shellNavigation(req));
     return;
   }
