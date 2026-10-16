@@ -38,6 +38,8 @@ Beyond readiness and `queue_depth`, status exposes:
 | `error_count` / `recent_failures` | Terminal failures for Jobs UI |
 | `current_job` | Includes `id`, `attempts`, prior `error` when retrying |
 
+Members see a reduced view: `GET /api/ai/status`, `GET /api/health` and the `ai` block of `GET /api/settings` keep the readiness flags and feature switches the player and library read, but leave out the provider address, model names, GPU details, key tail, budget and error texts (administrators get everything). `GET /api/ai/jobs` is administrator-only.
+
 Health (`GET /api/health`) mirrors `workers.ai_error_count` and `workers.ai_blocked_reason`.
 
 ### Job admin API

@@ -184,3 +184,96 @@ def test_server_owned_ui_keys_are_shared_and_admin_only(client, member_client):
     from app.services.ytdlp_formats import default_download_video_codec
 
     assert default_download_video_codec() == "sidecar"
+
+
+# --- What a member may see of the AI setup -------------------------------------------
+
+
+def _configure_ai_provider() -> None:
+    from app.services import app_settings
+
+    app_settings.save(
+        {
+            "ai": {
+                "openrouter_enabled": True,
+                "openrouter_api_key": "sk-or-v1-secret-tail-9f3a",
+                "openrouter_model": "vendor/private-model",
+                "openrouter_weekly_budget_usd": 7.5,
+                "base_url": "http://gpu-box.internal:11434",
+                "ai_chat": False,
+                "ai_chapters_mode": "on_watch",
+                "openrouter_show_costs": True,
+            }
+        }
+    )
+
+
+def test_a_member_gets_the_ai_switches_but_not_the_provider_setup(
+    client, member_client
+):
+    _configure_ai_provider()
+
+    seen = member_client.get("/api/settings").json()["ai"]
+
+    assert seen["openrouter_enabled"] is True
+    assert seen["openrouter_api_key_set"] is True
+    assert seen["ai_chat"] is False
+    assert seen["ai_chapters_mode"] == "on_watch"
+    assert seen["openrouter_show_costs"] is True
+    assert seen["openrouter_api_key"] == ""
+    assert seen["base_url"] == ""
+    assert seen["openrouter_model"] != "vendor/private-model"
+    assert seen["openrouter_weekly_budget_usd"] is None
+    # An administrator still sees everything the Settings page edits.
+    admin = client.get("/api/settings").json()["ai"]
+    assert admin["openrouter_api_key"].endswith("9f3a")
+    assert admin["base_url"] == "http://gpu-box.internal:11434"
+    assert admin["openrouter_model"] == "vendor/private-model"
+    assert admin["openrouter_weekly_budget_usd"] == 7.5
+
+
+def test_a_members_settings_patch_does_not_echo_the_provider_setup(member_client):
+    _configure_ai_provider()
+
+    out = member_client.patch("/api/settings", json={"ui": {"theme": "oled"}}).json()
+
+    assert out["ai"]["openrouter_api_key"] == ""
+    assert out["ai"]["base_url"] == ""
+
+
+def test_ai_status_hides_provider_internals_from_a_member(client, member_client):
+    _configure_ai_provider()
+
+    seen = member_client.get("/api/ai/status")
+    full = client.get("/api/ai/status")
+
+    assert seen.status_code == full.status_code == 200
+    member, admin = seen.json(), full.json()
+    # Everything the library and player read stays.
+    assert member["openrouter_enabled"] is True
+    assert member["openrouter_api_key_set"] is True
+    assert {"ready", "enabled", "paused", "queue_depth"} <= member.keys()
+    assert member["openrouter_model"] == ""
+    assert member["base_url"] is None and member["last_error"] is None
+    assert member["recent_failures"] == []
+    assert admin["openrouter_model"] == "vendor/private-model"
+
+
+def test_health_hides_provider_internals_from_a_member(client, member_client):
+    _configure_ai_provider()
+
+    seen = member_client.get("/api/health").json()
+    full = client.get("/api/health").json()
+
+    assert seen["openrouter"]["enabled"] is True
+    assert seen["openrouter"]["model"] is None
+    assert seen["ollama"]["base_url"] is None
+    assert seen["ollama"]["last_error"] is None
+    assert full["openrouter"]["model"] == "vendor/private-model"
+
+
+def test_the_ai_job_list_is_for_administrators(client, member_client):
+    assert client.get("/api/ai/jobs").status_code == 200
+    denied = member_client.get("/api/ai/jobs")
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "admin_required"

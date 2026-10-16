@@ -156,7 +156,25 @@ class AppSettingsUpdate(BaseModel):
     ai: AiSettingsUpdate | None = None
 
 
-def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
+#: What a non-administrator gets of the AI settings: the switches the player and
+#: library read to decide which features to show. Provider addresses, key tail,
+#: models, budget and schedule are administrator business; the rest keep defaults.
+MEMBER_VISIBLE_AI_FIELDS = frozenset(
+    {
+        "enabled",
+        "paused",
+        "openrouter_enabled",
+        "openrouter_api_key_set",
+        "openrouter_show_costs",
+        "ai_summaries",
+        "ai_chapters",
+        "ai_chapters_mode",
+        "ai_chat",
+    }
+)
+
+
+def _ai_read(data: dict[str, Any], *, admin: bool = True) -> AiSettingsRead:
     raw = data.get("ai") if isinstance(data.get("ai"), dict) else {}
     merged = {**app_settings.AI_DEFAULTS, **raw}
     # Drop internal-only keys (e.g. last_daily_run) before validating.
@@ -204,13 +222,18 @@ def _ai_read(data: dict[str, Any]) -> AiSettingsRead:
     filtered["openrouter_budget_hard_limit"] = bool(
         filtered.get("openrouter_budget_hard_limit")
     )
+    if not admin:
+        filtered = {k: v for k, v in filtered.items() if k in MEMBER_VISIBLE_AI_FIELDS}
     return AiSettingsRead(**filtered)
 
 
 def _settings_read(
-    data: dict[str, Any], ui: dict[str, Any] | None = None
+    data: dict[str, Any], ui: dict[str, Any] | None = None, *, admin: bool = True
 ) -> AppSettingsRead:
-    """``ui`` is the caller's effective preferences; default: the server-wide blob."""
+    """``ui`` is the caller's effective preferences; default: the server-wide blob.
+
+    ``admin=False`` trims the AI block to ``MEMBER_VISIBLE_AI_FIELDS``.
+    """
     if ui is None:
         ui = data.get("ui") if isinstance(data.get("ui"), dict) else {}
     try:
@@ -230,7 +253,7 @@ def _settings_read(
         setup_completed=bool(data.get("setup_completed")),
         settings_degraded=app_settings.is_degraded(),
         ui=ui,
-        ai=_ai_read(data),
+        ai=_ai_read(data, admin=admin),
     )
 
 
@@ -241,7 +264,9 @@ def get_settings(
 ):
     """Server settings, with the caller's own ``ui`` preferences over the defaults."""
     return _settings_read(
-        app_settings.load(), user_settings.effective_ui(session, user.id)
+        app_settings.load(),
+        user_settings.effective_ui(session, user.id),
+        admin=user.is_admin,
     )
 
 
@@ -364,4 +389,4 @@ def update_settings(
         ui = user_settings.save_ui(session, user.id, ui_patch)
     else:
         ui = user_settings.effective_ui(session, user.id)
-    return _settings_read(data, ui)
+    return _settings_read(data, ui, admin=user.is_admin)

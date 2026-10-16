@@ -30,6 +30,8 @@ When an administrator adds or edits an account they pick its **type** in *Settin
 | `manage_playlists` | Create, edit and delete the shared playlists | on |
 | `use_ai` | AI chat, on-demand summaries, tags and chapters, and the embedding half of library and channel-catalog search (these can cost money with a paid provider) | on |
 
+Members do not see how the AI providers are set up: the server settings, AI status and health endpoints answer them with readiness and feature switches only (no provider address, API key tail, budget or model names), and the AI job list is for administrators.
+
 These are **admin only** and cannot be granted: managing users, server-wide settings, AI provider configuration and worker control, factory reset, library-wide compatibility conversion, background and font management, pausing the download queue, a forced update check and the bulk metadata refresh. (Channel auto-download is *not* in this list: it needs only `download`.)
 
 Changes apply on the person's next request; they do not need to sign in again. The API answers a refused request with `403` and `code: "permission_denied"` (or `admin_required`); the app shows it as a message and hides the controls the account cannot use.

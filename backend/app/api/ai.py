@@ -174,8 +174,38 @@ class AiProcessResult(BaseModel):
     detail: str = ""
 
 
+def _member_view(status: AiStatusRead) -> AiStatusRead:
+    """What a non-administrator sees: readiness and queue progress, not the setup.
+
+    Provider address, model names, GPU details and error texts (which can quote a
+    URL or a key fragment) stay with the administrator.
+    """
+    current = status.current_job
+    if current is not None:
+        current = current.model_copy(update={"error": None, "model": None})
+    return status.model_copy(
+        update={
+            "base_url": None,
+            "last_error": None,
+            "embed_model": "",
+            "chat_model": "",
+            "openrouter_model": "",
+            "openrouter_embed_model": "",
+            "current_job": current,
+            "recent_failures": [],
+            "workload_warning": None,
+            "lock_reason": None,
+            "gpu_name": None,
+            "vram_total_bytes": None,
+        }
+    )
+
+
 @router.get("/status", response_model=AiStatusRead)
-def ai_status(session: Session = Depends(get_session)):
+def ai_status(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     from ..services import app_settings
     from ..services.ai import workload as ai_workload
 
@@ -208,7 +238,7 @@ def ai_status(session: Session = Depends(get_session)):
             error=current.get("error"),
             run_after=current.get("run_after"),
         )
-    return AiStatusRead(
+    result = AiStatusRead(
         **status.__dict__,
         queue_breakdown=breakdown,
         current_job=current_job,
@@ -233,6 +263,7 @@ def ai_status(session: Session = Depends(get_session)):
         invent_budget_chars=runtime.invent_budget_chars,
         models_match_profile=models_match,
     )
+    return result if user.is_admin else _member_view(result)
 
 
 @router.post(
@@ -426,7 +457,9 @@ def ai_resume():
     return {"paused": False}
 
 
-@router.get("/jobs", response_model=list[AiJobRow])
+@router.get(
+    "/jobs", response_model=list[AiJobRow], dependencies=[Depends(require_admin)]
+)
 def ai_list_jobs(
     status: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),

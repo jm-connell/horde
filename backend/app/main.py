@@ -449,11 +449,29 @@ def _public_health(request: Request) -> dict[str, Any]:
     }
 
 
+def _member_health(payload: dict[str, Any]) -> dict[str, Any]:
+    """Drop provider internals (address, models, error texts) for non-administrators."""
+    trimmed = dict(payload)
+    if trimmed.get("ollama"):
+        trimmed["ollama"] = {**trimmed["ollama"], "base_url": None, "last_error": None}
+    if trimmed.get("openrouter"):
+        trimmed["openrouter"] = {
+            **trimmed["openrouter"],
+            "model": None,
+            "scope": None,
+        }
+    if trimmed.get("workers"):
+        trimmed["workers"] = {**trimmed["workers"], "ai_blocked_reason": None}
+    return trimmed
+
+
 def health(request: Request):
     """The full payload for a signed-in user; the bare minimum for anyone else."""
-    if getattr(request.state, "user", None) is None:
+    user = getattr(request.state, "user", None)
+    if user is None:
         return _public_health(request)
-    return build_health_payload(request.app)
+    payload = build_health_payload(request.app)
+    return payload if user.is_admin else _member_health(payload)
 
 
 def metrics(request: Request) -> PlainTextResponse:
