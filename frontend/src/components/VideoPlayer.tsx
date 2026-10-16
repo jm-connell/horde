@@ -7,6 +7,9 @@ import { useSkipSegments } from "./player/useSkipSegments";
 import MiniPlayerFrame from "./player/MiniPlayerFrame";
 import { useMiniPlayer } from "./player/useMiniPlayer";
 import ControlBar from "./player/ControlBar";
+import { useFrameInset } from "./player/useFrameInset";
+import { playerLayout } from "./player/playerLayout";
+import { usePlayerViewMode } from "./player/usePlayerViewMode";
 import { usePlayerSource } from "./player/usePlayerSource";
 import { useStreamQuality } from "./player/useStreamQuality";
 import { useControlsVisibility } from "./player/useControlsVisibility";
@@ -24,7 +27,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useShakaDashLoad } from "../hooks/useShakaDash";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
-import type { ViewMode, VideoPlayerProps } from "./videoPlayerTypes";
+import type { VideoPlayerProps } from "./videoPlayerTypes";
 import UpNextOverlay from "./player/UpNextOverlay";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
@@ -120,39 +123,12 @@ export default function VideoPlayer({
   usePlayerBodyFlags(playing, isMini, mode);
   const [videoAspect, setVideoAspect] = useState<number | null>(null);
 
-  // Theater mode stretches the player edge-to-edge, but object-contain
-  // pillarboxes the picture when its aspect is narrower than the viewport;
-  // report that inset so the nav bar can line up with the visible frame.
-  useEffect(() => {
-    if (!onFrameInsetChange) return;
-    if (isMini || isNativeFullscreen || mode === "windowed") {
-      onFrameInsetChange(0);
-      return;
-    }
-    const el = videoRef.current;
-    if (!el) return;
-    const compute = () => {
-      const rect = el.getBoundingClientRect();
-      if (!videoAspect || rect.width <= 0 || rect.height <= 0) {
-        onFrameInsetChange(0);
-        return;
-      }
-      const boxAspect = rect.width / rect.height;
-      const inset =
-        boxAspect > videoAspect
-          ? Math.max(0, (rect.width - rect.height * videoAspect) / 2)
-          : 0;
-      onFrameInsetChange(inset);
-    };
-    compute();
-    const ro = new ResizeObserver(compute);
-    ro.observe(el);
-    window.addEventListener("resize", compute);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", compute);
-    };
-  }, [onFrameInsetChange, isMini, isNativeFullscreen, mode, videoAspect]);
+  useFrameInset(onFrameInsetChange, videoRef, {
+    isMini,
+    isNativeFullscreen,
+    mode,
+    videoAspect,
+  });
   const suppressClick = useRef(false);
   const {
     miniControlsVisible,
@@ -360,21 +336,10 @@ export default function VideoPlayer({
     else v.pause();
   }, [chromecastCasting, toggleChromecastPlay]);
 
-  const modeBeforeWindowed = useRef<ViewMode>("standard");
-
-  const toggleTheater = useCallback(() => {
-    if (mode === "windowed") return;
-    onModeChange(mode === "theater" ? "standard" : "theater");
-  }, [mode, onModeChange]);
-
-  const toggleWindowed = useCallback(() => {
-    if (mode === "windowed") {
-      onModeChange(modeBeforeWindowed.current);
-    } else {
-      modeBeforeWindowed.current = mode;
-      onModeChange("windowed");
-    }
-  }, [mode, onModeChange]);
+  const { toggleTheater, toggleWindowed, exitWindowed } = usePlayerViewMode(
+    mode,
+    onModeChange
+  );
 
   const stepRate = useCallback((dir: 1 | -1) => {
     setRate((r) => {
@@ -411,10 +376,6 @@ export default function VideoPlayer({
     },
     [onVolumeChange]
   );
-
-  const exitWindowed = useCallback(() => {
-    onModeChange(modeBeforeWindowed.current);
-  }, [onModeChange]);
 
   usePlayerKeyboard({
     videoRef,
@@ -459,34 +420,16 @@ export default function VideoPlayer({
     togglePlay,
   });
 
-  const wrapperClass = isMini
-    ? `player-mini relative w-full overflow-hidden bg-black leading-none${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
-    : isNativeFullscreen
-      ? "relative flex h-full w-full items-center justify-center overflow-hidden bg-black leading-none"
-      : mode === "windowed"
-        ? "relative flex h-full w-full items-center justify-center overflow-hidden bg-black leading-none"
-        : "relative w-full overflow-hidden bg-black leading-none";
-
-  const innerClass =
-    !isMini && (mode === "windowed" || isNativeFullscreen)
-      ? "relative h-full w-full leading-none"
-      : "relative w-full leading-none";
-
-  const miniStyle =
-    isMini && videoAspect
-      ? { aspectRatio: `${videoAspect}` as const }
-      : isMini
-        ? { aspectRatio: "16 / 9" as const }
-        : undefined;
-
-  const videoClass = isMini
-    ? "block h-full w-full bg-black object-contain"
-    : isNativeFullscreen || mode === "windowed"
-      ? "block h-full w-full object-contain"
-      : isMobile
-        ? "mx-auto block max-h-[70vh] w-full bg-black object-contain"
-        : "mx-auto block max-h-[85vh] w-full bg-black object-contain";
-  const subtitleClass = `sub-${subtitleSize}`;
+  const { wrapperClass, innerClass, miniStyle, videoClass, subtitleClass } =
+    playerLayout({
+      isMini,
+      isMobile,
+      isNativeFullscreen,
+      mode,
+      videoAspect,
+      canMoveMini: Boolean(onMiniMove),
+      subtitleSize,
+    });
 
   // Ultrawide (e.g. 2:1) letterboxes inside a 16:9 dock — compact the up-next
   // card so it stays within the visible video picture.
