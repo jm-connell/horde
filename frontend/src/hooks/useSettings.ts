@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError } from "../api";
+import { api, ApiError, withCsrf } from "../api";
 import { connectivity } from "../offline/connectivity";
 import { getJson, removeItem, setJson } from "../storage";
 import { mutedTextFor } from "../utils/contrast";
@@ -1182,6 +1182,7 @@ export function adoptSettingsOwner(userId: number, isAdmin: boolean): void {
       clearTimeout(syncTimer);
       syncTimer = null;
     }
+    pendingSync = null;
     clearLocalSettings();
     hydrationGeneration += 1;
     serverHydrated = false;
@@ -1222,6 +1223,7 @@ export async function flushSettingsSync(): Promise<void> {
     clearTimeout(syncTimer);
     syncTimer = null;
   }
+  pendingSync = null;
   const ui = settingsToServerUi(loadSettings());
   try {
     await api.updateAppSettings({ ui });
@@ -1308,13 +1310,51 @@ function ensureServerHydration(): Promise<void> {
   return serverHydratePromise;
 }
 
+/** The settings the pending debounced sync will send. */
+let pendingSync: Settings | null = null;
+
 function scheduleServerSync(settings: Settings): void {
   if (syncTimer) clearTimeout(syncTimer);
+  pendingSync = settings;
   syncTimer = setTimeout(() => {
     syncTimer = null;
+    pendingSync = null;
     const ui = settingsToServerUi(settings);
     api.updateAppSettings({ ui }).catch(() => undefined);
   }, 300);
+}
+
+/**
+ * Send a pending sync now, as the page is going away (reload, close, navigating
+ * off, tab hidden). The 300 ms debounce timer dies with the page, so a change
+ * made just before would otherwise be lost. `keepalive` lets the request
+ * outlive the page.
+ */
+function flushPendingSync(): void {
+  if (!pendingSync) return;
+  const ui = settingsToServerUi(pendingSync);
+  pendingSync = null;
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+  fetch(
+    "/api/settings",
+    withCsrf({
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ui }),
+      credentials: "same-origin",
+      keepalive: true,
+    })
+  ).catch(() => undefined);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushPendingSync);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPendingSync();
+  });
 }
 
 export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {

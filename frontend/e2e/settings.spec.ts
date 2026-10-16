@@ -180,3 +180,22 @@ test("AI panes and system status render without calling providers", async ({
   await expect(dialog).toHaveCount(0);
   await expect(page).toHaveURL(/tab=system/);
 });
+
+test("a change made just before a reload is still saved", async ({ page }) => {
+  await page.goto("/settings?tab=library");
+  const sort = page
+    .getByRole("heading", { name: "Default video sort" })
+    .locator("xpath=..");
+  await expect(sort).toBeVisible();
+  await sort.getByRole("button", { name: "Title", exact: true }).click();
+  // No wait for the debounced save: leaving the page must send it.
+  await page.reload();
+  await page.evaluate(() => localStorage.removeItem("horde.library-sort"));
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Sort library" })
+  ).toContainText("Title");
+  // The server has it too, not just this browser.
+  const ui = (await (await page.request.get("/api/settings")).json()).ui;
+  expect(ui.default_library_sort).toBe("title");
+});
