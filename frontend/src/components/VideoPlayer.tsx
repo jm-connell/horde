@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import PlayerOverlays from "./PlayerOverlays";
 import {
   BUFFERING_INDICATOR_DELAY_MS,
-  CONTROLS_HIDE_DELAY_MS,
-  HOLD_DELAY_MS,
   SPEED_STEPS,
   snapRateToStep,
 } from "./player/constants";
@@ -13,6 +11,8 @@ import { useSkipSegments } from "./player/useSkipSegments";
 import MiniPlayerFrame from "./player/MiniPlayerFrame";
 import { useMiniPlayer } from "./player/useMiniPlayer";
 import ControlBar from "./player/ControlBar";
+import { useControlsVisibility } from "./player/useControlsVisibility";
+import { useHoldToSpeed } from "./player/useHoldToSpeed";
 import { useFullscreen } from "./player/useFullscreen";
 import { usePictureInPicture } from "./player/usePictureInPicture";
 import { usePlayerBodyFlags } from "./player/usePlayerBodyFlags";
@@ -95,9 +95,6 @@ export default function VideoPlayer({
   const shakaPlayerRef = useRef<ShakaPlayer | null>(null);
   const capabilityMaxHeightRef = useRef<number>(2160);
   const playerRootRef = useRef<HTMLDivElement>(null);
-  const hideControlsTimer = useRef<number | null>(null);
-  const controlsInteracting = useRef(false);
-  const [controlsVisible, setControlsVisible] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -186,12 +183,7 @@ export default function VideoPlayer({
       window.removeEventListener("resize", compute);
     };
   }, [onFrameInsetChange, isMini, isNativeFullscreen, mode, videoAspect]);
-  const heldRate = useRef<number | null>(null);
-  const holdTimer = useRef<number | null>(null);
-  const holdActive = useRef(false);
-  const wasPlayingBeforeHold = useRef(false);
   const suppressClick = useRef(false);
-  const pointerDownOnVideo = useRef(false);
   const {
     miniControlsVisible,
     revealMiniControls,
@@ -628,51 +620,19 @@ export default function VideoPlayer({
     });
   }, []);
 
-  const clearHideControlsTimer = useCallback(() => {
-    if (hideControlsTimer.current !== null) {
-      clearTimeout(hideControlsTimer.current);
-      hideControlsTimer.current = null;
-    }
-  }, []);
-
-  const scheduleHideControls = useCallback(() => {
-    clearHideControlsTimer();
-    if (!playing || menuOpen || controlsInteracting.current) return;
-    hideControlsTimer.current = window.setTimeout(() => {
-      setControlsVisible(false);
-      hideControlsTimer.current = null;
-    }, CONTROLS_HIDE_DELAY_MS);
-  }, [playing, menuOpen, clearHideControlsTimer]);
-
-  const revealControls = useCallback(() => {
-    setControlsVisible(true);
-    scheduleHideControls();
-  }, [scheduleHideControls]);
-
-  const onPlayerMouseMove = useCallback(() => {
-    if (isMini) {
-      revealMiniControls();
-      return;
-    }
-    revealControls();
-  }, [isMini, revealControls, revealMiniControls]);
-
-  const onPlayerMouseLeave = useCallback(() => {
-    if (isMini || !playing || menuOpen || controlsInteracting.current) return;
-    clearHideControlsTimer();
-    setControlsVisible(false);
-  }, [isMini, playing, menuOpen, clearHideControlsTimer]);
-
-  const onControlsInteractionStart = useCallback(() => {
-    controlsInteracting.current = true;
-    clearHideControlsTimer();
-    setControlsVisible(true);
-  }, [clearHideControlsTimer]);
-
-  const onControlsInteractionEnd = useCallback(() => {
-    controlsInteracting.current = false;
-    scheduleHideControls();
-  }, [scheduleHideControls]);
+  const {
+    controlsVisible,
+    revealControls,
+    onPlayerMouseMove,
+    onPlayerMouseLeave,
+    onControlsInteractionStart,
+    onControlsInteractionEnd,
+  } = useControlsVisibility({
+    isMini,
+    playing,
+    menuOpen,
+    revealMiniControls,
+  });
 
   const applyVolume = useCallback(
     (value: number, persist: boolean) => {
@@ -717,166 +677,22 @@ export default function VideoPlayer({
     setMuted(v.muted);
   };
 
-  const holdWindowCleanup = useRef<(() => void) | null>(null);
-
-  const endHold = useCallback(() => {
-    if (holdTimer.current !== null) {
-      clearTimeout(holdTimer.current);
-      holdTimer.current = null;
-    }
-    holdWindowCleanup.current?.();
-
-    if (!holdActive.current && heldRate.current === null) return;
-
-    const v = videoRef.current;
-    const hadHold = holdActive.current;
-    const shouldResume = wasPlayingBeforeHold.current;
-
-    if (heldRate.current !== null) {
-      setRate(heldRate.current);
-      heldRate.current = null;
-    }
-    holdActive.current = false;
-    wasPlayingBeforeHold.current = false;
-
-    // Only suppress the click that follows a real hold-to-speedup engagement.
-    if (hadHold) {
-      suppressClick.current = true;
-      window.setTimeout(() => {
-        suppressClick.current = false;
-      }, 300);
-      if (shouldResume && v?.paused) {
-        v.play().catch(() => undefined);
-      }
-    }
-  }, []);
-
-  const activateHold = useCallback(() => {
-    const v = videoRef.current;
-    if (!v || heldRate.current !== null) return;
-    holdActive.current = true;
-    wasPlayingBeforeHold.current = !v.paused;
-    heldRate.current = rate;
-    setRate(settings.holdPlaybackRate);
-    if (v.paused) v.play().catch(() => undefined);
-
-    // End hold if pointer is released outside the video element.
-    holdWindowCleanup.current?.();
-    const onWinPointerUp = () => endHold();
-    const onWinBlur = () => endHold();
-    window.addEventListener("pointerup", onWinPointerUp);
-    window.addEventListener("pointercancel", onWinPointerUp);
-    window.addEventListener("blur", onWinBlur);
-    holdWindowCleanup.current = () => {
-      window.removeEventListener("pointerup", onWinPointerUp);
-      window.removeEventListener("pointercancel", onWinPointerUp);
-      window.removeEventListener("blur", onWinBlur);
-      holdWindowCleanup.current = null;
-    };
-  }, [rate, endHold, settings.holdPlaybackRate]);
-
-  useEffect(() => {
-    return () => {
-      holdWindowCleanup.current?.();
-      if (holdTimer.current !== null) {
-        clearTimeout(holdTimer.current);
-        holdTimer.current = null;
-      }
-    };
-  }, []);
-
-  const onVideoPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLVideoElement>) => {
-      if (isMini) return;
-      pointerDownOnVideo.current = true;
-      if (e.pointerType === "touch") {
-        try {
-          e.currentTarget.setPointerCapture(e.pointerId);
-        } catch {
-          // ignore
-        }
-      }
-      if (holdTimer.current !== null || heldRate.current !== null) return;
-      holdTimer.current = window.setTimeout(() => {
-        holdTimer.current = null;
-        activateHold();
-      }, HOLD_DELAY_MS);
-    },
-    [isMini, activateHold]
-  );
-
-  const onVideoPointerUp = useCallback(
-    (e: React.PointerEvent<HTMLVideoElement>) => {
-      if (isMini) return;
-      const wasHold = holdActive.current;
-      const wasShortTap =
-        pointerDownOnVideo.current && !wasHold && holdTimer.current !== null;
-
-      endHold();
-
-      if (wasShortTap && isMobile) {
-        e.preventDefault();
-        suppressClick.current = true;
-        window.setTimeout(() => {
-          suppressClick.current = false;
-        }, 300);
-        togglePlay();
-      }
-
-      pointerDownOnVideo.current = false;
-      if (e.pointerType === "touch") {
-        try {
-          e.currentTarget.releasePointerCapture(e.pointerId);
-        } catch {
-          // ignore
-        }
-      }
-    },
-    [isMini, endHold, isMobile, togglePlay]
-  );
-
-  const onVideoPointerCancel = useCallback(() => {
-    if (isMini) return;
-    endHold();
-    pointerDownOnVideo.current = false;
-  }, [isMini, endHold]);
-
-  const onVideoClick = useCallback(
-    (e: React.MouseEvent<HTMLVideoElement>) => {
-      if (suppressClick.current || holdActive.current) {
-        e.preventDefault();
-        return;
-      }
-      if (isMobile) {
-        e.preventDefault();
-        return;
-      }
-      togglePlay();
-    },
-    [isMobile, togglePlay]
-  );
-
-  useEffect(() => {
-    if (isMini) return;
-    if (!playing) {
-      clearHideControlsTimer();
-      setControlsVisible(true);
-    } else {
-      scheduleHideControls();
-    }
-  }, [isMini, playing, clearHideControlsTimer, scheduleHideControls]);
-
-  useEffect(() => {
-    if (isMini) return;
-    if (menuOpen) {
-      clearHideControlsTimer();
-      setControlsVisible(true);
-    } else if (playing) {
-      scheduleHideControls();
-    }
-  }, [isMini, menuOpen, playing, clearHideControlsTimer, scheduleHideControls]);
-
-  useEffect(() => () => clearHideControlsTimer(), [clearHideControlsTimer]);
+  const {
+    endHold,
+    onVideoPointerDown,
+    onVideoPointerUp,
+    onVideoPointerCancel,
+    onVideoClick,
+  } = useHoldToSpeed({
+    videoRef,
+    isMini,
+    isMobile,
+    rate,
+    setRate,
+    holdPlaybackRate: settings.holdPlaybackRate,
+    suppressClick,
+    togglePlay,
+  });
 
   const wrapperClass = isMini
     ? `player-mini relative w-full overflow-hidden bg-black leading-none${onMiniMove ? " cursor-grab active:cursor-grabbing" : ""}`
