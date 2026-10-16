@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import { api, streamUrl } from "../api";
-import { usePlayback } from "../context/PlaybackContext";
+import { usePlaybackSession } from "../context/PlaybackContext";
 import { useCardPreview } from "../hooks/useCardPreview";
 import { maxPresetLabel } from "../presets";
 import type { ChannelFeedEntry } from "../types";
@@ -261,7 +261,7 @@ export default function ChannelFeedCard({
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const { current } = usePlayback();
+  const { current } = usePlaybackSession();
   const libraryVideoId = videoId ?? entry.video_id ?? null;
   const previewSrc =
     inLibrary && libraryVideoId != null ? streamUrl(libraryVideoId) : null;

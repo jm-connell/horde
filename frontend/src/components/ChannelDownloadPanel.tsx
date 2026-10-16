@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePlayback } from "../context/PlaybackContext";
+import {
+  usePlaybackLayout,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 import {
   formatApproxSize,
   mergePinnedPreset,
@@ -45,8 +48,8 @@ export default function ChannelDownloadPanel({
   queueDockedBottom?: boolean;
   onDismiss?: () => void;
 }) {
-  const { queue, miniPlayerActive, miniPlayerRect, miniPlayerCornerAnchor } =
-    usePlayback();
+  const { queue, miniPlayerActive } = usePlaybackSession();
+  const { miniPlayerRect, miniPlayerCornerAnchor } = usePlaybackLayout();
   const queueVisible = queue.length > 0;
   const liftAboveQueue = queueVisible && queueDockedBottom && !miniPlayerActive;
   const [viewport, setViewport] = useState(() => ({

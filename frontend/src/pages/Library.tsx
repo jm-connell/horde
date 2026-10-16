@@ -46,7 +46,10 @@ import ThemedSelect from "../components/ThemedSelect";
 import VideoCard from "../components/VideoCard";
 import YoutubeSearchChip from "../components/YoutubeSearchChip";
 import { useDownloads } from "../context/DownloadContext";
-import { usePlayback } from "../context/PlaybackContext";
+import {
+  usePlaybackLayout,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 import { useSearch } from "../context/SearchContext";
 import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss";
 import {
@@ -269,7 +272,8 @@ function OnlineLibrary() {
   const queryClient = useQueryClient();
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
   const { onJobCompleted, submitDownload } = useDownloads();
-  const { queue, miniPlayerActive, miniPlayerRect } = usePlayback();
+  const { queue, miniPlayerActive } = usePlaybackSession();
+  const { miniPlayerRect } = usePlaybackLayout();
   const [narrowViewport, setNarrowViewport] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 1100
   );

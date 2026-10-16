@@ -16,7 +16,7 @@ import {
   beginReorderDrag,
 } from "./playlistChrome";
 import { useConfirm } from "../context/ConfirmContext";
-import { usePlayback } from "../context/PlaybackContext";
+import { usePlaybackActions } from "../context/PlaybackContext";
 import { queryKeys } from "../queries/keys";
 import {
   mergePlaylist,
@@ -54,7 +54,7 @@ export default function PlaylistRow({
   const navigate = useNavigate();
   const confirm = useConfirm();
   const { showError } = useToast();
-  const { playVideo, addToQueue } = usePlayback();
+  const { playVideo, addToQueue } = usePlaybackActions();
   const headerRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);

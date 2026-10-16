@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { thumbnailUrl } from "../api";
-import { usePlayback } from "../context/PlaybackContext";
+import {
+  usePlaybackActions,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 
 interface Props {
   className?: string;
@@ -17,8 +20,9 @@ export default function PlaybackQueue({
   listMaxHeightClass = "",
 }: Props) {
   const navigate = useNavigate();
-  const { queue, playVideo, removeFromQueue, reorderQueue, clearQueue } =
-    usePlayback();
+  const { queue } = usePlaybackSession();
+  const { playVideo, removeFromQueue, reorderQueue, clearQueue } =
+    usePlaybackActions();
   const dragIndex = useRef<number | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const prevLen = useRef(queue.length);
