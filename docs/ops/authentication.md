@@ -30,7 +30,14 @@ When an administrator adds or edits an account they pick its **type** in *Settin
 | `manage_playlists` | Create, edit and delete the shared playlists | on |
 | `use_ai` | AI chat, on-demand summaries, tags and chapters, and the embedding half of library and channel-catalog search (these can cost money with a paid provider) | on |
 
-Members do not see how the AI providers are set up: the server settings, AI status and health endpoints answer them with readiness and feature switches only (no provider type or address, schedule, GPU details, API key tail, budget or model names), and the AI job list is for administrators.
+Members do not see how the server is set up: the server settings, AI status and health endpoints answer them with readiness and feature switches only (no provider type or address, schedule, GPU details, API key tail, budget or model names), and the AI job list is for administrators. The same goes for the rest of the API: a member gets coarse status (counts, `ready`/`error` states, whether a GPU can encode) but no internal address, file path, model name, GPU name or raw error text. Where a member's screen reports a failure (a video whose AI indexing or H.264 copy failed) it gets a generic message; the administrator sees the server's own text. In detail, for a member:
+
+- video reads give `embed_error` as "AI indexing failed" and `compat.error` as a generic sentence, and leave out `ai_summary_model` and `ai_summary_cost`;
+- `GET /api/system/activity` lists tasks without `engine`, `detail` or `error`;
+- `GET /api/system/stats` leaves out the GPU name and memory and the ffmpeg path;
+- `GET /api/health` leaves out the PO token provider address and error, and the message, target and URL of the last failed YouTube extract.
+
+Download job errors are not trimmed: they explain why a download the member can see failed (for example a private or members-only video).
 
 These are **admin only** and cannot be granted: managing users, server-wide settings, AI provider configuration and worker control, factory reset, library-wide compatibility conversion, background and font management, pausing the download queue, a forced update check and the bulk metadata refresh. (Channel auto-download is *not* in this list: it needs only `download`.)
 

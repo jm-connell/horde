@@ -566,7 +566,7 @@ def ai_recommendations(
                     "title": "",
                     "kind": "category",
                     "seed_video_id": None,
-                    "videos": _to_read_many(result.videos, session, user_id=user.id),
+                    "videos": _to_read_many(result.videos, session, viewer=user),
                 }
             )
         return {
@@ -585,7 +585,7 @@ def ai_recommendations(
                 "title": "",
                 "kind": "for_you",
                 "seed_video_id": None,
-                "videos": _to_read_many(page.videos, session, user_id=user.id),
+                "videos": _to_read_many(page.videos, session, viewer=user),
             }
         ]
         if page.videos

@@ -32,7 +32,9 @@ from ..schemas import (
 )
 from ..services import chapters as chapters_svc
 from ..services import library, user_state
+from ..services.auth.accounts import AuthUser
 from ..services.metadata import sprites_exist
+from . import member_view
 
 
 def safe_filename(name: str) -> str:
@@ -118,30 +120,26 @@ def to_read_many(
     videos: Iterable[Video],
     session: Session,
     *,
-    user_id: int | None,
+    viewer: AuthUser,
     states: Mapping[int, UserVideoState] | None = None,
     **kwargs,
 ) -> list[VideoRead]:
-    """Serialize a list, reading the user's watch state for all of it in one query."""
+    """Serialize a list, reading the viewer's watch state for all of it in one query."""
     rows = list(videos)
     if not kwargs.get("compact"):
         # Everything a full payload reads per video, fetched once for the page.
         kwargs.setdefault("metas", _load_metas(session, rows))
         kwargs.setdefault("sprite_ids", sprite_ids_on_disk())
     if states is None:
-        states = (
-            user_state.get_states(session, user_id, (v.id for v in rows if v.id))
-            if user_id is not None
-            else {}
-        )
-    return [to_read(v, session, user_id=user_id, states=states, **kwargs) for v in rows]
+        states = user_state.get_states(session, viewer.id, (v.id for v in rows if v.id))
+    return [to_read(v, session, viewer=viewer, states=states, **kwargs) for v in rows]
 
 
 def to_read(
     video: Video,
     session: Session | None = None,
     *,
-    user_id: int | None,
+    viewer: AuthUser,
     states: Mapping[int, UserVideoState] | None = None,
     include_processing: bool = False,
     match_reason: dict | None = None,
@@ -149,12 +147,39 @@ def to_read(
     metas: Mapping[int, VideoAiMeta] | None = None,
     sprite_ids: AbstractSet[int] | None = None,
 ) -> VideoRead:
-    """Serialize ``video`` for ``user_id`` (their history; the rest is shared).
+    """Serialize ``video`` for ``viewer`` (their history; the rest is shared).
 
-    ``user_id`` has no default on purpose: forgetting it would silently show
-    nobody's history. Pass ``states``, ``metas`` and ``sprite_ids`` (see
+    ``viewer`` has no default on purpose: forgetting it would silently show
+    nobody's history, or show a member what only an administrator may see
+    (``member_view.video``). Pass ``states``, ``metas`` and ``sprite_ids`` (see
     ``to_read_many``) when serializing a list, so no row costs its own query or stat.
     """
+    read = _to_read(
+        video,
+        session,
+        user_id=viewer.id,
+        states=states,
+        include_processing=include_processing,
+        match_reason=match_reason,
+        compact=compact,
+        metas=metas,
+        sprite_ids=sprite_ids,
+    )
+    return read if viewer.is_admin else member_view.video(read)
+
+
+def _to_read(
+    video: Video,
+    session: Session | None,
+    *,
+    user_id: int,
+    states: Mapping[int, UserVideoState] | None,
+    include_processing: bool,
+    match_reason: dict | None,
+    compact: bool,
+    metas: Mapping[int, VideoAiMeta] | None,
+    sprite_ids: AbstractSet[int] | None,
+) -> VideoRead:
     reason = (
         SearchMatchReason.model_validate(match_reason)
         if match_reason is not None

@@ -38,7 +38,7 @@ Beyond readiness and `queue_depth`, status exposes:
 | `error_count` / `recent_failures` | Terminal failures for Jobs UI |
 | `current_job` | Includes `id`, `attempts`, prior `error` when retrying |
 
-Members see a reduced view: `GET /api/ai/status`, `GET /api/health` and the `ai` block of `GET /api/settings` keep the readiness flags and feature switches the player and library read, but leave out the provider type and address, schedule, workload profile, model names, GPU details, key tail, budget and error texts; `GET /api/health` has no `openrouter` block for them (administrators get everything). `GET /api/ai/jobs` is administrator-only.
+Members see a reduced view: `GET /api/ai/status`, `GET /api/health` and the `ai` block of `GET /api/settings` keep the readiness flags and feature switches the player and library read, but leave out the provider type and address, schedule, workload profile, model names, GPU details, key tail, budget and error texts; `GET /api/health` has no `openrouter` block for them (administrators get everything). Video reads give them "AI indexing failed" instead of the embedding error and no summary model or cost, and `GET /api/system/activity` leaves out the engine, detail (model names) and error of AI jobs and model pulls ([what members see](../ops/authentication.md#account-types-and-permissions)). `GET /api/ai/jobs` is administrator-only.
 
 A chat stream also ends when its caller loses access (session revoked, account disabled or deleted): the server stops reading from the provider, which drops the upstream request. The cost of that cut-off turn is not booked in the ledger, because the provider only reports it in a final usage chunk (a client that disconnects mid-answer loses it the same way).
 

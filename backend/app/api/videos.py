@@ -220,7 +220,7 @@ def list_videos(
                 _to_read(
                     v,
                     session,
-                    user_id=user.id,
+                    viewer=user,
                     states=states,
                     compact=True,
                     match_reason=explain_library_video(
@@ -257,7 +257,7 @@ def list_videos(
     return build_page(
         videos,
         serialize=lambda rows, states: _to_read_many(
-            rows, session, user_id=user.id, states=states, compact=True
+            rows, session, viewer=user, states=states, compact=True
         ),
         total=total,
         **paging,
@@ -399,7 +399,7 @@ def get_video(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, user_id=user.id, include_processing=True)
+    return _to_read(video, session, viewer=user, include_processing=True)
 
 
 @router.get("/videos/{video_id}/related", response_model=list[VideoRead])
@@ -414,7 +414,7 @@ def related_videos(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     rows = library.related_videos(session, video_id, limit=limit, offset=offset)
-    return _to_read_many(rows, session, user_id=user.id, compact=True)
+    return _to_read_many(rows, session, viewer=user, compact=True)
 
 
 @router.patch(
@@ -528,7 +528,7 @@ def update_video(
                 exc_info=True,
             )
 
-    return _to_read(video, session, user_id=user.id)
+    return _to_read(video, session, viewer=user)
 
 
 @router.patch("/videos/{video_id}/progress", status_code=204)
@@ -618,7 +618,7 @@ def redownload_video(
     session.refresh(job)
 
     download_jobs.enqueue_download(require_id(job))
-    return _to_read(video, session, user_id=user.id)
+    return _to_read(video, session, viewer=user)
 
 
 def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
@@ -693,7 +693,7 @@ def refresh_metadata(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, user_id=user.id)
+    return _to_read(video, session, viewer=user)
 
 
 @router.post(
@@ -720,7 +720,7 @@ def refresh_video_tags(
     except Exception as exc:
         logger.warning("tag refresh failed video_id=%s", video_id, exc_info=True)
         raise HTTPException(status_code=400, detail=format_provider_error(exc)) from exc
-    return _to_read(video, session, user_id=user.id)
+    return _to_read(video, session, viewer=user)
 
 
 @router.post(
@@ -753,7 +753,7 @@ def summarize_video(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, user_id=user.id, include_processing=True)
+    return _to_read(video, session, viewer=user, include_processing=True)
 
 
 @router.post(
@@ -786,7 +786,7 @@ def generate_video_chapters(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, user_id=user.id, include_processing=True)
+    return _to_read(video, session, viewer=user, include_processing=True)
 
 
 class VideoAiChatRequest(BaseModel):
@@ -886,7 +886,7 @@ def upload_thumbnail(
     session.add(video)
     session.commit()
     session.refresh(video)
-    return _to_read(video, session, user_id=user.id)
+    return _to_read(video, session, viewer=user)
 
 
 @router.post(
@@ -988,7 +988,7 @@ def select_thumbnail_candidate(
     session.add(video)
     session.commit()
     session.refresh(video)
-    return _to_read(video, session, user_id=user.id)
+    return _to_read(video, session, viewer=user)
 
 
 @router.get("/thumbnails/{video_id}", response_class=RAW, responses=IMAGE_JPEG)

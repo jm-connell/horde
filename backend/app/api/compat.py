@@ -8,15 +8,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from ..auth import require_admin, require_permission
+from ..auth import current_user, require_admin, require_permission
 from ..context import get_session
 from ..models import Video, require_id
 from ..response_schemas import CompatCancelResult, CompatSummaryRead
 from ..schemas import CompatState
 from ..services import compat_rendition
+from ..services.auth.accounts import AuthUser
 from ..services.media_info import needs_compat
 from ..services.paths import resolve_compat_path
 from ..services.ytdlp_formats import compat_copy_cap
+from . import member_view
 from .video_serialize import resolve_media
 
 router = APIRouter(prefix="/api", tags=["compat"])
@@ -41,6 +43,11 @@ class CompatCancelRequest(BaseModel):
     kind: Literal["compat", "convert"] | None = None
 
 
+def _state_for(user: AuthUser, state: dict) -> CompatState:
+    read = CompatState(**state)
+    return read if user.is_admin else member_view.compat(read)
+
+
 def _video_or_404(session: Session, video_id: int) -> Video:
     video = session.get(Video, video_id)
     if video is None:
@@ -49,9 +56,13 @@ def _video_or_404(session: Session, video_id: int) -> Video:
 
 
 @router.get("/videos/{video_id}/compat", response_model=CompatState)
-def get_compat(video_id: int, session: Session = Depends(get_session)):
+def get_compat(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = _video_or_404(session, video_id)
-    return CompatState(**compat_rendition.compat_status(video))
+    return _state_for(user, compat_rendition.compat_status(video))
 
 
 @router.post("/videos/{video_id}/compat", response_model=CompatState)
@@ -59,12 +70,13 @@ def request_compat(
     video_id: int,
     payload: CompatRequest | None = None,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Create the sidecar for one video (a viewer is waiting, so it jumps the queue)."""
     video = _video_or_404(session, video_id)
     existing = resolve_compat_path(video)
     if existing is not None and existing.is_file():
-        return CompatState(**compat_rendition.compat_status(video))
+        return _state_for(user, compat_rendition.compat_status(video))
     if not needs_compat(video, compat_copy_cap()):
         raise HTTPException(
             status_code=409,
@@ -80,7 +92,7 @@ def request_compat(
         reason="Requested for a device that cannot play the original",
         front=True,
     )
-    return CompatState(**compat_rendition.compat_status(video))
+    return _state_for(user, compat_rendition.compat_status(video))
 
 
 def _safari_state(video: Video) -> dict:
@@ -92,13 +104,21 @@ def _safari_state(video: Video) -> dict:
 
 
 @router.get("/videos/{video_id}/compat/safari", response_model=CompatState)
-def get_safari_prep(video_id: int, session: Session = Depends(get_session)):
+def get_safari_prep(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     """Is the stored original playable by WebKit (Safari, every iOS browser)?"""
-    return CompatState(**_safari_state(_video_or_404(session, video_id)))
+    return _state_for(user, _safari_state(_video_or_404(session, video_id)))
 
 
 @router.post("/videos/{video_id}/compat/safari", response_model=CompatState)
-def request_safari_prep(video_id: int, session: Session = Depends(get_session)):
+def request_safari_prep(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     """Queue the in-place Safari remux (AAC audio + faststart, video copied).
 
     GET /stream only serves files that already exist; a client that detects it
@@ -116,7 +136,7 @@ def request_safari_prep(video_id: int, session: Session = Depends(get_session)):
             front=True,
         )
         state = _safari_state(video)
-    return CompatState(**state)
+    return _state_for(user, state)
 
 
 @router.delete(

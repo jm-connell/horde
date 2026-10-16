@@ -236,6 +236,9 @@ export default function PlaybackCompatPicker({
                   ? " — usable for encoding"
                   : " — not usable by Horde"}
               </span>
+            ) : hw.hasGpuEncode ? (
+              // Members get no GPU name from /api/system/stats, only whether it encodes.
+              <span className="text-emerald-300">usable for encoding</span>
             ) : stats ? (
               <span className="text-gray-300">None detected</span>
             ) : (

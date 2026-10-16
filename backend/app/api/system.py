@@ -9,10 +9,13 @@ import shutil
 import subprocess
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from ..auth import current_user
 from ..response_schemas import SystemStatsRead
 from ..schemas import SystemActivityRead
+from ..services.auth.accounts import AuthUser
+from . import member_view
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +162,7 @@ _nvidia_gpu = host_gpu
 
 
 @router.get("/stats", response_model=SystemStatsRead)
-def system_stats():
+def system_stats(user: AuthUser = Depends(current_user)):
     cpu_ram = _cpu_ram()
     gpu = host_gpu()
     encode = None
@@ -185,7 +188,7 @@ def system_stats():
         logger.debug(
             "could not read disk usage of %s", get_paths().downloads, exc_info=True
         )
-    return {
+    payload = {
         "cpu_percent": cpu_ram["cpu_percent"],
         "cpu_model": cpu_ram["cpu_model"],
         "cpu_temp_c": cpu_ram["cpu_temp_c"],
@@ -197,18 +200,20 @@ def system_stats():
         "disk": disk,
         "encode": encode,
     }
+    return payload if user.is_admin else member_view.stats(payload)
 
 
 @router.get("/activity", response_model=SystemActivityRead)
-def system_activity():
+def system_activity(user: AuthUser = Depends(current_user)):
     """Live + recent background tasks (ffmpeg, downloads, AI, catalog, …)."""
     from ..services import activity
 
     snap = activity.snapshot()
     cpu = _cpu_ram().get("cpu_percent")
-    return {
+    payload = {
         "running": snap["running"],
         "recent": snap["recent"],
         "queued": snap["queued"],
         "cpu_percent": cpu,
     }
+    return payload if user.is_admin else member_view.activity(payload)

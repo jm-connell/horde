@@ -21,6 +21,7 @@ from .api import (
     compat,
     downloads,
     fonts,
+    member_view,
     playlists,
     preview,
     review,
@@ -492,30 +493,13 @@ def _public_health(request: Request) -> dict[str, Any]:
     }
 
 
-def _member_health(payload: dict[str, Any]) -> dict[str, Any]:
-    """Drop provider internals (address, models, OpenRouter setup, error texts) for members."""
-    trimmed = dict(payload)
-    if trimmed.get("ollama"):
-        trimmed["ollama"] = {
-            **trimmed["ollama"],
-            "base_url": None,
-            "last_error": None,
-            "pulling": None,
-        }
-    # Only the administrator's Settings > System shows the OpenRouter setup.
-    trimmed["openrouter"] = None
-    if trimmed.get("workers"):
-        trimmed["workers"] = {**trimmed["workers"], "ai_blocked_reason": None}
-    return trimmed
-
-
 def health(request: Request):
     """The full payload for a signed-in user; the bare minimum for anyone else."""
     user = getattr(request.state, "user", None)
     if user is None:
         return _public_health(request)
     payload = build_health_payload(request.app)
-    return payload if user.is_admin else _member_health(payload)
+    return payload if user.is_admin else member_view.health(payload)
 
 
 def metrics(request: Request) -> PlainTextResponse:

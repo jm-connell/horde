@@ -15,6 +15,7 @@ Horde has [accounts](authentication.md) ([model](../design/no-auth.md)) and is m
 | Links or thumbnails that make the server fetch internal URLs (SSRF) | [URL safety](#private-urls). |
 | Stored XSS through links, custom CSS | Only `http(s)` links are stored and rendered; custom CSS cannot load remote resources (it is sanitised when saved, again at startup for anything stored before the sanitiser existed, and when the first administrator adopts the settings kept from before accounts); a Content-Security-Policy is sent. |
 | Oversized or fake uploads | [Upload limits](#upload-limits). |
+| A member's browser reads internal addresses, model names or error texts (which can quote a URL) | Responses are trimmed for anyone but an administrator: members get statuses and counts, and a generic message where their screen reports a failure. See [what members see](authentication.md#account-types-and-permissions). |
 | Factory reset triggered by accident | The request must contain the typed phrase `RESET` (or `ERASE MEDIA` when erasing media). The UI asks for it. |
 
 If you script the API yourself, send `X-Horde-Request: 1` on every `POST`, `PUT`, `PATCH` and `DELETE`.

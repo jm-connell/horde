@@ -359,7 +359,7 @@ def get_playlist(
     videos = _ordered_videos(session, playlist_id)
     base = _to_playlist_read(session, playlist)
     return PlaylistDetail(
-        **base.model_dump(), videos=_to_read_many(videos, session, user_id=user.id)
+        **base.model_dump(), videos=_to_read_many(videos, session, viewer=user)
     )
 
 

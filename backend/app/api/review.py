@@ -78,7 +78,7 @@ def review_queue(
         session=session,
         user_id=user.id,
         serialize=lambda rows, states: _to_read_many(
-            rows, session, user_id=user.id, states=states
+            rows, session, viewer=user, states=states
         ),
         total=total,
     )
@@ -158,7 +158,7 @@ def upload_import(
                 raise HTTPException(status_code=409, detail="File already in library")
             dest.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail="Could not import file")
-        return _to_read(video, session, user_id=user.id)
+        return _to_read(video, session, viewer=user)
     except HTTPException:
         part.unlink(missing_ok=True)
         raise
@@ -201,7 +201,7 @@ def skip_review(
         enqueue_for_video(video_id, include_tags=True, force=False)
     except Exception:
         logger.debug("AI enqueue after review skip failed", exc_info=True)
-    return _to_read(video, session, user_id=user.id)
+    return _to_read(video, session, viewer=user)
 
 
 class DuplicateGroupPage(BaseModel):
@@ -272,7 +272,7 @@ def duplicate_groups(
     out: list[dict[str, Any]] = []
     for match_type, group in raw_groups:
         entry: dict[str, Any] = {
-            "videos": _to_read_many(group, session, user_id=user.id),
+            "videos": _to_read_many(group, session, viewer=user),
             "match_type": match_type,
             "ai_score": None,
             "ai_verdict": None,

@@ -1144,7 +1144,7 @@ def ensure_models(provider: OllamaProvider) -> tuple[bool, bool]:
 
                 handle = activity.start(
                     "model_pull",
-                    f"Downloading model {m}",
+                    "Downloading an AI model",
                     reason="Required Ollama model is missing",
                     engine="ollama",
                     detail=m,

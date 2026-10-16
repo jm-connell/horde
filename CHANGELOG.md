@@ -133,6 +133,13 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - Members no longer see the AI setup in `GET /api/ai/status` (provider type,
   schedule, workload profile, GPU tier and source, OpenRouter reachability) or
   the `openrouter` block of `GET /api/health`.
+- Members no longer see server internals elsewhere either: video reads replace
+  the raw embedding and H.264-copy errors (which quoted the provider URL or a
+  file path) with a generic message and drop the summary model and cost;
+  `GET /api/system/activity` drops each task's engine, detail and error;
+  `GET /api/system/stats` drops the GPU name, VRAM and ffmpeg path; and
+  `GET /api/health` drops the PO token provider address and the text, target and
+  URL of the last failed YouTube extract. Administrators still get everything.
 - A search sorted by last watched now reflects what you just watched; that sort
   is no longer served from the two-minute ranking cache.
 - `scripts/check.sh` and CI fail when `backend/requirements.lock` (what the
