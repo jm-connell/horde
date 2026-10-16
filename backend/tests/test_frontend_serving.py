@@ -71,3 +71,20 @@ def test_unknown_api_and_missing_worker_404(tmp_path):
 def test_no_path_traversal(tmp_path):
     resp = _client(tmp_path).get("/..%2Fsecret.txt")
     assert "nope" not in resp.text
+
+
+def test_unknown_api_paths_404_whatever_their_spelling(tmp_path):
+    """A doubled slash or other case must not turn an API miss into the SPA page."""
+    client = _client(tmp_path)
+    for path in (
+        "http://testserver//api/videos",
+        "/API/videos",
+        "/Api/ping/x",
+        "/api",
+        "/API",
+    ):
+        resp = client.get(path)
+        assert resp.status_code == 404, path
+        assert resp.json()["code"] == "not_found", path
+    # Paths that merely start with the letters stay SPA routes.
+    assert client.get("/apiary").status_code == 200

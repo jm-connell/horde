@@ -115,6 +115,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
   startup in `app_settings.json` (only rewritten when something changes) and
   when the first administrator adopts the old look, so an `@import` or remote
   `url()` from an old install is never applied.
+- Unknown API paths spelled with a doubled slash or another case (`//api/x`,
+  `/API/x`) now get the JSON 404 instead of the web app's page.
 - Known advisories in FastAPI/Starlette/python-multipart and in the frontend
   build toolchain.
 - Documentation now states that `DATA_PATH` must be a local disk (SQLite WAL is

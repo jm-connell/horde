@@ -665,7 +665,9 @@ def mount_frontend(target: FastAPI, frontend_dir: Path, wiki_dir: Path) -> None:
         candidate = (frontend_dir / full_path).resolve()
         if full_path and candidate.is_file() and candidate.is_relative_to(root):
             return _spa_file_response(candidate)
-        if full_path.startswith("api/") or full_path == "sw.js":
+        # Routing is exact, so "//api/x" or "/API/x" reach this catch-all too.
+        api_path = full_path.lstrip("/").lower()
+        if api_path == "api" or api_path.startswith("api/") or full_path == "sw.js":
             # Unknown API routes / missing worker must not look like a page:
             # the service worker would cache index.html as JSON or a script.
             return error_response(404, "Not Found", "not_found")
