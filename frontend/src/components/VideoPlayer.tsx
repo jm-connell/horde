@@ -25,6 +25,11 @@ import {
   SPEED_STEPS,
   snapRateToStep,
 } from "./player/constants";
+import {
+  activeChapterAt,
+  isChapterActive,
+  useChapters,
+} from "./player/useChapters";
 import { playerChromeBtn, playerMenuItem } from "./player/playerChrome";
 import SubtitleOverlay from "./SubtitleOverlay";
 import { MenuFlyout } from "./MenuFlyout";
@@ -67,26 +72,6 @@ import {
 } from "./videoPlayerSponsor";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
-
-function activeChapterAt(chapters: Chapter[], time: number): Chapter | null {
-  if (chapters.length === 0) return null;
-  let active = chapters[0];
-  for (const ch of chapters) {
-    if (ch.startSec <= time) active = ch;
-    else break;
-  }
-  return active;
-}
-
-function isChapterActive(
-  chapters: Chapter[],
-  chapterIndex: number,
-  time: number
-): boolean {
-  const ch = chapters[chapterIndex];
-  const next = chapters[chapterIndex + 1];
-  return time >= ch.startSec && (!next || time < next.startSec);
-}
 
 interface Props {
   src: string;
@@ -373,9 +358,8 @@ export default function VideoPlayer({
     time: number;
     pct: number;
   } | null>(null);
-  const [hoveredChapterSec, setHoveredChapterSec] = useState<number | null>(
-    null
-  );
+  const { hoveredChapter, setHoveredChapterSec, nextChapterStart } =
+    useChapters(chapters);
   const scrubberRef = useRef<HTMLDivElement>(null);
 
   const castAvailable = chromecast.available || airplay.available;
@@ -1382,9 +1366,8 @@ export default function VideoPlayer({
         stepRate(-1);
       } else if (e.key === "n" && chapters.length > 0 && videoRef.current) {
         e.preventDefault();
-        const t = videoRef.current.currentTime;
-        const next = chapters.find((c) => c.startSec > t + 1);
-        if (next) seekTo(next.startSec);
+        const next = nextChapterStart(videoRef.current.currentTime);
+        if (next != null) seekTo(next);
       }
     };
     window.addEventListener("keydown", handler);
@@ -1400,6 +1383,7 @@ export default function VideoPlayer({
     isMini,
     revealControls,
     chapters,
+    nextChapterStart,
     cycleCaptions,
     seekTo,
     volume,
@@ -1880,11 +1864,6 @@ export default function VideoPlayer({
             tileStyle,
           };
         })()
-      : null;
-
-  const hoveredChapter =
-    hoveredChapterSec != null
-      ? (chapters.find((ch) => ch.startSec === hoveredChapterSec) ?? null)
       : null;
 
   const wrapperClass = isMini
