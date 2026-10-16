@@ -23,7 +23,7 @@ from fastapi import Request
 logger = logging.getLogger(__name__)
 
 DEFAULT_STOP_TIMEOUT_SEC = 5.0
-#: All joins together during shutdown (docker stop allows 30 s in the compose file).
+#: All joins together during shutdown (docker stop allows 40 s in the compose file).
 TOTAL_STOP_TIMEOUT_SEC = 20.0
 
 
