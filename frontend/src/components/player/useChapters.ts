@@ -25,6 +25,14 @@ export function isChapterActive(
   return time >= ch.startSec && (!next || time < next.startSec);
 }
 
+/** Start of the first chapter more than a second past `time`, if any. */
+export function nextChapterStartAfter(
+  chapters: Chapter[],
+  time: number
+): number | null {
+  return chapters.find((c) => c.startSec > time + 1)?.startSec ?? null;
+}
+
 /** Chapter lookups for the seek bar, the time label and the `n` shortcut. */
 export function useChapters(chapters: Chapter[]) {
   const [hoveredChapterSec, setHoveredChapterSec] = useState<number | null>(
@@ -37,8 +45,7 @@ export function useChapters(chapters: Chapter[]) {
 
   /** Start of the first chapter more than a second past `time`, if any. */
   const nextChapterStart = useCallback(
-    (time: number): number | null =>
-      chapters.find((c) => c.startSec > time + 1)?.startSec ?? null,
+    (time: number): number | null => nextChapterStartAfter(chapters, time),
     [chapters]
   );
 

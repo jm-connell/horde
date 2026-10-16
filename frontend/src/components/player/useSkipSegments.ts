@@ -31,7 +31,7 @@ type NoticeAction =
   | { type: "skipped"; segment: SkippedSegment }
   | { type: "clear" };
 
-function noticeReducer(
+export function noticeReducer(
   _state: SkipNotice | null,
   action: NoticeAction
 ): SkipNotice | null {
