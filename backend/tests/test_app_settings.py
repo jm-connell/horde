@@ -188,6 +188,38 @@ def test_save_after_corruption_with_backup_keeps_data(tmp_dirs):
     assert on_disk["progress_expiry_days"] == 20
 
 
+_EVIL_CSS = "@import url(http://evil.example/x.css); body{color:red}"
+
+
+def test_startup_css_cleanup_leaves_no_unsanitised_backup(tmp_dirs):
+    """The .bak is what a corrupt file is restored from, so it must be clean too."""
+    path = tmp_dirs["data"] / "app_settings.json"
+    bak = path.with_name("app_settings.json.bak")
+    settings_svc.save({"ui": {"customCss": _EVIL_CSS}})
+    settings_svc.save({"progress_expiry_days": 19})  # .bak holds the CSS too
+
+    assert settings_svc.sanitize_stored_ui() is True
+
+    assert "evil.example" not in path.read_text()
+    assert "evil.example" not in bak.read_text()
+    path.write_text("{")  # corrupt: load() restores the .bak
+    assert settings_svc.load()["ui"]["customCss"] == " body{color:red}"
+
+
+def test_startup_css_cleanup_also_cleans_a_backup_left_dirty(tmp_dirs):
+    path = tmp_dirs["data"] / "app_settings.json"
+    bak = path.with_name("app_settings.json.bak")
+    settings_svc.save({"ui": {"theme": "oled"}})
+    bak.write_text(json.dumps({"ui": {"themes": [{"custom_css": _EVIL_CSS}]}}))
+
+    settings_svc.sanitize_stored_ui()
+
+    assert json.loads(bak.read_text()) == {
+        "ui": {"themes": [{"custom_css": " body{color:red}"}]}
+    }
+    assert json.loads(path.read_text())["ui"] == {"theme": "oled"}
+
+
 def test_reset_is_the_way_out_of_unrecoverable_corruption(tmp_dirs):
     path = tmp_dirs["data"] / "app_settings.json"
     path.write_text("{")

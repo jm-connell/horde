@@ -4,6 +4,7 @@ import logging
 import os
 import tempfile
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -395,6 +396,29 @@ class _Store:
             self._atomic_write(p, payload, keep_backup=keep_backup)
             self._remember(p, _normalize(settings), False)
 
+    def clean_backup(
+        self, p: Path, clean: Callable[[dict[str, Any]], dict[str, Any]]
+    ) -> bool:
+        """Rewrite the ``.bak`` of ``p`` through ``clean`` if that changes it.
+
+        A backup that does not parse is left alone: it is never restored.
+        """
+        bak = _backup_path(p)
+        with self.lock:
+            try:
+                data = self._parse(bak.read_bytes())
+            except FileNotFoundError:
+                return False
+            except (OSError, ValueError) as exc:
+                logger.warning("Not cleaning settings backup %s: %s", bak, exc)
+                return False
+            cleaned = clean(data)
+            if cleaned == data:
+                return False
+            payload = json.dumps(cleaned, indent=2).encode("utf-8")
+            self._atomic_write(bak, payload, keep_backup=False)
+            return True
+
     def purge_copies(self, p: Path) -> None:
         """Delete the ``.bak`` and every ``.corrupt-*`` copy of ``p``."""
         with self.lock:
@@ -489,6 +513,13 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
         return current
 
 
+def _sanitize_settings_css(data: dict[str, Any]) -> dict[str, Any]:
+    ui = data.get("ui")
+    if not isinstance(ui, dict):
+        return data
+    return {**data, "ui": sanitize_ui_css(ui)}
+
+
 def sanitize_stored_ui() -> bool:
     """Strip network-fetching custom CSS from the stored ``ui`` blob.
 
@@ -496,17 +527,25 @@ def sanitize_stored_ui() -> bool:
     existed (and adopted as the first administrator's preferences and the members'
     default) was not. Runs at startup; rewrites the file only when something
     changed. Returns whether it did.
+
+    The ``.bak`` is cleaned as well, since a missing or corrupt file is restored
+    from it, and the rewrite does not rotate the backup: rotating would copy the
+    CSS being removed into the ``.bak``.
     """
     with _lock:
+        if _store.clean_backup(_path(), _sanitize_settings_css):
+            logger.warning(
+                "Removed @import rules and remote url() references from the "
+                "custom CSS stored in %s",
+                _backup_path(_path()).name,
+            )
         current, degraded = _store.read(_path())
-        ui = current.get("ui")
-        if degraded or not isinstance(ui, dict):
+        if degraded:
             return False
-        cleaned = sanitize_ui_css(ui)
-        if cleaned == ui:
+        cleaned = _sanitize_settings_css(current)
+        if cleaned == current:
             return False
-        current["ui"] = cleaned
-        _write(current)
+        _store.write(_path(), cleaned, keep_backup=False)
     logger.warning(
         "Removed @import rules and remote url() references from the custom CSS "
         "stored in %s",

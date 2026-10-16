@@ -130,6 +130,9 @@ level. Detailed per-area entries are added by the maintainer at release time.
   (`u@import "x";rl(https://...)` became `url(https://...)`), which the app
   then applied because it sanitizes only once when it starts. The removed rule
   now leaves an empty comment `/**/` where the two sides would otherwise merge.
+- The startup clean-up of stored custom CSS no longer copies the old CSS into
+  `app_settings.json.bak`, and cleans a `.bak` an earlier start left behind, so
+  restoring a corrupt settings file from its backup cannot bring the CSS back.
 - Unknown API paths spelled with a doubled slash or another case (`//api/x`,
   `/API/x`) now get the JSON 404 instead of the web app's page.
 - The bare `/api` path, also when percent-encoded (`/%61pi`), now reaches the
