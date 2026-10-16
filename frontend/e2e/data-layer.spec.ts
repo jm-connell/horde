@@ -135,7 +135,19 @@ test("a failing refresh does not replace the video being watched", async ({
   await expect(
     page.getByRole("heading", { name: "Aurora Drift" }).first()
   ).toBeVisible();
-  await expect.poll(() => reads, { timeout: 20_000 }).toBeGreaterThan(1);
+  // The page's refresh fails with a 500; wait until the browser has it and the
+  // UI has had a frame to react before checking the video is still shown.
+  await page.waitForResponse(
+    (r) =>
+      new RegExp(`/api/videos/${item.id}$`).test(r.url()) && r.status() === 500,
+    { timeout: 20_000 }
+  );
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  );
   await expect(page.getByText("Video not found")).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Aurora Drift" }).first()
