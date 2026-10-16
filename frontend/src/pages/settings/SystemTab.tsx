@@ -4,12 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { createPortal } from "react-dom";
 import { useSettingsPage } from "./context";
+import { useAiCore } from "./ai/useAiCore";
+import { useSystemState } from "./useSystemState";
 import { Section } from "./ui";
 import { PANEL_BTN, STATUS_TIPS, INPUT } from "./constants";
 import { saveDismissedUpdateSha } from "./helpers";
 import { api } from "../../api";
 import { useConfirm } from "../../context/ConfirmContext";
 import { downloadErrorLabel, extractFailureCopy } from "../../downloadErrors";
+import type { HealthStats, StorageStats } from "../../types";
 import { formatSize, safeHref } from "../../utils";
 import { clearHordeBrowserState } from "../../setupStorage";
 import LoadingIndicator from "../../components/LoadingIndicator";
@@ -62,10 +65,8 @@ function StatusRow({
 
 export default function SystemTab() {
   const confirm = useConfirm();
+  const { match, showToast, showError } = useSettingsPage();
   const {
-    match,
-    showToast,
-    showError,
     storage,
     health,
     updateCheck,
@@ -77,6 +78,10 @@ export default function SystemTab() {
     catalogIndexing,
     setCatalogIndexing,
     refreshCatalogStatus,
+    systemActivity,
+    metadataSyncStatus,
+  } = useSystemState();
+  const {
     aiStatus,
     systemStats,
     openRouterCosts,
@@ -84,9 +89,7 @@ export default function SystemTab() {
     runAiProcess,
     aiProcessingAction,
     appSettings,
-    systemActivity,
-    metadataSyncStatus,
-  } = useSettingsPage();
+  } = useAiCore();
 
   return (
     <>
@@ -660,14 +663,20 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
         title="Reset Horde"
         hidden={!match("reset", "factory", "wipe", "erase", "setup wizard")}
       >
-        <ResetHordePanel />
+        <ResetHordePanel storage={storage} health={health} />
       </Section>
     </>
   );
 }
 
-function ResetHordePanel() {
-  const { showToast, storage, health } = useSettingsPage();
+function ResetHordePanel({
+  storage,
+  health,
+}: {
+  storage: StorageStats | null;
+  health: HealthStats | null;
+}) {
+  const { showToast } = useSettingsPage();
   const [open, setOpen] = useState(false);
   const [eraseMedia, setEraseMedia] = useState(false);
   const [confirmText, setConfirmText] = useState("");

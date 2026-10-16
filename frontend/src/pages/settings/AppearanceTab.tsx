@@ -30,17 +30,14 @@ import {
 } from "./constants";
 import { Chip, Section, SettingRow, Toggle } from "./ui";
 import { useSettingsPage } from "./context";
+import { useAppearanceState } from "./useAppearanceState";
 import CustomCssSection from "./CustomCssSection";
 
 export default function AppearanceTab() {
   const confirm = useConfirm();
+  const { q, match, settings, update, showToast, showError } =
+    useSettingsPage();
   const {
-    q,
-    match,
-    settings,
-    update,
-    showToast,
-    showError,
     themeNameDraft,
     setThemeNameDraft,
     saveCurrentAsTheme,
@@ -60,7 +57,7 @@ export default function AppearanceTab() {
     applyPaletteColor,
     navPreview,
     setNavPreview,
-  } = useSettingsPage();
+  } = useAppearanceState();
 
   const selectedLoading = LOADING_STYLE_OPTIONS.find(
     (o) => o.value === settings.loadingStyle

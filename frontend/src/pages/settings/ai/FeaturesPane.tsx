@@ -1,5 +1,6 @@
 import HelpTip from "../../../components/HelpTip";
 import { useSettingsPage } from "../context";
+import { useAiPage } from "./aiPageContext";
 import { Section, SettingRow, Toggle } from "../ui";
 import {
   CHAPTER_MODE_OPTIONS,
@@ -9,7 +10,8 @@ import {
 } from "../constants";
 
 export default function FeaturesPane() {
-  const { q, match, aiDraft, setAiDraft, saveAi } = useSettingsPage();
+  const { q, match } = useSettingsPage();
+  const { aiDraft, setAiDraft, saveAi } = useAiPage();
 
   return (
     <Section
