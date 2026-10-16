@@ -21,12 +21,14 @@ export function loadSettings(): Settings {
 export const SETTINGS_CHANGED_EVENT = "horde:settings-changed";
 
 /** The user the cached preferences in this browser belong to. */
+export const PENDING_KEY = "horde.settings-pending";
 export const OWNER_KEY = "horde.settings-owner";
 
 /** Forget this browser's cached preferences (on sign-in/out, so users never see each other's). */
 export function clearLocalSettings(): void {
   removeItem(STORAGE_KEY);
   removeItem(OWNER_KEY);
+  removeItem(PENDING_KEY);
 }
 
 export function persistLocal(settings: Settings): void {

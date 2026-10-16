@@ -10,6 +10,13 @@ import {
   persistLocal,
 } from "./localStore";
 import { normalizeSettings } from "./migrations";
+import {
+  adoptPendingOwner,
+  clearPending,
+  loadPending,
+  markPending,
+  overlayPending,
+} from "./pending";
 import { serverUiToSettingsPatch, settingsToServerUi } from "./serverUi";
 import type { Settings } from "./types";
 
@@ -49,6 +56,7 @@ export function adoptSettingsOwner(userId: number, isAdmin: boolean): void {
   const legacy = stored === null;
   if (legacy && isAdmin) {
     legacyPrefsMayMigrate = true;
+    adoptPendingOwner(userId);
   } else {
     legacyPrefsMayMigrate = false;
     const hadHydrated = serverHydrated || serverHydratePromise !== null;
@@ -93,6 +101,7 @@ export async function flushSettingsSync(): Promise<void> {
   const ui = settingsToServerUi(loadSettings());
   try {
     await api.updateAppSettings({ ui });
+    clearPending(Date.now());
   } catch {
     // ignore
   }
@@ -124,20 +133,27 @@ export function ensureServerHydration(): Promise<void> {
       const local = loadSettings();
       const ui = remote.ui && typeof remote.ui === "object" ? remote.ui : {};
       const hasServerUi = Object.keys(ui).length > 0;
+      // A change this browser made that the server never acknowledged: the
+      // server's copy is older than it, so it must not replace it.
+      const pending = loadPending(legacyPrefsMayMigrate);
 
       if (hasServerUi) {
-        const patch = serverUiToSettingsPatch(ui);
+        const patch = overlayPending(serverUiToSettingsPatch(ui), pending);
         const next = normalizeSettings({
           ...local,
           ...patch,
           progressExpiryDays: remote.progress_expiry_days,
         });
         persistLocal(next);
-        if (!Object.prototype.hasOwnProperty.call(ui, "preview_muted")) {
+        if (
+          pending ||
+          !Object.prototype.hasOwnProperty.call(ui, "preview_muted")
+        ) {
           scheduleServerSync(next);
         }
       } else if (remote.setup_completed) {
         // Migrate local → server, only the preferences kept from before accounts
+        if (pending) scheduleServerSync(local);
         const uiPayload = settingsToServerUi(local);
         if (legacyPrefsMayMigrate && Object.keys(uiPayload).length > 0) {
           api.updateAppSettings({ ui: uiPayload }).catch(() => undefined);
@@ -178,15 +194,22 @@ export function ensureServerHydration(): Promise<void> {
 
 /** The settings the pending debounced sync will send. */
 let pendingSync: Settings | null = null;
+/** Identifies the change in `pendingSync` in the stored pending marker. */
+let pendingStamp = 0;
 
 export function scheduleServerSync(settings: Settings): void {
   if (syncTimer) clearTimeout(syncTimer);
   pendingSync = settings;
+  const ui = settingsToServerUi(settings);
+  const stamp = markPending(ui);
+  pendingStamp = stamp;
   syncTimer = setTimeout(() => {
     syncTimer = null;
     pendingSync = null;
-    const ui = settingsToServerUi(settings);
-    api.updateAppSettings({ ui }).catch(() => undefined);
+    api
+      .updateAppSettings({ ui })
+      .then(() => clearPending(stamp))
+      .catch(() => undefined);
   }, 300);
 }
 
@@ -199,6 +222,7 @@ export function scheduleServerSync(settings: Settings): void {
 function flushPendingSync(): void {
   if (!pendingSync) return;
   const ui = settingsToServerUi(pendingSync);
+  const stamp = pendingStamp;
   pendingSync = null;
   if (syncTimer) {
     clearTimeout(syncTimer);
@@ -213,7 +237,11 @@ function flushPendingSync(): void {
       credentials: "same-origin",
       keepalive: true,
     })
-  ).catch(() => undefined);
+  )
+    .then((res) => {
+      if (res.ok) clearPending(stamp);
+    })
+    .catch(() => undefined);
 }
 
 if (typeof window !== "undefined") {
