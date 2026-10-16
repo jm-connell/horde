@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, api } from "./api";
+import { ApiError, PERMISSION_DENIED_EVENT, api } from "./api";
 
 function respondWith(status: number, body: unknown) {
   vi.stubGlobal(
@@ -65,4 +65,23 @@ describe("ApiError", () => {
     expect(err.message).toBe("Bad Gateway");
     expect(err.status).toBe(502);
   });
+
+  it.each(["permission_denied", "admin_required", "csrf_rejected"])(
+    "announces the detail of a 403 with code %s",
+    async (code) => {
+      const seen: string[] = [];
+      const onDenied = (e: Event) =>
+        seen.push((e as CustomEvent<string>).detail);
+      const target = new EventTarget();
+      vi.stubGlobal("window", target);
+      target.addEventListener(PERMISSION_DENIED_EVENT, onDenied);
+      try {
+        respondWith(403, { detail: "Not for you", code });
+        await failure();
+      } finally {
+        target.removeEventListener(PERMISSION_DENIED_EVENT, onDenied);
+      }
+      expect(seen).toEqual(["Not for you"]);
+    }
+  );
 });
