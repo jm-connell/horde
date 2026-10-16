@@ -81,6 +81,8 @@ In **offline mode**:
   to the account that was signed in while you watched. If someone else signs
   in on the device first, your positions wait for you (for up to 30 days)
   instead of landing in their history.
+  If the signed-in account changes while positions are syncing (another tab
+  signs in), the sync stops and carries on for the new account.
 
 If Horde went offline **by itself** (server unreachable), it keeps checking in
 the background with a tiny `/api/ping` request (backing off from 3 s to once a

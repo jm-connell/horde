@@ -69,6 +69,7 @@ export class PendingProgressQueue {
   /** The account saves are queued for; null while nobody is signed in. */
   private owner: number | null = null;
   private flushing = false;
+  private rerun = false;
 
   constructor(
     private store: PendingProgressStore = indexedDbStore,
@@ -94,13 +95,30 @@ export class PendingProgressQueue {
   /**
    * Send the queued saves of whoever the server says is signed in. The server
    * is asked rather than trusting `owner`: the session cookie these requests
-   * carry may belong to someone else by now (signed in from another tab).
+   * carry may belong to someone else by now (signed in from another tab), and
+   * it is asked again before every send, so a sign-in change halfway through
+   * ends the flush instead of recording the rest under the new account.
    * Stops at the first failure (other than a deleted video) and tries again
-   * on the next call.
+   * on the next call. A call made while a flush runs makes it run once
+   * more when it ends (the account may have changed), instead of being lost.
    */
   async flush(deps: FlushDeps): Promise<void> {
-    if (this.flushing) return;
+    if (this.flushing) {
+      this.rerun = true;
+      return;
+    }
     this.flushing = true;
+    try {
+      do {
+        this.rerun = false;
+        await this.flushOnce(deps);
+      } while (this.rerun);
+    } finally {
+      this.flushing = false;
+    }
+  }
+
+  private async flushOnce(deps: FlushDeps): Promise<void> {
     try {
       const records = await this.store.getAll();
       if (records.length === 0) return;
@@ -108,6 +126,11 @@ export class PendingProgressQueue {
       const plan = planPendingFlush(records, owner, this.now());
       for (const p of plan.expire) await this.store.delete(p.owner, p.videoId);
       for (const p of plan.send) {
+        if ((await deps.whoAmI()) !== p.owner) {
+          // Signed out or in as someone else meanwhile: the rest waits.
+          this.rerun = true;
+          return;
+        }
         try {
           await deps.send(p.videoId, p.positionSec);
         } catch (err) {
@@ -119,8 +142,6 @@ export class PendingProgressQueue {
       }
     } catch {
       // Still unreachable, or IndexedDB unavailable: the next call retries.
-    } finally {
-      this.flushing = false;
     }
   }
 }

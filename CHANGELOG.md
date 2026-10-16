@@ -117,6 +117,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
   `url()` from an old install is never applied.
 - Unknown API paths spelled with a doubled slash or another case (`//api/x`,
   `/API/x`) now get the JSON 404 instead of the web app's page.
+- Progress saved offline is no longer recorded under the wrong account when
+  another tab signs someone else in during the sync: the signed-in account is
+  checked before every save is sent, the sync stops when it changes, and the
+  new account's saves are then synced without waiting for the next trigger.
 - Metadata sync logs one warning line per video when the source is unreachable
   (no network, proxy down) instead of a full traceback; the traceback is logged
   at DEBUG.

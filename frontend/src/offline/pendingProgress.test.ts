@@ -119,4 +119,46 @@ describe("PendingProgressQueue", () => {
     expect(send).toHaveBeenCalledTimes(3);
     expect(rows()).toEqual([]);
   });
+
+  it("stops when the signed-in account changes mid-flush and sends the new owner's saves on a re-run", async () => {
+    const { store, rows } = memoryStore([rec(1, 10), rec(1, 11), rec(2, 20)]);
+    const queue = new PendingProgressQueue(store, () => NOW);
+    let who = 1;
+    const sent: number[] = [];
+    const send = vi.fn(async (videoId: number) => {
+      sent.push(videoId);
+      if (videoId === 10) who = 2; // another tab signs 1 out and 2 in
+    });
+    await queue.flush({ whoAmI: async () => who, send, isGone: () => false });
+    // Account 1's second save must not go out under account 2's cookie.
+    expect(sent).toEqual([10, 20]);
+    expect(rows()).toEqual([rec(1, 11)]);
+  });
+
+  it("runs once more when a flush was requested while one was running", async () => {
+    const { store, rows } = memoryStore([rec(1, 10)]);
+    const queue = new PendingProgressQueue(store, () => NOW);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    let who = 1;
+    const sent: number[] = [];
+    const deps = {
+      whoAmI: async () => who,
+      send: vi.fn(async (videoId: number) => {
+        sent.push(videoId);
+        if (videoId === 10) await gate;
+      }),
+      isGone: () => false,
+    };
+    const first = queue.flush(deps);
+    await vi.waitFor(() => expect(sent).toEqual([10]));
+    who = 2;
+    await store.put(rec(2, 20));
+    await queue.flush(deps); // requested meanwhile: returns at once
+    expect(sent).toEqual([10]);
+    release();
+    await first;
+    expect(sent).toEqual([10, 20]);
+    expect(rows()).toEqual([]);
+  });
 });
