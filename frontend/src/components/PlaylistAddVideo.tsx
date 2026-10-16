@@ -252,24 +252,23 @@ export default function PlaylistAddVideo({
       ),
     ]);
     return (
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- options are driven from the combobox input (arrows, Enter); the row itself is not focusable
       <li
         key="download"
         id={`${listId}-${index}`}
         role="option"
         aria-selected={activeRow}
+        aria-disabled={busy || undefined}
+        onMouseEnter={() => setHighlight(index)}
+        onClick={() => {
+          if (!busy) void choose(item);
+        }}
+        className={`block w-full cursor-pointer px-3 py-2 text-left ${
+          activeRow ? "bg-ink-800" : "hover:bg-ink-800"
+        }`}
       >
-        <button
-          type="button"
-          disabled={busy}
-          onMouseEnter={() => setHighlight(index)}
-          onClick={() => void choose(item)}
-          className={`block w-full px-3 py-2 text-left ${
-            activeRow ? "bg-ink-800" : "hover:bg-ink-800"
-          }`}
-        >
-          <p className="truncate text-sm font-medium text-gray-100">{title}</p>
-          <p className="truncate text-xs text-muted">{meta || item.url}</p>
-        </button>
+        <p className="truncate text-sm font-medium text-gray-100">{title}</p>
+        <p className="truncate text-xs text-muted">{meta || item.url}</p>
       </li>
     );
   };
@@ -444,28 +443,27 @@ export default function PlaylistAddVideo({
                     formatPublishedAt(item.video.published_at),
                   ]);
                   return (
+                    // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- options are driven from the combobox input (arrows, Enter); the row itself is not focusable
                     <li
                       key={item.video.id}
                       id={`${listId}-${index}`}
                       role="option"
                       aria-selected={activeRow}
+                      aria-disabled={busy || undefined}
+                      onMouseEnter={() => setHighlight(index)}
+                      onClick={() => {
+                        if (!busy) void choose(item);
+                      }}
+                      className={`block w-full cursor-pointer px-3 py-2 text-left ${
+                        activeRow ? "bg-ink-800" : "hover:bg-ink-800"
+                      }`}
                     >
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onMouseEnter={() => setHighlight(index)}
-                        onClick={() => void choose(item)}
-                        className={`block w-full px-3 py-2 text-left ${
-                          activeRow ? "bg-ink-800" : "hover:bg-ink-800"
-                        }`}
-                      >
-                        <p className="truncate text-sm font-medium text-gray-100">
-                          {item.video.title}
-                        </p>
-                        {meta ? (
-                          <p className="truncate text-xs text-muted">{meta}</p>
-                        ) : null}
-                      </button>
+                      <p className="truncate text-sm font-medium text-gray-100">
+                        {item.video.title}
+                      </p>
+                      {meta ? (
+                        <p className="truncate text-xs text-muted">{meta}</p>
+                      ) : null}
                     </li>
                   );
                 })
