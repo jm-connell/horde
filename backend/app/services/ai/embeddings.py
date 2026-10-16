@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import struct
 
+from sqlalchemy import case, func
 from sqlmodel import Session, select
 
 from ...models import Video, VideoAiMeta, VideoEmbedding, utcnow
@@ -370,26 +371,46 @@ def build_chat_context(session: Session, video: Video, question: str) -> str:
     )
 
 
+def _model_matched_video_ids(session: Session, model: str) -> set[int]:
+    """Ids of videos with at least one embedding row, all using ``model``.
+
+    One grouped query for the whole library, instead of a select per video.
+    """
+    rows = session.exec(
+        select(
+            VideoEmbedding.video_id,
+            func.count(),
+            func.sum(
+                case((func.coalesce(VideoEmbedding.model, "") == model, 1), else_=0)
+            ),
+        ).group_by(VideoEmbedding.video_id)
+    ).all()
+    return {int(vid) for vid, total, matching in rows if total and total == matching}
+
+
 def indexed_count(session: Session) -> tuple[int, int]:
     """Return (indexed_ready, total_library_videos).
 
     Ready means embed_status is ready and stored vectors use the current embed model.
+    The query count is constant, whatever the library size.
     """
     model = resolve_embed_model()
-    videos = session.exec(
-        select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-    ).all()
-    total = len(videos)
-    ready = 0
-    for video in videos:
-        if video.id is None:
-            continue
-        meta = session.get(VideoAiMeta, video.id)
-        if meta is None or meta.embed_status != "ready":
-            continue
-        if _embeddings_match_model(session, video.id, model):
-            ready += 1
-    return ready, total
+    library_ids = [
+        int(vid)
+        for vid in session.exec(
+            select(Video.id).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+        ).all()
+        if vid is not None
+    ]
+    ready_ids = {
+        int(vid)
+        for vid in session.exec(
+            select(VideoAiMeta.video_id).where(VideoAiMeta.embed_status == "ready")
+        ).all()
+    }
+    matched = _model_matched_video_ids(session, model)
+    ready = sum(1 for vid in library_ids if vid in ready_ids and vid in matched)
+    return ready, len(library_ids)
 
 
 def videos_needing_embed(
@@ -406,11 +427,13 @@ def videos_needing_embed(
     videos = session.exec(
         select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).all()
+    metas = {m.video_id: m for m in session.exec(select(VideoAiMeta)).all()}
+    matched = _model_matched_video_ids(session, model)
     need: list[int] = []
     for video in videos:
         if video.id is None or video.id in skip_ids:
             continue
-        meta = session.get(VideoAiMeta, video.id)
+        meta = metas.get(video.id)
         digest = ai_text.content_hash(video, use_subtitles=use_subs)
         if (
             skip_empty_document
@@ -423,7 +446,7 @@ def videos_needing_embed(
         stale_content = (
             meta is None or meta.embed_status != "ready" or meta.content_hash != digest
         )
-        if stale_content or not _embeddings_match_model(session, video.id, model):
+        if stale_content or video.id not in matched:
             need.append(video.id)
             if len(need) >= limit:
                 break

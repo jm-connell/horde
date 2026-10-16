@@ -6,6 +6,7 @@ import logging
 import threading
 from datetime import timedelta
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ...database import engine
@@ -459,12 +460,15 @@ def _result(breakdown: dict[str, int], *, empty: str) -> dict:
 
 def queue_depth() -> int:
     with Session(engine) as session:
-        rows = session.exec(
-            select(AiJob).where(
-                AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
-            )
-        ).all()
-        return len(rows)
+        return int(
+            session.exec(
+                select(func.count())
+                .select_from(AiJob)
+                .where(
+                    AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
+                )
+            ).one()
+        )
 
 
 def queue_breakdown() -> dict[str, int]:
@@ -493,10 +497,13 @@ def queue_breakdown() -> dict[str, int]:
 
 def error_count() -> int:
     with Session(engine) as session:
-        rows = session.exec(
-            select(AiJob).where(AiJob.status == AiJobStatus.error)
-        ).all()
-        return len(rows)
+        return int(
+            session.exec(
+                select(func.count())
+                .select_from(AiJob)
+                .where(AiJob.status == AiJobStatus.error)
+            ).one()
+        )
 
 
 def blocked_reason() -> str | None:
@@ -508,18 +515,40 @@ def _set_blocked_reason(reason: str | None) -> None:
     _blocked_reason = reason
 
 
-def _job_title(session: Session, job: AiJob) -> str | None:
-    if job.video_id:
-        video = session.get(Video, job.video_id)
-        if video is not None:
-            return video.title
-    if job.catalog_video_id:
-        from ...models import ChannelCatalogVideo
+def _job_titles(session: Session, jobs: list[AiJob]) -> dict[int, str | None]:
+    """Titles for ``jobs`` keyed by job id, loaded with two IN queries."""
+    from ...models import ChannelCatalogVideo
 
-        cv = session.get(ChannelCatalogVideo, job.catalog_video_id)
-        if cv is not None:
-            return cv.title
-    return None
+    video_ids = {j.video_id for j in jobs if j.video_id}
+    catalog_ids = {j.catalog_video_id for j in jobs if j.catalog_video_id}
+    videos: dict[int, str | None] = {}
+    if video_ids:
+        videos = {
+            int(vid): title
+            for vid, title in session.exec(
+                select(Video.id, Video.title).where(Video.id.in_(video_ids))  # type: ignore[attr-defined]
+            ).all()
+        }
+    catalog: dict[int, str | None] = {}
+    if catalog_ids:
+        catalog = {
+            int(cid): title
+            for cid, title in session.exec(
+                select(ChannelCatalogVideo.id, ChannelCatalogVideo.title).where(
+                    ChannelCatalogVideo.id.in_(catalog_ids)  # type: ignore[attr-defined]
+                )
+            ).all()
+        }
+    out: dict[int, str | None] = {}
+    for job in jobs:
+        title = None
+        if job.video_id and job.video_id in videos:
+            title = videos[job.video_id]
+        elif job.catalog_video_id and job.catalog_video_id in catalog:
+            title = catalog[job.catalog_video_id]
+        if job.id is not None:
+            out[job.id] = title
+    return out
 
 
 def queue_stats() -> dict:
@@ -571,6 +600,7 @@ def recent_failures(*, limit: int = 10) -> list[dict]:
             .order_by(AiJob.updated_at.desc())
             .limit(limit)
         ).all()
+        titles = _job_titles(session, list(rows))
         for job in rows:
             kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
             out.append(
@@ -579,7 +609,7 @@ def recent_failures(*, limit: int = 10) -> list[dict]:
                     "kind": kind,
                     "video_id": job.video_id,
                     "catalog_video_id": job.catalog_video_id,
-                    "title": _job_title(session, job),
+                    "title": titles.get(job.id) if job.id is not None else None,
                     "attempts": job.attempts,
                     "error": job.error,
                     "updated_at": job.updated_at.isoformat()
@@ -610,6 +640,7 @@ def list_jobs(
                 .limit(limit)
             )
         rows = session.exec(statement).all()
+        titles = _job_titles(session, list(rows))
         out: list[dict] = []
         for job in rows:
             kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
@@ -623,7 +654,7 @@ def list_jobs(
                     "status": st_val,
                     "video_id": job.video_id,
                     "catalog_video_id": job.catalog_video_id,
-                    "title": _job_title(session, job),
+                    "title": titles.get(job.id) if job.id is not None else None,
                     "attempts": job.attempts,
                     "error": job.error,
                     "run_after": job.run_after.isoformat() if job.run_after else None,
