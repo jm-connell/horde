@@ -1,0 +1,51 @@
+{
+  "targets": [
+    "url(https://evil.example/x)",
+    "url(\"//evil.example/x\")",
+    "\\75rl(//evil.example/x)",
+    "image-set(\"https://evil.example/x\" 1x)",
+    "@import \"https://evil.example/x.css\";",
+    "/* c */",
+    "\"s\"",
+    "a{b:c}"
+  ],
+  "removable": [
+    "@import \"x\";",
+    "@\\69mport url(/a);",
+    "url(https://evil.example/y)",
+    "url(/\")",
+    "image-set(var(--u) 1x)"
+  ],
+  "noise": [
+    "u",
+    "rl(",
+    "url(",
+    "/",
+    "*",
+    "/*",
+    "*/",
+    "\"",
+    "'",
+    "(",
+    ")",
+    "\\",
+    "\\75",
+    "\\75 ",
+    "\\\n",
+    "\n",
+    "\r",
+    " ",
+    ";",
+    "{",
+    "}",
+    "#",
+    "@",
+    "a",
+    "1x",
+    ",",
+    "/ok.png",
+    "data:x",
+    "var(--u)",
+    "none"
+  ]
+}

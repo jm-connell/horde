@@ -53,6 +53,8 @@ _HEX = "0123456789abcdefABCDEF"
 _WHITESPACE = " \t\n"
 _SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.\-]*:")
 _CLOSER = {"(": ")", "[": "]", "{": "}"}
+#: Replacement for a forbidden URL when the text after it would extend ``none``.
+_NONE_THEN_COMMENT = "none/**/"
 
 
 def _is_ident_char(ch: str) -> bool:
@@ -321,25 +323,62 @@ def _arguments_safe(css: str, start: int, stop: int) -> bool:
     return True
 
 
+def _ends_cleanly(kind: str, arg: str) -> bool:
+    """True when no text that follows a token of this kind can merge into it."""
+    return kind in ("", "whitespace", "comment") or (
+        kind == "delim" and arg in (";", "{", "}")
+    )
+
+
+def _continues_a_name(css: str, i: int) -> bool:
+    """True when ``css[i]`` would extend an identifier written just before it."""
+    return i < len(css) and (
+        _is_ident_char(css[i]) or _is_valid_escape(css, i) or css[i] == "("
+    )
+
+
 def sanitize_custom_css(css: str) -> str:
-    """Return ``css`` with ``@import`` and non-local URLs removed."""
+    """Return ``css`` with ``@import`` and non-local URLs removed.
+
+    Idempotent by construction: the output is the input's tokens with some of
+    them replaced, and no replacement merges with its neighbours. A removed
+    ``@import`` leaves an empty comment unless the previous token ends cleanly
+    (otherwise ``u@import "x";rl(...)`` would become ``url(...)``). The ``none``
+    that replaces a URL is followed by an empty comment when the next character
+    would extend it; nothing before a URL can extend into it.
+    """
     css = _preprocess(css)
     out: list[str] = []
+    prev_kind, prev_arg = "", ""
     i = 0
     n = len(css)
     while i < n:
         kind, end, arg = _token(css, i)
         if kind == "at-keyword" and arg == "import":
-            end = _prelude_end(css, end)
-        elif kind in ("url", "bad-url"):
-            keep = kind == "url" and url_allowed(arg)
-            out.append(css[i:end] if keep else "none")
+            i = _prelude_end(css, end)
+            if not _ends_cleanly(prev_kind, prev_arg):
+                out.append("/**/")
+                prev_kind, prev_arg = "comment", ""
+            continue
+        if kind in ("url", "bad-url"):
+            if kind == "url" and url_allowed(arg):
+                out.append(css[i:end])
+            else:
+                out.append(
+                    _NONE_THEN_COMMENT if _continues_a_name(css, end) else "none"
+                )
         elif kind == "function" and arg in _URL_FUNCTIONS:
             close = _block_end(css, end, ")")
-            out.append(css[i:close] if _arguments_safe(css, end, close) else "none")
+            if _arguments_safe(css, end, close):
+                out.append(css[i:close])
+            else:
+                out.append(
+                    _NONE_THEN_COMMENT if _continues_a_name(css, close) else "none"
+                )
             end = close
         else:
             out.append(css[i:end])
+        prev_kind, prev_arg = kind, arg
         i = end
     return "".join(out)
 

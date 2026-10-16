@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 
 import pytest
@@ -10,19 +11,52 @@ import pytest
 from app.services.css_sanitize import sanitize_custom_css
 
 # One list of cases for both implementations; frontend/src/customCss.test.ts runs it too.
-_VECTORS = json.loads(
-    (
-        Path(__file__).resolve().parents[2]
-        / "frontend"
-        / "src"
-        / "customCssSanitize.vectors.json"
-    ).read_text(encoding="utf-8")
+_VECTORS_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "frontend"
+    / "src"
+    / "customCssSanitize.vectors.json"
 )
+_VECTORS = json.loads(_VECTORS_PATH.read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize("vector", _VECTORS, ids=[v["name"] for v in _VECTORS])
 def test_sanitize_vectors(vector):
     assert sanitize_custom_css(vector["input"]) == vector["output"]
+
+
+@pytest.mark.parametrize("vector", _VECTORS, ids=[v["name"] for v in _VECTORS])
+def test_sanitize_is_idempotent_on_the_vectors(vector):
+    once = sanitize_custom_css(vector["input"])
+    assert sanitize_custom_css(once) == once
+
+
+# Splice corpus, shared with frontend/src/customCss.test.ts: a dangerous construct
+# is cut at a random point, something the sanitizer removes is put in the cut,
+# and random noise goes around it.
+_CORPUS = json.loads(
+    (_VECTORS_PATH.parent / "customCssSanitize.corpus.json").read_text(encoding="utf-8")
+)
+
+
+def _spliced(rng: random.Random) -> str:
+    text = rng.choice(_CORPUS["targets"])
+    for _ in range(rng.randint(1, 3)):
+        cut = rng.randint(0, len(text))
+        text = text[:cut] + rng.choice(_CORPUS["removable"]) + text[cut:]
+    noise = _CORPUS["noise"]
+    before = "".join(rng.choice(noise) for _ in range(rng.randint(0, 4)))
+    after = "".join(rng.choice(noise) for _ in range(rng.randint(0, 4)))
+    return before + text + after
+
+
+def test_sanitize_is_idempotent_on_generated_inputs():
+    """sanitize(sanitize(x)) == sanitize(x): removing something never makes a URL."""
+    rng = random.Random(20261016)  # noqa: S311 - reproducible test inputs
+    for _ in range(3000):
+        css = _spliced(rng)
+        once = sanitize_custom_css(css)
+        assert sanitize_custom_css(once) == once, css
 
 
 def test_saving_settings_sanitizes_css_everywhere_it_appears(client):

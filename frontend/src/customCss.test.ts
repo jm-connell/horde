@@ -7,6 +7,7 @@ import {
   sanitizeCustomCss,
   stripRemoteCss,
 } from "./customCss";
+import corpus from "./customCssSanitize.corpus.json";
 import vectors from "./customCssSanitize.vectors.json";
 
 describe("normalizeCustomCss", () => {
@@ -71,6 +72,40 @@ describe("stripRemoteCss", () => {
       expect(stripRemoteCss(vector.input)).toBe(vector.output);
     });
   }
+
+  it("is idempotent on the vectors", () => {
+    for (const vector of vectors) {
+      const once = stripRemoteCss(vector.input);
+      expect(stripRemoteCss(once), vector.name).toBe(once);
+    }
+  });
+
+  it("is idempotent on generated inputs", () => {
+    // Same splice corpus as backend/tests/test_css_sanitize.py: a dangerous
+    // construct is cut at a random point, something the sanitizer removes goes
+    // in the cut, and random noise goes around it. Seeded, so reproducible.
+    let seed = 20261016;
+    const below = (max: number): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return Math.floor((seed / 2 ** 32) * max);
+    };
+    const pick = (items: string[]): string => items[below(items.length)];
+    const noise = (): string => {
+      let text = "";
+      for (let k = below(5); k > 0; k -= 1) text += pick(corpus.noise);
+      return text;
+    };
+    for (let k = 0; k < 3000; k += 1) {
+      let text = pick(corpus.targets);
+      for (let cuts = 1 + below(3); cuts > 0; cuts -= 1) {
+        const cut = below(text.length + 1);
+        text = text.slice(0, cut) + pick(corpus.removable) + text.slice(cut);
+      }
+      const css = noise() + text + noise();
+      const once = stripRemoteCss(css);
+      expect(stripRemoteCss(once), JSON.stringify(css)).toBe(once);
+    }
+  });
 
   it("is applied by sanitizeCustomCss together with the style-tag guard", () => {
     expect(

@@ -233,5 +233,30 @@
     "name": "replaces a remote @font-face source next to unicode-range",
     "input": "@font-face{unicode-range:U+0-7F;src:url(//evil.example/f.woff2)}",
     "output": "@font-face{unicode-range:U+0-7F;src:none}"
+  },
+  {
+    "name": "removing @import never joins the text around it",
+    "input": "a{b:u@import \"x\";rl(https://evil.example/x)}",
+    "output": "a{b:u/**/rl(https://evil.example/x)}"
+  },
+  {
+    "name": "removing @import after an escaped name keeps them apart",
+    "input": "a{b:\\75 @import \"x\";rl(https://evil.example/x)}",
+    "output": "a{b:\\75 /**/rl(https://evil.example/x)}"
+  },
+  {
+    "name": "removing @import after a delimiter keeps any comment opener apart",
+    "input": "a{b:/@import \"x\";*/c}",
+    "output": "a{b://**/*/c}"
+  },
+  {
+    "name": "a replaced url() never merges with the name after it",
+    "input": "a{b:url(https://evil.example/x)image-set(@import \"x\";)}",
+    "output": "a{b:none/**/image-set(@import \"x\";)}"
+  },
+  {
+    "name": "removing @import inside an at-rule name keeps the halves apart",
+    "input": "@imp@import \"x\";ort \"https://evil.example/x.css\";a{}",
+    "output": "@imp/**/ort \"https://evil.example/x.css\";a{}"
   }
 ]

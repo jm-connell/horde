@@ -125,6 +125,11 @@ level. Detailed per-area entries are added by the maintainer at release time.
   form feed inside a string, or a `var()`/`attr()` inside `image-set()` could
   hide a remote URL from it, so a saved stylesheet could still load
   `https://...` resources. Malformed `url()` values are now replaced by `none`.
+- Security: sanitizing custom CSS twice now gives the same result as once.
+  Removing an `@import` could join the text on either side into a new `url()`
+  (`u@import "x";rl(https://...)` became `url(https://...)`), which the app
+  then applied because it sanitizes only once when it starts. The removed rule
+  now leaves an empty comment `/**/` where the two sides would otherwise merge.
 - Unknown API paths spelled with a doubled slash or another case (`//api/x`,
   `/API/x`) now get the JSON 404 instead of the web app's page.
 - The bare `/api` path, also when percent-encoded (`/%61pi`), now reaches the

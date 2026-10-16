@@ -450,10 +450,42 @@ function argumentsSafe(css: string, start: number, stop: number): boolean {
   return true;
 }
 
-/** Remove `@import` and any URL that is not `data:` or same-origin relative. */
+/** True when `css[i]` would extend an identifier written just before it. */
+function continuesAName(css: string, i: number): boolean {
+  return (
+    i < css.length &&
+    (isIdentChar(css[i]) || isValidEscape(css, i) || css[i] === "(")
+  );
+}
+
+/** Replacement for a forbidden URL that ends at `end`. */
+function noneBefore(css: string, end: number): string {
+  return continuesAName(css, end) ? "none/**/" : "none";
+}
+
+/** True when no text that follows a token of this kind can merge into it. */
+function endsCleanly(tok: Token | null): boolean {
+  if (tok === null) return true;
+  if (tok.kind === "whitespace" || tok.kind === "comment") return true;
+  return (
+    tok.kind === "delim" &&
+    (tok.arg === ";" || tok.arg === "{" || tok.arg === "}")
+  );
+}
+
+/**
+ * Remove `@import` and any URL that is not `data:` or same-origin relative.
+ *
+ * Idempotent by construction: a removed `@import` leaves an empty comment
+ * unless the previous token ends cleanly (otherwise `u@import "x";rl(...)`
+ * would become `url(...)`). The `none` that replaces a URL is followed by an
+ * empty comment when the next character would extend it; nothing before a URL
+ * can extend into it.
+ */
 export function stripRemoteCss(input: string): string {
   const css = preprocess(input);
   let out = "";
+  let prev: Token | null = null;
   let i = 0;
   const n = css.length;
   while (i < n) {
@@ -461,16 +493,25 @@ export function stripRemoteCss(input: string): string {
     let end = tok.end;
     if (tok.kind === "at-keyword" && tok.arg === "import") {
       end = preludeEnd(css, end);
+      if (!endsCleanly(prev)) {
+        out += "/**/";
+        prev = { kind: "comment", end, arg: "" };
+      }
+      i = end;
+      continue;
     } else if (tok.kind === "url" || tok.kind === "bad-url") {
       const keep = tok.kind === "url" && cssUrlAllowed(tok.arg);
-      out += keep ? css.slice(i, end) : "none";
+      out += keep ? css.slice(i, end) : noneBefore(css, end);
     } else if (tok.kind === "function" && URL_FUNCTIONS.has(tok.arg)) {
       const close = blockEnd(css, end, ")");
-      out += argumentsSafe(css, end, close) ? css.slice(i, close) : "none";
+      out += argumentsSafe(css, end, close)
+        ? css.slice(i, close)
+        : noneBefore(css, close);
       end = close;
     } else {
       out += css.slice(i, end);
     }
+    prev = tok;
     i = end;
   }
   return out;
