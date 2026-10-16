@@ -31,14 +31,21 @@ export function subscribeToJob(
   return () => source.close();
 }
 
-/** One EventSource for the whole download queue (avoids the HTTP/1.1 socket cap). */
+/**
+ * One EventSource for the whole download queue (avoids the HTTP/1.1 socket cap).
+ * `onConnection` reports the stream going up (`true`) and down (`false`); the
+ * browser reconnects by itself, so it may report `true` again later.
+ */
 export function subscribeToQueue(
-  onEvent: (event: ProgressEvent) => void
+  onEvent: (event: ProgressEvent) => void,
+  onConnection?: (open: boolean) => void
 ): () => void {
   const source = new EventSource("/api/downloads/events");
   source.onmessage = (e) => {
     const parsed = parseFrame(e.data);
     if (parsed) onEvent(parsed);
   };
+  source.onopen = () => onConnection?.(true);
+  source.onerror = () => onConnection?.(false);
   return () => source.close();
 }
