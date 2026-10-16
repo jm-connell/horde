@@ -4,9 +4,9 @@ import threading
 import time
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
-from ...models import DownloadDestination, DownloadJob, JobStatus, Video
+from ...models import DownloadDestination, DownloadJob, JobStatus, Video, require_id
 from .. import library
 from ..url_clean import clean_url, youtube_video_id
 from ..ytdlp_formats import (
@@ -51,8 +51,8 @@ def find_active_job_for_identity(session: Session, url: str) -> DownloadJob | No
     cleaned = clean_url(url, keep_playlist=False) or url
     jobs = session.exec(
         select(DownloadJob)
-        .where(DownloadJob.status.in_(list(ACTIVE_JOB_STATUSES)))
-        .order_by(DownloadJob.id.asc())
+        .where(col(DownloadJob.status).in_(list(ACTIVE_JOB_STATUSES)))
+        .order_by(col(DownloadJob.id).asc())
     ).all()
     for job in jobs:
         other = job.url or ""
@@ -197,7 +197,7 @@ def _finish_restart(
             _save(session, job)
         finally:
             download_queue.release_job(job_id)
-        enqueue_download(job.id)
+        enqueue_download(require_id(job))
         return job
 
 

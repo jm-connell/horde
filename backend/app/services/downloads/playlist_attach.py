@@ -5,7 +5,7 @@ import threading
 
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...context import get_engine
 from ...models import DownloadJob, JobStatus, Playlist, PlaylistItem, Video
@@ -30,8 +30,8 @@ def attach_slot(session: Session, playlist_id: int, job_id: int) -> int:
             .select_from(DownloadJob)
             .where(
                 DownloadJob.playlist_id == playlist_id,
-                DownloadJob.id < job_id,
-                DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading]),
+                col(DownloadJob.id) < job_id,
+                col(DownloadJob.status).in_([JobStatus.queued, JobStatus.downloading]),
             )
         ).one()
     )
@@ -168,7 +168,7 @@ def append_unlisted_playlist_items(
         items = session.exec(
             select(PlaylistItem)
             .where(PlaylistItem.playlist_id == playlist_id)
-            .order_by(PlaylistItem.position)
+            .order_by(col(PlaylistItem.position))
         ).all()
         pos = start_pos
         for item in items:

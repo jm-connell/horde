@@ -14,7 +14,14 @@ from typing import Any
 from sqlmodel import Session, select
 
 from ...context import get_engine, get_paths
-from ...models import DownloadDestination, DownloadJob, JobStatus, Video, VideoStatus
+from ...models import (
+    DownloadDestination,
+    DownloadJob,
+    JobStatus,
+    Video,
+    VideoStatus,
+    require_id,
+)
 from .. import activity, compat_rendition, library, scanner
 from ..fsutil import MoveJournal, safe_unlink
 from ..media_info import apply_stream_info, needs_compat, probe_stream_info
@@ -162,6 +169,8 @@ def probe_facts(path: Path, info: dict[str, Any], *, is_library: bool) -> MediaF
     file_size = path.stat().st_size if path.exists() else None
     duration = probe_duration(path) or info.get("duration")
     dims = probe_dimensions(path)
+    width: int | None
+    height: int | None
     if dims:
         width, height = dims
     else:
@@ -443,7 +452,7 @@ def _resolve_target(
         return video, True, _stale_files_of(video, request.final_path)
     video = find_video_by_path(session, request.rel_path)
     if video is None:
-        video = Video(file_path=request.rel_path)
+        video = Video(file_path=request.rel_path)  # type: ignore[call-arg]  # table models skip validation; _apply_display_title sets title before the flush
         session.add(video)
     return video, False, []
 
@@ -571,7 +580,7 @@ def commit_library_video(request: CommitRequest) -> CommittedVideo:
             and needs_compat(video, compat_copy_cap())
         )
         return CommittedVideo(
-            video_id=video.id,
+            video_id=require_id(video),
             channel_url=video.channel_url,
             channel_name=video.channel,
             want_sidecar=want_sidecar,

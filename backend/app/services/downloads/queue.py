@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable
 
 from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...config import MAX_DOWNLOAD_CONCURRENCY
 from ...context import get_engine
@@ -169,7 +169,9 @@ class DownloadQueue:
         with Session(get_engine()) as session:
             for job in session.exec(
                 select(DownloadJob).where(
-                    DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading])
+                    col(DownloadJob.status).in_(
+                        [JobStatus.queued, JobStatus.downloading]
+                    )
                 )
             ).all():
                 if job.id in ffmpeg_ids:
@@ -289,7 +291,7 @@ class DownloadQueue:
                     select(func.count())
                     .select_from(DownloadJob)
                     .where(
-                        DownloadJob.status.in_(
+                        col(DownloadJob.status).in_(
                             [JobStatus.queued, JobStatus.downloading]
                         )
                     )
@@ -367,7 +369,7 @@ class DownloadQueue:
                 query = query.where(DownloadJob.id.notin_(excluded))  # type: ignore[union-attr]
             return session.exec(
                 query.order_by(
-                    DownloadJob.created_at.asc(), DownloadJob.id.asc()
+                    col(DownloadJob.created_at).asc(), col(DownloadJob.id).asc()
                 ).limit(1)
             ).first()
 
