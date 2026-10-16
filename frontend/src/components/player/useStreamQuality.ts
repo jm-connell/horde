@@ -112,7 +112,8 @@ export function useStreamQuality({
       p.removeEventListener("variantchanged", sync);
       window.clearInterval(id);
     };
-    // onActiveQualityChange is stable enough via PlaybackContext setter
+    // The caller passes a stable callback (a state setter); do not list it
+    // here, or an unstable one would re-subscribe and restart the poll.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onActiveQualityChange is a stable setter; re-subscribing on its identity would reset the poll
   }, [effectiveStreamType, shakaReady, dashReloadToken, src]);
 

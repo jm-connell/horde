@@ -1,3 +1,4 @@
+import type { SubtitleSize } from "../../hooks/useSettings";
 import type { ViewMode } from "../videoPlayerTypes";
 
 interface LayoutInput {
@@ -9,7 +10,7 @@ interface LayoutInput {
   videoAspect: number | null;
   /** The host lets the mini player be dragged. */
   canMoveMini: boolean;
-  subtitleSize: string;
+  subtitleSize: SubtitleSize;
 }
 
 /** Class names and inline style for the player's wrapper, stage and <video>. */
