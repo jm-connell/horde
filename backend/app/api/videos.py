@@ -175,18 +175,8 @@ def list_videos(
         cache = request.app.state.search_cache
         # Embedding the query can cost money: only members allowed AI get it.
         semantic = user.can("use_ai")
-        # Only the watch-state sorts read the caller's history; the ranking is
-        # otherwise the same for everyone, so they share an entry.
-        key = (
-            q.strip(),
-            channel,
-            tag,
-            sort,
-            order,
-            seed,
-            user.id if sort == "last_watched_at" else None,
-            semantic,
-        )
+        # The ranking is the same for every user, so they share an entry.
+        key = (q.strip(), channel, tag, sort, order, seed, semantic)
 
         def rank() -> tuple[list[int], dict[int, int]]:
             found, found_chunks = hybrid_search(
@@ -207,9 +197,14 @@ def list_videos(
             )
             return [v.id for v in found if v.id is not None], found_chunks
 
-        ranked_ids, chunks = cache.ranking(
-            key, lambda: library_fingerprint(session), rank
-        )
+        if sort == "last_watched_at":
+            # Ordered by the caller's watch history, which changes with every
+            # play and is not part of the cache's invalidation: rank afresh.
+            ranked_ids, chunks = rank()
+        else:
+            ranked_ids, chunks = cache.ranking(
+                key, lambda: library_fingerprint(session), rank
+            )
         window_ids = ranked_ids[page.offset : page.offset + page.fetch]
         by_id = {
             v.id: v

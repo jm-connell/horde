@@ -123,6 +123,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - Members no longer see the AI setup in `GET /api/ai/status` (provider type,
   schedule, workload profile, GPU tier and source, OpenRouter reachability) or
   the `openrouter` block of `GET /api/health`.
+- A search sorted by last watched now reflects what you just watched; that sort
+  is no longer served from the two-minute ranking cache.
 - Known advisories in FastAPI/Starlette/python-multipart and in the frontend
   build toolchain.
 - Documentation now states that `DATA_PATH` must be a local disk (SQLite WAL is

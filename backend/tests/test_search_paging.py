@@ -289,7 +289,7 @@ def test_watch_history_sort_is_ranked_per_user(
         ]
     assert sorted(admin_first) == sorted(member_first)
     assert member_first[0] == ids[2] != admin_first[0]
-    assert client.app.state.search_cache.computes == 2, "one ranking per user"
+    assert client.app.state.search_cache.computes == 0, "watch history is not cached"
 
 
 def test_delete_during_a_walk_drops_only_that_video(
@@ -311,3 +311,29 @@ def test_delete_during_a_walk_drops_only_that_video(
     )
     assert second.status_code == 200
     assert victim not in [v["id"] for v in second.json()["items"]]
+
+
+def test_watch_history_sort_follows_new_progress(
+    client, init_db, admin_user, add_video, embedder
+):
+    """Watching a video must move it to the top of a last-watched search at once.
+
+    Progress lives in user_video_state, which the ranking cache does not watch, so
+    that sort is never served from the cache.
+    """
+    from app.services import user_state
+
+    ids = _seed(add_video, embedder, keyword=3, semantic=0)
+    params = {"q": QUERY, "sort": "last_watched_at", "order": "desc"}
+
+    def first() -> int:
+        return client.get("/api/videos", params=params).json()["items"][0]["id"]
+
+    with Session(init_db["engine"]) as s:
+        user_state.record_progress(s, admin_user.id, ids[0], 10.0)
+    assert first() == ids[0]
+    time.sleep(0.01)
+    with Session(init_db["engine"]) as s:
+        user_state.record_progress(s, admin_user.id, ids[2], 10.0)
+    assert first() == ids[2]
+    assert client.app.state.search_cache.computes == 0
