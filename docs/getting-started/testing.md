@@ -153,3 +153,7 @@ Frontend: colocate `*.test.ts` next to the pure helper. Vitest is configured wit
 - [Video player smoke checklist](../reference/video-player-smoke.md)
 - [API overview](../architecture/api-overview.md)
 - [Architecture overview](../architecture/overview.md)
+
+## Benchmarks
+
+`backend/scripts/bench_library.py` builds a throw-away library (10 000 videos and 60 000 embedding chunks by default) and prints median timings for keyword search, tag filters, tag listings, YouTube id lookup and vector search. Run it from `backend/` with `PYTHONPATH=. python scripts/bench_library.py`; it never touches your real `DATA_DIR`. Use it before and after changing a query in `services/library.py` or the vector search.
