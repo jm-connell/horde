@@ -517,3 +517,25 @@ def test_queue_events_route_registered(client):
     paths = client.app.openapi()["paths"]
     assert "/api/downloads/events" in paths
     assert "/api/downloads/{job_id}/events" in paths
+
+
+def test_list_jobs_survives_a_legacy_destination_value(client, init_db):
+    from sqlmodel import Session
+
+    from app.models import DownloadJob, JobStatus
+
+    with Session(init_db["engine"]) as session:
+        job = DownloadJob(
+            url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            quality_preset="720p",
+            status=JobStatus.queued,
+            destination="somewhere-old",
+        )
+        session.add(job)
+        session.commit()
+        job_id = job.id
+
+    listed = client.get("/api/downloads")
+    assert listed.status_code == 200
+    row = next(r for r in listed.json() if r["id"] == job_id)
+    assert row["destination"] == "library"

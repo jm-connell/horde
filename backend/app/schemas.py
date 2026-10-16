@@ -226,6 +226,16 @@ class DownloadJobRead(BaseModel):
     superseded: bool = False
     playlist_id: int | None = None
 
+    @field_validator("destination", mode="before")
+    @classmethod
+    def _known_destination(cls, value: object) -> DownloadDestination:
+        # Rows from older versions may hold a value that is no longer valid;
+        # list the job as a library download instead of failing the whole list.
+        try:
+            return DownloadDestination(value)
+        except ValueError:
+            return DownloadDestination.library
+
     @field_validator("video_codec", mode="before")
     @classmethod
     def _normalize_video_codec(cls, value: object) -> str:
