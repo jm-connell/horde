@@ -156,9 +156,11 @@ def test_slow_yt_dlp_work_does_not_stall_other_requests(client, monkeypatch):
     from app.services import stream_preview
 
     release = threading.Event()
+    inside = threading.Semaphore(0)
 
     def slow_resolve(*_a, **_k):
-        release.wait(5)
+        inside.release()
+        release.wait(30)
         raise KeyError("no such subtitle")
 
     monkeypatch.setattr(stream_preview, "resolve_preview_subtitle", slow_resolve)
@@ -170,17 +172,32 @@ def test_slow_yt_dlp_work_does_not_stall_other_requests(client, monkeypatch):
         )
         results.append(r.status_code)
 
+    pings: list[int] = []
+    ping_errors: list[BaseException] = []
+
+    def ping_ten_times() -> None:
+        # A thread that dies on a failed assertion is also "not alive", so the
+        # outcome is handed back and asserted from the test thread.
+        try:
+            for _ in range(10):
+                pings.append(client.get("/api/ping").status_code)
+        except Exception as exc:  # noqa: BLE001 - re-asserted on the test thread below
+            ping_errors.append(exc)
+
     threads = [threading.Thread(target=request_subtitles) for _ in range(3)]
     for t in threads:
         t.start()
     try:
-        time.sleep(0.3)  # all three are now parked in yt-dlp work
-        worst = 0.0
-        for _ in range(10):
-            started = time.monotonic()
-            assert client.get("/api/ping").status_code == 200
-            worst = max(worst, time.monotonic() - started)
-        assert worst < 0.5, f"/api/ping took {worst:.2f}s while yt-dlp work was running"
+        for _ in threads:
+            assert inside.acquire(timeout=10), "a request never reached the yt-dlp work"
+        # All three requests are parked in yt-dlp work. If the work blocked the
+        # event loop the pings could not finish until release (30 s away).
+        pinger = threading.Thread(target=ping_ten_times)
+        pinger.start()
+        pinger.join(10)
+        assert not pinger.is_alive(), "/api/ping stalled while yt-dlp work was running"
+        assert not ping_errors, ping_errors
+        assert pings == [200] * 10
     finally:
         release.set()
         for t in threads:
