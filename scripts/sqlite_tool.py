@@ -8,7 +8,8 @@ Commands:
                     DST, then PRAGMA integrity_check on the copy. SRC defaults
                     to $DATA_DIR/horde.db.
   revision [DB]     Print the Alembic revision (alembic_version.version_num), or
-                    "none" when the table is missing (a pre-Alembic database).
+                    "none" when the table is missing (a pre-Alembic database);
+                    any other error (locked, unreadable) exits non-zero.
 
 Exit status: 0 ok, 3 the database file does not exist, anything else a real
 failure (unreadable, corrupt, locked).
@@ -67,8 +68,13 @@ def revision(db: str) -> None:
     conn = sqlite3.connect(db, timeout=30)
     try:
         row = conn.execute("SELECT version_num FROM alembic_version").fetchone()
-    except sqlite3.OperationalError:
-        row = None  # no alembic_version table: a pre-Alembic database
+    except sqlite3.OperationalError as exc:
+        # Only a missing table means a pre-Alembic database. A locked or
+        # unreadable one must fail (non-zero exit) so update.sh treats the
+        # revision as unknown instead of deciding a migration ran or did not.
+        if "no such table" not in str(exc):
+            raise
+        row = None
     finally:
         conn.close()
     print(row[0] if row and row[0] else "none")

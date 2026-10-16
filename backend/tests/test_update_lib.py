@@ -467,6 +467,35 @@ def test_sqlite_tool_revision_handles_legacy_and_missing_databases(tmp_path):
     )
 
 
+def test_sqlite_tool_revision_fails_instead_of_guessing_none(tmp_path, monkeypatch):
+    """A locked database is not a pre-Alembic one: it must not print "none"."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("sqlite_tool_under_test", SQLITE_TOOL)
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    db = tmp_path / "horde.db"
+    _make_db(db, "0002_integrity").close()
+    real_connect = sqlite3.connect
+
+    class Locked:
+        def __init__(self, conn):
+            self.conn = conn
+
+        def execute(self, *_a, **_k):
+            raise sqlite3.OperationalError("database is locked")
+
+        def close(self):
+            self.conn.close()
+
+    monkeypatch.setattr(
+        tool.sqlite3, "connect", lambda *a, **k: Locked(real_connect(*a, **k))
+    )
+
+    with pytest.raises(sqlite3.OperationalError, match="locked"):
+        tool.revision(str(db))
+
+
 def test_prune_backups_never_deletes_the_protected_folder(tmp_path):
     root = tmp_path / "update-backups"
     for stamp in ("20260101T000000Z", "20260102T000000Z", "20260103T000000Z"):
