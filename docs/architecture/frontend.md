@@ -60,7 +60,7 @@ This preserves playback state across route changes without remounting the media 
 
 ## Settings hydrate + debounce
 
-`useSettings` keeps a **module-level hydrate**: one `GET /api/settings` shared by all subscribers.
+`useSettings` (`hooks/settings/serverSync.ts`) keeps a **module-level hydrate**: one `GET /api/settings` shared by all subscribers.
 
 Edits patch local state immediately and **debounced sync** to the server (~**300 ms**) so typing and slider drags do not spam `PATCH /api/settings`. Appearance and AI panes follow the same pattern.
 
@@ -68,9 +68,9 @@ Edits patch local state immediately and **debounced sync** to the server (~**300
 
 | Area | Notes |
 |------|--------|
-| `pages/Library.tsx` | Browse composition; sidebar/bulk helpers live in `ChannelSidebar`, `LibraryBulkBar`, `libraryCatalogProgress` / `libraryStorage` |
+| `pages/Library.tsx` | Composes the browse page from `pages/library/`: state hooks (`useLibraryQuery` for channel, tag, sort and search; `useLibraryLists`, `useLibraryRefresh`, `useGlobalSearch`, `useChannelCatalog`, `useChannelNavigation`, `useSidebar`, `useQueueDock`, `useTagDrawer`), the select-mode reducer in `bulkSelection.ts`, and components (`LibraryHeader`, `ChannelHeader`, `HomeControls`, `ChannelControls`, `LibrarySidebar`, `TagDrawer`, `LibraryGrid`, `SearchResults`, `QueueDock`). Pure rules (URL parameters, filters, sort transitions) are in `libraryQuery.ts`. The grid renders every card; it is not virtualised, so Tab order, find-in-page and screen readers reach all of it |
 | `components/VideoPlayer.tsx` | Orchestration; types/quality in `videoPlayerTypes` / `videoPlayerQuality`; DASH load in `hooks/useShakaDash`; overlays in `PlayerOverlays` |
-| `hooks/useSettings.ts` | Hydrate + debounced PATCH; `ViewMode` type from `videoPlayerTypes` |
+| `hooks/useSettings.ts` | The hook and the public exports. The rest is in `hooks/settings/`: `types` / `defaults` (schema), `migrations` (legacy local formats), `serverUi` (server `ui` blob mapping), `applyToDom` (theme and CSS variables), `localStore` (browser cache) and `serverSync` (hydration, owner check, debounced PATCH, pagehide flush). `ViewMode` type from `videoPlayerTypes` |
 | `customCss.ts` | User CSS overlay (`#horde-custom-css`) and `data-page` / `data-horde` hooks |
 
 See also the [architecture map](../design/architecture.md#frontend) for where new frontend and backend code belongs.
