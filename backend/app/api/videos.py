@@ -66,7 +66,7 @@ from ..services.paths import (
     rename_video_file,
     resolve_compat_path,
 )
-from ..services.search_cache import SearchCache, library_fingerprint
+from ..services.search_cache import library_fingerprint
 from ..services.sprites import enqueue_sprite_generation
 from ..services.thumbnails import (
     copy_full,
@@ -103,16 +103,6 @@ CONTENT_TYPES = {
     ".webm": "video/webm",
     ".mkv": "video/x-matroska",
 }
-
-
-def _search_cache(request: Request, session: Session) -> SearchCache:
-    """The app's search cache (``lifespan`` builds it; created on first use if absent)."""
-    state = request.app.state
-    cache = getattr(state, "search_cache", None)
-    if cache is None:
-        cache = state.search_cache = SearchCache()
-        cache.attach(session.get_bind())  # type: ignore[arg-type]
-    return cache
 
 
 @router.get("/videos", response_model=VideoPage)
@@ -153,7 +143,7 @@ def list_videos(
         from ..services.ai.provider import resolve_embed_model
         from ..services.ai.search import explain_library_video, hybrid_search
 
-        cache = _search_cache(request, session)
+        cache = request.app.state.search_cache
         # Embedding the query can cost money: only members allowed AI get it.
         semantic = user.can("use_ai")
         # Only the watch-state sorts read the caller's history; the ranking is
@@ -188,7 +178,9 @@ def list_videos(
             )
             return [v.id for v in found if v.id is not None], found_chunks
 
-        ranked_ids, chunks = cache.ranking(key, library_fingerprint(session), rank)
+        ranked_ids, chunks = cache.ranking(
+            key, lambda: library_fingerprint(session), rank
+        )
         window_ids = ranked_ids[page.offset : page.offset + page.fetch]
         by_id = {
             v.id: v

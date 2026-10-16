@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.engine import Engine
 
 from .api import (
     ai,
@@ -183,6 +184,13 @@ def _start_workers(app_: FastAPI, registry: WorkerRegistry) -> None:
         registry.start(backup_worker)
 
 
+def install_caches(app_: FastAPI, bind: Engine) -> None:
+    """Build the request-path caches. ``lifespan`` and the test app both call this."""
+    app_.state.search_cache = SearchCache()
+    app_.state.search_cache.attach(bind)
+    app_.state.duplicate_groups = DuplicateGroupCache()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_dirs()
@@ -201,9 +209,7 @@ async def lifespan(app: FastAPI):
     registry = WorkerRegistry()
     app.state.shutdown_event = shutdown_event
     app.state.workers = registry
-    app.state.search_cache = SearchCache()
-    app.state.search_cache.attach(engine)
-    app.state.duplicate_groups = DuplicateGroupCache()
+    install_caches(app, engine)
     restore_signals = _install_shutdown_signals(shutdown_event)
     try:
         if _e2e_browser():

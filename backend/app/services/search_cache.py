@@ -11,8 +11,10 @@ so page 2 is a slice of what page 1 computed.
 
 Invalidation. An entry is dropped when (a) a video, tag or embedding row is
 committed through the ORM (``invalidate`` is called from the listeners at the
-bottom of this module), (b) the cheap library fingerprint (row counts and newest
-ids) differs from the one it was built under, or (c) it is older than the TTL,
+bottom of this module; ``video_tags`` is written by database triggers, so the
+listener sits on the ``videos`` and ``video_ai_meta`` rows that feed it), (b) every
+30 s a hit re-checks an aggregate fingerprint (row counts, newest ids, newest AI
+meta update), which catches writes that bypass the ORM, or (c) it is older than the TTL,
 which bounds staleness for writes that bypass the ORM. Memory is bounded by the
 entry count and by an estimate of the stored ids; the least recently used entry
 goes first.
@@ -27,7 +29,8 @@ import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Hashable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
@@ -35,9 +38,14 @@ from sqlalchemy.orm import Session as OrmSession
 from sqlalchemy.orm import object_session
 from sqlmodel import Session, func, select
 
-from ..models import Video, VideoEmbedding, VideoTag
+from ..models import Video, VideoAiMeta, VideoEmbedding, VideoTag
 
 TTL_SECONDS = 120.0
+#: A query vector that failed to compute is remembered only this long.
+FAILED_VECTOR_TTL_SECONDS = 5.0
+#: How often a hit re-checks the aggregate fingerprint (a backstop for writes that
+#: bypass the ORM listeners).
+FINGERPRINT_INTERVAL_SECONDS = 30.0
 MAX_ENTRIES = 32
 #: Rough cost of one ranked id (a Python int in a list plus its chunk entry).
 BYTES_PER_HIT = 100
@@ -53,30 +61,45 @@ Ranking = tuple[list[int], dict[int, int]]
 @dataclass
 class _Entry:
     expires: float
-    fingerprint: tuple
-    ids: list[int]
-    chunks: dict[int, int]
-    size: int
+    value: Any
+    size: int = 0
+    fingerprint: tuple = ()
+    checked: float = 0.0
+
+
+@dataclass
+class _Flight:
+    done: threading.Event = field(default_factory=threading.Event)
 
 
 class SearchCache:
+    """Ranked search results and query vectors; see the module docstring.
+
+    The lock only guards dictionary operations. Computing (database work, and the
+    provider call that embeds a query) happens outside it, so a commit that has to
+    call ``invalidate`` never waits for a search. Concurrent requests for the same
+    key share one computation through an in-flight map.
+    """
+
     def __init__(
         self,
         *,
         ttl: float = TTL_SECONDS,
         max_entries: int = MAX_ENTRIES,
         max_bytes: int = MAX_BYTES,
+        fingerprint_interval: float = FINGERPRINT_INTERVAL_SECONDS,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._ttl = ttl
         self._max_entries = max_entries
         self._max_bytes = max_bytes
+        self._fp_interval = fingerprint_interval
         self._clock = clock
-        self._lock = threading.RLock()  # ranking() computes via query_vector()
+        self._lock = threading.Lock()
         self._rankings: OrderedDict[Hashable, _Entry] = OrderedDict()
-        self._vectors: OrderedDict[Hashable, tuple[float, list[float] | None]] = (
-            OrderedDict()
-        )
+        self._vectors: OrderedDict[Hashable, _Entry] = OrderedDict()
+        self._flights: dict[tuple[str, Hashable], _Flight] = {}
+        self._generation = 0
         self._bytes = 0
         #: Rankings computed (cache misses), for tests and diagnostics.
         self.computes = 0
@@ -88,51 +111,106 @@ class SearchCache:
     def invalidate(self) -> None:
         """Drop every ranking. Query vectors stay: they depend on the text only."""
         with self._lock:
+            self._generation += 1
             self._rankings.clear()
             self._bytes = 0
+
+    # -- rankings -----------------------------------------------------------
 
     def ranking(
         self,
         key: Hashable,
-        fingerprint: tuple,
+        fingerprint: Callable[[], tuple],
         compute: Callable[[], Ranking],
     ) -> Ranking:
-        now = self._clock()
-        # Held across the compute so two simultaneous first pages rank once (the
-        # lock is reentrant: ranking computes through query_vector).
-        with self._lock:
-            entry = self._rankings.get(key)
-            if entry is not None:
-                if entry.expires > now and entry.fingerprint == fingerprint:
+        while True:
+            now = self._clock()
+            with self._lock:
+                entry = self._rankings.get(key)
+                if entry is not None and entry.expires <= now:
+                    self._drop(key)
+                    entry = None
+                recheck = entry is not None and now - entry.checked >= self._fp_interval
+                if entry is not None and not recheck:
                     self._rankings.move_to_end(key)
-                    return entry.ids, entry.chunks
-                self._drop(key)
-            ids, chunks = compute()
-            self.computes += 1
-            size = (len(ids) + len(chunks)) * BYTES_PER_HIT
-            if size <= self._max_bytes:
-                self._rankings[key] = _Entry(
-                    now + self._ttl, fingerprint, ids, chunks, size
-                )
-                self._bytes += size
-                self._evict()
-            return ids, chunks
+                    return entry.value
+            if entry is not None:
+                # Outside the lock: three aggregate queries.
+                current = fingerprint()
+                with self._lock:
+                    if self._rankings.get(key) is entry:
+                        if entry.fingerprint == current:
+                            entry.checked = now
+                            self._rankings.move_to_end(key)
+                            return entry.value
+                        self._drop(key)
+                continue
+            flight, owner = self._join(("ranking", key))
+            if not owner:
+                flight.done.wait()
+                continue
+            try:
+                with self._lock:
+                    generation = self._generation
+                stamp = fingerprint()
+                value = compute()
+                size = (len(value[0]) + len(value[1])) * BYTES_PER_HIT
+                with self._lock:
+                    self.computes += 1
+                    # A write committed while we ranked: answer, but do not keep it.
+                    if generation == self._generation and size <= self._max_bytes:
+                        self._rankings[key] = _Entry(
+                            now + self._ttl, value, size, stamp, now
+                        )
+                        self._bytes += size
+                        self._evict()
+                return value
+            finally:
+                self._leave(("ranking", key), flight)
+
+    # -- query vectors ------------------------------------------------------
 
     def query_vector(
         self, key: Hashable, compute: Callable[[], list[float] | None]
     ) -> list[float] | None:
         """The query's embedding, reused by every ranking of the same query text."""
-        now = self._clock()
+        while True:
+            now = self._clock()
+            with self._lock:
+                hit = self._vectors.get(key)
+                if hit is not None and hit.expires > now:
+                    self._vectors.move_to_end(key)
+                    return hit.value
+            flight, owner = self._join(("vector", key))
+            if not owner:
+                flight.done.wait()
+                continue
+            try:
+                vector = compute()
+                ttl = self._ttl if vector else FAILED_VECTOR_TTL_SECONDS
+                with self._lock:
+                    self._vectors[key] = _Entry(now + ttl, vector)
+                    while len(self._vectors) > MAX_VECTORS:
+                        self._vectors.popitem(last=False)
+                return vector
+            finally:
+                self._leave(("vector", key), flight)
+
+    # -- helpers ------------------------------------------------------------
+
+    def _join(self, flight_key: tuple[str, Hashable]) -> tuple[_Flight, bool]:
+        """The in-flight computation for the key, and whether the caller owns it."""
         with self._lock:
-            hit = self._vectors.get(key)
-            if hit is not None and hit[0] > now:
-                self._vectors.move_to_end(key)
-                return hit[1]
-            vector = compute()
-            self._vectors[key] = (now + self._ttl, vector)
-            while len(self._vectors) > MAX_VECTORS:
-                self._vectors.popitem(last=False)
-            return vector
+            flight = self._flights.get(flight_key)
+            if flight is not None:
+                return flight, False
+            flight = self._flights[flight_key] = _Flight()
+            return flight, True
+
+    def _leave(self, flight_key: tuple[str, Hashable], flight: _Flight) -> None:
+        with self._lock:
+            self._flights.pop(flight_key, None)
+        flight.done.set()
 
     def _drop(self, key: Hashable) -> None:
         entry = self._rankings.pop(key, None)
@@ -147,7 +225,7 @@ class SearchCache:
 
 
 def library_fingerprint(session: Session) -> tuple:
-    """Cheap stamp of everything a ranking reads: three aggregate queries."""
+    """Cheap stamp of everything a ranking reads: a few aggregate queries."""
     videos = session.exec(
         select(func.count(), func.max(Video.id), func.sum(Video.needs_review))  # type: ignore[arg-type]
     ).one()
@@ -155,7 +233,10 @@ def library_fingerprint(session: Session) -> tuple:
     embeddings = session.exec(
         select(func.count(), func.max(VideoEmbedding.id))  # type: ignore[arg-type]
     ).one()
-    return (tuple(videos), tuple(tags), tuple(embeddings))
+    meta = session.exec(
+        select(func.count(), func.max(VideoAiMeta.updated_at))  # type: ignore[arg-type]
+    ).one()
+    return (tuple(videos), tuple(tags), tuple(embeddings), tuple(meta))
 
 
 # --- invalidate on commit ------------------------------------------------------
@@ -164,9 +245,9 @@ def library_fingerprint(session: Session) -> tuple:
 @event.listens_for(Video, "after_insert")
 @event.listens_for(Video, "after_update")
 @event.listens_for(Video, "after_delete")
-@event.listens_for(VideoTag, "after_insert")
-@event.listens_for(VideoTag, "after_update")
-@event.listens_for(VideoTag, "after_delete")
+@event.listens_for(VideoAiMeta, "after_insert")
+@event.listens_for(VideoAiMeta, "after_update")
+@event.listens_for(VideoAiMeta, "after_delete")
 @event.listens_for(VideoEmbedding, "after_insert")
 @event.listens_for(VideoEmbedding, "after_update")
 @event.listens_for(VideoEmbedding, "after_delete")
