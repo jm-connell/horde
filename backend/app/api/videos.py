@@ -65,6 +65,7 @@ from ..services.paths import (
     rename_video_file,
     resolve_compat_path,
 )
+from ..services.search_cache import SearchCache, library_fingerprint
 from ..services.sprites import enqueue_sprite_generation
 from ..services.thumbnails import (
     copy_full,
@@ -103,8 +104,19 @@ CONTENT_TYPES = {
 }
 
 
+def _search_cache(request: Request, session: Session) -> SearchCache:
+    """The app's search cache (``lifespan`` builds it; created on first use if absent)."""
+    state = request.app.state
+    cache = getattr(state, "search_cache", None)
+    if cache is None:
+        cache = state.search_cache = SearchCache()
+        cache.attach(session.get_bind())  # type: ignore[arg-type]
+    return cache
+
+
 @router.get("/videos", response_model=VideoPage)
 def list_videos(
+    request: Request,
     q: str | None = None,
     channel: str | None = None,
     tag: str | None = None,
@@ -136,19 +148,55 @@ def list_videos(
         page=page, sort=sort, order=order, seed=seed, session=session, user_id=user.id
     )
     if q and not continue_watching and not watched_only:
+        from ..services.ai import embeddings
+        from ..services.ai.provider import resolve_embed_model
         from ..services.ai.search import explain_library_video, hybrid_search
 
-        videos, chunks = hybrid_search(
-            session,
-            q,
-            channel=channel,
-            tag=tag,
-            sort=sort,
-            order=order,
-            needs_review=False,
-            seed=seed,
-            user_id=user.id,
+        cache = _search_cache(request, session)
+        # Embedding the query can cost money: only members allowed AI get it.
+        semantic = user.can("use_ai")
+        # Only the watch-state sorts read the caller's history; the ranking is
+        # otherwise the same for everyone, so they share an entry.
+        key = (
+            q.strip(),
+            channel,
+            tag,
+            sort,
+            order,
+            seed,
+            user.id if sort == "last_watched_at" else None,
+            semantic,
         )
+
+        def rank() -> tuple[list[int], dict[int, int]]:
+            found, found_chunks = hybrid_search(
+                session,
+                q,
+                channel=channel,
+                tag=tag,
+                sort=sort,
+                order=order,
+                needs_review=False,
+                seed=seed,
+                user_id=user.id,
+                semantic=semantic,
+                embed_query=lambda text: cache.query_vector(
+                    (text.strip(), resolve_embed_model()),
+                    lambda: embeddings.embed_query(text),
+                ),
+            )
+            return [v.id for v in found if v.id is not None], found_chunks
+
+        ranked_ids, chunks = cache.ranking(key, library_fingerprint(session), rank)
+        window_ids = ranked_ids[page.offset : page.offset + page.fetch]
+        by_id = {
+            v.id: v
+            for v in session.exec(
+                select(Video).where(Video.id.in_(window_ids))  # type: ignore[attr-defined]
+            ).all()
+        }
+        # A video deleted since the ranking was cached drops out of the page.
+        videos = [by_id[i] for i in window_ids if i in by_id]
 
         def serialize_hits(rows, states):
             return [
@@ -166,11 +214,10 @@ def list_videos(
             ]
 
         # Ranked in Python, so the cursor is a position in that ranking.
-        window = videos[page.offset : page.offset + page.fetch]
         return build_page(
-            window,
+            videos,
             serialize=serialize_hits,
-            total=len(videos) if include_total else None,
+            total=len(ranked_ids) if include_total else None,
             keyset=False,
             **paging,
         )

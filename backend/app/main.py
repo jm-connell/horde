@@ -59,6 +59,7 @@ from .services.health import HealthCache, build_readiness
 from .services.metrics import CONTENT_TYPE as metrics_content_type
 from .services.metrics import render_metrics
 from .services.scanner import cleanup_orphans, create_scanner_workers
+from .services.search_cache import SearchCache
 from .services.storage_check import network_storage_warning
 from .services.workers import WorkerRegistry
 
@@ -197,6 +198,8 @@ async def lifespan(app: FastAPI):
     registry = WorkerRegistry()
     app.state.shutdown_event = shutdown_event
     app.state.workers = registry
+    app.state.search_cache = SearchCache()
+    app.state.search_cache.attach(engine)
     app.state.duplicate_groups = DuplicateGroupCache()
     restore_signals = _install_shutdown_signals(shutdown_event)
     try:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from sqlmodel import Session
@@ -66,12 +67,16 @@ def hybrid_search(
     needs_review: bool | None = False,
     seed: int | None = None,
     user_id: int | None = None,
+    semantic: bool = True,
+    embed_query: Callable[[str], list[float] | None] | None = None,
 ) -> tuple[list[Video], dict[int, int]]:
     """Merge whole-word keyword hits with embedding nearest neighbors.
 
     Returns (videos, chunk_index_by_video_id) for match-reason snippets.
     When Ollama/embeddings are unavailable, or the query is too short to
-    embed usefully, falls back to keyword-only search.
+    embed usefully, falls back to keyword-only search. ``semantic=False`` skips the
+    embedding half (the caller may not spend AI quota); ``embed_query`` lets the
+    caller reuse a cached query vector.
     """
     keyword = library.query_videos(
         session,
@@ -86,10 +91,15 @@ def hybrid_search(
     )
     chunks: dict[int, int] = {}
 
-    if get_embed_provider() is None or not q.strip() or not query_allows_semantic(q):
+    if (
+        not semantic
+        or get_embed_provider() is None
+        or not q.strip()
+        or not query_allows_semantic(q)
+    ):
         return keyword, chunks
 
-    query_vec = embeddings.embed_query(q)
+    query_vec = (embed_query or embeddings.embed_query)(q)
     if query_vec is None:
         return keyword, chunks
 
