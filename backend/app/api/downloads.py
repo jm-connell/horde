@@ -18,6 +18,7 @@ from ..config import DOWNLOADS_DIR
 from ..database import engine, get_session
 from ..errors import CodedHTTPException, extraction_error
 from ..models import DownloadDestination, DownloadJob, JobStatus, Playlist, Video
+from ..openapi_responses import EVENT_STREAM, FILE_DOWNLOAD, RAW
 from ..schemas import (
     DownloadBulkCreate,
     DownloadBulkResult,
@@ -238,7 +239,7 @@ def resume_queue():
     )
 
 
-@router.get("/events")
+@router.get("/events", response_class=RAW, responses=EVENT_STREAM)
 async def queue_events(request: Request) -> StreamingResponse:
     """One EventSource for the whole download queue (avoids HTTP/1.1 socket cap)."""
 
@@ -634,7 +635,10 @@ def get_job(job_id: int, session: Session = Depends(get_session)):
 
 
 @router.get(
-    "/{job_id}/file", dependencies=[Depends(require_permission("offline_download"))]
+    "/{job_id}/file",
+    response_class=RAW,
+    responses=FILE_DOWNLOAD,
+    dependencies=[Depends(require_permission("offline_download"))],
 )
 def download_device_file(job_id: int, session: Session = Depends(get_session)):
     """Serve an ephemeral device-destination download as a browser attachment."""
@@ -676,7 +680,7 @@ def _job_status(job_id: int) -> JobStatus | None:
         return job.status if job is not None else None
 
 
-@router.get("/{job_id}/events")
+@router.get("/{job_id}/events", response_class=RAW, responses=EVENT_STREAM)
 async def job_events(job_id: int, request: Request) -> StreamingResponse:
     """Progress stream for one job: 404 for an unknown job, closes once it finishes."""
     if await asyncio.to_thread(_job_status, job_id) is None:

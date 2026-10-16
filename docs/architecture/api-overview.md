@@ -17,6 +17,10 @@ Signed-in clients can mutate the library; server settings need an administrator 
 
 Use `/docs` as the live catalog of request/response shapes. This wiki does **not** enumerate every endpoint.
 
+### Response models
+
+Every JSON route declares a `response_model`; routes that send bytes, files or event streams declare the media type in `responses=` instead (`app/openapi_responses.py`). `tests/test_response_models.py` fails when a new route does neither, so `/openapi.json` always describes what the API returns.
+
 ### Errors
 
 Every error response, whichever layer raised it (host check, CSRF, sign-in, validation, a route, or an unexpected crash), has the same JSON body:

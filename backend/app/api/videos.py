@@ -11,6 +11,21 @@ from ..auth import current_user, require_admin, require_permission
 from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
 from ..database import get_session
 from ..models import DownloadJob, JobStatus, User, Video
+from ..openapi_responses import (
+    EVENT_STREAM,
+    FILE_DOWNLOAD,
+    IMAGE_JPEG,
+    RAW,
+    SUBTITLES,
+    VIDEO_STREAM,
+)
+from ..response_schemas import (
+    OkResponse,
+    SpriteGenerateResult,
+    SpriteMetaRead,
+    ThumbnailCandidates,
+    VideoAiChatHistory,
+)
 from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
@@ -621,7 +636,9 @@ class VideoAiChatRequest(BaseModel):
 
 
 @router.get(
-    "/videos/{video_id}/ai/chat", dependencies=[Depends(require_permission("use_ai"))]
+    "/videos/{video_id}/ai/chat",
+    response_model=VideoAiChatHistory,
+    dependencies=[Depends(require_permission("use_ai"))],
 )
 def get_video_ai_chat(
     video_id: int,
@@ -637,7 +654,9 @@ def get_video_ai_chat(
 
 
 @router.delete(
-    "/videos/{video_id}/ai/chat", dependencies=[Depends(require_permission("use_ai"))]
+    "/videos/{video_id}/ai/chat",
+    response_model=OkResponse,
+    dependencies=[Depends(require_permission("use_ai"))],
 )
 def delete_video_ai_chat(
     video_id: int,
@@ -654,7 +673,10 @@ def delete_video_ai_chat(
 
 
 @router.post(
-    "/videos/{video_id}/ai/chat", dependencies=[Depends(require_permission("use_ai"))]
+    "/videos/{video_id}/ai/chat",
+    response_class=RAW,
+    responses=EVENT_STREAM,
+    dependencies=[Depends(require_permission("use_ai"))],
 )
 def post_video_ai_chat(
     video_id: int,
@@ -705,6 +727,7 @@ def upload_thumbnail(
 
 @router.post(
     "/videos/{video_id}/thumbnail/candidates",
+    response_model=ThumbnailCandidates,
     dependencies=[Depends(require_permission("edit_metadata"))],
 )
 def generate_thumbnail_candidates(
@@ -755,7 +778,11 @@ def generate_thumbnail_candidates(
     }
 
 
-@router.get("/videos/{video_id}/thumbnail/candidates/{index}")
+@router.get(
+    "/videos/{video_id}/thumbnail/candidates/{index}",
+    response_class=RAW,
+    responses=IMAGE_JPEG,
+)
 def get_thumbnail_candidate(
     video_id: int,
     index: int,
@@ -800,7 +827,7 @@ def select_thumbnail_candidate(
     return _to_read(video, session, user_id=user.id)
 
 
-@router.get("/thumbnails/{video_id}")
+@router.get("/thumbnails/{video_id}", response_class=RAW, responses=IMAGE_JPEG)
 def get_thumbnail(
     video_id: int,
     size: str | None = Query(None),
@@ -821,7 +848,7 @@ def get_thumbnail(
     return FileResponse(path, media_type="image/jpeg")
 
 
-@router.get("/videos/{video_id}/sprites/meta")
+@router.get("/videos/{video_id}/sprites/meta", response_model=SpriteMetaRead)
 def get_sprite_meta(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
@@ -832,7 +859,7 @@ def get_sprite_meta(video_id: int, session: Session = Depends(get_session)):
     return meta
 
 
-@router.get("/videos/{video_id}/sprites")
+@router.get("/videos/{video_id}/sprites", response_class=RAW, responses=IMAGE_JPEG)
 def get_sprite_sheet(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
@@ -843,7 +870,7 @@ def get_sprite_sheet(video_id: int, session: Session = Depends(get_session)):
     return FileResponse(path, media_type="image/jpeg")
 
 
-@router.post("/videos/{video_id}/sprites/generate")
+@router.post("/videos/{video_id}/sprites/generate", response_model=SpriteGenerateResult)
 def generate_sprites(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
@@ -855,7 +882,9 @@ def generate_sprites(video_id: int, session: Session = Depends(get_session)):
     return {"status": status}
 
 
-@router.get("/videos/{video_id}/subtitles/{lang}")
+@router.get(
+    "/videos/{video_id}/subtitles/{lang}", response_class=RAW, responses=SUBTITLES
+)
 def get_subtitle(video_id: int, lang: str, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
@@ -887,7 +916,7 @@ def _resolve_rendition(video: Video, rendition: str | None) -> Path | None:
     return path
 
 
-@router.get("/videos/{video_id}/stream")
+@router.get("/videos/{video_id}/stream", response_class=RAW, responses=VIDEO_STREAM)
 def stream_video(
     video_id: int,
     request: Request,
@@ -981,6 +1010,8 @@ def media_token(
 
 @router.get(
     "/videos/{video_id}/file",
+    response_class=RAW,
+    responses=FILE_DOWNLOAD,
     dependencies=[Depends(require_permission("offline_download"))],
 )
 def download_video_file(

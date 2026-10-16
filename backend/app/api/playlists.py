@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from ..auth import current_user, require_permission
 from ..database import get_session
 from ..models import Playlist, PlaylistItem, PlaylistSource, Video
+from ..openapi_responses import IMAGE_JPEG, RAW
 from ..schemas import (
     BulkPlaylistAdd,
     DownloadCreate,
@@ -568,7 +569,7 @@ def reorder_items(
     return get_playlist(playlist_id, session, user)
 
 
-@router.get("/{playlist_id}/thumbnail")
+@router.get("/{playlist_id}/thumbnail", response_class=RAW, responses=IMAGE_JPEG)
 def get_playlist_thumbnail(playlist_id: int, session: Session = Depends(get_session)):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:

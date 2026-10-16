@@ -37,6 +37,14 @@ from .config import DATA_DIR, DOWNLOADS_DIR, ensure_dirs, short_git_sha
 from .database import engine, init_db
 from .errors import error_response
 from .logging_config import configure_logging
+from .openapi_responses import PROMETHEUS_TEXT
+from .response_schemas import (
+    HealthFull,
+    HealthPublic,
+    OkResponse,
+    PingResponse,
+    UpdateCheckRead,
+)
 from .schemas import ReadyResponse
 from .security import install_security
 from .services import app_settings as app_settings_svc
@@ -222,22 +230,6 @@ app = FastAPI(title="Horde", lifespan=lifespan)
 # Host allowlist, CSRF, media-only CORS, security headers (see app/security.py).
 install_security(app)
 
-app.include_router(videos.router)
-app.include_router(compat.router)
-app.include_router(channels.router)
-app.include_router(downloads.router)
-app.include_router(preview.router)
-app.include_router(review.router)
-app.include_router(playlists.router)
-app.include_router(app_settings.router)
-app.include_router(ai.router)
-app.include_router(system.router)
-app.include_router(backgrounds.router)
-app.include_router(fonts.router)
-app.include_router(setup.router)
-app.include_router(auth_api.router)
-app.include_router(users.router)
-
 
 def _health_cache(app_: FastAPI) -> HealthCache:
     """The app's startup-computed health values (built on first use if absent)."""
@@ -247,13 +239,11 @@ def _health_cache(app_: FastAPI) -> HealthCache:
     return cache
 
 
-@app.get("/api/ping")
 def ping():
     """Liveness probe for the PWA: no DB or disk work, never cached."""
     return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
 
-@app.get("/api/ready", response_model=ReadyResponse)
 def ready(request: Request):
     """Readiness probe: database reachable, migrations at head, workers alive."""
     report = build_readiness(
@@ -436,7 +426,6 @@ def _public_health(request: Request) -> dict[str, Any]:
     }
 
 
-@app.get("/api/health")
 def health(request: Request):
     """The full payload for a signed-in user; the bare minimum for anyone else."""
     if getattr(request.state, "user", None) is None:
@@ -444,11 +433,6 @@ def health(request: Request):
     return build_health_payload(request.app)
 
 
-@app.get(
-    "/api/metrics",
-    response_class=PlainTextResponse,
-    dependencies=[Depends(require_admin)],
-)
 def metrics(request: Request) -> PlainTextResponse:
     """Prometheus text format: queues, workers, database size, disk, request counts."""
     return PlainTextResponse(
@@ -456,7 +440,6 @@ def metrics(request: Request) -> PlainTextResponse:
     )
 
 
-@app.get("/api/updates")
 def updates(refresh: bool = False, user: AuthUser = Depends(current_user)):
     """Compare baked-in git SHA to GitHub main (24h cache). Soft-fails offline.
 
@@ -469,9 +452,61 @@ def updates(refresh: bool = False, user: AuthUser = Depends(current_user)):
     return check_for_updates(refresh=refresh)
 
 
+def include_api(target: FastAPI) -> None:
+    """Mount every API router and the status routes on ``target``.
+
+    One list for the production app and the tests' app, so a route added here is
+    exercised (and introspected by the contract tests) exactly as it ships.
+    """
+    for module in (
+        videos,
+        compat,
+        channels,
+        downloads,
+        preview,
+        review,
+        playlists,
+        app_settings,
+        ai,
+        system,
+        backgrounds,
+        fonts,
+        setup,
+        auth_api,
+        users,
+    ):
+        target.include_router(module.router)
+    target.add_api_route(
+        "/api/ping", ping, methods=["GET"], response_model=PingResponse
+    )
+    target.add_api_route(
+        "/api/ready", ready, methods=["GET"], response_model=ReadyResponse
+    )
+    target.add_api_route(
+        "/api/health",
+        health,
+        methods=["GET"],
+        response_model=HealthFull | HealthPublic,
+    )
+    target.add_api_route(
+        "/api/metrics",
+        metrics,
+        methods=["GET"],
+        response_class=PlainTextResponse,
+        responses=PROMETHEUS_TEXT,
+        dependencies=[Depends(require_admin)],
+    )
+    target.add_api_route(
+        "/api/updates", updates, methods=["GET"], response_model=UpdateCheckRead
+    )
+
+
+include_api(app)
+
+
 if _e2e_browser():
 
-    @app.post("/api/e2e/reset")
+    @app.post("/api/e2e/reset", response_model=OkResponse)
     def e2e_reset():
         """Restore browser-test data. Not mounted unless HORDE_E2E=1."""
         from .e2e_seed import prepare

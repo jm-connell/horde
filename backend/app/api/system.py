@@ -11,6 +11,9 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from ..response_schemas import SystemStatsRead
+from ..schemas import SystemActivityRead
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/system", tags=["system"])
@@ -155,7 +158,7 @@ nvidia_gpu = host_gpu
 _nvidia_gpu = host_gpu
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=SystemStatsRead)
 def system_stats():
     cpu_ram = _cpu_ram()
     gpu = host_gpu()
@@ -194,7 +197,7 @@ def system_stats():
     }
 
 
-@router.get("/activity")
+@router.get("/activity", response_model=SystemActivityRead)
 def system_activity():
     """Live + recent background tasks (ffmpeg, downloads, AI, catalog, …)."""
     from ..services import activity

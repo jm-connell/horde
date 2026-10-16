@@ -11,6 +11,17 @@ from sqlmodel import Session
 
 from ..auth import current_user, require_admin
 from ..database import get_session
+from ..response_schemas import (
+    AiApplyWorkloadResult,
+    AiCategoriesRead,
+    AiClearFailedResult,
+    AiConnectionTest,
+    AiJobAction,
+    AiRetryFailedResult,
+    OpenRouterConnectionTest,
+    PausedResponse,
+    RecommendationsRead,
+)
 from ..services.ai import embeddings, recommend, worker
 from ..services.ai.provider import (
     build_status,
@@ -224,7 +235,11 @@ def ai_status(session: Session = Depends(get_session)):
     )
 
 
-@router.post("/apply-workload", dependencies=[Depends(require_admin)])
+@router.post(
+    "/apply-workload",
+    response_model=AiApplyWorkloadResult,
+    dependencies=[Depends(require_admin)],
+)
 def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()):
     """Apply a workload profile: resolve models for the Ollama GPU, save, optional pull."""
     from ..services import app_settings
@@ -265,12 +280,22 @@ def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()
     }
 
 
-@router.post("/test", dependencies=[Depends(require_admin)])
+@router.post(
+    "/test",
+    response_model=AiConnectionTest,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(require_admin)],
+)
 def ai_test(payload: AiTestRequest):
     return test_connection(payload.base_url)
 
 
-@router.post("/openrouter/test", dependencies=[Depends(require_admin)])
+@router.post(
+    "/openrouter/test",
+    response_model=OpenRouterConnectionTest,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(require_admin)],
+)
 def ai_openrouter_test(payload: OpenRouterTestRequest = OpenRouterTestRequest()):
     return test_openrouter_connection(payload.api_key)
 
@@ -380,7 +405,9 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
     )
 
 
-@router.post("/pause", dependencies=[Depends(require_admin)])
+@router.post(
+    "/pause", response_model=PausedResponse, dependencies=[Depends(require_admin)]
+)
 def ai_pause():
     from ..services import app_settings
 
@@ -388,7 +415,9 @@ def ai_pause():
     return {"paused": True}
 
 
-@router.post("/resume", dependencies=[Depends(require_admin)])
+@router.post(
+    "/resume", response_model=PausedResponse, dependencies=[Depends(require_admin)]
+)
 def ai_resume():
     from ..services import app_settings
 
@@ -409,33 +438,49 @@ def ai_list_jobs(
     return [AiJobRow(**row) for row in rows]
 
 
-@router.post("/jobs/retry-failed", dependencies=[Depends(require_admin)])
+@router.post(
+    "/jobs/retry-failed",
+    response_model=AiRetryFailedResult,
+    dependencies=[Depends(require_admin)],
+)
 def ai_retry_failed():
     count = worker.retry_failed_jobs()
     return {"ok": True, "retried": count}
 
 
-@router.post("/jobs/clear-failed", dependencies=[Depends(require_admin)])
+@router.post(
+    "/jobs/clear-failed",
+    response_model=AiClearFailedResult,
+    dependencies=[Depends(require_admin)],
+)
 def ai_clear_failed(keep_days: int = Query(default=0, ge=0, le=365)):
     deleted = worker.clear_failed_jobs(keep_days=keep_days)
     return {"ok": True, "deleted": deleted}
 
 
-@router.post("/jobs/{job_id}/retry", dependencies=[Depends(require_admin)])
+@router.post(
+    "/jobs/{job_id}/retry",
+    response_model=AiJobAction,
+    dependencies=[Depends(require_admin)],
+)
 def ai_retry_job(job_id: int):
     if not worker.retry_job(job_id):
         raise HTTPException(status_code=404, detail="Job not found or not retryable")
     return {"ok": True, "id": job_id}
 
 
-@router.post("/jobs/{job_id}/cancel", dependencies=[Depends(require_admin)])
+@router.post(
+    "/jobs/{job_id}/cancel",
+    response_model=AiJobAction,
+    dependencies=[Depends(require_admin)],
+)
 def ai_cancel_job(job_id: int):
     if not worker.cancel_job(job_id):
         raise HTTPException(status_code=404, detail="Job not found or not cancellable")
     return {"ok": True, "id": job_id}
 
 
-@router.get("/recommendations")
+@router.get("/recommendations", response_model=RecommendationsRead)
 def ai_recommendations(
     category: str | None = Query(default=None),
     limit: int = Query(default=24, ge=1, le=100),
@@ -486,6 +531,6 @@ def ai_recommendations(
     }
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=AiCategoriesRead)
 def ai_categories(session: Session = Depends(get_session)):
     return {"categories": recommend.list_categories(session)}

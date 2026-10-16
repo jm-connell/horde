@@ -13,6 +13,13 @@ from fastapi.responses import FileResponse
 
 from ..auth import require_admin
 from ..config import BACKGROUNDS_DIR, ensure_dirs
+from ..openapi_responses import BACKGROUND_FILE, RAW
+from ..response_schemas import (
+    BackgroundList,
+    BackgroundPalette,
+    BackgroundRead,
+    OkResponse,
+)
 from ..services import uploads
 
 logger = logging.getLogger(__name__)
@@ -85,7 +92,7 @@ def _entry_for(path: Path) -> dict[str, Any]:
     }
 
 
-@router.get("")
+@router.get("", response_model=BackgroundList)
 def list_backgrounds():
     ensure_dirs()
     items: list[dict[str, Any]] = []
@@ -97,7 +104,7 @@ def list_backgrounds():
     return {"items": items}
 
 
-@router.post("", dependencies=[Depends(require_admin)])
+@router.post("", response_model=BackgroundRead, dependencies=[Depends(require_admin)])
 def upload_background(file: UploadFile = File(...)):
     ensure_dirs()
     name = file.filename or "upload.bin"
@@ -147,7 +154,7 @@ def upload_background(file: UploadFile = File(...)):
     }
 
 
-@router.get("/{bg_id}")
+@router.get("/{bg_id}", response_class=RAW, responses=BACKGROUND_FILE)
 def get_background(bg_id: str):
     path = _find_file(_safe_id(bg_id))
     if path is None:
@@ -156,7 +163,9 @@ def get_background(bg_id: str):
     return FileResponse(path, media_type=mime)
 
 
-@router.delete("/{bg_id}", dependencies=[Depends(require_admin)])
+@router.delete(
+    "/{bg_id}", response_model=OkResponse, dependencies=[Depends(require_admin)]
+)
 def delete_background(bg_id: str):
     safe = _safe_id(bg_id)
     path = _find_file(safe)
@@ -172,7 +181,11 @@ def delete_background(bg_id: str):
     return {"ok": True}
 
 
-@router.post("/{bg_id}/palette", dependencies=[Depends(require_admin)])
+@router.post(
+    "/{bg_id}/palette",
+    response_model=BackgroundPalette,
+    dependencies=[Depends(require_admin)],
+)
 def extract_palette(bg_id: str):
     path = _find_file(_safe_id(bg_id))
     if path is None:

@@ -15,6 +15,12 @@ from starlette.concurrency import run_in_threadpool
 
 from ..database import get_session
 from ..errors import extraction_error
+from ..openapi_responses import (
+    DASH_MANIFEST,
+    RAW,
+    SUBTITLES,
+    VIDEO_STREAM,
+)
 from ..schemas import StreamPreviewMeta
 from ..services import library, stream_preview
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
@@ -406,7 +412,7 @@ def preview_meta(
     )
 
 
-@router.get("/subtitles")
+@router.get("/subtitles", response_class=RAW, responses=SUBTITLES)
 async def preview_subtitles(
     request: Request,
     url: str = Query(...),
@@ -504,7 +510,12 @@ async def preview_subtitles(
 # One handler serves both verbs. HEAD stays out of the schema so the OpenAPI
 # document has a single operation id (api_route would emit it twice and warn).
 @router.head("/manifest", include_in_schema=False, dependencies=[Depends(ytdlp_slot)])
-@router.get("/manifest", dependencies=[Depends(ytdlp_slot)])
+@router.get(
+    "/manifest",
+    response_class=RAW,
+    responses=DASH_MANIFEST,
+    dependencies=[Depends(ytdlp_slot)],
+)
 def preview_manifest(request: Request, url: str = Query(...)):
     """DASH MPD for adaptive high-res preview streaming."""
     cleaned = _require_video_url(url)
@@ -537,7 +548,7 @@ def preview_manifest(request: Request, url: str = Query(...)):
     )
 
 
-@router.get("/media")
+@router.get("/media", response_class=RAW, responses=VIDEO_STREAM)
 async def preview_media(
     request: Request,
     token: str = Query(...),
@@ -568,7 +579,7 @@ async def preview_media(
     return await _proxy_upstream(request, resolved, allow_refresh=(token, itag))
 
 
-@router.head("/media")
+@router.head("/media", response_class=RAW, responses=VIDEO_STREAM)
 async def preview_media_head(
     request: Request,
     token: str = Query(...),
@@ -598,7 +609,7 @@ async def preview_media_head(
     return await _head_upstream(request, resolved, allow_refresh=(token, itag))
 
 
-@router.get("/stream")
+@router.get("/stream", response_class=RAW, responses=VIDEO_STREAM)
 async def preview_stream(request: Request, url: str = Query(...)):
     """Legacy progressive (<=720p) proxy — kept as fallback."""
     cleaned = await run_in_threadpool(_require_video_url, url)

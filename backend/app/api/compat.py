@@ -11,6 +11,7 @@ from sqlmodel import Session
 from ..auth import require_admin, require_permission
 from ..database import get_session
 from ..models import Video
+from ..response_schemas import CompatCancelResult, CompatSummaryRead
 from ..schemas import CompatState
 from ..services import compat_rendition
 from ..services.media_info import needs_compat
@@ -135,7 +136,7 @@ def delete_compat(video_id: int, session: Session = Depends(get_session)):
     session.commit()
 
 
-@router.get("/compat/summary")
+@router.get("/compat/summary", response_model=CompatSummaryRead)
 def compat_summary(session: Session = Depends(get_session)):
     return compat_rendition.library_summary(session)
 
@@ -193,7 +194,11 @@ def convert_library(
     return CompatBulkResult(queued=queued, already_queued=already)
 
 
-@router.post("/compat/cancel", dependencies=[Depends(require_admin)])
+@router.post(
+    "/compat/cancel",
+    response_model=CompatCancelResult,
+    dependencies=[Depends(require_admin)],
+)
 def compat_cancel(payload: CompatCancelRequest | None = None):
     dropped = compat_rendition.cancel_all(payload.kind if payload else None)
     return {"cancelled": dropped}

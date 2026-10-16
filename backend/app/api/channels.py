@@ -10,6 +10,7 @@ from sqlmodel import Session
 
 from ..auth import require_permission
 from ..database import get_session
+from ..response_schemas import ChannelRenameResult
 from ..schemas import (
     ChannelAutodownloadRead,
     ChannelAutodownloadUpdate,
@@ -74,7 +75,7 @@ def list_channels(
 
 @router.patch(
     "/channels",
-    response_model=dict,
+    response_model=ChannelRenameResult,
     dependencies=[Depends(require_permission("edit_metadata"))],
 )
 def rename_channel(payload: ChannelRename, session: Session = Depends(get_session)):

@@ -13,6 +13,8 @@ from fastapi.responses import FileResponse
 
 from ..auth import require_admin
 from ..config import FONTS_DIR, ensure_dirs
+from ..openapi_responses import FONT_FILE, RAW
+from ..response_schemas import FontList, FontRead, OkResponse
 from ..services import uploads
 
 logger = logging.getLogger(__name__)
@@ -78,7 +80,7 @@ def _entry_for(path: Path) -> dict[str, Any]:
     }
 
 
-@router.get("")
+@router.get("", response_model=FontList)
 def list_fonts():
     ensure_dirs()
     items: list[dict[str, Any]] = []
@@ -90,7 +92,7 @@ def list_fonts():
     return {"items": items}
 
 
-@router.post("", dependencies=[Depends(require_admin)])
+@router.post("", response_model=FontRead, dependencies=[Depends(require_admin)])
 def upload_font(file: UploadFile = File(...)):
     ensure_dirs()
     name = file.filename or "font.bin"
@@ -128,7 +130,7 @@ def upload_font(file: UploadFile = File(...)):
     }
 
 
-@router.get("/{font_id}")
+@router.get("/{font_id}", response_class=RAW, responses=FONT_FILE)
 def get_font(font_id: str):
     path = _find_file(_safe_id(font_id))
     if path is None:
@@ -141,7 +143,9 @@ def get_font(font_id: str):
     )
 
 
-@router.delete("/{font_id}", dependencies=[Depends(require_admin)])
+@router.delete(
+    "/{font_id}", response_model=OkResponse, dependencies=[Depends(require_admin)]
+)
 def delete_font(font_id: str):
     safe = _safe_id(font_id)
     path = _find_file(safe)

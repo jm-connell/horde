@@ -261,31 +261,11 @@ def set_watch(session) -> Callable[..., Any]:
 @pytest.fixture
 def app(init_db, monkeypatch):
     """FastAPI app with the real routers but no production lifespan/workers."""
-    from fastapi import Depends, FastAPI
+    from fastapi import FastAPI
     from sqlmodel import Session as DBSession
 
-    from app.api import (
-        ai,
-        app_settings,
-        backgrounds,
-        channels,
-        compat,
-        downloads,
-        fonts,
-        playlists,
-        preview,
-        review,
-        setup,
-        system,
-        users,
-        videos,
-    )
-    from app.api import (
-        auth as auth_api,
-    )
-    from app.auth import require_admin
     from app.database import get_session
-    from app.main import health, metrics, ping, ready
+    from app.main import include_api
     from app.security import install_security
     from app.services import downloader
     from app.services.auth.runtime import AuthConfig
@@ -302,30 +282,7 @@ def app(init_db, monkeypatch):
     )
 
     test_app = FastAPI(title="Horde test")
-    test_app.include_router(videos.router)
-    test_app.include_router(compat.router)
-    test_app.include_router(channels.router)
-    test_app.include_router(downloads.router)
-    test_app.include_router(preview.router)
-    test_app.include_router(review.router)
-    test_app.include_router(playlists.router)
-    test_app.include_router(app_settings.router)
-    test_app.include_router(ai.router)
-    test_app.include_router(system.router)
-    test_app.include_router(backgrounds.router)
-    test_app.include_router(fonts.router)
-    test_app.include_router(setup.router)
-    test_app.include_router(auth_api.router)
-    test_app.include_router(users.router)
-    test_app.add_api_route("/api/health", health, methods=["GET"])
-    test_app.add_api_route("/api/ready", ready, methods=["GET"])
-    test_app.add_api_route("/api/ping", ping, methods=["GET"])
-    test_app.add_api_route(
-        "/api/metrics",
-        metrics,
-        methods=["GET"],
-        dependencies=[Depends(require_admin)],
-    )
+    include_api(test_app)
     # Explicit config so a developer's HORDE_AUTH_DISABLED never leaks into tests.
     install_security(test_app, auth_config=AuthConfig())
 
