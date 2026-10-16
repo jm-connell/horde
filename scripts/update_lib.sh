@@ -386,3 +386,11 @@ horde_schema_changed() {
   local before="$1" after="$2"
   [[ -n "$before" && -n "$after" && "$before" != "$after" ]]
 }
+
+# Can the version we would roll back to run on the migrated database? Versions
+# from before the Alembic overhaul ("none": the database had no revision table)
+# have no check for an unknown schema revision and tolerate the added tables.
+# Every later version refuses to start on a revision it does not know.
+horde_old_version_tolerates_schema() {
+  [[ "$1" == "none" ]]
+}

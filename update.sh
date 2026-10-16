@@ -537,6 +537,16 @@ perform_rollback() {
   elif [[ "$changed" -eq 1 || "$unknown" -eq 1 ]]; then
     if [[ "$how" == "auto" && "$changed" -eq 1 ]]; then
       restore=1
+    elif [[ "$how" == "manual" && "$changed" -eq 1 && "$unknown" -eq 0 ]] \
+      && horde_old_version_tolerates_schema "$revision_before"; then
+      {
+        echo "The previous version predates the migration system and runs on the migrated database."
+        echo "Going back WITHOUT restoring the database. Note:"
+        echo "  - watch history recorded per account since the update is not visible to the previous version;"
+        echo "  - history the previous version records is not picked up again when you update."
+        echo "To discard everything written since the update instead:"
+        echo "  bash update.sh --rollback --restore-db"
+      } >&2
     else
       {
         if [[ "$changed" -eq 1 ]]; then

@@ -376,6 +376,17 @@ def test_schema_changed_decides_database_restore():
     ]
 
 
+def test_only_a_pre_alembic_version_tolerates_a_migrated_database():
+    out = _check(
+        """
+        horde_old_version_tolerates_schema "none" && echo pre_alembic
+        horde_old_version_tolerates_schema "0001" || echo has_check
+        horde_old_version_tolerates_schema "" || echo unknown
+        """
+    )
+    assert out.split() == ["pre_alembic", "has_check", "unknown"]
+
+
 def test_version_string_uses_nearest_release_tag(stack):
     work, _ = stack
     assert _check("horde_version_string", cwd=work) == "dev"

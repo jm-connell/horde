@@ -389,6 +389,25 @@ def test_manual_rollback_after_a_migration_refuses_before_touching_anything(harn
     assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
 
 
+def test_manual_rollback_to_a_pre_alembic_version_needs_no_database_restore(harness):
+    """The pre-Alembic code runs on the migrated database, so refusing was wrong."""
+    harness.publish()
+    harness.set(revision="none", revision_before="none", revision_new="0001_baseline")
+    assert harness.run().returncode == 0
+    assert harness.read_state()["revision"] == "0001_baseline"
+
+    result = harness.run("--rollback")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "WITHOUT restoring the database" in result.stderr
+    assert "not visible to the previous version" in result.stderr
+    assert "--restore-db" in result.stderr  # offered as the alternative
+    state = harness.read_state()
+    assert "restored" not in state
+    assert state["tags"]["horde:latest"] == "sha256:old"
+    assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+
+
 def test_manual_rollback_without_a_migration_just_switches_back(harness):
     harness.publish()
     assert harness.run().returncode == 0

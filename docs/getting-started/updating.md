@@ -104,6 +104,9 @@ bash update.sh --rollback --restore-db # also restore the pre-update database ba
 
 If a migration ran (or the revision cannot be read), `--rollback` **refuses before stopping or changing anything**, because the previous version would refuse to start on the migrated database and you may have days of new data. It tells you to re-run with `--restore-db` if you accept losing that data. Only the most recent update can be rolled back.
 
+!!! note "Rolling back to a version from before accounts and migrations"
+    The one exception is an install whose database had no `alembic_version` table before the update (a version from before the migration system). That older code has no check for an unknown schema revision and runs fine on the migrated database, so `--rollback` goes back **without** restoring the database and prints a warning instead of refusing. Two things to expect: watch history recorded per account since the update is invisible to the old version, and history the old version records afterwards is not picked up again when you update later. Use `--rollback --restore-db` instead if you would rather return to the exact pre-update database and lose everything written since.
+
 !!! note "Upstream is unchanged"
     Rolling back does not change GitHub. Running `update.sh` again pulls the same upstream commit. Wait for a fix, or stay on the old version until you want to retry.
 
