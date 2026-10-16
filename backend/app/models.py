@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from enum import Enum
-from typing import overload
+from typing import Protocol, overload
 
 from sqlalchemy import Column, Index, String, UniqueConstraint, event
 from sqlmodel import Field, SQLModel
@@ -54,6 +54,17 @@ class DownloadDestination(str, Enum):
 # Tables whose ids are referenced from elsewhere use AUTOINCREMENT so a deleted
 # id is never reissued to an unrelated row.
 _AUTOINCREMENT = {"sqlite_autoincrement": True}
+
+
+class _HasId(Protocol):
+    id: int | None
+
+
+def require_id(row: _HasId) -> int:
+    """The primary key of a row that has been flushed (``None`` only before that)."""
+    if row.id is None:
+        raise RuntimeError(f"{type(row).__name__} has not been saved yet")
+    return row.id
 
 
 class Video(SQLModel, table=True):
