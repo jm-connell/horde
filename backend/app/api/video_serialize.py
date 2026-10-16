@@ -70,15 +70,21 @@ def _watch_fields(
 
 
 def to_read_many(
-    videos: Iterable[Video], session: Session, *, user_id: int | None, **kwargs
+    videos: Iterable[Video],
+    session: Session,
+    *,
+    user_id: int | None,
+    states: Mapping[int, UserVideoState] | None = None,
+    **kwargs,
 ) -> list[VideoRead]:
     """Serialize a list, reading the user's watch state for all of it in one query."""
     rows = list(videos)
-    states = (
-        user_state.get_states(session, user_id, (v.id for v in rows if v.id))
-        if user_id is not None
-        else {}
-    )
+    if states is None:
+        states = (
+            user_state.get_states(session, user_id, (v.id for v in rows if v.id))
+            if user_id is not None
+            else {}
+        )
     return [to_read(v, session, user_id=user_id, states=states, **kwargs) for v in rows]
 
 

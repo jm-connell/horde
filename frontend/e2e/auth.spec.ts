@@ -148,7 +148,7 @@ test("a member without delete_videos sees no delete action", async ({
   baseURL,
   request,
 }) => {
-  const list = await (await request.get("/api/videos")).json();
+  const { items: list } = await (await request.get("/api/videos")).json();
   const id = list.find((v: { title: string }) => v.title === "Kiln fire").id;
 
   // Admin: Delete is in the actions menu.

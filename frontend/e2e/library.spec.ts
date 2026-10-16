@@ -124,3 +124,33 @@ test("continue watching dismisses from the row", async ({ page }) => {
   ).toHaveCount(0);
   await expect(videoCard(page, "Aurora Drift")).toBeVisible();
 });
+
+test("a library the server hands over in pages still shows every video", async ({
+  page,
+}) => {
+  // Re-cut the real answer into one-video pages: the grid has to follow the cursors.
+  const cursors: (string | null)[] = [];
+  await page.route(/\/api\/videos\?/, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("continue_watching")) return route.fallback();
+    const cursor = url.searchParams.get("cursor");
+    cursors.push(cursor);
+    url.searchParams.delete("cursor");
+    url.searchParams.set("limit", "500");
+    const real = await route.fetch({ url: url.toString() });
+    const all: unknown[] = (await real.json()).items;
+    const at = cursor ? Number(cursor) : 0;
+    await route.fulfill({
+      response: real,
+      json: {
+        items: all.slice(at, at + 1),
+        next_cursor: at + 1 < all.length ? String(at + 1) : null,
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
+  await expect(videoCard(page, "Kiln fire")).toBeVisible();
+  await expect(videoCard(page, "Harbor Lights")).toBeVisible();
+  expect(cursors.length).toBeGreaterThan(2);
+});

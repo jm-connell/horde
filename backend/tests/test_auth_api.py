@@ -102,7 +102,9 @@ def test_bootstrap_moves_legacy_history_settings_and_chat_to_the_admin(
     )
 
     row = next(
-        r for r in fresh_client.get("/api/videos").json() if r["id"] == watched.id
+        r
+        for r in fresh_client.get("/api/videos").json()["items"]
+        if r["id"] == watched.id
     )
     assert row["last_position_sec"] == 33.0
     assert fresh_client.get("/api/settings").json()["ui"]["theme"] == "oled"

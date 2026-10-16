@@ -70,7 +70,7 @@ test("watch page has no serious accessibility violations", async ({
   page,
   request,
 }) => {
-  const videos: { id: number; title: string }[] = await (
+  const { items: videos }: { items: { id: number; title: string }[] } = await (
     await request.get("/api/videos")
   ).json();
   const id = videos.find((v) => v.title === "Aurora Drift")!.id;

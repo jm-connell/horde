@@ -69,6 +69,26 @@ Library (and preview) media endpoints support HTTP **Range** requests so the bro
 
 Video payloads carry the probed codec fields, `has_compat` on lists, and `compat` (state) on detail. `GET /api/stats/storage` includes `compat_bytes` in its totals.
 
+### Pagination
+
+`GET /api/videos` and `GET /api/review` return a page, not a bare list:
+
+```json
+{ "items": [ ... ], "next_cursor": "eyJ0IjoiayIs...", "total": null }
+```
+
+| Parameter       | Meaning                                                                                                   |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| `limit`         | Rows per page, 1 to 500 (default 100)                                                                     |
+| `cursor`        | The previous page's `next_cursor`. Opaque: do not build or edit one. Missing means the first page         |
+| `include_total` | `true` adds `total` (the number of matches). Off by default because counting is an extra query            |
+
+Follow `next_cursor` until it is `null`. Library cursors are keyset cursors (the sort value and id of the last row), so a video added or removed between two requests never repeats or skips a row. `sort=random` and text search (`q`) have no database ordering, so their cursor is a position in a seeded shuffle or in the ranked hits; a random walk keeps one seed for all its pages. A cursor only works with the `sort` and `order` it was issued for (otherwise `400`). The *Continue watching* shelf (`continue_watching=true`) is at most 12 rows and is never paged.
+
+`GET /api/review/groups` pages the same way (`limit` 1 to 100 groups, default 25; only the groups on the page are checked by AI). Lists that are small by nature are capped instead of paged: `/api/tags` (`limit` up to 5000), `/api/tags/stats` (the `limit` most used, up to 2000) and `/api/playlists` (`limit` up to 1000 with `offset`).
+
+The web UI asks for 500 rows at a time and keeps following the cursor, painting the first page as soon as it arrives. A library under 500 videos therefore takes one request, exactly as before.
+
 ### List vs. detail video payloads
 
 `GET /api/videos` (including `continue_watching`, search, and `watched_only`) and `GET /api/videos/{id}/related` return **card-sized** payloads (no description/chapters/AI meta, no disk stats). Fetch `GET /api/videos/{id}` for the full detail record.

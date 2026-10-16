@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import delete, func
 from sqlalchemy import update as sa_update
@@ -243,9 +243,23 @@ def estimate_playlist_sizes(
 
 
 @router.get("", response_model=list[PlaylistRead])
-def list_playlists(session: Session = Depends(get_session)):
+def list_playlists(
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    session: Session = Depends(get_session),
+):
+    """Playlists in their saved order; ``limit`` caps a pathological library."""
+    return _playlist_reads(session, limit=limit, offset=offset)
+
+
+def _playlist_reads(
+    session: Session, *, limit: int = 1000, offset: int = 0
+) -> list[PlaylistRead]:
     playlists = session.exec(
-        select(Playlist).order_by(Playlist.position, Playlist.created_at.desc())
+        select(Playlist)
+        .order_by(Playlist.position, Playlist.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     ).all()
     if not playlists:
         return []
@@ -327,7 +341,7 @@ def reorder_playlists(
             playlist.position = position[playlist.id]
             session.add(playlist)
     session.commit()
-    return list_playlists(session)
+    return _playlist_reads(session)
 
 
 @router.get("/{playlist_id}", response_model=PlaylistDetail)

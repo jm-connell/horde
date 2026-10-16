@@ -5,10 +5,11 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, func, nullsfirst, nullslast
+from sqlalchemy import and_, func, nullsfirst, nullslast, or_
 from sqlmodel import Session, select
 
 from ..models import UserVideoState, Video
+from .pagination import PageRequest
 from .search_text import keyword_match_clause
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,65 @@ def _apply_sort(statement, sort: str, order: str):
     return statement.order_by(ordering), False
 
 
+#: The Video attribute each sort key reads (``last_watched_at`` is per user).
+_SORT_ATTRS = {
+    "added_at": "added_at",
+    "title": "title",
+    "duration": "duration_sec",
+    "published_at": "published_at",
+    "file_size": "file_size",
+    "view_count": "view_count",
+}
+
+
+def sort_value(video: Video, sort: str, state: UserVideoState | None = None):
+    """The value ``video`` sorts by under ``sort``: what a keyset cursor remembers."""
+    if sort == "last_watched_at":
+        return state.last_watched_at if state is not None else None
+    return getattr(video, _SORT_ATTRS.get(sort, "added_at"))
+
+
+def _keyset_after(statement, sort: str, order: str, page: PageRequest):
+    """Order by (sort key, id) and keep only the rows after the cursor's row.
+
+    SQLite sorts NULL before every value when ascending and after every value when
+    descending, which is what ``_apply_sort`` asks for on the nullable columns and
+    what the other columns do by default, so NULL is handled the same way for all.
+    """
+    column = SORT_COLUMNS.get(sort, Video.added_at)
+    desc = order == "desc"
+    statement = statement.order_by(Video.id.desc() if desc else Video.id.asc())
+    if not page.has_position:
+        return statement
+    after_id = page.after_id
+    id_after = Video.id < after_id if desc else Video.id > after_id
+    value = page.value
+    if value is None:
+        if desc:
+            clause = and_(column.is_(None), id_after)
+        else:
+            clause = or_(and_(column.is_(None), id_after), column.is_not(None))
+    else:
+        past = column < value if desc else column > value
+        clause = or_(past, and_(column == value, id_after))
+        if desc:
+            clause = or_(clause, column.is_(None))
+    return statement.where(clause)
+
+
+_ID_CHUNK = 500
+
+
+def _load_in_order(session: Session, ids: list[int]) -> list[Video]:
+    """The videos with these ids, in this order (missing ids are skipped)."""
+    found: dict[int, Video] = {}
+    for start in range(0, len(ids), _ID_CHUNK):
+        chunk = ids[start : start + _ID_CHUNK]
+        for video in session.exec(select(Video).where(Video.id.in_(chunk))):  # type: ignore[attr-defined]
+            found[video.id] = video
+    return [found[i] for i in ids if i in found]
+
+
 def query_videos(
     session: Session,
     q: str | None = None,
@@ -98,8 +158,13 @@ def query_videos(
     watched_only: bool = False,
     seed: int | None = None,
     user_id: int | None = None,
-) -> list[Video]:
+    page: PageRequest | None = None,
+    count_only: bool = False,
+) -> list[Video] | int:
     """Library rows, newest first by default.
+
+    With ``page`` the result is that page plus one extra row (so the caller can tell
+    whether another page follows); ``count_only`` returns how many rows match.
 
     Anything that reads watch state (``continue_watching``, ``watched_only``,
     ``sort="last_watched_at"``) needs ``user_id``: history belongs to one user,
@@ -153,13 +218,24 @@ def query_videos(
         # Tags are stored as a JSON list string; match the quoted token.
         statement = statement.where(Video.tags.ilike(f'%"{tag}"%'))
 
-    statement, is_random = _apply_sort(statement, sort, order)
+    if count_only:
+        total = session.scalar(select(func.count()).select_from(statement.subquery()))
+        return int(total or 0)
 
-    results = list(session.exec(statement).all())
+    statement, is_random = _apply_sort(statement, sort, order)
     if is_random:
+        # Shuffle ids only: a page needs one position in the shuffle, not every row.
+        ids = list(
+            session.exec(statement.with_only_columns(Video.id).order_by(Video.id))
+        )
         rng = py_random.Random(seed)  # noqa: S311 - seeded shuffle for stable UI ordering, not security
-        rng.shuffle(results)
-    return results
+        rng.shuffle(ids)
+        if page is not None:
+            ids = ids[page.offset : page.offset + page.fetch]
+        return _load_in_order(session, ids)
+    if page is not None:
+        statement = _keyset_after(statement, sort, order, page).limit(page.fetch)
+    return list(session.exec(statement).all())
 
 
 def rename_channel(session: Session, old_name: str, new_name: str) -> int:

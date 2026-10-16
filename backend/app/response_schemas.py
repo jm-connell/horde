@@ -32,6 +32,18 @@ class ErrorResponse(BaseModel):
     )
 
 
+class VideoPage(BaseModel):
+    """One page of videos. Pass ``next_cursor`` back as ``cursor`` for the next."""
+
+    items: list[VideoRead]
+    next_cursor: str | None = Field(
+        default=None, description="Opaque token; null on the last page."
+    )
+    total: int | None = Field(
+        default=None, description="Matching rows; only present with include_total=true."
+    )
+
+
 class OkResponse(BaseModel):
     ok: bool = True
 

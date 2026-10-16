@@ -13,7 +13,7 @@ def _progress(c, video_id, seconds):
 
 
 def _row(c, video_id):
-    return next(r for r in c.get("/api/videos").json() if r["id"] == video_id)
+    return next(r for r in c.get("/api/videos").json()["items"] if r["id"] == video_id)
 
 
 def test_progress_is_private_to_each_user(client, member_client, add_video):
@@ -42,7 +42,7 @@ def test_continue_watching_and_history_are_per_user(client, member_client, add_v
     _progress(member_client, second.id, 90)
 
     def ids(c, **params):
-        return [r["id"] for r in c.get("/api/videos", params=params).json()]
+        return [r["id"] for r in c.get("/api/videos", params=params).json()["items"]]
 
     assert ids(client, continue_watching=True) == [first.id]
     assert ids(member_client, continue_watching=True) == [second.id]

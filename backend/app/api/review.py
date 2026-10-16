@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -11,10 +11,12 @@ from ..auth import current_user, require_permission
 from ..config import DOWNLOADS_DIR, VIDEO_EXTENSIONS
 from ..database import get_session
 from ..models import Video
+from ..response_schemas import VideoPage
 from ..schemas import VideoRead
 from ..services import library, uploads
 from ..services.auth.accounts import AuthUser
 from ..services.metadata import probe_is_playable
+from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
 from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
 from ..services.scanner import (
     ingest_media_file,
@@ -22,6 +24,7 @@ from ..services.scanner import (
     scan_for_new_files,
     unmark_active,
 )
+from .video_page import DEFAULT_LIMIT, MAX_LIMIT, build_page, page_request
 from .video_serialize import to_read as _to_read
 from .video_serialize import to_read_many as _to_read_many
 
@@ -45,14 +48,40 @@ class ScanResult(BaseModel):
     requeued: int
 
 
-@router.get("", response_model=list[VideoRead])
+@router.get("", response_model=VideoPage)
 def review_queue(
-    session: Session = Depends(get_session), user: AuthUser = Depends(current_user)
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    cursor: str | None = None,
+    include_total: bool = False,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
+    """One page of videos waiting for review, newest first."""
+    sort, order = "added_at", "desc"
+    page, _ = page_request(cursor, limit=limit, sort=sort, order=order, seed=None)
     videos = library.query_videos(
-        session, needs_review=True, sort="added_at", order="desc"
+        session, needs_review=True, sort=sort, order=order, page=page
     )
-    return _to_read_many(videos, session, user_id=user.id)
+    total = (
+        library.query_videos(
+            session, needs_review=True, sort=sort, order=order, count_only=True
+        )
+        if include_total
+        else None
+    )
+    return build_page(
+        videos,
+        page,
+        sort=sort,
+        order=order,
+        seed=None,
+        session=session,
+        user_id=user.id,
+        serialize=lambda rows, states: _to_read_many(
+            rows, session, user_id=user.id, states=states
+        ),
+        total=total,
+    )
 
 
 @router.post(
@@ -191,15 +220,28 @@ def _title_tokens(title: str) -> set[str]:
     return set(re.sub(r"[^a-z0-9 ]", "", title.lower()).split())
 
 
-@router.get("/groups")
-def duplicate_groups(
-    session: Session = Depends(get_session), user: AuthUser = Depends(current_user)
-) -> list[Any]:
-    """Return heuristic clusters of likely duplicate videos in the library.
+class DuplicateGroupPage(BaseModel):
+    items: list[DuplicateGroupRead]
+    next_cursor: str | None = None
 
-    Response is a list of DuplicateGroupRead objects. Older clients that expect
-    ``list[list[VideoRead]]`` can still read ``.videos`` from each group.
+
+@router.get("/groups", response_model=DuplicateGroupPage)
+def duplicate_groups(
+    limit: int = Query(25, ge=1, le=100),
+    cursor: str | None = None,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Clusters of likely duplicate videos, ``limit`` groups per page.
+
+    Finding the clusters reads the whole library, but the AI check (one model call
+    per heuristic cluster) and the serialization only run for the groups on the
+    requested page.
     """
+    try:
+        page = parse_cursor(cursor, limit=limit, sort="groups", order="asc")
+    except InvalidCursor as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     all_videos = session.exec(
         select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).all()
@@ -246,6 +288,10 @@ def duplicate_groups(
                 used.add(v.id)
             raw_groups.append(("heuristic", cluster))
 
+    window = raw_groups[page.offset : page.offset + page.fetch]
+    more = len(window) > limit
+    raw_groups = window[:limit]
+
     annotate = False
     ai_unavailable_reason: str | None = None
     try:
@@ -291,4 +337,9 @@ def duplicate_groups(
             entry["ai_confidence"] = 1.0
             entry["ai_reason"] = "Same YouTube video ID"
         out.append(entry)
-    return out
+    next_cursor = (
+        offset_cursor(sort="groups", order="asc", offset=page.offset + limit)
+        if more
+        else None
+    )
+    return DuplicateGroupPage(items=out, next_cursor=next_cursor)

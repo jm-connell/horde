@@ -213,6 +213,37 @@ export interface LibraryQuery {
   signal?: AbortSignal;
 }
 
+/** One page of a cursor-paginated list; `next_cursor` is null on the last page. */
+export interface Page<T> {
+  items: T[];
+  next_cursor: string | null;
+  /** Present only when the request asked for `include_total`. */
+  total?: number | null;
+}
+
+/** Rows asked for per request; the server caps it at 500. */
+const PAGE_SIZE = 500;
+
+/**
+ * Walk a cursor-paginated list to its end. `onPage` sees everything fetched so
+ * far after each page that is not the last, so a screen can paint the first page
+ * while the rest loads in the background.
+ */
+async function collectPages<T>(
+  fetchPage: (cursor: string | null) => Promise<Page<T>>,
+  onPage?: (soFar: T[]) => void
+): Promise<T[]> {
+  const all: T[] = [];
+  let cursor: string | null = null;
+  do {
+    const page: Page<T> = await fetchPage(cursor);
+    all.push(...page.items);
+    cursor = page.next_cursor;
+    if (cursor && onPage) onPage([...all]);
+  } while (cursor);
+  return all;
+}
+
 export interface ChannelQuery {
   sort?: string;
   order?: string;
@@ -284,15 +315,36 @@ export const api = {
     return request<void>(`/api/users/${id}`, { method: "DELETE" });
   },
 
-  listVideos(params: LibraryQuery = {}): Promise<Video[]> {
+  /** One page of the library. `listVideos` walks them all. */
+  listVideosPage(
+    params: LibraryQuery & {
+      limit?: number;
+      cursor?: string | null;
+      include_total?: boolean;
+    } = {}
+  ): Promise<Page<Video>> {
     const { signal, ...query } = params;
     const qs = new URLSearchParams();
     Object.entries(query).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
     });
-    return request<Video[]>(
+    return request<Page<Video>>(
       `/api/videos?${qs.toString()}`,
       signal ? { signal } : undefined
+    );
+  },
+
+  /**
+   * Every matching video. Pages are fetched back to back; `onPage` receives the
+   * list so far after each page but the last (see `collectPages`).
+   */
+  listVideos(
+    params: LibraryQuery = {},
+    onPage?: (soFar: Video[]) => void
+  ): Promise<Video[]> {
+    return collectPages(
+      (cursor) => api.listVideosPage({ ...params, limit: PAGE_SIZE, cursor }),
+      onPage
     );
   },
 
@@ -1017,15 +1069,23 @@ export const api = {
   },
 
   listDuplicateGroups(): Promise<DuplicateGroup[]> {
-    return request<DuplicateGroup[]>("/api/review/groups");
+    return collectPages((cursor) => {
+      const qs = new URLSearchParams({ limit: "100" });
+      if (cursor) qs.set("cursor", cursor);
+      return request<Page<DuplicateGroup>>(`/api/review/groups?${qs}`);
+    });
   },
 
   listReview(): Promise<Video[]> {
-    return request<Video[]>("/api/review");
+    return collectPages((cursor) => {
+      const qs = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      if (cursor) qs.set("cursor", cursor);
+      return request<Page<Video>>(`/api/review?${qs}`);
+    });
   },
 
   listImport(): Promise<Video[]> {
-    return request<Video[]>("/api/review");
+    return api.listReview();
   },
 
   scanImport(): Promise<ImportScanResult> {

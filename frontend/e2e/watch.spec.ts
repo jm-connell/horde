@@ -89,7 +89,7 @@ test("a slow response for the previous video does not replace the current one", 
   page,
   request,
 }) => {
-  const videos: { id: number; title: string }[] = await (
+  const { items: videos }: { items: { id: number; title: string }[] } = await (
     await request.get("/api/videos")
   ).json();
   const slow = videos.find((v) => v.title === "Aurora Drift")!;

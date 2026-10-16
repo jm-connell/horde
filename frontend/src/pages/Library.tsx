@@ -497,7 +497,10 @@ function OnlineLibrary() {
   }, [activeChannel, videos.length, recommendedTabActive]);
 
   useEffect(() => {
-    if (recommendedTabActive) return;
+    if (recommendedTabActive) {
+      setLoading(false);
+      return;
+    }
     const cacheKey = JSON.stringify({
       q: debouncedSearch || "",
       channel: activeChannel || "",
@@ -513,16 +516,22 @@ function OnlineLibrary() {
       // Nothing to show yet (first visit or a filter with no cached match).
       setLoading(true);
     }
+    const ac = new AbortController();
+    const query = {
+      channel: activeChannel || undefined,
+      tag: activeTag || undefined,
+      sort,
+      order,
+      seed: sort === "random" ? randomSeed : undefined,
+      signal: ac.signal,
+    };
     api
-      .listVideos({
-        q: debouncedSearch || undefined,
-        channel: activeChannel || undefined,
-        tag: activeTag || undefined,
-        sort,
-        order,
-        seed: sort === "random" ? randomSeed : undefined,
+      .listVideos({ ...query, q: debouncedSearch || undefined }, (soFar) => {
+        // Show the first page while the rest of a big library streams in.
+        if (!ac.signal.aborted) setVideos(soFar);
       })
       .then(async (matches) => {
+        if (ac.signal.aborted) return;
         setVideos(matches);
         writeLibraryCache(cacheKey, matches);
         if (!debouncedSearch) {
@@ -530,26 +539,24 @@ function OnlineLibrary() {
           return;
         }
         try {
-          const all = await api.listVideos({
-            channel: activeChannel || undefined,
-            tag: activeTag || undefined,
-            sort,
-            order,
-            seed: sort === "random" ? randomSeed : undefined,
-          });
+          const all = await api.listVideos(query);
+          if (ac.signal.aborted) return;
           const matchIds = new Set(matches.map((v) => v.id));
           setOtherVideos(all.filter((v) => !matchIds.has(v.id)));
         } catch {
-          setOtherVideos([]);
+          if (!ac.signal.aborted) setOtherVideos([]);
         }
       })
       .catch(() => {
-        if (!cached) {
+        if (!cached && !ac.signal.aborted) {
           setVideos([]);
           setOtherVideos([]);
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!ac.signal.aborted) setLoading(false);
+      });
+    return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- videos.length is only read to decide whether to show the loading state; re-fetching whenever the list changes would loop
   }, [
     debouncedSearch,

@@ -332,7 +332,7 @@ def test_get_video_processing_chapters(client, add_video, session):
     body = client.get(f"/api/videos/{video.id}").json()
     assert body["processing_chapters"] is True
     assert body["processing_summary"] is False
-    listed = client.get("/api/videos").json()
+    listed = client.get("/api/videos").json()["items"]
     row = next(v for v in listed if v["id"] == video.id)
     assert row["processing_chapters"] is False
 

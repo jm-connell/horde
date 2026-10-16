@@ -43,6 +43,14 @@ level. Detailed per-area entries are added by the maintainer at release time.
   `1.2.0-5-gabc1234`; the in-app update check then only reports **new releases**,
   not every new commit on `main`.
 
+- **API changes for anything calling the HTTP API directly** (the web UI is
+  already updated): `GET /api/videos`, `GET /api/review` and
+  `GET /api/review/groups` return `{items, next_cursor, total?}` pages instead of
+  a bare list, and every error body is `{detail, code, ...}` with `detail` always a
+  string (duplicate-download and link-reading errors no longer nest an object in
+  `detail`; read `code` and `extra.error_kind`). See
+  [docs/architecture/api-overview.md](docs/architecture/api-overview.md).
+
 ### Added
 
 - Accounts: sign-in, an admin plus members with per-account permissions, per-user

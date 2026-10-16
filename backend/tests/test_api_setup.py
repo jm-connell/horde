@@ -34,7 +34,7 @@ def test_reset_keep_media(client, add_video, session, tmp_dirs):
     assert settings["ui"] == {}
     assert settings["ai"]["enabled"] is True
 
-    videos = client.get("/api/videos").json()
+    videos = client.get("/api/videos").json()["items"]
     assert len(videos) == 1
     playlists = client.get("/api/playlists").json()
     assert len(playlists) == 1
@@ -73,5 +73,5 @@ def test_reset_erase_media(client, add_video, session, tmp_dirs):
     settings = client.get("/api/settings").json()
     assert settings["setup_completed"] is False
     assert settings["ui"] == {}
-    assert client.get("/api/videos").json() == []
+    assert client.get("/api/videos").json()["items"] == []
     assert client.get("/api/playlists").json() == []

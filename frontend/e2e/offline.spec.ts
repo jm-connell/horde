@@ -111,9 +111,7 @@ test.describe("offline downloads (mobile)", () => {
     const list = await request.get("/api/videos?limit=100");
     expect(list.ok()).toBe(true);
     const body = await list.json();
-    const items: { id: number; title: string }[] = Array.isArray(body)
-      ? body
-      : (body.items ?? body.videos ?? []);
+    const items: { id: number; title: string }[] = body.items;
     const id = items.find((v) => v.title === TITLE)?.id;
     expect(id, `video "${TITLE}" not in /api/videos`).toBeTruthy();
     const full = await request.get(`/api/videos/${id}/stream`);

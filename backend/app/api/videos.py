@@ -25,6 +25,7 @@ from ..response_schemas import (
     SpriteMetaRead,
     ThumbnailCandidates,
     VideoAiChatHistory,
+    VideoPage,
 )
 from ..schemas import (
     BulkMetadataRefresh,
@@ -66,6 +67,7 @@ from ..services.thumbnails import (
 from ..services.url_safety import validate_public_url
 from ..services.video_delete import delete_video_cascade, remove_files
 from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
+from .video_page import DEFAULT_LIMIT, MAX_LIMIT, build_page, page_request
 from .video_serialize import (
     resolve_media as _resolve_media,
 )
@@ -92,7 +94,7 @@ CONTENT_TYPES = {
 }
 
 
-@router.get("/videos", response_model=list[VideoRead])
+@router.get("/videos", response_model=VideoPage)
 def list_videos(
     q: str | None = None,
     channel: str | None = None,
@@ -102,10 +104,27 @@ def list_videos(
     continue_watching: bool = False,
     watched_only: bool = False,
     seed: int | None = None,
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    cursor: str | None = None,
+    include_total: bool = False,
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ):
+    """One page of the library. Follow ``next_cursor`` until it is null.
+
+    ``continue_watching`` is a fixed short shelf and is never paged.
+    """
     # Expiry is a write; it now runs on a background tick, not this read path.
+    page, seed = page_request(
+        cursor,
+        limit=MAX_LIMIT if continue_watching else limit,
+        sort=sort,
+        order=order,
+        seed=seed,
+    )
+    paging = dict(
+        page=page, sort=sort, order=order, seed=seed, session=session, user_id=user.id
+    )
     if q and not continue_watching and not watched_only:
         from ..services.ai.search import explain_library_video, hybrid_search
 
@@ -120,22 +139,32 @@ def list_videos(
             seed=seed,
             user_id=user.id,
         )
-        states = user_state.get_states(session, user.id, (v.id for v in videos if v.id))
-        return [
-            _to_read(
-                v,
-                session,
-                user_id=user.id,
-                states=states,
-                compact=True,
-                match_reason=explain_library_video(
-                    v, q, chunk_index=chunks.get(v.id) if v.id is not None else None
-                ),
-            )
-            for v in videos
-        ]
-    videos = library.query_videos(
-        session,
+
+        def serialize_hits(rows, states):
+            return [
+                _to_read(
+                    v,
+                    session,
+                    user_id=user.id,
+                    states=states,
+                    compact=True,
+                    match_reason=explain_library_video(
+                        v, q, chunk_index=chunks.get(v.id) if v.id is not None else None
+                    ),
+                )
+                for v in rows
+            ]
+
+        # Ranked in Python, so the cursor is a position in that ranking.
+        window = videos[page.offset : page.offset + page.fetch]
+        return build_page(
+            window,
+            serialize=serialize_hits,
+            total=len(videos) if include_total else None,
+            keyset=False,
+            **paging,
+        )
+    filters = dict(
         q=q,
         channel=channel,
         tag=tag,
@@ -147,18 +176,40 @@ def list_videos(
         seed=seed,
         user_id=user.id,
     )
-    return _to_read_many(videos, session, user_id=user.id, compact=True)
+    videos = library.query_videos(session, page=page, **filters)
+    total = None
+    if include_total and not continue_watching:
+        total = library.query_videos(session, count_only=True, **filters)
+    return build_page(
+        videos,
+        serialize=lambda rows, states: _to_read_many(
+            rows, session, user_id=user.id, states=states, compact=True
+        ),
+        total=total,
+        keyset=sort != "random" and not continue_watching,
+        **paging,
+    )
 
 
 @router.get("/tags", response_model=list[str])
-def list_tags(session: Session = Depends(get_session)):
-    return library.all_tags(session)
+def list_tags(
+    limit: int = Query(1000, ge=1, le=5000),
+    session: Session = Depends(get_session),
+):
+    """Alphabetical tags, at most ``limit`` (the library rarely has that many)."""
+    return library.all_tags(session)[:limit]
 
 
 @router.get("/tags/stats", response_model=list[TagStat])
-def tag_stats(channel: str | None = None, session: Session = Depends(get_session)):
+def tag_stats(
+    channel: str | None = None,
+    limit: int = Query(500, ge=1, le=2000),
+    session: Session = Depends(get_session),
+):
+    """The ``limit`` most used tags, most common first."""
     return [
-        TagStat(tag=t, count=n) for t, n in library.tag_stats(session, channel=channel)
+        TagStat(tag=t, count=n)
+        for t, n in library.tag_stats(session, channel=channel)[:limit]
     ]
 
 

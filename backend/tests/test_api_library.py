@@ -11,7 +11,7 @@ def test_list_videos_hides_review_queue(client, add_video):
         needs_review=True,
         file_path="imports/drop.mp4",
     )
-    body = client.get("/api/videos").json()
+    body = client.get("/api/videos").json()["items"]
     ids = {row["id"] for row in body}
     assert ready.id in ids
     assert all(not row["needs_review"] for row in body)
@@ -22,15 +22,15 @@ def test_filter_and_sort_videos(client, add_video):
     add_video(title="Aardvark", channel="Beta", tags=["fun"])
     add_video(title="Other", channel="Alpha", tags=["meh"])
 
-    by_channel = client.get("/api/videos", params={"channel": "Alpha"}).json()
+    by_channel = client.get("/api/videos", params={"channel": "Alpha"}).json()["items"]
     assert {row["title"] for row in by_channel} == {"Zebra", "Other"}
 
-    by_tag = client.get("/api/videos", params={"tag": "fun"}).json()
+    by_tag = client.get("/api/videos", params={"tag": "fun"}).json()["items"]
     assert {row["title"] for row in by_tag} == {"Zebra", "Aardvark"}
 
     sorted_asc = client.get(
         "/api/videos", params={"sort": "title", "order": "asc"}
-    ).json()
+    ).json()["items"]
     assert [row["title"] for row in sorted_asc] == ["Aardvark", "Other", "Zebra"]
 
 
@@ -72,7 +72,7 @@ def test_watch_progress_and_continue_watching(client, add_video):
     assert body["last_position_sec"] == 40.0
     assert body["last_watched_at"] is not None
 
-    row = client.get("/api/videos", params={"continue_watching": True}).json()
+    row = client.get("/api/videos", params={"continue_watching": True}).json()["items"]
     assert [item["id"] for item in row] == [video.id]
 
     # Near-complete (>=90%) clears progress so it leaves continue-watching.
@@ -80,7 +80,10 @@ def test_watch_progress_and_continue_watching(client, add_video):
     assert done.status_code == 204
     body = client.get(f"/api/videos/{video.id}").json()
     assert body["last_position_sec"] == 0.0
-    assert client.get("/api/videos", params={"continue_watching": True}).json() == []
+    assert (
+        client.get("/api/videos", params={"continue_watching": True}).json()["items"]
+        == []
+    )
 
 
 def test_tags_and_storage_stats(client, add_video):
@@ -106,7 +109,9 @@ def test_list_videos_are_compact(client, add_video):
         thumbnail_path="thumbs/missing.jpg",
     )
 
-    row = next(r for r in client.get("/api/videos").json() if r["id"] == video.id)
+    row = next(
+        r for r in client.get("/api/videos").json()["items"] if r["id"] == video.id
+    )
     assert row["description"] is None
     assert row["source_description"] is None
     assert row["notes"] is None
@@ -166,7 +171,7 @@ def test_review_queue_approve_and_skip(client, add_video, init_db):
         file_path="imports/dropped.mp4",
         write_file=True,
     )
-    queue = client.get("/api/review").json()
+    queue = client.get("/api/review").json()["items"]
     assert [row["id"] for row in queue] == [pending.id]
 
     skipped = add_video(
@@ -179,7 +184,9 @@ def test_review_queue_approve_and_skip(client, add_video, init_db):
     skip = client.post(f"/api/review/{skipped.id}/skip")
     assert skip.status_code == 200
     assert skip.json()["needs_review"] is False
-    assert skipped.id not in {row["id"] for row in client.get("/api/review").json()}
+    assert skipped.id not in {
+        row["id"] for row in client.get("/api/review").json()["items"]
+    }
 
     approved = client.patch(
         f"/api/videos/{pending.id}",
@@ -189,7 +196,7 @@ def test_review_queue_approve_and_skip(client, add_video, init_db):
     body = approved.json()
     assert body["needs_review"] is False
     assert body["channel"] == "Imports"
-    assert client.get("/api/review").json() == []
+    assert client.get("/api/review").json()["items"] == []
     # Manual import is renamed onto Channel/Title.ext
     assert body["file_path"].endswith("Placed.mp4")
     assert (init_db["downloads"] / body["file_path"]).exists()
@@ -449,7 +456,7 @@ def test_duplicate_groups_by_youtube_id(client, add_video):
         file_path="Alpha/2023/Copy B [dQw4w9WgXcQ].mp4",
     )
     add_video(title="Unique", yt_id="xxxxxxxxxxx", channel="Beta")
-    groups = client.get("/api/review/groups").json()
+    groups = client.get("/api/review/groups").json()["items"]
     yt_groups = [g for g in groups if g["match_type"] == "youtube_id"]
     assert len(yt_groups) == 1
     assert {v["title"] for v in yt_groups[0]["videos"]} == {"Copy A", "Copy B"}
@@ -487,3 +494,22 @@ def test_stream_range_forms(client, add_video):
 
     for bad in ("bytes=-", "bytes=-0", "bytes=200-", "bytes=50-10", "bytes=a-b"):
         assert get(bad).status_code == 416, bad
+
+
+def test_duplicate_groups_page(client, add_video):
+    for n in range(3):
+        for copy in ("A", "B"):
+            add_video(title=f"Pair {n} copy {copy}", yt_id=f"dupdupdup{n:02d}")
+    first = client.get("/api/review/groups", params={"limit": 2}).json()
+    assert len(first["items"]) == 2
+    assert first["next_cursor"]
+    rest = client.get(
+        "/api/review/groups", params={"limit": 2, "cursor": first["next_cursor"]}
+    ).json()
+    assert len(rest["items"]) == 1
+    assert rest["next_cursor"] is None
+    seen = {tuple(sorted(v["id"] for v in g["videos"])) for g in first["items"]}
+    assert not seen & {
+        tuple(sorted(v["id"] for v in g["videos"])) for g in rest["items"]
+    }
+    assert client.get("/api/review/groups", params={"cursor": "x"}).status_code == 400
