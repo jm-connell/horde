@@ -199,7 +199,7 @@ React 18 + TypeScript + Vite + Tailwind under `frontend/src/`, built into `backe
 | `context/` | Cross-cutting state providers: Toast, Confirm, Auth, Download, Search, Playback |
 | `hooks/` | Data and behaviour hooks (settings hydrate, casting, card preview, ...) |
 | `api.ts`, `apiErrors.ts` | The only HTTP client. Adds `X-Horde-Request` to every request (`withCsrf`), parses the error envelope into `ApiError`, follows cursors |
-| `types.ts` | Wire types, hand-maintained to mirror `backend/openapi.json` (generated types are planned); `types/` holds only `cast.d.ts` |
+| `types.ts`, `api/schema.d.ts` | Wire types. `api/schema.d.ts` is generated from the committed `backend/openapi.json` (`npm run gen:api`); `types.ts` aliases its schemas under app-facing names (narrowing a few fields) and adds the few client-only types. `types/` holds only `cast.d.ts` |
 | `utils/`, `utils.ts` | Pure helpers (`safeHref` for any link rendered from stored data) |
 | `offline/` | Service worker, IndexedDB, offline downloads |
 | `effects/` | Canvas background effects |
@@ -211,7 +211,7 @@ Provider nesting in `App.tsx`, outer to inner: `ErrorBoundary`, `ToastProvider`,
 **Where to put new code**
 
 - A new screen: a `pages/` component, a lazy entry in `pages/lazy.ts`, a route in `App.tsx` (with `RequirePermission` if a grant is needed).
-- A new API call: a typed function in `api.ts` (never a bare `fetch`; a mutating `fetch` or `XMLHttpRequest` outside it must use `withCsrf()` / `CSRF_HEADER`), types in `types.ts`.
+- A new API call: a typed function in `api.ts` (never a bare `fetch`; a mutating `fetch` or `XMLHttpRequest` outside it must use `withCsrf()` / `CSRF_HEADER`), request and response types from the regenerated `api/schema.d.ts`, aliased in `types.ts` when the app names them.
 - Shared state used by several pages: a context; state used by one page: a hook beside it.
 - A link built from stored data: `safeHref()`.
 - Offline behaviour: `offline/`, and bump the cache version names in `offline/db.ts` if a stored shape changes.
