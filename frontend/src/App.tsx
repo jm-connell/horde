@@ -6,8 +6,8 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { Suspense, useEffect, useRef, useState } from "react";
-import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { Suspense, useEffect, useMemo, useRef } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { applyPageId } from "./customCss";
 import Library from "./pages/Library";
 import {
@@ -188,31 +188,32 @@ function AppShell() {
 }
 
 /**
- * Cached answers belong to the signed-in account (watch history, permissions),
- * so a different user, or none, starts from an empty cache.
+ * Everything below the sign-in gate belongs to one account: the query cache
+ * (watch history, downloads, permissions) and the providers that hold state
+ * derived from it. A different user gets a new client and a remounted subtree
+ * in the same commit, so nothing rendered or observed can read the previous
+ * user's data; the old client is cleared when it is dropped.
  */
-function ClearCacheOnUserChange() {
-  const queryClient = useQueryClient();
+function UserScope({ children }: { children: React.ReactNode }) {
   const userId = useAuth().user?.id ?? null;
-  const previous = useRef(userId);
-  useEffect(() => {
-    if (previous.current === userId) return;
-    previous.current = userId;
-    queryClient.clear();
-  }, [userId, queryClient]);
-  return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- a new user must get a new client even though the factory does not read the id
+  const queryClient = useMemo(() => createQueryClient(), [userId]);
+  useEffect(() => () => queryClient.clear(), [queryClient]);
+  return (
+    <QueryClientProvider key={userId ?? "anon"} client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
 }
 
 export default function App() {
-  const [queryClient] = useState(createQueryClient);
   return (
     <ErrorBoundary scope="app" fullPage>
-      <QueryClientProvider client={queryClient}>
-        <ToastProvider>
-          <ConfirmProvider>
-            <AuthProvider>
-              <ClearCacheOnUserChange />
-              <AuthGate>
+      <ToastProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <AuthGate>
+              <UserScope>
                 <DownloadProvider>
                   <SearchProvider>
                     <PlaybackProvider>
@@ -221,11 +222,11 @@ export default function App() {
                     </PlaybackProvider>
                   </SearchProvider>
                 </DownloadProvider>
-              </AuthGate>
-            </AuthProvider>
-          </ConfirmProvider>
-        </ToastProvider>
-      </QueryClientProvider>
+              </UserScope>
+            </AuthGate>
+          </AuthProvider>
+        </ConfirmProvider>
+      </ToastProvider>
     </ErrorBoundary>
   );
 }

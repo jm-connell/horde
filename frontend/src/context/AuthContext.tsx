@@ -25,6 +25,8 @@ import { useToast } from "./ToastContext";
 
 /** Last state that came from the server, so the installed app still opens offline. */
 const CACHE_KEY = "horde-auth-state";
+/** Minimum gap between session re-checks triggered by the tab becoming visible. */
+const VISIBLE_REFRESH_MS = 3000;
 
 function isAuthState(value: unknown): value is AuthState {
   return (
@@ -95,6 +97,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  // Another tab may have signed in as someone else or out: look again when
+  // this one comes back to the front (throttled; one cheap GET).
+  useEffect(() => {
+    let last = 0;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - last < VISIBLE_REFRESH_MS) return;
+      last = now;
+      void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refresh]);
 
   useEffect(() => {
