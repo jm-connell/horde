@@ -31,14 +31,10 @@ import {
 } from "./player/useChapters";
 import SkipNoticeChip from "./player/SkipNotice";
 import { useSkipSegments } from "./player/useSkipSegments";
+import { usePlayerKeyboard } from "./player/usePlayerKeyboard";
 import { playerChromeBtn, playerMenuItem } from "./player/playerChrome";
 import SubtitleOverlay from "./SubtitleOverlay";
 import { MenuFlyout } from "./MenuFlyout";
-import {
-  isInteractiveControl,
-  isTextEntryTarget,
-  ownsArrowKeys,
-} from "../utils/keyboardTarget";
 import { useAirPlay } from "../hooks/useAirPlay";
 import { useChromecast } from "../hooks/useChromecast";
 import { usePlaybackHealth } from "../hooks/usePlaybackHealth";
@@ -1210,99 +1206,41 @@ export default function VideoPlayer({
     []
   );
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      // Never hijack browser/OS shortcuts or typing.
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (isTextEntryTarget(e.target)) return;
-      // WCAG 2.1.4: character-key shortcuts can be switched off in Settings.
-      if (e.key.length === 1 && !singleKeyShortcuts) return;
-      // Buttons and menu items own Space; sliders and menus own the arrows.
-      if (e.key === " " && isInteractiveControl(e.target)) return;
-      if (e.key.startsWith("Arrow") && ownsArrowKeys(e.target)) return;
-      const isPlayerKey =
-        e.key === " " ||
-        e.key === "k" ||
-        e.key === "c" ||
-        e.key === "C" ||
-        e.key === "t" ||
-        e.key === "f" ||
-        e.key === "ArrowRight" ||
-        e.key === "ArrowLeft" ||
-        e.key === "ArrowUp" ||
-        e.key === "ArrowDown" ||
-        e.key === ">" ||
-        e.key === "." ||
-        e.key === "<" ||
-        e.key === "," ||
-        e.key === "n" ||
-        (e.key === "Escape" && mode === "windowed");
-      if (isPlayerKey && !isMini) revealControls();
-      if (e.key === " " || e.key === "k") {
-        e.preventDefault();
-        togglePlay();
-      } else if (e.key === "c" || e.key === "C") {
-        e.preventDefault();
-        cycleCaptions();
-      } else if (e.key === "t") {
-        toggleTheater();
-      } else if (e.key === "f") {
-        toggleWindowed();
-      } else if (e.key === "Escape" && mode === "windowed") {
-        onModeChange(modeBeforeWindowed.current);
-      } else if (e.key === "ArrowRight" && videoRef.current) {
-        seekTo(videoRef.current.currentTime + 5);
-      } else if (e.key === "ArrowLeft" && videoRef.current) {
-        seekTo(videoRef.current.currentTime - 5);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const next = Math.min(1, Math.round((volume + 0.05) * 100) / 100);
-        setVolume(next);
-        setMuted(next === 0);
-        if (videoRef.current) {
-          videoRef.current.volume = next;
-          videoRef.current.muted = next === 0;
-        }
-        onVolumeChange?.(next);
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        const next = Math.max(0, Math.round((volume - 0.05) * 100) / 100);
-        setVolume(next);
-        setMuted(next === 0);
-        if (videoRef.current) {
-          videoRef.current.volume = next;
-          videoRef.current.muted = next === 0;
-        }
-        onVolumeChange?.(next);
-      } else if (e.key === ">" || e.key === ".") {
-        stepRate(1);
-      } else if (e.key === "<" || e.key === ",") {
-        stepRate(-1);
-      } else if (e.key === "n" && chapters.length > 0 && videoRef.current) {
-        e.preventDefault();
-        const next = nextChapterStart(videoRef.current.currentTime);
-        if (next != null) seekTo(next);
+  const applyVolume = useCallback(
+    (value: number, persist: boolean) => {
+      setVolume(value);
+      setMuted(value === 0);
+      if (videoRef.current) {
+        videoRef.current.volume = value;
+        videoRef.current.muted = value === 0;
       }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [
+      if (persist) onVolumeChange?.(value);
+    },
+    [onVolumeChange]
+  );
+
+  const exitWindowed = useCallback(() => {
+    onModeChange(modeBeforeWindowed.current);
+  }, [onModeChange]);
+
+  usePlayerKeyboard({
+    videoRef,
+    mode,
+    isMini,
     singleKeyShortcuts,
+    volume,
+    hasChapters: chapters.length > 0,
     togglePlay,
     toggleTheater,
     toggleWindowed,
-    mode,
-    onModeChange,
-    stepRate,
-    isMini,
-    revealControls,
-    chapters,
-    nextChapterStart,
+    exitWindowed,
     cycleCaptions,
     seekTo,
-    volume,
-    onVolumeChange,
-  ]);
+    nextChapterStart,
+    applyVolume,
+    stepRate,
+    revealControls,
+  });
 
   // The native step is 0.1 s; match the global shortcuts (5 s) for the keyboard.
   const onSeekKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1320,16 +1258,6 @@ export default function VideoPlayer({
     if (duration > 0) {
       setScrubHover({ time: t, pct: (t / duration) * 100 });
     }
-  };
-
-  const applyVolume = (value: number, persist: boolean) => {
-    setVolume(value);
-    setMuted(value === 0);
-    if (videoRef.current) {
-      videoRef.current.volume = value;
-      videoRef.current.muted = value === 0;
-    }
-    if (persist) onVolumeChange?.(value);
   };
 
   const onVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
