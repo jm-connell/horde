@@ -1393,7 +1393,8 @@ export interface paths {
          * Duplicate Groups
          * @description Clusters of likely duplicate videos, ``limit`` groups per page.
          *
-         *     Finding the clusters reads the whole library, but the AI check (one model call
+         *     Finding the clusters reads the whole library, so the grouping is cached until
+         *     the library changes (``services/duplicate_groups.py``); the AI check (one model call
          *     per heuristic cluster) and the serialization only run for the groups on the
          *     requested page.
          */
