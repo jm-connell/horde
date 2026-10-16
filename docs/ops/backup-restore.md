@@ -24,7 +24,7 @@ A consistent snapshot of **both** keeps file paths and DB rows aligned. Backing 
 !!! tip "Stop or quiesce"
     Prefer stopping Horde (or at least pausing downloads/AI) briefly so SQLite and in-flight `.part` files are quiet. For ZFS/TrueNAS, a dataset snapshot of both mounts is ideal.
 
-Horde also writes `DATA_DIR/backups/horde-pre-*.db` before it migrates the database to a newer schema (the newest five are kept) and `app_settings.json.bak` beside the settings file. These are safety nets, not a replacement for your own backups: they live on the same volume.
+Horde also writes `DATA_DIR/backups/horde-pre-*.db` before it migrates the database to a newer schema or repairs rows an older version left behind (the newest five are kept) and `app_settings.json.bak` beside the settings file. These are safety nets, not a replacement for your own backups: they live on the same volume.
 
 ## Nightly database backups { #nightly }
 

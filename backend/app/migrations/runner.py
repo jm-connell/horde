@@ -20,6 +20,11 @@ parent row and leave its children behind; those rows are repaired the way
 The legacy ``video_ai_chat`` table such code recreates is dropped again. A
 database that is behind gets the same row repair before its revisions run,
 because the migration refuses to commit over foreign key violations.
+
+Anything that changes an existing database writes ``DATA_DIR/backups/
+horde-pre-<label>-<stamp>.db`` first: a pending migration, the adoption of a
+pre-Alembic database, and an integrity repair that has something to repair.
+A clean database already at head is only read.
 """
 
 from __future__ import annotations
@@ -119,6 +124,11 @@ def stored_revision(engine: Engine) -> str | None:
     return row[0] if row else None
 
 
+def _backup_stamp(path: Path) -> str:
+    """The UTC timestamp a ``horde-pre-<label>-<stamp>.db`` name ends with."""
+    return path.stem.rsplit("-", 1)[-1]
+
+
 def _backup_database(engine: Engine, label: str) -> Path | None:
     """Copy the database next to itself before it is changed. Keeps the newest few."""
     db_file = engine.url.database
@@ -137,9 +147,10 @@ def _backup_database(engine: Engine, label: str) -> Path | None:
             dest.close()
     finally:
         raw.close()
-    for old in sorted(backups.glob("horde-pre-*.db"))[:-BACKUP_KEEP]:
+    # By timestamp, not name: labels differ (revisions, adoption, repair).
+    for old in sorted(backups.glob("horde-pre-*.db"), key=_backup_stamp)[:-BACKUP_KEEP]:
         old.unlink(missing_ok=True)
-    logger.info("Database backed up to %s before migrating", target)
+    logger.info("Database backed up to %s before changing it", target)
     return target
 
 
@@ -249,18 +260,32 @@ def _repair_foreign_key(conn: Connection, table: str, fk_id: int) -> int:
     return count
 
 
-def repair_integrity(engine: Engine) -> None:
-    """Repair what code running with foreign keys off left behind (database at head)."""
-    with engine.begin() as conn:
+def _needs_repair(engine: Engine) -> tuple[list[str], bool]:
+    """The legacy tables present, and whether any row violates a foreign key."""
+    with engine.connect() as conn:
         existing = set(inspect(conn).get_table_names())
-        for table in _LEGACY_TABLES:
-            if table in existing:
-                logger.warning(
-                    "Integrity check: dropping the legacy %s table (recreated by an "
-                    "older Horde)",
-                    table,
-                )
-                conn.exec_driver_sql(f"DROP TABLE {_quote(table)}")
+        violations = conn.exec_driver_sql("PRAGMA foreign_key_check").first()
+    return [t for t in _LEGACY_TABLES if t in existing], violations is not None
+
+
+def repair_integrity(engine: Engine) -> None:
+    """Repair what code running with foreign keys off left behind (database at head).
+
+    A clean database is only read. Anything else is backed up first, like a
+    migration: the repair deletes rows and drops a table.
+    """
+    legacy, violations = _needs_repair(engine)
+    if not legacy and not violations:
+        return
+    _backup_database(engine, "integrity-repair")
+    with engine.begin() as conn:
+        for table in legacy:
+            logger.warning(
+                "Integrity check: dropping the legacy %s table (recreated by an "
+                "older Horde)",
+                table,
+            )
+            conn.exec_driver_sql(f"DROP TABLE {_quote(table)}")
         _repair_foreign_keys(conn)
 
 

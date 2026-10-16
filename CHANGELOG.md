@@ -111,6 +111,11 @@ level. Detailed per-area entries are added by the maintainer at release time.
   `video_ai_chat` table it recreates, and the tag list only shows tags of
   existing videos. Migration `0006_video_tags_delete` adds a trigger that
   clears a deleted video's tags on any connection.
+- That repair now backs the database up first
+  (`DATA_DIR/backups/horde-pre-integrity-repair-*.db`) when the database is
+  already at the latest schema and there is something to repair; before, only a
+  pending migration took a copy. A clean start still writes nothing, and the
+  five newest migration copies are kept by age rather than by name.
 - Custom CSS saved before the sanitizer existed is now cleaned too: once at
   startup in `app_settings.json` (only rewritten when something changes) and
   when the first administrator adopts the old look, so an `@import` or remote

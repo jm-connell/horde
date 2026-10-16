@@ -683,6 +683,85 @@ def test_rollback_writes_are_repaired_on_the_next_start(init_db):
         assert session.exec(select(DownloadJob)).one().video_id is None
 
 
+_ROLLBACK_DAMAGE = {
+    "orphan": (
+        "INSERT INTO playlists (name, source_type, subscribed, position, created_at, "
+        "cover_video_id) VALUES ('p', 'user', 0, 0, '2024-01-01 00:00:00', 42)"
+    ),
+    "legacy_table": (
+        "CREATE TABLE video_ai_chat (id INTEGER PRIMARY KEY, video_id INTEGER)"
+    ),
+}
+
+
+def _repair_backups(data: Path) -> list[Path]:
+    return sorted((data / "backups").glob("horde-pre-integrity-repair-*.db"))
+
+
+@pytest.mark.parametrize("damage", sorted(_ROLLBACK_DAMAGE))
+def test_an_integrity_repair_backs_up_the_database_first(init_db, damage):
+    """At head no migration backs up, so the repair must before it deletes or drops."""
+    from app.database import init_db as run_init_db
+
+    con = sqlite3.connect(init_db["db_path"])
+    try:
+        con.execute(_ROLLBACK_DAMAGE[damage])
+        con.commit()
+    finally:
+        con.close()
+
+    run_init_db()
+
+    backups = _repair_backups(init_db["data"])
+    assert len(backups) == 1
+    old = sqlite3.connect(backups[0])
+    try:
+        # The copy is from before the repair.
+        if damage == "orphan":
+            assert old.execute("SELECT cover_video_id FROM playlists").fetchall() == [
+                (42,)
+            ]
+        else:
+            assert old.execute(
+                "SELECT name FROM sqlite_master WHERE name = 'video_ai_chat'"
+            ).fetchall() == [("video_ai_chat",)]
+    finally:
+        old.close()
+
+    # The next start finds nothing to repair and writes no further copy.
+    run_init_db()
+    assert _repair_backups(init_db["data"]) == backups
+
+
+def test_a_clean_start_at_head_writes_no_backup(init_db):
+    from app.database import init_db as run_init_db
+
+    run_init_db()
+
+    assert list((init_db["data"] / "backups").glob("horde-pre-*.db")) == []
+
+
+def test_migration_backups_are_pruned_by_age_whatever_their_label(init_db):
+    from app.migrations.runner import BACKUP_KEEP, _backup_database
+
+    folder = init_db["data"] / "backups"
+    folder.mkdir()
+    oldest = folder / "horde-pre-integrity-repair-20200101T000000Z.db"
+    oldest.write_bytes(b"old")
+    revisions = [
+        folder / f"horde-pre-0005-to-0006-2020020{i}T000000Z.db"
+        for i in range(1, BACKUP_KEEP + 1)
+    ]
+    for path in revisions:
+        path.write_bytes(b"rev")
+
+    newest = _backup_database(init_db["engine"], "0006-to-0007")
+
+    kept = sorted(folder.glob("horde-pre-*.db"))
+    assert newest in kept and len(kept) == BACKUP_KEEP
+    assert not oldest.exists() and not revisions[0].exists()
+
+
 def test_all_tags_ignores_tags_of_missing_videos(session, add_video):
     """A stray video_tags row (written with foreign keys off) is not a library tag."""
     add_video(tags=["real"])

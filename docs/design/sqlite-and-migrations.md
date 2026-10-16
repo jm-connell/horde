@@ -52,7 +52,7 @@ The whole migration runs in one transaction with `PRAGMA foreign_keys=OFF` for i
 
 ### Backups
 
-Before any pending migration on a non-empty database, `DATA_DIR/backups/horde-pre-<from>-to-<to>-<timestamp>.db` is written with SQLite's online backup API (the newest five are kept). Migrations are **forward-only**: `downgrade()` raises. To go back, stop Horde, restore `horde.db` from one of these copies (or your own backup) and start the older version. Keep your own off-box backups too; see [Backup & restore](../ops/backup-restore.md).
+Before any pending migration on a non-empty database, `DATA_DIR/backups/horde-pre-<from>-to-<to>-<timestamp>.db` is written with SQLite's online backup API, and `horde-pre-integrity-repair-<timestamp>.db` before a start at head repairs foreign key orphans or drops the legacy `video_ai_chat` table (a clean start writes nothing). The newest five of these copies are kept, whatever their label. Migrations are **forward-only**: `downgrade()` raises. To go back, stop Horde, restore `horde.db` from one of these copies (or your own backup) and start the older version. Keep your own off-box backups too; see [Backup & restore](../ops/backup-restore.md).
 
 ## Adding a migration
 
