@@ -40,6 +40,8 @@ Beyond readiness and `queue_depth`, status exposes:
 
 Members see a reduced view: `GET /api/ai/status`, `GET /api/health` and the `ai` block of `GET /api/settings` keep the readiness flags and feature switches the player and library read, but leave out the provider address, model names, GPU details, key tail, budget and error texts (administrators get everything). `GET /api/ai/jobs` is administrator-only.
 
+A chat stream also ends when its caller loses access (session revoked, account disabled or deleted): the server stops reading from the provider, which drops the upstream request. The cost of that cut-off turn is not booked in the ledger, because the provider only reports it in a final usage chunk (a client that disconnects mid-answer loses it the same way).
+
 Health (`GET /api/health`) mirrors `workers.ai_error_count` and `workers.ai_blocked_reason`.
 
 ### Job admin API

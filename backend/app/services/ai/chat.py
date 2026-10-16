@@ -224,27 +224,28 @@ def stream_chat(
 
     assistant_parts: list[str] = []
     revoked = False
+    stream = provider.chat_stream(
+        user_text,
+        chat_model,
+        system=system,
+        messages=history,
+        num_predict=_NUM_PREDICT,
+        timeout=_CHAT_TIMEOUT,
+        temperature=0.4,
+        usage_kind="chat",
+        video_id=video_id,
+    )
     try:
-        for delta in provider.chat_stream(
-            user_text,
-            chat_model,
-            system=system,
-            messages=history,
-            num_predict=_NUM_PREDICT,
-            timeout=_CHAT_TIMEOUT,
-            temperature=0.4,
-            usage_kind="chat",
-            video_id=video_id,
-        ):
+        for delta in stream:
             if not delta:
                 continue
-            if revoked:
-                # Keep draining so the provider records what the turn cost.
-                continue
             if authorized is not None and not authorized():
+                # Stop reading: closing the generator drops the upstream request.
+                # The turn's cost is not booked (the provider only learns it from
+                # the final usage chunk); a client disconnect loses it the same way.
                 revoked = True
                 yield _sse(_revoked_event())
-                continue
+                break
             assistant_parts.append(delta)
             yield _sse({"type": "token", "text": delta})
     except Exception as exc:
@@ -254,6 +255,10 @@ def stream_chat(
             {"type": "error", "detail": format_provider_error(exc), "status": 502}
         )
         return
+    finally:
+        close = getattr(stream, "close", None)
+        if close is not None:
+            close()
 
     if revoked:
         logger.warning(

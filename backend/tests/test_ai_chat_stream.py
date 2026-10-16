@@ -146,3 +146,59 @@ def test_ai_routes_do_not_quote_the_provider_url(client, add_video, monkeypatch,
 
     assert resp.status_code == 502
     assert "gpu-box" not in resp.text and "11434" not in resp.text
+
+
+def test_a_revoked_chat_stops_reading_the_provider(chat_env, session):
+    """Closing the provider stream drops the upstream request instead of draining it."""
+    user, video, use = chat_env
+    state = {"closed": False, "yielded": 0}
+
+    class Provider:
+        last_cost = None
+
+        def chat_stream(self, *_a, **_k):
+            try:
+                for word in ("a ", "b ", "c ", "d "):
+                    state["yielded"] += 1
+                    yield word
+            finally:
+                state["closed"] = True
+
+    use(Provider())
+    allowed = iter([True, False])
+    list(
+        chat.stream_chat_events(
+            video.id, "hi", user.id, lambda force=False: next(allowed, False)
+        )
+    )
+
+    assert state == {"closed": True, "yielded": 2}
+
+
+def test_chat_route_ends_the_stream_when_the_member_is_disabled_midway(
+    app, member_client, member_user, init_db, chat_env, session
+):
+    """The real route wires the auth guard into the chat generator."""
+    from sqlmodel import Session
+
+    _user, video, use = chat_env
+    app.state.auth.stream_recheck_seconds = 0.0
+
+    class Provider:
+        last_cost = None
+
+        def chat_stream(self, *_a, **_k):
+            yield "hello "
+            with Session(init_db["engine"]) as other:
+                accounts.update_user(other, member_user.id, disabled=True)
+            yield "world "
+            yield "never sent"
+
+    use(Provider())
+    resp = member_client.post(f"/api/videos/{video.id}/ai/chat", json={"message": "hi"})
+
+    assert resp.status_code == 200
+    assert '"text": "hello "' in resp.text
+    assert '"status": 401' in resp.text
+    assert "never sent" not in resp.text
+    assert '"type": "done"' not in resp.text
