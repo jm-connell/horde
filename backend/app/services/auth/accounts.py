@@ -35,6 +35,7 @@ from ...models import (
     utcnow,
 )
 from .. import app_settings
+from ..css_sanitize import sanitize_ui_css
 from . import passwords, permissions
 
 logger = logging.getLogger(__name__)
@@ -257,7 +258,8 @@ def _adopt_legacy_data(session: Session, user: User) -> None:
     session.add(
         UserSettings(
             user_id=_uid(user),
-            ui_json=json.dumps(ui if isinstance(ui, dict) else {}),
+            # Saved before custom CSS was sanitized on the way in.
+            ui_json=json.dumps(sanitize_ui_css(ui) if isinstance(ui, dict) else {}),
         )
     )
     logger.info(

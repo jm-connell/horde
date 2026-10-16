@@ -22,6 +22,7 @@ both are exercised by the same test vectors.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 #: Functions whose arguments are URLs the browser would fetch.
 _URL_FUNCTIONS = frozenset(
@@ -258,3 +259,23 @@ def sanitize_custom_css(css: str) -> str:
             out.append(ch)
             i += 1
     return "".join(out)
+
+
+#: Keys of the ``ui`` settings blob that hold custom CSS.
+CUSTOM_CSS_KEYS = ("customCss", "custom_css")
+
+
+def sanitize_ui_css(value: Any) -> Any:
+    """Sanitize custom CSS wherever it appears in a ``ui`` blob (saved themes too)."""
+    if isinstance(value, dict):
+        return {
+            k: (
+                sanitize_custom_css(v)
+                if k in CUSTOM_CSS_KEYS and isinstance(v, str)
+                else sanitize_ui_css(v)
+            )
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [sanitize_ui_css(v) for v in value]
+    return value

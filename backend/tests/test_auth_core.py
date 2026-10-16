@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -406,3 +407,29 @@ def test_failures_slow_a_username_across_addresses_without_locking_it():
         limiter.record_failure(f"10.0.{i}.1", "admin")
         now[0] += 1.1
     assert limiter.retry_after("203.0.113.9", "admin") == 0
+
+
+EVIL_CSS = "@import url(http://evil.example/x.css); body{color:red}"
+
+
+def test_adopted_legacy_ui_has_its_custom_css_sanitized(session):
+    """The pre-accounts ui blob was saved before the sanitizer existed."""
+    from app.services import app_settings
+
+    app_settings.save(
+        {
+            "ui": {
+                "theme": "ember",
+                "customCss": EVIL_CSS,
+                "themes": [{"customCss": EVIL_CSS}],
+            }
+        }
+    )
+    admin = accounts.create_user(session, "root", "password-one")
+
+    stored = session.get(UserSettings, admin.id)
+    assert stored is not None
+    ui = json.loads(stored.ui_json)
+    assert ui["theme"] == "ember"
+    assert ui["customCss"] == " body{color:red}"
+    assert ui["themes"] == [{"customCss": " body{color:red}"}]

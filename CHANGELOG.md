@@ -111,6 +111,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
   `video_ai_chat` table it recreates, and the tag list only shows tags of
   existing videos. Migration `0006_video_tags_delete` adds a trigger that
   clears a deleted video's tags on any connection.
+- Custom CSS saved before the sanitizer existed is now cleaned too: once at
+  startup in `app_settings.json` (only rewritten when something changes) and
+  when the first administrator adopts the old look, so an `@import` or remote
+  `url()` from an old install is never applied.
 - Known advisories in FastAPI/Starlette/python-multipart and in the frontend
   build toolchain.
 - Documentation now states that `DATA_PATH` must be a local disk (SQLite WAL is

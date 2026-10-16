@@ -481,3 +481,24 @@ def test_failed_init_db_leaves_no_context_behind(lifespan_env, monkeypatch):
         pass
     assert context.current() is before
     assert not hasattr(main.app.state, "ctx")
+
+
+def test_startup_sanitizes_the_stored_ui_custom_css(lifespan_env, caplog):
+    """Custom CSS saved before the sanitizer existed is cleaned once, at startup."""
+    from app.services import app_settings
+
+    evil = "@import url(http://evil.example/x.css); body{color:red}"
+    app_settings.save({"ui": {"theme": "ember", "customCss": evil}})
+
+    with caplog.at_level(logging.WARNING), TestClient(main.app):
+        pass
+    ui = app_settings.load()["ui"]
+    assert ui == {"theme": "ember", "customCss": " body{color:red}"}
+    assert "custom CSS" in caplog.text
+
+    # Idempotent: a clean blob is left alone (no rewrite, no warning).
+    caplog.clear()
+    with caplog.at_level(logging.WARNING), TestClient(main.app):
+        pass
+    assert app_settings.load()["ui"] == ui
+    assert "custom CSS" not in caplog.text

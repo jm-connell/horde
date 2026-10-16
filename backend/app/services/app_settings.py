@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .css_sanitize import sanitize_ui_css
+
 logger = logging.getLogger(__name__)
 
 AI_DEFAULTS: dict[str, Any] = {
@@ -485,6 +487,32 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
         current.update(updates)
         _write(current)
         return current
+
+
+def sanitize_stored_ui() -> bool:
+    """Strip network-fetching custom CSS from the stored ``ui`` blob.
+
+    Saves through the API are sanitized, but a blob written before the sanitizer
+    existed (and adopted as the first administrator's preferences and the members'
+    default) was not. Runs at startup; rewrites the file only when something
+    changed. Returns whether it did.
+    """
+    with _lock:
+        current, degraded = _store.read(_path())
+        ui = current.get("ui")
+        if degraded or not isinstance(ui, dict):
+            return False
+        cleaned = sanitize_ui_css(ui)
+        if cleaned == ui:
+            return False
+        current["ui"] = cleaned
+        _write(current)
+    logger.warning(
+        "Removed @import rules and remote url() references from the custom CSS "
+        "stored in %s",
+        _path().name,
+    )
+    return True
 
 
 def reset_to_defaults() -> dict[str, Any]:

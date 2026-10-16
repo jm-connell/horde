@@ -239,6 +239,7 @@ async def lifespan(app: FastAPI):
         install_caches(app, ctx)
         ctx.paths.ensure()
         init_db(ctx.engine)
+        app_settings_svc.sanitize_stored_ui()
         if app.state.auth.config.disabled:
             logger.warning(
                 "HORDE_AUTH_DISABLED is set: Horde is NOT asking anyone to sign in. "
