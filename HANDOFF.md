@@ -90,3 +90,4 @@ Fix every review finding plus week-1, weeks 2–4 and months 2–3 items. Add au
 ## Progress log
 - 01:05 UTC Oct 16: WP-G auth MERGED (integration tip b6c9a5b, pushed). Remote branch deletion is blocked by the proxy (403) -> owner must delete backup/* branches manually at the end.
 - Launched fresh agents: J1-finish (/home/user/wt/dlsplit, rebase onto b6c9a5b + gate + per-commit), WP-M (/home/user/wt/model, ports 8991), WP-H1 (/home/user/wt/api, ports 9091). Merged worktrees removed.
+- 01:45 UTC: container restarted ~01:25 (agents resumed; all commits intact; docker restart needs `rm -f /var/run/docker.pid`). WP-H1 done (wp/api tip 7f23426, 6 commits): in architect review (review-api). /api/v1 SKIPPED -> owner question (orphans offline downloads; would be its own package). Follow-up for WP-N: check.sh's double -q hides the pytest count — fix.
