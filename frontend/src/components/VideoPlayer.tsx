@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { absoluteUrl, api, streamUrl, withMediaToken } from "../api";
 import PlayerOverlays from "./PlayerOverlays";
 import {
   BUFFERING_INDICATOR_DELAY_MS,
@@ -20,11 +19,10 @@ import { useSkipSegments } from "./player/useSkipSegments";
 import MiniPlayerFrame from "./player/MiniPlayerFrame";
 import { useMiniPlayer } from "./player/useMiniPlayer";
 import ControlBar from "./player/ControlBar";
+import { useCasting } from "./player/useCasting";
 import { usePlayerMenu } from "./player/usePlayerMenu";
 import { usePlayerKeyboard } from "./player/usePlayerKeyboard";
 import SubtitleOverlay from "./SubtitleOverlay";
-import { useAirPlay } from "../hooks/useAirPlay";
-import { useChromecast } from "../hooks/useChromecast";
 import { usePlaybackHealth } from "../hooks/usePlaybackHealth";
 import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -98,23 +96,6 @@ export default function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const shakaPlayerRef = useRef<ShakaPlayer | null>(null);
   const capabilityMaxHeightRef = useRef<number>(2160);
-  const chromecast = useChromecast();
-  const signedAirPlaySrc = useCallback(async () => {
-    if (videoId == null) return null;
-    const { token } = await api.getMediaToken(videoId);
-    return withMediaToken(src, token);
-  }, [videoId, src]);
-  const airplay = useAirPlay(videoRef, src, signedAirPlaySrc);
-  // Destructured so hook dependency arrays list the stable callbacks rather
-  // than the whole (per-render) hook result objects.
-  const {
-    castMedia: castChromecastMedia,
-    stop: stopChromecast,
-    remotePlay: toggleChromecastPlay,
-    remoteSeek: seekChromecast,
-    setOnSessionEnd: setChromecastOnSessionEnd,
-  } = chromecast;
-  const { showPicker: showAirPlayPicker } = airplay;
   const playerRootRef = useRef<HTMLDivElement>(null);
   const userInitiatedFullscreen = useRef(false);
   const hideControlsTimer = useRef<number | null>(null);
@@ -126,6 +107,28 @@ export default function VideoPlayer({
   const [volume, setVolume] = useState(volumeProp ?? 1);
   const [muted, setMuted] = useState(false);
   const [captionLang, setCaptionLang] = useState<string | null>(null);
+  const {
+    available: castAvailable,
+    casting,
+    chromecastCasting,
+    deviceName: castDeviceName,
+    onCastClick,
+    toggleChromecastPlay,
+    seekChromecast,
+  } = useCasting({
+    videoRef,
+    videoId,
+    src,
+    mimeType,
+    title,
+    poster,
+    tracks,
+    captionLang,
+    onProgress,
+    setCurrent,
+    setDuration,
+    setPlaying,
+  });
   /** PiP / iOS native fullscreen — overlay can't paint; use native cues. */
   const [nativeTextActive, setNativeTextActive] = useState(false);
   const [rate, setRate] = useState(() => snapRateToStep(defaultRate));
@@ -256,14 +259,6 @@ export default function VideoPlayer({
     useChapters(chapters);
   const scrubberRef = useRef<HTMLDivElement>(null);
 
-  const castAvailable = chromecast.available || airplay.available;
-  const casting = chromecast.casting || airplay.casting;
-  const castDeviceName = chromecast.casting
-    ? chromecast.deviceName
-    : airplay.casting
-      ? "AirPlay"
-      : null;
-
   const effectiveStreamType: StreamType =
     compatMode || streamType !== "dash" ? "file" : "dash";
   const effectiveSrc =
@@ -287,14 +282,14 @@ export default function VideoPlayer({
         el.currentTime = initialPosition;
       }
       pendingSeekRef.current = 0;
-      if (!chromecast.casting) {
+      if (!chromecastCasting) {
         el.play().catch(() => undefined);
       }
     }
   }, [
     initialPosition,
     src,
-    chromecast.casting,
+    chromecastCasting,
     effectiveStreamType,
     mediaSuspended,
   ]);
@@ -372,7 +367,7 @@ export default function VideoPlayer({
     qualityChoiceRef,
     capabilityMaxHeightRef,
     variantTracksRef,
-    casting: chromecast.casting,
+    casting: chromecastCasting,
     enterCompatMode,
     setShakaReady,
     setAvailableHeights,
@@ -529,85 +524,6 @@ export default function VideoPlayer({
     }
   }, [effectiveStreamType]);
 
-  useEffect(() => {
-    setChromecastOnSessionEnd((position) => {
-      const v = videoRef.current;
-      if (!v) return;
-      if (position > 0) {
-        v.currentTime = position;
-        setCurrent(position);
-        onProgress?.(position);
-      }
-      v.play().catch(() => undefined);
-    });
-  }, [setChromecastOnSessionEnd, onProgress]);
-
-  useEffect(() => {
-    if (!chromecast.casting) return;
-    setCurrent(chromecast.remoteCurrentTime);
-    setDuration(chromecast.remoteDuration);
-    setPlaying(!chromecast.remoteIsPaused);
-  }, [
-    chromecast.casting,
-    chromecast.remoteCurrentTime,
-    chromecast.remoteDuration,
-    chromecast.remoteIsPaused,
-  ]);
-
-  const startChromecast = useCallback(async () => {
-    const v = videoRef.current;
-    if (!v || videoId == null) return;
-    v.pause();
-    try {
-      // The receiver fetches these itself and sends no cookie: sign them.
-      const { token } = await api.getMediaToken(videoId);
-      const signed = (path: string) => absoluteUrl(withMediaToken(path, token));
-      await castChromecastMedia({
-        contentUrl: signed(streamUrl(videoId)),
-        mimeType,
-        title: title ?? "Video",
-        posterUrl: poster ? signed(poster) : null,
-        currentTime: v.currentTime,
-        subtitles: tracks.map((t) => ({
-          lang: t.lang,
-          src: signed(t.src),
-        })),
-        activeSubtitleLang: captionLang,
-      });
-    } catch {
-      // User cancelled device picker or load failed.
-    }
-  }, [
-    videoId,
-    mimeType,
-    title,
-    poster,
-    tracks,
-    captionLang,
-    castChromecastMedia,
-  ]);
-
-  const onCastClick = useCallback(() => {
-    if (chromecast.casting) {
-      stopChromecast();
-      return;
-    }
-    if (chromecast.available) {
-      void startChromecast();
-      return;
-    }
-    if (airplay.available) {
-      showAirPlayPicker();
-    }
-  }, [
-    chromecast.casting,
-    chromecast.available,
-    stopChromecast,
-    startChromecast,
-    airplay.available,
-    showAirPlayPicker,
-  ]);
-
   const setCaptionMode = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -744,13 +660,13 @@ export default function VideoPlayer({
       isSeekingRef.current = true;
       prevTimeRef.current = t;
       setCurrent(t);
-      if (chromecast.casting) {
+      if (chromecastCasting) {
         seekChromecast(t);
         return;
       }
       if (videoRef.current) videoRef.current.currentTime = t;
     },
-    [chromecast.casting, seekChromecast, noteSeek]
+    [chromecastCasting, seekChromecast, noteSeek]
   );
 
   // Listen for programmatic seek requests (e.g., clicking a chapter in Watch.tsx)
@@ -773,9 +689,9 @@ export default function VideoPlayer({
   }, [src]);
 
   useEffect(() => {
-    if (chromecast.casting || mediaSuspended) return;
+    if (chromecastCasting || mediaSuspended) return;
     videoRef.current?.play().catch(() => undefined);
-  }, [src, chromecast.casting, mediaSuspended]);
+  }, [src, chromecastCasting, mediaSuspended]);
 
   const cycleCaptions = useCallback(() => {
     if (tracks.length === 0) {
@@ -794,7 +710,7 @@ export default function VideoPlayer({
 
   const togglePlay = useCallback(() => {
     if (suppressClick.current) return;
-    if (chromecast.casting) {
+    if (chromecastCasting) {
       toggleChromecastPlay();
       return;
     }
@@ -802,7 +718,7 @@ export default function VideoPlayer({
     if (!v) return;
     if (v.paused) v.play();
     else v.pause();
-  }, [chromecast.casting, toggleChromecastPlay]);
+  }, [chromecastCasting, toggleChromecastPlay]);
 
   const modeBeforeWindowed = useRef<ViewMode>("standard");
 
@@ -1366,7 +1282,7 @@ export default function VideoPlayer({
               el.currentTime = seekTarget;
             }
             pendingSeekRef.current = 0;
-            if (!chromecast.casting && !mediaSuspended) {
+            if (!chromecastCasting && !mediaSuspended) {
               el.play().catch(() => undefined);
             }
           }}
@@ -1410,7 +1326,7 @@ export default function VideoPlayer({
             ))}
         </video>
 
-        {activeSubtitleSrc && !nativeTextActive && !chromecast.casting && (
+        {activeSubtitleSrc && !nativeTextActive && !chromecastCasting && (
           <SubtitleOverlay
             videoRef={videoRef}
             src={activeSubtitleSrc}
@@ -1429,7 +1345,7 @@ export default function VideoPlayer({
         <PlayerOverlays
           buffering={buffering && !blockingOverlay}
           mediaError={mediaError}
-          casting={chromecast.casting}
+          casting={chromecastCasting}
           castDeviceName={castDeviceName}
           qualityNotice={qualityNotice}
           compatMode={compatMode}
