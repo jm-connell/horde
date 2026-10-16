@@ -265,7 +265,7 @@ def app(init_db, monkeypatch):
     from sqlmodel import Session as DBSession
 
     from app.database import get_session
-    from app.main import include_api
+    from app.main import include_api, install_caches
     from app.security import install_security
     from app.services import downloader
     from app.services.auth.runtime import AuthConfig
@@ -283,6 +283,7 @@ def app(init_db, monkeypatch):
 
     test_app = FastAPI(title="Horde test")
     include_api(test_app)
+    install_caches(test_app, init_db["engine"])
     # Explicit config so a developer's HORDE_AUTH_DISABLED never leaks into tests.
     install_security(test_app, auth_config=AuthConfig())
 

@@ -15,7 +15,6 @@ from ..schemas import VideoRead
 from ..services import duplicate_groups as duplicate_groups_svc
 from ..services import library, uploads
 from ..services.auth.accounts import AuthUser
-from ..services.duplicate_groups import DuplicateGroupCache
 from ..services.metadata import probe_is_playable
 from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
 from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
@@ -205,15 +204,6 @@ def skip_review(
     return _to_read(video, session, user_id=user.id)
 
 
-def _group_cache(request: Request) -> DuplicateGroupCache:
-    """The app's grouping cache (``lifespan`` builds it; created on first use if absent)."""
-    state = request.app.state
-    cache = getattr(state, "duplicate_groups", None)
-    if cache is None:
-        cache = state.duplicate_groups = DuplicateGroupCache()
-    return cache
-
-
 class DuplicateGroupPage(BaseModel):
     items: list[DuplicateGroupRead]
     next_cursor: str | None = None
@@ -240,7 +230,9 @@ def duplicate_groups(
         )
     except InvalidCursor as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    groups = _group_cache(request).groups(duplicate_groups_svc.load_facts(session))
+    groups = request.app.state.duplicate_groups.groups(
+        duplicate_groups_svc.load_facts(session)
+    )
     window = groups[page.offset : page.offset + page.fetch]
     more = len(window) > limit
     window = window[:limit]
