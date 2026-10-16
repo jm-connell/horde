@@ -110,3 +110,18 @@ Fix every review finding plus week-1, weeks 2–4 and months 2–3 items. Add au
 - ~06:40 UTC: H2 R5 fixed (wp/fdl 99706e4; test proven to fail without setQueryData). Treat H2 as APPROVED. Merge after J1, auditfix, perf; needs rebase + openapi/api-types regen + full gate.
 - ~06:50 UTC: WP-N2 e2e done (wp/e2e c1d0342, 12 commits on 258a144; 98 e2e x3 green; e2e-only /api/e2e/bulk-videos gated by _e2e_browser; a11y fix in PlaylistAddVideo.tsx). Accepted without separate review (specs + gated test route). Merge late (after H2; PlaylistAddVideo.tsx may conflict with H2). Its commits carry Sonnet trailers (subagent's own attribution) - leave as is. Library default-sort-not-reapplied-after-hydration bug -> H2 agent.
 - UI gap noted for owner/final: playlist rename/delete buttons not hidden for members without manage_playlists (server refuses w/ toast). No "clear history" feature exists.
+- ~07:20 UTC: Player APPROVED + hardening done (wp/player 091d576, 22 commits on 258a144). Merge after H2 (rebase; recheck useStreamQuality stable-callback comment). H2 tip 8204484 (Library default sort fix).
+
+## PAUSED ~07:30 UTC Oct 16 for usage reset (resume ~11:00 UTC)
+State: integration tip 466fc73. All agents idle except J1 (told to stop at a clean point).
+Ready / approved, merge in this order (each: rebase onto tip, regen openapi.json + `npm run gen:api` if needed, gate via heavy.sh, ff-merge, push):
+ 1. wp/dlsplit (J1, APPROVED) - per-commit on d71d568 base was 25/27 green (+1 lifecycle sprite-pool failure on 1cd6cc0 to classify); then rebase onto 466fc73 + gate. Agent a18e123f628ceee88.
+ 2. wp/perf ad71098 (APPROVED). Agent aeb6ac1a2ed07e3d1.
+ 3. wp/auditfix d8cfb86 (fixes done, per-commit all green; quick re-review by a4118eb1a9730e49f optional). Agent a3b8a11506995af64.
+ 4. wp/docs e03eee1 (rebase; drop "lands with"/"two changes on their way" wording; fix wp/model ai-pipeline "rebuilt after any change"; add device-download job sharing note). Agent ac6fb6ddd05121538.
+ 5. wp/fdl 8204484 (H2, APPROVED incl R5 + Library default-sort fix). Agent a7e10c038ad5d61d8.
+ 6. wp/e2e c1d0342 (done; PlaylistAddVideo.tsx may conflict with H2). Agent aba5bf4f4e5a4bb07.
+ 7. wp/player 091d576 (APPROVED + hardening). Agent aabe5c6da3567ad5c.
+Then: J2 AppContext (after J1), J3 rest (Library/Settings/Watch/useSettings; after H2, 2 agents), mypy-to-zero gate, final whole-branch review on Fable, PR + subscribe, owner question list.
+BLOCKER needing owner OK: /dev/null was clobbered into a regular file by an agent (mv ... /dev/null). Fix: `rm -f /dev/null && mknod -m 666 /dev/null c 1 3` - asked owner, no answer yet. Container restart also fixes it.
+Owner Qs so far: /api/v1; pause bg effects default; React Compiler lint; downloader.py facade removal timing; UtcDateTime conversion; mermaid in docs; search ranking TTL 120s; hide playlist rename/delete for members w/o manage_playlists; delete backup/* branches; add required checks to ruleset; GHCR public; v* tag ruleset.
