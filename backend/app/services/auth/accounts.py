@@ -18,10 +18,12 @@ import re
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any, cast
 
 from sqlalchemy import delete, func, insert, literal, or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session
+from sqlmodel import Session, col
 
 from ...models import (
     User,
@@ -155,7 +157,7 @@ def _check_password(password: str, username: str) -> None:
 
 
 def count_users(session: Session) -> int:
-    return int(session.scalar(select(func.count(User.id))) or 0)
+    return int(session.scalar(select(func.count(col(User.id)))) or 0)
 
 
 def get_user(session: Session, user_id: int) -> User | None:
@@ -164,20 +166,20 @@ def get_user(session: Session, user_id: int) -> User | None:
 
 def get_by_username(session: Session, username: str) -> User | None:
     return session.scalar(
-        select(User).where(User.username_norm == (username or "").strip().lower())
+        select(User).where(col(User.username_norm) == (username or "").strip().lower())
     )
 
 
 def list_users(session: Session) -> list[User]:
-    return list(session.scalars(select(User).order_by(User.id)))
+    return list(session.scalars(select(User).order_by(col(User.id))))
 
 
 def first_admin(session: Session) -> User | None:
     """The oldest enabled administrator (the identity when sign-in is disabled)."""
     return session.scalar(
         select(User)
-        .where(User.is_admin == True, User.disabled == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-        .order_by(User.id)
+        .where(col(User.is_admin) == True, col(User.disabled) == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+        .order_by(col(User.id))
         .limit(1)
     )
 
@@ -231,22 +233,28 @@ def create_user(
 
 def _adopt_legacy_data(session: Session, user: User) -> None:
     """Move the pre-accounts history and UI preferences to the first user."""
-    moved = session.execute(
-        insert(UserVideoState).from_select(
-            ["user_id", "video_id", "position_sec", "last_watched_at"],
-            select(
-                literal(_uid(user)),
-                Video.id,
-                Video.last_position_sec,
-                Video.last_watched_at,
-            ).where(
-                or_(Video.last_watched_at.is_not(None), Video.last_position_sec > 0)
-            ),
-        )
+    moved = cast(
+        "CursorResult[Any]",
+        session.execute(
+            insert(UserVideoState).from_select(
+                ["user_id", "video_id", "position_sec", "last_watched_at"],
+                select(
+                    literal(_uid(user)),
+                    col(Video.id),
+                    col(Video.last_position_sec),
+                    col(Video.last_watched_at),
+                ).where(
+                    or_(
+                        col(Video.last_watched_at).is_not(None),
+                        col(Video.last_position_sec) > 0,
+                    )
+                ),
+            )
+        ),
     )
     session.execute(
         update(VideoAiChatMessage)
-        .where(VideoAiChatMessage.user_id.is_(None))  # type: ignore[union-attr]
+        .where(col(VideoAiChatMessage.user_id).is_(None))
         .values(user_id=_uid(user))
     )
     ui = app_settings.load().get("ui")
@@ -303,9 +311,9 @@ def set_password(
 def _enabled_admin_count(session: Session) -> int:
     return int(
         session.scalar(
-            select(func.count(User.id)).where(
-                User.is_admin == True,  # noqa: E712 - SQL column comparison, not a Python truth test
-                User.disabled == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+            select(func.count(col(User.id))).where(
+                col(User.is_admin) == True,  # noqa: E712 - SQL column comparison, not a Python truth test
+                col(User.disabled) == False,  # noqa: E712 - SQL column comparison, not a Python truth test
             )
         )
         or 0
@@ -373,10 +381,12 @@ def delete_user(session: Session, user_id: int) -> None:
     was_active_admin = _is_active_admin(user)
     # Explicit deletes as well as the FK cascades, matching delete_video_cascade.
     _delete_sessions(session, user_id)
-    session.execute(delete(UserVideoState).where(UserVideoState.user_id == user_id))
-    session.execute(delete(UserSettings).where(UserSettings.user_id == user_id))
     session.execute(
-        delete(VideoAiChatMessage).where(VideoAiChatMessage.user_id == user_id)
+        delete(UserVideoState).where(col(UserVideoState.user_id) == user_id)
+    )
+    session.execute(delete(UserSettings).where(col(UserSettings.user_id) == user_id))
+    session.execute(
+        delete(VideoAiChatMessage).where(col(VideoAiChatMessage.user_id) == user_id)
     )
     session.delete(user)
     if was_active_admin:
@@ -408,7 +418,7 @@ def start_session(
     """Create a session row and return the cookie token (shown only once)."""
     now = now or utcnow()
     token = secrets.token_urlsafe(32)
-    session.execute(delete(UserSession).where(UserSession.expires_at < now))
+    session.execute(delete(UserSession).where(col(UserSession.expires_at) < now))
     session.add(
         UserSession(
             user_id=_uid(user),
@@ -435,8 +445,8 @@ def resolve_session(
     now = now or utcnow()
     row = session.execute(
         select(UserSession, User)
-        .join(User, User.id == UserSession.user_id)
-        .where(UserSession.token_hash == hash_token(token))
+        .join(User, col(User.id) == col(UserSession.user_id))
+        .where(col(UserSession.token_hash) == hash_token(token))
     ).first()
     if row is None:
         return None
@@ -455,7 +465,7 @@ def resolve_session(
 
 def end_session(session: Session, token: str) -> None:
     session.execute(
-        delete(UserSession).where(UserSession.token_hash == hash_token(token))
+        delete(UserSession).where(col(UserSession.token_hash) == hash_token(token))
     )
     session.commit()
 
@@ -463,7 +473,7 @@ def end_session(session: Session, token: str) -> None:
 def _delete_sessions(
     session: Session, user_id: int, *, keep_token_hash: str | None = None
 ) -> None:
-    statement = delete(UserSession).where(UserSession.user_id == user_id)
+    statement = delete(UserSession).where(col(UserSession.user_id) == user_id)
     if keep_token_hash is not None:
-        statement = statement.where(UserSession.token_hash != keep_token_hash)
+        statement = statement.where(col(UserSession.token_hash) != keep_token_hash)
     session.execute(statement)
