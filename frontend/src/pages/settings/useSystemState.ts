@@ -79,3 +79,5 @@ export function useSystemState() {
     metadataSyncStatus,
   };
 }
+
+export type SystemState = ReturnType<typeof useSystemState>;

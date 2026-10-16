@@ -1,86 +1,34 @@
-import type { ReactNode } from "react";
 import { describeError } from "../../apiErrors";
-import { useEffect, useRef, useState } from "react";
-import { useFocusTrap } from "../../hooks/useFocusTrap";
-import { createPortal } from "react-dom";
 import { useSettingsPage } from "./context";
 import { useAiCore } from "./ai/useAiCore";
+import ResetHordePanel from "./system/ResetHordePanel";
+import StatusSection from "./system/StatusSection";
+import UpdateNotice from "./system/UpdateNotice";
 import { useSystemState } from "./useSystemState";
 import { Section } from "./ui";
-import { PANEL_BTN, STATUS_TIPS, INPUT } from "./constants";
-import { saveDismissedUpdateSha } from "./helpers";
+import { PANEL_BTN } from "./constants";
 import { api } from "../../api";
 import { useConfirm } from "../../context/ConfirmContext";
-import { downloadErrorLabel, extractFailureCopy } from "../../downloadErrors";
-import type { HealthStats, StorageStats } from "../../types";
-import { formatSize, safeHref } from "../../utils";
-import { clearHordeBrowserState } from "../../setupStorage";
-import LoadingIndicator from "../../components/LoadingIndicator";
-import Collapse from "../../components/Collapse";
-import HelpTip from "../../components/HelpTip";
+import { formatSize } from "../../utils";
 import AiQueueStatus from "./AiQueueStatus";
 import BackgroundActivity from "./BackgroundActivity";
 import SystemStatsSnippet from "./SystemStatsSnippet";
 
-function LastExtractFailure({
-  failure,
-}: {
-  failure: { kind: string; message: string; target?: string | null };
-}) {
-  const copy = extractFailureCopy(failure);
-  return (
-    <>
-      <span className="text-red-400">{downloadErrorLabel(failure.kind)}</span>
-      {copy.target ? (
-        <div className="mt-0.5 text-xs text-gray-200">{copy.target}</div>
-      ) : null}
-      <div className="mt-0.5 text-xs text-muted">{copy.message}</div>
-    </>
-  );
-}
-
-function StatusRow({
-  label,
-  tip,
-  children,
-  ddClassName = "text-right text-gray-200",
-}: {
-  label: string;
-  tip: string;
-  children: ReactNode;
-  ddClassName?: string;
-}) {
-  return (
-    <HelpTip
-      as="div"
-      text={tip}
-      placement="bottom"
-      className="flex w-full cursor-help justify-between gap-4"
-    >
-      <dt className="text-gray-400">{label}</dt>
-      <dd className={ddClassName}>{children}</dd>
-    </HelpTip>
-  );
-}
-
 export default function SystemTab() {
   const confirm = useConfirm();
+  const system = useSystemState();
+  const ai = useAiCore();
   const { match, showToast, showError } = useSettingsPage();
   const {
     storage,
     health,
-    updateCheck,
-    updateChecking,
-    refreshUpdates,
-    showUpdateNotice,
-    setDismissedUpdateSha,
     catalogStatus,
     catalogIndexing,
     setCatalogIndexing,
     refreshCatalogStatus,
     systemActivity,
     metadataSyncStatus,
-  } = useSystemState();
+  } = system;
   const {
     aiStatus,
     systemStats,
@@ -89,99 +37,11 @@ export default function SystemTab() {
     runAiProcess,
     aiProcessingAction,
     appSettings,
-  } = useAiCore();
+  } = ai;
 
   return (
     <>
-      {showUpdateNotice && updateCheck && (
-        <div className="mb-6 rounded-lg border border-ink-700 bg-ink-950/60 px-4 py-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm text-gray-200">
-                A newer version is available
-                {updateCheck.current_short && updateCheck.latest_short ? (
-                  <span className="text-muted">
-                    {" "}
-                    (
-                    <span className="font-mono">
-                      {updateCheck.current_short}
-                    </span>
-                    {" → "}
-                    <span className="font-mono">
-                      {updateCheck.latest_short}
-                    </span>
-                    )
-                  </span>
-                ) : null}
-              </p>
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs text-muted hover:text-gray-400">
-                  How to update
-                </summary>
-                <div className="mt-2 space-y-2 text-xs text-gray-400">
-                  <p>
-                    On the TrueNAS shell (not Dockge Bash), go to your stack
-                    folder and run:
-                  </p>
-                  <pre className="overflow-x-auto rounded bg-ink-900/80 p-2 font-mono text-[11px] leading-relaxed text-gray-300">
-                    {`cd /mnt/tank/dockge/stacks/horde   # adjust to your path
-bash update.sh`}
-                  </pre>
-                  <p>
-                    Use <span className="font-mono">bash update.sh</span> so you
-                    do not need <span className="font-mono">chmod +x</span>.
-                    Then hard-refresh the browser (
-                    <kbd className="font-mono">Ctrl+Shift+R</kbd>
-                    ). Library data stays on host volumes.
-                  </p>
-                  {safeHref(updateCheck.latest_html_url) && (
-                    <a
-                      href={safeHref(updateCheck.latest_html_url)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-block text-accent underline underline-offset-2"
-                    >
-                      View latest commit on GitHub
-                    </a>
-                  )}
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-xs text-muted hover:text-gray-400">
-                      Advanced: manual commands
-                    </summary>
-                    <pre className="mt-2 overflow-x-auto rounded bg-ink-900/80 p-2 font-mono text-[11px] leading-relaxed text-gray-300">
-                      {`git pull
-sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde
-sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
-                    </pre>
-                  </details>
-                </div>
-              </details>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                disabled={updateChecking}
-                onClick={() => void refreshUpdates(true)}
-                className="text-xs text-muted hover:text-gray-300 disabled:opacity-50"
-              >
-                {updateChecking ? "Checking…" : "Check again"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!updateCheck.latest_sha) return;
-                  saveDismissedUpdateSha(updateCheck.latest_sha);
-                  setDismissedUpdateSha(updateCheck.latest_sha);
-                }}
-                className="text-xs text-muted hover:text-gray-300"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      <UpdateNotice system={system} />
       <Section
         first
         title="Storage"
@@ -227,162 +87,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
         <SystemStatsSnippet stats={systemStats} />
       </Section>
 
-      <Section
-        title="Status"
-        hidden={
-          !match(
-            "health",
-            "yt-dlp",
-            "ollama",
-            "disk",
-            "review",
-            "downloads",
-            "gpu",
-            "system status",
-            "update",
-            "version",
-            "github",
-            "git pull",
-            "docker",
-            "rebuild",
-            "po token",
-            "cookies",
-            "openrouter"
-          )
-        }
-      >
-        {health ? (
-          <dl className="space-y-2 text-sm">
-            <StatusRow
-              label="Horde"
-              tip={STATUS_TIPS.horde}
-              ddClassName="text-right font-mono text-gray-200"
-            >
-              {health.horde_version ?? "unknown"}
-              {updateCheck && !updateCheck.error ? (
-                <span className="ml-2 font-sans text-muted">
-                  {updateCheck.update_available
-                    ? "· update available"
-                    : health.horde_version && health.horde_version !== "unknown"
-                      ? "· up to date"
-                      : ""}
-                </span>
-              ) : null}
-            </StatusRow>
-            <StatusRow
-              label="yt-dlp"
-              tip={STATUS_TIPS.ytdlp}
-              ddClassName="text-right font-mono text-gray-200"
-            >
-              {health.yt_dlp_version}
-            </StatusRow>
-            {health.pot_provider && (
-              <StatusRow label="PO token provider" tip={STATUS_TIPS.pot}>
-                {health.pot_provider.status === "ok" ? (
-                  <>
-                    Connected
-                    {health.pot_provider.version
-                      ? ` (v${health.pot_provider.version})`
-                      : ""}
-                  </>
-                ) : (
-                  <span className="text-red-400">
-                    {health.pot_provider.detail ?? "Unavailable"}
-                  </span>
-                )}
-              </StatusRow>
-            )}
-            {health.ollama && (
-              <StatusRow label="Ollama" tip={STATUS_TIPS.ollama}>
-                {!health.ollama.enabled
-                  ? "Disabled"
-                  : health.ollama.ready
-                    ? "Ready"
-                    : health.ollama.reachable
-                      ? "Connected"
-                      : "Offline"}
-                {!health.ollama.enabled || health.ollama.ready ? null : health
-                    .ollama.last_error ? (
-                  <div className="mt-0.5 max-w-xs text-xs text-red-400">
-                    {health.ollama.last_error}
-                  </div>
-                ) : null}
-              </StatusRow>
-            )}
-            {health.openrouter && (
-              <StatusRow label="OpenRouter" tip={STATUS_TIPS.openrouter}>
-                {!health.openrouter.enabled
-                  ? "Disabled"
-                  : health.openrouter.configured || health.openrouter.reachable
-                    ? "Configured"
-                    : "No API key"}
-              </StatusRow>
-            )}
-            <StatusRow label="Cookies" tip={STATUS_TIPS.cookies}>
-              {health.youtube?.cookies_configured
-                ? "Configured"
-                : "Not configured"}
-            </StatusRow>
-            <StatusRow label="Library" tip={STATUS_TIPS.library}>
-              {storage
-                ? `${storage.video_count} video${
-                    storage.video_count === 1 ? "" : "s"
-                  } - ${formatSize(storage.total_bytes) || "0 B"}`
-                : `${health.library_video_count} video${
-                    health.library_video_count === 1 ? "" : "s"
-                  }`}
-            </StatusRow>
-            <StatusRow label="Pending import" tip={STATUS_TIPS.pendingImport}>
-              {health.review_pending_count}
-            </StatusRow>
-            <StatusRow label="Active downloads" tip={STATUS_TIPS.downloads}>
-              {health.downloads?.active ?? health.active_downloads}
-              {health.downloads?.paused ? " · paused" : ""}
-            </StatusRow>
-            {health.workers && (
-              <>
-                <StatusRow label="AI queue" tip={STATUS_TIPS.aiQueue}>
-                  {health.workers.ai_queue_depth}
-                  {health.workers.ai_running
-                    ? ` · ${health.workers.ai_running} running`
-                    : ""}
-                  {(health.workers.ai_error_count ?? 0) > 0
-                    ? ` · ${health.workers.ai_error_count} failed`
-                    : ""}
-                  {health.workers.ai_blocked_reason ? (
-                    <span className="mt-0.5 block text-xs text-amber-400/90">
-                      {health.workers.ai_blocked_reason}
-                    </span>
-                  ) : null}
-                </StatusRow>
-                <StatusRow label="Catalog queue" tip={STATUS_TIPS.catalogQueue}>
-                  {health.workers.catalog_queue_depth}
-                  {health.workers.catalog_indexing ? " · indexing" : ""}
-                </StatusRow>
-              </>
-            )}
-            {health.youtube?.last_extract_failure && (
-              <StatusRow
-                label="Last extract failure"
-                tip={STATUS_TIPS.extractFailure}
-                ddClassName="max-w-xs text-right text-gray-200"
-              >
-                <LastExtractFailure
-                  failure={health.youtube.last_extract_failure}
-                />
-              </StatusRow>
-            )}
-            {health.disk && (
-              <StatusRow label="Disk free" tip={STATUS_TIPS.disk}>
-                {formatSize(health.disk.free_bytes)} /{" "}
-                {formatSize(health.disk.total_bytes)}
-              </StatusRow>
-            )}
-          </dl>
-        ) : (
-          <LoadingIndicator label="Loading" className="py-4" />
-        )}
-      </Section>
+      <StatusSection system={system} />
 
       <Section
         title="Background activity"
@@ -665,174 +370,6 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d`}
       >
         <ResetHordePanel storage={storage} health={health} />
       </Section>
-    </>
-  );
-}
-
-function ResetHordePanel({
-  storage,
-  health,
-}: {
-  storage: StorageStats | null;
-  health: HealthStats | null;
-}) {
-  const { showToast } = useSettingsPage();
-  const [open, setOpen] = useState(false);
-  const [eraseMedia, setEraseMedia] = useState(false);
-  const [confirmText, setConfirmText] = useState("");
-  const [resetting, setResetting] = useState(false);
-  const videoCount = storage?.video_count ?? health?.library_video_count ?? 0;
-  // The server requires this exact phrase (POST /api/setup/reset).
-  const expectedPhrase = eraseMedia ? "ERASE MEDIA" : "RESET";
-  const canReset = confirmText.trim() === expectedPhrase;
-  const resetDialogRef = useRef<HTMLDivElement>(null);
-  // Escape is handled below (it must also respect `resetting`).
-  useFocusTrap(resetDialogRef, { active: open });
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !resetting) {
-        setOpen(false);
-        setConfirmText("");
-      }
-    };
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, resetting]);
-
-  const close = () => {
-    if (resetting) return;
-    setOpen(false);
-    setConfirmText("");
-  };
-
-  const runReset = async () => {
-    if (resetting || !canReset) return;
-    setResetting(true);
-    try {
-      await api.resetApp(eraseMedia, confirmText.trim());
-      clearHordeBrowserState();
-      window.location.assign("/setup");
-    } catch (err) {
-      setResetting(false);
-      showToast(err instanceof Error ? err.message : "Reset failed");
-    }
-  };
-
-  return (
-    <>
-      <p className="mb-3 text-xs text-muted">
-        Restore factory settings and run the setup wizard again. Media volumes
-        and Docker environment variables are not changed unless you erase the
-        library.
-      </p>
-      <button type="button" onClick={() => setOpen(true)} className={PANEL_BTN}>
-        Reset Horde…
-      </button>
-      {open
-        ? createPortal(
-            <>
-              <div
-                className="fixed inset-0 z-[80] bg-black/60"
-                onClick={close}
-                aria-hidden
-              />
-              <div className="pointer-events-none fixed inset-0 z-[81] flex items-start justify-center p-4 pt-[max(1rem,calc(50dvh-8rem))]">
-                <div
-                  ref={resetDialogRef}
-                  tabIndex={-1}
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="reset-horde-title"
-                  className="ui-panel pointer-events-auto w-full max-w-md overflow-y-auto outline-none rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600 max-h-[calc(100dvh-2rem)]"
-                >
-                  <h2
-                    id="reset-horde-title"
-                    className="text-base font-semibold text-gray-100"
-                  >
-                    Reset Horde?
-                  </h2>
-                  <p className="mt-2 text-sm text-gray-300">
-                    Appearance, download, playback, and AI settings return to
-                    defaults. You will go through the setup wizard again.
-                  </p>
-                  <label className="mt-4 flex items-start gap-3 text-sm text-gray-200">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={eraseMedia}
-                      disabled={resetting}
-                      onChange={(e) => {
-                        setEraseMedia(e.target.checked);
-                        setConfirmText("");
-                      }}
-                    />
-                    <span>
-                      Erase all media
-                      <span className="mt-0.5 block text-xs text-muted">
-                        Permanently delete {videoCount} video
-                        {videoCount === 1 ? "" : "s"}
-                        {storage?.total_bytes
-                          ? ` (${formatSize(storage.total_bytes)})`
-                          : ""}{" "}
-                        plus playlists and channel catalogs. Files on the
-                        downloads volume are removed.
-                      </span>
-                    </span>
-                  </label>
-                  <Collapse open={!eraseMedia}>
-                    <p className="pt-3 text-xs text-muted">
-                      Library files, playlists, and watch progress stay on disk.
-                    </p>
-                  </Collapse>
-                  <div className="pt-4">
-                    <p className="text-xs text-muted">
-                      Type{" "}
-                      <span className="font-mono text-gray-300">
-                        {expectedPhrase}
-                      </span>{" "}
-                      to confirm.
-                    </p>
-                    <input
-                      type="text"
-                      value={confirmText}
-                      onChange={(e) => setConfirmText(e.target.value)}
-                      disabled={resetting}
-                      autoComplete="off"
-                      className={`${INPUT} mt-1`}
-                      aria-label={`Type ${expectedPhrase} to confirm`}
-                    />
-                  </div>
-                  <div className="mt-5 flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={close}
-                      disabled={resetting}
-                      className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-300 hover:bg-ink-700 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void runReset()}
-                      disabled={resetting || !canReset}
-                      className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-400 disabled:opacity-50"
-                    >
-                      {resetting ? "Resetting…" : "Reset"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>,
-            document.body
-          )
-        : null}
     </>
   );
 }
