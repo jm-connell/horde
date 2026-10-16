@@ -39,6 +39,7 @@ from .errors import error_response
 from .logging_config import configure_logging
 from .openapi_responses import PROMETHEUS_TEXT
 from .response_schemas import (
+    ErrorResponse,
     HealthFull,
     HealthPublic,
     OkResponse,
@@ -225,7 +226,15 @@ async def lifespan(app: FastAPI):
         restore_signals()
 
 
-app = FastAPI(title="Horde", lifespan=lifespan)
+app = FastAPI(
+    title="Horde",
+    lifespan=lifespan,
+    # Every route can fail with the envelope in app/errors.py; say so in the schema.
+    responses={
+        "default": {"model": ErrorResponse, "description": "Error"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+    },
+)
 
 # Host allowlist, CSRF, media-only CORS, security headers (see app/security.py).
 install_security(app)

@@ -17,6 +17,12 @@ Signed-in clients can mutate the library; server settings need an administrator 
 
 Use `/docs` as the live catalog of request/response shapes. This wiki does **not** enumerate every endpoint.
 
+### OpenAPI export and versioning
+
+`python -m app.export_openapi [FILE]` writes the schema without starting the server (sorted, stable output; `--check FILE` exits 1 when the file is stale, for CI). It is the input for generating the TypeScript client.
+
+The API is **not** versioned in the URL: the only client is the web UI shipped in the same image, so the two always change together. A change that would break a script calling the API directly is listed under *Upgrade notes* in the [changelog](https://github.com/jm-connell/horde/blob/main/CHANGELOG.md). A `/api/v1` prefix was considered and left out for now: the sign-in check, the media-route CORS, signed media links, upload limits and the offline cache keys all match on the literal `/api/...` paths, so a second prefix would have to be threaded through each of them (and existing offline downloads are keyed by the old URLs).
+
 ### Response models
 
 Every JSON route declares a `response_model`; routes that send bytes, files or event streams declare the media type in `responses=` instead (`app/openapi_responses.py`). `tests/test_response_models.py` fails when a new route does neither, so `/openapi.json` always describes what the API returns.
