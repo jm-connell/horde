@@ -60,7 +60,7 @@ When theme is `custom`, `customColors` supplies:
 | `electrolize` | Electrolize |
 | `custom` | Add custom… (transient while adding) |
 
-Google Fonts families load via CSS link when selected. Permanently saved customs live in `customFonts` (URL or uploaded file) and are selected by their saved id.
+Google Fonts families load via CSS link when selected. Permanently saved customs live in `customFonts` (URL or uploaded file) and are selected by their saved id. Uploading a font file (and deleting one from the server) is for administrators; members add Google Fonts by URL or name, and removing a font only takes it off their own list.
 
 ### Font size (`fontSize`)
 
@@ -80,7 +80,7 @@ Applied as `documentElement` font-size. Legacy `uiScale` percentages migrate int
 | Value | Description |
 |-------|-------------|
 | `none` | Solid theme background (**default**) |
-| `custom-image` | Uploaded still or animated background |
+| `custom-image` | Uploaded still or animated background (administrators upload, delete and extract palettes; anyone picks one of the uploaded images) |
 | `rain` | Falling rain streaks |
 | `constellation` | Drifting linked stars |
 | `perlin-flow` | Particles in a noise field |

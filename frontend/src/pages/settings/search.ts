@@ -50,6 +50,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   // Library
   {
     tab: "library",
+    access: "admin",
     keywords:
       "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval youtube only youtube direct youtube search youtube video search",
   },
@@ -59,6 +60,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "library",
+    access: "admin",
     keywords: "progress expiry inactivity days",
   },
   {
@@ -108,6 +110,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   // Downloads (legacy tab, redirected to library)
   {
     tab: "library",
+    access: "download",
     keywords:
       "download count navigation badge normalize volume loudness downloads",
   },

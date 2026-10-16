@@ -19,6 +19,17 @@ import {
 import HelpTip from "../../components/HelpTip";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
 
+const EXPIRY_TERMS = ["progress expiry", "inactivity", "days"];
+
+const DOWNLOAD_PREF_TERMS = [
+  "download count",
+  "navigation",
+  "badge",
+  "normalize volume",
+  "loudness",
+  "downloads",
+];
+
 const COMPAT_TERMS = [
   "compatibility",
   "av1",
@@ -36,7 +47,9 @@ const COMPAT_TERMS = [
 
 export default function LibraryTab() {
   const { q, match, settings, update } = useSettingsPage();
-  const { isAdmin } = useAuth();
+  const { isAdmin, can } = useAuth();
+  // Download preferences only matter to someone who may download (admins can).
+  const canDownload = can("download");
   const {
     appSettings,
     catalogMaxInput,
@@ -68,9 +81,7 @@ export default function LibraryTab() {
             "progress bar",
             "dates",
             "video cards",
-            "progress expiry",
-            "inactivity",
-            "days",
+            ...(isAdmin ? EXPIRY_TERMS : []),
             "default video sort",
             "sort",
             "library",
@@ -143,37 +154,40 @@ export default function LibraryTab() {
           />
         </div>
 
-        <div className="mt-6 border-t border-ink-700 pt-6">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-            Progress expiry
-          </h3>
-          <p className="mb-3 text-xs text-muted">
-            Saved watch position resets after this many days of inactivity. The
-            continue watching row hides videos after 7 days (fixed, not
-            configurable).
-          </p>
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              min={1}
-              max={365}
-              aria-label="Progress expiry in days"
-              value={expiryInput}
-              onChange={(e) => setExpiryInput(e.target.value)}
-              className={INPUT_COMPACT}
-            />
-            <button
-              onClick={saveExpiry}
-              disabled={
-                !appSettings ||
-                parseInt(expiryInput, 10) === appSettings.progress_expiry_days
-              }
-              className={PANEL_BTN}
-            >
-              Save
-            </button>
+        {/* Server-wide: it resets everyone's saved positions. */}
+        {isAdmin && (
+          <div className="mt-6 border-t border-ink-700 pt-6">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+              Progress expiry
+            </h3>
+            <p className="mb-3 text-xs text-muted">
+              Saved watch position resets after this many days of inactivity.
+              The continue watching row hides videos after 7 days (fixed, not
+              configurable).
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                max={365}
+                aria-label="Progress expiry in days"
+                value={expiryInput}
+                onChange={(e) => setExpiryInput(e.target.value)}
+                className={INPUT_COMPACT}
+              />
+              <button
+                onClick={saveExpiry}
+                disabled={
+                  !appSettings ||
+                  parseInt(expiryInput, 10) === appSettings.progress_expiry_days
+                }
+                className={PANEL_BTN}
+              >
+                Save
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-6 border-t border-ink-700 pt-6">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
@@ -233,15 +247,8 @@ export default function LibraryTab() {
         title="Downloads"
         description="Background download queue and navigation preferences."
         hidden={
-          !match(
-            "download count",
-            "navigation",
-            "badge",
-            "normalize volume",
-            "loudness",
-            "downloads",
-            ...(isAdmin ? COMPAT_TERMS : [])
-          )
+          !canDownload ||
+          !match(...DOWNLOAD_PREF_TERMS, ...(isAdmin ? COMPAT_TERMS : []))
         }
       >
         <div className="space-y-4">
@@ -298,6 +305,7 @@ export default function LibraryTab() {
         title="Metadata and catalog"
         description="Pull fresh thumbnails, captions, view counts, and titles from each video's source URL. Choose what to sync. Channel catalogs refresh on the same interval."
         hidden={
+          !isAdmin ||
           !match(
             "library metadata",
             "resync",

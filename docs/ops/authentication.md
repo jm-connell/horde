@@ -43,6 +43,20 @@ Download job errors are not trimmed: they explain why a download the member can 
 
 These are **admin only** and cannot be granted: managing users, server-wide settings, AI provider configuration and worker control, factory reset, library-wide compatibility conversion, background and font management, pausing the download queue, a forced update check and the bulk metadata refresh. (Channel auto-download is *not* in this list: it needs only `download`.)
 
+### What members can and can't change
+
+Every administrator sees and can change everything below. A member sees only the first column; the rest is hidden from them in the app and refused by the API (403 `admin_required` or `permission_denied`).
+
+| Area | A member can change | Needs a permission | Administrators only |
+|------|---------------------|--------------------|---------------------|
+| Settings → Appearance | Theme, saved themes, font (including Google Fonts by URL), font size, interface, background animation and picking an uploaded background image, custom CSS | | Uploading or deleting background images and font files, extracting a palette from a background |
+| Settings → Library | Continue watching, progress bars, card dates, default sort, channel list order | Download count badge, normalize volume on download (`download`) | Progress expiry, playback compatibility (download codec, H.264 copy size, library copies and conversion), metadata and catalog (indexing, YouTube search switches, catalog size, refresh interval, resync) |
+| Settings → Playback | Everything: watch page, previews, subtitles, SponsorBlock, speeds, offline mode | | |
+| Settings → AI, System, Users | | | The whole tab: AI providers, keys, models, budget, schedule and jobs; storage, background activity, health, updates, factory reset; user management |
+| Elsewhere | Their own password, history and chats | Downloads, imports, channel auto-download (`download`); saving for offline (`offline_download`); notes, details, thumbnails (`edit_metadata`); playlists (`manage_playlists`); AI chat and on-demand AI (`use_ai`); deleting (`delete_videos`) | Pausing or resuming the whole download queue, the bulk metadata resync, refreshing the AI category shelves |
+
+Members still get the read-only values their screens need: the YouTube search switches, the progress expiry and the server's download codec (their downloads use it). `GET /api/settings` gives a member the defaults of the other server-only fields, and the library-wide compatibility totals (`GET /api/compat/summary`) and the metadata resync progress (`GET /api/videos/refresh-metadata/status`) are for administrators.
+
 Changes apply on the person's next request; they do not need to sign in again. The API answers a refused request with `403` and `code: "permission_denied"` (or `admin_required`); the app shows it as a message and hides the controls the account cannot use.
 
 !!! note "Offline saves"

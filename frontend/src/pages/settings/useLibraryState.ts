@@ -37,10 +37,10 @@ export function useLibraryState() {
     setSyncIntervalInput(String(s.metadata_sync_interval_hours ?? 24));
   });
 
-  const metadataSyncStatus =
-    useMetadataSyncStatus({ interval: 5000 }).data ?? null;
+  // The metadata section and the compatibility picker are for administrators.
   const { isAdmin } = useAuth();
-  // Only the compatibility picker (administrators) reads the encoder stats.
+  const metadataSyncStatus =
+    useMetadataSyncStatus({ interval: 5000, enabled: isAdmin }).data ?? null;
   const systemStats = dataOrNull(
     useSystemStats({ interval: false, enabled: isAdmin })
   );

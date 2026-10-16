@@ -310,3 +310,30 @@ def test_the_ai_job_list_is_for_administrators(client, member_client):
     denied = member_client.get("/api/ai/jobs")
     assert denied.status_code == 403
     assert denied.json()["code"] == "admin_required"
+
+
+def test_a_member_gets_the_defaults_of_the_server_only_fields(client, member_client):
+    changed = {
+        "metadata_sync_interval_hours": 72,
+        "channel_catalog_enabled": False,
+        "channel_catalog_max_videos": 3000,
+        "direct_youtube_search": False,
+        "youtube_video_search": False,
+        "progress_expiry_days": 30,
+    }
+    assert client.patch("/api/settings", json=changed).status_code == 200
+    admin = client.get("/api/settings").json()
+    assert {k: admin[k] for k in changed} == changed
+
+    for resp in (
+        member_client.get("/api/settings"),
+        member_client.patch("/api/settings", json={"ui": {"theme": "nord"}}),
+    ):
+        seen = resp.json()
+        assert seen["metadata_sync_interval_hours"] == 24
+        assert seen["channel_catalog_enabled"] is True
+        assert seen["channel_catalog_max_videos"] == 1000
+        # Member screens read these, so they are the real values.
+        assert seen["direct_youtube_search"] is False
+        assert seen["youtube_video_search"] is False
+        assert seen["progress_expiry_days"] == 30

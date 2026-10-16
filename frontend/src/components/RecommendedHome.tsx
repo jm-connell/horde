@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { aiStatusQuery } from "../queries/status";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
@@ -15,6 +16,8 @@ export default function RecommendedHome({
   sidebarCollapsed: boolean;
 }) {
   const { showToast, showError } = useToast();
+  // Re-running the category job is AI worker control (administrators).
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [categories, setCategories] = useState<string[]>([]);
   const [feedVideos, setFeedVideos] = useState<Video[]>([]);
@@ -231,7 +234,7 @@ export default function RecommendedHome({
             ›
           </button>
         )}
-        {showForYou && (
+        {showForYou && isAdmin && (
           <button
             type="button"
             onClick={refreshCategories}

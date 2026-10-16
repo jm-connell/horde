@@ -13933,6 +13933,7 @@
     },
     "/api/videos/refresh-metadata/status": {
       "get": {
+        "description": "Progress of the library-wide metadata refresh (raw errors included).",
         "operationId": "metadata_sync_status_api_videos_refresh_metadata_status_get",
         "responses": {
           "200": {

@@ -663,8 +663,13 @@ def bulk_refresh_metadata(
     )
 
 
-@router.get("/videos/refresh-metadata/status", response_model=MetadataSyncStatus)
+@router.get(
+    "/videos/refresh-metadata/status",
+    response_model=MetadataSyncStatus,
+    dependencies=[Depends(require_admin)],
+)
 def metadata_sync_status():
+    """Progress of the library-wide metadata refresh (raw errors included)."""
     from ..services.metadata_sync import get_sync_status
 
     return MetadataSyncStatus(**get_sync_status())

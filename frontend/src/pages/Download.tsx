@@ -7,6 +7,7 @@ import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
 import LoadingIndicator from "../components/LoadingIndicator";
 import ThemedSelect from "../components/ThemedSelect";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { downloadErrorHint, downloadErrorLabel } from "../downloadErrors";
 import {
@@ -73,6 +74,8 @@ function toastBulkSkips(
 
 export default function Download() {
   const { showToast } = useToast();
+  // Pausing the queue stops everyone's downloads: an administrator's call.
+  const { isAdmin } = useAuth();
   const {
     jobs,
     progress,
@@ -963,7 +966,13 @@ export default function Download() {
               </span>
             </button>
             <div className="flex shrink-0 gap-2">
-              {queuePaused ? (
+              {!isAdmin ? (
+                queuePaused && (
+                  <span className="rounded-lg bg-ink-800 px-3 py-1.5 text-xs font-medium text-gray-300">
+                    Paused by an administrator
+                  </span>
+                )
+              ) : queuePaused ? (
                 <button
                   type="button"
                   onClick={() => resumeQueue()}

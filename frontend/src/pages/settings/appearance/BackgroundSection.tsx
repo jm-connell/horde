@@ -9,6 +9,7 @@ import {
 import ThemedSelect from "../../../components/ThemedSelect";
 import { PANEL_BTN } from "../constants";
 import { Chip, Section, SettingRow, Toggle } from "../ui";
+import { useAuth } from "../../../context/AuthContext";
 import { useSettingsPage } from "../context";
 import type { AppearanceState } from "../useAppearanceState";
 
@@ -18,6 +19,9 @@ export default function BackgroundSection({
   appearance: AppearanceState;
 }) {
   const { q, match, settings, update } = useSettingsPage();
+  // The uploaded backgrounds are shared files on the server: anyone may pick
+  // one, only an administrator adds, removes or analyses them.
+  const { isAdmin } = useAuth();
   const {
     bgUploading,
     uploadCustomBackground,
@@ -108,29 +112,37 @@ export default function BackgroundSection({
             </p>
           </div>
 
-          <label className="block">
-            <span className="mb-1 block text-xs text-muted">
-              Image or GIF / WebM
-            </span>
-            <input
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp,.gif,.webm,image/*,video/webm"
-              disabled={bgUploading}
-              onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
-                e.target.value = "";
-                void uploadCustomBackground(file);
-              }}
-              className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border file:border-ink-700 file:bg-ink-900 file:px-3 file:py-1.5 file:text-sm file:text-gray-200 hover:file:border-accent"
-            />
-            {bgUploading ? (
-              <p className="mt-1 text-xs text-muted">Uploading…</p>
-            ) : lastUploadedName ? (
-              <p className="mt-1 text-xs text-muted">
-                Uploaded: {lastUploadedName}
-              </p>
-            ) : null}
-          </label>
+          {isAdmin && (
+            <label className="block">
+              <span className="mb-1 block text-xs text-muted">
+                Image or GIF / WebM
+              </span>
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,.gif,.webm,image/*,video/webm"
+                disabled={bgUploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  e.target.value = "";
+                  void uploadCustomBackground(file);
+                }}
+                className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border file:border-ink-700 file:bg-ink-900 file:px-3 file:py-1.5 file:text-sm file:text-gray-200 hover:file:border-accent"
+              />
+              {bgUploading ? (
+                <p className="mt-1 text-xs text-muted">Uploading…</p>
+              ) : lastUploadedName ? (
+                <p className="mt-1 text-xs text-muted">
+                  Uploaded: {lastUploadedName}
+                </p>
+              ) : null}
+            </label>
+          )}
+
+          {!isAdmin && bgLibrary.length === 0 && (
+            <p className="text-xs text-muted">
+              No background images yet. An administrator can upload them.
+            </p>
+          )}
 
           {bgLibrary.length > 0 && (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -177,17 +189,19 @@ export default function BackgroundSection({
                         />
                       )}
                     </button>
-                    <button
-                      type="button"
-                      aria-label="Delete background"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void deleteLibraryBackground(item.id);
-                      }}
-                      className="absolute right-1 top-1 rounded bg-ink-950/80 px-1.5 py-0.5 text-[10px] text-gray-300 opacity-0 ring-1 ring-ink-700 transition-opacity group-hover:opacity-100 hover:text-red-300"
-                    >
-                      ✕
-                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        aria-label="Delete background"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void deleteLibraryBackground(item.id);
+                        }}
+                        className="absolute right-1 top-1 rounded bg-ink-950/80 px-1.5 py-0.5 text-[10px] text-gray-300 opacity-0 ring-1 ring-ink-700 transition-opacity group-hover:opacity-100 hover:text-red-300"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -276,30 +290,32 @@ export default function BackgroundSection({
             </label>
           </div>
 
-          <div>
-            <button
-              type="button"
-              disabled={!settings.customBackgroundId || paletteLoading}
-              onClick={() => void extractPalette()}
-              className={PANEL_BTN}
-            >
-              {paletteLoading ? "Extracting…" : "Extract palette"}
-            </button>
-            {paletteColors.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {paletteColors.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    title={`Use ${c} as accent`}
-                    onClick={() => applyPaletteColor(c)}
-                    className="ui-interactive h-8 w-8 rounded-full ring-1 ring-ink-700 hover:ring-accent"
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          {isAdmin && (
+            <div>
+              <button
+                type="button"
+                disabled={!settings.customBackgroundId || paletteLoading}
+                onClick={() => void extractPalette()}
+                className={PANEL_BTN}
+              >
+                {paletteLoading ? "Extracting…" : "Extract palette"}
+              </button>
+              {paletteColors.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {paletteColors.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      title={`Use ${c} as accent`}
+                      onClick={() => applyPaletteColor(c)}
+                      className="ui-interactive h-8 w-8 rounded-full ring-1 ring-ink-700 hover:ring-accent"
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

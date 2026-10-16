@@ -1785,7 +1785,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Metadata Sync Status */
+        /**
+         * Metadata Sync Status
+         * @description Progress of the library-wide metadata refresh (raw errors included).
+         */
         get: operations["metadata_sync_status_api_videos_refresh_metadata_status_get"];
         put?: never;
         post?: never;

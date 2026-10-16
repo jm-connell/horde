@@ -1,5 +1,6 @@
 import { api } from "../../../api";
 import { describeError } from "../../../apiErrors";
+import { useAuth } from "../../../context/AuthContext";
 import { useConfirm } from "../../../context/ConfirmContext";
 import { loadSettings } from "../../../hooks/useSettings";
 import type { UiFont } from "../../../hooks/useSettings";
@@ -20,6 +21,8 @@ export default function FontSection({
   const { customFontDraft, setCustomFontDraft, addCustomFontFromUrl } =
     appearance;
   const confirm = useConfirm();
+  // Font files are stored on the server; only an administrator adds or deletes them.
+  const { isAdmin } = useAuth();
 
   return (
     <Section
@@ -132,48 +135,50 @@ export default function FontSection({
               </button>
             </div>
           </label>
-          <div className="space-y-1.5">
-            <span className="block text-sm text-gray-300">
-              Or upload a font file
-            </span>
-            <input
-              type="file"
-              accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
-              className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-800 file:px-3 file:py-1.5 file:text-sm file:text-gray-200"
-              onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
-                e.target.value = "";
-                if (!file) return;
-                void (async () => {
-                  try {
-                    const result = await api.uploadFont(file);
-                    const name = labelFromFilename(
-                      result.filename || file.name
-                    );
-                    const current = loadSettings();
-                    update({
-                      customFonts: [
-                        ...current.customFonts,
-                        {
-                          id: result.id,
-                          name,
-                          source: "file",
-                        },
-                      ],
-                      uiFont: result.id,
-                    });
-                    showToast(`Saved “${name}”`);
-                  } catch (err) {
-                    showError(`Font upload failed: ${describeError(err)}`);
-                  }
-                })();
-              }}
-            />
-            <p className="text-xs text-muted">
-              Saved fonts are added to the dropdown permanently and stored with
-              your Horde data.
-            </p>
-          </div>
+          {isAdmin && (
+            <div className="space-y-1.5">
+              <span className="block text-sm text-gray-300">
+                Or upload a font file
+              </span>
+              <input
+                type="file"
+                accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf"
+                className="block w-full max-w-md text-sm text-gray-400 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-800 file:px-3 file:py-1.5 file:text-sm file:text-gray-200"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  e.target.value = "";
+                  if (!file) return;
+                  void (async () => {
+                    try {
+                      const result = await api.uploadFont(file);
+                      const name = labelFromFilename(
+                        result.filename || file.name
+                      );
+                      const current = loadSettings();
+                      update({
+                        customFonts: [
+                          ...current.customFonts,
+                          {
+                            id: result.id,
+                            name,
+                            source: "file",
+                          },
+                        ],
+                        uiFont: result.id,
+                      });
+                      showToast(`Saved “${name}”`);
+                    } catch (err) {
+                      showError(`Font upload failed: ${describeError(err)}`);
+                    }
+                  })();
+                }}
+              />
+              <p className="text-xs text-muted">
+                Saved fonts are added to the dropdown permanently and stored
+                with your Horde data.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -184,19 +189,19 @@ export default function FontSection({
           onClick={async () => {
             const id = settings.uiFont;
             const entry = settings.customFonts.find((f) => f.id === id);
+            // A member only drops it from their own list; the file stays.
+            const deleteFile = entry?.source === "file" && isAdmin;
             const next = loadSettings().customFonts.filter((f) => f.id !== id);
             const ok = await confirm({
               title: "Remove this font?",
               body: `${entry?.name ?? "The font"} is removed from the dropdown${
-                entry?.source === "file"
-                  ? " and its file is deleted from the server"
-                  : ""
+                deleteFile ? " and its file is deleted from the server" : ""
               }.`,
               confirmLabel: "Remove",
               danger: true,
             });
             if (!ok) return;
-            if (entry?.source === "file") {
+            if (deleteFile) {
               try {
                 await api.deleteFont(id);
               } catch (err) {

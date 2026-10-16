@@ -98,6 +98,16 @@ level. Detailed per-area entries are added by the maintainer at release time.
   change to `download_video_codec` or `compat_copy_resolution` with 403
   `admin_required` (echoing the current value is still accepted), and
   `GET /api/compat/summary` requires an administrator.
+- Members no longer see server-wide controls they cannot use: progress expiry
+  and the metadata and catalog section (Settings → Library), background and
+  font uploads, deletes and palette extraction (Settings → Appearance), the
+  download queue's Pause all / Resume all, the bulk metadata resync and the
+  AI category refresh. The download preferences need the `download`
+  permission, and the bulk bar's playlist, note and save-for-offline actions
+  follow their permissions. `GET /api/settings` gives members the defaults of
+  the catalog and metadata-interval fields, and the metadata resync progress
+  (`GET /api/videos/refresh-metadata/status`) requires an administrator. See
+  "What members can and can't change" in docs/ops/authentication.md.
 - Reproducible builds: pinned base images (version and digest), `npm ci`, Node 22
   everywhere, a hash-checked `backend/requirements.lock`, pinned docs toolchain.
 - The ffmpeg flavor is an explicit build argument (`FFMPEG_FLAVOR=jellyfin|debian`);

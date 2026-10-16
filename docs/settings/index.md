@@ -28,7 +28,7 @@ flowchart LR
 3. **Edits** — `useSettings` writes localStorage first, then schedules a patch of the `ui` blob. Top-level and AI fields use explicit save helpers (e.g. progress expiry, catalog caps, `saveAi`).
 
 !!! note "Per account"
-    The `ui` blob is saved **per user** (`user_settings`), layered over a server-wide default. AI, System and Users tabs are visible to administrators only; members see Appearance, Library and Playback and can change only their own preferences.
+    The `ui` blob is saved **per user** (`user_settings`), layered over a server-wide default. AI, System and Users tabs are visible to administrators only; members see Appearance, Library and Playback and can change only their own preferences. Server-wide parts of those three tabs (progress expiry, playback compatibility, metadata and catalog, background and font uploads) are hidden from members too; see [what members can and can't change](../ops/authentication.md#what-members-can-and-cant-change).
 
 !!! tip "Same server, new browser"
     Opening Horde on another machine pulls the server `ui` blob and AI/app settings. Keys **not** in `SERVER_UI_KEYS` (notably `volume` and `lastCustomChannel`) stay per-browser.

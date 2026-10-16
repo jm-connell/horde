@@ -19,7 +19,7 @@ Controls under **Settings → Library** (`?tab=library`). Display and download p
 |---------|-----|---------|-------|---------|
 | Progress expiry (days) | `progress_expiry_days` | `14` | 1–365 | Top-level `app_settings.json` (mirrored locally as `progressExpiryDays`) |
 
-Saved watch position resets after this many days of **inactivity**.
+Saved watch position resets after this many days of **inactivity**. Server-wide: shown to administrators only.
 
 !!! warning "`continue_watching_days` is backend-only"
     The continue watching **row** hides videos after **7 days**. That value is `continue_watching_days` in server `DEFAULTS` — fixed at 7, **not** editable in the UI, and not part of the client settings object. Do not confuse it with progress expiry.
@@ -48,7 +48,7 @@ Saved watch position resets after this many days of **inactivity**.
 
 ## Downloads
 
-Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Library).
+Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Library). The section is shown to accounts with the `download` permission (every administrator); the two personal rows below are per user.
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
@@ -77,7 +77,7 @@ The summary line shows library size, how many copies exist and their size, and "
 
 ## Metadata and catalog
 
-These are **top-level** keys (not the `ui` blob).
+These are **top-level** keys (not the `ui` blob). The whole section is server-wide and shown to administrators only; `GET /api/settings` gives members the defaults of `metadata_sync_interval_hours`, `channel_catalog_enabled` and `channel_catalog_max_videos` (the two YouTube search switches keep their real values, because member screens use them).
 
 ### Channel catalog
 

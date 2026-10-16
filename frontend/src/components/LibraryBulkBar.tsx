@@ -42,7 +42,7 @@ export default function LibraryBulkBar({
   onDelete: () => void | Promise<void>;
   onCancel: () => void;
 }) {
-  const { can } = useAuth();
+  const { can, isAdmin } = useAuth();
   const playlistTriggerRef = useRef<HTMLButtonElement>(null);
   const noteTriggerRef = useRef<HTMLButtonElement>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -77,107 +77,117 @@ export default function LibraryBulkBar({
             {selectedCount} selected
           </span>
 
-          <div className="relative">
-            <button
-              ref={playlistTriggerRef}
-              onClick={() =>
-                playlistOpen ? onTogglePlaylist() : onOpenPlaylistPicker()
-              }
-              aria-haspopup="menu"
-              aria-expanded={playlistOpen}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-            >
-              + Playlist
-            </button>
-            <MenuFlyout
-              open={playlistOpen}
-              className="absolute bottom-10 left-0 z-50 w-56"
-              menu={{
-                label: "Add to playlist",
-                onClose: onTogglePlaylist,
-                triggerRef: playlistTriggerRef,
-              }}
-            >
-              <MenuScroll className="max-h-56" revision={playlists.length}>
-                {playlists.length === 0 ? (
-                  <p className="px-3 py-2 text-xs text-muted">
-                    No playlists yet.
-                  </p>
-                ) : (
-                  playlists.map((p) => (
-                    <button
-                      key={p.id}
-                      role="menuitem"
-                      onClick={() => onAddToPlaylist(p.id)}
-                      className="block w-full truncate px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
-                    >
-                      {p.name}
-                    </button>
-                  ))
-                )}
-              </MenuScroll>
-            </MenuFlyout>
-          </div>
+          {can("manage_playlists") && (
+            <div className="relative">
+              <button
+                ref={playlistTriggerRef}
+                onClick={() =>
+                  playlistOpen ? onTogglePlaylist() : onOpenPlaylistPicker()
+                }
+                aria-haspopup="menu"
+                aria-expanded={playlistOpen}
+                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+              >
+                + Playlist
+              </button>
+              <MenuFlyout
+                open={playlistOpen}
+                className="absolute bottom-10 left-0 z-50 w-56"
+                menu={{
+                  label: "Add to playlist",
+                  onClose: onTogglePlaylist,
+                  triggerRef: playlistTriggerRef,
+                }}
+              >
+                <MenuScroll className="max-h-56" revision={playlists.length}>
+                  {playlists.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-muted">
+                      No playlists yet.
+                    </p>
+                  ) : (
+                    playlists.map((p) => (
+                      <button
+                        key={p.id}
+                        role="menuitem"
+                        onClick={() => onAddToPlaylist(p.id)}
+                        className="block w-full truncate px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
+                      >
+                        {p.name}
+                      </button>
+                    ))
+                  )}
+                </MenuScroll>
+              </MenuFlyout>
+            </div>
+          )}
 
-          <div className="relative">
-            <button
-              ref={noteTriggerRef}
-              onClick={onToggleNote}
-              aria-haspopup="dialog"
-              aria-expanded={bulkNoteOpen}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-            >
-              Add note
-            </button>
-            <MenuFlyout
-              open={bulkNoteOpen}
-              className="absolute bottom-10 left-0 z-50 w-72"
-              menu={{
-                kind: "popup",
-                label: "Note for selected videos",
-                onClose: onToggleNote,
-                triggerRef: noteTriggerRef,
-              }}
-            >
-              <div className="p-3">
-                <div className="mb-1 flex items-baseline justify-between gap-2">
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                    Note
-                  </span>
+          {can("edit_metadata") && (
+            <div className="relative">
+              <button
+                ref={noteTriggerRef}
+                onClick={onToggleNote}
+                aria-haspopup="dialog"
+                aria-expanded={bulkNoteOpen}
+                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+              >
+                Add note
+              </button>
+              <MenuFlyout
+                open={bulkNoteOpen}
+                className="absolute bottom-10 left-0 z-50 w-72"
+                menu={{
+                  kind: "popup",
+                  label: "Note for selected videos",
+                  onClose: onToggleNote,
+                  triggerRef: noteTriggerRef,
+                }}
+              >
+                <div className="p-3">
+                  <div className="mb-1 flex items-baseline justify-between gap-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                      Note
+                    </span>
+                  </div>
+                  <textarea
+                    value={bulkNote}
+                    onChange={(e) => onNoteChange(e.target.value)}
+                    rows={3}
+                    placeholder="Note to apply to all selected..."
+                    className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    ref={focusOnMount}
+                  />
+                  <button
+                    onClick={onSaveNote}
+                    disabled={!bulkNote.trim()}
+                    className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-40"
+                  >
+                    Apply to {selectedCount} video
+                    {selectedCount === 1 ? "" : "s"}
+                  </button>
                 </div>
-                <textarea
-                  value={bulkNote}
-                  onChange={(e) => onNoteChange(e.target.value)}
-                  rows={3}
-                  placeholder="Note to apply to all selected..."
-                  className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
-                  ref={focusOnMount}
-                />
-                <button
-                  onClick={onSaveNote}
-                  disabled={!bulkNote.trim()}
-                  className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-40"
-                >
-                  Apply to {selectedCount} video{selectedCount === 1 ? "" : "s"}
-                </button>
-              </div>
-            </MenuFlyout>
-          </div>
+              </MenuFlyout>
+            </div>
+          )}
 
-          <button
-            onClick={onRefreshMetadata}
-            disabled={metadataSyncing}
-            className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:opacity-50"
-          >
-            {metadataSyncing ? "Syncing…" : "Resync metadata"}
-          </button>
+          {/* The bulk metadata refresh is admin-only on the server. */}
+          {isAdmin && (
+            <button
+              onClick={onRefreshMetadata}
+              disabled={metadataSyncing}
+              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:opacity-50"
+            >
+              {metadataSyncing ? "Syncing…" : "Resync metadata"}
+            </button>
+          )}
 
-          <button
-            onClick={onDownload}
-            className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-          >
-            Download
-          </button>
+          {can("offline_download") && (
+            <button
+              onClick={onDownload}
+              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+            >
+              Download
+            </button>
+          )}
 
           {can("offline_download") && (
             <button

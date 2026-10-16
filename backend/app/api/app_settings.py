@@ -157,6 +157,18 @@ MEMBER_VISIBLE_AI_FIELDS = frozenset(
 )
 
 
+#: Top-level fields only the administrator's settings screens read: how often
+#: metadata and catalogs refresh, how large catalogs grow, whether indexing is on,
+#: and whether the settings file is damaged. A member gets the defaults. (The
+#: YouTube search switches and the progress expiry stay: member screens use them.)
+MEMBER_HIDDEN_FIELDS = (
+    "metadata_sync_interval_hours",
+    "channel_catalog_enabled",
+    "channel_catalog_max_videos",
+    "settings_degraded",
+)
+
+
 def _ai_read(data: dict[str, Any], *, admin: bool = True) -> AiSettingsRead:
     ai_value = data.get("ai")
     raw = ai_value if isinstance(ai_value, dict) else {}
@@ -216,7 +228,8 @@ def _settings_read(
 ) -> AppSettingsRead:
     """``ui`` is the caller's effective preferences; default: the server-wide blob.
 
-    ``admin=False`` trims the AI block to ``MEMBER_VISIBLE_AI_FIELDS``.
+    ``admin=False`` trims the AI block to ``MEMBER_VISIBLE_AI_FIELDS`` and leaves
+    the server-only fields (``MEMBER_HIDDEN_FIELDS``) at their defaults.
     """
     if ui is None:
         server_ui = data.get("ui")
@@ -226,7 +239,7 @@ def _settings_read(
     except (TypeError, ValueError):
         interval = 24
     interval = max(1, min(168, interval))
-    return AppSettingsRead(
+    read = AppSettingsRead(
         progress_expiry_days=data["progress_expiry_days"],
         metadata_sync_interval_hours=interval,
         channel_catalog_enabled=bool(data.get("channel_catalog_enabled", True)),
@@ -239,6 +252,12 @@ def _settings_read(
         settings_degraded=app_settings.is_degraded(),
         ui=ui,
         ai=_ai_read(data, admin=admin),
+    )
+    if admin:
+        return read
+    fields = AppSettingsRead.model_fields
+    return read.model_copy(
+        update={name: fields[name].default for name in MEMBER_HIDDEN_FIELDS}
     )
 
 
