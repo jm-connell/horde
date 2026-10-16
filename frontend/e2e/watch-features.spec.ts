@@ -157,3 +157,41 @@ test("changing resolution sends the chosen quality and reports the job", async (
   await expect(dialog).toHaveCount(0);
   expect(body).toMatchObject({ quality_preset: "720p" });
 });
+
+test("the mini player stays hidden while the next video loads and on a missing video", async ({
+  page,
+}) => {
+  const a = await videoId(page, "Aurora Drift");
+  const b = await videoId(page, "Harbor Lights");
+  const related = await (await page.request.get(`/api/videos/${b}`)).json();
+  await page.route(new RegExp(`/api/videos/${a}/related`), (route) =>
+    route.fulfill({ json: [related] })
+  );
+  await page.goto(`/watch/${a}`);
+  await expect(
+    page.getByRole("heading", { name: "Aurora Drift", level: 1 })
+  ).toBeVisible();
+
+  const mini = page.getByLabel("Drag to resize mini player");
+  await page.route(new RegExp(`/api/videos/${b}$`), async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await route.fallback();
+  });
+  await page
+    .getByRole("link", { name: /Harbor Lights/ })
+    .first()
+    .click();
+  await expect(page.getByText("Loading…")).toBeVisible();
+  await expect(mini).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Harbor Lights", level: 1 })
+  ).toBeVisible();
+
+  // A video that does not exist shows the error page, still without the mini player.
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/watch/987654");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect(page.getByText("Video not found")).toBeVisible();
+  await expect(mini).toHaveCount(0);
+});

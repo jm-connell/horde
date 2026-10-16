@@ -1,6 +1,10 @@
+import { useEffect, useRef } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import LoadingIndicator from "../components/LoadingIndicator";
-import { usePlaybackSession } from "../context/PlaybackContext";
+import {
+  usePlaybackActions,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import RedownloadDialog from "./watch/RedownloadDialog";
@@ -47,6 +51,18 @@ export default function Watch() {
   const actions = useWatchActions({ video, setSource });
   const ai = useWatchAi(source, setVideo);
   const related = useRelatedFeed(video?.id);
+
+  // Registered here, above the early returns: the loading and error views must
+  // not unregister the dock, or the player would jump to the mini player.
+  const { registerDock } = usePlaybackActions();
+  const dockRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!source) return;
+    registerDock(dockRef.current);
+    return () => registerDock(null);
+    // Do not depend on mode — re-registering on theater toggle briefly clears
+    // the dock and can collapse the player into mini layout.
+  }, [registerDock, source]);
 
   if (loading) {
     return (
@@ -100,6 +116,7 @@ export default function Watch() {
           channelParam={channelParam}
           streamDownload={streamDownload}
           onVideoUpdated={setVideo}
+          dockRef={dockRef}
         >
           <WatchInfoPanels
             source={source}
