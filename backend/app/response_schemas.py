@@ -276,6 +276,30 @@ class UpdateCheckRead(BaseModel):
     error: str | None = None
 
 
+class UpdateControlRead(BaseModel):
+    """The "Update now" button: whether the host watcher is set up, and progress."""
+
+    watcher_connected: bool
+    watcher_last_seen: str | None = None
+    state: Literal[
+        "idle",
+        "requested",
+        "running",
+        "updated",
+        "up_to_date",
+        "rolled_back",
+        "failed",
+        "interrupted",
+    ]
+    request_id: str | None = None
+    requested_at: str | None = None
+    requested_by: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    exit_code: int | None = None
+    log_tail: list[str] = Field(default_factory=list)
+
+
 class PingResponse(BaseModel):
     ok: bool = True
 
