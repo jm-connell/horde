@@ -1247,6 +1247,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/preview/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Stream Ai
+         * @description Saved results for the stream (nothing is generated or fetched).
+         *
+         *     Opening a stream that has saved results restarts their retention period.
+         */
+        get: operations["get_stream_ai_api_preview_ai_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/ai/chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Chapters For Stream */
+        post: operations["chapters_for_stream_api_preview_ai_chapters_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/ai/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Stream Chat */
+        get: operations["get_stream_chat_api_preview_ai_chat_get"];
+        put?: never;
+        /** Post Stream Chat */
+        post: operations["post_stream_chat_api_preview_ai_chat_post"];
+        /** Delete Stream Chat */
+        delete: operations["delete_stream_chat_api_preview_ai_chat_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/ai/summarize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Summarize Stream */
+        post: operations["summarize_stream_api_preview_ai_summarize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/preview/manifest": {
         parameters: {
             query?: never;
@@ -1297,6 +1372,26 @@ export interface paths {
         };
         /** Preview Meta */
         get: operations["preview_meta_api_preview_meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/related": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Related
+         * @description Library and indexed-channel videos related to a stream.
+         */
+        get: operations["preview_related_api_preview_related_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4519,6 +4614,51 @@ export interface components {
             /** Video Count */
             video_count: number;
         };
+        /** StreamAiAction */
+        StreamAiAction: {
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+            /** Url */
+            url: string;
+        };
+        /** StreamAiChatRequest */
+        StreamAiChatRequest: {
+            /** Message */
+            message: string;
+            /** Url */
+            url: string;
+        };
+        /**
+         * StreamAiRead
+         * @description AI results saved for a streamed (not downloaded) video.
+         */
+        StreamAiRead: {
+            /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["ChapterRead"][];
+            /** Expires At */
+            expires_at?: string | null;
+            /** Has Captions */
+            has_captions?: boolean | null;
+            /** Summary */
+            summary?: string | null;
+            /** Summary Cost */
+            summary_cost?: number | null;
+            /** Summary Model */
+            summary_model?: string | null;
+            /**
+             * Supported
+             * @default true
+             */
+            supported: boolean;
+            /** Youtube Id */
+            youtube_id?: string | null;
+        };
         /** StreamPreviewMeta */
         StreamPreviewMeta: {
             /**
@@ -4553,6 +4693,18 @@ export interface components {
             title?: string | null;
             /** View Count */
             view_count?: number | null;
+        };
+        /**
+         * StreamRelatedPage
+         * @description Related videos for a stream: library and not-downloaded ones, marked.
+         *
+         *     One page; ``next_cursor`` is always None (kept for the list envelope).
+         */
+        StreamRelatedPage: {
+            /** Items */
+            items: components["schemas"]["ChannelFeedEntry"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** SubtitleTrack */
         SubtitleTrack: {
@@ -8292,6 +8444,252 @@ export interface operations {
             };
         };
     };
+    get_stream_ai_api_preview_ai_get: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamAiRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    chapters_for_stream_api_preview_ai_chapters_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StreamAiAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamAiRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_stream_chat_api_preview_ai_chat_get: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoAiChatHistory"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_stream_chat_api_preview_ai_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StreamAiChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Server-sent events, one JSON object per event */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_stream_chat_api_preview_ai_chat_delete: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    summarize_stream_api_preview_ai_summarize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StreamAiAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamAiRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     preview_manifest_api_preview_manifest_get: {
         parameters: {
             query: {
@@ -8434,6 +8832,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StreamPreviewMeta"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_related_api_preview_related_get: {
+        parameters: {
+            query: {
+                url: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamRelatedPage"];
                 };
             };
             /** @description Validation error */

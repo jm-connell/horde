@@ -44,7 +44,7 @@ Horde is **one OS process**: a uvicorn server running one FastAPI app. There is 
 | `metadata-sync` | Refresh stale source metadata and subscribed playlists |
 | `horde-ai-worker`, `horde-ai-timer` | Single-flight AI job runner and its scheduler |
 | `horde-channel-catalog` | One channel index at a time |
-| `autodownload-poller`, `subtitle-retry`, `job-metadata`, `codec-probe-backfill`, `nightly-backup` | The remaining loops |
+| `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `codec-probe-backfill`, `nightly-backup` | The remaining loops |
 
 Details per worker: [Background workers](../architecture/workers.md).
 

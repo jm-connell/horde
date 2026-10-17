@@ -12,8 +12,10 @@ from fastapi.responses import Response, StreamingResponse
 from sqlmodel import Session
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from ..context import get_session
+from ..auth import current_user
+from ..context import get_engine, get_session
 from ..errors import extraction_error
 from ..openapi_responses import (
     DASH_MANIFEST,
@@ -21,10 +23,11 @@ from ..openapi_responses import (
     SUBTITLES,
     VIDEO_STREAM,
 )
-from ..schemas import StreamPreviewMeta
-from ..services import library, stream_preview
+from ..schemas import StreamPreviewMeta, StreamRelatedPage
+from ..services import library, stream_preview, stream_related
+from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
-from ..services.url_clean import _youtube_video_id, clean_url
+from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
 from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
 from ..services.ytdlp_common import (
     ERROR_KIND_UNKNOWN,
@@ -356,6 +359,23 @@ async def _head_upstream(
     )
 
 
+def preview_extraction_error(exc: Exception, cleaned: str) -> StarletteHTTPException:
+    """The HTTP error for a failed yt-dlp read of the stream ``cleaned``."""
+    if isinstance(exc, MembersOnlyError):
+        return extraction_error(
+            400,
+            http_detail_for_error(exc, prefix="Could not load preview", url=cleaned),
+        )
+    if isinstance(exc, ValueError):
+        return HTTPException(status_code=400, detail=str(exc))
+    kind, _ = classify_ytdlp_error(exc, url=cleaned)
+    detail = http_detail_for_error(exc, prefix="Could not load preview", url=cleaned)
+    if kind == ERROR_KIND_UNKNOWN:
+        logger.error("stream preview meta failed for %r", cleaned, exc_info=exc)
+        return extraction_error(500, detail)
+    return extraction_error(400, detail)
+
+
 @router.get(
     "/meta", response_model=StreamPreviewMeta, dependencies=[Depends(ytdlp_slot)]
 )
@@ -369,22 +389,8 @@ def preview_meta(
         meta = gate.run(stream_preview.extract_stream_preview_meta, cleaned)
     except HTTPException:
         raise  # 429 / 504 from the gate
-    except MembersOnlyError as exc:
-        raise extraction_error(
-            400,
-            http_detail_for_error(exc, prefix="Could not load preview", url=cleaned),
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        kind, _ = classify_ytdlp_error(exc, url=cleaned)
-        detail = http_detail_for_error(
-            exc, prefix="Could not load preview", url=cleaned
-        )
-        if kind == ERROR_KIND_UNKNOWN:
-            logger.exception("stream preview meta failed for %r", cleaned)
-            raise extraction_error(500, detail) from exc
-        raise extraction_error(400, detail) from exc
+        raise preview_extraction_error(exc, cleaned) from exc
 
     library_video_id = None
     yt_id = meta.get("id")
@@ -412,14 +418,11 @@ def preview_meta(
     )
 
 
-@router.get("/subtitles", response_class=RAW, responses=SUBTITLES)
-async def preview_subtitles(
-    request: Request,
-    url: str = Query(...),
-    lang: str = Query("en"),
-):
-    """Proxy an English (or requested) WebVTT caption track for stream preview."""
-    cleaned = await run_in_threadpool(_require_video_url, url)
+async def fetch_preview_vtt(request: Request, cleaned: str, lang: str) -> bytes:
+    """The WebVTT caption track ``lang`` of the (validated) stream ``cleaned``.
+
+    Raises ``HTTPException`` (404 no such track, 502 upstream failure).
+    """
     try:
         resolved = await _in_ytdlp_thread(
             request, stream_preview.resolve_preview_subtitle, cleaned, lang
@@ -499,6 +502,51 @@ async def preview_subtitles(
     if not body.lstrip().startswith(b"WEBVTT"):
         logger.warning("Upstream subtitle was not WEBVTT (prefix=%r)", body[:40])
         raise HTTPException(status_code=502, detail="Upstream subtitle was not WEBVTT")
+    return body
+
+
+@router.get("/related", response_model=StreamRelatedPage)
+async def preview_related(
+    request: Request,
+    url: str = Query(..., max_length=4000),
+    limit: int = Query(24, ge=1, le=48),
+    user: AuthUser = Depends(current_user),
+):
+    """Library and indexed-channel videos related to a stream."""
+    cleaned = await run_in_threadpool(_require_video_url, url)
+    youtube_id = youtube_video_id(cleaned)
+    if youtube_id is None:
+        return StreamRelatedPage(items=[])
+    try:
+        meta = await _in_ytdlp_thread(
+            request, stream_preview.extract_stream_preview_meta, cleaned
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise preview_extraction_error(exc, cleaned) from exc
+    items = await run_in_threadpool(
+        _related, youtube_id, meta, limit, user.can("use_ai")
+    )
+    return StreamRelatedPage(items=items)
+
+
+def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool):
+    with Session(get_engine()) as session:
+        return stream_related.related_for_stream(
+            session, youtube_id, meta, limit=limit, may_embed=may_embed
+        )
+
+
+@router.get("/subtitles", response_class=RAW, responses=SUBTITLES)
+async def preview_subtitles(
+    request: Request,
+    url: str = Query(...),
+    lang: str = Query("en"),
+):
+    """Proxy an English (or requested) WebVTT caption track for stream preview."""
+    cleaned = await run_in_threadpool(_require_video_url, url)
+    body = await fetch_preview_vtt(request, cleaned, lang)
 
     return Response(
         content=body,

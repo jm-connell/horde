@@ -442,6 +442,51 @@ class VideoAiChatMessage(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class StreamAiState(SQLModel, table=True):
+    """AI results for a streamed (not downloaded) video, keyed by YouTube id.
+
+    Moved onto the library video when it is downloaded; deleted when nobody
+    opened the stream for ``STREAM_AI_RETENTION_DAYS``.
+    """
+
+    __tablename__ = "stream_ai_state"
+
+    id: int | None = Field(default=None, primary_key=True)
+    youtube_id: str = Field(index=True, unique=True)
+    source_url: str = Field(default="")
+    title: str = Field(default="")
+    channel: str | None = None
+    description: str | None = None
+    duration_sec: float | None = None
+    # English WebVTT fetched from the stream (None until first needed).
+    captions_vtt: str | None = None
+    summary: str | None = None
+    summary_length: str | None = None
+    summary_cost: float | None = None
+    summary_model: str | None = None
+    # JSON list of LLM chapters: [{"start_sec": float, "title": str}].
+    chapters: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+    last_used_at: datetime = Field(default_factory=utcnow, index=True)
+
+
+class StreamAiChatMessage(SQLModel, table=True):
+    """One turn of a user's conversation about a streamed video."""
+
+    __tablename__ = "stream_ai_chat_messages"
+
+    id: int | None = Field(default=None, primary_key=True)
+    stream_id: int = Field(
+        foreign_key="stream_ai_state.id", index=True, ondelete="CASCADE"
+    )
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    role: str = Field(default="user")  # user | assistant
+    content: str = Field(default="")
+    cost: float | None = None
+    model: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class OpenRouterUsage(SQLModel, table=True):
     """Append-only ledger of OpenRouter charges attributed to Horde."""
 

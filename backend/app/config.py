@@ -20,6 +20,12 @@ SCAN_INTERVAL_SEC: int = int(os.environ.get("SCAN_INTERVAL_SEC", "60"))
 # (and not owned by an active job) are deleted. 0 disables the sweep.
 TEMP_SWEEP_MAX_AGE_HOURS: float = float(os.environ.get("HORDE_TEMP_SWEEP_HOURS", "6"))
 
+# AI results for a streamed video are kept this long after it was last opened,
+# then deleted unless it was downloaded (which moves them onto the video).
+STREAM_AI_RETENTION_DAYS: int = max(
+    1, int(os.environ.get("HORDE_STREAM_AI_RETENTION_DAYS", "30"))
+)
+
 # Video extensions the scanner treats as importable media.
 VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm"}
 

@@ -38,6 +38,7 @@ EXPECTED_WORKERS = {
     "horde-channel-catalog",
     "autodownload-poller",
     "subtitle-retry",
+    "stream-ai",
     "job-metadata",
     "codec-probe-backfill",
     "nightly-backup",

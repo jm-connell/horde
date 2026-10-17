@@ -205,6 +205,34 @@ class StreamPreviewMeta(BaseModel):
     subtitles: list[SubtitleTrack] = []
 
 
+class StreamAiRead(BaseModel):
+    """AI results saved for a streamed (not downloaded) video."""
+
+    #: The YouTube id the results are kept under; None when the URL has none.
+    youtube_id: str | None = None
+    #: False for a source Horde cannot key (not a YouTube video).
+    supported: bool = True
+    summary: str | None = None
+    summary_model: str | None = None
+    summary_cost: float | None = None
+    chapters: list[ChapterRead] = []
+    #: Whether captions were found; None until something needed them.
+    has_captions: bool | None = None
+    #: When the saved results are deleted unless the stream is opened again or
+    #: the video is downloaded (which moves them onto it). None: nothing saved.
+    expires_at: datetime | None = None
+
+
+class StreamAiAction(BaseModel):
+    url: str = Field(..., min_length=1, max_length=4000)
+    force: bool = False
+
+
+class StreamAiChatRequest(BaseModel):
+    url: str = Field(..., min_length=1, max_length=4000)
+    message: str = Field(..., min_length=1, max_length=4000)
+
+
 class DownloadJobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -320,6 +348,16 @@ class ChannelFeedEntry(BaseModel):
     library_height_px: int | None = None
     max_height: int | None = None
     match_reason: SearchMatchReason | None = None
+
+
+class StreamRelatedPage(BaseModel):
+    """Related videos for a stream: library and not-downloaded ones, marked.
+
+    One page; ``next_cursor`` is always None (kept for the list envelope).
+    """
+
+    items: list[ChannelFeedEntry]
+    next_cursor: str | None = None
 
 
 class ChannelFeedPage(BaseModel):

@@ -89,6 +89,11 @@ level. Detailed per-area entries are added by the maintainer at release time.
   generated inputs, cleaned by both the web app's and the server's sanitizer,
   in Chromium and fails if any of them makes the browser contact another host
   (`frontend/e2e/custom-css-network.spec.ts`).
+- Streamed (not downloaded) videos get the AI panel (summary, chat, AI
+  chapters) and related videos that mix library and indexed-channel videos,
+  marked downloaded or not. Their AI results are saved, move onto the video when
+  it is downloaded, and are deleted after `HORDE_STREAM_AI_RETENTION_DAYS`
+  (default 30) days unopened.
 
 ### Changed
 

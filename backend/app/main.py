@@ -33,6 +33,9 @@ from .api import (
 from .api import (
     auth as auth_api,
 )
+from .api import (
+    stream_ai as stream_ai_api,
+)
 from .auth import E2E_PUBLIC_ROUTES, current_user, ensure_admin, require_admin
 from .config import short_git_sha
 from .context import (
@@ -155,6 +158,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
         channel_catalog,
         compat_rendition,
         job_metadata,
+        stream_ai,
         subtitle_retry,
     )
     from .services.ai import worker as ai_worker
@@ -185,6 +189,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     registry.start(channel_catalog.create_catalog_worker())
     registry.start(channel_autodownload.create_worker())
     registry.start(subtitle_retry.create_worker())
+    registry.start(stream_ai.create_worker())
     registry.start(job_metadata.create_worker())
     job_metadata.rehydrate_pending()
     registry.start(compat_rendition.create_probe_backfill_worker())
@@ -539,6 +544,7 @@ def include_api(target: FastAPI) -> None:
         channels,
         downloads,
         preview,
+        stream_ai_api,
         review,
         playlists,
         app_settings,

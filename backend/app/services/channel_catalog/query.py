@@ -232,6 +232,11 @@ def _keyword_fetch_limit(limit: int) -> int:
     return min(max(limit * 4, 200), _KEYWORD_FETCH_CAP)
 
 
+def is_hidden_catalog_video(video: ChannelCatalogVideo, skipped: set[str]) -> bool:
+    """Skipped, members-only without cookies, or a Short: never listed."""
+    return _is_hidden_catalog_video(video, skipped)
+
+
 def _is_hidden_catalog_video(video: ChannelCatalogVideo, skipped: set[str]) -> bool:
     if video.yt_id in skipped:
         return True
@@ -311,44 +316,110 @@ def _semantic_catalog_hits(
         query_vec = emb_mod.embed_query(query)
         if query_vec is None:
             return []
-        if catalog_id is None:
-            emb_count = session.exec(
-                select(func.count()).select_from(ChannelCatalogEmbedding)
-            ).one()
-            if int(emb_count or 0) > _EMBED_SEARCH_ROW_CEILING:
-                return []
-        stmt = (
-            select(ChannelCatalogEmbedding, ChannelCatalogVideo, ChannelCatalog)
-            .join(
-                ChannelCatalogVideo,
-                col(ChannelCatalogEmbedding.catalog_video_id)
-                == col(ChannelCatalogVideo.id),
-            )
-            .join(
-                ChannelCatalog,
-                col(ChannelCatalogVideo.catalog_id) == col(ChannelCatalog.id),
-            )
+        return catalog_hits_for_vector(
+            session, query_vec, catalog_id=catalog_id, limit=limit
         )
-        if catalog_id is not None:
-            stmt = stmt.where(ChannelCatalogVideo.catalog_id == catalog_id)
-        scored: list[tuple[float, ChannelCatalogVideo, str | None]] = []
-        for row in session.exec(stmt).all():
-            emb, video, catalog = row[0], row[1], row[2]
-            vec = emb_mod.unpack_vector(emb.vector, emb.dim)
-            score = emb_mod.cosine(query_vec, vec)
-            if score >= _CATALOG_EMBED_MIN_SCORE:
-                scored.append(
-                    (
-                        score,
-                        video,
-                        catalog.channel_name if catalog else None,
-                    )
-                )
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return scored[:limit]
     except Exception:
         logger.warning("catalog search failed", exc_info=True)
         return []
+
+
+def catalog_hits_for_vector(
+    session: Session,
+    query_vec: list[float],
+    *,
+    catalog_id: int | None = None,
+    limit: int,
+    exclude_yt_ids: set[str] | None = None,
+    min_score: float = _CATALOG_EMBED_MIN_SCORE,
+) -> list[tuple[float, ChannelCatalogVideo, str | None]]:
+    """Catalog videos nearest ``query_vec``: ``(score, video, channel name)``.
+
+    Empty when the catalog holds more embeddings than a brute-force scan allows.
+    """
+    from ..ai import embeddings as emb_mod
+
+    if catalog_id is None:
+        emb_count = session.exec(
+            select(func.count()).select_from(ChannelCatalogEmbedding)
+        ).one()
+        if int(emb_count or 0) > _EMBED_SEARCH_ROW_CEILING:
+            return []
+    stmt = (
+        select(ChannelCatalogEmbedding, ChannelCatalogVideo, ChannelCatalog)
+        .join(
+            ChannelCatalogVideo,
+            col(ChannelCatalogEmbedding.catalog_video_id)
+            == col(ChannelCatalogVideo.id),
+        )
+        .join(
+            ChannelCatalog,
+            col(ChannelCatalogVideo.catalog_id) == col(ChannelCatalog.id),
+        )
+    )
+    if catalog_id is not None:
+        stmt = stmt.where(ChannelCatalogVideo.catalog_id == catalog_id)
+    exclude = exclude_yt_ids or set()
+    scored: list[tuple[float, ChannelCatalogVideo, str | None]] = []
+    for row in session.exec(stmt).all():
+        emb, video, catalog = row[0], row[1], row[2]
+        if video.yt_id in exclude:
+            continue
+        vec = emb_mod.unpack_vector(emb.vector, emb.dim)
+        score = emb_mod.cosine(query_vec, vec)
+        if score >= min_score:
+            scored.append(
+                (
+                    score,
+                    video,
+                    catalog.channel_name if catalog else None,
+                )
+            )
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return scored[:limit]
+
+
+def catalog_vector_for(session: Session, yt_id: str) -> list[float] | None:
+    """The stored embedding of a catalog video, if it has one."""
+    from ..ai import embeddings as emb_mod
+
+    row = session.exec(
+        select(ChannelCatalogEmbedding)
+        .join(
+            ChannelCatalogVideo,
+            col(ChannelCatalogEmbedding.catalog_video_id)
+            == col(ChannelCatalogVideo.id),
+        )
+        .where(col(ChannelCatalogVideo.yt_id) == yt_id)
+        .limit(1)
+    ).first()
+    if row is None:
+        return None
+    return emb_mod.unpack_vector(row.vector, row.dim) or None
+
+
+def visible_channel_videos(
+    session: Session, channel_url: str, *, limit: int, exclude_yt_ids: set[str]
+) -> tuple[list[ChannelCatalogVideo], str | None]:
+    """The newest listed videos of an indexed channel, and its display name."""
+    catalog = get_catalog_by_url(session, channel_url)
+    if catalog is None:
+        return [], None
+    skipped = skipped_yt_ids(session, require_id(catalog))
+    out: list[ChannelCatalogVideo] = []
+    rows = session.exec(
+        select(ChannelCatalogVideo)
+        .where(ChannelCatalogVideo.catalog_id == catalog.id)
+        .order_by(col(ChannelCatalogVideo.position).asc())
+        .limit(limit * 4 + len(exclude_yt_ids))
+    ).all()
+    for video in rows:
+        if video.yt_id in exclude_yt_ids or _is_hidden_catalog_video(video, skipped):
+            continue
+        out.append(video)
+        if len(out) >= limit:
+            break
+    return out, catalog.channel_name
 
 
 def _fuse_catalog_hits(
