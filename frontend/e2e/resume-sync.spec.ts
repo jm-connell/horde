@@ -81,6 +81,25 @@ async function startPosition(page: Page): Promise<number> {
   return video.evaluate((v: HTMLVideoElement) => v.currentTime);
 }
 
+/** Record every time the playhead goes back by more than a second. */
+async function trackRewinds(page: Page) {
+  await player(page).evaluate((v: HTMLVideoElement) => {
+    const w = window as unknown as { rewinds: number[] };
+    w.rewinds = [];
+    let last = v.currentTime;
+    v.addEventListener("timeupdate", () => {
+      if (v.currentTime < last - 1) w.rewinds.push(last);
+      last = v.currentTime;
+    });
+  });
+}
+
+function rewinds(page: Page): Promise<number[]> {
+  return page.evaluate(
+    () => (window as unknown as { rewinds: number[] }).rewinds
+  );
+}
+
 async function signedInDevice(
   browser: import("@playwright/test").Browser,
   baseURL: string | undefined,
@@ -197,25 +216,66 @@ test("refreshing the details of a playing video does not rewind it", async ({
   await page.goto(`/watch/${kiln}`);
   await waitForMedia(page);
   const video = player(page);
-  await video.evaluate((v: HTMLVideoElement) => {
-    const w = window as unknown as { rewinds: number[] };
-    w.rewinds = [];
-    let last = v.currentTime;
-    v.addEventListener("timeupdate", () => {
-      if (v.currentTime < last - 1) w.rewinds.push(last);
-      last = v.currentTime;
-    });
-  });
+  await trackRewinds(page);
   await expect
     .poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime), {
       timeout: 30_000,
     })
     .toBeGreaterThan(14);
-  expect(
-    await page.evaluate(
-      () => (window as unknown as { rewinds: number[] }).rewinds
-    )
-  ).toEqual([]);
+  expect(await rewinds(page)).toEqual([]);
+});
+
+test("a paused player picks up another device's progress when the tab comes back", async ({
+  page: phone,
+  browser,
+  baseURL,
+}) => {
+  const idOf = await seededIds(phone);
+  const kiln = idOf("Kiln fire");
+  const { ctx, page: pc } = await signedInDevice(browser, baseURL, "admin");
+  await pc.goto(`/watch/${kiln}`);
+  await watchTo(pc, kiln, 6);
+
+  // The PC sits paused in the background while the phone carries on.
+  await phone.goto(`/watch/${kiln}`);
+  await watchTo(phone, kiln, 14);
+
+  await pc.evaluate(() => {
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("focus"));
+  });
+  const video = player(pc);
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime))
+    .toBeCloseTo(14, 0);
+  // Brought up to date, not started.
+  expect(await video.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
+  await ctx.close();
+});
+
+test("expanding the mini-player carries on from the playhead", async ({
+  page,
+}) => {
+  const idOf = await seededIds(page);
+  const kiln = idOf("Kiln fire");
+  await page.goto(`/watch/${kiln}`);
+  await waitForMedia(page);
+  const video = player(page);
+  const now = () => video.evaluate((v: HTMLVideoElement) => v.currentTime);
+  // Saves go out every 5 s: at 8 s the server is a few seconds behind.
+  await expect.poll(now, { timeout: 20_000 }).toBeGreaterThan(8);
+  await page.getByRole("link", { name: "Home", exact: true }).first().click();
+  await trackRewinds(page);
+  const mini = page.locator(".player-mini");
+  await mini.hover();
+  await mini.getByRole("button", { name: "Expand" }).click();
+  await expect(page).toHaveURL(new RegExp(`/watch/${kiln}$`));
+  await expect(
+    page.getByRole("heading", { name: "Kiln fire", level: 1 })
+  ).toBeVisible();
+  const at = await now();
+  await expect.poll(now).toBeGreaterThan(at + 1);
+  expect(await rewinds(page)).toEqual([]);
 });
 
 /** Positions queued in this browser while progress saves could not get through. */

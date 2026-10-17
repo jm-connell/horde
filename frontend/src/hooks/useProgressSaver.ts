@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { undismissContinueWatching } from "./useContinueWatchingDismiss";
 
@@ -89,20 +89,29 @@ export class ProgressSaver {
   }
 }
 
-function saveForAccount(videoId: number, positionSec: number): void {
-  // Resuming watch (≥30s) should bring the video back to Continue watching.
-  if (positionSec >= 30) undismissContinueWatching(videoId);
-  api.saveProgress(videoId, positionSec).catch(() => undefined);
-}
-
 /**
  * Saves the playing library video's position for the signed-in account, so
  * the account's other devices resume from it (see ProgressSaver). A position
  * not saved yet is sent when the page is hidden or unloaded; the request is
- * `keepalive`, so it outlives the page.
+ * `keepalive`, so it outlives the page. `onSaved` hears of each save that
+ * went through (or was queued to be sent later).
  */
-export function useProgressSaver(): ProgressSaver {
-  const [saver] = useState(() => new ProgressSaver(saveForAccount));
+export function useProgressSaver(
+  onSaved?: (videoId: number, positionSec: number) => void
+): ProgressSaver {
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
+  const [saver] = useState(
+    () =>
+      new ProgressSaver((videoId, positionSec) => {
+        // Resuming watch (≥30s) brings the video back to Continue watching.
+        if (positionSec >= 30) undismissContinueWatching(videoId);
+        api
+          .saveProgress(videoId, positionSec)
+          .then(() => onSavedRef.current?.(videoId, positionSec))
+          .catch(() => undefined);
+      })
+  );
   useEffect(() => {
     const onHide = () => {
       if (document.visibilityState === "hidden") saver.flush();

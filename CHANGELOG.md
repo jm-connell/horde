@@ -105,6 +105,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Fixed
 
+- Resume points follow your account across devices more closely: a paused
+  player catches up with progress you made on another device when its tab or
+  window comes back to the front, and expanding the mini-player no longer jumps
+  back to the position saved a few seconds earlier.
 - A playing video no longer jumps back a few seconds every time its details
   refresh (while subtitles, a summary, sprites or chapters are still being
   made): the refreshed copy carried the position saved a moment earlier, and

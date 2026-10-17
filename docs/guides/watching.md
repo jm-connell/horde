@@ -24,7 +24,9 @@ to Horde has their own position in the same video.
 | **Save interval** | Progress is persisted about every **5 seconds** while playing, and where you stopped is saved within 5 seconds of pausing or seeking |
 | **Leaving** | Hiding the tab, switching apps or closing the page saves the position at once |
 | **Near end** | At **≥ 90%** of duration, progress is **cleared** (treated as finished; next open starts from the beginning) |
-| **Resume** | Reopening `/watch/:id` seeks to the saved position when it is meaningful |
+| **Resume** | Reopening `/watch/:id` seeks to the saved position when it is meaningful, as saved by any of your devices (no reload needed) |
+| **Coming back to a paused tab** | If you moved on in the same video on another device meanwhile, the paused player jumps to that position when the tab or window comes back to the front. It does not start playing, and a playing video is never moved |
+| **Mini-player** | Expanding the mini-player (or opening the video it is playing) carries on from the playhead, unless another device of yours has saved a newer position since |
 
 Continue watching on the [Library](library.md) and [History](history.md) pages uses the same progress fields.
 

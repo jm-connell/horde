@@ -40,6 +40,7 @@ import {
 import type { SubtitleTrack, Video } from "../types";
 
 import { useProgressSaver } from "../hooks/useProgressSaver";
+import { useAccountPosition } from "../hooks/useAccountPosition";
 import { getItem, getJson, removeItem, setItem, setJson } from "../storage";
 export interface StreamSession {
   url: string;
@@ -308,7 +309,15 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const activeSession = Boolean(current || stream);
 
   // Persist the watch position for this account (throttled; see the hook).
-  const progressSaver = useProgressSaver();
+  const streamPlayingRef = useRef(false);
+  streamPlayingRef.current = stream !== null;
+  const { noteSaved, startPosition } = useAccountPosition({
+    currentRef,
+    streamPlayingRef,
+    hostRef,
+    livePositionRef: libraryPosRef,
+  });
+  const progressSaver = useProgressSaver(noteSaved);
 
   useEffect(() => {
     setJson(QUEUE_KEY, queue, "session");
@@ -488,27 +497,35 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const playVideo = useCallback((video: Video, opts?: { queue?: Video[] }) => {
-    setMediaSuspended(false);
-    setCurrent((prev) => {
-      if (prev?.id != null && prev.id !== video.id) {
-        recentWatchedRef.current = [
-          prev.id,
-          ...recentWatchedRef.current.filter((id) => id !== prev.id),
-        ].slice(0, 12);
+  const playVideo = useCallback(
+    (opened: Video, opts?: { queue?: Video[] }) => {
+      const from = startPosition(opened);
+      const video =
+        from === opened.last_position_sec
+          ? opened
+          : { ...opened, last_position_sec: from };
+      setMediaSuspended(false);
+      setCurrent((prev) => {
+        if (prev?.id != null && prev.id !== video.id) {
+          recentWatchedRef.current = [
+            prev.id,
+            ...recentWatchedRef.current.filter((id) => id !== prev.id),
+          ].slice(0, 12);
+        }
+        return video;
+      });
+      setStream(null);
+      setActiveStreamQuality(null);
+      streamPosRef.current = 0;
+      libraryPosRef.current = video.last_position_sec || 0;
+      if (opts?.queue) {
+        setQueue(opts.queue.filter((v) => v.id !== video.id));
+      } else {
+        setQueue((q) => q.filter((v) => v.id !== video.id));
       }
-      return video;
-    });
-    setStream(null);
-    setActiveStreamQuality(null);
-    streamPosRef.current = 0;
-    libraryPosRef.current = video.last_position_sec || 0;
-    if (opts?.queue) {
-      setQueue(opts.queue.filter((v) => v.id !== video.id));
-    } else {
-      setQueue((q) => q.filter((v) => v.id !== video.id));
-    }
-  }, []);
+    },
+    [startPosition]
+  );
 
   const playStream = useCallback((session: StreamSession) => {
     setCurrent(null);
