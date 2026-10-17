@@ -76,6 +76,12 @@ After autodownload is on, the header button stays highlighted and reopens the sa
 
 Horde finds new uploads from the channel catalog (opening the feed, periodic catalog refresh, and a dedicated autodownload poll every 15 minutes). YouTube Shorts are not autodownloaded.
 
+## Following and live streams
+
+Follow a channel to see when it is live. You follow a channel automatically when a download you queued from it finishes, and an administrator starts out following every channel in the library. To follow a channel by hand, even one with no videos on the server, use **Follow** next to the channel's name on its page, or add its URL or `@handle` under **Settings → Library → Followed channels**. Unfollowing sticks: a later download from that channel does not follow it again.
+
+When followed channels are live, a small **Live** list appears at the top of the sidebar, with each channel, the stream title, the game and the viewer count. It is not there when nobody is live. Click a stream to watch it. The seek bar covers the stream so far, up to the last 4 hours by default, so you can scrub back. The **LIVE** readout shows how far behind you are; click it to jump back to live. Turn the list off with **Settings → Library → Show live streams**. How it works: [Live streams](../design/live-streams.md).
+
 ## Catalog indexing
 
 Catalog indexing is **YouTube only**. When you open a YouTube channel feed or download from a YouTube channel, Horde indexes that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time. Non-YouTube sources skip catalog indexing.

@@ -37,6 +37,7 @@ EXPECTED_WORKERS = {
     "horde-ai-timer",
     "horde-channel-catalog",
     "autodownload-poller",
+    "live-poller",
     "subtitle-retry",
     "stream-ai",
     "job-metadata",

@@ -22,7 +22,7 @@ from ...models import (
     VideoStatus,
     require_id,
 )
-from .. import activity, compat_rendition, library, scanner
+from .. import activity, compat_rendition, follows, library, scanner
 from ..fsutil import MoveJournal, safe_unlink
 from ..media_info import apply_stream_info, needs_compat, probe_stream_info
 from ..metadata import probe_dimensions, probe_duration
@@ -424,6 +424,7 @@ def _complete_library(
         error_kind=None,
     )
     attach_download_to_playlist(spec.job_id, video_id)
+    follows.follow_from_download(spec.job_id, video_id)
     progress_store[spec.job_id] = snapshot
     return video_id
 

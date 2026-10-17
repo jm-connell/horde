@@ -24,6 +24,7 @@ export default function WatchHeader({
 }) {
   const { activeStreamQuality } = usePlaybackLayout();
   const isLibrary = source.kind === "library";
+  const isLive = !isLibrary && Boolean(source.meta.is_live);
   const title = isLibrary
     ? source.video.title
     : source.meta.title || "Untitled";
@@ -59,7 +60,16 @@ export default function WatchHeader({
             <span>{formatDate(source.video.published_at)}</span>
           )}
           {isLibrary && <span>{formatSize(source.video.file_size)}</span>}
-          {!isLibrary && source.meta.duration != null && (
+          {isLive && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 rounded-full bg-red-500/80"
+              />
+              Live
+            </span>
+          )}
+          {!isLibrary && !isLive && source.meta.duration != null && (
             <span>{formatDuration(source.meta.duration)}</span>
           )}
           {!isLibrary && source.meta.view_count != null && (
@@ -87,7 +97,9 @@ export default function WatchHeader({
                 {Math.round(source.video.frame_rate)}fps
               </span>
             )}
-          {!isLibrary && <StreamDownloadControl download={streamDownload} />}
+          {!isLibrary && !isLive && (
+            <StreamDownloadControl download={streamDownload} />
+          )}
         </div>
       </div>
       {!isLibrary && (

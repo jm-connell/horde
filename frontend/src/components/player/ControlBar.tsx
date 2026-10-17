@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { formatDuration, type Chapter } from "../../utils";
+import { formatDuration, formatTimestamp, type Chapter } from "../../utils";
 import type { QualityChoice } from "../videoPlayerQuality";
 import type { StreamType, ViewMode } from "../videoPlayerTypes";
 import FullscreenButton from "./FullscreenButton";
@@ -9,6 +9,7 @@ import SpeedMenu from "./SpeedMenu";
 import VolumeControl from "./VolumeControl";
 import { playerChromeBtn } from "./playerChrome";
 import { activeChapterAt } from "./useChapters";
+import { LIVE_EDGE_TOLERANCE_SEC } from "./useLiveWindow";
 import type { PlayerMenu } from "./usePlayerMenu";
 
 interface Props {
@@ -63,6 +64,16 @@ interface Props {
   onToggleWindowed: () => void;
   isNativeFullscreen: boolean;
   onToggleFullscreen: () => void;
+  /** A live stream: the time readout becomes a LIVE / jump-to-live control. */
+  live?: LiveControl | null;
+}
+
+export interface LiveControl {
+  /** Seconds behind the live edge. */
+  behindSec: number;
+  /** False once the broadcast ended. */
+  isLive: boolean;
+  onGoLive: () => void;
 }
 
 /** The full-size player's bottom bar: seek bar, transport and option buttons. */
@@ -112,6 +123,7 @@ export default function ControlBar({
   onToggleWindowed,
   isNativeFullscreen,
   onToggleFullscreen,
+  live = null,
 }: Props) {
   const activeChapter =
     chapters.length > 0 ? activeChapterAt(chapters, current) : null;
@@ -132,6 +144,11 @@ export default function ControlBar({
         hoveredChapter={hoveredChapter}
         onHoverChapter={onHoverChapter}
         seekTo={seekTo}
+        formatTime={
+          live
+            ? (sec) => `-${formatTimestamp(Math.max(0, duration - sec))}`
+            : undefined
+        }
         onInteractionStart={onInteractionStart}
         onInteractionEnd={onInteractionEnd}
       />
@@ -162,14 +179,18 @@ export default function ControlBar({
           />
         )}
 
-        <span className="text-xs tabular-nums text-gray-300">
-          {formatDuration(current)} / {formatDuration(duration)}
-          {activeChapter && (
-            <span className="ml-2 max-w-[140px] truncate text-gray-400">
-              · {activeChapter.title}
-            </span>
-          )}
-        </span>
+        {live ? (
+          <LiveReadout live={live} />
+        ) : (
+          <span className="text-xs tabular-nums text-gray-300">
+            {formatDuration(current)} / {formatDuration(duration)}
+            {activeChapter && (
+              <span className="ml-2 max-w-[140px] truncate text-gray-400">
+                · {activeChapter.title}
+              </span>
+            )}
+          </span>
+        )}
 
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
           {streamType === "dash" && availableHeights.length > 0 && (
@@ -263,5 +284,38 @@ export default function ControlBar({
         </div>
       </div>
     </div>
+  );
+}
+
+/** "LIVE" at the edge; behind it, how far, and a click jumps back to live. */
+function LiveReadout({ live }: { live: LiveControl }) {
+  if (!live.isLive) {
+    return <span className="text-xs text-gray-400">Stream ended</span>;
+  }
+  const atEdge = live.behindSec <= LIVE_EDGE_TOLERANCE_SEC;
+  return (
+    <button
+      type="button"
+      onClick={live.onGoLive}
+      disabled={atEdge}
+      className="ui-player-chrome flex items-center gap-1.5 text-xs tabular-nums text-gray-300 enabled:hover:text-white"
+      title={atEdge ? "Watching live" : "Jump to live"}
+      aria-label={
+        atEdge
+          ? "Live"
+          : `${formatTimestamp(live.behindSec)} behind live. Jump to live`
+      }
+    >
+      <span
+        aria-hidden
+        className={`h-1.5 w-1.5 rounded-full ${atEdge ? "bg-red-500" : "bg-gray-500"}`}
+      />
+      <span className={atEdge ? "text-gray-200" : undefined}>LIVE</span>
+      {!atEdge && (
+        <span className="text-gray-400">
+          -{formatTimestamp(live.behindSec)}
+        </span>
+      )}
+    </button>
   );
 }

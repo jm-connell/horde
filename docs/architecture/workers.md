@@ -133,7 +133,7 @@ Videos added in the last **48 hours** that never got a metadata sync and still h
 
 ## Stream AI
 
-**Start:** `stream_ai.create_worker()` after subtitle retry. Once an hour it moves the saved AI results of streamed videos (`stream_ai_state`) onto library videos with the same YouTube id (download finalize does this immediately; the sweep covers imports) and deletes results nobody opened for `HORDE_STREAM_AI_RETENTION_DAYS` (default 30). See [ADR 0009](../adr/0009-stream-ai-retention.md).
+**Start:** `stream_ai.create_worker()` after subtitle retry. Once an hour it moves the saved AI results of streamed videos (`stream_ai_state`) onto library videos with the same YouTube id (download finalize does this immediately; the sweep covers imports) and deletes results nobody opened for `HORDE_STREAM_AI_RETENTION_DAYS` (default 30). See [ADR 0010](../adr/0010-stream-ai-retention.md).
 
 ## Nightly backup
 

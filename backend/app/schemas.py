@@ -203,6 +203,8 @@ class StreamPreviewMeta(BaseModel):
     library_video_id: int | None = None
     available_presets: list[str] = []
     subtitles: list[SubtitleTrack] = []
+    #: Live right now: play it through ``/api/live/{id}/master.m3u8``.
+    is_live: bool = False
 
 
 class StreamAiRead(BaseModel):
@@ -708,3 +710,51 @@ class UserUpdate(BaseModel):
     disabled: bool | None = None
     password: str | None = Field(default=None, max_length=2000)
     permissions: list[str] | None = None
+
+
+class FollowedChannelRead(BaseModel):
+    channel_url: str
+    channel_name: str | None = None
+    #: download | manual | library
+    source: str
+    created_at: datetime
+
+
+class FollowListResponse(BaseModel):
+    """Every channel the signed-in user follows (one page; ``next_cursor`` is null)."""
+
+    items: list[FollowedChannelRead] = []
+    next_cursor: str | None = None
+
+
+class FollowRequest(BaseModel):
+    #: A channel URL or an ``@handle``.
+    channel_url: str = Field(min_length=1, max_length=500)
+    channel_name: str | None = Field(default=None, max_length=300)
+
+
+class UnfollowResult(BaseModel):
+    channel_url: str
+    following: bool = False
+
+
+class LiveChannelRead(BaseModel):
+    channel_url: str
+    channel_name: str | None = None
+    video_id: str
+    title: str | None = None
+    #: The game card YouTube shows for Gaming streams, when there is one.
+    game: str | None = None
+    viewers: int | None = None
+    started_at: datetime | None = None
+    thumbnail_url: str
+    watch_url: str
+
+
+class LiveListResponse(BaseModel):
+    """Followed channels that are live now (one page; ``next_cursor`` is null)."""
+
+    items: list[LiveChannelRead] = []
+    next_cursor: str | None = None
+    #: False when the server's live checks are turned off (``HORDE_LIVE_POLL_SEC=0``).
+    enabled: bool = True

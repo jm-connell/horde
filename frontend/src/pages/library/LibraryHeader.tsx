@@ -65,6 +65,7 @@ export default function LibraryHeader({
         headline={headline}
         activeChannel={activeChannel}
         isHome={isHome}
+        channelUrl={activeChannelUrl}
         onRename={onRenameChannel}
       />
 

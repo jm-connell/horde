@@ -1,4 +1,4 @@
-# 0009. AI results for streamed videos are kept per YouTube id, for a while
+# 0010. AI results for streamed videos are kept per YouTube id, for a while
 
 Status: Accepted
 

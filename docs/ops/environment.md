@@ -19,6 +19,9 @@ Horde is configured primarily through environment variables. Most values have se
 | `HORDE_YTDLP_REQUEST_THREADS` | `8` | How many requests may be inside yt-dlp work (link checks, previews, feeds, searches) at once. Extra requests wait up to 15 s without using a worker thread, then get HTTP 429, so slow YouTube calls can never freeze the rest of the API. |
 | `HORDE_EXTRACT_QUEUE_TIMEOUT_SEC` | `180` | How long one yt-dlp call waits its turn on the global extract queue before giving up with an error. |
 | `HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC` | `540` (3x the above) | The same wait for background work (catalog indexing, metadata fills), which always queues behind interactive requests. |
+| `HORDE_LIVE_POLL_SEC` | `300` | How often each followed channel is checked for a live broadcast (seconds). `0` turns the checks off. See [Live streams](../design/live-streams.md). |
+| `HORDE_LIVE_POLL_SPACING_SEC` | `2` | Pause between two live checks, so a long follow list never bursts requests at YouTube. |
+| `HORDE_LIVE_DVR_HOURS` | `4` | How far back the player can scrub in a live stream, when YouTube still serves those segments. |
 | `HORDE_BACKUP_ENABLED` | `1` | `0` turns the [nightly database backup](backup-restore.md#nightly) off. |
 | `HORDE_BACKUP_HOUR` | `4` | Local hour (0-23) after which the nightly backup is taken. |
 | `HORDE_BACKUP_KEEP` | `7` | How many nightly backups to keep (minimum 1). |

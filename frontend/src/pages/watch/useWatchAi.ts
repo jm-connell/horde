@@ -166,10 +166,17 @@ export function useWatchAi(
     () => chaptersFromApi(savedAiChapters),
     [savedAiChapters]
   );
+  // A broadcast that is live has no chapters or captions yet (the player shows
+  // its DVR window instead), so nothing chapter- or caption-based is offered.
+  const isLive = !!stream?.meta.is_live;
   const streamChapters = useMemo(
     () =>
-      descriptionChapters.length > 0 ? descriptionChapters : aiStreamChapters,
-    [descriptionChapters, aiStreamChapters]
+      isLive
+        ? []
+        : descriptionChapters.length > 0
+          ? descriptionChapters
+          : aiStreamChapters,
+    [isLive, descriptionChapters, aiStreamChapters]
   );
   // Hand them to the player (chapter markers) too.
   useEffect(() => {
@@ -177,13 +184,15 @@ export function useWatchAi(
   }, [streamUrl, streamChapters, setStreamChapters]);
 
   const hasSubtitles = stream
-    ? stream.meta.subtitles.length > 0 && streamAi?.has_captions !== false
+    ? !isLive &&
+      stream.meta.subtitles.length > 0 &&
+      streamAi?.has_captions !== false
     : (video?.subtitles?.length ?? 0) > 0;
   const aiAvailable = isLibrary || (isStream && canUseAi && streamSupported);
   const canAiSummarize = aiAvailable && hasSubtitles && aiSummariesEnabled;
   const chaptersSource = video
     ? video.chapters_source
-    : stream
+    : stream && !isLive
       ? descriptionChapters.length > 0
         ? ("description" as const)
         : aiStreamChapters.length > 0

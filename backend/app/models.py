@@ -605,3 +605,42 @@ class UserSettings(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
     ui_json: str = Field(default="{}")
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+class DownloadRequester(SQLModel, table=True):
+    """Who queued a download job (automatic jobs have no row).
+
+    A finished library download follows its channel for this user
+    (``services/follows.follow_from_download``).
+    """
+
+    __tablename__ = "download_requesters"
+
+    job_id: int = Field(
+        foreign_key="download_jobs.id", primary_key=True, ondelete="CASCADE"
+    )
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+
+
+class ChannelFollow(SQLModel, table=True):
+    """A channel one user follows (feeds the live list).
+
+    ``followed`` False is a tombstone: the user unfollowed it, so a later download
+    from that channel must not follow it again.
+    """
+
+    __tablename__ = "channel_follows"
+    __table_args__ = (
+        UniqueConstraint("user_id", "channel_url", name="uq_channel_follows_user_url"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    # Normalized (services/follows.normalize_channel_url).
+    channel_url: str = Field(index=True)
+    channel_name: str | None = None
+    followed: bool = Field(default=True)
+    # download | manual | library (seeded from the library for an administrator)
+    source: str = Field(default="manual")
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)

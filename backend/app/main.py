@@ -20,7 +20,9 @@ from .api import (
     channels,
     compat,
     downloads,
+    follows,
     fonts,
+    live,
     member_view,
     playlists,
     preview,
@@ -37,7 +39,7 @@ from .api import (
     stream_ai as stream_ai_api,
 )
 from .auth import E2E_PUBLIC_ROUTES, current_user, ensure_admin, require_admin
-from .config import short_git_sha
+from .config import LIVE_POLL_SEC, short_git_sha
 from .context import (
     AppContext,
     activate,
@@ -162,6 +164,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
         subtitle_retry,
     )
     from .services.ai import worker as ai_worker
+    from .services.live import directory as live_directory
     from .services.metadata_sync import create_sync_worker
     from .services.sprites import sprite_pool
 
@@ -188,6 +191,9 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
         registry.start(worker)
     registry.start(channel_catalog.create_catalog_worker())
     registry.start(channel_autodownload.create_worker())
+    if LIVE_POLL_SEC > 0:
+        ctx.live.poller = live_directory.create_worker()
+        registry.start(ctx.live.poller)
     registry.start(subtitle_retry.create_worker())
     registry.start(stream_ai.create_worker())
     registry.start(job_metadata.create_worker())
@@ -219,12 +225,25 @@ def _boot_e2e(app_: FastAPI, ctx: AppContext) -> None:
     prepare(ctx, os.environ.get("HORDE_E2E_MODE", "app"))
 
 
+def _seed_follows() -> None:
+    from .services import follows
+
+    try:
+        added = follows.seed_administrators()
+    except Exception:
+        logger.warning("could not seed followed channels", exc_info=True)
+        return
+    if added:
+        logger.info("followed %s library channels for administrators", added)
+
+
 async def _boot_production(app_: FastAPI, ctx: AppContext) -> None:
     warning = network_storage_warning(ctx.paths.data)
     app_.state.storage_warning = warning
     if warning:
         logger.error("Storage problem: %s", warning)
     cleanup_orphans()
+    _seed_follows()
     from .services.ytdlp_common import ensure_plugins_loaded
 
     ensure_plugins_loaded()
@@ -262,6 +281,8 @@ async def lifespan(app: FastAPI):
         restore_signals = _install_shutdown_signals(ctx.shutdown_event)
         if ctx.e2e:
             _boot_e2e(app, ctx)
+            # Never used offline, but a test serving a local stream needs it.
+            await preview.init_preview_client()
         else:
             await _boot_production(app, ctx)
         yield
@@ -273,6 +294,7 @@ async def lifespan(app: FastAPI):
             stuck = await asyncio.to_thread(ctx.workers.stop_all)
             if stuck:
                 logger.error("shutdown left running: %s", ", ".join(stuck))
+            ctx.live.sessions.close_all()
             await preview.close_preview_client()
         finally:
             if restore_signals is not None:
@@ -545,6 +567,8 @@ def include_api(target: FastAPI) -> None:
         downloads,
         preview,
         stream_ai_api,
+        follows,
+        live,
         review,
         playlists,
         app_settings,

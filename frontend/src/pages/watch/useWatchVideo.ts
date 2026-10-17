@@ -154,10 +154,13 @@ export function useWatchVideo({
       title: source.meta.title || "Untitled",
       channel: source.meta.channel ?? null,
       poster: source.meta.thumbnail_url ?? null,
-      chapters: parseChapters(source.meta.description),
+      chapters: source.meta.is_live
+        ? []
+        : parseChapters(source.meta.description),
       sourceUrl: source.meta.source_url,
       channelParam: channelParam || source.meta.channel,
-      subtitles: source.meta.subtitles ?? [],
+      subtitles: source.meta.is_live ? [] : (source.meta.subtitles ?? []),
+      liveVideoId: source.meta.is_live ? (source.meta.id ?? null) : null,
     });
   }, [source, channelParam, playStream]);
 

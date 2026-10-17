@@ -5,8 +5,8 @@ streamed YouTube video (one row per YouTube id) and ``stream_ai_chat_messages``
 each user's chat about it. Downloading the video moves both onto the library
 video; rows nobody opened for ``HORDE_STREAM_AI_RETENTION_DAYS`` are deleted.
 
-Revision ID: 0007_stream_ai
-Revises: 0006_video_tags_delete
+Revision ID: 0008_stream_ai
+Revises: 0007_channel_follows
 """
 
 from collections.abc import Sequence
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0007_stream_ai"
-down_revision: str | None = "0006_video_tags_delete"
+revision: str = "0008_stream_ai"
+down_revision: str | None = "0007_channel_follows"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -441,3 +441,38 @@ test("a chapter request for one stream does not show as busy or failed on the ne
   await page.waitForTimeout(500);
   await expect(page.getByText("A failed")).toHaveCount(0);
 });
+
+test("a live broadcast offers no chapters or caption-based AI", async ({
+  page,
+}) => {
+  await enableAi(page);
+  const state = await mockStream(page);
+  state.chapters = [{ start_sec: 0, title: "Saved AI chapter" }];
+  // The newest route wins: this broadcast is live, with stamps in its text.
+  await page.route(/\/api\/preview\/meta\?/, (route) =>
+    route.fulfill({
+      json: {
+        ...META,
+        is_live: true,
+        description: "0:00 Opening\n2:00 Main event",
+      },
+    })
+  );
+  const aiRead = page.waitForResponse(/\/api\/preview\/ai\?/);
+  const statusRead = page.waitForResponse(/\/api\/ai\/status$/);
+  await page.goto(WATCH);
+  await Promise.all([aiRead, statusRead]);
+  await expect(
+    page.getByRole("heading", { name: "Ridge at dusk", level: 1 })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Opening/ })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Saved AI chapter/ })
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Generate summary" })
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Generate chapters" })
+  ).toHaveCount(0);
+});

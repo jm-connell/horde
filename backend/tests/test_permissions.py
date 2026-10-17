@@ -165,6 +165,8 @@ OPEN_MUTATIONS = {
     ("POST", "/api/playlists/estimate"),  # read-only size estimate
     ("POST", "/api/auth/logout"),
     ("POST", "/api/auth/password"),  # your own password
+    ("PUT", "/api/follows"),  # your own followed channels
+    ("DELETE", "/api/follows"),
 }
 PUBLIC = {
     ("POST", "/api/auth/login"),

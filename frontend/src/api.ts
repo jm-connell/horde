@@ -16,6 +16,10 @@ import type {
   ChannelFeedPage,
   ChannelStat,
   DownloadBulkResult,
+  FollowedChannel,
+  FollowList,
+  LiveList,
+  UnfollowResult,
   DownloadJob,
   DownloadOverrides,
   DownloadPreview,
@@ -979,6 +983,35 @@ export const api = {
     });
   },
 
+  listFollows(opts?: ReadOptions): Promise<FollowList> {
+    return request<FollowList>("/api/follows", opts);
+  },
+
+  followChannel(
+    channelUrl: string,
+    channelName?: string | null
+  ): Promise<FollowedChannel> {
+    return request<FollowedChannel>("/api/follows", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel_url: channelUrl,
+        channel_name: channelName ?? null,
+      }),
+    });
+  },
+
+  unfollowChannel(channelUrl: string): Promise<UnfollowResult> {
+    return request<UnfollowResult>(
+      `/api/follows?channel_url=${encodeURIComponent(channelUrl)}`,
+      { method: "DELETE" }
+    );
+  },
+
+  getLiveNow(opts?: ReadOptions): Promise<LiveList> {
+    return request<LiveList>("/api/live", opts);
+  },
+
   extractBackgroundPalette(
     id: string
   ): Promise<ApiResponse<"/api/backgrounds/{bg_id}/palette", "post">> {
@@ -1475,6 +1508,11 @@ export const api = {
     });
   },
 };
+
+/** HLS master playlist of a followed channel's live stream (by YouTube video id). */
+export function liveMasterUrl(videoId: string): string {
+  return `/api/live/${videoId}/master.m3u8`;
+}
 
 export function thumbnailUrl(video: Video): string | null {
   return video.has_thumbnail ? `/api/thumbnails/${video.id}` : null;

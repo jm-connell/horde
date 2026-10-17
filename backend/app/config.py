@@ -60,6 +60,17 @@ YTDLP_REQUEST_THREADS: int = max(
 # Max simultaneous ffmpeg sprite-sheet workers (CPU-heavy full-video decode).
 SPRITE_CONCURRENCY: int = max(1, int(os.environ.get("SPRITE_CONCURRENCY", "1")))
 
+# Live streams of followed channels. Each followed channel's /live page is checked
+# every LIVE_POLL_SEC (0 turns the checks off), LIVE_POLL_SPACING_SEC apart.
+LIVE_POLL_SEC: int = max(0, int(os.environ.get("HORDE_LIVE_POLL_SEC", "300")))
+LIVE_POLL_SPACING_SEC: float = max(
+    0.0, float(os.environ.get("HORDE_LIVE_POLL_SPACING_SEC", "2"))
+)
+# How far back the player can scrub in a live stream (when YouTube keeps it).
+LIVE_DVR_WINDOW_SEC: float = 3600 * max(
+    0.0, float(os.environ.get("HORDE_LIVE_DVR_HOURS", "4"))
+)
+
 # YouTube bot checks — bgutil POT sidecar (default in Docker) or cookie fallback.
 # See https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
 YTDLP_POT_BASE_URL: str = os.environ.get("YTDLP_POT_BASE_URL", "").strip()

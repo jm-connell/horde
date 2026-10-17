@@ -54,6 +54,12 @@ export const queryKeys = {
     stats: (channel: string | undefined) =>
       ["tags", "stats", channel ?? ""] as const,
   },
+  follows: {
+    list: ["follows", "list"] as const,
+  },
+  live: {
+    now: ["live", "now"] as const,
+  },
   playlists: {
     all: ["playlists"] as const,
     list: ["playlists", "list"] as const,

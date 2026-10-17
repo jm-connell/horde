@@ -30,7 +30,10 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ["shaka-player/dist/shaka-player.dash.js"],
+    include: [
+      "shaka-player/dist/shaka-player.dash.js",
+      "shaka-player/dist/shaka-player.hls.js",
+    ],
   },
   server: {
     proxy: {

@@ -38,7 +38,7 @@ from ..schemas import (
     DownloadQualityUpdate,
     DownloadQueueStatus,
 )
-from ..services import ytdlp_extract, ytdlp_formats
+from ..services import follows, ytdlp_extract, ytdlp_formats
 from ..services.auth.accounts import AuthUser
 from ..services.downloads import jobs as download_jobs
 from ..services.downloads import progress as download_progress
@@ -365,6 +365,8 @@ def create_download(
         session.add(job)
         session.commit()
         session.refresh(job)
+        follows.record_requester(session, require_id(job), user.id)
+        session.commit()
 
     request_job_metadata(job.id)
     download_jobs.enqueue_download(require_id(job))
@@ -439,6 +441,8 @@ def create_downloads_bulk(
             session.add(job)
             session.commit()
             session.refresh(job)
+            follows.record_requester(session, require_id(job), user.id)
+            session.commit()
         request_job_metadata(job.id)
         download_jobs.enqueue_download(require_id(job))
         jobs.append(job)

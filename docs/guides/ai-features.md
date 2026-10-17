@@ -44,7 +44,7 @@ Per-video chat lets you ask about content, chapters, or themes. Context is built
 
 A video you stream without downloading (`/watch?url=…`) gets the same AI panel: **Summary**, **Chat** and **Generate** chapters work from its title, description and English captions (fetched from the stream the first time you use AI on it; a stream without captions can still be chatted about from its metadata). Only YouTube videos are supported.
 
-Results are saved per video. Opening the stream again shows them without spending tokens, and **downloading the video moves them onto the library copy** (its own summary or chapters win if it already has some; your chat joins your conversation about the video, in time order). If nobody opens the stream for `HORDE_STREAM_AI_RETENTION_DAYS` (default **30**) days and it was not downloaded, its saved results are deleted. The AI panel shows the date they are kept until. See [ADR 0009](../adr/0009-stream-ai-retention.md).
+Results are saved per video. Opening the stream again shows them without spending tokens, and **downloading the video moves them onto the library copy** (its own summary or chapters win if it already has some; your chat joins your conversation about the video, in time order). If nobody opens the stream for `HORDE_STREAM_AI_RETENTION_DAYS` (default **30**) days and it was not downloaded, its saved results are deleted. The AI panel shows the date they are kept until. See [ADR 0010](../adr/0010-stream-ai-retention.md).
 
 ## Enrich tags
 

@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   api,
+  liveMasterUrl,
   previewManifestUrl,
   previewStreamUrl,
   previewSubtitleUrl,
@@ -52,6 +53,8 @@ export interface StreamSession {
   /** Channel query for expand / back navigation. */
   channelParam?: string | null;
   subtitles?: SubtitleTrack[];
+  /** YouTube video id of a broadcast that is live: play `/api/live` HLS. */
+  liveVideoId?: string | null;
 }
 
 export type MiniPlayerRect = {
@@ -991,10 +994,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     ) : stream != null ? (
       <VideoPlayer
         key={`stream:${stream.url}`}
-        src={previewManifestUrl(stream.url)}
+        src={
+          stream.liveVideoId
+            ? liveMasterUrl(stream.liveVideoId)
+            : previewManifestUrl(stream.url)
+        }
         streamType="dash"
+        live={Boolean(stream.liveVideoId)}
         progressiveFallbackSrc={previewStreamUrl(stream.url)}
-        mimeType="application/dash+xml"
+        mimeType={
+          stream.liveVideoId
+            ? "application/vnd.apple.mpegurl"
+            : "application/dash+xml"
+        }
         poster={stream.poster}
         mode={effectiveMode}
         onModeChange={setMode}

@@ -26,6 +26,12 @@ export interface VideoPlayerProps {
   /** Progressive local/remote file (default) or adaptive DASH manifest. */
   streamType?: StreamType;
   /**
+   * A live broadcast: `src` is an HLS master playlist (`/api/live/...`), played
+   * with the DVR window as the seek bar and a jump-to-live control. Implies
+   * `streamType="dash"` (Shaka) and no progressive fallback.
+   */
+  live?: boolean;
+  /**
    * Progressive (<=720p) URL used when DASH is unsupported or fails critically.
    * Typically `/api/preview/stream?url=...`.
    */
