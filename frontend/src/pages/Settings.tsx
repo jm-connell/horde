@@ -9,7 +9,6 @@ import { setItem } from "../storage";
 import AppearanceTab from "./settings/AppearanceTab";
 import LibraryTab from "./settings/LibraryTab";
 import PlaybackTab from "./settings/PlaybackTab";
-import UsersTab from "./settings/UsersTab";
 import { useAiPaneState } from "./settings/ai/useAiPaneState";
 import { AiTab, SystemTab } from "./settings/lazy";
 import { ADMIN_ONLY_TABS, TAB_STORAGE_KEY, TABS } from "./settings/constants";
@@ -184,7 +183,6 @@ export default function Settings() {
           <Suspense fallback={<LoadingIndicator label="Loading" />}>
             {tab === "ai" && <AiTab paneState={paneState} />}
             {tab === "system" && <SystemTab />}
-            {tab === "users" && isAdmin && <UsersTab />}
           </Suspense>
         </div>
       </SettingsPageProvider>

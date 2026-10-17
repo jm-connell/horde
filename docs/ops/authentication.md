@@ -16,7 +16,7 @@ Until that account exists nothing else can be done, so create it from a device y
 
 ## Account types and permissions
 
-When an administrator adds or edits an account they pick its **type** in *Settings → Users*:
+When an administrator adds or edits an account they pick its **type** in *Account settings → Users*:
 
 - **Admin** can do everything, including managing users and server settings.
 - **Member** can browse, search, watch, keep their own history, change their own password and appearance, and use the **permissions** they were given:
@@ -64,9 +64,13 @@ Changes apply on the person's next request; they do not need to sign in again. A
 !!! note "Offline saves"
     The server can only enforce `offline_download` for the "download file" routes. Saving a video for offline playback in the installed app reads the same stream the player uses, so for that the permission only hides the buttons.
 
+## Your account
+
+Click your name or picture at the top right: the menu has **Account settings** and **Sign out**. *Account settings* (`/account`) is where everyone sets a **profile picture** (any image, cropped to a 256 px square JPEG and kept in `DATA_DIR/avatars/`; other signed-in users see it next to your name) and **changes their password**, which signs out your other browsers. The old link `/settings?tab=users` opens this page.
+
 ## Managing users (admins)
 
-*Settings → Users* lists accounts. You can add a user (username, password, type and permissions), change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere: open pages lose access at once, and live event streams (download progress, AI chat replies) end within about 15 seconds. Deleting removes their history, chats and preferences; videos and playlists stay. You cannot change your own account type or disable your own account (the API answers `409` with `code: "self_lockout"`): another administrator has to do it, so a lone administrator can never lock themselves out.
+For administrators, *Account settings* also lists every account under **Users**. **Add a user** opens the form for a new account (username, password, type and permissions). You can also change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere: open pages lose access at once, and live event streams (download progress, AI chat replies) end within about 15 seconds. Deleting removes their history, chats and preferences; videos and playlists stay. You cannot change your own account type or disable your own account (the API answers `409` with `code: "self_lockout"`): another administrator has to do it, so a lone administrator can never lock themselves out.
 
 The server refuses any change that would leave **no enabled administrator** (`code: "last_admin"`).
 
@@ -75,7 +79,7 @@ The server refuses any change that would leave **no enabled administrator** (`co
 - Passwords are stored as salted **scrypt** hashes (`n=2^15, r=8, p=1`), never in clear. Minimum 8 characters, no composition rules, and not equal to the username.
 - Signing in sets an `HttpOnly`, `SameSite=Lax` cookie `horde_session` (`Secure` over HTTPS). Only a hash of the token is stored. A session lasts 30 days from its last use.
 - Changing your own password signs out your other browsers. Signing out deletes the session.
-- After 5 failed sign-ins for a username from one address, further attempts from that address wait with exponential back-off (`429` with `Retry-After`). Separately, once a username has more than 5 failures in a minute from anywhere, every further attempt on that name waits one second: guessing across many addresses is capped, but nobody can lock a user out for longer than that from a different address. While such an attack is actually running, the real user can still be slowed down (attacker requests take most of the one-second slots); it clears within a second of the attack stopping. Guessing the current password in *Change password* uses the same throttle. Behind a reverse proxy set `HORDE_TRUST_PROXY=1`, otherwise every client looks like one address and shares one back-off.
+- After 5 failed sign-ins for a username from one address, further attempts from that address wait with exponential back-off (`429` with `Retry-After`). Separately, once a username has more than 5 failures in a minute from anywhere, every further attempt on that name waits one second: guessing across many addresses is capped, but nobody can lock a user out for longer than that from a different address. While such an attack is actually running, the real user can still be slowed down (attacker requests take most of the one-second slots); it clears within a second of the attack stopping. Guessing the current password in *Account settings → Change password* uses the same throttle. Behind a reverse proxy set `HORDE_TRUST_PROXY=1`, otherwise every client looks like one address and shares one back-off.
 
 ## Forgot the admin password
 

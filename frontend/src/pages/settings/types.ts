@@ -1,5 +1,5 @@
 export type SettingsTab =
-  "appearance" | "library" | "playback" | "ai" | "system" | "users";
+  "appearance" | "library" | "playback" | "ai" | "system";
 
 /** Legacy tab id redirected to library */
 export type LegacySettingsTab = "downloads";

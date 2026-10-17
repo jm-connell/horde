@@ -362,6 +362,20 @@ export const api = {
     );
   },
 
+  /** Set your own profile picture; returns your account with the new version. */
+  uploadAvatar(file: File): Promise<AuthUser> {
+    const form = new FormData();
+    form.append("file", file);
+    return request<AuthUser>("/api/auth/avatar", {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  removeAvatar(): Promise<AuthUser> {
+    return request<AuthUser>("/api/auth/avatar", { method: "DELETE" });
+  },
+
   getMediaToken(videoId: number): Promise<MediaToken> {
     return request<MediaToken>(`/api/videos/${videoId}/media-token`);
   },
@@ -1547,6 +1561,11 @@ export function playlistCoverUrl(playlist: Playlist): string | null {
     return listThumbnailUrl(playlist.thumbnail_video_id);
   }
   return null;
+}
+
+/** A profile picture; the version in the URL changes on every upload. */
+export function avatarUrl(userId: number, version: number): string {
+  return `/api/auth/avatar/${userId}?v=${version}`;
 }
 
 export function spritesMetaUrl(id: number): string {

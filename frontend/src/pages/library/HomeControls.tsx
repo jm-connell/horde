@@ -1,15 +1,11 @@
 import ThemedSelect from "../../components/ThemedSelect";
-import YoutubeSearchChip from "../../components/YoutubeSearchChip";
 import {
   LIBRARY_SORT_OPTIONS,
   type LibrarySort,
 } from "../../hooks/useLibrarySort";
 
-/** Search, sort, tags and select controls on the home and tag pages. */
+/** Sort, tags and select controls on the home and tag pages (search is in the nav). */
 export default function HomeControls({
-  search,
-  onSearch,
-  onCommitSearch,
   sort,
   order,
   onSortChange,
@@ -22,9 +18,6 @@ export default function HomeControls({
   selectMode,
   onToggleSelect,
 }: {
-  search: string;
-  onSearch: (value: string) => void;
-  onCommitSearch: () => void;
   sort: LibrarySort;
   order: "asc" | "desc";
   onSortChange: (sort: LibrarySort) => void;
@@ -41,24 +34,6 @@ export default function HomeControls({
 }) {
   return (
     <>
-      <div
-        data-header-search
-        className="relative hidden min-w-0 max-w-64 flex-1 basis-24 md:block md:basis-40"
-      >
-        <input
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              onCommitSearch();
-            }
-          }}
-          placeholder="Search"
-          className="ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent sm:pl-4"
-        />
-        <YoutubeSearchChip />
-      </div>
       {showSort && (
         <>
           <ThemedSelect

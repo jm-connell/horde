@@ -8,7 +8,7 @@ The Library is Horde’s home screen: a video grid (or channel feed), channel si
 |--------|----------------|
 | **Channel sidebar** | Filter by channel; search local + remote channels |
 | **Main grid** | Your library videos (home) or a channel feed |
-| **Toolbar** | Search (YT for live YouTube results), sort, select mode, layout toggles |
+| **Toolbar** | Sort, select mode, layout toggles (search is in the nav bar, on every page; see [Search](search.md)) |
 | **Continue watching** | Row of in-progress videos (home only) |
 | **Home tabs** | **Library** / **Recommended** when AI is ready |
 
@@ -75,7 +75,7 @@ On the home Library tab (not Recommended, not a channel page), Horde shows a **C
 When AI providers are ready and recommendation categories exist, the home page shows two tabs:
 
 - **Library** — your normal grid, tags, continue watching, and search results.
-- **Recommended** — category shelves of suggestions based on embeddings and watch history.
+- **Recommended** — category shelves of suggestions based on embeddings and watch history, in recommendation order (no sort control).
 
 See [AI features](ai-features.md) for setup and what powers Recommended.
 

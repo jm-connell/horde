@@ -95,7 +95,8 @@ test("the admin adds a member, who has their own history", async ({
     page.getByRole("heading", { name: "Continue watching" })
   ).toBeVisible();
 
-  await page.goto("/settings?tab=users");
+  await page.goto("/account");
+  await page.getByRole("button", { name: "Add a user" }).click();
   await page.getByLabel("Username").fill("newbie");
   await page.getByLabel("Password", { exact: true }).fill("newbie-password");
   await page.getByRole("button", { name: "Add user" }).click();
@@ -120,7 +121,7 @@ test("the admin adds a member, who has their own history", async ({
 test("an admin cannot demote or disable their own account", async ({
   page,
 }) => {
-  await page.goto("/settings?tab=users");
+  await page.goto("/account");
   const rows = page.locator('[data-horde="user-row"]');
   const self = rows.filter({ hasText: "(you)" });
   await self.getByRole("button", { name: "Edit admin" }).click();
@@ -152,30 +153,32 @@ test("an admin cannot demote or disable their own account", async ({
   ).toBeVisible();
 });
 
-test("a member does not see the Users settings", async ({
+test("a member's account settings have no Users section", async ({
   page,
   browser,
   baseURL,
 }) => {
-  void page;
   const ctx = await contextAs(browser, baseURL, "member");
   const member = await ctx.newPage();
+  // The old Settings deep link lands on Account settings.
   await member.goto("/settings?tab=users");
+  await expect(member).toHaveURL(/\/account$/);
   await expect(
-    member.getByRole("heading", { name: "Settings", level: 1 })
+    member.getByRole("heading", { name: "Account settings", level: 1 })
   ).toBeVisible();
-  await expect(member.getByRole("tab", { name: "Users" })).toHaveCount(0);
-  await expect(member.getByRole("tab", { name: "System" })).toHaveCount(0);
-  await expect(member.getByRole("tab", { name: "Appearance" })).toBeVisible();
-  await expect(member.locator('[data-horde="users-tab"]')).toHaveCount(0);
+  await expect(
+    member.getByRole("heading", { name: "Change password" })
+  ).toBeVisible();
+  await expect(member.getByRole("region", { name: "Users" })).toHaveCount(0);
+  await expect(member.locator('[data-horde="users-section"]')).toHaveCount(0);
 
   const resp = await ctx.request.get("/api/users");
   expect(resp.status()).toBe(403);
   await ctx.close();
 
   // The admin sees it.
-  await page.goto("/settings");
-  await expect(page.getByRole("tab", { name: "Users" })).toBeVisible();
+  await page.goto("/account");
+  await expect(page.getByRole("region", { name: "Users" })).toBeVisible();
 });
 
 test("a member without delete_videos sees no delete action", async ({

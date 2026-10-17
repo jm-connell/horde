@@ -1,24 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../api";
 import { Field, FormError } from "../../components/auth/AuthForm";
+import UserAvatar from "../../components/auth/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useToast } from "../../context/ToastContext";
 import type { Permission, PermissionInfo, UserAccount } from "../../types";
-import AccountTypeFields from "./AccountTypeFields";
-import { PANEL_BTN } from "./constants";
+import AccountTypeFields from "../settings/AccountTypeFields";
+import { PANEL_BTN } from "../settings/constants";
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong";
 }
 
-export default function UsersTab() {
+/** Administrators: everyone's accounts, and adding new ones. */
+export default function UsersSection() {
   const { user: me } = useAuth();
   const { showToast, showError } = useToast();
   const confirm = useConfirm();
   const [users, setUsers] = useState<UserAccount[] | null>(null);
   const [catalog, setCatalog] = useState<PermissionInfo[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -29,14 +32,19 @@ export default function UsersTab() {
   }, [showError]);
 
   useEffect(() => {
-    void reload();
     api
       .listPermissions()
       .then(setCatalog)
       .catch((err) =>
         showError(`Could not load permissions: ${describe(err)}`)
       );
-  }, [reload, showError]);
+  }, [showError]);
+
+  // Your own row shows your picture, so changing it above loads the list again.
+  const myAvatar = me?.avatar_version;
+  useEffect(() => {
+    void reload();
+  }, [myAvatar, reload]);
 
   const remove = async (u: UserAccount) => {
     const ok = await confirm({
@@ -57,14 +65,25 @@ export default function UsersTab() {
   };
 
   return (
-    <div data-horde="users-tab" className="space-y-6">
+    <div data-horde="users-section" className="space-y-6">
       <section aria-labelledby="users-heading">
-        <h2
-          id="users-heading"
-          className="mb-1 text-lg font-semibold text-gray-100"
-        >
-          Users
-        </h2>
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <h2
+            id="users-heading"
+            className="text-lg font-semibold text-gray-100"
+          >
+            Users
+          </h2>
+          <button
+            type="button"
+            className={`${PANEL_BTN} ml-auto`}
+            aria-expanded={adding}
+            aria-controls="create-user"
+            onClick={() => setAdding((v) => !v)}
+          >
+            {adding ? "Cancel" : "Add a user"}
+          </button>
+        </div>
         <p className="mb-4 text-sm text-muted">
           Everyone signs in with their own account and has their own watch
           history. The library, playlists and downloads are shared.
@@ -76,6 +95,11 @@ export default function UsersTab() {
             {users.map((u) => (
               <li key={u.id} data-horde="user-row" className="p-3">
                 <div className="flex flex-wrap items-center gap-2">
+                  <UserAvatar
+                    userId={u.id}
+                    username={u.username}
+                    version={u.avatar_version}
+                  />
                   <span className="font-medium text-gray-100">
                     {u.username}
                   </span>
@@ -114,7 +138,15 @@ export default function UsersTab() {
           </ul>
         )}
       </section>
-      <CreateUser catalog={catalog} onCreated={reload} />
+      {adding && (
+        <CreateUser
+          catalog={catalog}
+          onCreated={async () => {
+            setAdding(false);
+            await reload();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -165,7 +197,11 @@ function CreateUser({
   };
 
   return (
-    <section aria-labelledby="create-user-heading">
+    <section
+      id="create-user"
+      aria-labelledby="create-user-heading"
+      className="rounded-lg border border-ink-700 p-4"
+    >
       <h3
         id="create-user-heading"
         className="mb-3 text-base font-semibold text-gray-100"
@@ -178,6 +214,7 @@ function CreateUser({
           value={username}
           onChange={setUsername}
           autoComplete="off"
+          focusOnMount
         />
         <Field
           label="Password"
