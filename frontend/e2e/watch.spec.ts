@@ -163,8 +163,15 @@ test("the description box keeps a readable width on a wide window", async ({
   await expect(page.locator("aside").filter({ visible: true })).toHaveCount(1);
   await expect.poll(width).toBeGreaterThan(1100);
 
-  // Theater drops the sidebar, so the column spans the window: cap the box.
+  // Theater drops the sidebar: the box keeps a readable width, centred under
+  // the full-bleed player rather than hugging the left edge.
   await page.locator("video").first().hover();
   await page.getByRole("button", { name: "Theater", exact: true }).click();
-  await expect.poll(width).toBeLessThanOrEqual(1024);
+  await expect.poll(width).toBeLessThanOrEqual(1152);
+  const offCentre = async () => {
+    const b = await box.boundingBox();
+    if (!b) return Infinity;
+    return Math.abs(b.x - (2400 - (b.x + b.width)));
+  };
+  await expect.poll(offCentre).toBeLessThan(4);
 });
