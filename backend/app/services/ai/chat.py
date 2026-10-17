@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Generator
-from typing import Any
+from typing import Any, Protocol
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
@@ -90,6 +90,11 @@ def _history_for_prompt(
             col(VideoAiChatMessage.created_at).asc(), col(VideoAiChatMessage.id).asc()
         )
     ).all()
+    return history_from_rows(list(rows))
+
+
+def history_from_rows(rows: list[Any]) -> list[dict[str, str]]:
+    """Prompt history from oldest-first message rows (``role`` / ``content``)."""
     # Drop the just-persisted latest user message — it is passed as ``prompt``.
     if rows and rows[-1].role == "user":
         rows = rows[:-1]
@@ -103,7 +108,8 @@ def _history_for_prompt(
     return out
 
 
-def _validate_chat_request(session: Session, video_id: int, message: str) -> Video:
+def validate_chat_message(message: str) -> None:
+    """Refuse a turn when chat is off or the message is empty or too long."""
     ai = app_settings.ai_settings()
     allowed, reason = llm_features_allowed()
     if not allowed:
@@ -119,6 +125,9 @@ def _validate_chat_request(session: Session, video_id: int, message: str) -> Vid
     if len(text) > 4000:
         raise ChatError("Message is too long", status_code=400)
 
+
+def _validate_chat_request(session: Session, video_id: int, message: str) -> Video:
+    validate_chat_message(message)
     video = session.get(Video, video_id)
     if video is None:
         raise ChatError("Video not found", status_code=404)
@@ -151,9 +160,101 @@ def stream_chat_events(
         yield from stream_chat(session, video_id, message, user_id, authorized)
 
 
+class ChatTarget(Protocol):
+    """What a chat turn is about: a library video or a stream."""
+
+    #: For log lines.
+    label: str
+    #: Attributed in the cost ledger (None for a stream).
+    usage_video_id: int | None
+
+    def validate(self, session: Session, message: str) -> None:
+        """Raise ``ChatError`` when this turn may not run."""
+
+    def add_message(
+        self,
+        session: Session,
+        *,
+        role: str,
+        content: str,
+        cost: float | None = None,
+        model: str | None = None,
+    ) -> Any:
+        """Persist one turn and return the refreshed row (``id``, ``created_at``)."""
+
+    def history(self, session: Session) -> list[dict[str, str]]:
+        """Earlier turns for the prompt, without the just-added user message."""
+
+    def context(self, session: Session, question: str) -> str | None:
+        """System context for the reply, or None when the subject is gone."""
+
+    def exists(self, session: Session) -> bool:
+        """Whether the video (or stream) the chat is about still exists."""
+
+
+class _LibraryChat:
+    def __init__(self, video_id: int, user_id: int) -> None:
+        self.video_id = video_id
+        self.user_id = user_id
+        self.label = f"video_id={video_id}"
+        self.usage_video_id: int | None = video_id
+
+    def validate(self, session: Session, message: str) -> None:
+        _validate_chat_request(session, self.video_id, message)
+
+    def add_message(
+        self,
+        session: Session,
+        *,
+        role: str,
+        content: str,
+        cost: float | None = None,
+        model: str | None = None,
+    ) -> VideoAiChatMessage:
+        row = VideoAiChatMessage(
+            video_id=self.video_id,
+            user_id=self.user_id,
+            role=role,
+            content=content,
+            cost=cost,
+            model=model,
+            created_at=utcnow(),
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return row
+
+    def history(self, session: Session) -> list[dict[str, str]]:
+        return _history_for_prompt(session, self.video_id, self.user_id)
+
+    def context(self, session: Session, question: str) -> str | None:
+        # Re-load video after commit (expire_on_commit) before building context.
+        video = session.get(Video, self.video_id)
+        if video is None:
+            return None
+        return ai_embeddings.build_chat_context(session, video, question)
+
+    def exists(self, session: Session) -> bool:
+        return session.get(Video, self.video_id) is not None
+
+
 def stream_chat(
     session: Session,
     video_id: int,
+    message: str,
+    user_id: int,
+    authorized: Authorized | None = None,
+) -> Generator[str, None, None]:
+    """Yield SSE event strings for a chat turn about a library video."""
+    yield from run_chat_turn(
+        session, _LibraryChat(video_id, user_id), message, user_id, authorized
+    )
+
+
+def run_chat_turn(
+    session: Session,
+    target: ChatTarget,
     message: str,
     user_id: int,
     authorized: Authorized | None = None,
@@ -166,7 +267,7 @@ def stream_chat(
     - ``data: {"type":"error","detail":"..."}\n\n``
     """
     try:
-        video = _validate_chat_request(session, video_id, message)
+        target.validate(session, message)
     except ChatError as exc:
         yield _sse({"type": "error", "detail": str(exc), "status": exc.status_code})
         return
@@ -191,22 +292,13 @@ def stream_chat(
         yield _sse({"type": "error", "detail": missing, "status": 503})
         return
 
-    user_row = VideoAiChatMessage(
-        video_id=video_id,
-        user_id=user_id,
-        role="user",
-        content=user_text,
-        created_at=utcnow(),
-    )
-    session.add(user_row)
-    session.commit()
-    session.refresh(user_row)
-    # Re-load video after commit (expire_on_commit) before building context.
-    fresh_video = session.get(Video, video_id)
-    if fresh_video is None:
-        yield _sse({"type": "error", "detail": "Video not found", "status": 404})
+    try:
+        user_row = target.add_message(session, role="user", content=user_text)
+    except IntegrityError:
+        session.rollback()
+        logger.warning("chat turn not stored (%s)", target.label, exc_info=True)
+        yield _sse(_gone_event(session, target))
         return
-    video = fresh_video
 
     yield _sse(
         {
@@ -222,9 +314,12 @@ def stream_chat(
         }
     )
 
-    context = ai_embeddings.build_chat_context(session, video, user_text)
+    context = target.context(session, user_text)
+    if context is None:
+        yield _sse(_subject_gone_event())
+        return
     system = ai_text.chat_system_prompt() + "\n\n" + context
-    history = _history_for_prompt(session, video_id, user_id)
+    history = target.history(session)
     session.commit()
 
     assistant_parts: list[str] = []
@@ -238,7 +333,7 @@ def stream_chat(
         timeout=_CHAT_TIMEOUT,
         temperature=0.4,
         usage_kind="chat",
-        video_id=video_id,
+        video_id=target.usage_video_id,
     )
     try:
         for delta in stream:
@@ -254,7 +349,7 @@ def stream_chat(
             assistant_parts.append(delta)
             yield _sse({"type": "token", "text": delta})
     except Exception as exc:
-        logger.warning("chat stream failed video_id=%s", video_id, exc_info=True)
+        logger.warning("chat stream failed %s", target.label, exc_info=True)
         # Not str(exc): an httpx error quotes the provider URL.
         yield _sse(
             {"type": "error", "detail": format_provider_error(exc), "status": 502}
@@ -267,16 +362,16 @@ def stream_chat(
 
     if revoked:
         logger.warning(
-            "chat stream ended: caller lost access user_id=%s video_id=%s",
+            "chat stream ended: caller lost access user_id=%s %s",
             user_id,
-            video_id,
+            target.label,
         )
         return
     if authorized is not None and not authorized(force=True):
         logger.warning(
-            "chat reply dropped: caller lost access user_id=%s video_id=%s",
+            "chat reply dropped: caller lost access user_id=%s %s",
             user_id,
-            video_id,
+            target.label,
         )
         yield _sse(_revoked_event())
         return
@@ -295,30 +390,26 @@ def stream_chat(
     turn_cost = getattr(provider, "last_cost", None)
     turn_cost = float(turn_cost) if isinstance(turn_cost, (int, float)) else None
 
-    assistant_row = VideoAiChatMessage(
-        video_id=video_id,
-        user_id=user_id,
-        role="assistant",
-        content=reply,
-        cost=turn_cost,
-        model=(chat_model or "").strip() or None,
-        created_at=utcnow(),
-    )
     try:
-        session.add(assistant_row)
-        session.commit()
-        session.refresh(assistant_row)
+        assistant_row = target.add_message(
+            session,
+            role="assistant",
+            content=reply,
+            cost=turn_cost,
+            model=(chat_model or "").strip() or None,
+        )
     except IntegrityError:
-        # The account was deleted while the model answered. The provider already
-        # booked the spend in the cost ledger; only the reply has nowhere to go.
+        # The account (or the stream's saved state) was deleted while the model
+        # answered. The provider already booked the spend in the cost ledger;
+        # only the reply has nowhere to go.
         session.rollback()
         logger.warning(
-            "chat reply not stored: user %s no longer exists (video_id=%s)",
+            "chat reply not stored: user %s or its subject no longer exists (%s)",
             user_id,
-            video_id,
+            target.label,
             exc_info=True,
         )
-        yield _sse(_revoked_event())
+        yield _sse(_gone_event(session, target))
         return
 
     yield _sse(
@@ -340,6 +431,25 @@ def stream_chat(
             "cost": assistant_row.cost,
         }
     )
+
+
+def _subject_gone_event() -> dict[str, Any]:
+    # A stream's chat moves to the library video when it is downloaded.
+    return {
+        "type": "error",
+        "detail": "This video was downloaded or removed; reopen it to keep chatting",
+        "status": 409,
+    }
+
+
+def _gone_event(session: Session, target: ChatTarget) -> dict[str, Any]:
+    """After a failed insert: the subject is gone, else the account is."""
+    try:
+        exists = target.exists(session)
+    except Exception:
+        logger.warning("chat: could not check %s", target.label, exc_info=True)
+        exists = True
+    return _revoked_event() if exists else _subject_gone_event()
 
 
 def _revoked_event() -> dict[str, Any]:

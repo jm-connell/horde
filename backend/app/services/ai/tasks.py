@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any
+from typing import Any, NamedTuple
 
 from sqlalchemy import func
 from sqlmodel import Session, col, select
@@ -348,38 +348,27 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
     return None
 
 
-class SummarizeError(Exception):
-    """User-facing summarize failure with an HTTP-ish status hint."""
+class SummaryResult(NamedTuple):
+    text: str
+    length: str
+    cost: float | None
+    model: str | None
 
-    def __init__(self, message: str, *, status_code: int = 400):
-        super().__init__(message)
-        self.status_code = status_code
 
+def generate_summary(
+    video: Video,
+    *,
+    subtitle_text: str | None = None,
+    usage_video_id: int | None = None,
+    log_id: str = "",
+) -> SummaryResult:
+    """Ask the LLM for a summary of ``video`` (a library row or a transient one).
 
-def run_summarize(session: Session, video_id: int, *, force: bool = False) -> str:
+    ``subtitle_text`` replaces the captions read from the video's subtitle files,
+    for a stream whose captions were never downloaded. The caller checks the
+    feature settings and persists the result.
+    """
     ai = app_settings.ai_settings()
-    allowed, reason = llm_features_allowed()
-    if not allowed:
-        code = 409 if ai.get("paused") else 400
-        raise SummarizeError(reason or "AI is disabled", status_code=code)
-    if not ai.get("ai_summaries", True):
-        raise SummarizeError("AI video summaries are disabled", status_code=400)
-
-    video = session.get(Video, video_id)
-    if video is None:
-        raise SummarizeError("Video not found", status_code=404)
-    if video.needs_review:
-        raise SummarizeError("Video is still in review", status_code=400)
-    if not ai_text.has_subtitle_text(video):
-        raise SummarizeError(
-            "Summaries require downloaded subtitles for this video",
-            status_code=400,
-        )
-
-    meta = session.get(VideoAiMeta, video_id)
-    if not force and meta is not None and meta.summary and str(meta.summary).strip():
-        return str(meta.summary).strip()
-
     provider = get_llm_provider()
     if provider is None:
         raise SummarizeError(
@@ -396,10 +385,9 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
     length = ai_text.normalize_summary_length(ai.get("summary_length"))
     max_chars = ai_text.summary_max_chars(length)
     min_words, max_words = ai_text.summary_word_bounds(length)
-    prompt = ai_text.summary_prompt(video, length=length)
+    prompt = ai_text.summary_prompt(video, length=length, subtitle_text=subtitle_text)
     system = ai_text.summary_system_prompt(length)
     num_predict = ai_text.summary_num_predict(length)
-    session.commit()
     # Longer videos / higher num_predict need more than the default 120s chat timeout.
     _SUMMARIZE_TIMEOUT = 300.0
 
@@ -429,15 +417,15 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
             format=ai_text.SUMMARY_JSON_SCHEMA if use_schema else None,
             temperature=0.2 if use_schema else 0.5,
             usage_kind="summary",
-            video_id=video_id,
+            video_id=usage_video_id,
         )
         _accumulate_cost()
         summary = _extract_summary_text(raw)
         if summary:
             break
         logger.warning(
-            "summarize empty for video_id=%s length=%s attempt=%s raw_len=%s raw_prefix=%r",
-            video_id,
+            "summarize empty for %s length=%s attempt=%s raw_len=%s raw_prefix=%r",
+            log_id,
             length,
             attempt + 1,
             len(raw or ""),
@@ -454,7 +442,11 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
             break
         need = max(80, min_words - words)
         continue_prompt = ai_text.summary_continue_prompt(
-            video, summary, length=length, need_words=need
+            video,
+            summary,
+            length=length,
+            need_words=need,
+            subtitle_text=subtitle_text,
         )
         cont_raw = provider.chat(
             continue_prompt,
@@ -465,16 +457,16 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
             temperature=0.5,
             format=ai_text.SUMMARY_JSON_SCHEMA,
             usage_kind="summary",
-            video_id=video_id,
+            video_id=usage_video_id,
         )
         _accumulate_cost()
         continuation = _extract_summary_text(cont_raw)
         cont_words = ai_text.count_words(continuation)
         if cont_words < 40:
             logger.info(
-                "summarize continue too short video_id=%s length=%s "
+                "summarize continue too short %s length=%s "
                 "before=%s cont=%s raw_prefix=%r",
-                video_id,
+                log_id,
                 length,
                 words,
                 cont_words,
@@ -495,24 +487,76 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
     if not cleaned:
         raise SummarizeError("Model returned an empty summary", status_code=502)
 
+    return SummaryResult(
+        cleaned,
+        length,
+        round(total_cost, 8) if saw_cost else None,
+        (chat_model or "").strip() or None,
+    )
+
+
+class SummarizeError(Exception):
+    """User-facing summarize failure with an HTTP-ish status hint."""
+
+    def __init__(
+        self, message: str, *, status_code: int = 400, code: str | None = None
+    ):
+        super().__init__(message)
+        self.status_code = status_code
+        #: Machine-readable reason for the error envelope (stream AI routes).
+        self.code = code
+
+
+def run_summarize(session: Session, video_id: int, *, force: bool = False) -> str:
+    ai = app_settings.ai_settings()
+    allowed, reason = llm_features_allowed()
+    if not allowed:
+        code = 409 if ai.get("paused") else 400
+        raise SummarizeError(reason or "AI is disabled", status_code=code)
+    if not ai.get("ai_summaries", True):
+        raise SummarizeError("AI video summaries are disabled", status_code=400)
+
+    video = session.get(Video, video_id)
+    if video is None:
+        raise SummarizeError("Video not found", status_code=404)
+    if video.needs_review:
+        raise SummarizeError("Video is still in review", status_code=400)
+    if not ai_text.has_subtitle_text(video):
+        raise SummarizeError(
+            "Summaries require downloaded subtitles for this video",
+            status_code=400,
+        )
+
+    meta = session.get(VideoAiMeta, video_id)
+    if not force and meta is not None and meta.summary and str(meta.summary).strip():
+        return str(meta.summary).strip()
+
+    session.commit()
+    result = generate_summary(
+        video, usage_video_id=video_id, log_id=f"video_id={video_id}"
+    )
     if meta is None:
         meta = VideoAiMeta(video_id=video_id)
-    meta.summary = cleaned
-    meta.summary_length = length
-    meta.summary_cost = round(total_cost, 8) if saw_cost else None
-    meta.summary_model = (chat_model or "").strip() or None
+    meta.summary = result.text
+    meta.summary_length = result.length
+    meta.summary_cost = result.cost
+    meta.summary_model = result.model
     meta.updated_at = utcnow()
     session.add(meta)
     session.commit()
-    return cleaned
+    return result.text
 
 
 class ChaptersError(Exception):
     """User-facing chapter generation failure with an HTTP-ish status hint."""
 
-    def __init__(self, message: str, *, status_code: int = 400):
+    def __init__(
+        self, message: str, *, status_code: int = 400, code: str | None = None
+    ):
         super().__init__(message)
         self.status_code = status_code
+        #: Machine-readable reason for the error envelope (stream AI routes).
+        self.code = code
 
 
 _CHAPTER_SKIP_MESSAGES = {
@@ -524,6 +568,111 @@ _CHAPTER_SKIP_MESSAGES = {
     "too_short": "Video is shorter than 3 minutes",
     "music_like": "Captions look like music or lyrics",
 }
+
+
+def generate_chapters(
+    video: Video,
+    cues: list[tuple[float, str]],
+    *,
+    usage_video_id: int | None = None,
+    log_id: str = "",
+) -> list[dict]:
+    """Ask the LLM for chapters of ``video`` from its timed caption ``cues``.
+
+    ``video`` may be a transient row (a stream). The caller runs the skip checks
+    and persists the result.
+    """
+    ai = app_settings.ai_settings()
+    provider = get_llm_provider()
+    if provider is None:
+        raise ChaptersError(
+            "No LLM available (enable OpenRouter or Ollama)", status_code=503
+        )
+    if isinstance(provider, OpenRouterProvider):
+        chat_model = resolve_llm_model(provider)
+    else:
+        chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    missing = require_llm_chat_model(provider, chat_model)
+    if missing:
+        raise ChaptersError(missing, status_code=503)
+
+    max_chars = chapters_svc.transcript_char_cap(ai.get("workload_profile"))
+    transcript = chapters_svc.format_timed_transcript(cues, max_chars=max_chars)
+    if not transcript.strip():
+        raise ChaptersError(
+            "Chapters require downloaded subtitles for this video",
+            status_code=400,
+        )
+    prompt = chapters_svc.chapters_prompt(
+        video, transcript, duration_sec=video.duration_sec
+    )
+    system = chapters_svc.chapters_system_prompt()
+    _CHAPTERS_TIMEOUT = 300.0
+
+    cleaned: list[dict] = []
+    for attempt in range(2):
+        use_schema = attempt == 0
+        raw = provider.chat(
+            prompt,
+            chat_model,
+            system=system,
+            num_predict=1200,
+            timeout=_CHAPTERS_TIMEOUT,
+            format=chapters_svc.CHAPTERS_JSON_SCHEMA if use_schema else None,
+            temperature=0.2 if use_schema else 0.4,
+            usage_kind="chapters",
+            video_id=usage_video_id,
+        )
+        payload = chapters_svc.chapters_from_model_output(raw)
+        cleaned = chapters_svc.snap_and_validate(payload, cues, video.duration_sec)
+        if cleaned:
+            break
+        logger.warning(
+            "chapters empty for %s attempt=%s raw_len=%s raw_prefix=%r",
+            log_id,
+            attempt + 1,
+            len(raw or ""),
+            (raw or "")[:240],
+        )
+    if cleaned and chapters_svc.titles_need_rewrite(cleaned, cues):
+        try:
+            rewritten = provider.chat(
+                chapters_svc.title_rewrite_prompt(cleaned, cues),
+                chat_model,
+                system=chapters_svc.title_rewrite_system_prompt(),
+                num_predict=1200,
+                timeout=_CHAPTERS_TIMEOUT,
+                format=chapters_svc.CHAPTERS_JSON_SCHEMA,
+                temperature=0.2,
+                usage_kind="chapters",
+                video_id=usage_video_id,
+            )
+        except Exception:
+            logger.warning(
+                "chapter title rewrite failed for %s",
+                log_id,
+                exc_info=True,
+            )
+            rewritten = ""
+        cleaned = chapters_svc.apply_title_rewrites(
+            cleaned,
+            chapters_svc.chapters_from_model_output(rewritten),
+            cues,
+        )
+    if not cleaned:
+        cleaned = chapters_svc.fallback_chapters_from_cues(cues, video.duration_sec)
+        if cleaned:
+            logger.warning(
+                "chapters fallback from captions %s count=%s",
+                log_id,
+                len(cleaned),
+            )
+    if cleaned:
+        cleaned = chapters_svc.replace_spoken_titles(cleaned, cues)
+    if not cleaned:
+        raise ChaptersError("Model returned unusable chapters", status_code=502)
+
+    return cleaned
 
 
 def run_chapters(session: Session, video_id: int, *, force: bool = False) -> list[dict]:
@@ -559,96 +708,10 @@ def run_chapters(session: Session, video_id: int, *, force: bool = False) -> lis
             status_code=400,
         )
 
-    provider = get_llm_provider()
-    if provider is None:
-        raise ChaptersError(
-            "No LLM available (enable OpenRouter or Ollama)", status_code=503
-        )
-    if isinstance(provider, OpenRouterProvider):
-        chat_model = resolve_llm_model(provider)
-    else:
-        chat_model = str(ai.get("chat_model") or "llama3.2:3b")
-    missing = require_llm_chat_model(provider, chat_model)
-    if missing:
-        raise ChaptersError(missing, status_code=503)
-
-    max_chars = chapters_svc.transcript_char_cap(ai.get("workload_profile"))
-    transcript = chapters_svc.format_timed_transcript(cues, max_chars=max_chars)
-    if not transcript.strip():
-        raise ChaptersError(
-            "Chapters require downloaded subtitles for this video",
-            status_code=400,
-        )
-    prompt = chapters_svc.chapters_prompt(
-        video, transcript, duration_sec=video.duration_sec
-    )
-    system = chapters_svc.chapters_system_prompt()
     session.commit()
-    _CHAPTERS_TIMEOUT = 300.0
-
-    cleaned: list[dict] = []
-    for attempt in range(2):
-        use_schema = attempt == 0
-        raw = provider.chat(
-            prompt,
-            chat_model,
-            system=system,
-            num_predict=1200,
-            timeout=_CHAPTERS_TIMEOUT,
-            format=chapters_svc.CHAPTERS_JSON_SCHEMA if use_schema else None,
-            temperature=0.2 if use_schema else 0.4,
-            usage_kind="chapters",
-            video_id=video_id,
-        )
-        payload = chapters_svc.chapters_from_model_output(raw)
-        cleaned = chapters_svc.snap_and_validate(payload, cues, video.duration_sec)
-        if cleaned:
-            break
-        logger.warning(
-            "chapters empty for video_id=%s attempt=%s raw_len=%s raw_prefix=%r",
-            video_id,
-            attempt + 1,
-            len(raw or ""),
-            (raw or "")[:240],
-        )
-    if cleaned and chapters_svc.titles_need_rewrite(cleaned, cues):
-        try:
-            rewritten = provider.chat(
-                chapters_svc.title_rewrite_prompt(cleaned, cues),
-                chat_model,
-                system=chapters_svc.title_rewrite_system_prompt(),
-                num_predict=1200,
-                timeout=_CHAPTERS_TIMEOUT,
-                format=chapters_svc.CHAPTERS_JSON_SCHEMA,
-                temperature=0.2,
-                usage_kind="chapters",
-                video_id=video_id,
-            )
-        except Exception:
-            logger.warning(
-                "chapter title rewrite failed for video_id=%s",
-                video_id,
-                exc_info=True,
-            )
-            rewritten = ""
-        cleaned = chapters_svc.apply_title_rewrites(
-            cleaned,
-            chapters_svc.chapters_from_model_output(rewritten),
-            cues,
-        )
-    if not cleaned:
-        cleaned = chapters_svc.fallback_chapters_from_cues(cues, video.duration_sec)
-        if cleaned:
-            logger.warning(
-                "chapters fallback from captions video_id=%s count=%s",
-                video_id,
-                len(cleaned),
-            )
-    if cleaned:
-        cleaned = chapters_svc.replace_spoken_titles(cleaned, cues)
-    if not cleaned:
-        raise ChaptersError("Model returned unusable chapters", status_code=502)
-
+    cleaned = generate_chapters(
+        video, cues, usage_video_id=video_id, log_id=f"video_id={video_id}"
+    )
     if meta is None:
         meta = VideoAiMeta(video_id=video_id)
     meta.chapters = chapters_svc.dump_chapter_list(cleaned)
