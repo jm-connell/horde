@@ -3,7 +3,11 @@ import type { VideoAiChatMessage } from "../types";
 import { formatUsdCost } from "../utils";
 import type { AiChatApi } from "./aiTarget";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { clampPanelHeight, usePanelSize } from "../hooks/usePanelSize";
+import {
+  clampPanelHeight,
+  panelHeightRange,
+  usePanelSize,
+} from "../hooks/usePanelSize";
 import AiMarkdown from "./AiMarkdown";
 import ResizeHandle from "./ResizeHandle";
 
@@ -429,6 +433,7 @@ export default function VideoAiChat({
           onChange={setInputHeight}
           onCommit={commitInputHeight}
           onReset={() => commitInputHeight(null)}
+          {...panelHeightRange(MIN_INPUT_REM)}
         />
       )}
     </div>

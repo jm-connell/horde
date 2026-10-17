@@ -7,7 +7,11 @@ import OverlayScrollThumb from "./OverlayScrollThumb";
 import ResizeHandle from "./ResizeHandle";
 import { remPx, useAnimatedClipHeight } from "../hooks/useAnimatedClipHeight";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { clampPanelHeight, usePanelSize } from "../hooks/usePanelSize";
+import {
+  clampPanelHeight,
+  panelHeightRange,
+  usePanelSize,
+} from "../hooks/usePanelSize";
 import { useSettings } from "../hooks/useSettings";
 import type { Chapter } from "../utils";
 
@@ -191,6 +195,7 @@ export default function WatchMeta({
         onChange: setClipPx,
         onCommit: commitClipPx,
         onReset: () => commitClipPx(null),
+        ...panelHeightRange(MIN_CLIP_REM),
       };
 
   /** Width the two columns share (the grid minus the gutter). */
@@ -475,6 +480,8 @@ export default function WatchMeta({
             onChange={setSplit}
             onCommit={commitSplit}
             onReset={() => commitSplit(null)}
+            valueMin={0}
+            valueMax={1}
           />
         ))}
       {chapters.length > 0 && (

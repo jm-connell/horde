@@ -14,7 +14,7 @@ interface Props {
   /** Desktop: drag the bottom edge to change the collapsed height. */
   resize?: Pick<
     ResizeHandleProps,
-    "toValue" | "onChange" | "onCommit" | "onReset"
+    "toValue" | "onChange" | "onCommit" | "onReset" | "valueMin" | "valueMax"
   > | null;
 }
 

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { clampPanelHeight, usePanelSize } from "../hooks/usePanelSize";
+import {
+  clampPanelHeight,
+  panelHeightRange,
+  usePanelSize,
+} from "../hooks/usePanelSize";
 import { useSettings } from "../hooks/useSettings";
 import AiMarkdown from "./AiMarkdown";
 import Collapse from "./Collapse";
@@ -242,6 +246,7 @@ export default function VideoAiPanel({
                   onChange={setSummaryHeight}
                   onCommit={commitSummaryHeight}
                   onReset={() => commitSummaryHeight(null)}
+                  {...panelHeightRange(MIN_SUMMARY_REM)}
                 />
               )}
             </div>

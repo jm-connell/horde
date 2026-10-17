@@ -32,11 +32,18 @@ function saveSize(name: PanelSizeName, value: number | null) {
   setJson(PANEL_SIZES_KEY, next);
 }
 
-/** Clamp a dragged height between `minRem` and most of the viewport. */
+/** The pixel range a dragged height can take: `minRem` to most of the viewport. */
+export function panelHeightRange(minRem: number) {
+  return {
+    valueMin: Math.round(remPx(minRem)),
+    valueMax: Math.round(window.innerHeight * 0.85),
+  };
+}
+
+/** Clamp a dragged height to {@link panelHeightRange}. */
 export function clampPanelHeight(px: number, minRem: number): number {
-  return Math.round(
-    Math.min(Math.max(px, remPx(minRem)), window.innerHeight * 0.85)
-  );
+  const { valueMin, valueMax } = panelHeightRange(minRem);
+  return Math.round(Math.min(Math.max(px, valueMin), valueMax));
 }
 
 /**
