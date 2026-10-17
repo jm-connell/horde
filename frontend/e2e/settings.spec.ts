@@ -49,6 +49,20 @@ test("appearance changes theme and loading animation", async ({ page }) => {
   await expect(page.getByLabel("Background animation").first()).toBeVisible();
 });
 
+test("the panel blur slider changes the blur on panels", async ({ page }) => {
+  await page.goto("/settings?tab=appearance");
+  const slider = page.getByRole("slider", { name: "Panel blur" });
+  // The header also carries Tailwind's `backdrop-blur`, which the slider must beat.
+  const header = page.locator("header.ui-panel").first();
+  const backdrop = () =>
+    header.evaluate((el) => getComputedStyle(el).backdropFilter);
+
+  await slider.fill("1");
+  await expect.poll(backdrop).toBe("blur(24px)");
+  await slider.fill("0");
+  await expect.poll(backdrop).toBe("blur(0px)");
+});
+
 test("settings search jumps to SponsorBlock", async ({ page }) => {
   await page.goto("/settings");
   await page.getByLabel("Search settings").fill("sponsorblock");

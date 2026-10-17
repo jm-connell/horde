@@ -25,8 +25,8 @@ body::-webkit-scrollbar,
 /* Overlay pill is always opaque accent — not panel alpha / tint. */
 .horde-overlay-scroll-thumb {
   background-color: rgb(var(--accent));
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* Themed thin scrollbars (queue / panels) */
@@ -729,14 +729,16 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
 }
 
 /* Translucent panels — let background effects show through.
-   Alpha/blur come from --ui-panel-* set by applyMotionPrefs (transparency + blur sliders). */
+   Alpha/blur come from --ui-panel-* set by applyMotionPrefs (transparency + blur sliders).
+   Keep -webkit-backdrop-filter before backdrop-filter: in the other order the
+   minifier drops the standard property and only Safari applies the blur. */
 html[data-translucent-panels="on"] .ui-panel,
 html[data-translucent-panels="on"] .ui-card {
   background-color: rgb(
     var(--ink-900) / var(--ui-panel-alpha, 0.32)
   ) !important;
-  backdrop-filter: blur(var(--ui-panel-blur, 12px));
   -webkit-backdrop-filter: blur(var(--ui-panel-blur, 12px));
+  backdrop-filter: blur(var(--ui-panel-blur, 12px));
 }
 
 html[data-translucent-panels="on"] header.ui-panel {
@@ -781,8 +783,8 @@ html[data-translucent-panels="on"][data-panel-legibility="on"]
   .ui-panel-legible,
 html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-menu {
   background-color: rgb(var(--ink-900) / 0.88) !important;
-  backdrop-filter: blur(var(--ui-panel-blur, 12px));
   -webkit-backdrop-filter: blur(var(--ui-panel-blur, 12px));
+  backdrop-filter: blur(var(--ui-panel-blur, 12px));
 }
 
 /* Header + hamburger menu: same raised opacity as other legible panels,
@@ -792,8 +794,8 @@ html[data-translucent-panels="on"][data-panel-legibility="on"]
 html[data-translucent-panels="on"][data-panel-legibility="on"]
   [data-horde="nav-menu"].ui-panel-legible {
   background-color: rgb(var(--ink-950) / 0.88) !important;
-  backdrop-filter: blur(var(--ui-panel-blur, 12px));
   -webkit-backdrop-filter: blur(var(--ui-panel-blur, 12px));
+  backdrop-filter: blur(var(--ui-panel-blur, 12px));
 }
 
 /* Optional user tint — mixed into the same fills, including when panels are opaque. */
@@ -971,8 +973,8 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   html[data-translucent-panels="on"] .ui-card.video-card--feed,
   html[data-panel-tint="on"] .ui-card.video-card--feed {
     background-color: transparent !important;
-    backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
     border-radius: 0;
     box-shadow: none !important;
   }
