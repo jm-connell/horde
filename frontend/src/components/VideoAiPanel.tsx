@@ -39,7 +39,10 @@ export default function VideoAiPanel({
   const isMobile = useIsMobile();
   const [summaryHeight, setSummaryHeight, commitSummaryHeight] =
     usePanelSize("aiSummary");
-  const summaryMax = !isMobile && summaryHeight != null ? summaryHeight : null;
+  // A dragged height is fixed (not a cap), so the handle always follows the
+  // pointer, even past the end of a short summary.
+  const summaryFixed =
+    !isMobile && summaryHeight != null ? summaryHeight : null;
 
   const expanded = settings.aiExpanded;
   const showToggle = canSummarize && canChat;
@@ -181,12 +184,12 @@ export default function VideoAiPanel({
               <div
                 ref={summaryScrollRef}
                 className={
-                  summaryMax != null
+                  summaryFixed != null
                     ? "horde-meta-scrollbar overflow-y-auto"
                     : undefined
                 }
                 style={
-                  summaryMax != null ? { maxHeight: summaryMax } : undefined
+                  summaryFixed != null ? { height: summaryFixed } : undefined
                 }
               >
                 <div className="px-4 py-3">
@@ -218,10 +221,10 @@ export default function VideoAiPanel({
                   )}
                 </div>
               </div>
-              {summaryMax != null && (
+              {summaryFixed != null && (
                 <OverlayScrollThumb
                   scrollRef={summaryScrollRef}
-                  revision={`${summaryMax}-${summaryText.length}`}
+                  revision={`${summaryFixed}-${summaryText.length}`}
                 />
               )}
               {!isMobile && (

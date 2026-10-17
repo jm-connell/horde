@@ -60,7 +60,9 @@ export default function VideoAiChat({
   const listRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const [listHeight, setListHeight, commitListHeight] = usePanelSize("aiChat");
-  const listMax = !isMobile && listHeight != null ? listHeight : null;
+  // A dragged height is a fixed height (not a cap), so a short thread can be
+  // given room to grow into.
+  const listFixed = !isMobile && listHeight != null ? listHeight : null;
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // The latest operations, read by the effects below without re-running them.
@@ -262,7 +264,7 @@ export default function VideoAiChat({
   if (!active) return null;
 
   return (
-    <div className="ui-panel group isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
+    <div className="ui-panel group relative isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
       {threadCostLabel && (
         <div className="flex items-center justify-end border-b border-ink-800/80 px-3 py-1">
           <span
@@ -274,112 +276,94 @@ export default function VideoAiChat({
           </span>
         </div>
       )}
-      <div className="relative">
-        <div
-          ref={listRef}
-          className={`horde-scrollbar space-y-3 overflow-y-auto px-4 py-3 ${
-            listMax != null ? "" : "max-h-72"
-          }`}
-          style={listMax != null ? { maxHeight: listMax } : undefined}
-        >
-          {loading && (
-            <div className="flex justify-center py-6">
-              <TypingDots label="Loading chat" />
+      <div
+        ref={listRef}
+        className={`horde-scrollbar space-y-3 overflow-y-auto px-4 py-3 ${
+          listFixed != null ? "" : "max-h-72"
+        }`}
+        style={listFixed != null ? { height: listFixed } : undefined}
+      >
+        {loading && (
+          <div className="flex justify-center py-6">
+            <TypingDots label="Loading chat" />
+          </div>
+        )}
+        {!loading && showSeed && (
+          <div className="flex justify-start">
+            <div className="w-fit max-w-[90%] rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-400">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                From summary
+              </p>
+              <AiMarkdown
+                text={seedSummary}
+                className="space-y-2 text-sm text-gray-400"
+              />
             </div>
-          )}
-          {!loading && showSeed && (
-            <div className="flex justify-start">
-              <div className="w-fit max-w-[90%] rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-400">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                  From summary
-                </p>
-                <AiMarkdown
-                  text={seedSummary}
-                  className="space-y-2 text-sm text-gray-400"
-                />
-              </div>
-            </div>
-          )}
-          {!loading && !showSeed && messages.length === 0 && !sending && (
-            <p className="text-xs text-muted">
-              Ask this video anything
-              {!hasSubtitles
-                ? " — captions not available, answers will use title and description only."
-                : "."}
-            </p>
-          )}
-          {messages.map((m) => {
-            const waiting =
-              sending && m.role === "assistant" && !m.content.trim();
-            const costLabel =
-              showCosts &&
-              m.role === "assistant" &&
-              typeof m.cost === "number" &&
-              m.cost >= 0
-                ? formatUsdCost(m.cost)
-                : "";
-            return (
+          </div>
+        )}
+        {!loading && !showSeed && messages.length === 0 && !sending && (
+          <p className="text-xs text-muted">
+            Ask this video anything
+            {!hasSubtitles
+              ? " — captions not available, answers will use title and description only."
+              : "."}
+          </p>
+        )}
+        {messages.map((m) => {
+          const waiting =
+            sending && m.role === "assistant" && !m.content.trim();
+          const costLabel =
+            showCosts &&
+            m.role === "assistant" &&
+            typeof m.cost === "number" &&
+            m.cost >= 0
+              ? formatUsdCost(m.cost)
+              : "";
+          return (
+            <div
+              key={m.id}
+              className={
+                m.role === "user" ? "flex justify-end" : "flex justify-start"
+              }
+            >
               <div
-                key={m.id}
                 className={
-                  m.role === "user" ? "flex justify-end" : "flex justify-start"
+                  m.role === "user"
+                    ? "w-fit max-w-[70%] rounded-lg bg-accent/10 px-3 py-2 text-sm text-gray-200"
+                    : "relative w-fit max-w-[90%] rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
                 }
               >
-                <div
-                  className={
-                    m.role === "user"
-                      ? "w-fit max-w-[70%] rounded-lg bg-accent/10 px-3 py-2 text-sm text-gray-200"
-                      : "relative w-fit max-w-[90%] rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
-                  }
-                >
-                  <div className="mb-0.5 flex items-center justify-between gap-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
-                      {m.role === "user" ? "You" : "Video"}
-                    </p>
-                    {costLabel && (
-                      <span
-                        className="text-[10px] tabular-nums text-muted"
-                        title={m.model || undefined}
-                        aria-label={`Reply cost ${costLabel}${m.model ? ` (${m.model})` : ""}`}
-                      >
-                        {costLabel}
-                      </span>
-                    )}
-                  </div>
-                  {waiting ? (
-                    <TypingDots label="Video is typing" className="py-1" />
-                  ) : (
-                    <AiMarkdown
-                      text={m.content}
-                      className={
-                        m.role === "user"
-                          ? "space-y-2 text-sm text-gray-200"
-                          : "space-y-2 text-sm text-gray-300"
-                      }
-                    />
+                <div className="mb-0.5 flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    {m.role === "user" ? "You" : "Video"}
+                  </p>
+                  {costLabel && (
+                    <span
+                      className="text-[10px] tabular-nums text-muted"
+                      title={m.model || undefined}
+                      aria-label={`Reply cost ${costLabel}${m.model ? ` (${m.model})` : ""}`}
+                    >
+                      {costLabel}
+                    </span>
                   )}
                 </div>
+                {waiting ? (
+                  <TypingDots label="Video is typing" className="py-1" />
+                ) : (
+                  <AiMarkdown
+                    text={m.content}
+                    className={
+                      m.role === "user"
+                        ? "space-y-2 text-sm text-gray-200"
+                        : "space-y-2 text-sm text-gray-300"
+                    }
+                  />
+                )}
               </div>
-            );
-          })}
-          {error && <p className="text-xs text-amber-400/90">{error}</p>}
-        </div>
-        {!isMobile && (
-          <ResizeHandle
-            axis="y"
-            label="Resize chat"
-            className="absolute inset-x-0 bottom-0 h-2.5"
-            getStart={() =>
-              listRef.current?.getBoundingClientRect().height ?? 0
-            }
-            toValue={(start, delta) =>
-              clampPanelHeight(start + delta, MIN_CHAT_REM)
-            }
-            onChange={setListHeight}
-            onCommit={commitListHeight}
-            onReset={() => commitListHeight(null)}
-          />
-        )}
+            </div>
+          );
+        })}
+        {error && <p className="text-xs text-amber-400/90">{error}</p>}
       </div>
       <div className="border-t border-ink-700 px-3 py-2">
         <form
@@ -434,6 +418,20 @@ export default function VideoAiChat({
           )}
         </form>
       </div>
+      {!isMobile && (
+        <ResizeHandle
+          axis="y"
+          label="Resize chat"
+          className="absolute inset-x-0 bottom-0 h-2"
+          getStart={() => listRef.current?.getBoundingClientRect().height ?? 0}
+          toValue={(start, delta) =>
+            clampPanelHeight(start + delta, MIN_CHAT_REM)
+          }
+          onChange={setListHeight}
+          onCommit={commitListHeight}
+          onReset={() => commitListHeight(null)}
+        />
+      )}
     </div>
   );
 }
