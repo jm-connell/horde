@@ -6,11 +6,14 @@ import logging
 from datetime import timedelta
 from typing import cast
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request, Response, UploadFile
+from fastapi.responses import FileResponse
 from sqlmodel import Session
 
 from ..auth import CodedHTTPException, current_user
 from ..context import get_session
+from ..models import User
+from ..openapi_responses import IMAGE_JPEG, RAW
 from ..schemas import (
     AuthLoginResult,
     AuthState,
@@ -19,8 +22,8 @@ from ..schemas import (
     LoginRequest,
     PasswordChange,
 )
-from ..services import app_settings
-from ..services.auth import accounts, passwords
+from ..services import app_settings, uploads
+from ..services.auth import accounts, avatars, passwords
 from ..services.auth.accounts import AuthUser
 from ..services.auth.runtime import AuthRuntime
 
@@ -39,6 +42,7 @@ def user_read(user: AuthUser) -> AuthUserRead:
         username=user.username,
         is_admin=user.is_admin,
         permissions=sorted(user.permissions),
+        avatar_version=user.avatar_version,
     )
 
 
@@ -189,3 +193,48 @@ def change_password(
         keep_token_hash=accounts.hash_token(token) if token else None,
     )
     return Response(status_code=204)
+
+
+@router.post("/avatar", response_model=AuthUserRead)
+def upload_avatar(
+    file: UploadFile,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Set your own profile picture (any image; stored as a square JPEG)."""
+    data = uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
+    if not data:
+        raise CodedHTTPException(400, "Empty file", "empty_file")
+    try:
+        row = avatars.set_avatar(session, user.id, data)
+    except ValueError as exc:
+        raise CodedHTTPException(400, "Could not read image", "bad_image") from exc
+    return user_read(AuthUser.of(row))
+
+
+@router.delete("/avatar", response_model=AuthUserRead)
+def remove_avatar(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Remove your own profile picture."""
+    return user_read(AuthUser.of(avatars.clear_avatar(session, user.id)))
+
+
+@router.get("/avatar/{user_id}", response_class=RAW, responses=IMAGE_JPEG)
+def get_avatar(
+    user_id: int,
+    session: Session = Depends(get_session),
+    _user: AuthUser = Depends(current_user),
+):
+    """Any account's profile picture, for any signed-in user (it is shown to others)."""
+    row = session.get(User, user_id)
+    path = avatars.existing_avatar(row) if row is not None else None
+    if path is None:
+        raise CodedHTTPException(404, "No profile picture", "no_avatar")
+    # The URL carries ?v=avatar_version, so a new upload is a new URL.
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )

@@ -109,6 +109,8 @@ class AuthUser:
     is_admin: bool
     #: Effective permissions: everything for an administrator.
     permissions: frozenset[str] = frozenset()
+    #: Profile picture cache key; None without one (see services/auth/avatars).
+    avatar_version: int | None = None
 
     @classmethod
     def of(cls, user: User) -> AuthUser:
@@ -117,6 +119,7 @@ class AuthUser:
             username=user.username,
             is_admin=user.is_admin,
             permissions=effective_permissions(user),
+            avatar_version=user.avatar_version,
         )
 
     def can(self, permission: str) -> bool:

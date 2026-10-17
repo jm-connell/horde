@@ -646,6 +646,8 @@ class AuthUserRead(BaseModel):
     username: str
     is_admin: bool
     permissions: list[str]
+    #: Profile picture cache key; None when there is none.
+    avatar_version: int | None = None
 
 
 class AuthState(BaseModel):
@@ -695,6 +697,8 @@ class UserRead(BaseModel):
     permissions: list[str]
     created_at: datetime
     last_login_at: datetime | None = None
+    #: Profile picture cache key; None when there is none.
+    avatar_version: int | None = None
 
 
 class UserCreate(BaseModel):

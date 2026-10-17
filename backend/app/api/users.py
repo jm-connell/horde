@@ -9,7 +9,7 @@ from ..auth import require_admin
 from ..context import get_session
 from ..models import User, as_utc, require_id
 from ..schemas import PermissionInfo, UserCreate, UserRead, UserUpdate
-from ..services.auth import accounts, permissions
+from ..services.auth import accounts, avatars, permissions
 from ..services.auth.accounts import AuthUser
 
 router = APIRouter(
@@ -26,6 +26,7 @@ def _read(user: User) -> UserRead:
         permissions=sorted(accounts.effective_permissions(user)),
         created_at=as_utc(user.created_at),
         last_login_at=as_utc(user.last_login_at),
+        avatar_version=user.avatar_version,
     )
 
 
@@ -95,4 +96,5 @@ def delete_user(
     _admin: AuthUser = Depends(require_admin),
 ):
     accounts.delete_user(session, user_id)
+    avatars.unlink_avatars(user_id)
     return Response(status_code=204)

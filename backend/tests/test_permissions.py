@@ -168,6 +168,8 @@ OPEN_MUTATIONS = {
     ("POST", "/api/playlists/estimate"),  # read-only size estimate
     ("POST", "/api/auth/logout"),
     ("POST", "/api/auth/password"),  # your own password
+    ("POST", "/api/auth/avatar"),  # your own profile picture
+    ("DELETE", "/api/auth/avatar"),
     ("PUT", "/api/follows"),  # your own followed channels
     ("DELETE", "/api/follows"),
 }

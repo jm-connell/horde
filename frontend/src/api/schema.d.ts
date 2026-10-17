@@ -279,6 +279,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Avatar
+         * @description Set your own profile picture (any image; stored as a square JPEG).
+         */
+        post: operations["upload_avatar_api_auth_avatar_post"];
+        /**
+         * Remove Avatar
+         * @description Remove your own profile picture.
+         */
+        delete: operations["remove_avatar_api_auth_avatar_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/avatar/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Avatar
+         * @description Any account's profile picture, for any signed-in user (it is shown to others).
+         */
+        get: operations["get_avatar_api_auth_avatar__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/bootstrap": {
         parameters: {
             query?: never;
@@ -3171,6 +3215,8 @@ export interface components {
          * @description The signed-in user. ``permissions`` is effective: all of them for an admin.
          */
         AuthUserRead: {
+            /** Avatar Version */
+            avatar_version?: number | null;
             /** Id */
             id: number;
             /** Is Admin */
@@ -3202,6 +3248,11 @@ export interface components {
             mime: string;
             /** Url */
             url: string;
+        };
+        /** Body_upload_avatar_api_auth_avatar_post */
+        Body_upload_avatar_api_auth_avatar_post: {
+            /** File */
+            file: string;
         };
         /** Body_upload_background_api_backgrounds_post */
         Body_upload_background_api_backgrounds_post: {
@@ -5096,6 +5147,8 @@ export interface components {
         };
         /** UserRead */
         UserRead: {
+            /** Avatar Version */
+            avatar_version?: number | null;
             /**
              * Created At
              * Format: date-time
@@ -5998,6 +6051,126 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiConnectionTest"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_avatar_api_auth_avatar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_avatar_api_auth_avatar_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthUserRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_avatar_api_auth_avatar_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthUserRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_avatar_api_auth_avatar__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JPEG image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
                 };
             };
             /** @description Validation error */

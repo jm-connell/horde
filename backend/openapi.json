@@ -1876,6 +1876,17 @@
       "AuthUserRead": {
         "description": "The signed-in user. ``permissions`` is effective: all of them for an admin.",
         "properties": {
+          "avatar_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Version"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -1974,6 +1985,20 @@
           "animated"
         ],
         "title": "BackgroundRead",
+        "type": "object"
+      },
+      "Body_upload_avatar_api_auth_avatar_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_avatar_api_auth_avatar_post",
         "type": "object"
       },
       "Body_upload_background_api_backgrounds_post": {
@@ -7280,6 +7305,17 @@
       },
       "UserRead": {
         "properties": {
+          "avatar_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Version"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -9065,6 +9101,152 @@
         "summary": "Ai Test",
         "tags": [
           "ai"
+        ]
+      }
+    },
+    "/api/auth/avatar": {
+      "delete": {
+        "description": "Remove your own profile picture.",
+        "operationId": "remove_avatar_api_auth_avatar_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove Avatar",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "description": "Set your own profile picture (any image; stored as a square JPEG).",
+        "operationId": "upload_avatar_api_auth_avatar_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_avatar_api_auth_avatar_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Upload Avatar",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/avatar/{user_id}": {
+      "get": {
+        "description": "Any account's profile picture, for any signed-in user (it is shown to others).",
+        "operationId": "get_avatar_api_auth_avatar__user_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "JPEG image"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Avatar",
+        "tags": [
+          "auth"
         ]
       }
     },
