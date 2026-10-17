@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { absoluteUrl, api, streamUrl, withMediaToken } from "../../api";
 import { useAirPlay } from "../../hooks/useAirPlay";
 import { useChromecast } from "../../hooks/useChromecast";
@@ -75,6 +75,16 @@ export function useCasting({
       v.play().catch(() => undefined);
     });
   }, [setChromecastOnSessionEnd, onProgress, videoRef, setCurrent]);
+
+  // The <video> is paused while the receiver plays, so it reports no
+  // progress: report the receiver's, so the account's other devices (and this
+  // one after the cast) resume from where the TV got to.
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
+  useEffect(() => {
+    if (!chromecast.casting || chromecast.remoteCurrentTime <= 0) return;
+    onProgressRef.current?.(chromecast.remoteCurrentTime);
+  }, [chromecast.casting, chromecast.remoteCurrentTime]);
 
   useEffect(() => {
     if (!chromecast.casting) return;

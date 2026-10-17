@@ -105,6 +105,9 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Fixed
 
+- Watching on a Chromecast now saves your progress as it plays; before, it was
+  only saved when the cast session ended, so other devices resumed from where
+  casting started.
 - Resume points follow your account across devices more closely: a paused
   player catches up with progress you made on another device when its tab or
   window comes back to the front, and expanding the mini-player no longer jumps

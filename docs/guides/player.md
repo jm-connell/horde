@@ -93,7 +93,7 @@ Floating UI (download panel / queue) tracks the mini player on resize and avoids
 | **Chromecast** | Cast library/stream media when the Cast SDK is available |
 | **AirPlay** | Show the AirPlay picker on supported Safari / Apple environments |
 
-Remote playback syncs position where the cast session reports it; ending a cast session can restore local position.
+Remote playback syncs position where the cast session reports it, and while a Chromecast plays, the position it reports is saved to your account like local playback (every few seconds), so your other devices resume from where the TV got to. Ending a cast session restores that position locally. AirPlay plays through the page's own player, so its progress is saved as usual.
 
 ## SponsorBlock
 
