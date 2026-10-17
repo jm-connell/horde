@@ -103,6 +103,10 @@ services:
       # Opt-in: on every start, install the newest yt-dlp into the data volume.
       - YTDLP_AUTO_UPDATE=${YTDLP_AUTO_UPDATE:-0}
       - HORDE_ALLOW_ROOT=${HORDE_ALLOW_ROOT:-0}
+      # Live streams of followed channels (docs/design/live-streams.md).
+      - HORDE_LIVE_POLL_SEC=${HORDE_LIVE_POLL_SEC:-300}
+      - HORDE_LIVE_POLL_SPACING_SEC=${HORDE_LIVE_POLL_SPACING_SEC:-2}
+      - HORDE_LIVE_DVR_HOURS=${HORDE_LIVE_DVR_HOURS:-4}
       # Logging and nightly database backups (docs/ops/logging.md, backup-restore.md).
       - HORDE_LOG_LEVEL=${HORDE_LOG_LEVEL:-INFO}
       - HORDE_LOG_FORMAT=${HORDE_LOG_FORMAT:-text}

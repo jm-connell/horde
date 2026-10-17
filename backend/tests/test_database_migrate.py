@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0006_video_tags_delete"
+HEAD = "0007_channel_follows"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -788,6 +788,8 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
         con.executescript(
             """
             DROP TRIGGER trg_videos_tags_delete;
+            DROP TABLE channel_follows;
+            DROP TABLE download_requesters;
             UPDATE alembic_version SET version_num = '0005_tags_search';
             INSERT INTO playlists (name, source_type, subscribed, position,
                 created_at, cover_video_id)

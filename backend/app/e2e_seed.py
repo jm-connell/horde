@@ -62,6 +62,40 @@ def prepare(ctx: AppContext, mode: str) -> None:
 
     _seed_accounts(engine)
     _seed_library(paths.downloads, engine)
+    _seed_live(ctx)
+
+
+#: A channel the browser suite can follow; the live directory says it is live.
+E2E_LIVE_CHANNEL = "https://youtube.com/@hordelive"
+
+
+def _seed_live(ctx: AppContext) -> None:
+    """One live broadcast in the directory (there is no live poller offline)."""
+    import time
+
+    from .services.live.directory import ChannelLiveState
+    from .services.live.page import LiveBroadcast
+
+    never_stale = time.time() + 10 * 365 * 86400
+    ctx.live.directory.retain(set())
+    ctx.live.directory.seed(
+        [
+            ChannelLiveState(
+                channel_url=E2E_LIVE_CHANNEL,
+                channel_name="Horde Live",
+                broadcast=LiveBroadcast(
+                    video_id="hordelive01",
+                    title="Late night speedruns",
+                    channel_name="Horde Live",
+                    game="Celeste",
+                    viewers=1234,
+                    started_at=None,
+                ),
+                checked_at=never_stale,
+                confirmed_at=never_stale,
+            )
+        ]
+    )
 
 
 #: Accounts every app-mode e2e run starts with: (username, password, admin, grants).

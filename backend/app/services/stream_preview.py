@@ -664,6 +664,7 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
         "preview_height": preview_height,
         "available_presets": _available_presets(info),
         "subtitles": subtitles,
+        "is_live": info.get("is_live") is True or info.get("live_status") == "is_live",
     }
 
 

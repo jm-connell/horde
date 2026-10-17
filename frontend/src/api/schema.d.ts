@@ -940,6 +940,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/follows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Follows */
+        get: operations["list_follows_api_follows_get"];
+        /**
+         * Follow Channel
+         * @description Follow a channel by URL or ``@handle`` (it needs no videos in the library).
+         */
+        put: operations["follow_channel_api_follows_put"];
+        post?: never;
+        /** Unfollow Channel */
+        delete: operations["unfollow_channel_api_follows_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fonts": {
         parameters: {
             query?: never;
@@ -988,6 +1010,77 @@ export interface paths {
          * @description The full payload for a signed-in user; the bare minimum for anyone else.
          */
         get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Now
+         * @description Followed channels that are live right now (from the background checks).
+         */
+        get: operations["live_now_api_live_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/{video_id}/master.m3u8": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live Master */
+        get: operations["live_master_api_live__video_id__master_m3u8_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/{video_id}/seg/{key}/{sq}.ts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live Segment */
+        get: operations["live_segment_api_live__video_id__seg__key___sq__ts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/{video_id}/v/{key}.m3u8": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live Media Playlist */
+        get: operations["live_media_playlist_api_live__video_id__v__key__m3u8_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3794,6 +3887,40 @@ export interface components {
             /** Version */
             version?: string | null;
         };
+        /**
+         * FollowListResponse
+         * @description Every channel the signed-in user follows (one page; ``next_cursor`` is null).
+         */
+        FollowListResponse: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["FollowedChannelRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** FollowRequest */
+        FollowRequest: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+        };
+        /** FollowedChannelRead */
+        FollowedChannelRead: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Source */
+            source: string;
+        };
         /** FontList */
         FontList: {
             /** Items */
@@ -3902,6 +4029,45 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "queued" | "downloading" | "completed" | "error" | "cancelled";
+        /** LiveChannelRead */
+        LiveChannelRead: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /** Game */
+            game?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Thumbnail Url */
+            thumbnail_url: string;
+            /** Title */
+            title?: string | null;
+            /** Video Id */
+            video_id: string;
+            /** Viewers */
+            viewers?: number | null;
+            /** Watch Url */
+            watch_url: string;
+        };
+        /**
+         * LiveListResponse
+         * @description Followed channels that are live now (one page; ``next_cursor`` is null).
+         */
+        LiveListResponse: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["LiveChannelRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Password */
@@ -4536,6 +4702,11 @@ export interface components {
             duration?: number | null;
             /** Id */
             id?: string | null;
+            /**
+             * Is Live
+             * @default false
+             */
+            is_live: boolean;
             /** Library Video Id */
             library_video_id?: number | null;
             /** Preview Height */
@@ -4646,6 +4817,16 @@ export interface components {
         ThumbnailCandidates: {
             /** Candidates */
             candidates: components["schemas"]["ThumbnailCandidate"][];
+        };
+        /** UnfollowResult */
+        UnfollowResult: {
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Following
+             * @default false
+             */
+            following: boolean;
         };
         /** UpdateCheckRead */
         UpdateCheckRead: {
@@ -7353,6 +7534,126 @@ export interface operations {
             };
         };
     };
+    list_follows_api_follows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowListResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    follow_channel_api_follows_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowedChannelRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unfollow_channel_api_follows_delete: {
+        parameters: {
+            query: {
+                channel_url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnfollowResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_fonts_api_fonts_get: {
         parameters: {
             query?: never;
@@ -7530,6 +7831,167 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthFull"] | components["schemas"]["HealthPublic"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_now_api_live_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveListResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_master_api_live__video_id__master_m3u8_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HLS playlist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.apple.mpegurl": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_segment_api_live__video_id__seg__key___sq__ts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+                key: string;
+                sq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description MPEG-TS media segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp2t": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_media_playlist_api_live__video_id__v__key__m3u8_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HLS playlist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.apple.mpegurl": string;
                 };
             };
             /** @description Validation error */

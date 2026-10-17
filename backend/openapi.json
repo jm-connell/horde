@@ -4283,6 +4283,94 @@
         "title": "FfmpegInfo",
         "type": "object"
       },
+      "FollowListResponse": {
+        "description": "Every channel the signed-in user follows (one page; ``next_cursor`` is null).",
+        "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FollowedChannelRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "title": "FollowListResponse",
+        "type": "object"
+      },
+      "FollowRequest": {
+        "properties": {
+          "channel_name": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Channel Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "FollowRequest",
+        "type": "object"
+      },
+      "FollowedChannelRead": {
+        "properties": {
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url",
+          "source",
+          "created_at"
+        ],
+        "title": "FollowedChannelRead",
+        "type": "object"
+      },
       "FontList": {
         "properties": {
           "items": {
@@ -4664,6 +4752,121 @@
         ],
         "title": "JobStatus",
         "type": "string"
+      },
+      "LiveChannelRead": {
+        "properties": {
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "game": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "thumbnail_url": {
+            "title": "Thumbnail Url",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "video_id": {
+            "title": "Video Id",
+            "type": "string"
+          },
+          "viewers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viewers"
+          },
+          "watch_url": {
+            "title": "Watch Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url",
+          "video_id",
+          "thumbnail_url",
+          "watch_url"
+        ],
+        "title": "LiveChannelRead",
+        "type": "object"
+      },
+      "LiveListResponse": {
+        "description": "Followed channels that are live now (one page; ``next_cursor`` is null).",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LiveChannelRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "title": "LiveListResponse",
+        "type": "object"
       },
       "LoginRequest": {
         "properties": {
@@ -6270,6 +6473,11 @@
             ],
             "title": "Id"
           },
+          "is_live": {
+            "default": false,
+            "title": "Is Live",
+            "type": "boolean"
+          },
           "library_video_id": {
             "anyOf": [
               {
@@ -6631,6 +6839,24 @@
           "candidates"
         ],
         "title": "ThumbnailCandidates",
+        "type": "object"
+      },
+      "UnfollowResult": {
+        "properties": {
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "following": {
+            "default": false,
+            "title": "Following",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "UnfollowResult",
         "type": "object"
       },
       "UpdateCheckRead": {
@@ -10902,6 +11128,149 @@
         ]
       }
     },
+    "/api/follows": {
+      "delete": {
+        "operationId": "unfollow_channel_api_follows_delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "channel_url",
+            "required": true,
+            "schema": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Channel Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnfollowResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Unfollow Channel",
+        "tags": [
+          "follows"
+        ]
+      },
+      "get": {
+        "operationId": "list_follows_api_follows_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Follows",
+        "tags": [
+          "follows"
+        ]
+      },
+      "put": {
+        "description": "Follow a channel by URL or ``@handle`` (it needs no videos in the library).",
+        "operationId": "follow_channel_api_follows_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FollowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowedChannelRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Follow Channel",
+        "tags": [
+          "follows"
+        ]
+      }
+    },
     "/api/fonts": {
       "get": {
         "operationId": "list_fonts_api_fonts_get",
@@ -11146,6 +11515,240 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/api/live": {
+      "get": {
+        "description": "Followed channels that are live right now (from the background checks).",
+        "operationId": "live_now_api_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Live Now",
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/api/live/{video_id}/master.m3u8": {
+      "get": {
+        "operationId": "live_master_api_live__video_id__master_m3u8_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{11}$",
+              "title": "Video Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.apple.mpegurl": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "HLS playlist"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Live Master",
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/api/live/{video_id}/seg/{key}/{sq}.ts": {
+      "get": {
+        "operationId": "live_segment_api_live__video_id__seg__key___sq__ts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{11}$",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,40}$",
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sq",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Sq",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "video/mp2t": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "MPEG-TS media segment"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Live Segment",
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/api/live/{video_id}/v/{key}.m3u8": {
+      "get": {
+        "operationId": "live_media_playlist_api_live__video_id__v__key__m3u8_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{11}$",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,40}$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.apple.mpegurl": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "HLS playlist"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Live Media Playlist",
+        "tags": [
+          "live"
+        ]
       }
     },
     "/api/metrics": {
