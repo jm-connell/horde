@@ -134,7 +134,14 @@ under Settings → AI.
 
 ### Update
 
-From the same clone, on the host:
+Administrators can update from the app: **Settings → System → Updates → Update now**.
+It needs a one-time setup, a cron job on the host that runs
+`scripts/update_watch.sh` every minute as root (TrueNAS: System → Advanced
+Settings → Cron Jobs). Horde itself never gets Docker access; the button only
+leaves a request file that the job picks up. Steps and troubleshooting:
+[Updating](docs/getting-started/updating.md#update-from-the-app).
+
+The button runs the same script as the shell. From the same clone, on the host:
 
 ```bash
 cd /path/to/horde          # e.g. /mnt/tank/dockge/stacks/horde

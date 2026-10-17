@@ -156,8 +156,14 @@ To pass a host NVIDIA / Intel / AMD device into the **`horde`** container (for H
 
 ## 6. Updating on TrueNAS
 
+### The Update now button (recommended)
+
+Set up the button once and later updates are one click in **Settings → System → Updates**, with no shell. Setup is a single TrueNAS Cron Job that runs `scripts/update_watch.sh` as `root` every minute. Follow the numbered steps in [Updating: one-time setup](updating.md#update-button-setup) (run the `--setup` check, then **System → Advanced Settings → Cron Jobs → Add**). To remove it later, disable the cron job.
+
+### Updating from the shell
+
 !!! warning "Update on the host shell — not Dockge Bash"
-    Run updates from the **TrueNAS shell** (or SSH to the host), in the Dockge stack folder. Do **not** use Dockge’s per-service **Bash** button: that opens a shell *inside* the Horde container, where `docker` and `git pull` against the host stack are not available.
+    Run shell commands (`update.sh`, `update_watch.sh --setup`) from the **TrueNAS shell** (or SSH to the host), in the Dockge stack folder. Do **not** use Dockge’s per-service **Bash** button: that opens a shell *inside* the Horde container, where `docker` and `git pull` against the host stack are not available. The **Update now** button needs none of this once the cron job exists.
 
 ```bash
 cd /mnt/tank/dockge/stacks/horde   # your stack path
@@ -195,7 +201,7 @@ More detail: [Storage layout](../ops/storage-layout.md).
 - [ ] `PUID` / `PGID` match the dataset owner; dirs `chown`’d
 - [ ] Dockge **Scan Stacks Folder**; stack deployed; UI at `http://<truenas-ip>:8686`
 - [ ] Optional SMB share for manual drops
-- [ ] Know to run `bash update.sh` on the **host**, not in Dockge Bash
+- [ ] Set up the **Update now** [cron job](updating.md#update-button-setup), or know to run `bash update.sh` on the **host**, not in Dockge Bash
 - [ ] GPU optional — **None detected** is normal until you [pass a device in](../ops/environment.md#gpu)
 
 ## Next steps

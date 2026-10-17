@@ -114,6 +114,7 @@ nav:
       - 0008 Releases and rollback: adr/0008-releases-and-rollback.md
       - 0009 Live streams HLS proxy: adr/0009-live-streams-hls-proxy.md
       - 0010 Stream AI retention: adr/0010-stream-ai-retention.md
+      - 0011 In-app updates: adr/0011-in-app-updates.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md
