@@ -3,7 +3,7 @@ import { getJson, setJson } from "../storage";
 import { remPx } from "./useAnimatedClipHeight";
 
 /**
- * Sizes the user dragged the watch page panels to (AI summary and chat,
+ * Sizes the user dragged the watch page panels to (AI summary, chat input,
  * description, chapters, the description/chapters split). Kept per device in
  * localStorage, not in the account settings: a size that suits a 4K monitor
  * does not suit a laptop.
@@ -11,7 +11,7 @@ import { remPx } from "./useAnimatedClipHeight";
 export const PANEL_SIZES_KEY = "horde.watch.panelSizes";
 
 export type PanelSizeName =
-  "aiSummary" | "aiChat" | "metaSide" | "metaStacked" | "metaSplit";
+  "aiSummary" | "aiChatInput" | "metaSide" | "metaStacked" | "metaSplit";
 
 type PanelSizes = Partial<Record<PanelSizeName, number>>;
 

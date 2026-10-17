@@ -54,7 +54,7 @@ Chapters come from, in order: timestamp lines in the video **description**, yt-d
 
 ## Resizing the panels under the video
 
-On desktop, the AI summary, AI chat, description and chapters panels can be resized: hover a panel and drag the faint bar on its bottom edge, or drag the gap between the description and chapters to change their widths. Double-click a handle to go back to the default size; with a handle focused, the arrow keys nudge it. Sizes are remembered per device (in the browser), not per account, and apply to every video. The description and the chapters beside it share one height.
+On desktop, the AI summary, the AI chat input, the description and the chapters can be resized: hover a panel and drag the faint bar on its bottom edge (on the chat box this sizes the message input), or drag the gap between the description and chapters to change their widths. Double-click a handle to go back to the default size; with a handle focused, the arrow keys nudge it. Sizes are remembered per device (in the browser), not per account, and apply to every video. The description and the chapters beside it share one height.
 
 ## Scrub sprites
 

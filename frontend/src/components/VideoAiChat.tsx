@@ -7,8 +7,8 @@ import { clampPanelHeight, usePanelSize } from "../hooks/usePanelSize";
 import AiMarkdown from "./AiMarkdown";
 import ResizeHandle from "./ResizeHandle";
 
-/** Smallest height the message list can be dragged to, in rem. */
-const MIN_CHAT_REM = 4;
+/** Smallest height the message input can be dragged to, in rem. */
+const MIN_INPUT_REM = 2.5;
 import TypingDots from "./TypingDots";
 
 interface Props {
@@ -59,10 +59,11 @@ export default function VideoAiChat({
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
-  const [listHeight, setListHeight, commitListHeight] = usePanelSize("aiChat");
-  // A dragged height is a fixed height (not a cap), so a short thread can be
-  // given room to grow into.
-  const listFixed = !isMobile && listHeight != null ? listHeight : null;
+  // Dragging the chat box's bottom edge sizes the message input; the thread
+  // above keeps its own height.
+  const [inputHeight, setInputHeight, commitInputHeight] =
+    usePanelSize("aiChatInput");
+  const inputFixed = !isMobile && inputHeight != null ? inputHeight : null;
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // The latest operations, read by the effects below without re-running them.
@@ -278,10 +279,7 @@ export default function VideoAiChat({
       )}
       <div
         ref={listRef}
-        className={`horde-scrollbar space-y-3 overflow-y-auto px-4 py-3 ${
-          listFixed != null ? "" : "max-h-72"
-        }`}
-        style={listFixed != null ? { height: listFixed } : undefined}
+        className="horde-scrollbar max-h-72 space-y-3 overflow-y-auto px-4 py-3"
       >
         {loading && (
           <div className="flex justify-center py-6">
@@ -384,6 +382,7 @@ export default function VideoAiChat({
               }
             }}
             rows={2}
+            style={inputFixed != null ? { height: inputFixed } : undefined}
             disabled={sending}
             placeholder="Ask this video…"
             className="horde-scrollbar min-h-[2.5rem] flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-200 placeholder:text-muted focus:border-accent focus:outline-none"
@@ -423,13 +422,13 @@ export default function VideoAiChat({
           axis="y"
           label="Resize chat"
           className="absolute inset-x-0 bottom-0 h-2"
-          getStart={() => listRef.current?.getBoundingClientRect().height ?? 0}
+          getStart={() => inputRef.current?.getBoundingClientRect().height ?? 0}
           toValue={(start, delta) =>
-            clampPanelHeight(start + delta, MIN_CHAT_REM)
+            clampPanelHeight(start + delta, MIN_INPUT_REM)
           }
-          onChange={setListHeight}
-          onCommit={commitListHeight}
-          onReset={() => commitListHeight(null)}
+          onChange={setInputHeight}
+          onCommit={commitInputHeight}
+          onReset={() => commitInputHeight(null)}
         />
       )}
     </div>
