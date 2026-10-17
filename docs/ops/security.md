@@ -82,7 +82,7 @@ Other limits: bulk endpoints take at most 1000 items (5000 for playlist entries)
 
 Every response carries `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and framing is limited to the same origin. The policy lists what the app actually loads:
 
-- scripts: its own bundle and the Google Cast sender SDK (`www.gstatic.com`)
+- scripts: its own bundle and the Google Cast sender SDK (`www.gstatic.com`; over plain HTTP too, because the SDK loads its parts with the page's scheme, so casting works from a LAN address without HTTPS)
 - styles: its own, Google Fonts (`fonts.googleapis.com`, for the optional UI font) and inline styles (the web app's own and your custom CSS)
 - images: its own, plus remote thumbnails over HTTPS (YouTube's `i.ytimg.com` and other sites yt-dlp reads)
 - connections: its own API and SponsorBlock (`sponsor.ajay.app`)

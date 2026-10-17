@@ -128,7 +128,9 @@ class HostPolicy:
 
 #: The SPA. Everything it loads is listed here:
 #:  * scripts: its own bundle, the Google Cast sender SDK (gstatic; Chrome's cast
-#:    shim also loads from a chrome-extension: URL)
+#:    shim also loads from a chrome-extension: URL). The SDK loads its framework
+#:    and the ``eureka`` sender with the page's own scheme, so a plain-HTTP LAN
+#:    page fetches them over http://; an HTTPS page never does (mixed content).
 #:  * styles: Tailwind output, Google Fonts (a user-selectable UI font), plus inline
 #:    styles (React ``style=`` attributes and the user's custom CSS <style> tag)
 #:  * images: own thumbnails, and remote thumbnails from whichever site yt-dlp read
@@ -138,12 +140,12 @@ class HostPolicy:
 APP_CSP = "; ".join(
     [
         "default-src 'self'",
-        "script-src 'self' https://www.gstatic.com chrome-extension:",
+        "script-src 'self' https://www.gstatic.com http://www.gstatic.com chrome-extension:",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' data: https://fonts.gstatic.com",
         "img-src 'self' data: blob: https:",
         "media-src 'self' blob: data:",
-        "connect-src 'self' https://sponsor.ajay.app https://www.gstatic.com",
+        "connect-src 'self' https://sponsor.ajay.app https://www.gstatic.com http://www.gstatic.com",
         "worker-src 'self' blob:",
         "manifest-src 'self'",
         "object-src 'none'",

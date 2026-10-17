@@ -273,6 +273,10 @@ def test_app_csp_lists_only_the_origins_the_app_loads():
     csp = security.content_security_policy("/")
 
     assert "script-src 'self' https://www.gstatic.com" in csp
+    # The Cast SDK loads its other parts with the page's scheme, so a plain-HTTP
+    # LAN page needs the http:// origin too.
+    script_src = next(p for p in csp.split("; ") if p.startswith("script-src"))
+    assert "http://www.gstatic.com" in script_src.split()
     assert "https://sponsor.ajay.app" in csp
     assert "https://fonts.googleapis.com" in csp
     assert "'unsafe-eval'" not in csp
