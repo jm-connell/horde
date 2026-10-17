@@ -21,6 +21,7 @@ export const queryKeys = {
   system: {
     stats: ["system", "stats"] as const,
     activity: ["system", "activity"] as const,
+    update: ["system", "update"] as const,
   },
   compat: {
     summary: ["compat", "summary"] as const,

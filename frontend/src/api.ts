@@ -41,6 +41,7 @@ import type {
   CompatSummary,
   TagStat,
   UpdateCheck,
+  UpdateControl,
   Video,
   VideoUpdate,
   SpriteMeta,
@@ -958,6 +959,20 @@ export const api = {
   checkUpdates(refresh = false): Promise<UpdateCheck> {
     const qs = refresh ? "?refresh=true" : "";
     return request<UpdateCheck>(`/api/updates${qs}`);
+  },
+
+  updateControl(opts?: ReadOptions): Promise<UpdateControl> {
+    return request<UpdateControl>("/api/system/update", opts);
+  },
+
+  requestUpdate(): Promise<UpdateControl> {
+    return request<UpdateControl>("/api/system/update", { method: "POST" });
+  },
+
+  cancelUpdate(): Promise<UpdateControl> {
+    return request<UpdateControl>("/api/system/update/cancel", {
+      method: "POST",
+    });
   },
 
   uploadBackground(

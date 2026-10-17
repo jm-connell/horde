@@ -24,6 +24,7 @@ export class ServiceWorkerUpdates {
   private listeners = new Set<Listener>();
   private reloading = false;
   private watched = new WeakSet<object>();
+  private registration: Pick<ServiceWorkerRegistration, "update"> | null = null;
 
   constructor(private readonly reload: () => void = () => location.reload()) {}
 
@@ -63,7 +64,15 @@ export class ServiceWorkerUpdates {
   }
 
   /** Track `registration` and surface any worker that is waiting to activate. */
+  /** The registration `reloadToLatest` asks for a new worker (set by `watch`). */
+  trackRegistration(
+    registration: Pick<ServiceWorkerRegistration, "update">
+  ): void {
+    this.registration = registration;
+  }
+
   watch(registration: ServiceWorkerRegistration): void {
+    this.trackRegistration(registration);
     // A waiting worker only counts as an update when a page is already
     // controlled; on the very first install there is nothing to replace.
     const check = () => {
@@ -89,6 +98,39 @@ export class ServiceWorkerUpdates {
       // and never because another tab accepted the update.
       if (this.reloading) this.reload();
     });
+  }
+
+  /**
+   * Reload into the release the server serves now (after an in-app update).
+   * A plain reload would be answered from the current worker's cached shell,
+   * i.e. the old release, so first fetch the new worker and activate it. Falls
+   * back to a plain reload without a worker, or when none arrives in time.
+   */
+  reloadToLatest(timeoutMs = 10_000): void {
+    if (this.ready) {
+      this.applyUpdate();
+      return;
+    }
+    const registration = this.registration;
+    if (!registration) {
+      this.reload();
+      return;
+    }
+    let done = false;
+    let unsubscribe = () => {};
+    const finish = (apply: boolean) => {
+      if (done) return;
+      done = true;
+      globalThis.clearTimeout(timer);
+      unsubscribe();
+      if (apply) this.applyUpdate();
+      else this.reload();
+    };
+    const timer = globalThis.setTimeout(() => finish(false), timeoutMs);
+    unsubscribe = this.subscribe((ready) => {
+      if (ready) finish(true);
+    });
+    registration.update().catch(() => finish(false));
   }
 
   /** Activate the waiting worker; the page reloads on `controllerchange`. */

@@ -81,3 +81,42 @@ describe("ServiceWorkerUpdates", () => {
     expect(updates.ready).toBe(false);
   });
 });
+
+describe("ServiceWorkerUpdates.reloadToLatest", () => {
+  function registration() {
+    return { update: vi.fn(() => Promise.resolve(undefined as never)) };
+  }
+
+  it("reloads plainly when no worker is registered (dev, no SW support)", () => {
+    const reload = vi.fn();
+    new ServiceWorkerUpdates(reload).reloadToLatest();
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetches the new worker and activates it instead of reloading the old shell", async () => {
+    const reload = vi.fn();
+    const updates = new ServiceWorkerUpdates(reload);
+    const reg = registration();
+    updates.trackRegistration(reg);
+    updates.reloadToLatest();
+    expect(reg.update).toHaveBeenCalled();
+    const { worker } = fakeWorker();
+    updates.adopt(worker); // the new release finished installing
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    expect(reload).not.toHaveBeenCalled(); // controllerchange reloads
+  });
+
+  it("falls back to a plain reload when no new worker arrives", () => {
+    vi.useFakeTimers();
+    try {
+      const reload = vi.fn();
+      const updates = new ServiceWorkerUpdates(reload);
+      updates.trackRegistration(registration());
+      updates.reloadToLatest(1_000);
+      vi.advanceTimersByTime(1_000);
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

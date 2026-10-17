@@ -9,6 +9,7 @@ import {
 import type { HealthStats, StorageStats, UpdateCheck } from "../../types";
 import { useSettingsPage } from "./context";
 import { loadDismissedUpdateSha } from "./helpers";
+import { useUpdateRun } from "./system/useUpdateRun";
 
 /** State and polling of the System tab: versions, storage, catalog and job activity. */
 export function useSystemState() {
@@ -21,6 +22,7 @@ export function useSystemState() {
     loadDismissedUpdateSha
   );
   const [catalogIndexing, setCatalogIndexing] = useState(false);
+  const updateRun = useUpdateRun();
 
   useEffect(() => {
     api
@@ -69,6 +71,7 @@ export function useSystemState() {
     updateCheck,
     updateChecking,
     refreshUpdates,
+    updateRun,
     showUpdateNotice,
     setDismissedUpdateSha,
     catalogStatus,
