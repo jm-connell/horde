@@ -12,6 +12,12 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Upgrade notes
 
+- **The bgutil POT sidecar is now 2.0.2**, which fixes a remote code execution
+  flaw ([GHSA-qpv9-8xfj-xx9m](https://github.com/Brainicism/bgutil-ytdlp-pot-provider/security/advisories/GHSA-qpv9-8xfj-xx9m)).
+  `docker compose pull && docker compose up -d` picks it up. The bundled
+  Compose setup needs no other change. If you run the provider natively on
+  another machine (a custom `YTDLP_POT_BASE_URL`), it now binds to localhost by
+  default: start it with `--host 0.0.0.0` so Horde can reach it.
 - **Behind a reverse proxy or tunnel, list the public hostname in
   `HORDE_ALLOWED_HOSTS`.** Horde now only answers LAN-style `Host` names
   (`localhost`, private and Tailscale addresses, single-word names, `*.local`,
