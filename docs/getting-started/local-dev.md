@@ -34,7 +34,7 @@ From the repo root:
 6. Starts **uvicorn** with `--reload` on port **8080**
 7. Starts **Vite** (`npm run dev`, usually **5173**) once the backend health check passes
 
-Open the Vite URL printed in the terminal (typically `http://localhost:5173`). Vite proxies `/api`, `/docs`, `/redoc`, `/openapi.json`, and `/wiki` to `http://127.0.0.1:8080`.
+Open the Vite URL printed in the terminal (typically `http://localhost:5173`). Vite proxies `/api`, `/docs`, `/redoc`, `/openapi.json`, and `/wiki` to `http://127.0.0.1:8080`. The proxy keeps the browser's `Host` header (`changeOrigin: false`): the backend's CSRF check compares `Origin` with `Host`, so a proxy that rewrites `Host` gets every POST, PATCH and DELETE rejected with 403 "Origin does not match this server".
 
 !!! tip "Wiki in local development"
     `./start.sh` builds the wiki by default so Settings → Documentation and `/wiki/` work locally (`wiki_available` on `/api/health`). Skip with:
